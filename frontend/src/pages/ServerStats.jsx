@@ -17,15 +17,15 @@ const formatBytes = (bytes) => {
 const nodeMeta = (node) => {
   const code = (node?.name || '').toUpperCase();
   const byCode = {
-    DE: { flag: '🇩🇪', location: 'Frankfurt, Germany', lon: 8.68, lat: 50.11 },
-    TR: { flag: '🇹🇷', location: 'Türkiye', lon: 35.24, lat: 38.96 },
-    FL: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92 },
-    FI: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92 },
-    US: { flag: '🇺🇸', location: 'United States', lon: -98.58, lat: 39.83 },
-    UK: { flag: '🇬🇧', location: 'London, United Kingdom', lon: -0.12, lat: 51.5 },
-    JP: { flag: '🇯🇵', location: 'Tokyo, Japan', lon: 139.69, lat: 35.68 },
+    DE: { flag: '🇩🇪', location: 'Frankfurt, Germany', lon: 8.68, lat: 50.11, dx: 16, dy: -12 },
+    TR: { flag: '🇹🇷', location: 'Türkiye', lon: 35.24, lat: 38.96, dx: 16, dy: 18 },
+    FL: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92, dx: 16, dy: -18 },
+    FI: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92, dx: 16, dy: -18 },
+    US: { flag: '🇺🇸', location: 'United States', lon: -98.58, lat: 39.83, dx: 16, dy: -12 },
+    UK: { flag: '🇬🇧', location: 'London, United Kingdom', lon: -0.12, lat: 51.5, dx: 16, dy: -12 },
+    JP: { flag: '🇯🇵', location: 'Tokyo, Japan', lon: 139.69, lat: 35.68, dx: 16, dy: -12 },
   };
-  return byCode[code] || { flag: '🌐', location: node?.tunnel_address || node?.address || 'Unknown', lon: 0, lat: 20 };
+  return byCode[code] || { flag: '🌐', location: node?.tunnel_address || node?.address || 'Unknown', lon: 0, lat: 20, dx: 16, dy: -12 };
 };
 
 const MiniLine = () => (
@@ -82,9 +82,13 @@ const WorldMap = ({ nodes, nodeStatus }) => {
           return (
             <g key={node.id} className="map-marker" transform={`translate(${x} ${y})`}>
               <title>{`${node.name} — ${meta.location} — ${sessions} live connections`}</title>
-              <circle r="8" />
-              <circle className="pulse" r="19" />
-              <text x="14" y="4">{node.name} · {sessions}</text>
+              <circle className="node-halo" r="18">
+                <animate attributeName="r" values="14;28;14" dur="2.2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.75;0.08;0.75" dur="2.2s" repeatCount="indefinite" />
+              </circle>
+              <circle className="node-dot" r="8" />
+              <text x={meta.dx} y={meta.dy}>{node.name} · {sessions}</text>
+              <text className="node-country-label" x={meta.dx} y={meta.dy + 16}>{meta.location}</text>
             </g>
           );
         })}

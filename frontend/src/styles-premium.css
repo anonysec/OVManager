@@ -235,3 +235,33 @@ html[data-theme="light"] .world-map-real .country { fill: #b7cce0; stroke: rgba(
 html[data-theme="light"] .world-map-real .country:hover { fill: #91b1d0; }
 html[data-theme="light"] .world-map-real .country-borders { stroke: rgba(45,70,95,.45); }
 html[data-theme="light"] .map-marker text { fill: #0f1720; stroke: #f8fbff; }
+
+/* final map/logo corrections */
+.ops-brand img,
+.header-logo,
+.sidebar-logo.brand-logo,
+.login-logo {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.ops-brand img { width: 92px; height: 92px; margin-top: -18px; margin-bottom: -18px; }
+.world-map-real {
+  height: 292px !important;
+  background: #10161f !important;
+  border: 1px solid rgba(17,211,233,.18);
+}
+.world-map-real .sphere { fill: #0d131b !important; stroke: rgba(17,211,233,.28) !important; stroke-width: 1.4 !important; }
+.world-map-real .country { fill: #2a4258 !important; stroke: rgba(210,235,245,.26) !important; stroke-width: .65 !important; }
+.world-map-real .country:hover { fill: #466a88 !important; stroke: rgba(17,211,233,.85) !important; stroke-width: 1.1 !important; }
+.world-map-real .country-borders { stroke: rgba(226,244,250,.48) !important; stroke-width: .62 !important; }
+.map-marker .node-halo { fill: none; stroke: var(--orange); stroke-width: 2.4; pointer-events: none; }
+.map-marker .node-dot { fill: var(--cyan); stroke: #07151a; stroke-width: 2.4; filter: drop-shadow(0 0 10px var(--cyan)); }
+.map-marker text { fill: #ffffff !important; font-size: 16px !important; font-weight: 1000 !important; paint-order: stroke; stroke: #080d12 !important; stroke-width: 4px !important; pointer-events: none; }
+.map-marker .node-country-label { fill: #9defff !important; font-size: 11px !important; font-weight: 800 !important; stroke-width: 3px !important; }
+html[data-theme="light"] .world-map-real { background: #e7f2fb !important; }
+html[data-theme="light"] .world-map-real .sphere { fill: #e9f5fd !important; }
+html[data-theme="light"] .world-map-real .country { fill: #a9c5dc !important; stroke: rgba(30,60,90,.34) !important; }
+html[data-theme="light"] .world-map-real .country-borders { stroke: rgba(35,65,95,.52) !important; }
+html[data-theme="light"] .map-marker text { fill: #07111d !important; stroke: #ffffff !important; }
+html[data-theme="light"] .map-marker .node-country-label { fill: #075a75 !important; }
