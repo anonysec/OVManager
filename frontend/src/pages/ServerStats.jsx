@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { geoNaturalEarth1, geoPath } from 'd3-geo';
+import { feature, mesh } from 'topojson-client';
+import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
 import mascot from '../assets/ovmanager-character.webp';
 
@@ -14,14 +17,15 @@ const formatBytes = (bytes) => {
 const nodeMeta = (node) => {
   const code = (node?.name || '').toUpperCase();
   const byCode = {
-    DE: { flag: '🇩🇪', location: 'Frankfurt, DE', x: 52, y: 35 },
-    TR: { flag: '🇹🇷', location: 'Türkiye', x: 58, y: 43 },
-    FL: { flag: '🇫🇮', location: 'Finland', x: 54, y: 24 },
-    US: { flag: '🇺🇸', location: 'United States', x: 24, y: 40 },
-    UK: { flag: '🇬🇧', location: 'London, UK', x: 48, y: 31 },
-    JP: { flag: '🇯🇵', location: 'Tokyo, JP', x: 83, y: 45 },
+    DE: { flag: '🇩🇪', location: 'Frankfurt, Germany', lon: 8.68, lat: 50.11 },
+    TR: { flag: '🇹🇷', location: 'Türkiye', lon: 35.24, lat: 38.96 },
+    FL: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92 },
+    FI: { flag: '🇫🇮', location: 'Finland', lon: 25.75, lat: 61.92 },
+    US: { flag: '🇺🇸', location: 'United States', lon: -98.58, lat: 39.83 },
+    UK: { flag: '🇬🇧', location: 'London, United Kingdom', lon: -0.12, lat: 51.5 },
+    JP: { flag: '🇯🇵', location: 'Tokyo, Japan', lon: 139.69, lat: 35.68 },
   };
-  return byCode[code] || { flag: '🌐', location: node?.tunnel_address || node?.address || 'Unknown', x: 50, y: 50 };
+  return byCode[code] || { flag: '🌐', location: node?.tunnel_address || node?.address || 'Unknown', lon: 0, lat: 20 };
 };
 
 const MiniLine = () => (
@@ -46,29 +50,48 @@ const Panel = ({ title, tone = 'orange', children, className = '', tip }) => (
   </section>
 );
 
-const WorldMap = ({ nodes, nodeStatus }) => (
-  <div className="world-map-real" aria-label="Server node map">
-    <svg viewBox="0 0 1000 420" preserveAspectRatio="none">
-      <path className="continent" d="M135 113l70-35 100 27 48 58-26 58-82 33-98-27-48-55z" />
-      <path className="continent" d="M278 258l58 28 32 76-36 38-55-28-27-66z" />
-      <path className="continent" d="M455 95l82-37 118 20 98 67-38 65-150 10-96-44z" />
-      <path className="continent" d="M534 222l94 8 45 76-34 70-78-18-45-76z" />
-      <path className="continent" d="M693 142l110-50 112 34 22 80-84 42-113-22z" />
-      <path className="continent" d="M799 285l82 13 30 48-54 28-72-20z" />
-      {nodes.map((node) => {
-        const meta = nodeMeta(node);
-        const sessions = Number(nodeStatus[node.id]?.session_diagnostics?.live_count || 0);
-        return (
-          <g key={node.id} className="map-marker" transform={`translate(${meta.x * 10} ${meta.y * 4.2})`}>
-            <circle r="12" />
-            <circle className="pulse" r="22" />
-            <text x="18" y="5">{node.name} · {sessions}</text>
-          </g>
-        );
-      })}
-    </svg>
-  </div>
-);
+const WorldMap = ({ nodes, nodeStatus }) => {
+  const { countries, borders, path, projection } = useMemo(() => {
+    const countryFeatures = feature(worldAtlas, worldAtlas.objects.countries).features;
+    const countryBorders = mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b);
+    const proj = geoNaturalEarth1().fitSize([1000, 420], { type: 'Sphere' });
+    return { countries: countryFeatures, borders: countryBorders, path: geoPath(proj), projection: proj };
+  }, []);
+
+  return (
+    <div className="world-map-real" aria-label="Server node map">
+      <svg viewBox="0 0 1000 420" role="img">
+        <defs>
+          <radialGradient id="mapGlow" cx="50%" cy="50%" r="65%">
+            <stop offset="0%" stopColor="rgba(17,211,233,.26)" />
+            <stop offset="100%" stopColor="rgba(17,211,233,0)" />
+          </radialGradient>
+        </defs>
+        <rect width="1000" height="420" fill="url(#mapGlow)" />
+        <path className="sphere" d={path({ type: 'Sphere' })} />
+        {countries.map((country) => (
+          <path key={country.id} className="country" d={path(country)}>
+            <title>{country.properties?.name || country.id}</title>
+          </path>
+        ))}
+        <path className="country-borders" d={path(borders)} />
+        {nodes.map((node) => {
+          const meta = nodeMeta(node);
+          const sessions = Number(nodeStatus[node.id]?.session_diagnostics?.live_count || 0);
+          const [x, y] = projection([meta.lon, meta.lat]) || [500, 210];
+          return (
+            <g key={node.id} className="map-marker" transform={`translate(${x} ${y})`}>
+              <title>{`${node.name} — ${meta.location} — ${sessions} live connections`}</title>
+              <circle r="8" />
+              <circle className="pulse" r="19" />
+              <text x="14" y="4">{node.name} · {sessions}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
 
 const ServerStats = () => {
   const [stats, setStats] = useState(null);

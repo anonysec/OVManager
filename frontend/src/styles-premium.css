@@ -210,3 +210,28 @@ html[data-theme="light"] .ops-table td { color: var(--text); }
 .map-marker text { fill: #dffbff; font-size: 18px; font-weight: 800; paint-order: stroke; stroke: #11151b; stroke-width: 4px; }
 @keyframes mapPulse { 0%,100% { transform: scale(.7); opacity:.2; } 50% { transform: scale(1.25); opacity:.75; } }
 html[data-theme="light"] .map-marker text { fill: #101827; stroke: #fff; }
+
+/* Natural Earth world map with country borders */
+.world-map-real {
+  height: 238px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  background: #121820;
+  border-radius: 8px 8px 0 0;
+}
+.world-map-real svg { width: 100%; height: 100%; display: block; }
+.world-map-real .sphere { fill: #111923; stroke: rgba(17,211,233,.18); stroke-width: 1.2; }
+.world-map-real .country { fill: #24364a; stroke: rgba(17,211,233,.10); stroke-width: .45; transition: fill .16s ease, stroke .16s ease; }
+.world-map-real .country:hover { fill: #36516b; stroke: rgba(17,211,233,.55); }
+.world-map-real .country-borders { fill: none; stroke: rgba(170,210,230,.34); stroke-width: .55; pointer-events: none; }
+.map-marker circle:first-child { fill: var(--cyan); stroke: #07151a; stroke-width: 2; filter: drop-shadow(0 0 8px var(--cyan)); }
+.map-marker .pulse { fill: none; stroke: var(--cyan); stroke-width: 2; opacity: .45; animation: mapPulse 2s ease-in-out infinite; transform-origin: center; }
+.map-marker text { fill: #e9fbff; font-size: 15px; font-weight: 900; paint-order: stroke; stroke: #0e141b; stroke-width: 4px; pointer-events: none; }
+@keyframes mapPulse { 0%,100% { transform: scale(.65); opacity:.18; } 50% { transform: scale(1.35); opacity:.78; } }
+html[data-theme="light"] .world-map-real { background: #eaf2fb; }
+html[data-theme="light"] .world-map-real .sphere { fill: #e8f2fb; }
+html[data-theme="light"] .world-map-real .country { fill: #b7cce0; stroke: rgba(40,70,100,.20); }
+html[data-theme="light"] .world-map-real .country:hover { fill: #91b1d0; }
+html[data-theme="light"] .world-map-real .country-borders { stroke: rgba(45,70,95,.45); }
+html[data-theme="light"] .map-marker text { fill: #0f1720; stroke: #f8fbff; }
