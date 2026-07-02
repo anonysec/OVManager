@@ -1,0 +1,130 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from backend.auth.auth import get_current_user
+from backend.db.engine import get_db
+from backend.schema.output import ResponseModel
+from backend.schema._input import NodeCreate
+from backend.node.task import (
+    add_node_handler,
+    update_node_handler,
+    delete_node_handler,
+    download_ovpn_client_from_node,
+    download_all_ovpn_clients_from_node,
+    list_nodes_handler,
+    get_node_status_handler,
+)
+
+router = APIRouter(prefix="/nodes", tags=["Nodes"])
+
+
+@router.post("/", response_model=ResponseModel)
+async def add_node(
+    request: NodeCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if user["type"] != "main_admin":
+        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+
+    new_node = await add_node_handler(request, db)
+    return ResponseModel(
+        success=new_node,
+        msg="Node added successfully" if new_node else "Failed to add node",
+    )
+
+
+@router.put("/{node_id}", response_model=ResponseModel)
+async def update_node(
+    node_id: int,
+    request: NodeCreate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if user["type"] != "main_admin":
+        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+
+    result = await update_node_handler(node_id, request, db)
+    return ResponseModel(
+        success=result,
+        msg="Node updated successfully" if result else "Failed to update node",
+    )
+
+
+@router.get("/{node_id}/status/", response_model=ResponseModel)
+async def get_node_status(
+    node_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if user["type"] != "main_admin":
+        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+
+    node_status = await get_node_status_handler(node_id, db)
+    return ResponseModel(
+        success=True,
+        msg="Node status retrieved successfully",
+        data=node_status,
+    )
+
+
+@router.get("/", response_model=ResponseModel)
+async def list_nodes(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    nodes = await list_nodes_handler(db)
+    return ResponseModel(
+        success=True,
+        msg="Nodes retrieved successfully",
+        data=nodes,
+    )
+
+
+@router.get(
+    "/ovpn/{uuid}/{node_id}",
+    description="Download OVPN client configuration from a node",
+)
+async def download_ovpn_client(
+    node_id: int,
+    uuid: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    response = await download_ovpn_client_from_node(db=db, uuid=uuid, node_id=node_id)
+    if response:
+        return response
+    raise HTTPException(status_code=404, detail="OVPN file not found")
+
+
+@router.get(
+    "/ovpn-all/{node_id}",
+    description="Download all OVPN client configurations from a node as a ZIP",
+)
+async def download_all_ovpn_clients(
+    node_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if user["type"] != "main_admin":
+        raise HTTPException(status_code=403, detail="Unauthorized access")
+    response = await download_all_ovpn_clients_from_node(node_id=node_id, db=db)
+    if response:
+        return response
+    raise HTTPException(status_code=404, detail="Node not found or configs unavailable")
+
+
+@router.delete("/{node_id}", response_model=ResponseModel)
+async def delete_node(
+    node_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    if user["type"] != "main_admin":
+        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+
+    result = await delete_node_handler(node_id, db)
+    return ResponseModel(
+        success=result,
+        msg="Node deleted successfully" if result else "Failed to delete node",
+    )

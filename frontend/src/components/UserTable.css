@@ -1,0 +1,32 @@
+/* Status badge styles */
+.status-active {
+    color: #22c55e;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(34, 197, 94, 0.1);
+}
+
+.status-inactive {
+    color: #ef4444;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Usage color classes for CPU and RAM percent */
+.usage-green {
+    color: #43a047;
+    font-weight: bold;
+}
+
+.usage-yellow {
+    color: #fbc02d;
+    font-weight: bold;
+}
+
+.usage-red {
+    color: #e53935;
+    font-weight: bold;
+}

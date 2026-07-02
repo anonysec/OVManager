@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Sub info</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- OpenVPN favicon (inline data URI so it works without external assets) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EA7E20' d='M256 24 56 104v144c0 124 84 213 200 240 116-27 200-116 200-240V104L256 24z'/%3E%3Ccircle cx='256' cy='196' r='58' fill='%23fff'/%3E%3Cpath fill='%23fff' d='M256 268c-79 0-128 52-138 122-2 14 8 26 22 26h232c14 0 24-12 22-26-10-70-59-122-138-122z'/%3E%3C/svg%3E">
+
+    <!-- Fonts: Arad (Persian), Plus Jakarta Sans (English/Latin), Noto Sans SC (Chinese) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Arad:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        @font-face {
+            font-family: Arad;
+            font-style: normal;
+            font-weight: normal;
+            src: url('https://cdn.jsdelivr.net/gh/MohamadDarvishi/Arad/Fonts/main/static-webfont/Arad-Regular.woff2') format('woff2');
+            font-display: fallback;
+        }
+
+        :root {
+            /* Palette: Modern Slate & Blue */
+            --bg-color: #f8fafc;
+            --surface-color: #ffffff;
+            --primary-color: #3b82f6;
+            --primary-dark: #2563eb;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --logo-bg: #e2e8f0;
+            /* Slightly darker than bg for logo box */
+            --dropdown-bg: #ffffff;
+            --dropdown-hover: #f1f5f9;
+
+            --success: #10b981;
+            --error: #ef4444;
+
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+            --btn-size: 40px;
+
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            --dropdown-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Scoped to html tag to prevent conflict with buttons using data-theme="dark" */
+        html[data-theme="dark"] {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --primary-color: #60a5fa;
+            --primary-dark: #3b82f6;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --logo-bg: #334155;
+            --dropdown-bg: #1e293b;
+            --dropdown-hover: #334155;
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            --dropdown-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', 'Arad', 'Noto Sans SC', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background-image:
+                linear-gradient(to right, rgba(100, 116, 139, 0.07) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(100, 116, 139, 0.07) 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+
+        /* Main Card */
+        .container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            overflow: visible;
+            /* Changed to visible for dropdowns */
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 24px 0 24px;
+            position: relative;
+            z-index: 20;
+        }
+
+        /* Logo Styling */
+        .brand-icon {
+            width: var(--btn-size);
+            height: var(--btn-size);
+            background: var(--logo-bg);
+            /* Slight difference from bg */
+            border-radius: 12px;
+            /* Matching button radius */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            /* Padding inside the box */
+            transition: var(--transition);
+        }
+
+        .brand-icon svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Controls (Lang/Theme) */
+        .controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Dropdown System */
+        .dropdown {
+            position: relative;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: var(--btn-size);
+            height: var(--btn-size);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .icon-btn:hover,
+        .icon-btn.active {
+            background: var(--bg-color);
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        .icon-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            /* Align to right edge of button */
+            background: var(--dropdown-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--dropdown-shadow);
+            min-width: 140px;
+            opacity: 0;
+            transform: translateY(-10px);
+            visibility: hidden;
+            transition: var(--transition);
+            z-index: 100;
+            overflow: hidden;
+            padding: 4px;
+        }
+
+        [dir="rtl"] .dropdown-menu {
+            right: auto;
+            left: 0;
+        }
+
+        .dropdown.open .dropdown-menu {
+            opacity: 1;
+            transform: translateY(0);
+            visibility: visible;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            padding: 10px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            text-align: left;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        [dir="rtl"] .dropdown-item {
+            text-align: right;
+        }
+
+        .dropdown-item:hover {
+            background: var(--dropdown-hover);
+        }
+
+        .dropdown-item.selected {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .item-icon {
+            font-size: 1.1em;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Header Section */
+        .header {
+            padding: 20px 24px 24px 24px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin: 12px 0 24px;
+            letter-spacing: -0.02em;
+        }
+
+        /* Status Badge */
+        .status-container {
+            display: flex;
+            justify-content: center;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .status-badge.inactive {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Info Grid */
+        .info-card {
+            background: var(--bg-color);
+            margin: 0 24px;
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* Links Section */
+        .links-section {
+            padding: 32px 24px;
+        }
+
+        #links-label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
+
+        .download-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .download-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .download-btn:hover {
+            border-color: var(--primary-color);
+            background: rgba(59, 130, 246, 0.02);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .download-btn span {
+            word-break: break-all;
+        }
+
+        .btn-icon-container {
+            min-width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            color: var(--primary-color);
+            transition: var(--transition);
+        }
+
+        .download-btn:hover .btn-icon-container {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-icon-container svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: var(--radius-sm);
+            border: 1px dashed var(--border-color);
+        }
+
+        /* Logic Holders */
+        .template-logic-holder {
+            display: none !important;
+        }
+
+        /* Direction Utility */
+        [dir="rtl"] .download-btn {
+            flex-direction: row;
+        }
+
+        [dir="ltr"] .download-btn {
+            flex-direction: row;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container" id="main-container">
+
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <!-- Logo Box -->
+            <div class="brand-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+                    <defs>
+                        <linearGradient id="ovpnShield" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stop-color="#F39323"/>
+                            <stop offset="1" stop-color="#E97E20"/>
+                        </linearGradient>
+                    </defs>
+                    <path fill="url(#ovpnShield)"
+                          d="M256 24 56 104v144c0 124 84 213 200 240 116-27 200-116 200-240V104L256 24z"/>
+                    <circle cx="256" cy="196" r="58" fill="#fff"/>
+                    <path fill="#fff"
+                          d="M256 268c-79 0-128 52-138 122-2 14 8 26 22 26h232c14 0 24-12 22-26-10-70-59-122-138-122z"/>
+                </svg>
+            </div>
+
+            <div class="controls">
+
+                <!-- Language Dropdown -->
+                <div class="dropdown" id="lang-dropdown">
+                    <button class="icon-btn" id="lang-btn" title="Switch Language">
+                        <!-- Translate SVG -->
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button class="dropdown-item" data-lang="fa">
+                            <span class="item-icon">🇮🇷</span> فارسی
+                        </button>
+                        <button class="dropdown-item" data-lang="en">
+                            <span class="item-icon">🇺🇸</span> English
+                        </button>
+                        <button class="dropdown-item" data-lang="ru">
+                            <span class="item-icon">🇷🇺</span> Русский
+                        </button>
+                        <button class="dropdown-item" data-lang="zh">
+                            <span class="item-icon">🇨🇳</span> 中文
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Dropdown -->
+                <div class="dropdown" id="theme-dropdown">
+                    <button class="icon-btn" id="theme-btn" title="Switch Theme">
+                        <!-- Dynamic Theme Icon -->
+                        <svg class="theme-icon-display" xmlns="http://www.w3.org/2000/svg" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <!-- Default to moon, updated by JS -->
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu">
+                        <button class="dropdown-item" data-theme="light">
+                            <span class="item-icon">☀️</span> Light
+                        </button>
+                        <button class="dropdown-item" data-theme="dark">
+                            <span class="item-icon">🌙</span> Dark
+                        </button>
+                        <button class="dropdown-item" data-theme="system">
+                            <span class="item-icon">🖥️</span> System
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h2 id="title">اطلاعات اشتراک شما</h2>
+            <div class="status-container">
+                <div id="status-display" class="status-badge">
+                    <!-- Template Logic for Status -->
+                    <span id="template-status-wrapper">
+                        {% if is_active %}
+                        <span class="active-text" data-val="active">فعال</span>
+                        {% else %}
+                        <span class="inactive-text" data-val="inactive">غیرفعال</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Grid -->
+        <div class="info-card">
+            <div class="info-row">
+                <span class="info-label" id="username-label">نام کاربری</span>
+                <span class="info-value" id="username">{{ name }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label" id="total-traffic-label">کل ترافیک</span>
+                <span class="info-value">
+                    {% if total %}{{ "%.2f"|format(total / (1024 ** 3)) }} GB{% else %}∞{% endif %}
+                </span>
+            </div>
+
+            <div class="info-row">
+                <span class="info-label" id="used-traffic-label">ترافیک مصرف شده</span>
+                <span class="info-value">
+                    {{ "%.2f"|format((used or 0) / (1024 ** 3)) }} GB
+                </span>
+            </div>
+            <div class="info-row">
+                <span class="info-label" id="expiry-label">تاریخ انقضا</span>
+                <span class="info-value" id="expiry">{{ expiry_date }}</span>
+            </div>
+        </div>
+
+        <!-- OpenVPN App Download Section -->
+        <div class="app-download-section" style="margin: 32px 24px 0 24px;">
+            <div id="app-download-label"
+                style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 16px;">
+                دانلود اپلیکیشن OpenVPN
+            </div>
+            <div class="app-download-btns" style="display: flex; flex-direction: column; gap: 12px;">
+                <a id="btn-client" class="app-btn" href="https://openvpn.net/client/" target="_blank" rel="noopener"
+                    style="background: var(--surface-color); border: 1px solid var(--border-color); padding: 14px 20px; border-radius: var(--radius-sm); text-decoration: none; color: var(--primary-color); font-weight: 600; text-align: center; transition: var(--transition);">
+                    دانلود کلاینت OpenVPN
+                </a>
+            </div>
+        </div>
+
+        <!-- Downloads -->
+        <div class="links-section">
+            <strong id="links-label">دانلود کانفیگ ها</strong>
+            <div id="links-list" class="download-list">
+                <!-- Template Logic for Links -->
+                {% if ovpn_download_links %}
+                {% for node, link in ovpn_download_links.items() %}
+                <a href="{{ link }}" class="download-btn" download>
+                    <span>{{ node }}</span>
+                    <div class="btn-icon-container">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+                {% else %}
+                <!-- We keep this clean ID for JS to find -->
+                <div id="no-links-msg" class="empty-state">
+                    <span id="no-links-text">هیچ لینکی موجود نیست.</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+    {% raw %}
+    <script>
+        (function () {
+            // --- 1. MOCK DATA LOGIC (Runs if template tags are detected) ---
+            function checkAndMockData() {
+                const usernameEl = document.getElementById('username');
+                const rawContent = usernameEl ? usernameEl.textContent.trim() : '';
+
+                // If we see curly braces, the backend didn't run. Let's mock it.
+                if (rawContent.includes('{{') || rawContent === '') {
+                    console.log("Template tags detected. Activating Preview Mode with Mock Data.");
+
+                    // Mock User Info
+                    document.getElementById('username').textContent = "User_12345";
+                    document.getElementById('expiry').textContent = "2025/12/30";
+
+                    // Mock Status (Force Active for preview)
+                    const statusWrapper = document.getElementById('template-status-wrapper');
+                    if (statusWrapper) {
+                        // Rebuild status badge for preview
+                        const statusBadge = document.getElementById('status-display');
+                        statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Active</span>`;
+                        statusBadge.className = 'status-badge active';
+                    }
+
+                    // Mock Links
+                    const linksList = document.getElementById('links-list');
+                    if (linksList) {
+                        // Clear the "raw" template logic code that might be visible
+                        linksList.innerHTML = '';
+
+                        // Add fake buttons
+                        const mockLinks = [
+                            { name: "Germany", link: "#" },
+                            { name: "France", link: "#" },
+                            { name: "Netherlands", link: "#" }
+                        ];
+
+                        const downloadIcon = `
+                            <div class="btn-icon-container">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            </div>`;
+
+                        mockLinks.forEach(item => {
+                            const a = document.createElement('a');
+                            a.className = 'download-btn';
+                            a.href = item.link;
+                            a.innerHTML = `<span>${item.name}</span>${downloadIcon}`;
+                            linksList.appendChild(a);
+                        });
+                    }
+                } else {
+                    // Backend ran successfully. Let's just style the status badge properly based on template output.
+                    const statusWrapper = document.getElementById('template-status-wrapper');
+                    const statusBadge = document.getElementById('status-display');
+
+                    if (statusWrapper && statusBadge) {
+                        // Check if the template rendered "active" or "inactive" classes/text
+                        const isActive = statusWrapper.querySelector('.active-text') !== null;
+                        const isInactive = statusWrapper.querySelector('.inactive-text') !== null;
+
+                        // Clean up the wrapper and show clean badge
+                        if (isActive) {
+                            statusBadge.classList.add('active');
+                            statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Active</span>`;
+                        } else if (isInactive) {
+                            statusBadge.classList.add('inactive');
+                            statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Inactive</span>`;
+                        }
+                    }
+                }
+            }
+
+            // --- 2. LANGUAGE DATA ---
+            const langData = {
+                fa: {
+                    title: "اطلاعات اشتراک شما",
+                    username: "نام کاربری",
+                    totalTraffic: "کل ترافیک",
+                    usedTraffic: "ترافیک مصرف شده",
+                    expiry: "تاریخ انقضا",
+                    active: "فعال",
+                    inactive: "غیرفعال",
+                    links: "دانلود کانفیگ ها",
+                    noLinks: "هیچ لینکی موجود نیست",
+                    appDownload: "دانلود اپلیکیشن OpenVPN",
+                    client: "دانلود کلاینت OpenVPN",
+                    dir: "rtl",
+                    themeLight: "روشن", themeDark: "تاریک", themeSystem: "سیستم"
+                },
+                en: {
+                    title: "Subscription Details",
+                    username: "Username",
+                    totalTraffic: "Total Traffic",
+                    usedTraffic: "Used Traffic",
+                    expiry: "Expiry Date",
+                    active: "Active",
+                    inactive: "Inactive",
+                    links: "Download Configs",
+                    noLinks: "No links available",
+                    appDownload: "Download OpenVPN App",
+                    client: "Download OpenVPN Client",
+                    dir: "ltr",
+                    themeLight: "Light", themeDark: "Dark", themeSystem: "System"
+                },
+                ru: {
+                    title: "Детали подписки",
+                    username: "Имя пользователя",
+                    totalTraffic: "Общий трафик",
+                    usedTraffic: "Использованный трафик",
+                    expiry: "Дата истечения",
+                    active: "Активен",
+                    inactive: "Неактивен",
+                    links: "Скачать конфигурации",
+                    noLinks: "Нет доступных ссылок",
+                    appDownload: "Скачать OpenVPN приложение",
+                    client: "Скачать OpenVPN клиент",
+                    dir: "ltr",
+                    themeLight: "Светлая", themeDark: "Темная", themeSystem: "Системная"
+                },
+                zh: {
+                    title: "订阅详情",
+                    username: "用户名",
+                    totalTraffic: "总流量",
+                    usedTraffic: "已用流量",
+                    expiry: "到期日期",
+                    active: "有效",
+                    inactive: "无效",
+                    links: "下载配置",
+                    noLinks: "无可用链接",
+                    appDownload: "下载 OpenVPN 应用",
+                    client: "下载 OpenVPN 客户端",
+                    dir: "ltr",
+                    themeLight: "浅色", themeDark: "深色", themeSystem: "系统"
+                }
+            };
+
+            // --- 3. THEME ICONS ---
+            const icons = {
+                light: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />',
+                dark: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />',
+                system: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />'
+            };
+
+            // --- 4. CORE UI FUNCTIONS ---
+
+            function updateUI(lang, themePref) {
+                // 1. Update Text
+                const dict = langData[lang];
+                document.getElementById('title').textContent = dict.title;
+                document.getElementById('username-label').textContent = dict.username;
+                document.getElementById('total-traffic-label').textContent = dict.totalTraffic;
+                document.getElementById('used-traffic-label').textContent = dict.usedTraffic;
+                document.getElementById('expiry-label').textContent = dict.expiry;
+                document.getElementById('links-label').textContent = dict.links;
+                const noLinksText = document.getElementById('no-links-text');
+                if (noLinksText) noLinksText.textContent = dict.noLinks;
+                // Update OpenVPN app download section
+                const appLabel = document.getElementById('app-download-label');
+                if (appLabel) appLabel.textContent = dict.appDownload;
+                const btnClient = document.getElementById('btn-client');
+                if (btnClient) btnClient.textContent = dict.client;
+
+                // Update Dropdown Text Localization
+                const themeItems = document.querySelectorAll('#theme-dropdown .dropdown-item');
+                themeItems.forEach(item => {
+                    const t = item.dataset.theme;
+                    const label = t === 'light' ? dict.themeLight : (t === 'dark' ? dict.themeDark : dict.themeSystem);
+                    const icon = item.querySelector('.item-icon').textContent;
+                    // item.innerHTML = `<span class="item-icon">${icon}</span> ${label}`;
+                    // Keep the structure, just update text node if possible, or rebuild
+                    item.childNodes.forEach(n => {
+                        if (n.nodeType === 3 && n.textContent.trim().length > 0) {
+                            n.textContent = " " + label;
+                        }
+                    });
+                });
+
+                // Update Status
+                const statusText = document.getElementById('status-text');
+                if (statusText) {
+                    const isActive = document.getElementById('status-display').classList.contains('active');
+                    statusText.textContent = isActive ? dict.active : dict.inactive;
+                }
+
+                // Update Dir & Lang
+                document.documentElement.lang = lang;
+                document.documentElement.dir = dict.dir;
+
+                // 2. Handle Theme
+                const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                let effectiveTheme = themePref;
+
+                if (themePref === 'system') {
+                    effectiveTheme = systemDark ? 'dark' : 'light';
+                }
+
+                document.documentElement.setAttribute('data-theme', effectiveTheme);
+
+                // Update Button Icon
+                const svg = document.querySelector('.theme-icon-display');
+                // If system, show monitor. If light/dark manual, show sun/moon
+                svg.innerHTML = icons[themePref === 'system' ? 'system' : effectiveTheme];
+
+                // 3. Update Active States in Dropdowns
+                document.querySelectorAll('.dropdown-item').forEach(btn => btn.classList.remove('selected'));
+                document.querySelector(`[data-lang="${lang}"]`)?.classList.add('selected');
+                document.querySelector(`[data-theme="${themePref}"]`)?.classList.add('selected');
+
+                // 4. Save
+                localStorage.setItem('sub_lang', lang);
+                localStorage.setItem('sub_theme', themePref);
+            }
+
+            // --- 5. DROPDOWN LOGIC ---
+            function setupDropdown(id) {
+                const container = document.getElementById(id);
+                const btn = container.querySelector('.icon-btn');
+
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    // Close others
+                    document.querySelectorAll('.dropdown').forEach(d => {
+                        if (d !== container) d.classList.remove('open');
+                    });
+                    container.classList.toggle('open');
+                    btn.classList.toggle('active');
+                };
+            }
+
+            setupDropdown('lang-dropdown');
+            setupDropdown('theme-dropdown');
+
+            // Click outside to close
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.dropdown').forEach(d => {
+                    d.classList.remove('open');
+                    d.querySelector('.icon-btn').classList.remove('active');
+                });
+            });
+
+            // Selection Logic
+            document.querySelectorAll('#lang-dropdown .dropdown-item').forEach(item => {
+                item.onclick = () => {
+                    const l = item.dataset.lang;
+                    const currentTheme = localStorage.getItem('sub_theme') || 'system';
+                    updateUI(l, currentTheme);
+                };
+            });
+
+            document.querySelectorAll('#theme-dropdown .dropdown-item').forEach(item => {
+                item.onclick = () => {
+                    const t = item.dataset.theme;
+                    const currentLang = localStorage.getItem('sub_lang') || 'fa';
+                    updateUI(currentLang, t);
+                };
+            });
+
+            // --- 6. SYSTEM THEME LISTENER ---
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                const currentThemePref = localStorage.getItem('sub_theme') || 'system';
+                if (currentThemePref === 'system') {
+                    // Re-run update to apply new system preference
+                    const currentLang = localStorage.getItem('sub_lang') || 'fa';
+                    updateUI(currentLang, 'system');
+                }
+            });
+
+            // --- 7. INITIALIZATION ---
+            checkAndMockData();
+
+            const savedLang = localStorage.getItem('sub_lang') || 'fa';
+            // Default to 'system' if nothing saved
+            const savedTheme = localStorage.getItem('sub_theme') || 'system';
+
+            updateUI(savedLang, savedTheme);
+
+        })();
+    </script>
+    {% endraw %}
+</body>
+
+</html>
