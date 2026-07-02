@@ -2,11 +2,11 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FiGrid, FiUsers, FiServer, FiSettings, FiLogOut, FiRefreshCw, FiGlobe, FiMoon, FiSun, FiShield } from 'react-icons/fi';
+import { FiBell, FiLogOut, FiGlobe, FiMoon, FiSun, FiSettings } from 'react-icons/fi';
 import logoSrc from '../assets/ovmanager-character.webp';
 
 const DashboardLayout = () => {
-  const { logout, userRole } = useAuth();
+  const { logout } = useAuth();
   const { i18n } = useTranslation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
 
@@ -16,11 +16,13 @@ const DashboardLayout = () => {
   }, [theme]);
 
   const navItems = [
-    { to: '/', label: 'Dashboard', icon: <FiGrid />, end: true },
-    { to: '/users', label: 'Users', icon: <FiUsers /> },
-    ...(userRole !== 'admin' ? [{ to: '/nodes', label: 'Nodes', icon: <FiServer /> }] : []),
-    ...(userRole === 'main_admin' ? [{ to: '/admins', label: 'Admins', icon: <FiShield /> }] : []),
-    { to: '/settings', label: 'Settings', icon: <FiSettings /> },
+    { to: '/', label: 'Dashboard', end: true },
+    { to: '/users', label: 'Users' },
+    { to: '/nodes', label: 'Servers' },
+    { to: '/nodes', label: 'Network' },
+    { to: '/settings', label: 'Security' },
+    { to: '/users', label: 'Activity' },
+    { to: '/settings', label: 'Settings' },
   ];
 
   const changeLanguage = () => {
@@ -30,47 +32,34 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="ov-shell">
-      <header className="ov-topbar">
-        <div className="ov-brand">
-          <img src={logoSrc} alt="OVManager" />
-          <div>
-            <strong>OVManager</strong>
-            <span>OpenVPN Operations</span>
-          </div>
+    <div className="ops-shell">
+      <header className="ops-topbar">
+        <div className="ops-brand">
+          <span className="ops-logo-mark" />
+          <strong><span>OV</span>Manager</strong>
+          <img src={logoSrc} alt="OVManager character" />
         </div>
 
-        <nav className="ov-tabs" aria-label="Primary navigation">
+        <nav className="ops-nav">
           {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className="ov-tab">
-              {item.icon}
-              <span>{item.label}</span>
+            <NavLink key={`${item.label}-${item.to}`} to={item.to} end={item.end} className="ops-nav-link">
+              {item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="ov-actions">
-          <button type="button" className="ov-icon-btn" onClick={changeLanguage} title="Language"><FiGlobe /></button>
-          <button type="button" className="ov-icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Theme">
+        <div className="ops-userbar">
+          <button type="button" onClick={changeLanguage} title="Language"><FiGlobe /></button>
+          <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Theme">
             {theme === 'dark' ? <FiSun /> : <FiMoon />}
           </button>
-          <button type="button" className="ov-icon-btn" onClick={() => window.location.reload()} title="Refresh"><FiRefreshCw /></button>
-          <button type="button" className="ov-logout" onClick={logout}><FiLogOut /> Logout</button>
+          <button type="button" title="Settings"><FiSettings /></button>
+          <button type="button" className="ops-bell" title="Alerts"><FiBell /></button>
+          <div className="ops-profile"><span>AR</span><b>Alex R.</b></div>
+          <button type="button" onClick={logout} title="Logout"><FiLogOut /></button>
         </div>
       </header>
-
-      <section className="ov-hero-strip">
-        <div>
-          <span className="ov-eyebrow">Live control center</span>
-          <h1>Manage users, nodes and traffic without noise.</h1>
-        </div>
-        <div className="ov-hero-metrics">
-          <span>OVManager</span>
-          <strong>v2 UI</strong>
-        </div>
-      </section>
-
-      <main className="ov-main">
+      <main className="ops-main">
         <Outlet />
       </main>
     </div>

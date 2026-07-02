@@ -4,13 +4,13 @@ OVManager is the web control panel for managing OpenVPN users, traffic, subscrip
 
 ## Features
 
+- Operational overview dashboard
 - User management with expiry dates, traffic quotas, and max-login limits
 - Online/offline status and active connection counts per user
 - Per-user disconnect and auth-error diagnostics
-- Node management and bulk OVPN config download
+- Node/server management and bulk OVPN config download
 - Subscription link generation
 - Dark/light admin UI
-- React frontend + FastAPI backend
 
 ## Project structure
 
