@@ -9,7 +9,7 @@ import NodeManagement from './pages/NodeManagement';
 import AdminManagement from './pages/AdminManagement';
 import Settings from './pages/Settings';
 
-import favicon from './assets/ovmanager-character.webp';
+import favicon from './assets/ovmanager-character-clean.png';
 
 function App() {
   const { isAuthenticated, userRole } = useAuth();

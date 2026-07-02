@@ -2,62 +2,32 @@ import { FiEdit, FiTrash2, FiUser, FiUsers } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 
 const AdminTable = ({ admins, isLoading, onEdit, onDelete }) => {
-    const { t } = useTranslation();
+  const { t } = useTranslation();
+  if (isLoading) return <div className="empty-state">{t('loading', 'Loading...')}</div>;
+  if (!admins || admins.length === 0) return <div className="empty-state">{t('noAdminsFound', 'No admins found.')}</div>;
 
-    if (isLoading) {
-        return (
-            <div className="table-container">
-                <p>{t('loading')}</p>
-            </div>
-        );
-    }
-
-    if (!admins || admins.length === 0) {
-        return (
-            <div className="table-container">
-                <p>{t('noAdminsFound')}</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="admin-cards-container">
-            {admins.map((admin) => (
-                <div key={admin.id} className="admin-card">
-                    <div className="admin-card-header">
-                        <div className="admin-avatar">
-                            <FiUser size={24} />
-                        </div>
-                        <div className="admin-info">
-                            <h4 className="admin-username">{admin.username}</h4>
-                            <div className="admin-stats">
-                                <FiUsers size={14} />
-                                <span>{admin.users_count || 0} {t('users')}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="admin-card-actions">
-                        <button
-                            onClick={() => onEdit(admin)}
-                            className="btn-admin-edit"
-                            title={t('editButton')}
-                        >
-                            <FiEdit size={16} />
-                            <span>{t('editButton')}</span>
-                        </button>
-                        <button
-                            onClick={() => onDelete(admin)}
-                            className="btn-admin-delete"
-                            title={t('deleteButton')}
-                        >
-                            <FiTrash2 size={16} />
-                            <span>{t('deleteButton')}</span>
-                        </button>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
+  return (
+    <div className="table-container list-table-container">
+      <table className="list-table admin-list-table">
+        <thead>
+          <tr><th>Admin</th><th>Users</th><th>Role</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {admins.map((admin) => (
+            <tr key={admin.username}>
+              <td className="identity-cell"><span className="row-avatar"><FiUser /></span><div><strong>{admin.username}</strong><small>administrator</small></div></td>
+              <td><FiUsers /> {admin.users_count || 0}</td>
+              <td><span className="pill online">Admin</span></td>
+              <td><div className="row-actions">
+                <button title="Edit" onClick={() => onEdit(admin)}><FiEdit /></button>
+                <button className="danger" title="Delete" onClick={() => onDelete(admin)}><FiTrash2 /></button>
+              </div></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 };
 
 export default AdminTable;

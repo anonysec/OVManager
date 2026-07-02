@@ -265,3 +265,23 @@ html[data-theme="light"] .world-map-real .country { fill: #a9c5dc !important; st
 html[data-theme="light"] .world-map-real .country-borders { stroke: rgba(35,65,95,.52) !important; }
 html[data-theme="light"] .map-marker text { fill: #07111d !important; stroke: #ffffff !important; }
 html[data-theme="light"] .map-marker .node-country-label { fill: #075a75 !important; }
+
+/* list view override for users/nodes/admins */
+.user-board, .node-board, .admin-cards-container { display: block !important; }
+.list-table-container { padding: 0 !important; overflow: auto !important; }
+.list-table { width: 100%; min-width: 980px; border-collapse: collapse; }
+.list-table th { background: rgba(255,255,255,.035); color: #c6cad2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 14px 16px; }
+.list-table td { padding: 13px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.list-table tbody tr:hover td { background: rgba(255,255,255,.04); }
+.identity-cell { display: flex; align-items: center; gap: 10px; }
+.identity-cell strong { display:block; }
+.identity-cell small { display:block; color: var(--muted); margin-top: 2px; font-size: 11px; }
+.row-avatar { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: #343b47; color: #fff; font-size: 12px; font-weight: 900; flex: 0 0 auto; }
+.node-avatar { border-radius: 10px; background: rgba(17,211,233,.18); color: var(--cyan); }
+.login-count { color: var(--orange); font-size: 16px; }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.row-actions button { min-width: 31px; height: 31px; padding: 0 8px !important; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--line) !important; background: #2d3440 !important; color: var(--text) !important; border-radius: 8px !important; box-shadow: none !important; }
+.row-actions button:hover { border-color: var(--orange) !important; color: var(--orange) !important; }
+.row-actions button.danger { background: rgba(255,83,104,.14) !important; color: var(--red) !important; }
+html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
+html[data-theme="light"] .row-actions button { background: #eef2f7 !important; }

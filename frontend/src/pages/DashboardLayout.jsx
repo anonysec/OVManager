@@ -16,11 +16,11 @@ const DashboardLayout = () => {
   }, [theme]);
 
   const navItems = [
-    { to: '/', label: 'Dashboard', end: true },
-    { to: '/users', label: 'Users' },
-    { to: '/nodes', label: 'Nodes' },
-    ...(userRole === 'main_admin' ? [{ to: '/admins', label: 'Admins' }] : []),
-    { to: '/settings', label: 'Settings' },
+    { to: '/', label: i18n.language === 'fa' ? 'داشبورد' : 'Dashboard', end: true },
+    { to: '/users', label: i18n.language === 'fa' ? 'کاربران' : 'Users' },
+    { to: '/nodes', label: i18n.language === 'fa' ? 'نودها' : 'Nodes' },
+    ...(userRole === 'main_admin' ? [{ to: '/admins', label: i18n.language === 'fa' ? 'ادمین‌ها' : 'Admins' }] : []),
+    { to: '/settings', label: i18n.language === 'fa' ? 'تنظیمات' : 'Settings' },
   ];
 
   const changeLanguage = () => {
