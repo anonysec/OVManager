@@ -161,3 +161,52 @@ html[data-theme="light"] .ops-table td { color: var(--text); }
 
 @media (max-width: 1180px) { .ops-shell { padding: 14px; } .ops-topbar { grid-template-columns: 1fr; height: auto; } .ops-nav { justify-content: flex-start; overflow-x: auto; } .ops-userbar { justify-content: flex-start; } .ops-overview-grid, .ops-lower-grid { grid-template-columns: 1fr; } body { overflow: auto; } }
 @media (max-width: 760px) { .ops-shell { height: auto; } .network-card-grid, .health-grid, .security-grid, .user-card-grid, .node-specs { grid-template-columns: 1fr; } .ops-brand img { width: 58px; height: 58px; } }
+
+/* dashboard bugfix/enhancement: real map + hover details */
+.has-tip { position: relative; }
+.has-tip:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 10px;
+  top: calc(100% + 8px);
+  z-index: 90;
+  max-width: 320px;
+  width: max-content;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #080a0f;
+  color: #fff;
+  border: 1px solid #454b58;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.has-tip:hover::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 100%;
+  z-index: 91;
+  border: 7px solid transparent;
+  border-bottom-color: #080a0f;
+  pointer-events: none;
+}
+.world-map-real {
+  height: 204px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  background: radial-gradient(circle at 50% 50%, rgba(17,211,233,.10), transparent 65%);
+  overflow: hidden;
+}
+.world-map-real svg { width: 100%; height: 100%; display: block; }
+.world-map-real .continent {
+  fill: rgba(56, 99, 131, .58);
+  stroke: rgba(17, 211, 233, .16);
+  stroke-width: 2;
+}
+.map-marker circle:first-child { fill: var(--cyan); filter: drop-shadow(0 0 7px var(--cyan)); }
+.map-marker .pulse { fill: none; stroke: var(--cyan); stroke-width: 2; opacity: .45; animation: mapPulse 2s ease-in-out infinite; }
+.map-marker text { fill: #dffbff; font-size: 18px; font-weight: 800; paint-order: stroke; stroke: #11151b; stroke-width: 4px; }
+@keyframes mapPulse { 0%,100% { transform: scale(.7); opacity:.2; } 50% { transform: scale(1.25); opacity:.75; } }
+html[data-theme="light"] .map-marker text { fill: #101827; stroke: #fff; }

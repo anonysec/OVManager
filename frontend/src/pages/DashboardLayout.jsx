@@ -6,7 +6,7 @@ import { FiBell, FiLogOut, FiGlobe, FiMoon, FiSun, FiSettings } from 'react-icon
 import logoSrc from '../assets/ovmanager-character.webp';
 
 const DashboardLayout = () => {
-  const { logout } = useAuth();
+  const { logout, userRole } = useAuth();
   const { i18n } = useTranslation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
 
@@ -18,10 +18,8 @@ const DashboardLayout = () => {
   const navItems = [
     { to: '/', label: 'Dashboard', end: true },
     { to: '/users', label: 'Users' },
-    { to: '/nodes', label: 'Servers' },
-    { to: '/nodes', label: 'Network' },
-    { to: '/settings', label: 'Security' },
-    { to: '/users', label: 'Activity' },
+    { to: '/nodes', label: 'Nodes' },
+    ...(userRole === 'main_admin' ? [{ to: '/admins', label: 'Admins' }] : []),
     { to: '/settings', label: 'Settings' },
   ];
 

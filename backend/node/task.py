@@ -191,16 +191,25 @@ async def get_node_status_handler(node_id: int, db: Session):
         # get_node_info() uses blocking `requests`; run it in a threadpool so a
         # slow/unreachable node can't block the event loop (which would freeze
         # the whole panel and make the dashboard hang / show 0 active nodes).
-        node_status = await run_in_threadpool(
-            NodeRequests(
-                address=node.address, port=node.port, api_key=node.key
-            ).get_node_info
+        node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        node_status, session_diagnostics = await asyncio.gather(
+            run_in_threadpool(node_req.get_node_info),
+            run_in_threadpool(node_req.get_sessions, None, 8),
+            return_exceptions=True,
         )
+        if isinstance(node_status, Exception):
+            logger.warning("node status failed for %s: %s", node.name, node_status)
+            node_status = {}
+        if isinstance(session_diagnostics, Exception) or session_diagnostics is False:
+            logger.warning("node session diagnostics failed for %s: %s", node.name, session_diagnostics)
+            session_diagnostics = {}
         return {
             "address": node.address,
             "port": node.port,
+            "name": node.name,
             "status": "active" if node.status else "inactive",
             "node_info": node_status,
+            "session_diagnostics": session_diagnostics or {},
         }
     return None
 
