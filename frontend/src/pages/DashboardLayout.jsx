@@ -1,15 +1,13 @@
-import { Outlet } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
-import MobileNav from '../components/MobileNav'; 
+import { Outlet, NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useState } from 'react';
-import { FiLogOut, FiRefreshCw, FiGlobe, FiMoon, FiSun } from 'react-icons/fi';
-import logoSrc from '../assets/ovmanager-character.webp'; 
+import { FiGrid, FiUsers, FiServer, FiSettings, FiLogOut, FiRefreshCw, FiGlobe, FiMoon, FiSun, FiShield } from 'react-icons/fi';
+import logoSrc from '../assets/ovmanager-character.webp';
 
 const DashboardLayout = () => {
-  const { logout } = useAuth();
-  const { t, i18n } = useTranslation();
+  const { logout, userRole } = useAuth();
+  const { i18n } = useTranslation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
 
   useEffect(() => {
@@ -17,48 +15,64 @@ const DashboardLayout = () => {
     localStorage.setItem('ovmanager-theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
-
-  const handleRefresh = () => {
-    window.location.reload();
-  };
+  const navItems = [
+    { to: '/', label: 'Dashboard', icon: <FiGrid />, end: true },
+    { to: '/users', label: 'Users', icon: <FiUsers /> },
+    ...(userRole !== 'admin' ? [{ to: '/nodes', label: 'Nodes', icon: <FiServer /> }] : []),
+    ...(userRole === 'main_admin' ? [{ to: '/admins', label: 'Admins', icon: <FiShield /> }] : []),
+    { to: '/settings', label: 'Settings', icon: <FiSettings /> },
+  ];
 
   const changeLanguage = () => {
-    const newLang = i18n.language === 'en' ? 'fa' : 'en';
-    i18n.changeLanguage(newLang);
-    document.documentElement.dir = newLang === 'fa' ? 'rtl' : 'ltr';
+    const next = i18n.language === 'en' ? 'fa' : 'en';
+    i18n.changeLanguage(next);
+    document.documentElement.dir = next === 'fa' ? 'rtl' : 'ltr';
   };
 
   return (
-    <div id="main-container">
-      <Sidebar />
-      <div className="content-wrapper">
-        <header className="main-header">
-          {/* Logo container, visible only on mobile */}
-          <div className="header-logo-container">
-            <img src={logoSrc} alt="Panel Logo" className="header-logo" />
+    <div className="ov-shell">
+      <header className="ov-topbar">
+        <div className="ov-brand">
+          <img src={logoSrc} alt="OVManager" />
+          <div>
+            <strong>OVManager</strong>
+            <span>OpenVPN Operations</span>
           </div>
-          <div className="header-actions">
-            <button onClick={changeLanguage} className="action-btn" title="Language">
-              <FiGlobe size={18} />
-            </button>
-            <button onClick={toggleTheme} className="action-btn" title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-              {theme === 'dark' ? <FiSun size={18} /> : <FiMoon size={18} />}
-            </button>
-            <button onClick={handleRefresh} className="action-btn" title="Refresh">
-              <FiRefreshCw size={18} />
-            </button>
-            <button onClick={logout} className="btn btn-danger" style={{width: 'auto', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px'}}>
-              <FiLogOut />
-              <span className="logout-text">{t('logout')}</span>
-            </button>
-          </div>
-        </header>
-        <main>
-          <Outlet />
-        </main>
-      </div>
-      <MobileNav />
+        </div>
+
+        <nav className="ov-tabs" aria-label="Primary navigation">
+          {navItems.map((item) => (
+            <NavLink key={item.to} to={item.to} end={item.end} className="ov-tab">
+              {item.icon}
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="ov-actions">
+          <button type="button" className="ov-icon-btn" onClick={changeLanguage} title="Language"><FiGlobe /></button>
+          <button type="button" className="ov-icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Theme">
+            {theme === 'dark' ? <FiSun /> : <FiMoon />}
+          </button>
+          <button type="button" className="ov-icon-btn" onClick={() => window.location.reload()} title="Refresh"><FiRefreshCw /></button>
+          <button type="button" className="ov-logout" onClick={logout}><FiLogOut /> Logout</button>
+        </div>
+      </header>
+
+      <section className="ov-hero-strip">
+        <div>
+          <span className="ov-eyebrow">Live control center</span>
+          <h1>Manage users, nodes and traffic without noise.</h1>
+        </div>
+        <div className="ov-hero-metrics">
+          <span>OVManager</span>
+          <strong>v2 UI</strong>
+        </div>
+      </section>
+
+      <main className="ov-main">
+        <Outlet />
+      </main>
     </div>
   );
 };

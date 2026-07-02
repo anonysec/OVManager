@@ -1,43 +1,30 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { FiCopy } from 'react-icons/fi';
-import ActionsDropdown from './ActionsDropdown';
-import './UserTable.css';
+import { FiCopy, FiDownload, FiEdit3, FiPower, FiRefreshCw, FiTrash2, FiActivity } from 'react-icons/fi';
 
 const UserTable = ({ users, onDelete, onDownload, onEdit, onToggleStatus, onResetUsage, onShowSessions, getSubscriptionLink }) => {
-  const { t } = useTranslation();
   const [copyFeedback, setCopyFeedback] = useState({ id: null, status: null });
 
-  const formatTrafficGB = (bytes) => {
-    if (bytes === null || bytes === undefined) return '-';
-    const gb = Number(bytes) / 1024 / 1024 / 1024;
-    if (!Number.isFinite(gb)) return '-';
-
-    if (gb < 1) {
-      return gb.toFixed(1);
-    }
-    // For values >= 1 GB, remove trailing zeros
-    return gb.toFixed(2).replace(/\.00$/, '').replace(/\.0$/, '');
+  const gb = (bytes) => {
+    if (bytes === null || bytes === undefined) return 0;
+    const value = Number(bytes) / 1024 / 1024 / 1024;
+    return Number.isFinite(value) ? value : 0;
   };
 
-  const formatLoginUsage = (user) => {
+  const trafficText = (user) => {
+    const used = gb(user.used);
+    if (user.total === null || user.total === undefined) return `${used.toFixed(2)} / ∞ GB`;
+    return `${used.toFixed(2)} / ${gb(user.total).toFixed(0)} GB`;
+  };
+
+  const trafficPercent = (user) => {
+    if (!user.total) return 0;
+    return Math.min(100, Math.max(0, (Number(user.used || 0) / Number(user.total)) * 100));
+  };
+
+  const loginText = (user) => {
     const active = Number(user.active_connections || 0);
     const max = Number(user.max_logins || 0);
-    return `${active}/${max === 0 ? t('unlimited', '∞') : max}`;
-  };
-
-  const formatTrafficUsage = (used, total) => {
-    const unlimited = t('unlimited', '∞');
-    const usedText = formatTrafficGB(used);
-    // total null/undefined means unlimited traffic.
-    if (total === null || total === undefined) {
-      return usedText === '-' ? `0 / ${unlimited}` : `${usedText} / ${unlimited}`;
-    }
-    const totalText = formatTrafficGB(total);
-    if (usedText === '-' && totalText === '-') return '-';
-    if (usedText === '-') return `- / ${totalText} GB`;
-    if (totalText === '-') return `${usedText} / -`;
-    return `${usedText} / ${totalText} GB`;
+    return `${active}/${max === 0 ? '∞' : max}`;
   };
 
   const showCopyFeedback = (user, status) => {
@@ -45,190 +32,90 @@ const UserTable = ({ users, onDelete, onDownload, onEdit, onToggleStatus, onRese
     setCopyFeedback({ id, status });
     window.setTimeout(() => {
       setCopyFeedback((current) => (current.id === id ? { id: null, status: null } : current));
-    }, 1600);
+    }, 1400);
   };
 
-  const copyLabelFor = (user) => {
+  const copyLabel = (user) => {
     const id = user?.uuid || user?.name;
-    if (copyFeedback.id !== id) return t('copySubscriptionLink', 'Copy');
-    if (copyFeedback.status === 'copied') return t('copied_subscription_link', 'Copied');
-    if (copyFeedback.status === 'empty') return t('copy_no_link', 'No link');
-    if (copyFeedback.status === 'failed') return t('copy_failed', 'Failed');
-    return t('copySubscriptionLink', 'Copy');
+    if (copyFeedback.id !== id) return 'Copy sub';
+    if (copyFeedback.status === 'copied') return 'Copied';
+    return 'No link';
   };
 
-  const copyColorFor = (user) => {
-    const id = user?.uuid || user?.name;
-    if (copyFeedback.id !== id) return '#90caf9';
-    if (copyFeedback.status === 'copied') return '#4caf50';
-    return '#ff9800';
-  };
-
-  const handleCopyLink = async (user) => {
-    if (!getSubscriptionLink) {
-      showCopyFeedback(user, 'empty');
-      return;
-    }
-    const link = getSubscriptionLink(user) || '';
-    if (!link) {
-      showCopyFeedback(user, 'empty');
-      return;
-    }
-
-    const copied = await copyTextToClipboard(link);
-    showCopyFeedback(user, copied ? 'copied' : 'failed');
-    if (!copied) {
-      console.warn('Failed to copy subscription link:', link);
-    }
-  };
-
-  // Works on both HTTPS and plain HTTP/IP panels.
-  async function copyTextToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch {
-        // Fall through to textarea fallback.
-      }
-    }
-
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.setAttribute('readonly', '');
-    textArea.style.position = 'fixed';
-    textArea.style.top = '-1000px';
-    textArea.style.left = '-1000px';
-    textArea.style.opacity = '0';
-    document.body.appendChild(textArea);
-
-    const selection = document.getSelection();
-    const selectedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-
-    textArea.focus();
-    textArea.select();
-    textArea.setSelectionRange(0, text.length);
-
-    let copied = false;
+  const copySub = async (user) => {
+    const link = getSubscriptionLink?.(user) || '';
+    if (!link) return showCopyFeedback(user, 'empty');
     try {
-      copied = document.execCommand('copy');
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      showCopyFeedback(user, 'copied');
     } catch {
-      copied = false;
+      showCopyFeedback(user, 'empty');
     }
+  };
 
-    document.body.removeChild(textArea);
-    if (selectedRange && selection) {
-      selection.removeAllRanges();
-      selection.addRange(selectedRange);
-    }
-    return copied;
+  if (!users.length) {
+    return <div className="empty-state">No users found.</div>;
   }
 
   return (
-    <div className="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>{t('th_username')}</th>
-            <th>{t('th_expiryDate')}</th>
-            <th>{t('th_totalTraffic')}</th>
-            <th>{t('th_maxLogins')}</th>
-            <th>{t('th_status')}</th>
-            <th>{t('th_owner')}</th>
-            <th>{t('th_actions')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.length === 0 ? (
-            <tr><td colSpan="7" style={{ textAlign: 'center' }}>{t('noUsersFound')}</td></tr>
-          ) : (
-            users.map((user) => (
-              <tr key={user.name}>
-                <td>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <span
-                      title={user.online ? t('online', 'Online') : t('offline', 'Offline')}
-                      style={{
-                        width: 9,
-                        height: 9,
-                        borderRadius: '50%',
-                        background: user.online ? '#4caf50' : '#777',
-                        boxShadow: user.online ? '0 0 8px rgba(76,175,80,.7)' : 'none',
-                        display: 'inline-block',
-                      }}
-                    />
-                    <span>{user.name}</span>
-                    <small style={{ color: user.online ? '#81c784' : '#9e9e9e' }}>
-                      {user.online ? t('online', 'Online') : t('offline', 'Offline')}
-                    </small>
-                  </span>
-                </td>
-                <td>{new Date(user.expiry_date).toLocaleDateString('en-CA')}</td>
-                <td>{formatTrafficUsage(user.used, user.total)}</td>
-                <td>{formatLoginUsage(user)}</td>
-                <td>
-                  <span className={`status-${user.is_active ? 'active' : 'inactive'}`}>
-                    {user.is_active ? t('status_active') : t('status_inactive')}
-                  </span>
-                </td>
-                <td>{user.owner}</td>
-                <td style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ActionsDropdown
-                    actions={[
-                      { label: t('editButton'), onClick: () => onEdit(user) },
-                      { label: t('downloadButton'), onClick: () => onDownload(user) },
-                      {
-                        label: t('resetUsageButton', 'Reset Usage'),
-                        onClick: () => onResetUsage && onResetUsage(user),
-                        className: 'secondary-action',
-                      },
-                      {
-                        label: t('sessionsButton', 'Sessions / Auth Errors'),
-                        onClick: () => onShowSessions && onShowSessions(user),
-                        className: 'secondary-action',
-                      },
-                      {
-                        label: user.is_active ? t('deactivateButton', 'Deactivate') : t('activateButton', 'Activate'),
-                        onClick: () => onToggleStatus(user),
-                        className: user.is_active ? 'warning-action' : 'success-action',
-                      },
-                      {
-                        label: t('deleteButton'),
-                        onClick: () => onDelete(user.uuid, user.name),
-                        className: 'danger-action',
-                      },
-                    ]}
-                  />
-                  <button
-                    className="icon-btn btn-copy"
-                    title={copyLabelFor(user)}
-                    type="button"
-                    onClick={() => handleCopyLink(user)}
-                    style={{
-                      background: 'rgba(144, 202, 249, 0.08)',
-                      border: '1px solid rgba(144, 202, 249, 0.35)',
-                      borderRadius: 6,
-                      padding: '4px 8px',
-                      marginLeft: 6,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      color: copyColorFor(user),
-                      fontSize: 12,
-                      minWidth: 72,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <FiCopy style={{ fontSize: 16, color: copyColorFor(user) }} />
-                    <span>{copyLabelFor(user)}</span>
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+    <div className="user-board">
+      {users.map((user) => {
+        const percent = trafficPercent(user);
+        return (
+          <article className={`user-card ${user.online ? 'is-online' : ''}`} key={user.uuid || user.name}>
+            <div className="user-card-head">
+              <div className="user-avatar">{user.name.slice(0, 2).toUpperCase()}</div>
+              <div className="user-title">
+                <h3>{user.name}</h3>
+                <span className={user.online ? 'pill online' : 'pill'}>{user.online ? 'Online' : 'Offline'}</span>
+              </div>
+              <div className="login-counter">{loginText(user)}</div>
+            </div>
+
+            <div className="user-card-grid">
+              <div>
+                <span>Expiry</span>
+                <strong>{new Date(user.expiry_date).toLocaleDateString('en-CA')}</strong>
+              </div>
+              <div>
+                <span>Owner</span>
+                <strong>{user.owner}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{user.is_active ? 'Active' : 'Inactive'}</strong>
+              </div>
+            </div>
+
+            <div className="traffic-block">
+              <div className="traffic-row">
+                <span>Total Traffic</span>
+                <strong>{trafficText(user)}</strong>
+              </div>
+              <div className="progress-track"><div style={{ width: `${percent}%` }} /></div>
+            </div>
+
+            <div className="card-actions-row">
+              <button onClick={() => onShowSessions?.(user)}><FiActivity /> Sessions</button>
+              <button onClick={() => copySub(user)}><FiCopy /> {copyLabel(user)}</button>
+              <button onClick={() => onDownload(user)}><FiDownload /> Config</button>
+              <button onClick={() => onEdit(user)}><FiEdit3 /> Edit</button>
+              <button onClick={() => onResetUsage?.(user)}><FiRefreshCw /> Reset</button>
+              <button onClick={() => onToggleStatus(user)}><FiPower /> {user.is_active ? 'Disable' : 'Enable'}</button>
+              <button className="danger" onClick={() => onDelete(user.uuid, user.name)}><FiTrash2 /> Delete</button>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 };
