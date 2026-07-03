@@ -28,11 +28,22 @@ const nodeMeta = (node) => {
   return byCode[code] || { flag: '🌐', location: node?.tunnel_address || node?.address || 'Unknown', lon: 0, lat: 20, dx: 16, dy: -12 };
 };
 
-const MiniLine = () => (
-  <svg className="mini-line" viewBox="0 0 220 54" aria-hidden="true">
-    <polyline points="0,38 10,34 20,42 32,22 45,30 58,16 71,28 84,24 97,36 110,20 122,32 135,8 148,28 162,18 176,26 190,34 205,16 220,24" />
-  </svg>
-);
+const MiniLine = ({ values = [] }) => {
+  const data = values.length >= 2 ? values.slice(-48) : [12, 20, 15, 28, 22, 34, 30, 42, 36, 44, 38, 48];
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const span = Math.max(max - min, 1);
+  const points = data.map((v, i) => {
+    const x = data.length === 1 ? 0 : (i / (data.length - 1)) * 220;
+    const y = 48 - ((v - min) / span) * 40;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return (
+    <svg className="mini-line" viewBox="0 0 220 54" aria-hidden="true">
+      <polyline points={points} />
+    </svg>
+  );
+};
 
 const Tip = ({ tip, children, className = '' }) => <div className={`has-tip ${className}`} data-tip={tip}>{children}</div>;
 
@@ -102,19 +113,22 @@ const ServerStats = () => {
   const [nodes, setNodes] = useState([]);
   const [nodeStatus, setNodeStatus] = useState({});
   const [users, setUsers] = useState([]);
+  const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [serverRes, nodesRes, usersRes] = await Promise.all([
+        const [serverRes, nodesRes, usersRes, metricsRes] = await Promise.all([
           apiClient.get('/server/info'),
           apiClient.get('/nodes/'),
           apiClient.get('/users/'),
+          apiClient.get('/metrics/history?hours=24'),
         ]);
         const nextNodes = nodesRes.data.success ? (nodesRes.data.data || []) : [];
         if (serverRes.data.success) setStats(serverRes.data.data);
         setNodes(nextNodes);
         if (usersRes.data.success) setUsers(usersRes.data.data || []);
+        if (metricsRes.data.success) setMetrics(metricsRes.data.data || null);
 
         const statuses = {};
         await Promise.all(nextNodes.map(async (node) => {
@@ -140,6 +154,7 @@ const ServerStats = () => {
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   })();
   const totalUsed = users.reduce((sum, u) => sum + Number(u.used || 0), 0);
+  const trafficTrend = (metrics?.traffic || []).map((p) => Number(p.active_connections || 0));
   const avgNodeCpu = (() => {
     const values = Object.values(nodeStatus).map((s) => Number(s?.node_info?.cpu_usage)).filter(Number.isFinite);
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : Number(stats?.cpu || 0);
@@ -149,8 +164,12 @@ const ServerStats = () => {
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : Number(stats?.memory_percent || 0);
   })();
   const offlineNodes = nodes.length - onlineNodes;
-  const securityScore = Math.max(80, 100 - offlineNodes * 8);
-  const previewUsers = users.slice().sort((a, b) => Number(b.online) - Number(a.online)).slice(0, 6);
+  const fullUsers = users.filter((u) => Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins || 0));
+  const inactiveUsers = users.filter((u) => u.is_active === false);
+  const activeAlerts = offlineNodes + fullUsers.length + inactiveUsers.length;
+  const potentialThreats = fullUsers.length;
+  const securityScore = Math.max(70, 100 - offlineNodes * 8 - fullUsers.length * 2 - inactiveUsers.length);
+  const previewUsers = users.filter((u) => Number(u.active_connections || 0) > 0).slice(0, 6);
 
   if (!stats) return <div className="ops-loading">Loading operational overview...</div>;
 
@@ -163,7 +182,7 @@ const ServerStats = () => {
           <div className="network-card-grid">
             <StatCell label="Active Connections" value={activeConnections.toLocaleString()} tip="Sum of live OpenVPN sessions reported by every OVNode." />
             <Tip className="traffic-graph" tip={`Total saved user traffic: ${formatBytes(totalUsed)}. Graph is a visual trend indicator.`}>
-              <span>Live Traffic Graph</span><small>{formatBytes(totalUsed)} total used</small><MiniLine />
+              <span>Live Traffic Graph</span><small>{formatBytes(totalUsed)} total used · {(metrics?.traffic || []).length} snapshots</small><MiniLine values={trafficTrend} />
             </Tip>
             <StatCell label="Server Load" value={`${stats.cpu.toFixed(0)}%`} tip="CPU load of the OVManager panel server." />
             <StatCell label="Latency" value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip="Average panel-to-OVNode API latency from live node health checks." />
@@ -185,11 +204,11 @@ const ServerStats = () => {
 
         <Panel title="Security Overview" tone="orange" className="security-panel" tip="Operational alerts derived from node status and auth diagnostics">
           <div className="security-grid">
-            <StatCell label="Active Alerts" value={String(offlineNodes).padStart(2, '0')} tip="Offline nodes or failed health checks." />
-            <StatCell label="Potential Threats" value="0" tip="No threat feed connected. Auth-error details are available per user." />
+            <StatCell label="Active Alerts" value={String(activeAlerts).padStart(2, '0')} tip="Offline nodes + users at max-login + inactive users." />
+            <StatCell label="Potential Threats" value={String(potentialThreats)} tip="Users currently at max-login and likely to hit AUTH_FAILED on another device." />
             <StatCell label="Security Score" value={`${securityScore}%`} tip="Score decreases when nodes are offline or unhealthy." />
           </div>
-          <p><span>Latest Event:</span>{offlineNodes ? ' Node health requires attention' : ' All OVNodes reachable'}</p>
+          <p><span>Latest Event:</span>{offlineNodes ? ' Node health requires attention' : fullUsers.length ? ' Some users reached max-logins' : ' All OVNodes reachable'}</p>
           <img src={mascot} alt="Security mascot" />
         </Panel>
       </div>

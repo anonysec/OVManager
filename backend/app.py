@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
 from backend.operations.daily_checks import enforce_user_limits, check_user_used_traffic
+from backend.operations.metrics import collect_metrics
 from backend.config import config
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
@@ -70,12 +71,20 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        collect_metrics,
+        CronTrigger(minute="*/5"),
+        id="collect_metrics",
+        replace_existing=True,
+    )
+
     scheduler.start()
 
 
 @api.on_event("startup")
 async def startup_event():
     start_scheduler()
+    await collect_metrics()
 
 
 for router in all_routers:

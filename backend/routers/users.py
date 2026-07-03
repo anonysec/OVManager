@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.operations.daily_checks import enforce_user_limits
+from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel, Users
 from backend.schema._input import CreateUser, UpdateUser
 from backend.db.engine import get_db
@@ -87,6 +88,7 @@ async def create_user(
     # Do NOT synchronously create the user on every node here. The OpenVPN client
     # generation script is slow and can make the Add User popup look stuck.
     # The node-side client/config is created lazily when Download is clicked.
+    log_event(db, "user.create", actor=user.get("username"), target=new_user.name, detail="User created")
     return ResponseModel(
         success=True,
         msg="User created successfully. VPN config will be generated on first download.",
@@ -104,19 +106,20 @@ async def update_user(
 ):
     result = crud.update_user(db, uuid, request)
     if result:
-        user = crud.get_user_by_uuid(db, uuid)
-        used = user.used or 0
+        db_user = crud.get_user_by_uuid(db, uuid)
+        used = db_user.used or 0
         # total=None means unlimited traffic, so it is never "exceeded".
-        not_expired = user.expiry_date >= datetime.today().date()
-        has_traffic = user.total is None or user.total > used
+        not_expired = db_user.expiry_date >= datetime.today().date()
+        has_traffic = db_user.total is None or db_user.total > used
         if not_expired and has_traffic:
             await change_user_status_on_all_nodes(uuid, request.name, True, db)
         else:
             await change_user_status_on_all_nodes(uuid, request.name, False, db)
         # Push the (possibly updated) simultaneous-login limit to all nodes.
-        await set_user_limit_on_all_nodes(user.name, user.max_logins, db)
+        await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db)
     # enforce_user_limits is async; must be awaited or it silently never runs.
     await enforce_user_limits()
+    log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
     return ResponseModel(success=True, msg="User updated successfully", data=result)
 
 
@@ -128,6 +131,7 @@ async def change_user_status(
     user: dict = Depends(get_current_user),
 ):
     await change_user_status_on_all_nodes(uuid, request.name, request.status, db)
+    log_event(db, "user.status", actor=user.get("username"), target=request.name, detail=f"status={request.status}")
     return ResponseModel(success=True, msg="Changed user status successfully")
 
 
@@ -159,6 +163,7 @@ async def disconnect_user_sessions(
     if user["type"] == "admin" and db_user.owner != user["username"]:
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
     data = await disconnect_user_on_all_nodes(db_user.name, db)
+    log_event(db, "user.disconnect", actor=user.get("username"), target=db_user.name, detail="Disconnect requested")
     return ResponseModel(success=True, msg="Disconnect command processed", data=data)
 
 
@@ -166,11 +171,13 @@ async def disconnect_user_sessions(
 async def delete_user(
     uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)
 ):
-    user = crud.get_user_by_uuid(db, uuid)
-    if user is None:
+    db_user = crud.get_user_by_uuid(db, uuid)
+    if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
 
-    if await delete_user_on_all_nodes(user.name, db):
-        crud.delete_user(db, user.name)
+    if await delete_user_on_all_nodes(db_user.name, db):
+        name = db_user.name
+        crud.delete_user(db, name)
+        log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")
         return ResponseModel(success=True, msg="User deleted successfully")
     return ResponseModel(success=False, msg="Failed to delete user on all nodes")
