@@ -74,12 +74,17 @@ async def auto_clean_stale_job():
 
 def start_scheduler():
     """This function starts scheduled maintenance tasks."""
-    scheduler = AsyncIOScheduler()
+    # Scheduled jobs can perform network I/O against nodes and then write to
+    # SQLite. Prevent overlapping copies of the same job from piling up if a
+    # node is slow, which reduces write contention and avoids locked database
+    # errors during admin UI activity.
+    scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
     scheduler.add_job(
         check_user_used_traffic,
         CronTrigger(minute="*/5"),   # reduced frequency → significantly lower CPU/RAM
         id="check_user_used_traffic",
         replace_existing=True,
+        misfire_grace_time=60,
     )
 
     scheduler.add_job(
@@ -87,6 +92,7 @@ def start_scheduler():
         CronTrigger(minute="*/10"),  # reduced frequency
         id="enforce_user_limits",
         replace_existing=True,
+        misfire_grace_time=60,
     )
 
     scheduler.add_job(
@@ -94,6 +100,7 @@ def start_scheduler():
         CronTrigger(minute="*/5"),
         id="collect_metrics",
         replace_existing=True,
+        misfire_grace_time=60,
     )
 
     scheduler.add_job(
@@ -101,6 +108,7 @@ def start_scheduler():
         CronTrigger(minute="*/30"),
         id="auto_sync_limits",
         replace_existing=True,
+        misfire_grace_time=60,
     )
 
     scheduler.add_job(
@@ -108,6 +116,7 @@ def start_scheduler():
         CronTrigger(minute="*/15"),
         id="auto_clean_stale",
         replace_existing=True,
+        misfire_grace_time=60,
     )
 
     scheduler.start()
