@@ -19,7 +19,6 @@ async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_
     for n in nodes:
         if not n.status:
             items.append({"level": "danger", "type": "node_offline", "title": f"Node {n.name} is offline", "target": n.name})
-    for u in users:
-        if not bool(u.is_active):
-            items.append({"level": "warning", "type": "user_inactive", "title": f"User {u.name} is inactive", "target": u.name})
+    # Do not notify for inactive users; that is expected administrative state.
+    # Full/max-login and stale-login issues are surfaced in Max-login Health.
     return ResponseModel(success=True, msg="Notifications", data=items[:100])

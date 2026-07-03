@@ -9,6 +9,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 from backend.operations.daily_checks import enforce_user_limits, check_user_used_traffic
 from backend.operations.metrics import collect_metrics
+from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
+from backend.db.engine import SessionLocal
 from backend.config import config
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
@@ -54,8 +56,24 @@ api.add_middleware(
 )
 
 
+async def auto_sync_limits_job():
+    db = SessionLocal()
+    try:
+        await sync_all_user_limits(db)
+    finally:
+        db.close()
+
+
+async def auto_clean_stale_job():
+    db = SessionLocal()
+    try:
+        await clean_stale_sessions_all_nodes(db)
+    finally:
+        db.close()
+
+
 def start_scheduler():
-    """This function starts the scheduler for every 5 minutes tasks"""
+    """This function starts scheduled maintenance tasks."""
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         check_user_used_traffic,
@@ -78,6 +96,20 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        auto_sync_limits_job,
+        CronTrigger(minute="*/30"),
+        id="auto_sync_limits",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        auto_clean_stale_job,
+        CronTrigger(minute="*/15"),
+        id="auto_clean_stale",
+        replace_existing=True,
+    )
+
     scheduler.start()
 
 
@@ -85,6 +117,8 @@ def start_scheduler():
 async def startup_event():
     start_scheduler()
     await collect_metrics()
+    await auto_sync_limits_job()
+    await auto_clean_stale_job()
 
 
 for router in all_routers:

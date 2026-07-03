@@ -8,6 +8,7 @@ from .activity import router as activity_router
 from .security import router as security_router
 from .notifications import router as notifications_router
 from .metrics import router as metrics_router
+from .maintenance import router as maintenance_router
 
 all_routers = [
     login_router,
@@ -20,4 +21,5 @@ all_routers = [
     security_router,
     notifications_router,
     metrics_router,
+    maintenance_router,
 ]

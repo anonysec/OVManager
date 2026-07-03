@@ -546,3 +546,152 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
     if not response:
         return {}
     return response
+
+
+def _panel_username_from_cn(common_name: str, node_name: str) -> str:
+    suffix = f"-{node_name}"
+    if common_name.endswith(suffix):
+        return common_name[: -len(suffix)]
+    return common_name.rsplit("-", 1)[0] if "-" in common_name else common_name
+
+
+async def login_health_summary(db: Session, hours: int = 8) -> dict:
+    """Global max-login health computed from current node diagnostics."""
+    users = crud.get_all_users(db)
+    nodes = crud.get_all_nodes(db)
+    active_counts: dict[str, int] = {}
+    stale_counts: dict[str, int] = {}
+    auth_counts: dict[str, int] = {}
+    node_rows = []
+
+    def work(node):
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        data = req.get_sessions(hours=hours)
+        return node, (data if isinstance(data, dict) else {})
+
+    raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
+    for item in raw:
+        if isinstance(item, Exception):
+            logger.warning("login health node failed: %s", item)
+            continue
+        node, data = item
+        live_sessions = data.get("live_sessions") or []
+        stale_markers = data.get("stale_markers") or []
+        for sess in live_sessions:
+            username = _panel_username_from_cn(sess.get("common_name") or "", node.name)
+            active_counts[username] = active_counts.get(username, 0) + 1
+        for marker in stale_markers:
+            username = _panel_username_from_cn(marker.get("common_name") or "", node.name)
+            stale_counts[username] = stale_counts.get(username, 0) + 1
+        last_error = data.get("last_error") or {}
+        if isinstance(last_error, dict):
+            for cn in last_error.keys():
+                username = _panel_username_from_cn(cn, node.name)
+                auth_counts[username] = auth_counts.get(username, 0) + 1
+        node_rows.append({
+            "node": node.name,
+            "live_count": int(data.get("live_count") or 0),
+            "stale_marker_count": int(data.get("stale_marker_count") or 0),
+            "auth_errors": int(data.get("auth_errors") or 0),
+            "reachable": bool(data),
+        })
+
+    rows = []
+    for u in users:
+        active = int(active_counts.get(u.name, 0))
+        max_logins = int(u.max_logins or 0)
+        mode = "unlimited" if max_logins == 0 else ("takeover" if max_logins == 1 else "strict")
+        full = max_logins > 0 and active >= max_logins
+        if not bool(u.is_active):
+            status = "inactive"
+        elif stale_counts.get(u.name, 0):
+            status = "stale"
+        elif full and mode == "strict":
+            status = "full"
+        elif active > 0:
+            status = "online"
+        else:
+            status = "idle"
+        stale_count = int(stale_counts.get(u.name, 0))
+        # UI should stay focused: show only users currently online or with stale markers.
+        if active <= 0 and stale_count <= 0:
+            continue
+        rows.append({
+            "name": u.name,
+            "uuid": u.uuid,
+            "active_connections": active,
+            "max_logins": max_logins,
+            "mode": mode,
+            "full": full,
+            "is_active": bool(u.is_active),
+            "stale_markers": stale_count,
+            "auth_events": int(auth_counts.get(u.name, 0)),
+            "status": status,
+        })
+    rows.sort(key=lambda r: (r["status"] != "stale", -r["active_connections"], r["name"].lower()))
+    return {
+        "users": rows,
+        "nodes": node_rows,
+        "totals": {
+            "shown": len(rows),
+            "users": len(users),
+            "online": sum(1 for r in rows if r["active_connections"] > 0),
+            "full": sum(1 for r in rows if r["full"]),
+            "stale": sum(r["stale_markers"] for r in rows),
+            "takeover_mode": sum(1 for r in rows if r["mode"] == "takeover"),
+        },
+    }
+
+
+async def sync_all_user_limits(db: Session) -> dict:
+    """Push every user's max_login limit to every node; no node restart."""
+    users = crud.get_all_users(db)
+    nodes = crud.get_all_nodes(db)
+    results = []
+
+    def work(node, user):
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        cn = f"{user.name}-{node.name}"
+        ok = req.set_user_limit(cn, int(user.max_logins or 0))
+        return {"node": node.name, "user": user.name, "common_name": cn, "max_logins": int(user.max_logins or 0), "success": bool(ok)}
+
+    tasks = [run_in_threadpool(work, n, u) for n in nodes for u in users]
+    raw = await asyncio.gather(*tasks, return_exceptions=True)
+    for item in raw:
+        if isinstance(item, Exception):
+            results.append({"success": False, "error": str(item)})
+        else:
+            results.append(item)
+    return {"total": len(results), "success": sum(1 for r in results if r.get("success")), "results": results}
+
+
+async def clean_stale_sessions_all_nodes(db: Session) -> dict:
+    """Remove stale markers where no live session exists for the same CN; no restart."""
+    nodes = crud.get_all_nodes(db)
+    results = []
+
+    def work(node):
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        data = req.get_sessions(hours=8)
+        if not isinstance(data, dict):
+            return {"node": node.name, "success": False, "error": "diagnostics unavailable", "removed": []}
+        live_cns = {s.get("common_name") for s in (data.get("live_sessions") or []) if s.get("common_name")}
+        stale_cns = sorted({m.get("common_name") for m in (data.get("stale_markers") or []) if m.get("common_name")})
+        removed = []
+        skipped = []
+        for cn in stale_cns:
+            if cn in live_cns:
+                skipped.append(cn)
+                continue
+            res = req.disconnect_user(cn)
+            if isinstance(res, dict):
+                removed.extend(res.get("removed_markers") or [])
+        return {"node": node.name, "success": True, "removed": removed, "skipped_live": skipped}
+
+    raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
+    for item in raw:
+        if isinstance(item, Exception):
+            results.append({"success": False, "error": str(item)})
+        else:
+            results.append(item)
+    return {"nodes": results, "removed_total": sum(len(r.get("removed") or []) for r in results)}

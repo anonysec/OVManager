@@ -15,7 +15,8 @@ import fcntl
 import os
 import time
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Iterable, Optional
 
 import requests
@@ -27,6 +28,7 @@ from sqlalchemy.orm import Session
 from backend.db.engine import get_db
 from backend.db.models import Node, User
 from backend.logger import logger
+from backend.node.requests import NodeRequests
 from backend.schema.output import ResponseModel
 
 
@@ -242,6 +244,28 @@ def _cleanup_registry(
                 )
 
 
+
+def _disconnect_user_everywhere(username: str, db: Session) -> None:
+    """Best-effort disconnect for single-login takeover.
+
+    For max_logins=1 we keep fair pricing (only one live session) but avoid
+    user-facing AUTH_FAILED when switching devices: the newest connection takes
+    over and older sessions/markers are cleared across nodes.
+    """
+    nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
+    for node in nodes:
+        common_name = f"{username}-{node.name}"
+        try:
+            NodeRequests(address=node.address, port=node.port, api_key=node.key).disconnect_user(common_name)
+        except Exception as e:
+            logger.warning("single-login takeover: failed to disconnect %s on %s: %s", common_name, node.name, e)
+    db.execute(text("DELETE FROM global_mlogin_sessions WHERE username = :username"), {"username": username})
+    db.commit()
+
+def _tehran_now() -> str:
+    return datetime.now(ZoneInfo("Asia/Tehran")).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _user_policy(user: User | None) -> tuple[bool, str]:
     if not user:
         return False, "user not found"
@@ -302,25 +326,35 @@ async def global_mlogin_connect(
         global_active = len(existing_sessions)
 
         if max_logins > 0 and not already_registered and global_active >= max_logins:
-            db.commit()
-            logger.info(
-                "global mlogin reject username=%s cn=%s node=%s active=%s limit=%s",
-                username,
-                event.common_name,
-                node.name,
-                global_active,
-                max_logins,
-            )
-            return {
-                "success": True,
-                "allow": False,
-                "msg": "max login reached",
-                "data": {
-                    "username": username,
-                    "global_active": global_active,
-                    "max_logins": max_logins,
-                },
-            }
+            if max_logins == 1:
+                logger.info(
+                    "MAX_LOGIN_TAKEOVER tehran=%s user=%s cn=%s node=%s active=%s max=1 action=disconnect_old_allow_new",
+                    _tehran_now(), username, event.common_name, node.name, global_active,
+                )
+                _disconnect_user_everywhere(username, db)
+                existing_sessions = set()
+                global_active = 0
+            else:
+                db.commit()
+                logger.info(
+                    "MAX_LOGIN_REJECT tehran=%s user=%s cn=%s node=%s active=%s max=%s reason=max_login_reached",
+                    _tehran_now(),
+                    username,
+                    event.common_name,
+                    node.name,
+                    global_active,
+                    max_logins,
+                )
+                return {
+                    "success": True,
+                    "allow": False,
+                    "msg": "max login reached",
+                    "data": {
+                        "username": username,
+                        "global_active": global_active,
+                        "max_logins": max_logins,
+                    },
+                }
 
         # Re-registering the same session is harmless.
         db.execute(
