@@ -135,6 +135,10 @@ const ServerStats = () => {
 
   const onlineNodes = nodes.filter((n) => n.status).length;
   const activeConnections = Object.values(nodeStatus).reduce((sum, status) => sum + Number(status?.session_diagnostics?.live_count || 0), 0);
+  const avgLatency = (() => {
+    const values = Object.values(nodeStatus).map((s) => Number(s?.latency_ms)).filter(Number.isFinite);
+    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+  })();
   const totalUsed = users.reduce((sum, u) => sum + Number(u.used || 0), 0);
   const avgNodeCpu = (() => {
     const values = Object.values(nodeStatus).map((s) => Number(s?.node_info?.cpu_usage)).filter(Number.isFinite);
@@ -162,7 +166,7 @@ const ServerStats = () => {
               <span>Live Traffic Graph</span><small>{formatBytes(totalUsed)} total used</small><MiniLine />
             </Tip>
             <StatCell label="Server Load" value={`${stats.cpu.toFixed(0)}%`} tip="CPU load of the OVManager panel server." />
-            <StatCell label="Latency" value="28ms" tip="Panel-to-node API latency indicator. Exact per-node latency can be added next." />
+            <StatCell label="Latency" value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip="Average panel-to-OVNode API latency from live node health checks." />
           </div>
         </Panel>
 
@@ -228,7 +232,7 @@ const ServerStats = () => {
                     <td>{meta.location}</td>
                     <td><span className={node.status ? 'dot online' : 'dot'} />{node.status ? 'Online' : 'Offline'}</td>
                     <td>{Number.isFinite(Number(cpu)) ? `${Number(cpu).toFixed(0)}%` : '-'}</td>
-                    <td>{conns}</td>
+                    <td>{conns} <small className="latency-note">{status.latency_ms ? `${status.latency_ms}ms` : ''}</small></td>
                   </tr>
                 );
               })}

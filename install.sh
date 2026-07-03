@@ -6,8 +6,8 @@ cd /tmp
 
 APP_NAME="ov-panel"
 INSTALL_DIR="/opt/$APP_NAME"
-REPO_SUBDIR="panel"
-REPO="anonysec/ov"
+# OVManager is now a standalone repository with panel files at repo root.
+REPO="anonysec/OVManager"
 
 YELLOW="\033[1;33m"
 GREEN="\033[0;32m"
@@ -45,9 +45,9 @@ mkdir -p /tmp/ov-panel-extract
 curl -L --fail -o /tmp/ov-panel-source.tar.gz "$LATEST_URL"
 tar -xzf /tmp/ov-panel-source.tar.gz -C /tmp/ov-panel-extract
 
-SRC_DIR=$(find /tmp/ov-panel-extract -mindepth 2 -maxdepth 2 -type d -name "$REPO_SUBDIR" | head -n 1)
+SRC_DIR=$(find /tmp/ov-panel-extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
-    echo -e "${RED}Could not find '$REPO_SUBDIR' directory in downloaded source.${NC}"
+    echo -e "${RED}Could not find extracted OVManager source.${NC}"
     exit 1
 fi
 

@@ -285,3 +285,4 @@ html[data-theme="light"] .map-marker .node-country-label { fill: #075a75 !import
 .row-actions button.danger { background: rgba(255,83,104,.14) !important; color: var(--red) !important; }
 html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 html[data-theme="light"] .row-actions button { background: #eef2f7 !important; }
+.latency-note { color: var(--muted); margin-left: 6px; font-size: 11px; }

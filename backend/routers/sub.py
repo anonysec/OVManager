@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -25,6 +26,13 @@ async def get_subscription(
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
         raise HTTPException(status_code=404)
+    used = user.used or 0
+    if not bool(user.is_active):
+        raise HTTPException(status_code=403, detail="User is inactive")
+    if user.expiry_date and user.expiry_date < date.today():
+        raise HTTPException(status_code=403, detail="User is expired")
+    if user.total is not None and used >= user.total:
+        raise HTTPException(status_code=403, detail="Traffic limit reached")
     nodes = [n for n in crud.get_all_nodes(db) if n.status]
     ovpn_download_links = {}
 
@@ -72,6 +80,13 @@ async def download_ovpn(
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
         raise HTTPException(status_code=404)
+    used = user.used or 0
+    if not bool(user.is_active):
+        raise HTTPException(status_code=403, detail="User is inactive")
+    if user.expiry_date and user.expiry_date < date.today():
+        raise HTTPException(status_code=403, detail="User is expired")
+    if user.total is not None and used >= user.total:
+        raise HTTPException(status_code=403, detail="Traffic limit reached")
     node_obj = crud.get_node_by_name(db, node_name)
     if not node_obj:
         raise HTTPException(status_code=404)

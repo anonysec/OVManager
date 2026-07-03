@@ -1,43 +1,25 @@
-<div align="center">
-  <img width="150px" src="./docs/images/logo.png" alt="OV-Panel Logo">
+# OVManager
 
-  # **OV-Panel**
-  Free, open-source and lightweight panel for managing **OpenVPN** servers and users.
-</div>
+OVManager is the web control panel for managing OpenVPN users, traffic, subscription links, and OVNode servers.
 
-  ![OV-Panel Screenshot](docs/images/panel.png)
+## Features
 
----
+- Operational overview dashboard with real node health, latency and connection metrics
+- Country-border world map with live OVNode markers
+- User management with expiry dates, traffic quotas, and max-login limits
+- Online/offline status and active connection counts per user
+- Per-user disconnect and auth-error diagnostics
+- Node/server management and bulk OVPN config download
+- Subscription link generation with active/expired/traffic-limit enforcement
+- Dark/light admin UI
 
-## 🚀 Overview
+## Project structure
 
-**OV-Panel** is a modern and easy-to-use web panel that allows you to manage your **OpenVPN** server, users, and connections from a simple dashboard.
+- `backend/` — FastAPI backend, database models, routers, node API client
+- `frontend/` — React/Vite UI
+- `install.sh` / `installer.py` — installer entrypoints
+- `data/` — runtime data directory placeholder
 
-It’s designed for both beginners and system administrators who want a minimal yet powerful solution to handle OpenVPN deployments.
+## Notes
 
----
-
-## ✨ Features
-
-- 🧠 Simple and intuitive dashboard  
-- ⚙️ User and connection management  
-- 🔑 Auto user creation with configuration export  
-- 🧩 Supports multiple OpenVPN servers (Node)  
-- 🔒 JWT-based authentication  
-- 🌐 API-ready for automation  
-
----
-
-## ⚡ Quick Installation OV-Panel
-
-You can install OV-Panel on a fresh Ubuntu/Debian system with a single command:
-
-```bash
-bash <(curl -s https://raw.githubusercontent.com/anonysec/ov/main/panel/install.sh)
-```
-## ⚡ Quick Installation OV-Node
-
-You can install OV-Node on a fresh Ubuntu/Debian system with a single command:
-```bash
-bash <(curl -s https://raw.githubusercontent.com/anonysec/ov/main/node/install.sh)
-```
+Do not commit `.env`, runtime databases, logs, or generated virtualenv/node_modules directories.

@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -192,6 +193,7 @@ async def get_node_status_handler(node_id: int, db: Session):
         # slow/unreachable node can't block the event loop (which would freeze
         # the whole panel and make the dashboard hang / show 0 active nodes).
         node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        start = time.perf_counter()
         node_status, session_diagnostics = await asyncio.gather(
             run_in_threadpool(node_req.get_node_info),
             run_in_threadpool(node_req.get_sessions, None, 8),
@@ -203,6 +205,7 @@ async def get_node_status_handler(node_id: int, db: Session):
         if isinstance(session_diagnostics, Exception) or session_diagnostics is False:
             logger.warning("node session diagnostics failed for %s: %s", node.name, session_diagnostics)
             session_diagnostics = {}
+        latency_ms = round((time.perf_counter() - start) * 1000, 1)
         return {
             "address": node.address,
             "port": node.port,
@@ -210,6 +213,7 @@ async def get_node_status_handler(node_id: int, db: Session):
             "status": "active" if node.status else "inactive",
             "node_info": node_status,
             "session_diagnostics": session_diagnostics or {},
+            "latency_ms": latency_ms,
         }
     return None
 
