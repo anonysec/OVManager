@@ -95,13 +95,18 @@ const NodeManagement = () => {
     try {
       const response = await apiClient.delete(`/nodes/${nodeId}`);
       if (response.data.success) {
-        console.warn('Node deleted successfully.');
-        fetchNodes();
+        window.alert(response.data.msg || 'Node deleted successfully.');
       } else {
-        console.warn(response.data.msg || 'Unable to delete node.');
+        window.alert(response.data.msg || 'Unable to delete node.');
       }
-    } catch {
-      console.warn('Error deleting node.');
+    } catch (error) {
+      if (error.response?.status === 404) {
+        window.alert('Node is already removed from the server. Refreshing list.');
+      } else {
+        window.alert(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.');
+      }
+    } finally {
+      fetchNodes();
     }
   };
 

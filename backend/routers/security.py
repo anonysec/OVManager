@@ -1,7 +1,7 @@
 import asyncio
 import re
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
@@ -36,16 +36,21 @@ def _parse_log_line(line: str, common_name: str = "") -> dict:
     msg = re.search(r"msg=([^\n]+)$", line)
     # journal line format: Jul 03 06:20:02 host tag: ... (server timezone is UTC)
     tehran_time = None
+    ts = 0.0
     m_time = re.match(r"([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})", line)
     if m_time:
         try:
             year = datetime.utcnow().year
             dt = datetime.strptime(f"{year} {m_time.group(1)} {m_time.group(2)} {m_time.group(3)}", "%Y %b %d %H:%M:%S")
-            tehran_time = (dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(TEHRAN)).strftime("%Y-%m-%d %H:%M:%S")
+            dt_utc = dt.replace(tzinfo=ZoneInfo("UTC"))
+            ts = dt_utc.timestamp()
+            tehran_time = dt_utc.astimezone(TEHRAN).strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             tehran_time = None
+            ts = 0.0
     username = cn.rsplit("-", 1)[0] if "-" in cn else cn
     return {
+        "ts": ts,
         "time_tehran": tehran_time,
         "username": username,
         "common_name": cn,
@@ -93,6 +98,7 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
             "live": int(data.get("live_count") or 0),
         })
 
+    clean_errors.sort(key=lambda e: float(e.get("ts") or 0), reverse=True)
     top = Counter(e["common_name"] for e in clean_errors if e.get("common_name"))
     return ResponseModel(success=True, msg="Security summary", data={
         "hours": hours,
@@ -101,6 +107,6 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
         "rejects": rejects,
         "stale_markers": stale,
         "per_node": per_node,
-        "last_errors": clean_errors[-50:],
+        "last_errors": clean_errors[:50],
         "top_common_names": top.most_common(20),
     })

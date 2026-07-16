@@ -131,7 +131,7 @@ const UserManagement = () => {
     setSessionLoading(true);
     setSessionError('');
     try {
-      const response = await apiClient.get(`/users/${user.uuid}/sessions?hours=8`);
+      const response = await apiClient.get(`/maintenance/login-diagnostics/${encodeURIComponent(user.name)}?hours=8`);
       if (response.data.success) {
         setSessionDiagnostics(response.data.data);
       } else {

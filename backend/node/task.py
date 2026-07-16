@@ -141,21 +141,23 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
 async def delete_node_handler(node_id: int, db: Session) -> bool:
     """Delete a node without resetting any user's total usage.
 
-    Before deletion we make one best-effort usage snapshot from that node. The
-    accumulated `users.used` value is never decreased, and per-node baselines are
-    intentionally kept in `users.node_usage` to avoid double-counting if a node is
-    later re-added with the same name.
+    If the node is online, take a very short best-effort usage snapshot first.
+    If the node is offline/inactive (for example removed by the ISP), skip the
+    remote call so the delete button does not appear stuck.
     """
     node = crud.get_node_by_id(db, node_id)
     if node:
-        try:
-            usage = await get_users_used_traffic(node, db)
-            if usage:
-                _apply_node_usage_to_db(node, usage, db)
-                db.commit()
-        except Exception as e:
-            db.rollback()
-            logger.warning("Could not snapshot usage before deleting node %s: %s", node.name, e)
+        if bool(node.status):
+            try:
+                usage = await asyncio.wait_for(get_users_used_traffic(node, db), timeout=5)
+                if usage:
+                    _apply_node_usage_to_db(node, usage, db)
+                    db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.warning("Could not snapshot usage before deleting node %s: %s", node.name, e)
+        else:
+            logger.info("Skipping usage snapshot for inactive node before delete: %s", node.name)
 
         crud.delete_node(db, node.id)
         logger.info(f"Node deleted successfully: {node.name}; user total usage preserved")
@@ -186,17 +188,29 @@ async def list_nodes_handler(db: Session) -> list:
 
 
 async def get_node_status_handler(node_id: int, db: Session):
-    """Get the status of a node"""
+    """Get the status of a node."""
     node = crud.get_node_by_id(db, node_id)
     if node:
-        # get_node_info() uses blocking `requests`; run it in a threadpool so a
-        # slow/unreachable node can't block the event loop (which would freeze
-        # the whole panel and make the dashboard hang / show 0 active nodes).
-        node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
         start = time.perf_counter()
+        if not node.status:
+            return {
+                "address": node.address,
+                "port": node.port,
+                "name": node.name,
+                "status": "inactive",
+                "node_info": {},
+                "session_diagnostics": {},
+                "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+            }
+
+        # get_node_info() uses blocking `requests`; run it in a threadpool so a
+        # slow/unreachable node can't block the event loop. Keep dashboard
+        # probes short because powered-off/removed nodes otherwise make the UI
+        # wait for every request timeout.
+        node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
         node_status, session_diagnostics = await asyncio.gather(
-            run_in_threadpool(node_req.get_node_info),
-            run_in_threadpool(node_req.get_sessions, None, 8),
+            run_in_threadpool(node_req.get_node_info, 3),
+            run_in_threadpool(node_req.get_sessions, None, 8, 3),
             return_exceptions=True,
         )
         if isinstance(node_status, Exception):
@@ -416,8 +430,12 @@ async def delete_user_on_all_nodes(name: str, db: Session) -> bool:
 
 
 async def get_active_connection_counts(db: Session) -> dict[str, int]:
-    """Return {panel_username: live_session_count} across all nodes."""
-    nodes = crud.get_all_nodes(db)
+    """Return {panel_username: live_session_count} across reachable active nodes."""
+    # Do not query inactive/offline nodes here. This function is called by the
+    # /users endpoint, which is part of the dashboard's first Promise.all; one
+    # powered-off node with a long TCP timeout makes the whole overview sit on
+    # "Loading operational overview...".
+    nodes = [node for node in crud.get_all_nodes(db) if bool(node.status)]
     counts: dict[str, int] = {}
 
     def base_username(common_name: str, node_name: str) -> str:
@@ -428,7 +446,11 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
 
     def work(node):
         req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
-        data = req.get_sessions(hours=1)
+        # Short dashboard timeout; failed nodes are ignored for live counts.
+        try:
+            data = req.get_sessions(hours=1, timeout=3)
+        except TypeError:
+            data = req.get_sessions(hours=1)
         if not data:
             return {}
         local: dict[str, int] = {}
@@ -695,3 +717,125 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
         else:
             results.append(item)
     return {"nodes": results, "removed_total": sum(len(r.get("removed") or []) for r in results)}
+
+async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> dict:
+    """Clean stale panel-side global_mlogin_sessions rows without disconnecting users."""
+    import time
+    from sqlalchemy import text
+
+    nodes = crud.get_all_nodes(db)
+    live_keys: set[tuple[str, str, str, str]] = set()
+    reachable_nodes: set[str] = set()
+
+    def work(node):
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        data = req.get_sessions(hours=1)
+        return node, data if isinstance(data, dict) else {}
+
+    raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
+    for item in raw:
+        if isinstance(item, Exception):
+            logger.warning("global registry cleanup: node failed: %s", item)
+            continue
+        node, data = item
+        if not data:
+            continue
+        reachable_nodes.add(node.name)
+        for sess in data.get("live_sessions") or []:
+            live_keys.add((
+                node.name,
+                str(sess.get("common_name") or ""),
+                str(sess.get("trusted_ip") or ""),
+                str(sess.get("trusted_port") or ""),
+            ))
+
+    try:
+        rows = db.execute(text(
+            "SELECT id, username, common_name, node_name, trusted_ip, trusted_port, created_at "
+            "FROM global_mlogin_sessions"
+        )).fetchall()
+    except Exception:
+        return {"reachable_nodes": sorted(reachable_nodes), "removed": [], "kept": [], "message": "registry table missing"}
+
+    now = time.time()
+    removed = []
+    kept = []
+    for row in rows:
+        key = (str(row[3] or ""), str(row[2] or ""), str(row[4] or ""), str(row[5] or ""))
+        node_name = key[0]
+        if node_name not in reachable_nodes:
+            kept.append({"id": row[0], "reason": "node_unreachable", "key": key})
+            continue
+        if float(row[6] or 0) > now - int(grace_seconds or 30):
+            kept.append({"id": row[0], "reason": "grace", "key": key})
+            continue
+        if key not in live_keys:
+            db.execute(text("DELETE FROM global_mlogin_sessions WHERE id = :id"), {"id": row[0]})
+            removed.append({"id": row[0], "username": row[1], "common_name": row[2], "node": row[3], "trusted_ip": row[4], "trusted_port": row[5]})
+    db.commit()
+    return {"reachable_nodes": sorted(reachable_nodes), "removed": removed, "kept_count": len(kept), "live_count": len(live_keys)}
+
+
+async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
+    """Detailed no-disconnect login diagnostics for one user."""
+    import datetime
+    from sqlalchemy import text
+
+    user = crud.get_user_by_name(db, name)
+    if not user:
+        return {"username": name, "found": False}
+
+    diag = await get_user_session_diagnostics(name, db, hours=hours)
+    health = await login_health_summary(db, hours=hours)
+    health_row = next((u for u in health.get("users", []) if u.get("name") == name), None)
+
+    registry = []
+    try:
+        rows = db.execute(text(
+            "SELECT username, common_name, node_name, session_key, trusted_ip, trusted_port, pool_ip, created_at, updated_at "
+            "FROM global_mlogin_sessions WHERE username = :username ORDER BY updated_at DESC"
+        ), {"username": name}).fetchall()
+        for r in rows:
+            registry.append({
+                "username": r[0], "common_name": r[1], "node_name": r[2], "session_key": r[3],
+                "trusted_ip": r[4], "trusted_port": r[5], "pool_ip": r[6],
+                "created_at": r[7], "updated_at": r[8],
+                "created_at_utc": datetime.datetime.utcfromtimestamp(float(r[7] or 0)).isoformat() if r[7] else None,
+            })
+    except Exception as e:
+        registry_error = str(e)
+    else:
+        registry_error = None
+
+    used = user.used or 0
+    policy = []
+    if not bool(user.is_active): policy.append("inactive")
+    if user.expiry_date and user.expiry_date < datetime.date.today(): policy.append("expired")
+    if user.total is not None and used >= user.total: policy.append("traffic_limit_reached")
+    if not policy: policy.append("ok")
+
+    active = int((health_row or {}).get("active_connections") or diag.get("totals", {}).get("live_count") or 0)
+    max_logins = int(user.max_logins or 0)
+    if max_logins == 0:
+        recommendation = "Unlimited login mode; no max-login block expected."
+    elif max_logins == 1:
+        recommendation = "Takeover mode: new connection should disconnect old session and be allowed."
+    elif active >= max_logins:
+        recommendation = "Strict mode is full; disconnect a session or increase max logins."
+    else:
+        recommendation = "User is below max-login limit. If connection fails, check node logs/config."
+
+    return {
+        "username": name,
+        "found": True,
+        "policy": policy,
+        "max_logins": max_logins,
+        "mode": "unlimited" if max_logins == 0 else ("takeover" if max_logins == 1 else "strict"),
+        "active_connections": active,
+        "global_registry": registry,
+        "global_registry_error": registry_error,
+        "nodes": diag.get("nodes", []),
+        "totals": diag.get("totals", {}),
+        "health": health_row,
+        "recommendation": recommendation,
+    }

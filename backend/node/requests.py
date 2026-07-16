@@ -49,7 +49,7 @@ class NodeRequests:
             logger.error(f"Error checking node {self.address}: {e}")
             return False
 
-    def get_node_info(self) -> dict:
+    def get_node_info(self, timeout: int | float = 10) -> dict:
         api = f"{self.scheme}://{self.address}/sync/status"
         try:
             data = {
@@ -59,7 +59,7 @@ class NodeRequests:
                 "set_new_setting": self.set_new_setting,
             }
             response = requests.get(
-                api, headers=self.headers, json=data, timeout=10
+                api, headers=self.headers, json=data, timeout=timeout
             ).json()
             if response.get("success"):
                 return response.get("data")
@@ -198,13 +198,18 @@ class NodeRequests:
             logger.error(f"Error setting user limit on node {self.address}: {e}")
             return False
 
-    def get_sessions(self, common_name: str | None = None, hours: int = 8) -> dict | bool:
+    def get_sessions(
+        self,
+        common_name: str | None = None,
+        hours: int = 8,
+        timeout: int | float = 15,
+    ) -> dict | bool:
         api = f"{self.scheme}://{self.address}/sync/sessions"
         params = {"hours": hours}
         if common_name:
             params["common_name"] = common_name
         try:
-            response = requests.get(api, headers=self.headers, params=params, timeout=15).json()
+            response = requests.get(api, headers=self.headers, params=params, timeout=timeout).json()
             if response.get("success"):
                 return response.get("data") or {}
             logger.error(

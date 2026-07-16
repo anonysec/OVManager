@@ -124,10 +124,10 @@ def start_scheduler():
 
 @api.on_event("startup")
 async def startup_event():
+    # Start serving immediately. Maintenance jobs are scheduled below; running
+    # them synchronously during startup can block the panel when a node is
+    # powered off or removed by the ISP.
     start_scheduler()
-    await collect_metrics()
-    await auto_sync_limits_job()
-    await auto_clean_stale_job()
 
 
 for router in all_routers:

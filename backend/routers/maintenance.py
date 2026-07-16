@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
 from backend.db.engine import get_db
-from backend.node.task import clean_stale_sessions_all_nodes, login_health_summary, sync_all_user_limits
+from backend.node.task import clean_global_mlogin_registry, clean_stale_sessions_all_nodes, login_diagnostics, login_health_summary, sync_all_user_limits
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
@@ -32,3 +32,18 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(get_cu
     data = await clean_stale_sessions_all_nodes(db)
     log_event(db, "maintenance.clean_stale", actor=user.get("username"), detail=f"removed={data.get('removed_total')}")
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
+
+
+@router.post("/clean-global-registry", response_model=ResponseModel)
+async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    if user["type"] != "main_admin":
+        return ResponseModel(success=False, msg="Unauthorized", data=None)
+    data = await clean_global_mlogin_registry(db)
+    log_event(db, "maintenance.clean_global_registry", actor=user.get("username"), detail=f"removed={len(data.get('removed') or [])}")
+    return ResponseModel(success=True, msg="Global login registry cleaned", data=data)
+
+
+@router.get("/login-diagnostics/{username}", response_model=ResponseModel)
+async def user_login_diagnostics(username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    data = await login_diagnostics(username, db, hours=hours)
+    return ResponseModel(success=True, msg="Login diagnostics", data=data)
