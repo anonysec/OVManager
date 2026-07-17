@@ -4,7 +4,7 @@ set -euo pipefail
 # Never run from inside a directory that may be deleted during reinstall.
 cd /tmp
 
-APP_NAME="ov-panel"
+APP_NAME="ovmanager"
 INSTALL_DIR="/opt/$APP_NAME"
 # OVManager is now a standalone repository with panel files at repo root.
 REPO="anonysec/OVManager"
@@ -40,12 +40,12 @@ if [ -z "${LATEST_URL:-}" ]; then
     LATEST_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
 fi
 
-rm -rf /tmp/ov-panel-extract /tmp/ov-panel-source.tar.gz
-mkdir -p /tmp/ov-panel-extract
-curl -L --fail -o /tmp/ov-panel-source.tar.gz "$LATEST_URL"
-tar -xzf /tmp/ov-panel-source.tar.gz -C /tmp/ov-panel-extract
+rm -rf /tmp/ovmanager-extract /tmp/ovmanager-source.tar.gz
+mkdir -p /tmp/ovmanager-extract
+curl -L --fail -o /tmp/ovmanager-source.tar.gz "$LATEST_URL"
+tar -xzf /tmp/ovmanager-source.tar.gz -C /tmp/ovmanager-extract
 
-SRC_DIR=$(find /tmp/ov-panel-extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+SRC_DIR=$(find /tmp/ovmanager-extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
     echo -e "${RED}Could not find extracted OVManager source.${NC}"
     exit 1
@@ -55,14 +55,14 @@ echo -e "${YELLOW}Installing into $INSTALL_DIR...${NC}"
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 cp -a "$SRC_DIR"/. "$INSTALL_DIR"/
-rm -rf /tmp/ov-panel-extract /tmp/ov-panel-source.tar.gz
+rm -rf /tmp/ovmanager-extract /tmp/ovmanager-source.tar.gz
 
 cd "$INSTALL_DIR"
 
 echo -e "${YELLOW}Installing Python dependencies...${NC}"
 uv sync
 
-echo -e "${YELLOW}Launching OV-Panel installer...${NC}"
+echo -e "${YELLOW}Launching OVManager installer...${NC}"
 uv run python installer.py
 
 echo -e "${GREEN}Done.${NC}"
