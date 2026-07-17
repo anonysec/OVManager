@@ -35,7 +35,13 @@ api = FastAPI(
 
 @api.get(f"{API_PREFIX}/health", tags=["Health"])
 async def health_check():
-    """Simple health check endpoint."""
+    """Simple health check endpoint - URL-prefixed."""
+    return {"status": "ok", "version": __version__}
+
+
+@api.get("/health", include_in_schema=False)
+async def health_check_public():
+    """Public health check - no auth, no URLPATH dependency. For Docker healthchecks."""
     return {"status": "ok", "version": __version__}
 
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
