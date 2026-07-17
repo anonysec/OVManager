@@ -14,11 +14,11 @@ The limit counts **simultaneous devices per user** (per config / certificate CN)
 
 ## Architecture recap
 
-ov-panel is split in two parts:
+ovmanager is split in two parts:
 
 ```
 ┌────────────┐   HTTP /sync/* (api key)   ┌──────────────────────────┐
-│  ov-panel  │ ─────────────────────────► │  node agent (per server) │
+│  ovmanager  │ ─────────────────────────► │  node agent (per server) │
 │  (this app)│                            │  + OpenVPN server        │
 └────────────┘                            └──────────────────────────┘
 ```
@@ -30,9 +30,9 @@ so **the limit is enforced on the node** by an OpenVPN `client-connect` script.
 Both sides are now implemented:
 
 * **Panel** (this repo): DB column + migration, schemas, CRUD, API endpoints and UI.
-* **Node agent** (`ov-node` repo): schema/endpoints to receive the limit, persistence,
+* **Node agent** (`ovnode` repo): schema/endpoints to receive the limit, persistence,
   and the OpenVPN `client-connect`/`client-disconnect` enforcement (auto-installed on
-  node startup). See `ov-node/docs/multi-login.md`.
+  node startup). See `ovnode/docs/multi-login.md`.
 
 The contract between them is described below.
 
@@ -52,7 +52,7 @@ The panel includes `max_logins` in the existing sync calls and adds one dedicate
 { "name": "ali-node1", "status": "activate", "max_logins": 2 }
 ```
 
-### 3. Set limit only — `PUT /sync/user/limit`  (implemented in `ov-node`)
+### 3. Set limit only — `PUT /sync/user/limit`  (implemented in `ovnode`)
 ```json
 { "name": "ali-node1", "max_logins": 2 }
 ```
@@ -61,15 +61,15 @@ Response (same envelope the node already uses):
 { "success": true, "msg": "User login limit updated successfully" }
 ```
 
-The `ov-node` agent persists the per-user limit to `/etc/openvpn/limits/<name>` (the
+The `ovnode` agent persists the per-user limit to `/etc/openvpn/limits/<name>` (the
 `client-connect` script reads it at connection time). `0` means unlimited. This is
 handled automatically by the updated node — no manual work required.
 
 ---
 
-## Node side (handled automatically by `ov-node`)
+## Node side (handled automatically by `ovnode`)
 
-The updated `ov-node` agent sets everything up on startup — no manual server config is
+The updated `ovnode` agent sets everything up on startup — no manual server config is
 required. For reference, on each node it:
 
 1. Installs `client-connect` / `client-disconnect` scripts to `/etc/openvpn/scripts/`.
@@ -91,4 +91,4 @@ otherwise it accepts and increments the counter, which the disconnect script dec
 > `duplicate-cn` (which by itself means *unlimited*) and then re-impose a counted cap in
 > the `client-connect` script. This is the standard way to get an exact N-device limit.
 
-See `ov-node/docs/multi-login.md` for full node-side details.
+See `ovnode/docs/multi-login.md` for full node-side details.

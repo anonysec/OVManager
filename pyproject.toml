@@ -1,5 +1,5 @@
 [project]
-name = "ov-panel"
+name = "ovmanager"
 version = "1.3.3"
 description = "An OpenVPN client management panel on the server"
 readme = "README.md"

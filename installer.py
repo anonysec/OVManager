@@ -15,7 +15,7 @@ from colorama import Fore, Style, init
 init(autoreset=True)
 
 VERSION = "1.3.3"
-APP_NAME = "ov-panel"
+APP_NAME = "ovmanager"
 INSTALL_DIR = Path(f"/opt/{APP_NAME}")
 REPO = "anonysec/ov"
 REPO_SUBDIR = "panel"
@@ -124,7 +124,7 @@ def ask_user(prompt: str, allow_empty: bool = False, input_type: str = "text") -
                     continue
             return value
         except KeyboardInterrupt:
-            print(f"\n\n{Fore.GREEN}Thank you for using OV-Panel!{Style.RESET_ALL}\n")
+            print(f"\n\n{Fore.GREEN}Thank you for using OVManager!{Style.RESET_ALL}\n")
             sys.exit(0)
 
 
@@ -154,7 +154,7 @@ def show_banner() -> None:
         f"""
 {Fore.CYAN}
 ╔════════════════════════╗
-║   OVPANEL  v{VERSION}     ║
+║   OVMANAGER  v{VERSION}     ║
 ╚════════════════════════╝
 {Style.RESET_ALL}
 """
@@ -246,7 +246,7 @@ def setup_panel() -> None:
     try:
         os.chdir(Path(__file__).resolve().parent)
         safe_clear()
-        print(f"\n{Fore.YELLOW}OV-Panel Configuration{Style.RESET_ALL}\n")
+        print(f"\n{Fore.YELLOW}OVManager Configuration{Style.RESET_ALL}\n")
 
         username = ask_user(f"{Fore.GREEN}> Panel username: {Style.RESET_ALL}")
         password = ask_password(f"{Fore.RED}> Panel password: {Style.RESET_ALL}")
@@ -288,18 +288,18 @@ def refresh_panel() -> None:
     install_dir = INSTALL_DIR
     env_file = install_dir / ".env"
     data_dir = install_dir / "data"
-    backup_env = Path("/tmp/ov-panel.env.bak")
-    backup_data = Path("/tmp/ov-panel.data.bak")
-    tarball = "/tmp/ov-panel-latest.tar.gz"
+    backup_env = Path("/tmp/ovmanager.env.bak")
+    backup_data = Path("/tmp/ovmanager.data.bak")
+    tarball = "/tmp/ovmanager-latest.tar.gz"
 
     if not install_dir.exists():
-        print(Fore.RED + "OV-Panel is not installed." + Style.RESET_ALL)
+        print(Fore.RED + "OVManager is not installed." + Style.RESET_ALL)
         input("Press Enter to return to menu...")
         main_menu()
         return
 
     try:
-        print(f"\n{Fore.YELLOW}Updating OV-Panel...{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Updating OVManager...{Style.RESET_ALL}")
         download_latest_tarball(tarball)
 
         if env_file.exists():
@@ -336,13 +336,13 @@ def refresh_panel() -> None:
 
 def restart_panel() -> None:
     if not INSTALL_DIR.exists():
-        print(Fore.RED + "OV-Panel is not installed." + Style.RESET_ALL)
+        print(Fore.RED + "OVManager is not installed." + Style.RESET_ALL)
         input("Press Enter to return to menu...")
         main_menu()
         return
     try:
-        run_command(["systemctl", "restart", "ov-panel"])
-        print(Fore.GREEN + "OV-Panel restarted successfully!" + Style.RESET_ALL)
+        run_command(["systemctl", "restart", "ovmanager"])
+        print(Fore.GREEN + "OVManager restarted successfully!" + Style.RESET_ALL)
     except Exception as e:
         print(Fore.RED + f"Restart failed: {e}" + Style.RESET_ALL)
     input("Press Enter to return to menu...")
@@ -351,21 +351,21 @@ def restart_panel() -> None:
 
 def remove_panel() -> None:
     if not INSTALL_DIR.exists():
-        print(Fore.RED + "OV-Panel is not installed." + Style.RESET_ALL)
+        print(Fore.RED + "OVManager is not installed." + Style.RESET_ALL)
         input("Press Enter to return to menu...")
         main_menu()
         return
-    if not ask_confirmation("Do you want to uninstall OV-Panel and remove all data? (y/n): "):
+    if not ask_confirmation("Do you want to uninstall OVManager and remove all data? (y/n): "):
         main_menu()
         return
     stop_service()
     shutil.rmtree(INSTALL_DIR, ignore_errors=True)
-    service_file = Path("/etc/systemd/system/ov-panel.service")
+    service_file = Path("/etc/systemd/system/ovmanager.service")
     if service_file.exists():
         service_file.unlink()
     run_command(["systemctl", "daemon-reload"], check=False)
     run_command(["systemctl", "reset-failed"], check=False)
-    print(Fore.GREEN + "OV-Panel removed." + Style.RESET_ALL)
+    print(Fore.GREEN + "OVManager removed." + Style.RESET_ALL)
     input("Press Enter to return to menu...")
     main_menu()
 
@@ -402,11 +402,11 @@ def apply_migrations() -> None:
 
 
 def start_service() -> None:
-    service_file = Path("/etc/systemd/system/ov-panel.service")
+    service_file = Path("/etc/systemd/system/ovmanager.service")
     uv_bin = get_uv_path()
     service_file.write_text(
         f"""[Unit]
-Description=OV-Panel App
+Description=OVManager App
 After=network.target
 
 [Service]
@@ -423,13 +423,13 @@ WantedBy=multi-user.target
         encoding="utf-8",
     )
     run_command(["systemctl", "daemon-reload"], check=False)
-    run_command(["systemctl", "enable", "ov-panel"], check=False)
-    run_command(["systemctl", "restart", "ov-panel"], check=False)
+    run_command(["systemctl", "enable", "ovmanager"], check=False)
+    run_command(["systemctl", "restart", "ovmanager"], check=False)
 
 
 def stop_service() -> None:
-    run_command(["systemctl", "stop", "ov-panel"], check=False)
-    run_command(["systemctl", "disable", "ov-panel"], check=False)
+    run_command(["systemctl", "stop", "ovmanager"], check=False)
+    run_command(["systemctl", "disable", "ovmanager"], check=False)
 
 
 def main_menu() -> None:
@@ -444,7 +444,7 @@ def main_menu() -> None:
     elif choice == "4":
         remove_panel()
     elif choice == "5":
-        print(f"\n{Fore.GREEN}Thank you for using OV-Panel!{Style.RESET_ALL}\n")
+        print(f"\n{Fore.GREEN}Thank you for using OVManager!{Style.RESET_ALL}\n")
         sys.exit(0)
 
 
@@ -452,5 +452,5 @@ if __name__ == "__main__":
     try:
         main_menu()
     except KeyboardInterrupt:
-        print(f"\n\n{Fore.GREEN}Thank you for using OV-Panel!{Style.RESET_ALL}\n")
+        print(f"\n\n{Fore.GREEN}Thank you for using OVManager!{Style.RESET_ALL}\n")
         sys.exit(0)
