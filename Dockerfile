@@ -24,8 +24,11 @@ COPY . .
 # Bring in the built frontend assets
 COPY --from=frontend /src/frontend/dist ./frontend/dist
 
-RUN pip install --no-cache-dir uv \
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv \
     && uv sync --frozen || uv sync
 
 EXPOSE 2095
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -sf http://localhost:2095/dash/api/health || exit 1
 CMD ["sh", "-c", "uv run main.py"]
