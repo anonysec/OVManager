@@ -1,0 +1,64 @@
+# OVManager stack - Docker deployment built from source repos.
+# Port map (host:container):
+#   panel  HTTP 2095
+#   node   HTTP 2083
+#   node   OpenVPN 1194/udp
+#
+# Data is persisted on the host at /opt/ovmanager/data and /opt/ovnode/data
+# (existing live data is reused, not overwritten).
+networks:
+  ovnet:
+    driver: bridge
+
+services:
+  panel:
+    build:
+      context: ../OVManager
+      dockerfile: Dockerfile
+    image: ovmanager:local
+    container_name: ovmanager
+    ports:
+      - "2095:2095"
+    environment:
+      - PORT=2095
+      - HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:2095/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - /opt/ovmanager/data:/app/data
+      - ./.env:/app/.env:ro
+    networks:
+      - ovnet
+    restart: unless-stopped
+
+  node:
+    build:
+      context: ../OVNode
+      dockerfile: Dockerfile
+    image: ovnode:local
+    container_name: ovnode
+    ports:
+      - "2083:2083"
+      - "1194:1194/udp"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:2083/sync/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - SERVICE_PORT=2083
+    volumes:
+      - /opt/ovnode/data:/app/data
+      - ../OVNode/.env:/app/.env:ro
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      - ovnet
+    restart: unless-stopped
