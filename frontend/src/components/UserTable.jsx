@@ -58,14 +58,14 @@ const UserTable = ({ users, onDelete, onDownload, onEdit, onToggleStatus, onRese
               <td><strong className="login-count">{loginText(user)}</strong></td>
               <td>{user.owner}</td>
               <td>
-                <div className="row-actions">
-                  <button title="Sessions" onClick={() => onShowSessions?.(user)}><FiActivity /></button>
-                  <button title="Copy subscription" onClick={() => copySub(user)}><FiCopy />{copyFeedback.id === user.uuid ? '✓' : ''}</button>
-                  <button title="Download config" onClick={() => onDownload(user)}><FiDownload /></button>
-                  <button title="Edit" onClick={() => onEdit(user)}><FiEdit3 /></button>
-                  <button title="Reset usage" onClick={() => onResetUsage?.(user)}><FiRefreshCw /></button>
-                  <button title="Toggle status" onClick={() => onToggleStatus(user)}><FiPower /></button>
-                  <button className="danger" title="Delete" onClick={() => onDelete(user.uuid, user.name)}><FiTrash2 /></button>
+                <div className="row-actions" role="toolbar" aria-label="User actions">
+                  <button type="button" title="View sessions" aria-label={`View sessions for ${user.name}`} onClick={() => onShowSessions?.(user)}><FiActivity /></button>
+                  <button type="button" title="Copy subscription link" aria-label={`Copy subscription link for ${user.name}`} onClick={() => copySub(user)}><FiCopy />{copyFeedback.id === user.uuid ? '✓' : ''}</button>
+                  <button type="button" title="Download OpenVPN config" aria-label={`Download OpenVPN config for ${user.name}`} onClick={() => onDownload(user)}><FiDownload /></button>
+                  <button type="button" title="Edit user" aria-label={`Edit ${user.name}`} onClick={() => onEdit(user)}><FiEdit3 /></button>
+                  <button type="button" title="Reset usage" aria-label={`Reset usage for ${user.name}`} onClick={() => onResetUsage?.(user)}><FiRefreshCw /></button>
+                  <button type="button" title="Toggle user status" aria-label={user.is_active ? `Deactivate ${user.name}` : `Activate ${user.name}`} onClick={() => onToggleStatus(user)}><FiPower /></button>
+                  <button type="button" className="danger" title="Delete user" aria-label={`Delete ${user.name}`} onClick={() => onDelete(user.uuid, user.name)}><FiTrash2 /></button>
                 </div>
               </td>
             </tr>

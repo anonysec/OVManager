@@ -33,6 +33,15 @@ const DashboardLayout = () => {
     setAccount(readTokenPayload());
   }, []);
 
+  // Skip to content handler
+  const skipToContent = (e) => {
+    const main = document.querySelector('.ops-main');
+    if (main) {
+      main.setAttribute('tabindex', '-1');
+      main.focus();
+    }
+  };
+
   useEffect(() => {
     const loadAlerts = async () => {
       try {
@@ -84,14 +93,15 @@ const DashboardLayout = () => {
 
   return (
     <div className="ops-shell">
-      <header className="ops-topbar">
+      <a href="#main-content" className="skip-link" onClick={skipToContent}>Skip to content</a>
+      <header className="ops-topbar" role="banner">
         <div className="ops-brand">
-          <span className="ops-logo-mark" />
+          <span className="ops-logo-mark" aria-hidden="true" />
           <strong><span>OV</span>Manager</strong>
-          <img src={logoSrc} alt="OVManager character" />
+          <img src={logoSrc} alt="OVManager character logo" />
         </div>
 
-        <nav className="ops-nav">
+        <nav className="ops-nav" aria-label="Main navigation">
           {navItems.map((item) => (
             <NavLink key={`${item.label}-${item.to}`} to={item.to} end={item.end} className="ops-nav-link">
               {item.label}
@@ -100,26 +110,26 @@ const DashboardLayout = () => {
         </nav>
 
         <div className="ops-userbar">
-          <button type="button" onClick={changeLanguage} title={t('language', 'Language')}><FiGlobe /></button>
-          <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={t('theme', 'Theme')}>
+          <button type="button" onClick={changeLanguage} title={t('language', 'Language')} aria-label="Change language"><FiGlobe /></button>
+          <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={t('theme', 'Theme')} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             {theme === 'dark' ? <FiSun /> : <FiMoon />}
           </button>
-          <NavLink to="/settings" className="ops-settings-link" title={t('settings', 'Settings')}><FiSettings /></NavLink>
+          <NavLink to="/settings" className="ops-settings-link" title={t('settings', 'Settings')} aria-label="Settings"><FiSettings /></NavLink>
           <div className="notification-wrap">
-            <button type="button" className={`ops-bell ${alerts.length ? 'has-alerts' : ''}`} title={alerts.length ? alerts.join('\n') : 'No alerts'}>
-              <FiBell />{alerts.length > 0 && <span>{alerts.length}</span>}
+            <button type="button" className={`ops-bell ${alerts.length ? 'has-alerts' : ''}`} aria-label={alerts.length ? `You have ${alerts.length} alerts` : 'No alerts'}>
+              <FiBell />{alerts.length > 0 && <span className="sr-only">{alerts.length} alerts</span>}
             </button>
-            {alerts.length > 0 && <div className="notification-popover">{alerts.map((a) => <p key={a}>{a}</p>)}</div>}
+            {alerts.length > 0 && <div className="notification-popover" role="status" aria-live="polite">{alerts.map((a) => <p key={a}>{a}</p>)}</div>}
           </div>
-          <div className="ops-profile" title={`${username} (${account.type || userRole || 'admin'})`}><span>{initials}</span><b>{username}</b></div>
-          <button type="button" onClick={logout} title={t('logout', 'Logout')}><FiLogOut /></button>
+          <div className="ops-profile" title={`${username} (${account.type || userRole || 'admin'})`} aria-label={`User profile: ${username}, role: ${account.type || userRole || 'admin'}`}><span>{initials}</span><b>{username}</b></div>
+          <button type="button" onClick={logout} title={t('logout', 'Logout')} aria-label="Logout"><FiLogOut /></button>
         </div>
       </header>
-      <main className="ops-main">
+      <main id="main-content" className="ops-main" tabIndex="-1">
         <Outlet />
       </main>
-      <div className="toast-stack">
-        {toasts.map((toast) => <div className="toast" key={toast.id}><strong>{toast.status || 'Error'}</strong><span>{toast.message}</span></div>)}
+      <div className="toast-stack" aria-live="polite" aria-atomic="true">
+        {toasts.map((toast) => <div className="toast" key={toast.id} role="alert"><strong>{toast.status || 'Error'}</strong><span>{toast.message}</span></div>)}
       </div>
     </div>
   );
