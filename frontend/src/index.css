@@ -478,45 +478,14 @@ html {
 }
 
 .ops-profile {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
-
-.ops-profile:hover {
-  background: rgba(252, 122, 30, 0.1);
-}
-
-.ops-profile span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent-color);
-  color: #000;
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.ops-profile b {
-  display: none;
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.ops-profile:hover b {
-  display: block;
-}
-
-.ops-profile:hover span {
-  opacity: 0.8;
-}
+.ops-profile:hover { background: rgba(252, 122, 30, 0.1); }
 
 /* --- Notifications --- */
 .notification-wrap {

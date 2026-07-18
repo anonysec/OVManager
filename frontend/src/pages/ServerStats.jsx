@@ -65,14 +65,14 @@ const MiniLine = ({ values = [] }) => {
 };
 
 const WorldMap = ({ nodes, nodeStatus }) => {
-  // Equirectangular, cropped to populated latitudes so there's no empty ocean/poles
-  const projection = geoEquirectangular().scale(125).translate([300, 168]);
+  // Equirectangular, full world framed inside the viewBox (no top/bottom clipping)
+  const projection = geoEquirectangular().scale(110).translate([360, 180]);
   const pathGen = geoPath(projection);
   const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
   const [hover, setHover] = useState(null);
   return (
-    <svg className="world-map-real" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet"
+    <svg className="world-map-real" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet"
       onMouseLeave={() => setHover(null)}>
       <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
       {land.features.map((feat) => (
@@ -180,6 +180,7 @@ const ServerStats = () => {
 
   useEffect(() => {
     const load = async () => {
+      let nodesData = [];
       try {
         const [statsRes, usersRes, nodesRes, metricsRes, secRes] = await Promise.all([
           apiClient.get('/server/info'),
@@ -190,7 +191,8 @@ const ServerStats = () => {
         ]);
         setStats(statsRes.data?.data || null);
         setUsers(usersRes.data?.data || []);
-        setNodes(nodesRes.data?.data || []);
+        nodesData = nodesRes.data?.data || [];
+        setNodes(nodesData);
         setMetrics(metricsRes.data?.data || null);
         setSecurity(secRes.data?.data || null);
         const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
@@ -200,13 +202,13 @@ const ServerStats = () => {
 
       // node status: per-node, non-blocking, short timeout
       try {
-        const ns = nodesRes?.data?.data || [];
+        const ns = nodesData;
         const results = await Promise.all(ns.map(async (n) => {
           if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0 }];
           try {
-            const r = await apiClient.get(`/nodes/${n.id}/status`, { timeout: 4000 });
+            const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
             return [n.id, r.data?.data || {}];
-          } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
+          } catch (e) { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
         }));
         setNodeStatus(Object.fromEntries(results));
       } catch { /* keep previous */ }

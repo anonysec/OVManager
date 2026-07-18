@@ -59,7 +59,7 @@ const DashboardLayout = () => {
       const ns = await Promise.all(nodes.map(async (n) => {
         if (!n.status) return [n.id, { status: 'inactive' }];
         try {
-          const r = await apiClient.get(`/nodes/${n.id}/status`, { timeout: 4000 });
+          const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
           return [n.id, r.data?.data || {}];
         } catch { return [n.id, { status: 'unreachable', node_info: undefined, session_diagnostics: undefined }]; }
       }));
