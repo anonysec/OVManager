@@ -14,7 +14,7 @@ from colorama import Fore, Style, init
 
 init(autoreset=True)
 
-VERSION = "1.3.3"
+VERSION = "1.4.0"
 APP_NAME = "ovmanager"
 INSTALL_DIR = Path(f"/opt/{APP_NAME}")
 REPO = "anonysec/ov"

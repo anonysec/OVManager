@@ -315,6 +315,7 @@ const UserManagement = () => {
         users={filteredUsers}
         isLoading={false}
         onDelete={handleDelete}
+        onSessions={handleShowSessions}
         onBulkDelete={handleBulkDelete}
         selected={selected}
         onSelect={handleSelect}

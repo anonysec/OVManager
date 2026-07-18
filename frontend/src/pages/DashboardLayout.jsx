@@ -29,6 +29,15 @@ const DashboardLayout = () => {
     localStorage.setItem('ovmanager-theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onDoc = (e) => {
+      if (!e.target.closest('.notification-wrap')) setNotifOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [notifOpen]);
+
   const skipToContent = (e) => {
     const main = document.querySelector('.ops-main');
     if (main) {

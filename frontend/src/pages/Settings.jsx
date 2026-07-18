@@ -242,7 +242,7 @@ const Settings = () => {
             <div><h3>System</h3><p>Runtime info.</p></div>
           </header>
           <div className="set-kpis compact">
-            <div><span>Version</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.3.3'}</strong></div>
+            <div><span>Version</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.4.0'}</strong></div>
             <div><span>Node mode</span><strong>{settings?.node_protocol || 'gRPC'}</strong></div>
           </div>
         </section>

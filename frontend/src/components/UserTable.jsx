@@ -1,6 +1,7 @@
-import React from 'react';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiUserX } from 'react-icons/fi';
+import React, { useState, useRef, useEffect } from 'react';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiUserX, FiCopy, FiActivity } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
+import { formatTraffic } from '../utils/format';
 
 const COLUMNS = [
   { key: 'name', label: 'Username', sortable: true },
@@ -13,11 +14,42 @@ const COLUMNS = [
   { key: 'actions', label: 'Actions', sortable: false },
 ];
 
+const statusOf = (user) => {
+  const online = user.online || Number(user.active_connections || 0) > 0;
+  if (online) return { label: 'Online', cls: 'online' };
+  const d = daysUntil(user.expiry_date);
+  if (d < 0) return { label: 'Expired', cls: 'expired' };
+  if (user.is_active === false) return { label: 'Disabled', cls: 'offline' };
+  return { label: 'Offline', cls: 'idle' };
+};
+
+const RowMenu = ({ user, onEdit, onDelete, onSessions, onClose, anchorRef }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target) && anchorRef?.current && !anchorRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [onClose, anchorRef]);
+  return (
+    <div className="row-menu" ref={ref} role="menu">
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> Edit</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> Sessions</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { navigator.clipboard?.writeText(user.uuid || ''); onClose(); }}><FiCopy /> Copy ID</button>
+      <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> Delete</button>
+    </div>
+  );
+};
+
 const UserTable = ({
   users = [],
   isLoading = false,
   onEdit,
   onDelete,
+  onSessions,
   onBulkDelete,
   selected = [],
   onSelect,
@@ -27,6 +59,8 @@ const UserTable = ({
 }) => {
   const allSelected = users.length > 0 && selected.length === users.length;
   const someSelected = selected.length > 0 && !allSelected;
+  const [menuFor, setMenuFor] = useState(null);
+  const anchorRefs = useRef({});
 
   if (isLoading) {
     return <div className="table-skeleton">Loading users…</div>;
@@ -92,7 +126,8 @@ const UserTable = ({
             {users.map((user) => {
               const isSel = selected.includes(user.uuid);
               const d = daysUntil(user.expiry_date);
-              const uIsOnline = user.online || Number(user.active_connections || 0) > 0;
+              const st = statusOf(user);
+              const open = menuFor === user.uuid;
               return (
                 <tr key={user.uuid} className={isSel ? 'selected' : ''}>
                   <td className="col-check">
@@ -110,14 +145,12 @@ const UserTable = ({
                     </div>
                   </td>
                   <td data-label="Status">
-                    <span className={`status-pill ${uIsOnline ? 'online' : (user.is_active ? 'idle' : 'offline')}`}>
-                      {uIsOnline ? 'Online' : (user.is_active ? 'Offline' : 'Disabled')}
-                    </span>
+                    <span className={`status-pill ${st.cls}`}>{st.label}</span>
                   </td>
                   <td data-label="Expiry Date">
                     <span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span>
                   </td>
-                  <td data-label="Total Traffic">{user.total ?? '—'}</td>
+                  <td data-label="Total Traffic" className="traffic-cell">{formatTraffic(user.total)}</td>
                   <td data-label="Max Logins">
                     <span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span>
                   </td>
@@ -126,7 +159,26 @@ const UserTable = ({
                   <td data-label="Actions" className="actions-cell">
                     <button className="icon-btn" onClick={() => onEdit(user)} title="Edit"><FiEdit2 /></button>
                     <button className="icon-btn danger" onClick={() => onDelete(user)} title="Delete"><FiTrash2 /></button>
-                    <button className="icon-btn" title="More"><FiMoreVertical /></button>
+                    <div className="row-menu-wrap">
+                      <button
+                        className="icon-btn"
+                        title="More"
+                        ref={(el) => { anchorRefs.current[user.uuid] = el; }}
+                        onClick={() => setMenuFor(open ? null : user.uuid)}
+                        aria-haspopup="menu"
+                        aria-expanded={open}
+                      ><FiMoreVertical /></button>
+                      {open && (
+                        <RowMenu
+                          user={user}
+                          anchorRef={{ current: anchorRefs.current[user.uuid] }}
+                          onEdit={onEdit}
+                          onDelete={onDelete}
+                          onSessions={onSessions}
+                          onClose={() => setMenuFor(null)}
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
