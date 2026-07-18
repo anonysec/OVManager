@@ -66,13 +66,13 @@ const MiniLine = ({ values = [] }) => {
 
 const WorldMap = ({ nodes, nodeStatus }) => {
   // Equirectangular, full world framed inside the viewBox (no top/bottom clipping)
-  const projection = geoEquirectangular().scale(110).translate([360, 180]);
+  const projection = geoEquirectangular().scale(106).translate([334, 167]);
   const pathGen = geoPath(projection);
   const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
   const [hover, setHover] = useState(null);
   return (
-    <svg className="world-map-real" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet"
+    <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
       onMouseLeave={() => setHover(null)}>
       <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
       {land.features.map((feat) => (
@@ -106,31 +106,6 @@ const WorldMap = ({ nodes, nodeStatus }) => {
     </svg>
   );
 };
-
-const NodeGrid = ({ nodes, nodeStatus }) => (
-  <div className="node-grid">
-    {nodes.map((node) => {
-      const meta = nodeMeta(node);
-      const st = nodeStatus[node.id] || {};
-      const reachable = node.status && st.node_info !== undefined;
-      const conns = Number(st.session_diagnostics?.live_count || 0);
-      const cpu = Number(st.node_info?.cpu_usage);
-      return (
-        <button
-          type="button"
-          key={node.id}
-          className={`node-tile ${reachable ? 'up' : (node.status ? 'down' : 'off')}`}
-          title={`${meta.name} · ${conns} sessions · ${reachable ? cpu.toFixed(0) + '% CPU' : (node.status ? 'unreachable' : 'disabled')} · API ${node.address}:${node.port}`}
-          onClick={() => window.location.assign(`/dash/nodes?node=${node.id}`)}
-        >
-          <span className="flag">{meta.flag}</span>
-          <span className="nname">{node.name}</span>
-          <span className="nstat">{reachable ? `${conns} conns` : (node.status ? 'DOWN' : 'off')}</span>
-        </button>
-      );
-    })}
-  </div>
-);
 
 const SecurityScoreRing = ({ score }) => {
   const r = 34; const c = 2 * Math.PI * r;
@@ -350,9 +325,8 @@ const ServerStats = () => {
           {nodes ? (
             <>
               <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
-              <NodeGrid nodes={nodes} nodeStatus={nodeStatus} />
               <table className="ops-table compact">
-                <thead><tr><th>Flag</th><th>ID</th><th>Location</th><th>Status</th><th>CPU%</th><th>Conns</th></tr></thead>
+                <thead><tr><th>ID</th><th>Location</th><th>Status</th><th>CPU%</th><th>Conns</th></tr></thead>
                 <tbody>
                   {nodes.slice(0, 8).map((node) => {
                     const meta = nodeMeta(node);
@@ -362,7 +336,6 @@ const ServerStats = () => {
                     const reachable = node.status && status.node_info !== undefined;
                     return (
                       <tr key={node.id} title={`${node.name}: ${conns} live sessions, API ${node.address}:${node.port}`}>
-                        <td>{meta.flag}</td>
                         <td>{node.name}</td>
                         <td>{meta.name}</td>
                         <td><span className={reachable ? 'dot online' : 'dot'} />{reachable ? 'Online' : (node.status ? 'Down' : 'Off')}</td>
