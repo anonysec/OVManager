@@ -6,7 +6,6 @@ import DashboardLayout from './pages/DashboardLayout';
 import ServerStats from './pages/ServerStats';
 import UserManagement from './pages/UserManagement';
 import NodeManagement from './pages/NodeManagement';
-import AdminManagement from './pages/AdminManagement';
 import Settings from './pages/Settings';
 import AuditLog from './pages/AuditLog';
 
@@ -40,7 +39,6 @@ function App() {
         <Route index element={<ServerStats />} />
         <Route path="users" element={<UserManagement />} />
         {userRole !== 'admin' && <Route path="nodes" element={<NodeManagement />} />}
-        {userRole === 'main_admin' && <Route path="admins" element={<AdminManagement />} />}
         {userRole === 'main_admin' && <Route path="audit" element={<AuditLog />} />}
         <Route path="settings" element={<Settings />} />
       </Route>

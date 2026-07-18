@@ -74,6 +74,13 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   return (
     <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
       onMouseLeave={() => setHover(null)}>
+      <defs>
+        <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
+          <stop offset="0%" stopColor="#13314a" />
+          <stop offset="60%" stopColor="#0c2236" />
+          <stop offset="100%" stopColor="#081320" />
+        </radialGradient>
+      </defs>
       <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
       {land.features.map((feat) => (
         <path
@@ -132,11 +139,9 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
   });
   (users || []).forEach((u) => {
     const d = daysUntil(u.expiry_date);
-    if (d >= 0 && d <= 7) out.push({ id: `exp-${u.uuid}`, level: 'warning', title: `User ${u.name} expires in ${d}d`, detail: `Expiry ${u.expiry_date}`, action: null });
     if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
       out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null });
     }
-    if (u.is_active === false) out.push({ id: `inact-${u.uuid}`, level: 'info', title: `User ${u.name} is disabled`, detail: 'Account inactive', action: null });
   });
   const sec = security || {};
   if (Number(sec.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${sec.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null });
@@ -215,15 +220,13 @@ const ServerStats = () => {
   })();
   const offlineNodes = (nodes || []).length - onlineNodes;
   const fullUsers = (users || []).filter((u) => Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins || 0));
-  const inactiveUsers = (users || []).filter((u) => u.is_active === false);
-  const expiringUsers = (users || []).filter((u) => { const d = daysUntil(u.expiry_date); return d >= 0 && d <= 7; });
-  const activeAlerts = offlineNodes + fullUsers.length + inactiveUsers.length + expiringUsers.length;
+  const activeAlerts = offlineNodes + fullUsers.length;
 
   const sec = security || {};
   const authErrors = Number(sec.auth_errors || 0);
   const rejects = Number(sec.rejects || 0);
   const stale = Number(sec.stale_markers || 0);
-  const penalty = offlineNodes * 8 + fullUsers.length * 3 + inactiveUsers.length * 2 + expiringUsers.length * 2 + Math.min(authErrors, 50) * 0.6 + Math.min(rejects, 50) * 0.4 + Math.min(stale, 50) * 0.4;
+  const penalty = offlineNodes * 8 + fullUsers.length * 3 + Math.min(authErrors, 50) * 0.6 + Math.min(rejects, 50) * 0.4 + Math.min(stale, 50) * 0.4;
   const securityScore = Math.max(0, Math.min(100, Math.round(100 - penalty)));
   const latestErrors = sec.last_errors || [];
   const notifications = deriveNotifications({ users, nodes, nodeStatus, security });

@@ -128,7 +128,6 @@ const DashboardLayout = () => {
       { to: '/', label: t('dashboard', 'Dashboard'), end: true },
       { to: '/users', label: t('users', 'Users') },
       { to: '/nodes', label: t('nodes', 'Nodes') },
-      ...(userRole === 'main_admin' ? [{ to: '/admins', label: t('admins', 'Admins') }] : []),
       ...(userRole === 'main_admin' ? [{ to: '/audit', label: t('audit', 'Audit') }] : []),
     ]
   ), [t, userRole]);
