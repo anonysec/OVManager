@@ -6,7 +6,6 @@ import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
-import UserStatCard from '../components/UserStatCard';
 import { FiSearch } from 'react-icons/fi';
 import { BsPersonFill, BsPersonCheckFill, BsPersonXFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
@@ -89,7 +88,7 @@ const UserManagement = () => {
     const term = searchTerm.toLowerCase();
     let list = users.filter((user) => {
       if (!user.name.toLowerCase().includes(term)) return false;
-      if (view === 'online') return user.online;
+      if (view === 'online') return user.online || Number(user.active_connections || 0) > 0;
       if (view === 'inactive') return !user.is_active;
       if (view === 'expiring') return daysUntil(user.expiry_date) >= 0 && daysUntil(user.expiry_date) <= 7;
       return true; // 'all'
@@ -268,34 +267,34 @@ const UserManagement = () => {
             <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All</button>
             <button type="button" role="tab" aria-selected={view === 'online'} className={view === 'online' ? 'active' : ''} onClick={() => setView('online')}>Online</button>
             <button type="button" role="tab" aria-selected={view === 'inactive'} className={view === 'inactive' ? 'active' : ''} onClick={() => setView('inactive')}>Inactive</button>
-            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>Expiring ≤7d</button>
+            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>Expiring</button>
           </div>
           <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
         </div>
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: '30px', display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
-        <UserStatCard
-          icon={<BsPersonFill style={{ fontSize: 28 }} />}
-          label={t('totalUsers')}
-          value={userStats.total}
-          color="#90caf9"
-          className="card-dark"
-        />
-        <UserStatCard
-          icon={<BsPersonCheckFill style={{ fontSize: 28 }} />}
-          label={t('activeUsers')}
-          value={userStats.active}
-          color="#43a047"
-          className="card-dark"
-        />
-        <UserStatCard
-          icon={<BsPersonXFill style={{ fontSize: 28 }} />}
-          label={t('inactiveUsers')}
-          value={userStats.inactive}
-          color="#e53935"
-          className="card-dark"
-        />
+      <div className="user-stats-row">
+        <div className="user-stat" style={{ '--us-accent': '#90caf9' }}>
+          <span className="us-ico"><BsPersonFill /></span>
+          <span className="us-body">
+            <span className="us-label">{t('totalUsers')}</span>
+            <span className="us-value">{userStats.total}</span>
+          </span>
+        </div>
+        <div className="user-stat" style={{ '--us-accent': '#43a047' }}>
+          <span className="us-ico"><BsPersonCheckFill /></span>
+          <span className="us-body">
+            <span className="us-label">{t('activeUsers')}</span>
+            <span className="us-value">{userStats.active}</span>
+          </span>
+        </div>
+        <div className="user-stat" style={{ '--us-accent': '#e53935' }}>
+          <span className="us-ico"><BsPersonXFill /></span>
+          <span className="us-body">
+            <span className="us-label">{t('inactiveUsers')}</span>
+            <span className="us-value">{userStats.inactive}</span>
+          </span>
+        </div>
       </div>
 
       <div className="search-pagination-controls">

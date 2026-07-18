@@ -92,6 +92,7 @@ const UserTable = ({
             {users.map((user) => {
               const isSel = selected.includes(user.uuid);
               const d = daysUntil(user.expiry_date);
+              const uIsOnline = user.online || Number(user.active_connections || 0) > 0;
               return (
                 <tr key={user.uuid} className={isSel ? 'selected' : ''}>
                   <td className="col-check">
@@ -109,8 +110,8 @@ const UserTable = ({
                     </div>
                   </td>
                   <td data-label="Status">
-                    <span className={`status-pill ${user.online ? 'online' : (user.is_active ? 'idle' : 'offline')}`}>
-                      {user.online ? 'Online' : (user.is_active ? 'Offline' : 'Disabled')}
+                    <span className={`status-pill ${uIsOnline ? 'online' : (user.is_active ? 'idle' : 'offline')}`}>
+                      {uIsOnline ? 'Online' : (user.is_active ? 'Offline' : 'Disabled')}
                     </span>
                   </td>
                   <td data-label="Expiry Date">

@@ -2,7 +2,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiLogOut, FiGlobe, FiMoon, FiSun, FiSettings, FiChevronDown } from 'react-icons/fi';
+import { FiBell, FiGlobe, FiMoon, FiSun, FiSettings } from 'react-icons/fi';
 import apiClient, { API_ERROR_EVENT } from '../services/api';
 import Logo from '../components/Logo';
 
@@ -20,20 +20,14 @@ const DashboardLayout = () => {
   const { logout, userRole } = useAuth();
   const { i18n, t } = useTranslation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
-  const [account, setAccount] = useState(() => readTokenPayload());
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('ovmanager-theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    setAccount(readTokenPayload());
-  }, []);
 
   const skipToContent = (e) => {
     const main = document.querySelector('.ops-main');
@@ -96,23 +90,6 @@ const DashboardLayout = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Close profile dropdown on outside click / escape
-  useEffect(() => {
-    if (!profileOpen) return;
-    const onKey = (e) => e.key === 'Escape' && setProfileOpen(false);
-    const onClick = (e) => {
-      if (!e.target.closest('.ops-profile-wrap')) setProfileOpen(false);
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onClick);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onClick);
-    };
-  }, [profileOpen]);
-
-  const openSettings = () => { setProfileOpen(false); window.location.assign('/dash/settings'); };
-
   useEffect(() => {
     const onApiError = (event) => {
       const id = `${Date.now()}-${Math.random()}`;
@@ -138,8 +115,6 @@ const DashboardLayout = () => {
     document.documentElement.dir = next === 'fa' ? 'rtl' : 'ltr';
   };
 
-  const username = account.sub || 'Admin';
-  const initials = username.slice(0, 2).toUpperCase();
   const notifCount = notifications.length;
   const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
 
@@ -199,33 +174,6 @@ const DashboardLayout = () => {
                   );
                 })
               )}
-            </div>
-          </div>
-          <div className="ops-profile-wrap">
-            <button
-              type="button"
-              className="ops-profile"
-              aria-haspopup="menu"
-              aria-expanded={profileOpen}
-              onClick={() => setProfileOpen((o) => !o)}
-            >
-              <span className="ops-avatar">{(account.sub || 'A').slice(0,1).toUpperCase()}</span>
-              <span className="ops-id">
-                <b>{username}</b>
-                <small>{account.type || userRole || 'admin'}</small>
-              </span>
-              <FiChevronDown className="prof-caret" />
-            </button>
-            <div className={`profile-menu ${profileOpen ? 'is-open' : ''}`} role="menu">
-              <div className="profile-head">
-                <span className="ops-avatar lg">{(account.sub || 'A').slice(0,1).toUpperCase()}</span>
-                <div>
-                  <strong>{username}</strong>
-                  <span className="role-chip">{(account.type || userRole || 'admin').toUpperCase()}</span>
-                </div>
-              </div>
-              <button type="button" className="profile-item" role="menuitem" onClick={openSettings}><FiSettings /> Settings</button>
-              <button type="button" className="profile-item danger" role="menuitem" onClick={logout}><FiLogOut /> Logout</button>
             </div>
           </div>
         </div>

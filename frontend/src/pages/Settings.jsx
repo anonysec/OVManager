@@ -111,32 +111,34 @@ const Settings = () => {
   const notifCount = Array.isArray(notifications) ? notifications.length : 0;
 
   return (
-    <div id="settings-view" className="view settings-page">
+    <div id="settings-view" className="view settings-overhaul">
       <div className="view-header">
         <h2>Settings &amp; Operations</h2>
         <button className="btn" type="button" onClick={() => load().catch(() => {})}><FiRefreshCw /> Refresh</button>
       </div>
 
-      <div className="settings-grid premium-settings-grid">
-        <section className="settings-panel wide-panel">
-          <div className="settings-row-title"><FiTool /><h3>Maintenance</h3></div>
-          <p className="settings-muted">Background jobs: limits sync every 30 min, stale session cleanup every 15 min. Max-login 1 users use takeover mode (new device disconnects old).</p>
-          <div className="settings-kpis">
+      <div className="settings-grid">
+        <section className="set-card span-2">
+          <header className="set-card-head">
+            <span className="set-ico"><FiTool /></span>
+            <div><h3>Maintenance</h3><p>Background jobs run automatically. Trigger them on demand below.</p></div>
+          </header>
+          <div className="set-kpis">
             <div><span>Users</span><strong>{totals.users ?? '-'}</strong></div>
             <div><span>Online</span><strong>{totals.online ?? '-'}</strong></div>
             <div><span>Full</span><strong>{totals.full ?? '-'}</strong></div>
             <div><span>Stale</span><strong>{totals.stale ?? '-'}</strong></div>
             <div><span>Takeover</span><strong>{totals.takeover_mode ?? '-'}</strong></div>
           </div>
-          <div className="settings-actions">
+          <div className="set-actions">
             <button className="btn" disabled={busy} onClick={() => runAction('/maintenance/sync-limits')}><FiZap /> Sync limits now</button>
             <button className="btn btn-secondary" disabled={busy} onClick={() => runAction('/maintenance/clean-stale')}><FiRefreshCw /> Clean stale now</button>
           </div>
-          <div className="table-container list-table-container health-table-wrap">
-            <table className="list-table">
+          <div className="set-table-wrap">
+            <table className="set-table">
               <thead><tr><th>User</th><th>Active/Max</th><th>Mode</th><th>Status</th><th>Stale</th><th>Auth events</th></tr></thead>
               <tbody>
-                {healthRows.map((row) => (
+                {healthRows.length ? healthRows.map((row) => (
                   <tr key={row.name}>
                     <td>{row.name}</td>
                     <td><strong className="login-count">{row.active_connections}/{row.max_logins === 0 ? '∞' : row.max_logins}</strong></td>
@@ -145,82 +147,101 @@ const Settings = () => {
                     <td>{row.stale_markers}</td>
                     <td>{row.auth_events}</td>
                   </tr>
-                ))}
+                )) : <tr><td colSpan={6} className="set-empty">No user login data yet.</td></tr>}
               </tbody>
             </table>
           </div>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiTool /><h3>Timezone</h3></div>
-          <p className="settings-muted">All dates (last online, logs, expiry) render in this timezone.</p>
-          <div className="settings-field">
-            <label htmlFor="tz">Display timezone</label>
-            <select id="tz" value={timezone} onChange={(e) => saveTimezone(e.target.value)} disabled={tzSaving}>
-              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </div>
-          {tzSaving && <small className="settings-muted">Saving…</small>}
-        </section>
-
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiBell /><h3>Notification Center</h3></div>
-          <p className="settings-muted">{notifCount} active operational {notifCount === 1 ? 'issue' : 'issues'} from nodes and users.</p>
-          <div className="settings-list">
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico"><FiBell /></span>
+            <div><h3>Notifications</h3><p>{notifCount} active operational {notifCount === 1 ? 'issue' : 'issues'}.</p></div>
+          </header>
+          <div className="set-list">
             {notifCount ? notifications.map((n, i) => (
               <p key={n.id ?? i} className={`notice ${n.level || 'warning'}`}>{n.title}</p>
             )) : <p className="notice good">No active notifications</p>}
           </div>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiShield /><h3>Security Summary</h3></div>
-          <div className="settings-kpis">
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico"><FiShield /></span>
+            <div><h3>Security</h3><p>Last 8 hours from nodes.</p></div>
+          </header>
+          <div className="set-kpis compact">
             <div><span>Auth errors</span><strong>{security?.auth_errors ?? '-'}</strong></div>
             <div><span>Rejects</span><strong>{security?.rejects ?? '-'}</strong></div>
             <div><span>Stale markers</span><strong>{security?.stale_markers ?? '-'}</strong></div>
           </div>
-          <div className="settings-list small">
-            {(security?.last_errors || []).slice(0, 5).map((e, i) => <p key={i}>{e.time_tehran || ''} — {e.common_name}: {e.reason} ({e.active || '?'}/{e.limit || '?'})</p>)}
+          <div className="set-list small">
+            {(security?.last_errors || []).slice(0, 5).map((e, i) => <p key={i} className="set-err">{e.time_tehran || ''} — {e.common_name}: {e.reason} ({e.active || '?'}/{e.limit || '?'})</p>)}
           </div>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiActivity /><h3>Activity Log</h3></div>
-          <p className="settings-muted">Recent admin actions recorded by OVManager.</p>
-          <div className="settings-list small">
-            {activity.length ? activity.map((a) => <p key={a.id}>{new Date(a.ts * 1000).toLocaleString()} — {a.actor || 'system'} — {a.action} {a.target || ''}</p>) : <p>No activity recorded yet.</p>}
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico"><FiActivity /></span>
+            <div><h3>Activity Log</h3><p>Recent admin actions.</p></div>
+          </header>
+          <div className="set-list small scroll">
+            {activity.length ? activity.map((a) => <p key={a.id}>{new Date(a.ts * 1000).toLocaleString()} — {a.actor || 'system'} — {a.action} {a.target || ''}</p>) : <p className="set-empty">No activity recorded yet.</p>}
           </div>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiLink /><h3>Subscription Link</h3></div>
-          <p className="settings-muted">Edit the base URL and path used by user VPN subscription links.</p>
-          <div className="settings-field">
-            <label htmlFor="sub-prefix">URL prefix</label>
-            <input id="sub-prefix" type="text" value={subPrefix} onChange={(e) => setSubPrefix(e.target.value)} placeholder="https://vpn.example.com/sub/" />
+        <section className="set-card span-2">
+          <header className="set-card-head">
+            <span className="set-ico"><FiLink /></span>
+            <div><h3>Subscription Link</h3><p>Base URL and path used by user VPN subscription links.</p></div>
+          </header>
+          <div className="set-fields">
+            <label className="set-field">
+              <span>URL prefix</span>
+              <input type="text" value={subPrefix} onChange={(e) => setSubPrefix(e.target.value)} placeholder="https://vpn.example.com/sub/" />
+            </label>
+            <label className="set-field">
+              <span>Path</span>
+              <input type="text" value={subPath} onChange={(e) => setSubPath(e.target.value)} placeholder="sub" />
+            </label>
           </div>
-          <div className="settings-field">
-            <label htmlFor="sub-path">Path</label>
-            <input id="sub-path" type="text" value={subPath} onChange={(e) => setSubPath(e.target.value)} placeholder="sub" />
+          <div className="set-foot">
+            <button className="btn btn-sm" disabled={subSaving} onClick={saveSubscription}>
+              <FiRefreshCw /> {subSaving ? 'Saving…' : 'Save link settings'}
+            </button>
+            {subSaved && <small className="set-saved">Saved.</small>}
           </div>
-          <button className="btn btn-sm" disabled={subSaving} onClick={saveSubscription}>
-            <FiRefreshCw /> {subSaving ? 'Saving…' : 'Save link settings'}
-          </button>
-          {subSaved && <small className="settings-muted">Saved.</small>}
-          <code className="settings-code">{`${subPrefix}${subPath ? subPath.replace(/^\/+|\/+$/g, '') + '/' : ''}{user_uuid}`}</code>
+          <code className="set-code">{`${subPrefix}${subPath ? subPath.replace(/^\/+|\/+$/g, '') + '/' : ''}{user_uuid}`}</code>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title">{theme === 'dark' ? <FiMoon /> : <FiSun />}<h3>Appearance</h3></div>
-          <p className="settings-muted">Switch between dark and light OVManager themes.</p>
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico"><FiTool /></span>
+            <div><h3>Timezone</h3><p>Used for all dates.</p></div>
+          </header>
+          <label className="set-field">
+            <span>Display timezone</span>
+            <select value={timezone} onChange={(e) => saveTimezone(e.target.value)} disabled={tzSaving}>
+              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+          </label>
+          {tzSaving && <small className="set-saved">Saving…</small>}
+        </section>
+
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico">{theme === 'dark' ? <FiMoon /> : <FiSun />}</span>
+            <div><h3>Appearance</h3><p>Switch theme.</p></div>
+          </header>
           <button className="btn" type="button" onClick={toggleTheme}>{theme === 'dark' ? 'Use Light Mode' : 'Use Dark Mode'}</button>
         </section>
 
-        <section className="settings-panel">
-          <div className="settings-row-title"><FiCpu /><h3>System</h3></div>
-          <p className="settings-muted">Panel version and runtime info.</p>
-          <div className="settings-kpis">
+        <section className="set-card">
+          <header className="set-card-head">
+            <span className="set-ico"><FiCpu /></span>
+            <div><h3>System</h3><p>Runtime info.</p></div>
+          </header>
+          <div className="set-kpis compact">
             <div><span>Version</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.3.3'}</strong></div>
             <div><span>Node mode</span><strong>{settings?.node_protocol || 'gRPC'}</strong></div>
           </div>
