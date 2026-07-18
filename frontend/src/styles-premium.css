@@ -61,7 +61,7 @@ html[data-theme="light"] .ops-topbar { background: var(--panel); }
 .ops-nav-link:hover { color: var(--text); background: rgba(255,255,255,.06); }
 .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); box-shadow: none; }
 .ops-nav-link.active::after { content: ''; position: absolute; height: 3px; left: 14px; right: 14px; bottom: 2px; background: var(--orange); border-radius: 3px; }
-.ops-userbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.ops-userbar { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
 .ops-userbar button { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--muted); border: 0; cursor: pointer; font-size: 20px; }
 .ops-userbar button:hover { color: var(--orange); }
 .ops-bell { position: relative; }
@@ -208,7 +208,45 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
 @media (max-width: 1180px) { .ops-shell { padding: 14px; } .ops-topbar { grid-template-columns: 1fr; height: auto; } .ops-nav { justify-content: flex-start; overflow-x: auto; } .ops-userbar { justify-content: flex-start; } .ops-overview-grid, .ops-lower-grid { grid-template-columns: 1fr; } body { overflow: auto; } }
 @media (max-width: 760px) { .ops-shell { height: auto; } .network-card-grid, .health-grid, .security-grid, .user-card-grid, .node-specs { grid-template-columns: 1fr; } }
 
-/* world map (atlas) — high contrast, cropped, hover name, compact */
+/* ---- empty states ---- */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty-illustration { margin-bottom: 14px; opacity: .9; }
+.empty-state h3 { margin: 0 0 6px; color: var(--text); font-size: 18px; }
+.empty-state p { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.5; }
+.table-skeleton { padding: 40px; text-align: center; color: var(--muted); }
+
+/* ---- bulk action bar ---- */
+.bulk-bar { display: flex; align-items: center; gap: 12px; background: rgba(255,122,30,.10); border: 1px solid rgba(255,122,30,.35); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+.bulk-count { font-weight: 700; color: var(--orange); font-size: 13px; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+.btn-danger { background: var(--red); color: #fff; border: 1px solid var(--red); }
+.btn-danger:hover { filter: brightness(1.08); }
+
+/* ---- sortable table headers ---- */
+.list-table th.sortable { cursor: pointer; user-select: none; }
+.list-table th.sortable:hover { color: var(--orange); }
+.list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-left: 4px; color: var(--orange); }
+.list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
+.list-table tr.selected { background: rgba(255,122,30,.08); }
+.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: linear-gradient(135deg, var(--orange), #ffb466); color: #15110a; font-weight: 800; font-size: 12px; margin-right: 8px; }
+.user-cell { display: flex; align-items: center; }
+.uname { font-weight: 600; }
+.status-pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.status-pill.online, .status-pill.ok { background: rgba(47,240,212,.16); color: #2ff0d4; }
+.status-pill.idle, .status-pill.info, .status-pill.warn { background: rgba(255,180,84,.16); color: #ffb454; }
+.status-pill.offline, .status-pill.danger { background: rgba(255,83,104,.16); color: #ff7a8a; }
+.status-pill.muted { background: rgba(255,255,255,.08); color: var(--muted); }
+.login-badge { font-variant-numeric: tabular-nums; font-weight: 600; }
+.expiry-soon { color: #ffb454; font-weight: 700; }
+.audit-detail { color: var(--muted); font-size: 12px; max-width: 320px; }
+
+/* ---- responsive table scroll ---- */
+.list-table-container { max-height: calc(100vh - 320px); overflow: auto; }
+@media (max-width: 1180px) { .list-table-container { max-height: none; } }
+
+/* sparkline in stat cell */
+.ops-stat-cell .mini-line { position: absolute; right: 12px; bottom: 8px; width: 64px; height: 26px; opacity: .55; }
+.ops-stat-cell { position: relative; }
 .world-map-real { height: 210px; width: 100%; background: #0f1a26; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
 .world-map-real svg { width: 100%; height: 100%; display: block; }
 .world-map-real .sphere { fill: #0c1620; stroke: rgba(255,255,255,.10); stroke-width: 1; }

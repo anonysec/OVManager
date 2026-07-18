@@ -51,6 +51,9 @@ export function fmtDate(iso, opts = {}) {
   }
 }
 
+// Alias used by UserTable / list views.
+export const formatDate = fmtDate;
+
 // "3h ago" style relative time from an ISO string.
 export function fmtRelative(iso) {
   if (!iso) return 'never';

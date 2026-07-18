@@ -26,9 +26,11 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const { t } = useTranslation();
 
-
   const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'online' | 'inactive' | 'expiring'
+  const [selected, setSelected] = useState([]);
+  const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -82,30 +84,65 @@ const UserManagement = () => {
     };
   }, [users]);
 
-  // Filter Data
+  // Filter + sort Data
   const filteredUsers = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return users.filter((user) => {
+    let list = users.filter((user) => {
       if (!user.name.toLowerCase().includes(term)) return false;
       if (view === 'online') return user.online;
       if (view === 'inactive') return !user.is_active;
       if (view === 'expiring') return daysUntil(user.expiry_date) >= 0 && daysUntil(user.expiry_date) <= 7;
       return true; // 'all'
     });
-  }, [users, searchTerm, view]);
+    const { key, dir } = sort;
+    const mul = dir === 'asc' ? 1 : -1;
+    list = list.slice().sort((a, b) => {
+      let av, bv;
+      if (key === 'name' || key === 'owner') { av = (a[key] || '').toLowerCase(); bv = (b[key] || '').toLowerCase(); }
+      else if (key === 'expiry_date' || key === 'last_online') { av = a[key] ? new Date(a[key]).getTime() : 0; bv = b[key] ? new Date(b[key]).getTime() : 0; }
+      else if (key === 'total') { av = Number(a.used ?? a.total ?? 0); bv = Number(b.used ?? b.total ?? 0); }
+      else if (key === 'max_logins') { av = Number(a.active_connections ?? 0); bv = Number(b.max_logins ?? 0); }
+      else { av = a[key]; bv = b[key]; }
+      if (av < bv) return -1 * mul;
+      if (av > bv) return 1 * mul;
+      return 0;
+    });
+    return list;
+  }, [users, searchTerm, view, sort]);
 
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
+  const handleSort = (key) => {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
   };
 
-  const handleDelete = async (uuid, name) => {
-    if (!window.confirm(`Are you sure you want to delete user ${name}?`)) return;
+  const handleSelect = (uuid) => {
+    setSelected((s) => (s.includes(uuid) ? s.filter((x) => x !== uuid) : [...s, uuid]));
+  };
+  const handleSelectAll = (checked) => {
+    if (checked) setSelected(filteredUsers.map((u) => u.uuid));
+    else setSelected([]);
+  };
+
+  const handleDelete = async (user) => {
+    if (!window.confirm(`Are you sure you want to delete user ${user.name}?`)) return;
     try {
-      await apiClient.delete(`/users/${uuid}`);
-      console.warn(`User ${name} deleted successfully.`);
+      await apiClient.delete(`/users/${user.uuid}`);
+      console.warn(`User ${user.name} deleted successfully.`);
+      setSelected((s) => s.filter((x) => x !== user.uuid));
       fetchUsers();
     } catch {
       console.warn('Error deleting user.');
+    }
+  };
+
+  const handleBulkDelete = async (uuids) => {
+    if (!window.confirm(`Delete ${uuids.length} selected user(s)? This cannot be undone.`)) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(uuids.map((uuid) => apiClient.delete(`/users/${uuid}`).catch(() => null)));
+      setSelected([]);
+      fetchUsers();
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -268,7 +305,7 @@ const UserManagement = () => {
             type="search"
             placeholder="Search by username..."
             value={searchTerm}
-            onChange={handleSearchChange}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input"
             aria-label="Search users by username"
           />
@@ -277,7 +314,14 @@ const UserManagement = () => {
 
       <UserTable
         users={filteredUsers}
+        isLoading={false}
         onDelete={handleDelete}
+        onBulkDelete={handleBulkDelete}
+        selected={selected}
+        onSelect={handleSelect}
+        onSelectAll={handleSelectAll}
+        sort={sort}
+        onSort={handleSort}
         onDownload={handleOpenDownloadModal}
         onEdit={handleEdit}
         onToggleStatus={handleToggleStatus}

@@ -45,10 +45,11 @@ const Skeleton = ({ lines = 3 }) => (
   </div>
 );
 
-const StatCell = ({ label, value, tip, tone }) => (
+const StatCell = ({ label, value, tip, tone, spark }) => (
   <div className="ops-stat-cell has-tip" data-tip={tip || ''}>
     <span>{label}</span>
     <strong className={tone === 'danger' ? 'tone-danger' : tone === 'warn' ? 'tone-warn' : tone === 'ok' ? 'tone-ok' : ''}>{value}</strong>
+    {spark && spark.length > 1 && <MiniLine values={spark} />}
   </div>
 );
 
@@ -175,6 +176,7 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [metrics, setMetrics] = useState(null);
   const [security, setSecurity] = useState(null);
+  const [trafficHistory, setTrafficHistory] = useState([]);
 
   useEffect(() => {
     const load = async () => {
@@ -191,6 +193,9 @@ const ServerStats = () => {
         setNodes(nodesRes.data?.data || []);
         setMetrics(metricsRes.data?.data || null);
         setSecurity(secRes.data?.data || null);
+        const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
+        const point = Number(lastTraffic?.active_connections ?? 0);
+        setTrafficHistory((h) => [...h.slice(-19), point]);
       } catch (e) { console.error('Dashboard load failed:', e); }
 
       // node status: per-node, non-blocking, short timeout
@@ -258,8 +263,8 @@ const ServerStats = () => {
         <Panel title="Network Status" tone="orange" icon={FiActivity} tip="Live connection and traffic totals from OVNode status APIs">
           {stats && users && nodes ? (
             <div className="network-card-grid">
-              <StatCell label="Active Connections" value={activeConnections.toLocaleString()} tip="Sum of live OpenVPN sessions reported by every OVNode." />
-              <StatCell label="Total Traffic" value={formatBytes(totalUsed)} tip="Cumulative data used by all users." />
+              <StatCell label="Active Connections" value={activeConnections.toLocaleString()} tip="Sum of live OpenVPN sessions reported by every OVNode." spark={trafficHistory} />
+              <StatCell label="Total Traffic" value={formatBytes(totalUsed)} tip="Cumulative data used by all users." spark={trafficHistory.map((v) => v * 8)} />
               <StatCell label="Online Nodes" value={`${onlineNodes}/${nodes.length || 0}`} tip="Active OVNodes in the panel database." tone={offlineNodes ? 'warn' : 'ok'} />
               <StatCell label="Avg Latency" value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip="Average panel-to-OVNode API latency from live node health checks." />
             </div>

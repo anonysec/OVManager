@@ -27,6 +27,10 @@ const Settings = () => {
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
   const [timezone, setTimezoneState] = useState(() => localStorage.getItem('ovTimezone') || 'UTC');
   const [tzSaving, setTzSaving] = useState(false);
+  const [subPrefix, setSubPrefix] = useState('');
+  const [subPath, setSubPath] = useState('');
+  const [subSaving, setSubSaving] = useState(false);
+  const [subSaved, setSubSaved] = useState(false);
 
   const load = async () => {
     const [settingsRes, securityRes, activityRes, notificationsRes, loginHealthRes] = await Promise.all([
@@ -44,6 +48,9 @@ const Settings = () => {
     setActivity(activityRes.data?.data || []);
     setNotifications(notificationsRes.data?.data || []);
     setLoginHealth(loginHealthRes.data?.data || null);
+    const s = settingsRes.data?.data || {};
+    setSubPrefix(s.subscription_url_prefix || '');
+    setSubPath(s.subscription_path || '');
   };
 
   useEffect(() => { load().catch(() => {}); }, []);
@@ -58,6 +65,23 @@ const Settings = () => {
       // keep local copy even if backend fails
     } finally {
       setTzSaving(false);
+    }
+  };
+
+  const saveSubscription = async () => {
+    setSubSaving(true);
+    setSubSaved(false);
+    try {
+      await apiClient.put('/server/settings/subscription', {
+        subscription_url_prefix: subPrefix,
+        subscription_path: subPath,
+      });
+      setSubSaved(true);
+      setTimeout(() => setSubSaved(false), 2500);
+    } catch {
+      // ignore
+    } finally {
+      setSubSaving(false);
     }
   };
 
@@ -171,8 +195,20 @@ const Settings = () => {
 
         <section className="settings-panel">
           <div className="settings-row-title"><FiLink /><h3>Subscription Link</h3></div>
-          <p className="settings-muted">Generated format used by the copy button in Users.</p>
-          <code className="settings-code">{subExample}</code>
+          <p className="settings-muted">Edit the base URL and path used by user VPN subscription links.</p>
+          <div className="settings-field">
+            <label htmlFor="sub-prefix">URL prefix</label>
+            <input id="sub-prefix" type="text" value={subPrefix} onChange={(e) => setSubPrefix(e.target.value)} placeholder="https://vpn.example.com/sub/" />
+          </div>
+          <div className="settings-field">
+            <label htmlFor="sub-path">Path</label>
+            <input id="sub-path" type="text" value={subPath} onChange={(e) => setSubPath(e.target.value)} placeholder="sub" />
+          </div>
+          <button className="btn btn-sm" disabled={subSaving} onClick={saveSubscription}>
+            <FiRefreshCw /> {subSaving ? 'Saving…' : 'Save link settings'}
+          </button>
+          {subSaved && <small className="settings-muted">Saved.</small>}
+          <code className="settings-code">{`${subPrefix}${subPath ? subPath.replace(/^\/+|\/+$/g, '') + '/' : ''}{user_uuid}`}</code>
         </section>
 
         <section className="settings-panel">

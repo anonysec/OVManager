@@ -12,10 +12,6 @@ from backend.config import config
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 
 
-class TimezoneUpdate(BaseModel):
-    timezone: str
-
-
 @router.get("/settings/", response_model=ResponseModel, include_in_schema=False)
 @router.get("/settings", response_model=ResponseModel)
 async def get_settings(
@@ -42,6 +38,15 @@ async def get_settings(
     )
 
 
+class TimezoneUpdate(BaseModel):
+    timezone: str
+
+
+class SubscriptionUpdate(BaseModel):
+    subscription_url_prefix: str | None = None
+    subscription_path: str | None = None
+
+
 @router.put("/settings/timezone", response_model=ResponseModel)
 async def update_timezone(
     payload: TimezoneUpdate,
@@ -51,6 +56,25 @@ async def update_timezone(
     tz = (payload.timezone or "UTC").strip() or "UTC"
     crud.update_setting_timezone(db, tz)
     return ResponseModel(success=True, msg="Timezone updated", data={"timezone": tz})
+
+
+@router.put("/settings/subscription", response_model=ResponseModel)
+async def update_subscription(
+    payload: SubscriptionUpdate,
+    user: str = Depends(get_current_user),
+):
+    if payload.subscription_url_prefix is not None:
+        config.SUBSCRIPTION_URL_PREFIX = payload.subscription_url_prefix.strip()
+    if payload.subscription_path is not None:
+        config.SUBSCRIPTION_PATH = payload.subscription_path.strip()
+    return ResponseModel(
+        success=True,
+        msg="Subscription link settings updated",
+        data={
+            "subscription_url_prefix": config.SUBSCRIPTION_URL_PREFIX,
+            "subscription_path": config.SUBSCRIPTION_PATH,
+        },
+    )
 
 
 @router.get(
