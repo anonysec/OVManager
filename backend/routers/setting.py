@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from backend.db.engine import get_db
 from backend.db import crud
@@ -9,6 +10,10 @@ from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
+
+
+class TimezoneUpdate(BaseModel):
+    timezone: str
 
 
 @router.get("/settings/", response_model=ResponseModel, include_in_schema=False)
@@ -24,15 +29,28 @@ async def get_settings(
         if config.SUBSCRIPTION_URL_PREFIX
         else str(request.base_url).rstrip("/") + (f"/{urlpath}/" if urlpath else "/")
     )
+    db_settings = crud.get_settings(db)
     settings = Settings(
         subscription_path=config.SUBSCRIPTION_PATH.strip("/"),
         subscription_url_prefix=subscription_prefix,
+        timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
     )
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
         data=settings,
     )
+
+
+@router.put("/settings/timezone", response_model=ResponseModel)
+async def update_timezone(
+    payload: TimezoneUpdate,
+    db: Session = Depends(get_db),
+    user: str = Depends(get_current_user),
+):
+    tz = (payload.timezone or "UTC").strip() or "UTC"
+    crud.update_setting_timezone(db, tz)
+    return ResponseModel(success=True, msg="Timezone updated", data={"timezone": tz})
 
 
 @router.get(

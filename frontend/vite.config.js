@@ -3,12 +3,21 @@ import react from '@vitejs/plugin-react'
 import dotenv from 'dotenv'
 import path from 'path'
 
-// Load .env from the project root
-dotenv.config({ path: path.resolve(__dirname, '../.env') })
+// Load .env from the project root (parent of frontend)
+// During Docker build, .env is copied to frontend dir, so check both locations
+const envPath = path.resolve(__dirname, '../.env')
+const localEnvPath = path.resolve(__dirname, '.env')
 
-const rawPath = (process.env.VITE_URLPATH || process.env.URLPATH || '').trim();
-const urlPath = rawPath.replace(/^\/+|\/+$/g, '') || '';
-const base = urlPath ? `/${urlPath}/` : '/';
+// Try loading from project root first, then from local dir
+try {
+    dotenv.config({ path: envPath })
+} catch {
+    dotenv.config({ path: localEnvPath })
+}
+
+const rawPath = (process.env.VITE_URLPATH || process.env.URLPATH || '').trim()
+const urlPath = rawPath.replace(/^\/+|\/+$/g, '') || ''
+const base = urlPath ? `/${urlPath}/` : '/'
 
 export default defineConfig({
   plugins: [react()],

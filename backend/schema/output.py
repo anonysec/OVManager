@@ -38,6 +38,7 @@ class ServerInfo(BaseModel):
 class Settings(BaseModel):
     subscription_url_prefix: str
     subscription_path: str
+    timezone: str = "UTC"
 
 
 class Admins(BaseModel):

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import LoadingButton from './LoadingButton';
+import Modal from './Modal';
 
-const AddUserModal = ({ onClose, onUserAdded }) => {
+const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   const [name, setName] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [totalTraffic, setTotalTraffic] = useState('');
@@ -20,6 +21,8 @@ const AddUserModal = ({ onClose, onUserAdded }) => {
     return Math.round(parsed * 1024 * 1024 * 1024);
   };
 
+  const reset = () => { setName(''); setExpiryDate(''); setTotalTraffic(''); setMaxLogins('1'); setError(''); };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -35,7 +38,7 @@ const AddUserModal = ({ onClose, onUserAdded }) => {
       };
       const response = await apiClient.post('/users/', payload);
       if (response.data.success) {
-        console.warn('User created successfully.');
+        reset();
         onUserAdded();
       } else {
         setError(response.data.msg);
@@ -48,69 +51,64 @@ const AddUserModal = ({ onClose, onUserAdded }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal">
-        <div className="modal-header">
-          <h3>{t('modal_createUserTitle')}</h3>
-          <button onClick={onClose} className="close-modal-btn">&times;</button>
+    <Modal isOpen={isOpen} onClose={onClose} title={t('modal_createUserTitle')} size="medium">
+      <form onSubmit={handleSubmit} className="modal-form">
+        <div className="input-group">
+          <label htmlFor="new-user-name">{t('username')}</label>
+          <input
+            type="text"
+            id="new-user-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required minLength="3" maxLength="10"
+            autoFocus
+          />
         </div>
-        <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label htmlFor="new-user-name">{t('username')}</label>
-            <input
-              type="text"
-              id="new-user-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required minLength="3" maxLength="10"
-            />
-          </div>
-          <div className="input-group">
-            <label htmlFor="new-user-expiry">{t('modal_expiryDate')}</label>
-            <input
-              type="date"
-              id="new-user-expiry"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              required
-            />
-          </div>
-          <div className="input-group">
-            <label htmlFor="new-user-total">{t('modal_totalTraffic')}</label>
-            <input
-              type="number"
-              id="new-user-total"
-              value={totalTraffic}
-              onChange={(e) => setTotalTraffic(e.target.value)}
-              min="0"
-              step="0.01"
-              placeholder={t('modal_totalTrafficPlaceholder')}
-            />
-            <small className="input-hint">{t('modal_totalTrafficHint')}</small>
-          </div>
-          <div className="input-group">
-            <label htmlFor="new-user-max-logins">{t('modal_maxLogins')}</label>
-            <input
-              type="number"
-              id="new-user-max-logins"
-              value={maxLogins}
-              onChange={(e) => setMaxLogins(e.target.value)}
-              min="0"
-              step="1"
-              placeholder={t('modal_maxLoginsPlaceholder')}
-            />
-            <small className="input-hint">{t('modal_maxLoginsHint')}</small>
-          </div>
-          <div className="modal-footer">
-            <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
-            <LoadingButton isLoading={isLoading} type="submit" className="btn">
-              {t('createUserButton')}
-            </LoadingButton>
-          </div>
-          {error && <p className="error-message">{error}</p>}
-        </form>
-      </div>
-    </div>
+        <div className="input-group">
+          <label htmlFor="new-user-expiry">{t('modal_expiryDate')}</label>
+          <input
+            type="date"
+            id="new-user-expiry"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            required
+          />
+        </div>
+        <div className="input-group">
+          <label htmlFor="new-user-total">{t('modal_totalTraffic')}</label>
+          <input
+            type="number"
+            id="new-user-total"
+            value={totalTraffic}
+            onChange={(e) => setTotalTraffic(e.target.value)}
+            min="0"
+            step="0.01"
+            placeholder={t('modal_totalTrafficPlaceholder')}
+          />
+          <small className="input-hint">{t('modal_totalTrafficHint')}</small>
+        </div>
+        <div className="input-group">
+          <label htmlFor="new-user-max-logins">{t('modal_maxLogins')}</label>
+          <input
+            type="number"
+            id="new-user-max-logins"
+            value={maxLogins}
+            onChange={(e) => setMaxLogins(e.target.value)}
+            min="0"
+            step="1"
+            placeholder={t('modal_maxLoginsPlaceholder')}
+          />
+          <small className="input-hint">{t('modal_maxLoginsHint')}</small>
+        </div>
+        <div className="modal-footer">
+          <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
+          <LoadingButton isLoading={isLoading} type="submit" className="btn">
+            {t('createUserButton')}
+          </LoadingButton>
+        </div>
+        {error && <p className="error-message">{error}</p>}
+      </form>
+    </Modal>
   );
 };
 

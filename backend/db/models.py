@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import BigInteger
+from sqlalchemy import BigInteger, DateTime
 from .engine import Base
-from datetime import date
+from datetime import date, datetime
 
 
 class User(Base):
@@ -19,9 +19,12 @@ class User(Base):
     # Max simultaneous logins/devices allowed per config.
     # 1 = single login (OpenVPN default), 0 = unlimited.
     max_logins: Mapped[int] = mapped_column(default=1, nullable=False)
-    expiry_date: Mapped[date]
+    expiry_date: Mapped[date] = mapped_column()
     is_active: Mapped[bool] = mapped_column(default=True)
     owner: Mapped[str] = mapped_column(nullable=False)
+    # Last time the user had at least one live connection (set whenever
+    # active_connections > 0). Used by the UI "Last Online" column.
+    last_online: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
 
 class Admin(Base):
@@ -53,3 +56,6 @@ class Settings(Base):
     tunnel_address: Mapped[str] = mapped_column(nullable=True)
     port: Mapped[int] = mapped_column(default=1194, nullable=False)
     protocol: Mapped[str] = mapped_column(default="tcp", nullable=False)
+    # Operator-configured display timezone (IANA name, e.g. "Asia/Tehran").
+    # Used by the UI to render "last online", logs, and expiry times.
+    timezone: Mapped[str] = mapped_column(default="UTC", nullable=False)

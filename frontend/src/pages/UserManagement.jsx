@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import apiClient from '../services/api';
 import UserTable from '../components/UserTable';
 import AddUserModal from '../components/AddUserModal';
@@ -9,8 +10,10 @@ import UserStatCard from '../components/UserStatCard';
 import { FiSearch } from 'react-icons/fi';
 import { BsPersonFill, BsPersonCheckFill, BsPersonXFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
+import { daysUntil } from '../utils/time';
 
 const UserManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
   const [subscriptionSettings, setSubscriptionSettings] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -25,6 +28,7 @@ const UserManagement = () => {
 
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [view, setView] = useState('all'); // 'all' | 'online' | 'inactive' | 'expiring'
 
   const fetchUsers = async () => {
     try {
@@ -56,6 +60,18 @@ const UserManagement = () => {
     fetchSubscriptionSettings();
   }, []);
 
+  // Deep-link: ?user=<uuid> opens that user's edit modal
+  useEffect(() => {
+    const userId = searchParams.get('user');
+    if (!userId) return;
+    const u = users.find((x) => x.uuid === userId);
+    if (u) {
+      handleEdit(u);
+      searchParams.delete('user');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [users]);
+
   const userStats = useMemo(() => {
     const activeUsersCount = users.filter(user => user.is_active).length;
     const inactiveUsersCount = users.length - activeUsersCount;
@@ -68,10 +84,15 @@ const UserManagement = () => {
 
   // Filter Data
   const filteredUsers = useMemo(() => {
-    return users.filter(user =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [users, searchTerm]);
+    const term = searchTerm.toLowerCase();
+    return users.filter((user) => {
+      if (!user.name.toLowerCase().includes(term)) return false;
+      if (view === 'online') return user.online;
+      if (view === 'inactive') return !user.is_active;
+      if (view === 'expiring') return daysUntil(user.expiry_date) >= 0 && daysUntil(user.expiry_date) <= 7;
+      return true; // 'all'
+    });
+  }, [users, searchTerm, view]);
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -205,7 +226,15 @@ const UserManagement = () => {
     <div id="users-view" className="view">
       <div className="view-header">
         <h2>Users</h2>
-        <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
+        <div className="view-header-actions">
+          <div className="seg-toggle" role="tablist" aria-label="User view">
+            <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All</button>
+            <button type="button" role="tab" aria-selected={view === 'online'} className={view === 'online' ? 'active' : ''} onClick={() => setView('online')}>Online</button>
+            <button type="button" role="tab" aria-selected={view === 'inactive'} className={view === 'inactive' ? 'active' : ''} onClick={() => setView('inactive')}>Inactive</button>
+            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>Expiring ≤7d</button>
+          </div>
+          <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
+        </div>
       </div>
 
       <div className="stats-grid" style={{ marginBottom: '30px', display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
@@ -233,16 +262,17 @@ const UserManagement = () => {
       </div>
 
       <div className="search-pagination-controls">
-        <div className="search-container">
-          <FiSearch className="search-icon" />
+        <label className="search-field">
+          <FiSearch className="search-icon" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             placeholder="Search by username..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="search-input"
+            aria-label="Search users by username"
           />
-        </div>
+        </label>
       </div>
 
       <UserTable
@@ -257,12 +287,14 @@ const UserManagement = () => {
       />
       {isAddModalOpen && (
         <AddUserModal
+          isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           onUserAdded={handleUserAdded}
         />
       )}
       {isEditModalOpen && (
         <EditUserModal
+          isOpen={isEditModalOpen}
           user={selectedUser}
           onClose={() => setIsEditModalOpen(false)}
           onUserUpdated={handleUserUpdated}
@@ -270,12 +302,14 @@ const UserManagement = () => {
       )}
       {isDownloadModalOpen && (
         <SelectNodeForDownloadModal
+          isOpen={isDownloadModalOpen}
           user={selectedUser}
           onClose={() => setIsDownloadModalOpen(false)}
         />
       )}
       {isSessionsModalOpen && (
         <UserSessionsModal
+          isOpen={isSessionsModalOpen}
           user={selectedUser}
           data={sessionDiagnostics}
           loading={sessionLoading}

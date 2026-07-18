@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react';
-import { FiActivity, FiAlertTriangle, FiBell, FiLink, FiMoon, FiRefreshCw, FiShield, FiSun, FiTool } from 'react-icons/fi';
+import { FiActivity, FiAlertTriangle, FiBell, FiLink, FiMoon, FiRefreshCw, FiShield, FiSun, FiTool, FiCpu, FiUsers, FiZap } from 'react-icons/fi';
 import apiClient from '../services/api';
+
+const TIMEZONES = [
+  'UTC',
+  'Asia/Tehran',
+  'Asia/Dubai',
+  'Asia/Kolkata',
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'Europe/Istanbul',
+  'Europe/Berlin',
+  'Europe/London',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+];
 
 const Settings = () => {
   const [settings, setSettings] = useState(null);
@@ -10,6 +25,8 @@ const Settings = () => {
   const [loginHealth, setLoginHealth] = useState(null);
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
+  const [timezone, setTimezoneState] = useState(() => localStorage.getItem('ovTimezone') || 'UTC');
+  const [tzSaving, setTzSaving] = useState(false);
 
   const load = async () => {
     const [settingsRes, securityRes, activityRes, notificationsRes, loginHealthRes] = await Promise.all([
@@ -20,6 +37,9 @@ const Settings = () => {
       apiClient.get('/maintenance/login-health?hours=8'),
     ]);
     setSettings(settingsRes.data?.data || null);
+    const tz = settingsRes.data?.data?.timezone || 'UTC';
+    setTimezoneState(tz);
+    localStorage.setItem('ovTimezone', tz);
     setSecurity(securityRes.data?.data || null);
     setActivity(activityRes.data?.data || []);
     setNotifications(notificationsRes.data?.data || []);
@@ -27,6 +47,19 @@ const Settings = () => {
   };
 
   useEffect(() => { load().catch(() => {}); }, []);
+
+  const saveTimezone = async (tz) => {
+    setTimezoneState(tz);
+    localStorage.setItem('ovTimezone', tz);
+    setTzSaving(true);
+    try {
+      await apiClient.put('/server/settings/timezone', { timezone: tz });
+    } catch {
+      // keep local copy even if backend fails
+    } finally {
+      setTzSaving(false);
+    }
+  };
 
   const runAction = async (path) => {
     setBusy(true);
@@ -51,18 +84,19 @@ const Settings = () => {
 
   const healthRows = loginHealth?.users || [];
   const totals = loginHealth?.totals || {};
+  const notifCount = Array.isArray(notifications) ? notifications.length : 0;
 
   return (
     <div id="settings-view" className="view settings-page">
       <div className="view-header">
-        <h2>Settings</h2>
+        <h2>Settings &amp; Operations</h2>
         <button className="btn" type="button" onClick={() => load().catch(() => {})}><FiRefreshCw /> Refresh</button>
       </div>
 
       <div className="settings-grid premium-settings-grid">
         <section className="settings-panel wide-panel">
-          <div className="settings-row-title"><FiTool /><h3>Max-login Health</h3></div>
-          <p className="settings-muted">Automatic maintenance runs in the background: limits sync every 30 minutes; stale session cleanup every 15 minutes. Max-login 1 users use takeover mode, so a new device disconnects the old one instead of failing auth.</p>
+          <div className="settings-row-title"><FiTool /><h3>Maintenance</h3></div>
+          <p className="settings-muted">Background jobs: limits sync every 30 min, stale session cleanup every 15 min. Max-login 1 users use takeover mode (new device disconnects old).</p>
           <div className="settings-kpis">
             <div><span>Users</span><strong>{totals.users ?? '-'}</strong></div>
             <div><span>Online</span><strong>{totals.online ?? '-'}</strong></div>
@@ -71,8 +105,8 @@ const Settings = () => {
             <div><span>Takeover</span><strong>{totals.takeover_mode ?? '-'}</strong></div>
           </div>
           <div className="settings-actions">
-            <button className="btn" disabled={busy} onClick={() => runAction('/maintenance/sync-limits')}>Sync limits now</button>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => runAction('/maintenance/clean-stale')}>Clean stale now</button>
+            <button className="btn" disabled={busy} onClick={() => runAction('/maintenance/sync-limits')}><FiZap /> Sync limits now</button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => runAction('/maintenance/clean-stale')}><FiRefreshCw /> Clean stale now</button>
           </div>
           <div className="table-container list-table-container health-table-wrap">
             <table className="list-table">
@@ -94,10 +128,24 @@ const Settings = () => {
         </section>
 
         <section className="settings-panel">
+          <div className="settings-row-title"><FiTool /><h3>Timezone</h3></div>
+          <p className="settings-muted">All dates (last online, logs, expiry) render in this timezone.</p>
+          <div className="settings-field">
+            <label htmlFor="tz">Display timezone</label>
+            <select id="tz" value={timezone} onChange={(e) => saveTimezone(e.target.value)} disabled={tzSaving}>
+              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+          </div>
+          {tzSaving && <small className="settings-muted">Saving…</small>}
+        </section>
+
+        <section className="settings-panel">
           <div className="settings-row-title"><FiBell /><h3>Notification Center</h3></div>
-          <p className="settings-muted">Live operational issues from nodes and users.</p>
+          <p className="settings-muted">{notifCount} active operational {notifCount === 1 ? 'issue' : 'issues'} from nodes and users.</p>
           <div className="settings-list">
-            {notifications.length ? notifications.map((n, i) => <p key={i} className={`notice ${n.level}`}>{n.title}</p>) : <p className="notice good">No active notifications</p>}
+            {notifCount ? notifications.map((n, i) => (
+              <p key={n.id ?? i} className={`notice ${n.level || 'warning'}`}>{n.title}</p>
+            )) : <p className="notice good">No active notifications</p>}
           </div>
         </section>
 
@@ -134,12 +182,12 @@ const Settings = () => {
         </section>
 
         <section className="settings-panel">
-          <div className="settings-row-title"><FiAlertTriangle /><h3>Recommended Next</h3></div>
-          <ul className="settings-bullets">
-            <li>Add editable node geolocation fields for exact map placement.</li>
-            <li>Add read/unread persistent notification state.</li>
-            <li>Add dedicated Security and Activity pages when the log volume grows.</li>
-          </ul>
+          <div className="settings-row-title"><FiCpu /><h3>System</h3></div>
+          <p className="settings-muted">Panel version and runtime info.</p>
+          <div className="settings-kpis">
+            <div><span>Version</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.3.3'}</strong></div>
+            <div><span>Node mode</span><strong>{settings?.node_protocol || 'gRPC'}</strong></div>
+          </div>
         </section>
       </div>
     </div>

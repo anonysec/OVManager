@@ -2,9 +2,9 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiLogOut, FiGlobe, FiMoon, FiSun, FiSettings } from 'react-icons/fi';
+import { FiBell, FiLogOut, FiGlobe, FiMoon, FiSun, FiSettings, FiChevronDown } from 'react-icons/fi';
 import apiClient, { API_ERROR_EVENT } from '../services/api';
-import logoSrc from '../assets/ovmanager-character.webp';
+import Logo from '../components/Logo';
 
 const readTokenPayload = () => {
   try {
@@ -21,7 +21,9 @@ const DashboardLayout = () => {
   const { i18n, t } = useTranslation();
   const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
   const [account, setAccount] = useState(() => readTokenPayload());
-  const [alerts, setAlerts] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
@@ -33,7 +35,6 @@ const DashboardLayout = () => {
     setAccount(readTokenPayload());
   }, []);
 
-  // Skip to content handler
   const skipToContent = (e) => {
     const main = document.querySelector('.ops-main');
     if (main) {
@@ -42,28 +43,75 @@ const DashboardLayout = () => {
     }
   };
 
+  // Real, useful notification center: derived from live operational data
+  // (offline nodes, expiring/inactive/max-login users, auth anomalies).
+  const loadNotifications = async () => {
+    try {
+      const [usersRes, nodesRes, secRes] = await Promise.all([
+        apiClient.get('/users/'),
+        apiClient.get('/nodes/'),
+        apiClient.get('/security/summary?hours=8'),
+      ]);
+      const users = usersRes.data?.data || [];
+      const nodes = nodesRes.data?.data || [];
+      const security = secRes.data?.data || {};
+      // Probe node reachability (short timeout, non-blocking)
+      const ns = await Promise.all(nodes.map(async (n) => {
+        if (!n.status) return [n.id, { status: 'inactive' }];
+        try {
+          const r = await apiClient.get(`/nodes/${n.id}/status`, { timeout: 4000 });
+          return [n.id, r.data?.data || {}];
+        } catch { return [n.id, { status: 'unreachable', node_info: undefined, session_diagnostics: undefined }]; }
+      }));
+      const nodeStatus = Object.fromEntries(ns);
+
+      const out = [];
+      nodes.forEach((n) => {
+        const st = nodeStatus[n.id] || {};
+        if (n.status && (st.node_info === undefined || st.session_diagnostics === undefined)) {
+          out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null, action_path: null });
+        }
+      });
+      const now = new Date();
+      users.forEach((u) => {
+        const exp = new Date(u.expiry_date);
+        const d = Math.ceil((exp - now) / 86400000);
+        if (d >= 0 && d <= 7) out.push({ id: `exp-${u.uuid}`, level: 'warning', title: `User ${u.name} expires in ${d}d`, detail: `Expiry ${u.expiry_date}`, action: null, action_path: null });
+        if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
+          out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null, action_path: null });
+        }
+        if (u.is_active === false) out.push({ id: `inact-${u.uuid}`, level: 'info', title: `User ${u.name} disabled`, detail: 'Account inactive', action: null, action_path: null });
+      });
+      if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${security.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null, action_path: null });
+      if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${security.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null, action_path: null });
+      setNotifications(out);
+    } catch {
+      // keep existing; API interceptor surfaces real errors as toasts
+    }
+  };
+
   useEffect(() => {
-    const loadAlerts = async () => {
-      try {
-        const [nodesRes, usersRes] = await Promise.all([apiClient.get('/nodes/'), apiClient.get('/users/')]);
-        const nodes = nodesRes.data?.data || [];
-        const users = usersRes.data?.data || [];
-        const next = [];
-        const offline = nodes.filter((n) => !n.status);
-        if (offline.length) next.push(`${offline.length} node(s) offline`);
-        const full = users.filter((u) => Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins || 0));
-        if (full.length) next.push(`${full.length} user(s) at max logins`);
-        const expired = users.filter((u) => u.is_active === false);
-        if (expired.length) next.push(`${expired.length} inactive user(s)`);
-        setAlerts(next);
-      } catch {
-        // api interceptor shows error toast
-      }
-    };
-    loadAlerts();
-    const id = setInterval(loadAlerts, 60000);
+    loadNotifications();
+    const id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, 30000);
     return () => clearInterval(id);
   }, []);
+
+  // Close profile dropdown on outside click / escape
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onKey = (e) => e.key === 'Escape' && setProfileOpen(false);
+    const onClick = (e) => {
+      if (!e.target.closest('.ops-profile-wrap')) setProfileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [profileOpen]);
+
+  const openSettings = () => { setProfileOpen(false); window.location.assign('/dash/settings'); };
 
   useEffect(() => {
     const onApiError = (event) => {
@@ -75,12 +123,14 @@ const DashboardLayout = () => {
     return () => window.removeEventListener(API_ERROR_EVENT, onApiError);
   }, []);
 
-  const navItems = useMemo(() => ([
-    { to: '/', label: t('dashboard', 'Dashboard'), end: true },
-    { to: '/users', label: t('users', 'Users') },
-    { to: '/nodes', label: t('nodes', 'Nodes') },
-    ...(userRole === 'main_admin' ? [{ to: '/admins', label: t('admins', 'Admins') }] : []),
-  ]), [t, userRole]);
+  const navItems = useMemo(() => (
+    [
+      { to: '/', label: t('dashboard', 'Dashboard'), end: true },
+      { to: '/users', label: t('users', 'Users') },
+      { to: '/nodes', label: t('nodes', 'Nodes') },
+      ...(userRole === 'main_admin' ? [{ to: '/admins', label: t('admins', 'Admins') }] : []),
+    ]
+  ), [t, userRole]);
 
   const changeLanguage = () => {
     const next = i18n.language === 'en' ? 'fa' : 'en';
@@ -90,15 +140,16 @@ const DashboardLayout = () => {
 
   const username = account.sub || 'Admin';
   const initials = username.slice(0, 2).toUpperCase();
+  const notifCount = notifications.length;
+  const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
 
   return (
     <div className="ops-shell">
       <a href="#main-content" className="skip-link" onClick={skipToContent}>Skip to content</a>
       <header className="ops-topbar" role="banner">
         <div className="ops-brand">
-          <span className="ops-logo-mark" aria-hidden="true" />
-          <strong><span>OV</span>Manager</strong>
-          <img src={logoSrc} alt="OVManager character logo" />
+          <Logo size={40} />
+          <strong>OV<span className="brand-accent">Manager</span></strong>
         </div>
 
         <nav className="ops-nav" aria-label="Main navigation">
@@ -116,13 +167,67 @@ const DashboardLayout = () => {
           </button>
           <NavLink to="/settings" className="ops-settings-link" title={t('settings', 'Settings')} aria-label="Settings"><FiSettings /></NavLink>
           <div className="notification-wrap">
-            <button type="button" className={`ops-bell ${alerts.length ? 'has-alerts' : ''}`} aria-label={alerts.length ? `You have ${alerts.length} alerts` : 'No alerts'}>
-              <FiBell />{alerts.length > 0 && <span className="sr-only">{alerts.length} alerts</span>}
+            <button
+              type="button"
+              className={`ops-bell ${notifCount ? 'has-alerts' : ''}`}
+              aria-label={notifCount ? `You have ${notifCount} notifications` : 'No notifications'}
+              aria-expanded={notifOpen}
+              onClick={() => setNotifOpen((o) => !o)}
+            >
+              <FiBell />{notifCount > 0 && <span>{notifCount > 9 ? '9+' : notifCount}</span>}
             </button>
-            {alerts.length > 0 && <div className="notification-popover" role="status" aria-live="polite">{alerts.map((a) => <p key={a}>{a}</p>)}</div>}
+            <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label="Notifications">
+              <div className="notif-head">
+                <strong>Notifications</strong>
+                {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label="Refresh notifications">↻</button>}
+              </div>
+              {notifCount === 0 ? (
+                <p className="notification-empty">No active notifications. All systems nominal.</p>
+              ) : (
+                notifications.map((n, i) => {
+                  const href = n.id?.startsWith('node-') ? `/dash/nodes?node=${n.id.replace('node-','')}`
+                    : n.id?.startsWith('exp-') || n.id?.startsWith('full-') || n.id?.startsWith('inact-') ? `/dash/users?user=${n.id.replace(/^(exp|full|inact)-/, '')}`
+                    : '/dash/settings';
+                  return (
+                    <a key={n.id ?? i} href={href} className={`notification-item ${levelClass(n.level)}`} onClick={() => setNotifOpen(false)}>
+                      <span className="dot" />
+                      <div>
+                        <div className="n-title">{n.title}</div>
+                        {n.detail && <div className="n-time">{n.detail}</div>}
+                      </div>
+                    </a>
+                  );
+                })
+              )}
+            </div>
           </div>
-          <div className="ops-profile" title={`${username} (${account.type || userRole || 'admin'})`} aria-label={`User profile: ${username}, role: ${account.type || userRole || 'admin'}`}><span>{initials}</span><b>{username}</b></div>
-          <button type="button" onClick={logout} title={t('logout', 'Logout')} aria-label="Logout"><FiLogOut /></button>
+          <div className="ops-profile-wrap">
+            <button
+              type="button"
+              className="ops-profile"
+              aria-haspopup="menu"
+              aria-expanded={profileOpen}
+              onClick={() => setProfileOpen((o) => !o)}
+            >
+              <span className="ops-avatar">{(account.sub || 'A').slice(0,1).toUpperCase()}</span>
+              <span className="ops-id">
+                <b>{username}</b>
+                <small>{account.type || userRole || 'admin'}</small>
+              </span>
+              <FiChevronDown className="prof-caret" />
+            </button>
+            <div className={`profile-menu ${profileOpen ? 'is-open' : ''}`} role="menu">
+              <div className="profile-head">
+                <span className="ops-avatar lg">{(account.sub || 'A').slice(0,1).toUpperCase()}</span>
+                <div>
+                  <strong>{username}</strong>
+                  <span className="role-chip">{(account.type || userRole || 'admin').toUpperCase()}</span>
+                </div>
+              </div>
+              <button type="button" className="profile-item" role="menuitem" onClick={openSettings}><FiSettings /> Settings</button>
+              <button type="button" className="profile-item danger" role="menuitem" onClick={logout}><FiLogOut /> Logout</button>
+            </div>
+          </div>
         </div>
       </header>
       <main id="main-content" className="ops-main" tabIndex="-1">

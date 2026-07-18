@@ -2,6 +2,13 @@
 # Builds the Vue frontend (frontend/dist) then runs the FastAPI panel.
 FROM node:22-slim AS frontend
 WORKDIR /src/frontend
+
+# Set VITE_URLPATH for Vite build BEFORE copying other files
+ENV VITE_URLPATH=dash
+
+# Copy .env to make it available for dotenv
+COPY .env ./
+
 COPY frontend/package*.json ./
 RUN npm ci || npm install
 COPY frontend/ ./

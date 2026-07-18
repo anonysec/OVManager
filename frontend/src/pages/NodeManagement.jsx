@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FiServer, FiCheckCircle, FiXCircle, FiSearch } from 'react-icons/fi';
 import apiClient from '../services/api';
 import AddNodeModal from '../components/AddNodeModal';
@@ -9,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 
 const NodeManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [nodes, setNodes] = useState([]);
   const [nodeInfo, setNodeInfo] = useState({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -37,6 +39,18 @@ const NodeManagement = () => {
   useEffect(() => {
     fetchNodes();
   }, [fetchNodes]);
+
+  // Deep-link: ?node=<id> opens that node's edit modal
+  useEffect(() => {
+    const nodeId = searchParams.get('node');
+    if (!nodeId) return;
+    const n = nodes.find((x) => String(x.id) === String(nodeId));
+    if (n) {
+      handleOpenEditModal(n);
+      searchParams.delete('node');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [nodes]);
 
 
   useEffect(() => {
@@ -215,6 +229,7 @@ const NodeManagement = () => {
 
       {isAddModalOpen && (
         <AddNodeModal
+          isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           onNodeCreated={handleNodeCreated}
         />
@@ -222,6 +237,7 @@ const NodeManagement = () => {
 
       {isEditModalOpen && (
         <EditNodeModal
+          isOpen={isEditModalOpen}
           node={selectedNode}
           onClose={() => setIsEditModalOpen(false)}
           onNodeUpdated={handleNodeUpdated}

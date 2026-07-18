@@ -17,6 +17,29 @@ from backend.routers.sub import router as subscription_router
 from backend.version import __version__
 
 
+def _run_migrations():
+    """Create any missing tables and add columns added after initial schema."""
+    from sqlalchemy import text as _text
+    from backend.db.engine import Base
+
+    db = SessionLocal()
+    try:
+        # Ensure every model's table exists (idempotent; no-op if already there).
+        Base.metadata.create_all(bind=db.get_bind())
+        for table, column, coltype in (
+            ("users", "last_online", "DATETIME"),
+            ("settings", "timezone", "VARCHAR NOT NULL DEFAULT 'UTC'"),
+        ):
+            existing = {
+                r[1] for r in db.execute(_text(f"PRAGMA table_info({table})")).fetchall()
+            }
+            if column not in existing:
+                db.execute(_text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
+        db.commit()
+    finally:
+        db.close()
+
+
 # Normalize the configured URL path (strip slashes). Empty -> served at root.
 URLPATH = (config.URLPATH or "").strip("/")
 
@@ -130,6 +153,11 @@ def start_scheduler():
 
 @api.on_event("startup")
 async def startup_event():
+    # Run lightweight schema migrations before serving (add missing columns).
+    try:
+        _run_migrations()
+    except Exception as e:  # never block startup on a migration hiccup
+        print("migration warning:", e)
     # Start serving immediately. Maintenance jobs are scheduled below; running
     # them synchronously during startup can block the panel when a node is
     # powered off or removed by the ISP.

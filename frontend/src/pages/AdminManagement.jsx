@@ -126,6 +126,7 @@ const AdminManagement = () => {
 
             {isAddModalOpen && (
                 <AddAdminModal
+                    isOpen={isAddModalOpen}
                     onClose={() => setIsAddModalOpen(false)}
                     onAdminCreated={handleAdminCreated}
                 />
@@ -133,6 +134,7 @@ const AdminManagement = () => {
 
             {isEditModalOpen && (
                 <EditAdminModal
+                    isOpen={isEditModalOpen}
                     admin={selectedAdmin}
                     onClose={() => setIsEditModalOpen(false)}
                     onAdminUpdated={handleAdminUpdated}

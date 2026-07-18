@@ -33,11 +33,18 @@ async def get_all_users(
         item = Users.model_validate(db_user).model_dump()
         item["active_connections"] = int(active_counts.get(db_user.name, 0) or 0)
         item["online"] = item["active_connections"] > 0
+        # Track the last time this user had a live connection.
+        if item["active_connections"] > 0:
+            db_user.last_online = datetime.utcnow()
+        item["last_online"] = (
+            db_user.last_online.isoformat() if db_user.last_online else None
+        )
         return item
 
     if user["type"] == "main_admin":
         all_users = crud.get_all_users(db)
         users_list = [serialize(u) for u in all_users]
+        db.commit()  # persist last_online updates
         return ResponseModel(
             success=True,
             msg="Users retrieved successfully",
@@ -47,6 +54,7 @@ async def get_all_users(
     elif user["type"] == "admin":
         admin_users = crud.get_users_by_admin(db, admin_username=user["username"])
         users_list = [serialize(u) for u in admin_users]
+        db.commit()
         return ResponseModel(
             success=True,
             msg="Users retrieved successfully",

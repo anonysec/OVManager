@@ -244,3 +244,16 @@ def get_settings(db: Session):
         db.refresh(settings)
 
     return settings
+
+
+def update_setting_timezone(db: Session, timezone: str):
+    settings = db.query(Settings).first()
+    if not settings:
+        settings = Settings(port=1194)
+        settings.protocol = "tcp"
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    settings.timezone = timezone
+    db.commit()
+    return settings
