@@ -79,11 +79,9 @@ const DashboardLayout = () => {
       users.forEach((u) => {
         const exp = new Date(u.expiry_date);
         const d = Math.ceil((exp - now) / 86400000);
-        if (d >= 0 && d <= 7) out.push({ id: `exp-${u.uuid}`, level: 'warning', title: `User ${u.name} expires in ${d}d`, detail: `Expiry ${u.expiry_date}`, action: null, action_path: null });
         if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
           out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null, action_path: null });
         }
-        if (u.is_active === false) out.push({ id: `inact-${u.uuid}`, level: 'info', title: `User ${u.name} disabled`, detail: 'Account inactive', action: null, action_path: null });
       });
       if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${security.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null, action_path: null });
       if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${security.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null, action_path: null });
@@ -154,19 +152,19 @@ const DashboardLayout = () => {
             <button
               type="button"
               className={`ops-bell ${notifCount ? 'has-alerts' : ''}`}
-              aria-label={notifCount ? `You have ${notifCount} notifications` : 'No notifications'}
+              aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')}
               aria-expanded={notifOpen}
               onClick={() => setNotifOpen((o) => !o)}
             >
               <FiBell />{notifCount > 0 && <span>{notifCount > 9 ? '9+' : notifCount}</span>}
             </button>
-            <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label="Notifications">
+            <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label={t('notifTitle')}>
               <div className="notif-head">
-                <strong>Notifications</strong>
-                {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label="Refresh notifications">↻</button>}
+                <strong>{t('notifTitle')}</strong>
+                {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label={t('notifRefresh')}>↻</button>}
               </div>
               {notifCount === 0 ? (
-                <p className="notification-empty">No active notifications. All systems nominal.</p>
+                <p className="notification-empty">{t('notifEmpty')}</p>
               ) : (
                 notifications.map((n, i) => {
                   const href = n.id?.startsWith('node-') ? `/dash/nodes?node=${n.id.replace('node-','')}`

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
@@ -34,7 +35,7 @@ const nodeMeta = (node) => {
 
 const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', children }) => (
   <section className={`ops-panel ${tone === 'cyan' ? 'cyan' : ''} ${className}`}>
-    <header><h3><Icon style={{ verticalAlign: -3, marginRight: 8 }} />{title}</h3>{tip && <span className="has-tip" data-tip={tip}>?</span>}</header>
+    <header><h3><Icon style={{ verticalAlign: -3, marginRight: 8 }} />{title}</h3>{tip && <span className="has-tip panel-tip" data-tip={tip} aria-label="info" />}</header>
     <div className="ops-panel-body">{children}</div>
   </section>
 );
@@ -71,46 +72,58 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
   const [hover, setHover] = useState(null);
+  const [zoom, setZoom] = useState(1);
+  const clamp = (z) => Math.max(1, Math.min(4, Math.round(z * 10) / 10));
   return (
-    <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-      onMouseLeave={() => setHover(null)}>
-      <defs>
-        <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
-          <stop offset="0%" stopColor="#13314a" />
-          <stop offset="60%" stopColor="#0c2236" />
-          <stop offset="100%" stopColor="#081320" />
-        </radialGradient>
-      </defs>
-      <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
-      {land.features.map((feat) => (
-        <path
-          key={feat.id || feat.properties.name}
-          className="country"
-          d={pathGen(feat) || ''}
-          onMouseOver={() => setHover(feat.properties.name)}
-        >
-          <title>{feat.properties.name}</title>
-        </path>
-      ))}
-      <path className="country-borders" d={pathGen(borders) || ''} />
-      {hover && (() => {
-        const c = pathGen.centroid(land.features.find((f) => f.properties.name === hover)) || [300, 150];
-        return <text x={c[0]} y={c[1]} className="country-label">{hover}</text>;
-      })()}
-      {nodes.map((node) => {
-        const m = nodeMeta(node);
-        const [x, y] = projection(m.coords) || [0, 0];
-        const st = nodeStatus[node.id] || {};
-        const online = node.status && st.session_diagnostics?.live_count != null && st.node_info !== undefined;
-        return (
-          <g key={node.id} className="map-marker" transform={`translate(${x},${y})`}>
-            {online && <circle className="pulse" r={6} />}
-            <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} />
-            <text x={7} y={4} className="node-country-label">{node.name}</text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="map-zoom-wrap">
+      <div className="map-zoom-controls" role="group" aria-label="Map zoom">
+        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+</button>
+        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−</button>
+        {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢</button>}
+      </div>
+      <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
+        <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
+          style={{ width: `${100 * zoom}%`, height: 'auto' }}
+          onMouseLeave={() => setHover(null)}>
+          <defs>
+            <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
+              <stop offset="0%" stopColor="#13314a" />
+              <stop offset="60%" stopColor="#0c2236" />
+              <stop offset="100%" stopColor="#081320" />
+            </radialGradient>
+          </defs>
+          <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
+          {land.features.map((feat) => (
+            <path
+              key={feat.id || feat.properties.name}
+              className="country"
+              d={pathGen(feat) || ''}
+              onMouseOver={() => setHover(feat.properties.name)}
+            >
+              <title>{feat.properties.name}</title>
+            </path>
+          ))}
+          <path className="country-borders" d={pathGen(borders) || ''} />
+          {hover && (() => {
+            const c = pathGen.centroid(land.features.find((f) => f.properties.name === hover)) || [300, 150];
+            return <text x={c[0]} y={c[1]} className="country-label">{hover}</text>;
+          })()}
+          {nodes.map((node) => {
+            const m = nodeMeta(node);
+            const [x, y] = projection(m.coords) || [0, 0];
+            const st = nodeStatus[node.id] || {};
+            const online = node.status && st.session_diagnostics?.live_count != null && st.node_info !== undefined;
+            return (
+              <g key={node.id} className="map-marker" transform={`translate(${x},${y})`}>
+                {online && <circle className="pulse" r={6} />}
+                <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} />
+                <text x={7} y={4} className="node-country-label">{node.name}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
   );
 };
 
@@ -150,6 +163,7 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
 };
 
 const ServerStats = () => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState(null);
   const [nodes, setNodes] = useState(null);
@@ -237,27 +251,27 @@ const ServerStats = () => {
 
   return (
     <div className="ops-dashboard compact">
-      <h2>Operational Overview</h2>
+      <h2>{t('operationalOverview')}</h2>
 
       <div className="ops-overview-grid">
-        <Panel title="Network Status" tone="orange" icon={FiActivity} tip="Live connection and traffic totals from OVNode status APIs">
+        <Panel title={t('networkStatus')} tone="orange" icon={FiActivity} tip={t('networkStatus')}>
           {stats && users && nodes ? (
             <div className="network-card-grid">
-              <StatCell label="Active Connections" value={activeConnections.toLocaleString()} tip="Sum of live OpenVPN sessions reported by every OVNode." spark={trafficHistory} />
-              <StatCell label="Total Traffic" value={formatBytes(totalUsed)} tip="Cumulative data used by all users." spark={trafficHistory.map((v) => v * 8)} />
-              <StatCell label="Online Nodes" value={`${onlineNodes}/${nodes.length || 0}`} tip="Active OVNodes in the panel database." tone={offlineNodes ? 'warn' : 'ok'} />
-              <StatCell label="Avg Latency" value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip="Average panel-to-OVNode API latency from live node health checks." />
+              <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} tip={t('activeConnections')} spark={trafficHistory} />
+              <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
+              <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
+              <StatCell label={t('avgLatency')} value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip={t('avgLatency')} />
             </div>
           ) : <Skeleton />}
         </Panel>
 
-        <Panel title="Server Health" tone="cyan" icon={FiServer} tip="OVManager panel resources and node health">
+        <Panel title={t('serverHealth')} tone="cyan" icon={FiServer} tip={t('serverHealth')}>
           {stats ? (
             <div className="health-grid">
-              <StatCell label="Panel CPU" value={`${stats.cpu.toFixed(0)}%`} tip="CPU load of the OVManager panel server." tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
-              <StatCell label="Panel Memory" value={`${stats.memory_percent.toFixed(0)}%`} tip="Memory usage of the OVManager panel server." tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
-              <StatCell label="Disk" value={`${stats.disk_percent.toFixed(0)}%`} tip="Disk usage on the panel host." tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
-              <StatCell label="Nodes Online" value={`${onlineNodes}/${nodes?.length || 0}`} tip="Active OVNodes." tone={offlineNodes ? 'warn' : 'ok'} />
+              <StatCell label={t('panelCPU')} value={`${stats.cpu.toFixed(0)}%`} tip={t('panelCPU')} tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
+              <StatCell label={t('panelMemory')} value={`${stats.memory_percent.toFixed(0)}%`} tip={t('panelMemory')} tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
+              <StatCell label={t('disk')} value={`${stats.disk_percent.toFixed(0)}%`} tip={t('disk')} tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
+              <StatCell label={t('nodesOnline')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('nodesOnline')} tone={offlineNodes ? 'warn' : 'ok'} />
             </div>
           ) : <Skeleton />}
           <div className="resource-chips">
@@ -268,22 +282,21 @@ const ServerStats = () => {
           </div>
         </Panel>
 
-        <Panel title="Security Overview" tone="orange" className="security-panel" icon={FiShield} tip="Security score is computed from live node status, auth diagnostics, and /security/summary.">
+        <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
           {security ? (
             <>
               <div className="security-flex">
                 <SecurityScoreRing score={securityScore} />
                 <div className="security-facts">
-                  <StatCell label="Active Alerts" value={String(activeAlerts).padStart(2, '0')} tip="Offline nodes + max-login + inactive + expiring users." tone={activeAlerts ? 'warn' : 'ok'} />
-                  <StatCell label="Auth Errors (8h)" value={String(authErrors)} tip="Failed authentications across nodes in the last 8 hours." tone={authErrors ? 'danger' : 'ok'} />
-                  <StatCell label="Rejects (8h)" value={String(rejects)} tip="Connection rejects reported by OVNodes in the window." tone={rejects ? 'warn' : 'ok'} />
+                  <StatCell label={t('activeAlerts')} value={String(activeAlerts).padStart(2, '0')} tip={t('activeAlerts')} tone={activeAlerts ? 'warn' : 'ok'} />
+                  <StatCell label={t('authErrors8h')} value={String(authErrors)} tip={t('authErrors8h')} tone={authErrors ? 'danger' : 'ok'} />
+                  <StatCell label={t('rejects8h')} value={String(rejects)} tip={t('rejects8h')} tone={rejects ? 'warn' : 'ok'} />
                 </div>
               </div>
-              <p className="security-verdict">
-                <FiAlertTriangle style={{ verticalAlign: -2, marginRight: 6 }} />
-                {securityScore >= 85 ? 'Healthy — all OVNodes reachable, no auth anomalies.'
-                  : securityScore >= 65 ? 'Watch — some limits or offline nodes need attention.'
-                  : 'Critical — immediate action recommended on offline nodes or auth failures.'}
+              <p className={`security-verdict ${securityScore >= 85 ? 'ok' : securityScore >= 65 ? 'warn' : 'bad'}`}>
+                {securityScore >= 85 ? t('verdictHealthy')
+                  : securityScore >= 65 ? t('verdictWatch')
+                  : t('verdictCritical')}
               </p>
               {latestErrors.length > 0 && (
                 <ul className="security-errors">
@@ -298,38 +311,38 @@ const ServerStats = () => {
       </div>
 
       <div className="ops-lower-grid">
-        <Panel title="Online Users" tone="orange" className="users-panel" icon={FiUsers} tip="Users currently connected, sorted by most active sessions">
+        <Panel title={t('onlineUsers')} tone="orange" className="users-panel" icon={FiUsers} tip={t('onlineUsers')}>
           {users ? (
             <>
               <table className="ops-table">
                 <thead>
-                  <tr><th>User</th><th>Plan</th><th>Status</th><th>Data Used</th><th>Sessions</th><th>Last Online</th><th>Actions</th></tr>
+                  <tr><th>{t('th_user')}</th><th>{t('th_plan')}</th><th>{t('th_status')}</th><th>{t('th_dataUsed')}</th><th>{t('th_sessions')}</th><th>{t('th_lastOnline')}</th><th>{t('th_actions')}</th></tr>
                 </thead>
                 <tbody>
                   {previewUsers.map((u) => (
                     <tr key={u.uuid || u.name} title={`${u.name}: ${u.active_connections || 0}/${u.max_logins || '∞'} sessions, ${formatBytes(u.used || 0)} used`}>
                       <td><span className="avatar-mini">{u.name.slice(0, 1).toUpperCase()}</span>{u.name}</td>
-                      <td>{u.max_logins === 0 ? 'Unlimited' : `${u.max_logins} devices`}</td>
-                      <td><span className={u.online ? 'dot online' : 'dot'} />{u.online ? 'Online' : 'Offline'}</td>
+                      <td>{u.max_logins === 0 ? t('unlimited') : t('devicesCount', { count: u.max_logins })}</td>
+                      <td><span className={u.online ? 'dot online' : 'dot'} />{u.online ? t('statusOnline') : t('statusOffline')}</td>
                       <td>{formatBytes(u.used || 0)}</td>
                       <td>{u.active_connections || 0}</td>
-                      <td className="col-last-online">{u.online ? 'now' : fmtRelative(u.last_online)}</td>
-                      <td><button type="button" className="mini-btn" title={`Manage ${u.name}`} onClick={() => window.location.assign(`/dash/users?user=${u.uuid}`)}>Manage</button></td>
+                      <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
+                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`/dash/users?user=${u.uuid}`)}>{t('manage')}</button></td>
                     </tr>
                   ))}
-                  {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>No users online right now.</td></tr>}
+                  {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noUsersOnline')}</td></tr>}
                 </tbody>
               </table>
             </>
           ) : <Skeleton />}
         </Panel>
 
-        <Panel title="Server Nodes" tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip="World map shows node locations; pins turn green when reachable. Tiles below link to each node.">
+        <Panel title={t('serverNodes')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('serverNodes')}>
           {nodes ? (
             <>
               <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
               <table className="ops-table compact">
-                <thead><tr><th>ID</th><th>Location</th><th>Status</th><th>CPU%</th><th>Conns</th></tr></thead>
+                <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
                 <tbody>
                   {nodes.slice(0, 8).map((node) => {
                     const meta = nodeMeta(node);
@@ -341,7 +354,7 @@ const ServerStats = () => {
                       <tr key={node.id} title={`${node.name}: ${conns} live sessions, API ${node.address}:${node.port}`}>
                         <td>{node.name}</td>
                         <td>{meta.name}</td>
-                        <td><span className={reachable ? 'dot online' : 'dot'} />{reachable ? 'Online' : (node.status ? 'Down' : 'Off')}</td>
+                        <td><span className={reachable ? 'dot online' : 'dot'} />{reachable ? t('statusOnline') : (node.status ? t('statusDown') : t('statusOff'))}</td>
                         <td>{Number.isFinite(Number(cpu)) ? `${Number(cpu).toFixed(0)}%` : '-'}</td>
                         <td>{conns} <small className="latency-note">{status.latency_ms ? `${status.latency_ms}ms` : ''}</small></td>
                       </tr>
@@ -356,9 +369,9 @@ const ServerStats = () => {
 
       {notifications.length > 0 && (
         <div className="ops-notice-strip">
-          <FiAlertTriangle /> {notifications.length} active {notifications.length === 1 ? 'alert' : 'alerts'}:{' '}
+          <FiAlertTriangle /> {notifications.length} {t(notifications.length === 1 ? 'alertOne' : 'alertsMany')}:{' '}
           {notifications.slice(0, 4).map((n) => <span key={n.id} className={`ntag ${n.level}`}>{n.title}</span>)}
-          {notifications.length > 4 && <span className="ntag">+{notifications.length - 4} more</span>}
+          {notifications.length > 4 && <span className="ntag">{t('moreN', { count: notifications.length - 4 })}</span>}
         </div>
       )}
     </div>

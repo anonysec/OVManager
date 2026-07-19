@@ -261,13 +261,13 @@ const UserManagement = () => {
   return (
     <div id="users-view" className="view">
       <div className="view-header">
-        <h2>Users</h2>
+        <h2>{t('users')}</h2>
         <div className="view-header-actions">
           <div className="seg-toggle" role="tablist" aria-label="User view">
-            <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All</button>
-            <button type="button" role="tab" aria-selected={view === 'online'} className={view === 'online' ? 'active' : ''} onClick={() => setView('online')}>Online</button>
-            <button type="button" role="tab" aria-selected={view === 'inactive'} className={view === 'inactive' ? 'active' : ''} onClick={() => setView('inactive')}>Inactive</button>
-            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>Expiring</button>
+            <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>{t('tabAll')}</button>
+            <button type="button" role="tab" aria-selected={view === 'online'} className={view === 'online' ? 'active' : ''} onClick={() => setView('online')}>{t('tabOnline')}</button>
+            <button type="button" role="tab" aria-selected={view === 'inactive'} className={view === 'inactive' ? 'active' : ''} onClick={() => setView('inactive')}>{t('tabInactive')}</button>
+            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>{t('tabExpiring')}</button>
           </div>
           <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
         </div>

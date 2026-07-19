@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
 
-const statusOf = (user) => {
+const statusOf = (user, t) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
-  if (online) return { label: 'Online', cls: 'online' };
+  if (online) return { label: t('statusOnline'), cls: 'online' };
   const d = daysUntil(user.expiry_date);
-  if (d < 0) return { label: 'Expired', cls: 'expired' };
-  if (user.is_active === false) return { label: 'Disabled', cls: 'offline' };
-  return { label: 'Offline', cls: 'idle' };
+  if (d < 0) return { label: t('expired'), cls: 'expired' };
+  if (user.is_active === false) return { label: t('disabled'), cls: 'offline' };
+  return { label: t('statusOffline'), cls: 'idle' };
 };
 
 const RowMenu = ({ user, onEdit, onDelete, onSessions, onClose, anchorRef }) => {
@@ -46,13 +47,14 @@ const UserTable = ({
   sort,
   onSort,
 }) => {
+  const { t } = useTranslation();
   const allSelected = users.length > 0 && selected.length === users.length;
   const someSelected = selected.length > 0 && !allSelected;
   const [menuFor, setMenuFor] = useState(null);
   const anchorRefs = useRef({});
 
   if (isLoading) {
-    return <div className="table-skeleton">Loading users…</div>;
+    return <div className="table-skeleton">{t('loading')}</div>;
   }
 
   if (!users.length) {
@@ -97,21 +99,21 @@ const UserTable = ({
                   aria-label="Select all users"
                 />
               </th>
-              <th className={sort.key === 'name' ? 'sortable active' : 'sortable'} onClick={() => onSort('name')}>Username{sort.key === 'name' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th>Status</th>
-              <th className={sort.key === 'expiry_date' ? 'sortable active' : 'sortable'} onClick={() => onSort('expiry_date')}>Expiry Date{sort.key === 'expiry_date' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'total' ? 'sortable active' : 'sortable'} onClick={() => onSort('total')}>Total Traffic{sort.key === 'total' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'max_logins' ? 'sortable active' : 'sortable'} onClick={() => onSort('max_logins')}>Max Logins{sort.key === 'max_logins' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'last_online' ? 'sortable active' : 'sortable'} onClick={() => onSort('last_online')}>Last Online{sort.key === 'last_online' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'owner' ? 'sortable active' : 'sortable'} onClick={() => onSort('owner')}>Owner{sort.key === 'owner' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th>Actions</th>
+              <th className={sort.key === 'name' ? 'sortable active' : 'sortable'} onClick={() => onSort('name')}>{t('th_username')}{sort.key === 'name' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th>{t('th_status')}</th>
+              <th className={sort.key === 'expiry_date' ? 'sortable active' : 'sortable'} onClick={() => onSort('expiry_date')}>{t('th_expiryDate')}{sort.key === 'expiry_date' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'total' ? 'sortable active' : 'sortable'} onClick={() => onSort('total')}>{t('th_totalTraffic')}{sort.key === 'total' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'max_logins' ? 'sortable active' : 'sortable'} onClick={() => onSort('max_logins')}>{t('th_maxLogins')}{sort.key === 'max_logins' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'last_online' ? 'sortable active' : 'sortable'} onClick={() => onSort('last_online')}>{t('th_lastOnline')}{sort.key === 'last_online' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'owner' ? 'sortable active' : 'sortable'} onClick={() => onSort('owner')}>{t('th_owner')}{sort.key === 'owner' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th>{t('th_actions')}</th>
             </tr>
           </thead>
           <tbody>
             {users.map((user) => {
               const isSel = selected.includes(user.uuid);
               const d = daysUntil(user.expiry_date);
-              const st = statusOf(user);
+              const st = statusOf(user, t);
               const open = menuFor === user.uuid;
               return (
                 <tr key={user.uuid} className={isSel ? 'selected' : ''}>
@@ -126,9 +128,12 @@ const UserTable = ({
                   </td>
                   <td data-label="Status"><span className={`status-pill ${st.cls}`}>{st.label}</span></td>
                   <td data-label="Expiry Date"><span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span></td>
-                  <td data-label="Total Traffic" className="traffic-cell">{formatTraffic(user.total)}</td>
+                  <td data-label="Total Traffic" className="traffic-cell">
+                    <span className="traffic-used">{formatTraffic(user.used)}</span>
+                    <span className="traffic-limit">/ {Number(user.total) >= 214748364800 || !Number(user.total) ? '∞' : formatTraffic(user.total)}</span>
+                  </td>
                   <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
-                  <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : 'never'}</td>
+                  <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>
                   <td data-label="Owner">{user.owner || '—'}</td>
                   <td data-label="Actions" className="actions-cell">
                     <button className="icon-btn" onClick={() => onEdit(user)} title="Edit"><FiEdit2 /></button>
