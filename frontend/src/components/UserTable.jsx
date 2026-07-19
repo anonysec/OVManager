@@ -130,7 +130,7 @@ const UserTable = ({
                   <td data-label="Expiry Date"><span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span></td>
                   <td data-label="Total Traffic" className="traffic-cell">
                     <span className="traffic-used">{formatTraffic(user.used)}</span>
-                    <span className="traffic-limit">/ {Number(user.total) >= 214748364800 || !Number(user.total) ? '∞' : formatTraffic(user.total)}</span>
+                    <span className="traffic-limit">/ {Number(user.total) > 0 ? formatTraffic(user.total) : '∞'}</span>
                   </td>
                   <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
                   <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>

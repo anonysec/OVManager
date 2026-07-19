@@ -226,7 +226,7 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
 .ops-stat-cell { position: relative; }
 .world-map-real { width: 100%; height: auto; min-width: 0; max-width: none; background: radial-gradient(120% 120% at 50% 30%, #0f2030 0%, #0a1420 60%, #070d16 100%); border-radius: 0; margin-bottom: 10px; display: block; }
 .map-zoom-wrap { position: relative; }
-.map-zoom-viewport { height: 300px; overflow: hidden; border-radius: 0; }
+.map-zoom-viewport { height: 300px; overflow: auto; display: flex; align-items: center; justify-content: center; border-radius: 0; }
 .map-zoom-controls { position: absolute; top: 8px; right: 8px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
 .map-zoom-btn { width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--line); background: rgba(20,28,40,.82); color: var(--text); font-size: 17px; font-weight: 700; line-height: 1; cursor: pointer; display: grid; place-items: center; backdrop-filter: blur(4px); transition: background .12s ease, border-color .12s ease; }
 .map-zoom-btn:hover { background: var(--orange); border-color: var(--orange); color: #111; }
@@ -813,3 +813,17 @@ html[data-theme="light"] .ops-panel, html[data-theme="light"] .user-stat, html[d
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: #eef1f6; }
 html[data-theme="light"] .map-zoom-btn { background: rgba(255,255,255,.9); color: #1b2230; border-color: #d7dde7; }
 html[data-theme="light"] .map-zoom-btn:hover { background: var(--orange); color: #fff; border-color: var(--orange); }
+/* ---- Light mode: topbar + brand visibility ---- */
+html[data-theme="light"] .ops-topbar { background: #ffffff !important; border: 1px solid #e3e8ef !important; box-shadow: 0 10px 30px rgba(20,30,50,.08) !important; }
+html[data-theme="light"] .ops-brand strong { color: #11161f !important; }
+html[data-theme="light"] .ops-brand .brand-accent { color: var(--orange) !important; }
+html[data-theme="light"] .ops-nav-link { color: #5b6473 !important; }
+html[data-theme="light"] .ops-nav-link:hover { color: #11161f !important; background: rgba(255,122,30,.08) !important; }
+html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
+html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !important; }
+/* ---- Light mode: borderless dashboard panels (shadow only) ---- */
+html[data-theme="light"] .ops-panel { border: none !important; box-shadow: 0 18px 34px rgba(20,30,50,.10) !important; }
+html[data-theme="light"] .user-stat { border: none !important; box-shadow: 0 12px 24px rgba(20,30,50,.08) !important; }
+html[data-theme="light"] .ops-stat-cell { border: none !important; }
+html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
+html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: #eef1f6 !important; }
