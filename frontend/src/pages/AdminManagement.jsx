@@ -88,7 +88,7 @@ const AdminManagement = () => {
     return (
         <div id="admins-view" className="view">
             <div className="view-header">
-                <h2>Admins</h2>
+                <h2>{t('admins')}</h2>
                 <button onClick={() => setIsAddModalOpen(true)} className="btn">
                     {t('addNewAdmin')}
                 </button>

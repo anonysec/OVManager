@@ -174,7 +174,7 @@ const NodeManagement = () => {
   return (
     <div id="nodes-view" className="view">
       <div className="view-header">
-        <h2>Nodes</h2>
+        <h2>{t('nodes')}</h2>
         <button onClick={() => setIsAddModalOpen(true)} className="btn">
           {t('addNewNode')}
         </button>
@@ -209,7 +209,7 @@ const NodeManagement = () => {
           <FiSearch className="search-icon" />
           <input
             type="text"
-            placeholder="Search by node name..."
+            placeholder={t('searchNodePlaceholder')}
             value={searchTerm}
             onChange={handleSearchChange}
             className="search-input"

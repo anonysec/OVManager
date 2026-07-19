@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FiActivity, FiAlertTriangle, FiBell, FiLink, FiMoon, FiRefreshCw, FiShield, FiSun, FiTool, FiCpu, FiUsers, FiZap } from 'react-icons/fi';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
 
 const TIMEZONES = [
@@ -18,6 +19,7 @@ const TIMEZONES = [
 ];
 
 const Settings = () => {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState(null);
   const [security, setSecurity] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -61,11 +63,7 @@ const Settings = () => {
     setTzSaving(true);
     try {
       await apiClient.put('/server/settings/timezone', { timezone: tz });
-    } catch {
-      // keep local copy even if backend fails
-    } finally {
-      setTzSaving(false);
-    }
+    } catch { /* keep local copy */ } finally { setTzSaving(false); }
   };
 
   const saveSubscription = async () => {
@@ -78,11 +76,7 @@ const Settings = () => {
       });
       setSubSaved(true);
       setTimeout(() => setSubSaved(false), 2500);
-    } catch {
-      // ignore
-    } finally {
-      setSubSaving(false);
-    }
+    } catch { /* ignore */ } finally { setSubSaving(false); }
   };
 
   const runAction = async (path) => {
@@ -90,9 +84,7 @@ const Settings = () => {
     try {
       await apiClient.post(path);
       await load();
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   const toggleTheme = () => {
@@ -102,10 +94,6 @@ const Settings = () => {
     localStorage.setItem('ovmanager-theme', next);
   };
 
-  const subExample = settings
-    ? `${settings.subscription_url_prefix}${settings.subscription_path ? `${settings.subscription_path}/` : ''}{user_uuid}`
-    : 'Loading...';
-
   const healthRows = loginHealth?.users || [];
   const totals = loginHealth?.totals || {};
   const notifCount = Array.isArray(notifications) ? notifications.length : 0;
@@ -113,103 +101,83 @@ const Settings = () => {
   return (
     <div id="settings-view" className="view settings-overhaul">
       <div className="view-header">
-        <h2>Settings &amp; Operations</h2>
-        <button className="btn" type="button" onClick={() => load().catch(() => {})}><FiRefreshCw /> Refresh</button>
+        <h2>{t('settingsTitle')}</h2>
+        <button className="btn" type="button" onClick={() => load().catch(() => {})}><FiRefreshCw /> {t('refresh')}</button>
       </div>
 
       <div className="settings-grid">
         <section className="set-card span-2">
           <header className="set-card-head">
             <span className="set-ico"><FiTool /></span>
-            <div><h3>Maintenance</h3><p>Background jobs run automatically. Trigger them on demand below.</p></div>
+            <div><h3>{t('maintenance')}</h3><p>{t('maintenanceDesc')}</p></div>
           </header>
           <div className="set-kpis">
-            <div><span>Users</span><strong>{totals.users ?? '-'}</strong></div>
-            <div><span>Online</span><strong>{totals.online ?? '-'}</strong></div>
-            <div><span>Full</span><strong>{totals.full ?? '-'}</strong></div>
-            <div><span>Stale</span><strong>{totals.stale ?? '-'}</strong></div>
-            <div><span>Takeover</span><strong>{totals.takeover_mode ?? '-'}</strong></div>
+            <div><span>{t('kpiUsers')}</span><strong>{totals.users ?? '-'}</strong></div>
+            <div><span>{t('kpiOnline')}</span><strong>{totals.online ?? '-'}</strong></div>
+            <div><span>{t('kpiFull')}</span><strong>{totals.full ?? '-'}</strong></div>
+            <div><span>{t('kpiStale')}</span><strong>{totals.stale ?? '-'}</strong></div>
+            <div><span>{t('kpiTakeover')}</span><strong>{totals.takeover_mode ?? '-'}</strong></div>
           </div>
           <div className="set-actions">
-            <button className="btn" disabled={busy} onClick={() => runAction('/maintenance/sync-limits')}><FiZap /> Sync limits now</button>
-            <button className="btn btn-secondary" disabled={busy} onClick={() => runAction('/maintenance/clean-stale')}><FiRefreshCw /> Clean stale now</button>
-          </div>
-          <div className="set-table-wrap">
-            <table className="set-table">
-              <thead><tr><th>User</th><th>Active/Max</th><th>Mode</th><th>Status</th><th>Stale</th><th>Auth events</th></tr></thead>
-              <tbody>
-                {healthRows.length ? healthRows.map((row) => (
-                  <tr key={row.name}>
-                    <td>{row.name}</td>
-                    <td><strong className="login-count">{row.active_connections}/{row.max_logins === 0 ? '∞' : row.max_logins}</strong></td>
-                    <td>{row.mode}</td>
-                    <td><span className={row.status === 'online' || row.status === 'idle' ? 'pill online' : 'pill'}>{row.status}</span></td>
-                    <td>{row.stale_markers}</td>
-                    <td>{row.auth_events}</td>
-                  </tr>
-                )) : <tr><td colSpan={6} className="set-empty">No user login data yet.</td></tr>}
-              </tbody>
-            </table>
+            <button className="btn" disabled={busy} onClick={() => runAction('/maintenance/sync-limits')}><FiZap /> {t('syncLimits')}</button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => runAction('/maintenance/clean-stale')}><FiRefreshCw /> {t('cleanStale')}</button>
           </div>
         </section>
 
         <section className="set-card">
           <header className="set-card-head">
             <span className="set-ico"><FiBell /></span>
-            <div><h3>Notifications</h3><p>{notifCount} active operational {notifCount === 1 ? 'issue' : 'issues'}.</p></div>
+            <div><h3>{t('notificationsCard')}</h3><p>{notifCount} {notifCount === 1 ? t('notifIssue') : t('notifIssues')}.</p></div>
           </header>
           <div className="set-list">
             {notifCount ? notifications.map((n, i) => (
               <p key={n.id ?? i} className={`notice ${n.level || 'warning'}`}>{n.title}</p>
-            )) : <p className="notice good">No active notifications</p>}
+            )) : <p className="notice good">{t('noActiveNotif')}</p>}
           </div>
         </section>
 
         <section className="set-card">
           <header className="set-card-head">
             <span className="set-ico"><FiShield /></span>
-            <div><h3>Security</h3><p>Last 8 hours from nodes.</p></div>
+            <div><h3>{t('securityCard')}</h3><p>{t('securityDesc')}</p></div>
           </header>
           <div className="set-kpis compact">
-            <div><span>Auth errors</span><strong>{security?.auth_errors ?? '-'}</strong></div>
-            <div><span>Rejects</span><strong>{security?.rejects ?? '-'}</strong></div>
-            <div><span>Stale markers</span><strong>{security?.stale_markers ?? '-'}</strong></div>
-          </div>
-          <div className="set-list small">
-            {(security?.last_errors || []).slice(0, 5).map((e, i) => <p key={i} className="set-err">{e.time_tehran || ''} — {e.common_name}: {e.reason} ({e.active || '?'}/{e.limit || '?'})</p>)}
+            <div><span>{t('authErrors')}</span><strong>{security?.auth_errors ?? '-'}</strong></div>
+            <div><span>{t('rejects')}</span><strong>{security?.rejects ?? '-'}</strong></div>
+            <div><span>{t('staleMarkers')}</span><strong>{security?.stale_markers ?? '-'}</strong></div>
           </div>
         </section>
 
-        <section className="set-card">
+        <section className="set-card span-2">
           <header className="set-card-head">
             <span className="set-ico"><FiActivity /></span>
-            <div><h3>Activity Log</h3><p>Recent admin actions.</p></div>
+            <div><h3>{t('activityLogCard')}</h3><p>{t('activityDesc')}</p></div>
           </header>
           <div className="set-list small scroll">
-            {activity.length ? activity.map((a) => <p key={a.id}>{new Date(a.ts * 1000).toLocaleString()} — {a.actor || 'system'} — {a.action} {a.target || ''}</p>) : <p className="set-empty">No activity recorded yet.</p>}
+            {activity.length ? activity.map((a) => <p key={a.id}>{new Date(a.ts * 1000).toLocaleString()} — {a.actor || 'system'} — {a.action} {a.target || ''}</p>) : <p className="set-empty">{t('noActivity')}</p>}
           </div>
         </section>
 
         <section className="set-card span-2">
           <header className="set-card-head">
             <span className="set-ico"><FiLink /></span>
-            <div><h3>Subscription Link</h3><p>Base URL and path used by user VPN subscription links.</p></div>
+            <div><h3>{t('subscriptionLinkCard')}</h3><p>{t('subscriptionLinkDesc')}</p></div>
           </header>
           <div className="set-fields">
             <label className="set-field">
-              <span>URL prefix</span>
+              <span>{t('urlPrefix')}</span>
               <input type="text" value={subPrefix} onChange={(e) => setSubPrefix(e.target.value)} placeholder="https://vpn.example.com/sub/" />
             </label>
             <label className="set-field">
-              <span>Path</span>
+              <span>{t('path')}</span>
               <input type="text" value={subPath} onChange={(e) => setSubPath(e.target.value)} placeholder="sub" />
             </label>
           </div>
           <div className="set-foot">
             <button className="btn btn-sm" disabled={subSaving} onClick={saveSubscription}>
-              <FiRefreshCw /> {subSaving ? 'Saving…' : 'Save link settings'}
+              <FiRefreshCw /> {subSaving ? t('saving') : t('saveLink')}
             </button>
-            {subSaved && <small className="set-saved">Saved.</small>}
+            {subSaved && <small className="set-saved">{t('saved')}</small>}
           </div>
           <code className="set-code">{`${subPrefix}${subPath ? subPath.replace(/^\/+|\/+$/g, '') + '/' : ''}{user_uuid}`}</code>
         </section>
@@ -217,33 +185,33 @@ const Settings = () => {
         <section className="set-card">
           <header className="set-card-head">
             <span className="set-ico"><FiTool /></span>
-            <div><h3>Timezone</h3><p>Used for all dates.</p></div>
+            <div><h3>{t('timezoneCard')}</h3><p>{t('timezoneDesc')}</p></div>
           </header>
           <label className="set-field">
-            <span>Display timezone</span>
+            <span>{t('displayTimezone')}</span>
             <select value={timezone} onChange={(e) => saveTimezone(e.target.value)} disabled={tzSaving}>
               {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
             </select>
           </label>
-          {tzSaving && <small className="set-saved">Saving…</small>}
+          {tzSaving && <small className="set-saved">{t('saving')}</small>}
         </section>
 
         <section className="set-card">
           <header className="set-card-head">
             <span className="set-ico">{theme === 'dark' ? <FiMoon /> : <FiSun />}</span>
-            <div><h3>Appearance</h3><p>Switch theme.</p></div>
+            <div><h3>{t('appearanceCard')}</h3><p>{t('appearanceDesc')}</p></div>
           </header>
-          <button className="btn" type="button" onClick={toggleTheme}>{theme === 'dark' ? 'Use Light Mode' : 'Use Dark Mode'}</button>
+          <button className="btn" type="button" onClick={toggleTheme}>{theme === 'dark' ? t('useLightMode') : t('useDarkMode')}</button>
         </section>
 
         <section className="set-card">
           <header className="set-card-head">
             <span className="set-ico"><FiCpu /></span>
-            <div><h3>System</h3><p>Runtime info.</p></div>
+            <div><h3>{t('systemCard')}</h3><p>{t('systemDesc')}</p></div>
           </header>
           <div className="set-kpis compact">
-            <div><span>Version</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.4.0'}</strong></div>
-            <div><span>Node mode</span><strong>{settings?.node_protocol || 'gRPC'}</strong></div>
+            <div><span>{t('version')}</span><strong>{(settings && (settings.version || settings.panel_version)) || '1.4.0'}</strong></div>
+            <div><span>{t('nodeMode')}</span><strong>{settings?.node_protocol || t('nodeProtocol')}</strong></div>
           </div>
         </section>
       </div>

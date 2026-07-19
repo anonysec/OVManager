@@ -97,11 +97,22 @@ const UserManagement = () => {
     const mul = dir === 'asc' ? 1 : -1;
     list = list.slice().sort((a, b) => {
       let av, bv;
-      if (key === 'name' || key === 'owner') { av = (a[key] || '').toLowerCase(); bv = (b[key] || '').toLowerCase(); }
-      else if (key === 'expiry_date' || key === 'last_online') { av = a[key] ? new Date(a[key]).getTime() : 0; bv = b[key] ? new Date(b[key]).getTime() : 0; }
-      else if (key === 'total') { av = Number(a.used ?? a.total ?? 0); bv = Number(b.used ?? b.total ?? 0); }
-      else if (key === 'max_logins') { av = Number(a.active_connections ?? 0); bv = Number(b.max_logins ?? 0); }
-      else { av = a[key]; bv = b[key]; }
+      if (key === 'name' || key === 'owner') {
+        av = (a[key] || '').toString().toLowerCase();
+        bv = (b[key] || '').toString().toLowerCase();
+      } else if (key === 'expiry_date' || key === 'last_online') {
+        av = a[key] ? new Date(a[key]).getTime() : (key === 'expiry_date' ? Infinity : 0);
+        bv = b[key] ? new Date(b[key]).getTime() : (key === 'expiry_date' ? Infinity : 0);
+      } else if (key === 'total') {
+        av = Number(a.total ?? 0);
+        bv = Number(b.total ?? 0);
+      } else if (key === 'max_logins') {
+        av = Number(a.max_logins ?? 0);
+        bv = Number(b.max_logins ?? 0);
+      } else {
+        av = a[key];
+        bv = b[key];
+      }
       if (av < bv) return -1 * mul;
       if (av > bv) return 1 * mul;
       return 0;

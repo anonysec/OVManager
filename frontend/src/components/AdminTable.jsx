@@ -10,17 +10,17 @@ const AdminTable = ({ admins, isLoading, onEdit, onDelete }) => {
     <div className="table-container list-table-container">
       <table className="list-table admin-list-table">
         <thead>
-          <tr><th>Admin</th><th>Users</th><th>Role</th><th>Actions</th></tr>
+          <tr><th>{t('th_admin')}</th><th>{t('th_users_col')}</th><th>{t('th_role')}</th><th>{t('th_actions')}</th></tr>
         </thead>
         <tbody>
           {admins.map((admin) => (
             <tr key={admin.username}>
-              <td className="identity-cell"><span className="row-avatar"><FiUser /></span><div><strong>{admin.username}</strong><small>administrator</small></div></td>
+              <td className="identity-cell"><span className="row-avatar"><FiUser /></span><div><strong>{admin.username}</strong><small>{t('administrator')}</small></div></td>
               <td><FiUsers /> {admin.users_count || 0}</td>
-              <td><span className="pill online">Admin</span></td>
+              <td><span className="pill online">{t('adminRole')}</span></td>
               <td><div className="row-actions">
-                <button title="Edit" onClick={() => onEdit(admin)}><FiEdit /></button>
-                <button className="danger" title="Delete" onClick={() => onDelete(admin)}><FiTrash2 /></button>
+                <button title={t('edit')} onClick={() => onEdit(admin)}><FiEdit /></button>
+                <button className="danger" title={t('delete')} onClick={() => onDelete(admin)}><FiTrash2 /></button>
               </div></td>
             </tr>
           ))}

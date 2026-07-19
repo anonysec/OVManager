@@ -22,7 +22,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
             <span>Policy: {policy || '-'}</span>
             <span>Registry: {registry.length}</span>
           </div>
-          <p className="diagnostic-recommendation">{data?.recommendation || 'No recommendation available.'}</p>
+          <p className="diagnostic-recommendation">{data?.recommendation || t('noRecommendation', 'No recommendation available.')}</p>
 
           <h4>{t('node', 'Node')} sessions</h4>
           <div className="table-container" style={{ maxHeight: 340, overflow: 'auto' }}>
@@ -43,7 +43,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
                     <td>{fmt(n.live_count)}</td>
                     <td>{fmt(n.auth_events)}</td>
                   </tr>
-                )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>No node sessions.</td></tr>}
+                )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noNodeSessions', 'No node sessions.')}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -67,7 +67,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
                     <td>{r.node || '-'}</td>
                     <td>{r.stale ? '⚠' : '—'}</td>
                   </tr>
-                )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>No registry entries.</td></tr>}
+                )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noRegistryEntries', 'No registry entries.')}</td></tr>}
               </tbody>
             </table>
           </div>

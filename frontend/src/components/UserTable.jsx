@@ -26,10 +26,10 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onClose, anchorRef }) => 
   }, [onClose, anchorRef]);
   return (
     <div className="row-menu" ref={ref} role="menu">
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> Edit</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> Sessions</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { navigator.clipboard?.writeText(user.uuid || ''); onClose(); }}><FiCopy /> Copy ID</button>
-      <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> Delete</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { navigator.clipboard?.writeText(user.uuid || ''); onClose(); }}><FiCopy /> {t('rowCopyId')}</button>
+      <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
     </div>
   );
 };
@@ -69,8 +69,8 @@ const UserTable = ({
             <circle cx="88" cy="86" r="9" fill="var(--panel)" stroke="var(--orange)" strokeWidth="3" />
           </svg>
         </div>
-        <h3>No users yet</h3>
-        <p>Create a user to start handing out VPN access. They'll appear here with live status.</p>
+        <h3>{t('noUsersTitle')}</h3>
+        <p>{t('noUsersBody')}</p>
       </div>
     );
   }
@@ -79,11 +79,11 @@ const UserTable = ({
     <>
       {selected.length > 0 && (
         <div className="bulk-bar">
-          <span className="bulk-count">{selected.length} selected</span>
+          <span className="bulk-count">{selected.length} {t('selected')}</span>
           <button className="btn btn-danger btn-sm" onClick={() => onBulkDelete(selected)}>
-            <FiTrash2 /> Delete selected
+            <FiTrash2 /> {t('deleteSelected')}
           </button>
-          <button className="btn btn-sm" onClick={() => onSelectAll(false)}>Clear</button>
+          <button className="btn btn-sm" onClick={() => onSelectAll(false)}>{t('clear')}</button>
         </div>
       )}
       <div className="list-table-container">

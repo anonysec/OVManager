@@ -114,7 +114,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
         <div className="input-group">
           <label htmlFor="node-select">{t('downloadSource', 'Download Source')}</label>
           {isLoadingNodes ? (
-            <p>Loading nodes...</p>
+            <p>{t('loadingNodesDots', 'Loading nodes...')}</p>
           ) : nodes.length === 0 ? (
             <p>{t('noNodesAvailable', 'No active nodes available for download.')}</p>
           ) : (
