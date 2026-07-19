@@ -29,6 +29,16 @@ const DashboardLayout = () => {
     localStorage.setItem('ovmanager-theme', theme);
   }, [theme]);
 
+  // Keep document direction in sync with the active language and persist it,
+  // so Farsi (RTL) survives navigation/refresh (not just the toggle click).
+  useEffect(() => {
+    const lang = i18n.language || 'en';
+    const dir = lang.startsWith('fa') ? 'rtl' : 'ltr';
+    document.documentElement.dir = dir;
+    document.documentElement.lang = lang;
+    localStorage.setItem('ovmanager-lang', lang);
+  }, [i18n.language]);
+
   useEffect(() => {
     if (!notifOpen) return;
     const onDoc = (e) => {
@@ -120,6 +130,7 @@ const DashboardLayout = () => {
     const next = i18n.language === 'en' ? 'fa' : 'en';
     i18n.changeLanguage(next);
     document.documentElement.dir = next === 'fa' ? 'rtl' : 'ltr';
+    localStorage.setItem('ovmanager-lang', next);
   };
 
   const notifCount = notifications.length;

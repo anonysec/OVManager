@@ -172,7 +172,12 @@ api.include_router(subscription_router, prefix=f"/{URLPATH}" if URLPATH else "")
 
 async def _serve_react():
     index_path = os.path.join(frontend_build_path, "index.html")
-    return FileResponse(index_path)
+    # no-cache on the HTML so new frontend builds are picked up immediately
+    # (hashed asset filenames are safe to cache, but the HTML must not be).
+    return FileResponse(
+        index_path,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 if URLPATH:

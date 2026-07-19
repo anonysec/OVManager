@@ -259,9 +259,11 @@ html[data-theme="light"] .map-marker .node-country-label { fill: #0a1622; stroke
 .list-table td { padding: 12px 14px; font-size: 13px; white-space: nowrap; }
 .list-table tbody tr:hover td { background: rgba(255,255,255,.04); }
 .list-table td[data-label="Total Traffic"], .list-table td[data-label="Expiry Date"], .list-table td[data-label="Last Online"] { font-variant-numeric: tabular-nums; }
-.identity-cell { display: flex; align-items: center; gap: 10px; }
-.identity-cell > div { display: flex; flex-direction: column; justify-content: center; line-height: 1.25; min-width: 0; }
-.identity-cell strong { display:block; }
+.identity-cell { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.identity-cell > div { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+.identity-cell strong { display: block; }
+.row-avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; background: #343b47; color: #fff; font-size: 12px; font-weight: 900; flex: 0 0 auto; }
+.node-avatar { border-radius: 9px; background: rgba(17,211,233,.18); color: var(--cyan); }
 .node-list-table td, .user-list-table td { vertical-align: middle; }
 
 /* ===== Excel-style lists (users / nodes / audit) ===== */
@@ -817,7 +819,7 @@ html[data-theme="light"] .map-zoom-btn { background: rgba(255,255,255,.9); color
 html[data-theme="light"] .map-zoom-btn:hover { background: var(--orange); color: #fff; border-color: var(--orange); }
 /* ---- Light mode: topbar + brand visibility ---- */
 html[data-theme="light"] .ops-topbar { background: #ffffff !important; border: 1px solid #e3e8ef !important; box-shadow: none !important; }
-html[data-theme="light"] .ops-brand strong { color: #11161f !important; }
+html[data-theme="light"] .ops-brand strong { color: #0b0f14 !important; font-weight: 800 !important; }
 html[data-theme="light"] .ops-brand .brand-accent { color: var(--orange) !important; }
 html[data-theme="light"] .ops-nav-link { color: #5b6473 !important; }
 html[data-theme="light"] .ops-nav-link:hover { color: #11161f !important; background: rgba(255,122,30,.08) !important; }
@@ -840,3 +842,24 @@ html[data-theme="light"] .set-card,
 html[data-theme="light"] .user-list-table,
 html[data-theme="light"] .node-list-table,
 html[data-theme="light"] .audit-table { box-shadow: none !important; }
+
+/* ===== RTL fixes ===== */
+/* traffic / login badges keep LTR so "1.8 GB / 200 GB" and "3/5" don't reverse */
+html[dir="rtl"] .traffic-cell,
+html[dir="rtl"] .login-badge { direction: ltr; unicode-bidi: plaintext; }
+/* notification popover must open toward the inside of the screen in RTL */
+html[dir="rtl"] .notification-popover { left: 0; right: auto; }
+/* modals become right-to-left with right-aligned text + inputs */
+html[dir="rtl"] .modal-window { direction: rtl; text-align: right; }
+html[dir="rtl"] .modal-window .input-group label,
+html[dir="rtl"] .modal-window .set-field > span { text-align: right; display: block; }
+html[dir="rtl"] .modal-window input,
+html[dir="rtl"] .modal-window select,
+html[dir="rtl"] .modal-window textarea { text-align: right; }
+html[dir="rtl"] .modal-window .modal-footer { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 10px; }
+/* node search bar polish (match users page) */
+.search-container { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; max-width: 380px; transition: border-color .15s ease, box-shadow .15s ease; }
+.search-container:focus-within { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(252,122,30,.15); }
+.search-container .search-icon { color: var(--muted); flex: 0 0 auto; font-size: 16px; }
+.search-container .search-input { background: transparent !important; border: 0 !important; color: var(--text) !important; padding: 12px 0; width: 100%; outline: none; font-size: 14px; }
+.search-container .search-input::placeholder { color: var(--muted); }
