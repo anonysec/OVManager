@@ -161,8 +161,6 @@ html[data-theme="light"] { --bg: #eef1f6; --text: #1b2230; }
 html[data-theme="light"] body { background: #eef1f6; color: #1b2230; }
 html[data-theme="light"] .ops-shell { background: #eef1f6; }
 html[data-theme="light"] .ops-topbar { background: #ffffff; border-color: #dfe3ea; box-shadow: 0 10px 30px rgba(20,30,50,.08); }
-html[data-theme="light"] .ops-brand strong { color: #1b2230; }
-html[data-theme="light"] .ops-brand .brand-accent { color: var(--orange); }
 html[data-theme="light"] .ops-nav-link { color: #5b6675; }
 html[data-theme="light"] .ops-nav-link:hover { color: #1b2230; background: rgba(0,0,0,.04); }
 html[data-theme="light"] .ops-userbar button { color: #5b6675; }
@@ -806,7 +804,6 @@ html[data-theme="light"] .ops-panel header span.has-tip, html[data-theme="light"
 html[data-theme="light"] .panel-tip::after { color: #5b6473; }
 html[data-theme="light"] .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); font-weight: 700; }
 html[data-theme="light"] .seg-toggle button.active { color: #fff; }
-html[data-theme="light"] .ops-brand strong { color: #11161f; }
 html[data-theme="light"] .ops-main { background: #eef1f6 !important; }
 html[data-theme="light"] .ops-table thead { background: #eef3f9 !important; }
 html[data-theme="light"] .ops-table thead th { color: #5b6473 !important; }
@@ -820,7 +817,7 @@ html[data-theme="light"] .map-zoom-btn:hover { background: var(--orange); color:
 /* ---- Light mode: topbar + brand visibility ---- */
 html[data-theme="light"] .ops-topbar { background: #ffffff !important; border: 1px solid #e3e8ef !important; box-shadow: none !important; }
 html[data-theme="light"] .ops-brand strong { color: #0b0f14 !important; font-weight: 800 !important; }
-html[data-theme="light"] .ops-brand .brand-accent { color: var(--orange) !important; }
+html[data-theme="light"] .ops-brand .brand-accent { color: #e8590c !important; }
 html[data-theme="light"] .ops-nav-link { color: #5b6473 !important; }
 html[data-theme="light"] .ops-nav-link:hover { color: #11161f !important; background: rgba(255,122,30,.08) !important; }
 html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
