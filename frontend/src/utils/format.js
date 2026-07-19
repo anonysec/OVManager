@@ -1,9 +1,5 @@
 // Shared display formatters.
 
-// Unlimited-traffic sentinel used by the backend: 2^31 * 100.
-// Any value at/above this is treated as "Unlimited".
-const UNLIMITED_SENTINEL = 214748364800;
-
 export function formatBytes(bytes) {
   const n = Number(bytes);
   if (!n || n <= 0) return '0 B';
@@ -12,10 +8,10 @@ export function formatBytes(bytes) {
   return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
 }
 
-// Total traffic for a user: None => —, sentinel/unlimited => Unlimited, else human bytes.
+// Total traffic for a user. Bytes in, human out. None/0 => dash.
+// (Backend stores the limit in bytes; 200GB => 214748364800, NOT unlimited.)
 export function formatTraffic(bytes) {
   const n = Number(bytes);
   if (!n || isNaN(n)) return '—';
-  if (n >= UNLIMITED_SENTINEL || n >= 2147483648) return 'Unlimited';
   return formatBytes(n);
 }

@@ -1,18 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiUserX, FiCopy, FiActivity } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
-
-const COLUMNS = [
-  { key: 'name', label: 'Username', sortable: true },
-  { key: 'status', label: 'Status', sortable: false },
-  { key: 'expiry_date', label: 'Expiry Date', sortable: true },
-  { key: 'total', label: 'Total Traffic', sortable: true },
-  { key: 'max_logins', label: 'Max Logins', sortable: true },
-  { key: 'last_online', label: 'Last Online', sortable: true },
-  { key: 'owner', label: 'Owner', sortable: true },
-  { key: 'actions', label: 'Actions', sortable: false },
-];
 
 const statusOf = (user) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
@@ -108,18 +97,14 @@ const UserTable = ({
                   aria-label="Select all users"
                 />
               </th>
-              {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  className={col.sortable ? 'sortable' : ''}
-                  onClick={col.sortable ? () => onSort(col.key) : undefined}
-                >
-                  {col.label}
-                  {col.sortable && sort.key === col.key && (
-                    sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />
-                  )}
-                </th>
-              ))}
+              <th className={sort.key === 'name' ? 'sortable active' : 'sortable'} onClick={() => onSort('name')}>Username{sort.key === 'name' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th>Status</th>
+              <th className={sort.key === 'expiry_date' ? 'sortable active' : 'sortable'} onClick={() => onSort('expiry_date')}>Expiry Date{sort.key === 'expiry_date' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'total' ? 'sortable active' : 'sortable'} onClick={() => onSort('total')}>Total Traffic{sort.key === 'total' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'max_logins' ? 'sortable active' : 'sortable'} onClick={() => onSort('max_logins')}>Max Logins{sort.key === 'max_logins' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'last_online' ? 'sortable active' : 'sortable'} onClick={() => onSort('last_online')}>Last Online{sort.key === 'last_online' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th className={sort.key === 'owner' ? 'sortable active' : 'sortable'} onClick={() => onSort('owner')}>Owner{sort.key === 'owner' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -131,12 +116,7 @@ const UserTable = ({
               return (
                 <tr key={user.uuid} className={isSel ? 'selected' : ''}>
                   <td className="col-check">
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => onSelect(user.uuid)}
-                      aria-label={`Select ${user.name}`}
-                    />
+                    <input type="checkbox" checked={isSel} onChange={() => onSelect(user.uuid)} aria-label={`Select ${user.name}`} />
                   </td>
                   <td data-label="Username">
                     <div className="user-cell">
@@ -144,16 +124,10 @@ const UserTable = ({
                       <span className="uname">{user.name}</span>
                     </div>
                   </td>
-                  <td data-label="Status">
-                    <span className={`status-pill ${st.cls}`}>{st.label}</span>
-                  </td>
-                  <td data-label="Expiry Date">
-                    <span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span>
-                  </td>
+                  <td data-label="Status"><span className={`status-pill ${st.cls}`}>{st.label}</span></td>
+                  <td data-label="Expiry Date"><span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span></td>
                   <td data-label="Total Traffic" className="traffic-cell">{formatTraffic(user.total)}</td>
-                  <td data-label="Max Logins">
-                    <span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span>
-                  </td>
+                  <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
                   <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : 'never'}</td>
                   <td data-label="Owner">{user.owner || '—'}</td>
                   <td data-label="Actions" className="actions-cell">

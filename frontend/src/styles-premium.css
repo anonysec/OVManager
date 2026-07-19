@@ -234,7 +234,8 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
 .uname { font-weight: 600; }
 .status-pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
 .status-pill.online, .status-pill.ok { background: rgba(47,240,212,.16); color: #2ff0d4; }
-.status-pill.idle, .status-pill.info, .status-pill.warn { background: rgba(255,180,84,.16); color: #ffb454; }
+.status-pill.idle { background: rgba(255,255,255,.07); color: var(--muted); }
+.status-pill.info, .status-pill.warn { background: rgba(255,180,84,.16); color: #ffb454; }
 .status-pill.offline, .status-pill.danger { background: rgba(255,83,104,.16); color: #ff7a8a; }
 .status-pill.muted { background: rgba(255,255,255,.08); color: var(--muted); }
 .login-badge { font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -279,6 +280,40 @@ html[data-theme="light"] .map-marker .node-country-label { fill: #0a1622; stroke
 .list-table td[data-label="Total Traffic"], .list-table td[data-label="Expiry Date"], .list-table td[data-label="Last Online"] { font-variant-numeric: tabular-nums; }
 .identity-cell { display: flex; align-items: center; gap: 10px; }
 .identity-cell strong { display:block; }
+
+/* ===== Excel-style users list ===== */
+.user-list-table { border-collapse: collapse !important; border-spacing: 0 !important; min-width: 1040px; font-variant-numeric: tabular-nums; }
+.user-list-table thead th {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  text-align: left; white-space: nowrap;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-bottom: 2px solid var(--line);
+}
+.user-list-table thead th:first-child { border-top-left-radius: 0; }
+.user-list-table thead th:last-child { border-top-right-radius: 0; }
+.user-list-table td {
+  padding: 8px 12px;
+  font-size: 13px; line-height: 1.35;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  height: 40px;
+  vertical-align: middle;
+  text-align: left;
+}
+.user-list-table tbody tr { background: var(--panel); }
+.user-list-table tbody tr:nth-child(even) { background: rgba(255,255,255,.022); }
+.user-list-table tbody tr:hover td { background: rgba(255,122,30,.07); }
+.user-list-table tbody tr.selected td { background: rgba(255,122,30,.12); }
+.user-list-table .col-check { width: 42px; text-align: center; padding: 0; }
+.user-list-table .col-check input { width: 15px; height: 15px; cursor: pointer; }
+.user-list-table td.traffic-cell { font-weight: 600; color: var(--text); }
+.user-list-table .user-cell { display: flex; align-items: center; gap: 9px; }
+.user-list-table .avatar-sm { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: rgba(255,122,30,.16); color: var(--orange); font-weight: 800; font-size: 12px; }
+.user-list-table .actions-cell { text-align: left; }
 .identity-cell small { display:block; color: var(--muted); margin-top: 2px; font-size: 11px; }
 .row-avatar { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: #343b47; color: #fff; font-size: 12px; font-weight: 900; flex: 0 0 auto; }
 .node-avatar { border-radius: 10px; background: rgba(17,211,233,.18); color: var(--cyan); }
