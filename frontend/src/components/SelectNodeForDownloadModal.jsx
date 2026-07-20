@@ -3,6 +3,7 @@ import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import LoadingButton from './LoadingButton';
 import Modal from './Modal';
+import { FiServer, FiDownload, FiCheck } from 'react-icons/fi';
 
 const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
@@ -34,30 +35,34 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
 
   useEffect(() => {
     const fetchNodes = async () => {
+      setIsLoadingNodes(true);
+      setError('');
       try {
         const response = await apiClient.get('/nodes/');
         if (response.data.success && response.data.data) {
           const available = response.data.data.filter(nodeIsActive);
           setNodes(available);
           if (available.length > 0) setSelectedNodeId(String(available[0].id));
+        } else {
+          setNodes([]);
         }
       } catch {
-        setError('Failed to load available nodes.');
+        setError(t('noNodesAvailable', 'Failed to load available nodes.'));
       } finally {
         setIsLoadingNodes(false);
       }
     };
     if (isOpen) fetchNodes();
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   const handleDownload = async (e) => {
     e.preventDefault();
     setError('');
     setIsDownloading(true);
     try {
-      if (!selectedNodeId) throw new Error('No node selected for download.');
+      if (!selectedNodeId) throw new Error(t('noNodeSelected', 'No node selected for download.'));
       const selectedNode = nodes.find(n => String(n.id) === String(selectedNodeId));
-      if (!selectedNode) throw new Error('Selected node not found.');
+      if (!selectedNode) throw new Error(t('noNodeSelected', 'Selected node not found.'));
       const downloadUrl = `/nodes/ovpn/${user.uuid}/${selectedNode.id}`;
       const downloadFileName = `${user.name}-${selectedNode.name}.ovpn`;
       const response = await apiClient.get(downloadUrl, {
@@ -89,7 +94,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
         }
       }
       if (contentType.includes('text/html') || startsWithHtml || !looksLikeOpenVpnConfig(text)) {
-        throw new Error('Panel received HTML or invalid content instead of an OpenVPN profile. Check panel URLPATH/API build and node selection.');
+        throw new Error(t('ovpnInvalid', 'Panel received HTML or invalid content instead of an OpenVPN profile. Check panel URLPATH/API build and node selection.'));
       }
       const blob = new Blob([response.data], { type: 'application/x-openvpn-profile' });
       const url = window.URL.createObjectURL(blob);
@@ -109,30 +114,47 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${t('selectNodeForDownload', 'Select Source for')} ${user?.name || ''}`} size="small">
-      <form onSubmit={handleDownload} className="modal-form">
-        <div className="input-group">
-          <label htmlFor="node-select">{t('downloadSource', 'Download Source')}</label>
-          {isLoadingNodes ? (
-            <p>{t('loadingNodesDots', 'Loading nodes...')}</p>
-          ) : nodes.length === 0 ? (
-            <p>{t('noNodesAvailable', 'No active nodes available for download.')}</p>
-          ) : (
-            <select id="node-select" value={selectedNodeId} onChange={(e) => setSelectedNodeId(e.target.value)} required>
-              {nodes.map(node => (
-                <option key={node.id} value={String(node.id)}>{node.name} ({node.address}:{node.port})</option>
-              ))}
-            </select>
-          )}
-        </div>
+    <Modal isOpen={isOpen} onClose={onClose} title={`${t('downloadConfigFromNode')} — ${user?.name || ''}`} size="medium">
+      <div className="node-pick">
+        <p className="node-pick-hint">{t('downloadSourceHint', 'Choose a node to pull the OpenVPN profile from.')}</p>
+
+        {isLoadingNodes ? (
+          <div className="node-pick-loading">{t('loadingNodesDots', 'Loading nodes...')}</div>
+        ) : nodes.length === 0 ? (
+          <div className="node-pick-empty">{t('noNodesAvailable', 'No active nodes available for download.')}</div>
+        ) : (
+          <div className="node-pick-list">
+            {nodes.map((node) => {
+              const active = String(selectedNodeId) === String(node.id);
+              return (
+                <button
+                  type="button"
+                  key={node.id}
+                  className={`node-pick-item${active ? ' active' : ''}`}
+                  onClick={() => setSelectedNodeId(String(node.id))}
+                  aria-pressed={active}
+                >
+                  <span className="npi-ico"><FiServer /></span>
+                  <span className="npi-body">
+                    <span className="npi-name">{node.name}</span>
+                    <span className="npi-addr">{node.address}:{node.port}</span>
+                  </span>
+                  {active && <span className="npi-check"><FiCheck /></span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {error && <p className="error-message">{error}</p>}
+
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
-          <LoadingButton isLoading={isDownloading} type="submit" className="btn btn-success" disabled={isLoadingNodes || nodes.length === 0}>
-            {t('downloadButton', 'Download')}
+          <LoadingButton isLoading={isDownloading} type="submit" className="btn btn-success" disabled={isLoadingNodes || nodes.length === 0} onClick={handleDownload}>
+            <FiDownload /> {t('downloadButton', 'Download')}
           </LoadingButton>
         </div>
-        {error && <p className="error-message">{error}</p>}
-      </form>
+      </div>
     </Modal>
   );
 };

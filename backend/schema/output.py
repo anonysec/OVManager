@@ -39,6 +39,7 @@ class Settings(BaseModel):
     subscription_url_prefix: str
     subscription_path: str
     timezone: str = "UTC"
+    panel_version: str = "1.4.0"
 
 
 class Admins(BaseModel):

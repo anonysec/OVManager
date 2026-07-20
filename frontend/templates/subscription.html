@@ -1,18 +1,19 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en" dir="ltr" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
-    <title>{{ name }} - Sub info</title>
+    <title>{{ name }} · OpenVPN Config</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- OpenVPN favicon (inline data URI so it works without external assets) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23EA7E20' d='M256 24 56 104v144c0 124 84 213 200 240 116-27 200-116 200-240V104L256 24z'/%3E%3Ccircle cx='256' cy='196' r='58' fill='%23fff'/%3E%3Cpath fill='%23fff' d='M256 268c-79 0-128 52-138 122-2 14 8 26 22 26h232c14 0 24-12 22-26-10-70-59-122-138-122z'/%3E%3C/svg%3E">
+    <meta name="description" content="Download your OpenVPN configuration and connect in minutes.">
+    <!-- Tab icon: OVManager brand mark (shield + check), inline so it works without external assets -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322C55E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z'/%3E%3Cpath d='M8.5 12.5l2.2 2.2 4.8-4.8'/%3E%3C/svg%3E">
 
-    <!-- Fonts: Arad (Persian), Plus Jakarta Sans (English/Latin), Noto Sans SC (Chinese) -->
+    <!-- Fonts: Plus Jakarta Sans (Latin), Arad (Persian), Noto Sans SC (Chinese) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Arad:wght@300;400;500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Arad:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap"
         rel="stylesheet">
 
     <style>
@@ -25,46 +26,52 @@
         }
 
         :root {
-            /* Palette: Modern Slate & Blue */
-            --bg-color: #f8fafc;
-            --surface-color: #ffffff;
-            --primary-color: #3b82f6;
-            --primary-dark: #2563eb;
-            --text-primary: #0f172a;
-            --text-secondary: #64748b;
-            --border-color: #e2e8f0;
-            --logo-bg: #e2e8f0;
-            /* Slightly darker than bg for logo box */
-            --dropdown-bg: #ffffff;
-            --dropdown-hover: #f1f5f9;
+            /* Dark-first palette (skill: Dark Mode OLED, connected green) */
+            --bg-color: #0b1120;
+            --bg-glow-1: rgba(34, 197, 94, 0.14);
+            --bg-glow-2: rgba(56, 189, 248, 0.10);
+            --surface-color: #111a2e;
+            --surface-2: #16213a;
+            --primary-color: #22c55e;
+            --primary-dark: #16a34a;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(148, 163, 184, 0.16);
+            --logo-bg: #16213a;
+            --dropdown-bg: #111a2e;
+            --dropdown-hover: #1c2742;
+            --success: #22c55e;
+            --error: #f87171;
+            --accent-soft: rgba(34, 197, 94, 0.12);
 
-            --success: #10b981;
-            --error: #ef4444;
-
-            --radius-lg: 24px;
+            --radius-lg: 22px;
             --radius-md: 16px;
             --radius-sm: 12px;
-            --btn-size: 40px;
+            --btn-size: 44px;
 
-            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-            --dropdown-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.65);
+            --dropdown-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.7);
+            --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Scoped to html tag to prevent conflict with buttons using data-theme="dark" */
-        html[data-theme="dark"] {
-            --bg-color: #0f172a;
-            --surface-color: #1e293b;
-            --primary-color: #60a5fa;
-            --primary-dark: #3b82f6;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --border-color: #334155;
-            --logo-bg: #334155;
-            --dropdown-bg: #1e293b;
-            --dropdown-hover: #334155;
-            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
-            --dropdown-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        /* Light theme override (user-selectable, still refined) */
+        html[data-theme="light"] {
+            --bg-color: #f1f5f9;
+            --bg-glow-1: rgba(22, 163, 74, 0.12);
+            --bg-glow-2: rgba(59, 130, 246, 0.10);
+            --surface-color: #ffffff;
+            --surface-2: #f8fafc;
+            --primary-color: #16a34a;
+            --primary-dark: #15803d;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: rgba(15, 23, 42, 0.12);
+            --logo-bg: #e2e8f0;
+            --dropdown-bg: #ffffff;
+            --dropdown-hover: #f1f5f9;
+            --accent-soft: rgba(22, 163, 74, 0.1);
+            --shadow: 0 24px 50px -24px rgba(15, 23, 42, 0.25);
+            --dropdown-shadow: 0 18px 40px -12px rgba(15, 23, 42, 0.2);
         }
 
         * {
@@ -74,33 +81,33 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        html, body { height: 100%; }
+
         body {
-            font-family: 'Plus Jakarta Sans', 'Arad', 'Noto Sans SC', sans-serif;
+            font-family: 'Inter', 'Plus Jakarta Sans', 'Arad', 'Noto Sans SC', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 24px 16px;
             transition: background-color 0.3s ease, color 0.3s ease;
             background-image:
-                linear-gradient(to right, rgba(100, 116, 139, 0.07) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(100, 116, 139, 0.07) 1px, transparent 1px);
-            background-size: 32px 32px;
+                radial-gradient(1100px 620px at 50% -12%, var(--bg-glow-1), transparent 60%),
+                radial-gradient(900px 520px at 110% 115%, var(--bg-glow-2), transparent 55%);
+            background-attachment: fixed;
         }
 
-        /* Main Card */
         .container {
             width: 100%;
-            max-width: 420px;
+            max-width: 460px;
             background: var(--surface-color);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow);
-            overflow: visible;
-            /* Changed to visible for dropdowns */
             border: 1px solid var(--border-color);
             position: relative;
+            overflow: hidden;
         }
 
         /* Top Bar */
@@ -108,43 +115,48 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 24px 24px 0 24px;
+            padding: 20px 22px 0;
             position: relative;
             z-index: 20;
         }
 
-        /* Logo Styling */
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .brand-icon {
             width: var(--btn-size);
             height: var(--btn-size);
-            background: var(--logo-bg);
-            /* Slight difference from bg */
-            border-radius: 12px;
-            /* Matching button radius */
+            background: var(--accent-soft);
+            color: var(--primary-color);
+            border-radius: 13px;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 4px;
-            /* Padding inside the box */
+            padding: 8px;
             transition: var(--transition);
         }
 
-        .brand-icon svg {
-            width: 100%;
-            height: 100%;
+        .brand-icon svg { width: 100%; height: 100%; display: block; }
+
+        .brand-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: -0.01em;
+            line-height: 1.1;
+        }
+        .brand-name small {
             display: block;
+            font-weight: 500;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
         }
 
-        /* Controls (Lang/Theme) */
-        .controls {
-            display: flex;
-            gap: 8px;
-        }
+        .controls { display: flex; gap: 8px; }
 
-        /* Dropdown System */
-        .dropdown {
-            position: relative;
-        }
+        .dropdown { position: relative; }
 
         .icon-btn {
             background: transparent;
@@ -152,7 +164,7 @@
             color: var(--text-secondary);
             width: var(--btn-size);
             height: var(--btn-size);
-            border-radius: 12px;
+            border-radius: 13px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -161,40 +173,36 @@
         }
 
         .icon-btn:hover,
-        .icon-btn.active {
-            background: var(--bg-color);
+        .icon-btn.active,
+        .icon-btn:focus-visible {
+            background: var(--surface-2);
             color: var(--text-primary);
-            border-color: var(--text-secondary);
+            border-color: var(--primary-color);
+            outline: none;
         }
+        .icon-btn:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
 
-        .icon-btn svg {
-            width: 20px;
-            height: 20px;
-        }
+        .icon-btn svg { width: 20px; height: 20px; }
 
         .dropdown-menu {
             position: absolute;
             top: calc(100% + 8px);
             right: 0;
-            /* Align to right edge of button */
             background: var(--dropdown-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 14px;
             box-shadow: var(--dropdown-shadow);
-            min-width: 140px;
+            min-width: 158px;
             opacity: 0;
             transform: translateY(-10px);
             visibility: hidden;
             transition: var(--transition);
             z-index: 100;
             overflow: hidden;
-            padding: 4px;
+            padding: 6px;
         }
 
-        [dir="rtl"] .dropdown-menu {
-            right: auto;
-            left: 0;
-        }
+        [dir="rtl"] .dropdown-menu { right: auto; left: 0; }
 
         .dropdown.open .dropdown-menu {
             opacity: 1;
@@ -207,7 +215,8 @@
             align-items: center;
             gap: 10px;
             width: 100%;
-            padding: 10px 12px;
+            min-height: 44px;
+            padding: 0 12px;
             border: none;
             background: transparent;
             color: var(--text-primary);
@@ -215,70 +224,69 @@
             font-size: 0.9rem;
             text-align: left;
             cursor: pointer;
-            border-radius: 8px;
-            transition: background 0.2s;
+            border-radius: 10px;
+            transition: background 0.18s;
         }
 
-        [dir="rtl"] .dropdown-item {
-            text-align: right;
-        }
+        [dir="rtl"] .dropdown-item { text-align: right; }
 
-        .dropdown-item:hover {
-            background: var(--dropdown-hover);
-        }
+        .dropdown-item:hover { background: var(--dropdown-hover); }
+        .dropdown-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
 
         .dropdown-item.selected {
-            background: rgba(59, 130, 246, 0.1);
+            background: var(--accent-soft);
             color: var(--primary-color);
             font-weight: 600;
         }
 
         .item-icon {
-            font-size: 1.1em;
-            width: 20px;
-            text-align: center;
+            font-size: 1.05em;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            overflow: hidden;
+            border-radius: 4px;
         }
+        .dropdown-item.selected .item-icon { color: var(--primary-color); }
+        .item-icon svg { width: 24px; height: 24px; display: block; border-radius: 3px; }
 
-        /* Header Section */
-        .header {
-            padding: 20px 24px 24px 24px;
-            text-align: center;
-        }
+        /* Header */
+        .header { padding: 22px 24px 18px; text-align: center; }
 
         h2 {
-            font-size: 1.4rem;
+            font-size: 1.45rem;
             font-weight: 700;
-            margin: 12px 0 24px;
+            margin: 14px 0 18px;
             letter-spacing: -0.02em;
         }
 
         /* Status Badge */
-        .status-container {
-            display: flex;
-            justify-content: center;
-        }
+        .status-container { display: flex; justify-content: center; }
 
         .status-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 16px;
+            padding: 7px 18px;
             border-radius: 50px;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             border: 1px solid transparent;
         }
 
         .status-badge.active {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            border-color: rgba(16, 185, 129, 0.2);
+            background: var(--accent-soft);
+            color: var(--primary-color);
+            border-color: rgba(34, 197, 94, 0.3);
         }
 
         .status-badge.inactive {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(248, 113, 113, 0.12);
             color: var(--error);
-            border-color: rgba(239, 68, 68, 0.2);
+            border-color: rgba(248, 113, 113, 0.25);
         }
 
         .status-dot {
@@ -286,129 +294,242 @@
             height: 8px;
             border-radius: 50%;
             background: currentColor;
-            box-shadow: 0 0 8px currentColor;
+            box-shadow: 0 0 10px currentColor;
         }
 
-        /* Info Grid */
-        .info-card {
-            background: var(--bg-color);
+        /* Connection summary strip */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
             margin: 0 24px;
-            border-radius: var(--radius-md);
-            padding: 20px;
-            border: 1px solid var(--border-color);
         }
 
-        .info-row {
+        .summary-cell {
+            background: var(--surface-2);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 14px 10px;
+            text-align: center;
+        }
+
+        .summary-cell .sv {
+            display: block;
+            font-weight: 700;
+            font-size: 0.98rem;
+            color: var(--text-primary);
+        }
+
+        .summary-cell .sl {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.68rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        /* Usage meter */
+        .usage-block {
+            margin: 16px 24px 0;
+        }
+        .usage-head {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-            font-size: 0.95rem;
+            align-items: baseline;
+            margin-bottom: 8px;
         }
-
-        .info-row:last-child {
-            margin-bottom: 0;
+        .usage-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.03em;
         }
-
-        .info-label {
+        .usage-pct {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        .usage-bar {
+            height: 8px;
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid var(--border-color);
+            border-radius: 50px;
+            overflow: hidden;
+        }
+        .usage-fill {
+            height: 100%;
+            border-radius: 50px;
+            background: linear-gradient(90deg, var(--primary-color), #4ade80);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .usage-fill.warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .usage-fill.danger { background: linear-gradient(90deg, #ef4444, #f87171); }
+        .usage-detail {
+            margin-top: 8px;
+            font-size: 0.8rem;
             color: var(--text-secondary);
         }
+        .usage-detail #usage-used { color: var(--text-primary); font-weight: 600; }
+        .usage-sep { margin: 0 4px; opacity: 0.6; }
 
-        .info-value {
-            font-weight: 600;
-            color: var(--text-primary);
-            font-family: 'Plus Jakarta Sans', sans-serif;
+        /* Hint / how-to */
+        .hint {
+            margin: 18px 24px 0;
+            background: var(--surface-2);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--primary-color);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
         }
+        [dir="rtl"] .hint { border-left: none; border-right: 3px solid var(--primary-color); }
+        .hint b { color: var(--text-primary); font-weight: 600; }
 
-        /* Links Section */
-        .links-section {
-            padding: 32px 24px;
-        }
-
-        #links-label {
+        /* Section labels */
+        .section-label {
             display: block;
             color: var(--text-secondary);
-            font-size: 0.8rem;
+            font-size: 0.72rem;
             font-weight: 700;
-            letter-spacing: 0.05em;
-            margin-bottom: 16px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin: 26px 24px 14px;
         }
 
+        /* Download cards */
         .download-list {
             display: flex;
             flex-direction: column;
             gap: 12px;
+            padding: 0 24px;
         }
 
         .download-btn {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            background: var(--surface-color);
+            gap: 14px;
+            background: var(--surface-2);
             border: 1px solid var(--border-color);
-            padding: 16px 20px;
-            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
             text-decoration: none;
             color: var(--text-primary);
             font-weight: 600;
             transition: var(--transition);
+            min-height: 56px;
         }
 
-        .download-btn:hover {
+        .download-btn:hover,
+        .download-btn:focus-visible {
             border-color: var(--primary-color);
-            background: rgba(59, 130, 246, 0.02);
+            background: var(--accent-soft);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 24px -10px rgba(34, 197, 94, 0.4);
+            outline: none;
         }
+        .download-btn:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
 
-        .download-btn span {
-            word-break: break-all;
-        }
-
-        .btn-icon-container {
-            min-width: 32px;
-            height: 32px;
+        .node-ico {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(59, 130, 246, 0.1);
-            border-radius: 8px;
+            background: var(--accent-soft);
+            border-radius: 10px;
+            color: var(--primary-color);
+        }
+        .node-ico svg { width: 20px; height: 20px; }
+
+        .node-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .node-name { font-size: 0.95rem; font-weight: 600; }
+        .node-sub { font-size: 0.72rem; color: var(--text-secondary); font-weight: 500; }
+
+        .btn-icon-container {
+            margin-left: auto;
+            min-width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(34, 197, 94, 0.12);
+            border-radius: 10px;
             color: var(--primary-color);
             transition: var(--transition);
         }
-
-        .download-btn:hover .btn-icon-container {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        .btn-icon-container svg {
-            width: 18px;
-            height: 18px;
-        }
+        [dir="rtl"] .btn-icon-container { margin-left: 0; margin-right: auto; }
+        .download-btn:hover .btn-icon-container { background: var(--primary-color); color: #04130a; }
+        .btn-icon-container svg { width: 18px; height: 18px; }
 
         .empty-state {
             text-align: center;
-            padding: 24px;
+            padding: 22px;
             color: var(--text-secondary);
-            font-size: 0.9rem;
-            background: rgba(0, 0, 0, 0.02);
-            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            background: var(--surface-2);
+            border-radius: var(--radius-md);
             border: 1px dashed var(--border-color);
+            margin: 0 24px;
         }
 
-        /* Logic Holders */
-        .template-logic-holder {
-            display: none !important;
+        /* Client CTA */
+        .cta {
+            margin: 26px 24px 8px;
+        }
+        .app-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 52px;
+            background: var(--primary-color);
+            color: #04130a;
+            border: none;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.95rem;
+            transition: var(--transition);
+        }
+        .app-btn:hover, .app-btn:focus-visible {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px -10px rgba(34, 197, 94, 0.55);
+            outline: none;
+        }
+        .app-btn:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+        .app-btn svg { width: 20px; height: 20px; }
+
+        .footer-note {
+            text-align: center;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            padding: 18px 24px 22px;
+            line-height: 1.5;
         }
 
-        /* Direction Utility */
-        [dir="rtl"] .download-btn {
-            flex-direction: row;
+        .template-logic-holder { display: none !important; }
+
+        @media (max-width: 400px) {
+            .summary { grid-template-columns: 1fr; }
+            .container { border-radius: 18px; }
+            .top-bar { padding: 16px 16px 0; }
+            .header { padding: 18px 18px 14px; }
+            .summary, .usage-block { margin-left: 16px; margin-right: 16px; }
+            .hint, .links-section, .cta { margin-left: 16px; margin-right: 16px; }
+            .download-list { padding: 0 16px; }
+            .footer-note { padding: 16px; }
+            h2 { font-size: 1.25rem; }
         }
 
-        [dir="ltr"] .download-btn {
-            flex-direction: row;
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
         }
     </style>
 </head>
@@ -419,29 +540,24 @@
 
         <!-- Top Bar -->
         <div class="top-bar">
-            <!-- Logo Box -->
-            <div class="brand-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-                    <defs>
-                        <linearGradient id="ovpnShield" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0" stop-color="#F39323"/>
-                            <stop offset="1" stop-color="#E97E20"/>
-                        </linearGradient>
-                    </defs>
-                    <path fill="url(#ovpnShield)"
-                          d="M256 24 56 104v144c0 124 84 213 200 240 116-27 200-116 200-240V104L256 24z"/>
-                    <circle cx="256" cy="196" r="58" fill="#fff"/>
-                    <path fill="#fff"
-                          d="M256 268c-79 0-128 52-138 122-2 14 8 26 22 26h232c14 0 24-12 22-26-10-70-59-122-138-122z"/>
-                </svg>
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/>
+                        <path d="M8.5 12.5l2.2 2.2 4.8-4.8"/>
+                    </svg>
+                </div>
+                <div class="brand-name">
+                    OVManager
+                    <small id="brand-sub">Secure Access</small>
+                </div>
             </div>
 
             <div class="controls">
 
-                <!-- Language Dropdown -->
+                <!-- Language Dropdown (SVG flags, no emoji) -->
                 <div class="dropdown" id="lang-dropdown">
-                    <button class="icon-btn" id="lang-btn" title="Switch Language">
-                        <!-- Translate SVG -->
+                    <button class="icon-btn" id="lang-btn" aria-label="Switch language" title="Switch language">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
@@ -449,40 +565,38 @@
                     </button>
                     <div class="dropdown-menu">
                         <button class="dropdown-item" data-lang="fa">
-                            <span class="item-icon">🇮🇷</span> فارسی
+                            <span class="item-icon"><svg viewBox="0 0 24 24"><rect width="24" height="8" y="0" fill="#239f40"/><rect width="24" height="8" y="8" fill="#fff"/><rect width="24" height="8" y="16" fill="#da0000"/><g transform="translate(12,12)"><circle r="2.6" fill="#d62828"/><g fill="#f4d35e"><circle r="2"/><polygon points="0,-7 1,-4 -1,-4"/><polygon points="0,7 1,4 -1,4"/><polygon points="-7,0 -4,1 -4,-1"/><polygon points="7,0 4,1 4,-1"/><polygon points="-5,-5 -3,-3 -4,-2"/><polygon points="5,5 3,3 4,2"/><polygon points="-5,5 -3,3 -4,2"/><polygon points="5,-5 3,-3 4,-2"/></g><g fill="#f4d35e" stroke="#b8860b" stroke-width="0.2"><path d="M-2.6,2.6 q2.8,-2.2 4.6,-0.4 l1.2,2.6 -2,0.2 -0.9,-1.2 -2.2,1.2 z"/><circle cx="-2" cy="-0.6" r="1.6"/><rect x="-2.9" y="2.4" width="0.8" height="2.8"/><rect x="-0.1" y="2.4" width="0.8" height="2.8"/><path d="M2.8,2 q2.6,-0.5 2,-3.6" fill="none" stroke="#f4d35e" stroke-width="0.7"/><line x1="-2" y1="-2" x2="-2" y2="-7" stroke="#e8eef0" stroke-width="0.7"/><line x1="-3.6" y1="-3" x2="-0.4" y2="-3" stroke="#e8eef0" stroke-width="0.7"/></g></g></svg></span> فارسی
                         </button>
                         <button class="dropdown-item" data-lang="en">
-                            <span class="item-icon">🇺🇸</span> English
+                            <span class="item-icon"><svg viewBox="0 0 24 24"><rect width="24" height="24" fill="#fff"/><rect width="24" height="2.4" y="0" fill="#b22234"/><rect width="24" height="2.4" y="4.8" fill="#b22234"/><rect width="24" height="2.4" y="9.6" fill="#b22234"/><rect width="24" height="2.4" y="14.4" fill="#b22234"/><rect width="24" height="2.4" y="19.2" fill="#b22234"/><rect width="11" height="13" x="0" y="0" fill="#3c3b6e"/><g fill="#fff"><circle cx="2" cy="2.2" r="0.9"/><circle cx="5" cy="2.2" r="0.9"/><circle cx="8" cy="2.2" r="0.9"/><circle cx="2" cy="5.5" r="0.9"/><circle cx="5" cy="5.5" r="0.9"/><circle cx="8" cy="5.5" r="0.9"/><circle cx="3.5" cy="8.8" r="0.9"/><circle cx="6.5" cy="8.8" r="0.9"/></g></svg></span> English
                         </button>
                         <button class="dropdown-item" data-lang="ru">
-                            <span class="item-icon">🇷🇺</span> Русский
+                            <span class="item-icon"><svg viewBox="0 0 24 24"><rect width="24" height="8" y="0" fill="#fff"/><rect width="24" height="8" y="8" fill="#0039a6"/><rect width="24" height="8" y="16" fill="#da291c"/></svg></span> Русский
                         </button>
                         <button class="dropdown-item" data-lang="zh">
-                            <span class="item-icon">🇨🇳</span> 中文
+                            <span class="item-icon"><svg viewBox="0 0 24 24"><rect width="24" height="24" fill="#de2910"/><polygon points="5,4 6.2,7.2 9.6,7.2 6.8,9.2 7.8,12.4 5,10.3 2.2,12.4 3.2,9.2 0.4,7.2 3.8,7.2" fill="#ffde00"/><g fill="#ffde00"><polygon points="17,5 17.7,6.6 19.4,6.6 18,7.7 18.6,9.3 17,8.2 15.4,9.3 16,7.7 14.6,6.6 16.3,6.6"/><polygon points="19.5,8.5 20.2,10.1 21.9,10.1 20.5,11.2 21.1,12.8 19.5,11.7 17.9,12.8 18.5,11.2 17.1,10.1 18.8,10.1"/><polygon points="18.5,12.5 19.2,14.1 20.9,14.1 19.5,15.2 20.1,16.8 18.5,15.7 16.9,16.8 17.5,15.2 16.1,14.1 17.8,14.1"/><polygon points="16,16 16.7,17.6 18.4,17.6 17,18.7 17.6,20.3 16,19.2 14.4,20.3 15,18.7 13.6,17.6 15.3,17.6"/></g></svg></span> 中文
                         </button>
                     </div>
                 </div>
 
-                <!-- Theme Dropdown -->
+                <!-- Theme Dropdown (SVG icons, no emoji) -->
                 <div class="dropdown" id="theme-dropdown">
-                    <button class="icon-btn" id="theme-btn" title="Switch Theme">
-                        <!-- Dynamic Theme Icon -->
+                    <button class="icon-btn" id="theme-btn" aria-label="Switch theme" title="Switch theme">
                         <svg class="theme-icon-display" xmlns="http://www.w3.org/2000/svg" fill="none"
                             viewBox="0 0 24 24" stroke="currentColor">
-                            <!-- Default to moon, updated by JS -->
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                         </svg>
                     </button>
                     <div class="dropdown-menu">
                         <button class="dropdown-item" data-theme="light">
-                            <span class="item-icon">☀️</span> Light
+                            <span class="item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4"/></svg></span> Light
                         </button>
                         <button class="dropdown-item" data-theme="dark">
-                            <span class="item-icon">🌙</span> Dark
+                            <span class="item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg></span> Dark
                         </button>
                         <button class="dropdown-item" data-theme="system">
-                            <span class="item-icon">🖥️</span> System
+                            <span class="item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span> System
                         </button>
                     </div>
                 </div>
@@ -492,84 +606,109 @@
 
         <!-- Header -->
         <div class="header">
-            <h2 id="title">اطلاعات اشتراک شما</h2>
+            <h2 id="title">Your Connection</h2>
             <div class="status-container">
                 <div id="status-display" class="status-badge">
-                    <!-- Template Logic for Status -->
                     <span id="template-status-wrapper">
                         {% if is_active %}
-                        <span class="active-text" data-val="active">فعال</span>
+                        <span class="active-text" data-val="active">Active</span>
                         {% else %}
-                        <span class="inactive-text" data-val="inactive">غیرفعال</span>
+                        <span class="inactive-text" data-val="inactive">Inactive</span>
                         {% endif %}
                     </span>
                 </div>
             </div>
         </div>
 
-        <!-- Info Grid -->
-        <div class="info-card">
-            <div class="info-row">
-                <span class="info-label" id="username-label">نام کاربری</span>
-                <span class="info-value" id="username">{{ name }}</span>
+        <!-- Summary strip -->
+        <div class="summary">
+            <div class="summary-cell">
+                <span class="sv" id="username">{{ name }}</span>
+                <span class="sl" id="username-label">Username</span>
             </div>
-            <div class="info-row">
-                <span class="info-label" id="total-traffic-label">کل ترافیک</span>
-                <span class="info-value">
+            <div class="summary-cell">
+                <span class="sv">
                     {% if total %}{{ "%.2f"|format(total / (1024 ** 3)) }} GB{% else %}∞{% endif %}
                 </span>
+                <span class="sl" id="total-traffic-label">Total Traffic</span>
             </div>
+            <div class="summary-cell">
+                <span class="sv" id="expiry">{{ expiry_date }}</span>
+                <span class="sl" id="expiry-label">Expires</span>
+            </div>
+            <div class="summary-cell">
+                <span class="sv" id="days-left">
+                    {% if days_left is none %}∞{% else %}{{ days_left }}{% endif %}
+                </span>
+                <span class="sl" id="days-left-label">Days Left</span>
+            </div>
+        </div>
 
-            <div class="info-row">
-                <span class="info-label" id="used-traffic-label">ترافیک مصرف شده</span>
-                <span class="info-value">
-                    {{ "%.2f"|format((used or 0) / (1024 ** 3)) }} GB
+        <!-- Usage -->
+        <div class="usage-block" id="usage-block">
+            <div class="usage-head">
+                <span class="usage-label" id="usage-label">Data Usage</span>
+                <span class="usage-pct" id="usage-pct">
+                    {% if used_pct is none %}∞{% else %}{{ used_pct }}%{% endif %}
                 </span>
             </div>
-            <div class="info-row">
-                <span class="info-label" id="expiry-label">تاریخ انقضا</span>
-                <span class="info-value" id="expiry">{{ expiry_date }}</span>
+            <div class="usage-bar">
+                <div class="usage-fill" id="usage-fill" style="width: {% if used_pct is none %}100{% else %}{{ used_pct }}{% endif %}%;"></div>
+            </div>
+            <div class="usage-detail">
+                <span id="usage-used">{{ "%.2f"|format((used or 0) / (1024 ** 3)) }} GB</span>
+                <span class="usage-sep">/</span>
+                <span id="usage-total">{% if total %}{{ "%.2f"|format(total / (1024 ** 3)) }} GB{% else %}∞{% endif %}</span>
             </div>
         </div>
 
-        <!-- OpenVPN App Download Section -->
-        <div class="app-download-section" style="margin: 32px 24px 0 24px;">
-            <div id="app-download-label"
-                style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 16px;">
-                دانلود اپلیکیشن OpenVPN
-            </div>
-            <div class="app-download-btns" style="display: flex; flex-direction: column; gap: 12px;">
-                <a id="btn-client" class="app-btn" href="https://openvpn.net/client/" target="_blank" rel="noopener"
-                    style="background: var(--surface-color); border: 1px solid var(--border-color); padding: 14px 20px; border-radius: var(--radius-sm); text-decoration: none; color: var(--primary-color); font-weight: 600; text-align: center; transition: var(--transition);">
-                    دانلود کلاینت OpenVPN
-                </a>
-            </div>
+        <!-- How-to hint -->
+        <div class="hint" id="howto">
+            <b id="howto-title">How to connect:</b>
+            <span id="howto-body">Download a config below, open it in the OpenVPN app, and tap connect. Need the app? Use the button at the bottom.</span>
         </div>
 
-        <!-- Downloads -->
-        <div class="links-section">
-            <strong id="links-label">دانلود کانفیگ ها</strong>
-            <div id="links-list" class="download-list">
-                <!-- Template Logic for Links -->
-                {% if ovpn_download_links %}
-                {% for node, link in ovpn_download_links.items() %}
-                <a href="{{ link }}" class="download-btn" download>
-                    <span>{{ node }}</span>
-                    <div class="btn-icon-container">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                    </div>
-                </a>
-                {% endfor %}
-                {% else %}
-                <!-- We keep this clean ID for JS to find -->
-                <div id="no-links-msg" class="empty-state">
-                    <span id="no-links-text">هیچ لینکی موجود نیست.</span>
+        <!-- Config downloads -->
+        <span class="section-label" id="links-label">Download Your Config</span>
+        <div id="links-list" class="download-list">
+            {% if ovpn_download_links %}
+            {% for node, link in ovpn_download_links.items() %}
+            <a href="{{ link }}" class="download-btn" download>
+                <span class="node-ico">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>
+                    </svg>
+                </span>
+                <span class="node-meta">
+                    <span class="node-name">{{ node }}</span>
+                    <span class="node-sub">OpenVPN · .ovpn</span>
+                </span>
+                <div class="btn-icon-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
                 </div>
-                {% endif %}
+            </a>
+            {% endfor %}
+            {% else %}
+            <div id="no-links-msg" class="empty-state">
+                <span id="no-links-text">No configs are available right now. Please contact support.</span>
             </div>
+            {% endif %}
+        </div>
+
+        <!-- Client CTA -->
+        <div class="cta">
+            <a id="btn-client" class="app-btn" href="https://openvpn.net/client/" target="_blank" rel="noopener">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>
+                </svg>
+                <span id="client-text">Get the OpenVPN App</span>
+            </a>
+        </div>
+
+        <div class="footer-note" id="footer-note">
+            This is your personal OpenVPN config. Keep it private — anyone with this file can use your connection.
         </div>
 
     </div>
@@ -581,66 +720,46 @@
                 const usernameEl = document.getElementById('username');
                 const rawContent = usernameEl ? usernameEl.textContent.trim() : '';
 
-                // If we see curly braces, the backend didn't run. Let's mock it.
                 if (rawContent.includes('{{') || rawContent === '') {
                     console.log("Template tags detected. Activating Preview Mode with Mock Data.");
-
-                    // Mock User Info
                     document.getElementById('username').textContent = "User_12345";
                     document.getElementById('expiry').textContent = "2025/12/30";
 
-                    // Mock Status (Force Active for preview)
                     const statusWrapper = document.getElementById('template-status-wrapper');
                     if (statusWrapper) {
-                        // Rebuild status badge for preview
                         const statusBadge = document.getElementById('status-display');
                         statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Active</span>`;
                         statusBadge.className = 'status-badge active';
                     }
 
-                    // Mock Links
                     const linksList = document.getElementById('links-list');
                     if (linksList) {
-                        // Clear the "raw" template logic code that might be visible
                         linksList.innerHTML = '';
-
-                        // Add fake buttons
                         const mockLinks = [
                             { name: "Germany", link: "#" },
                             { name: "France", link: "#" },
                             { name: "Netherlands", link: "#" }
                         ];
-
-                        const downloadIcon = `
-                            <div class="btn-icon-container">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                            </div>`;
-
+                        const nodeIco = `<span class="node-ico"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span>`;
+                        const dlIco = `<div class="btn-icon-container"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></div>`;
                         mockLinks.forEach(item => {
                             const a = document.createElement('a');
                             a.className = 'download-btn';
                             a.href = item.link;
-                            a.innerHTML = `<span>${item.name}</span>${downloadIcon}`;
+                            a.setAttribute('download', '');
+                            a.innerHTML = `${nodeIco}<span class="node-meta"><span class="node-name">${item.name}</span><span class="node-sub">OpenVPN · .ovpn</span></span>${dlIco}`;
                             linksList.appendChild(a);
                         });
                     }
                 } else {
-                    // Backend ran successfully. Let's just style the status badge properly based on template output.
                     const statusWrapper = document.getElementById('template-status-wrapper');
                     const statusBadge = document.getElementById('status-display');
-
                     if (statusWrapper && statusBadge) {
-                        // Check if the template rendered "active" or "inactive" classes/text
                         const isActive = statusWrapper.querySelector('.active-text') !== null;
-                        const isInactive = statusWrapper.querySelector('.inactive-text') !== null;
-
-                        // Clean up the wrapper and show clean badge
                         if (isActive) {
                             statusBadge.classList.add('active');
                             statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Active</span>`;
-                        } else if (isInactive) {
+                        } else if (statusWrapper.querySelector('.inactive-text') !== null) {
                             statusBadge.classList.add('inactive');
                             statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Inactive</span>`;
                         }
@@ -651,62 +770,82 @@
             // --- 2. LANGUAGE DATA ---
             const langData = {
                 fa: {
-                    title: "اطلاعات اشتراک شما",
+                    title: "اتصال شما",
+                    brandSub: "دسترسی امن",
                     username: "نام کاربری",
-                    totalTraffic: "کل ترافیک",
-                    usedTraffic: "ترافیک مصرف شده",
-                    expiry: "تاریخ انقضا",
+                    totalTraffic: "ترافیک کل",
+                    expiry: "انقضا",
+                    daysLeft: "روز باقی‌مانده",
+                    usage: "مصرف داده",
                     active: "فعال",
                     inactive: "غیرفعال",
-                    links: "دانلود کانفیگ ها",
-                    noLinks: "هیچ لینکی موجود نیست",
-                    appDownload: "دانلود اپلیکیشن OpenVPN",
-                    client: "دانلود کلاینت OpenVPN",
+                    links: "دانلود کانفیگ",
+                    noLinks: "در حال حاضر کانفیگی موجود نیست. لطفاً با پشتیبانی تماس بگیرید.",
+                    howtoTitle: "نحوه اتصال:",
+                    howtoBody: "یک کانفیگ را دانلود کنید، در اپلیکیشن OpenVPN باز کرده و روی اتصال بزنید. اپلیکیشن را از دکمه پایین بگیرید.",
+                    client: "دریافت اپلیکیشن OpenVPN",
+                    footer: "این کانفیگ شخصی OpenVPN شماست. آن را محرمانه نگه دارید — هر کسی با این فایل می‌تواند از اتصال شما استفاده کند.",
+                    nodeSub: "OpenVPN · .ovpn",
                     dir: "rtl",
                     themeLight: "روشن", themeDark: "تاریک", themeSystem: "سیستم"
                 },
                 en: {
-                    title: "Subscription Details",
+                    title: "Your Connection",
+                    brandSub: "Secure Access",
                     username: "Username",
                     totalTraffic: "Total Traffic",
-                    usedTraffic: "Used Traffic",
-                    expiry: "Expiry Date",
+                    expiry: "Expires",
+                    daysLeft: "Days Left",
+                    usage: "Data Usage",
                     active: "Active",
                     inactive: "Inactive",
-                    links: "Download Configs",
-                    noLinks: "No links available",
-                    appDownload: "Download OpenVPN App",
-                    client: "Download OpenVPN Client",
+                    links: "Download Your Config",
+                    noLinks: "No configs are available right now. Please contact support.",
+                    howtoTitle: "How to connect:",
+                    howtoBody: "Download a config below, open it in the OpenVPN app, and tap connect. Need the app? Use the button at the bottom.",
+                    client: "Get the OpenVPN App",
+                    footer: "This is your personal OpenVPN config. Keep it private — anyone with this file can use your connection.",
+                    nodeSub: "OpenVPN · .ovpn",
                     dir: "ltr",
                     themeLight: "Light", themeDark: "Dark", themeSystem: "System"
                 },
                 ru: {
-                    title: "Детали подписки",
+                    title: "Ваше подключение",
+                    brandSub: "Безопасный доступ",
                     username: "Имя пользователя",
-                    totalTraffic: "Общий трафик",
-                    usedTraffic: "Использованный трафик",
-                    expiry: "Дата истечения",
+                    totalTraffic: "Всего трафика",
+                    expiry: "Истекает",
+                    daysLeft: "Осталось дней",
+                    usage: "Использовано",
                     active: "Активен",
                     inactive: "Неактивен",
-                    links: "Скачать конфигурации",
-                    noLinks: "Нет доступных ссылок",
-                    appDownload: "Скачать OpenVPN приложение",
-                    client: "Скачать OpenVPN клиент",
+                    links: "Скачать конфиг",
+                    noLinks: "Конфигурации пока недоступны. Свяжитесь с поддержкой.",
+                    howtoTitle: "Как подключиться:",
+                    howtoBody: "Скачайте конфиг ниже, откройте его в приложении OpenVPN и нажмите «Подключить». Приложение — кнопкой внизу.",
+                    client: "Скачать OpenVPN",
+                    footer: "Это ваш личный конфиг OpenVPN. Храните его в тайне — любой с этим файлом сможет использовать ваше подключение.",
+                    nodeSub: "OpenVPN · .ovpn",
                     dir: "ltr",
-                    themeLight: "Светлая", themeDark: "Темная", themeSystem: "Системная"
+                    themeLight: "Светлая", themeDark: "Тёмная", themeSystem: "Системная"
                 },
                 zh: {
-                    title: "订阅详情",
+                    title: "您的连接",
+                    brandSub: "安全访问",
                     username: "用户名",
                     totalTraffic: "总流量",
-                    usedTraffic: "已用流量",
-                    expiry: "到期日期",
+                    expiry: "到期",
+                    daysLeft: "剩余天数",
+                    usage: "流量使用",
                     active: "有效",
                     inactive: "无效",
                     links: "下载配置",
-                    noLinks: "无可用链接",
-                    appDownload: "下载 OpenVPN 应用",
-                    client: "下载 OpenVPN 客户端",
+                    noLinks: "暂时没有可用配置，请联系客服。",
+                    howtoTitle: "如何连接：",
+                    howtoBody: "下载下面的配置，用 OpenVPN 客户端打开并点击连接。需要客户端？用底部按钮获取。",
+                    client: "获取 OpenVPN 客户端",
+                    footer: "这是您的个人 OpenVPN 配置。请妥善保管——任何拥有此文件的人都能使用您的连接。",
+                    nodeSub: "OpenVPN · .ovpn",
                     dir: "ltr",
                     themeLight: "浅色", themeDark: "深色", themeSystem: "系统"
                 }
@@ -720,71 +859,64 @@
             };
 
             // --- 4. CORE UI FUNCTIONS ---
-
             function updateUI(lang, themePref) {
-                // 1. Update Text
                 const dict = langData[lang];
                 document.getElementById('title').textContent = dict.title;
+                document.getElementById('brand-sub').textContent = dict.brandSub;
                 document.getElementById('username-label').textContent = dict.username;
                 document.getElementById('total-traffic-label').textContent = dict.totalTraffic;
-                document.getElementById('used-traffic-label').textContent = dict.usedTraffic;
                 document.getElementById('expiry-label').textContent = dict.expiry;
+                document.getElementById('days-left-label').textContent = dict.daysLeft;
+                document.getElementById('usage-label').textContent = dict.usage;
                 document.getElementById('links-label').textContent = dict.links;
                 const noLinksText = document.getElementById('no-links-text');
                 if (noLinksText) noLinksText.textContent = dict.noLinks;
-                // Update OpenVPN app download section
-                const appLabel = document.getElementById('app-download-label');
-                if (appLabel) appLabel.textContent = dict.appDownload;
-                const btnClient = document.getElementById('btn-client');
-                if (btnClient) btnClient.textContent = dict.client;
+                document.getElementById('howto-title').textContent = dict.howtoTitle;
+                document.getElementById('howto-body').textContent = dict.howtoBody;
+                document.getElementById('client-text').textContent = dict.client;
+                document.getElementById('footer-note').textContent = dict.footer;
+                // node subtitle on each card
+                document.querySelectorAll('.node-sub').forEach(el => el.textContent = dict.nodeSub);
 
-                // Update Dropdown Text Localization
                 const themeItems = document.querySelectorAll('#theme-dropdown .dropdown-item');
                 themeItems.forEach(item => {
                     const t = item.dataset.theme;
                     const label = t === 'light' ? dict.themeLight : (t === 'dark' ? dict.themeDark : dict.themeSystem);
-                    const icon = item.querySelector('.item-icon').textContent;
-                    // item.innerHTML = `<span class="item-icon">${icon}</span> ${label}`;
-                    // Keep the structure, just update text node if possible, or rebuild
                     item.childNodes.forEach(n => {
-                        if (n.nodeType === 3 && n.textContent.trim().length > 0) {
-                            n.textContent = " " + label;
-                        }
+                        if (n.nodeType === 3 && n.textContent.trim().length > 0) n.textContent = " " + label;
                     });
                 });
 
-                // Update Status
                 const statusText = document.getElementById('status-text');
                 if (statusText) {
                     const isActive = document.getElementById('status-display').classList.contains('active');
                     statusText.textContent = isActive ? dict.active : dict.inactive;
                 }
 
-                // Update Dir & Lang
                 document.documentElement.lang = lang;
                 document.documentElement.dir = dict.dir;
 
-                // 2. Handle Theme
                 const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 let effectiveTheme = themePref;
-
-                if (themePref === 'system') {
-                    effectiveTheme = systemDark ? 'dark' : 'light';
-                }
-
+                if (themePref === 'system') effectiveTheme = systemDark ? 'dark' : 'light';
                 document.documentElement.setAttribute('data-theme', effectiveTheme);
 
-                // Update Button Icon
                 const svg = document.querySelector('.theme-icon-display');
-                // If system, show monitor. If light/dark manual, show sun/moon
                 svg.innerHTML = icons[themePref === 'system' ? 'system' : effectiveTheme];
 
-                // 3. Update Active States in Dropdowns
                 document.querySelectorAll('.dropdown-item').forEach(btn => btn.classList.remove('selected'));
                 document.querySelector(`[data-lang="${lang}"]`)?.classList.add('selected');
                 document.querySelector(`[data-theme="${themePref}"]`)?.classList.add('selected');
 
-                // 4. Save
+                // Color the usage bar by level
+                const usageFill = document.getElementById('usage-fill');
+                const pctText = (document.getElementById('usage-pct')?.textContent || '').replace('%', '').trim();
+                if (usageFill && pctText && !isNaN(pctText)) {
+                    const p = parseInt(pctText, 10);
+                    usageFill.classList.toggle('warn', p >= 75 && p < 90);
+                    usageFill.classList.toggle('danger', p >= 90);
+                }
+
                 localStorage.setItem('sub_lang', lang);
                 localStorage.setItem('sub_theme', themePref);
             }
@@ -793,10 +925,8 @@
             function setupDropdown(id) {
                 const container = document.getElementById(id);
                 const btn = container.querySelector('.icon-btn');
-
                 btn.onclick = (e) => {
                     e.stopPropagation();
-                    // Close others
                     document.querySelectorAll('.dropdown').forEach(d => {
                         if (d !== container) d.classList.remove('open');
                     });
@@ -804,11 +934,9 @@
                     btn.classList.toggle('active');
                 };
             }
-
             setupDropdown('lang-dropdown');
             setupDropdown('theme-dropdown');
 
-            // Click outside to close
             document.addEventListener('click', () => {
                 document.querySelectorAll('.dropdown').forEach(d => {
                     d.classList.remove('open');
@@ -816,7 +944,6 @@
                 });
             });
 
-            // Selection Logic
             document.querySelectorAll('#lang-dropdown .dropdown-item').forEach(item => {
                 item.onclick = () => {
                     const l = item.dataset.lang;
@@ -833,25 +960,19 @@
                 };
             });
 
-            // --- 6. SYSTEM THEME LISTENER ---
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
                 const currentThemePref = localStorage.getItem('sub_theme') || 'system';
                 if (currentThemePref === 'system') {
-                    // Re-run update to apply new system preference
                     const currentLang = localStorage.getItem('sub_lang') || 'fa';
                     updateUI(currentLang, 'system');
                 }
             });
 
-            // --- 7. INITIALIZATION ---
+            // --- 6. INITIALIZATION ---
             checkAndMockData();
-
             const savedLang = localStorage.getItem('sub_lang') || 'fa';
-            // Default to 'system' if nothing saved
             const savedTheme = localStorage.getItem('sub_theme') || 'system';
-
             updateUI(savedLang, savedTheme);
-
         })();
     </script>
     {% endraw %}

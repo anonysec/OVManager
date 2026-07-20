@@ -8,6 +8,7 @@ from backend.auth.auth import get_current_user
 from backend.operations.server_info import get_server_info
 from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
+from backend.version import __version__
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 
@@ -30,6 +31,7 @@ async def get_settings(
         subscription_path=config.SUBSCRIPTION_PATH.strip("/"),
         subscription_url_prefix=subscription_prefix,
         timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
+        panel_version=__version__,
     )
     return ResponseModel(
         success=True,

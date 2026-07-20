@@ -88,10 +88,10 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     # total=None means unlimited traffic, so it is never "exceeded".
     not_expired = request.expiry_date >= datetime.today().date()
     has_traffic = request.total is None or request.total > used
-    if not_expired and has_traffic:
-        user.is_active = True
-    else:
-        user.is_active = False
+    # Manual status (from the edit modal checkbox) wins, but expiry/traffic
+    # violations still force-disable: an expired or out-of-traffic account
+    # must never be active even if the admin flipped the switch on.
+    user.is_active = bool(request.status) and not_expired and has_traffic
     user.expiry_date = request.expiry_date
     user.total = request.total
     if request.max_logins is not None:

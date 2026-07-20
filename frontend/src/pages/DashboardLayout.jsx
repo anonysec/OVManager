@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiGlobe, FiMoon, FiSun, FiSettings } from 'react-icons/fi';
 import apiClient, { API_ERROR_EVENT } from '../services/api';
@@ -18,16 +19,11 @@ const readTokenPayload = () => {
 
 const DashboardLayout = () => {
   const { logout, userRole } = useAuth();
+  const { theme, setTheme } = useTheme();
   const { i18n, t } = useTranslation();
-  const [theme, setTheme] = useState(() => localStorage.getItem('ovmanager-theme') || 'dark');
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem('ovmanager-theme', theme);
-  }, [theme]);
 
   // Keep document direction in sync with the active language and persist it,
   // so Farsi (RTL) survives navigation/refresh (not just the toggle click).
@@ -122,9 +118,8 @@ const DashboardLayout = () => {
       { to: '/', label: t('dashboard', 'Dashboard'), end: true },
       { to: '/users', label: t('users', 'Users') },
       { to: '/nodes', label: t('nodes', 'Nodes') },
-      ...(userRole === 'main_admin' ? [{ to: '/audit', label: t('audit', 'Audit') }] : []),
     ]
-  ), [t, userRole]);
+  ), [t]);
 
   const changeLanguage = () => {
     const next = i18n.language === 'en' ? 'fa' : 'en';

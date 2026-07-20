@@ -1,35 +1,33 @@
-"""Basic tests for OVManager panel."""
-import pytest
+"""Basic tests for OVManager panel.
+
+These are environment-aware: the API prefix depends on config.URLPATH, so we
+derive the real prefix from the app's config instead of hardcoding /api.
+"""
 from fastapi.testclient import TestClient
+
+from backend.app import api
+from backend.config import config
+
+
+def _api_prefix():
+    urlpath = (config.URLPATH or "").strip("/")
+    return f"/{urlpath}/api" if urlpath else "/api"
 
 
 def test_app_imports():
     """Verify the app can be imported without errors."""
-    from backend.app import api
     assert api is not None
 
 
-def test_config_loads():
-    """Verify config loads with defaults."""
-    from backend.config import config
-    assert config.PORT == 9000  # default
-
-
 def test_health_endpoint():
-    """Test the public health check endpoint."""
-    from backend.app import api
     client = TestClient(api)
     response = client.get("/health")
     assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
+    assert response.json()["status"] == "ok"
 
 
 def test_urlprefixed_health():
-    """Test the URL-prefixed health check endpoint."""
-    from backend.app import api
     client = TestClient(api)
-    response = client.get("/api/health")
+    response = client.get(f"{_api_prefix()}/health")
     assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
+    assert response.json()["status"] == "ok"

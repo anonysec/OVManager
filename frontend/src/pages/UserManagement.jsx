@@ -6,10 +6,12 @@ import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
+import UserDetailModal from '../components/UserDetailModal';
 import { FiSearch } from 'react-icons/fi';
-import { BsPersonFill, BsPersonCheckFill, BsPersonXFill } from 'react-icons/bs';
+import { BsPersonFill, BsPersonCheckFill, BsPersonXFill, BsPersonPlusFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
 import { daysUntil } from '../utils/time';
+import { copyText } from '../utils/clipboard';
 
 const UserManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,6 +24,7 @@ const UserManagement = () => {
   const [sessionDiagnostics, setSessionDiagnostics] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionError, setSessionError] = useState('');
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const { t } = useTranslation();
 
@@ -75,11 +78,13 @@ const UserManagement = () => {
 
   const userStats = useMemo(() => {
     const activeUsersCount = users.filter(user => user.is_active).length;
+    const onlineUsersCount = users.filter(user => user.online || Number(user.active_connections || 0) > 0).length;
     const inactiveUsersCount = users.length - activeUsersCount;
     return {
       total: users.length,
       active: activeUsersCount,
       inactive: inactiveUsersCount,
+      online: onlineUsersCount,
     };
   }, [users]);
 
@@ -247,6 +252,11 @@ const UserManagement = () => {
     fetchUsers();
   };
 
+  const handleUserClick = (user) => {
+    setSelectedUser(user);
+    setIsDetailModalOpen(true);
+  };
+
   const handleEdit = (user) => {
     setSelectedUser(user);
     setIsEditModalOpen(true);
@@ -258,11 +268,16 @@ const UserManagement = () => {
     fetchUsers();
   };
 
-  // Generate subscription link for each user
+  // Generate subscription link for each user. Fall back to the panel's own
+  // origin + base path when no subscription prefix is configured, so a usable
+  // per-user link always exists.
   const getSubscriptionLink = (user) => {
-    if (!subscriptionSettings || !user || !user.uuid) return '';
-    let prefix = subscriptionSettings.subscription_url_prefix;
-    let path = subscriptionSettings.subscription_path || '';
+    if (!user || !user.uuid) return '';
+    const urlpath = (import.meta.env.VITE_URLPATH || '').replace(/^\/+|\/+$/g, '');
+    const base = urlpath ? `${window.location.origin}/${urlpath}` : window.location.origin;
+    let prefix = subscriptionSettings?.subscription_url_prefix?.trim();
+    let path = (subscriptionSettings?.subscription_path || '').trim();
+    if (!prefix) prefix = `${base}/sub/`;
     if (!prefix.endsWith('/')) prefix += '/';
     if (path.startsWith('/')) path = path.slice(1);
     if (path && !path.endsWith('/')) path += '/';
@@ -299,6 +314,13 @@ const UserManagement = () => {
             <span className="us-value">{userStats.active}</span>
           </span>
         </div>
+        <div className="user-stat" style={{ '--us-accent': '#66bb6a' }}>
+          <span className="us-ico"><BsPersonPlusFill /></span>
+          <span className="us-body">
+            <span className="us-label">{t('onlineUsers')}</span>
+            <span className="us-value">{userStats.online}</span>
+          </span>
+        </div>
         <div className="user-stat" style={{ '--us-accent': '#e53935' }}>
           <span className="us-ico"><BsPersonXFill /></span>
           <span className="us-body">
@@ -325,6 +347,7 @@ const UserManagement = () => {
       <UserTable
         users={filteredUsers}
         isLoading={false}
+        onUserClick={handleUserClick}
         onDelete={handleDelete}
         onSessions={handleShowSessions}
         onBulkDelete={handleBulkDelete}
@@ -340,6 +363,19 @@ const UserManagement = () => {
         onShowSessions={handleShowSessions}
         getSubscriptionLink={getSubscriptionLink}
       />
+      {isDetailModalOpen && (
+        <UserDetailModal
+          isOpen={isDetailModalOpen}
+          user={selectedUser}
+          subscriptionLink={selectedUser ? getSubscriptionLink(selectedUser) : ''}
+          onClose={() => setIsDetailModalOpen(false)}
+          onEdit={handleEdit}
+          onSessions={handleShowSessions}
+          onDownload={handleOpenDownloadModal}
+          onCopyId={(u) => copyText(u.uuid || '')}
+          onToggleStatus={handleToggleStatus}
+        />
+      )}
       {isAddModalOpen && (
         <AddUserModal
           isOpen={isAddModalOpen}

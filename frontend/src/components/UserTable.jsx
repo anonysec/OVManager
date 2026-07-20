@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
+import { copyText } from '../utils/clipboard';
 
 const statusOf = (user, t) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
@@ -13,8 +15,35 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), cls: 'idle' };
 };
 
-const RowMenu = ({ user, onEdit, onDelete, onSessions, onClose, anchorRef }) => {
+const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRef }) => {
+  const { t } = useTranslation();
   const ref = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, ready: false });
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const place = () => {
+      const a = anchorRef?.current;
+      if (!a) return;
+      const r = a.getBoundingClientRect();
+      const menuW = 180;
+      const menuH = 184;
+      let left = r.right - menuW;
+      let top = r.bottom + 6;
+      if (left < 8) left = 8;
+      if (top + menuH > window.innerHeight - 8) top = r.top - menuH - 6;
+      setPos({ top, left, ready: true });
+    };
+    place();
+    const onScroll = () => onClose();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [anchorRef, onClose]);
+
   useEffect(() => {
     const onDoc = (e) => {
       if (ref.current && !ref.current.contains(e.target) && anchorRef?.current && !anchorRef.current.contains(e.target)) {
@@ -24,22 +53,34 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onClose, anchorRef }) => 
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [onClose, anchorRef]);
-  return (
-    <div className="row-menu" ref={ref} role="menu">
+
+  return createPortal(
+    <div
+      className="row-menu"
+      ref={ref}
+      role="menu"
+      style={{ position: 'fixed', top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}
+    >
       <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
       <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { navigator.clipboard?.writeText(user.uuid || ''); onClose(); }}><FiCopy /> {t('rowCopyId')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
+      <button type="button" className={`row-menu-item ${user.is_active ? '' : 'danger'}`} role="menuitem" onClick={() => { onToggleStatus?.(user); onClose(); }}>{user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}</button>
       <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
-    </div>
+    </div>,
+    document.body
   );
 };
 
 const UserTable = ({
   users = [],
   isLoading = false,
+  onUserClick,
   onEdit,
   onDelete,
   onSessions,
+  onDownload,
+  onToggleStatus,
   onBulkDelete,
   selected = [],
   onSelect,
@@ -121,7 +162,7 @@ const UserTable = ({
                     <input type="checkbox" checked={isSel} onChange={() => onSelect(user.uuid)} aria-label={`Select ${user.name}`} />
                   </td>
                   <td data-label="Username">
-                    <div className="user-cell">
+                    <div className="user-cell user-cell-clickable" onClick={(e) => { e.stopPropagation(); onUserClick?.(user); }}>
                       <span className="avatar-sm">{user.name.slice(0, 1).toUpperCase()}</span>
                       <span className="uname">{user.name}</span>
                     </div>
@@ -154,6 +195,8 @@ const UserTable = ({
                           onEdit={onEdit}
                           onDelete={onDelete}
                           onSessions={onSessions}
+                          onDownload={onDownload}
+                          onToggleStatus={onToggleStatus}
                           onClose={() => setMenuFor(null)}
                         />
                       )}

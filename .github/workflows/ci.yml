@@ -2,47 +2,39 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
 
 jobs:
-  test:
+  frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
-      - run: pip install uv
-      - run: |
-          if [ -f .env.example ]; then cp .env.example .env; fi
-      - run: uv sync
-      - run: uv run python -c "from backend.app import api; print('App imports OK')"
-      - run: uv run python -c "from backend.config import config; print('Config loads OK')"
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
 
-  lint:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - run: pip install uv ruff
-      - run: uv sync
-      - run: ruff check backend/ frontend/ --output-format=github || true
-      - run: ruff format --check backend/ frontend/ || true
-
-  build:
-    needs: [test, lint]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install uv
-      - run: uv sync
-      - name: Build Docker image
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Sync deps + dev group
         run: |
-          docker build -t ovmanager:ci . 2>/dev/null || echo "Docker not available in this runner"
+          uv sync
+          uv pip install --python .venv/bin/python3 pytest pytest-asyncio httpx
+      - name: Run backend tests
+        run: .venv/bin/python -m pytest -q

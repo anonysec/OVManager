@@ -119,10 +119,10 @@ async def update_user(
         # total=None means unlimited traffic, so it is never "exceeded".
         not_expired = db_user.expiry_date >= datetime.today().date()
         has_traffic = db_user.total is None or db_user.total > used
-        if not_expired and has_traffic:
-            await change_user_status_on_all_nodes(uuid, request.name, True, db)
-        else:
-            await change_user_status_on_all_nodes(uuid, request.name, False, db)
+        # Mirror crud.update_user: manual status wins, but expiry/traffic
+        # violations still force-disable on the nodes too.
+        final_active = bool(request.status) and not_expired and has_traffic
+        await change_user_status_on_all_nodes(uuid, request.name, final_active, db)
         # Push the (possibly updated) simultaneous-login limit to all nodes.
         await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db)
     # enforce_user_limits is async; must be awaited or it silently never runs.
