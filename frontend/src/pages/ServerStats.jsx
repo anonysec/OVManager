@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
-import apiClient, { urlPath } from '../services/api';
+import apiClient from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiCpu, FiThermometer, FiWifi, FiAlertTriangle, FiClock, FiGlobe, FiHardDrive } from 'react-icons/fi';
-import { fmtRelative, daysUntil, formatUptime } from '../utils/time';
+import { fmtRelative } from '../utils/time';
 
 const formatBytes = (bytes) => {
   if (!Number(bytes)) return '0 B';
@@ -33,6 +33,7 @@ const nodeMeta = (node) => {
   return CODES[code] || { name: node.name || 'Node', flag: '🏳️', coords: [20, 25] };
 };
 
+/* eslint-disable-next-line no-unused-vars */
 const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', children }) => (
   <section className={`ops-panel ${tone === 'cyan' ? 'cyan' : ''} ${className}`}>
     <header><h3><Icon style={{ verticalAlign: -3, marginRight: 8 }} />{title}</h3>{tip && <span className="has-tip panel-tip" data-tip={tip} aria-label="info" />}</header>
@@ -83,7 +84,7 @@ const WorldMap = ({ nodes, nodeStatus }) => {
       </div>
       <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
         <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: '100%', height: 'auto' }}
+          style={{ width: `${100 * zoom}%`, height: 'auto' }}
           onMouseLeave={() => setHover(null)}>
           <defs>
             <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
@@ -151,7 +152,6 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
     }
   });
   (users || []).forEach((u) => {
-    const d = daysUntil(u.expiry_date);
     if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
       out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null });
     }
@@ -168,7 +168,6 @@ const ServerStats = () => {
   const [users, setUsers] = useState(null);
   const [nodes, setNodes] = useState(null);
   const [nodeStatus, setNodeStatus] = useState({});
-  const [metrics, setMetrics] = useState(null);
   const [security, setSecurity] = useState(null);
   const [trafficHistory, setTrafficHistory] = useState([]);
 
@@ -187,7 +186,6 @@ const ServerStats = () => {
         setUsers(usersRes.data?.data || []);
         nodesData = nodesRes.data?.data || [];
         setNodes(nodesData);
-        setMetrics(metricsRes.data?.data || null);
         setSecurity(secRes.data?.data || null);
         const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
         const point = Number(lastTraffic?.active_connections ?? 0);
@@ -202,7 +200,7 @@ const ServerStats = () => {
           try {
             const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
             return [n.id, r.data?.data || {}];
-          } catch (e) { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
+          } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
         }));
         setNodeStatus(Object.fromEntries(results));
       } catch { /* keep previous */ }
@@ -223,15 +221,6 @@ const ServerStats = () => {
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   })();
   const totalUsed = (users || []).reduce((sum, u) => sum + Number(u.used || 0), 0);
-  const trafficTrend = (metrics?.traffic || []).map((p) => Number(p.active_connections || 0));
-  const avgNodeCpu = (() => {
-    const values = Object.values(nodeStatus).map((s) => Number(s?.node_info?.cpu_usage)).filter(Number.isFinite);
-    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : Number(stats?.cpu || 0);
-  })();
-  const avgNodeMem = (() => {
-    const values = Object.values(nodeStatus).map((s) => Number(s?.node_info?.memory_usage)).filter(Number.isFinite);
-    return values.length ? values.reduce((a, b) => a + b, 0) / values.length : Number(stats?.memory_percent || 0);
-  })();
   const offlineNodes = (nodes || []).length - onlineNodes;
   const fullUsers = (users || []).filter((u) => Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins || 0));
   const activeAlerts = offlineNodes + fullUsers.length;
@@ -300,8 +289,8 @@ const ServerStats = () => {
               </p>
               {latestErrors.length > 0 && (
                 <ul className="security-errors">
-                  {latestErrors.slice(0, 3).map((e, i) => (
-                    <li key={i}>{e.time_tehran || ''} — {e.common_name}: {e.reason} ({e.active || '?'}/{e.limit || '?'})</li>
+                  {latestErrors.slice(0, 3).map((_e, i) => (
+                    <li key={i}>{_e.time_tehran || ''} — {_e.common_name}: {_e.reason} ({_e.active || '?'}/{_e.limit || '?'})</li>
                   ))}
                 </ul>
               )}
@@ -327,7 +316,7 @@ const ServerStats = () => {
                       <td>{formatBytes(u.used || 0)}</td>
                       <td>{u.active_connections || 0}</td>
                       <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
-                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`${urlPath}/users?user=${u.uuid}`)}>{t('manage')}</button></td>
+                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`/dash/users?user=${u.uuid}`)}>{t('manage')}</button></td>
                     </tr>
                   ))}
                   {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noUsersOnline')}</td></tr>}

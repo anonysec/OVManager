@@ -34,7 +34,7 @@ const UserManagement = () => {
   const [view, setView] = useState('all'); // 'all' | 'online' | 'inactive' | 'expiring'
   const [selected, setSelected] = useState([]);
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
-  const [bulkBusy, setBulkBusy] = useState(false);
+  const [_bulkBusy, setBulkBusy] = useState(false);
 
   const fetchUsers = async () => {
     try {

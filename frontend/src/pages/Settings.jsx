@@ -94,7 +94,7 @@ const Settings = () => {
     setDefaultUsers(s.default_max_users || 1);
   };
 
-  useEffect(() => { loadSettings(); load(); }, []);
+  useEffect(() => { loadSettings(); load(); }, [load]);
 
   // Live auto-refresh — polls stats every 8s, does NOT touch form fields
   const { refreshTick } = useLive();
@@ -104,7 +104,7 @@ const Settings = () => {
     setTimezoneState(tz);
     localStorage.setItem('ovTimezone', tz);
     setTzSaving(true);
-    try { await apiClient.put('/server/settings/timezone', { timezone: tz }); } catch {} finally { setTzSaving(false); }
+    try { await apiClient.put('/server/settings/timezone', { timezone: tz }); } catch { /* noop */ } finally { setTzSaving(false); }
   };
 
   const saveSubscription = async () => {
@@ -116,11 +116,11 @@ const Settings = () => {
       await apiClient.put('/server/settings/subscription', { subscription_url_prefix: subPrefix, subscription_path: subPath });
       setSubSaved(true);
       setTimeout(() => setSubSaved(false), 2500);
-    } catch {}
+    } catch { /* noop */ }
   };
 
   const copyLink = async () => {
-    try { await copyText(buildSubUrlHelper(subPrefix, subPath)); } catch {}
+    try { await copyText(buildSubUrlHelper(subPrefix, subPath)); } catch { /* noop */ }
   };
 
   const saveBotConfig = async () => {

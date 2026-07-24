@@ -46,7 +46,7 @@ const DashboardLayout = () => {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [notifOpen, langOpen]);
 
-  const skipToContent = (e) => {
+  const skipToContent = () => {
     const main = document.querySelector('.ops-main');
     if (main) {
       main.setAttribute('tabindex', '-1');
@@ -82,9 +82,7 @@ const DashboardLayout = () => {
           out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null, action_path: null });
         }
       });
-      const now = new Date();
       users.forEach((u) => {
-        const exp = new Date(u.expiry_date);
         if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
           out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null, action_path: null });
         }
