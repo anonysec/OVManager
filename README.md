@@ -1,43 +1,46 @@
-<div align="center">
-  <img width="150px" src="./docs/images/logo.png" alt="OV-Panel Logo">
+# OVManager
 
-  # **OV-Panel**
-  Free, open-source OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
-</div>
+Free, open-source OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
-  ![OV-Panel Screenshot](docs/images/panel.png)
-
----
-
-## 🚀 Overview
-
-**OV-Panel** is a modern and easy-to-use web panel that allows you to manage your **OpenVPN** server, users, and connections from a simple dashboard.
-
-It’s designed for both beginners and system administrators who want a minimal yet powerful solution to handle OpenVPN deployments.
-
----
-
-## ✨ Features
-
-- 🧠 Simple and intuitive dashboard  
-- ⚙️ User and connection management  
-- 🔑 Auto user creation with configuration export  
-- 🧩 Supports multiple OpenVPN servers (Node)  
-- 🔒 JWT-based authentication  
-- 🌐 API-ready for automation  
-
----
-
-## ⚡ Quick Installation OV-Panel
-
-You can install OV-Panel on a fresh Ubuntu/Debian system with a single command:
+## Install
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/anonysec/ov/main/panel/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
-## ⚡ Quick Installation OV-Node
 
-You can install OV-Node on a fresh Ubuntu/Debian system with a single command:
+With options:
+
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/anonysec/ov/main/node/install.sh)
+bash <(curl -sSL URL) -- --port 2095 --path dash --admin-user admin --admin-pass mypassword
 ```
+
+## Update / Uninstall
+
+```bash
+# Update
+bash <(curl -sSL URL) update
+
+# Uninstall
+bash <(curl -sSL URL) uninstall
+```
+
+## Docker
+
+```bash
+bash <(curl -sSL URL) --docker
+```
+
+## Manual Install
+
+```bash
+git clone https://github.com/anonysec/OVManager.git /opt/ovmanager
+cd /opt/ovmanager
+cp .env.example .env  # edit with your settings
+pip install uv && uv sync
+cd frontend && npm ci && npm run build
+uv run main.py
+```
+
+## License
+
+MIT
