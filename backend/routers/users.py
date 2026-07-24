@@ -1,4 +1,5 @@
 from datetime import datetime
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -60,7 +61,7 @@ async def get_all_users(
         item["online"] = item["active_connections"] > 0
         # Track the last time this user had a live connection.
         if item["active_connections"] > 0:
-            db_user.last_online = datetime.utcnow()
+            db_user.last_online = datetime.now(UTC)
         item["last_online"] = (
             db_user.last_online.isoformat() if db_user.last_online else None
         )

@@ -34,8 +34,8 @@ def main():
             access_log=False,
             server_header=False,
             date_header=False,
-            ssl_keyfile=config.SSL_KEYFILE or "",
-            ssl_certfile=config.SSL_CERTFILE or "",
+            ssl_keyfile=config.SSL_KEYFILE or None,
+            ssl_certfile=config.SSL_CERTFILE or None,
         )
     finally:
         # Terminate bot when panel stops

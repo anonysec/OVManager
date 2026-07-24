@@ -155,7 +155,8 @@ async def startup_event():
     try:
         _run_migrations()
     except Exception as e:
-        print("migration warning:", e)
+        from backend.logger import logger
+        logger.error("migration warning: %s", e)
     start_scheduler()
 
 

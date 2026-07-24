@@ -127,10 +127,10 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     )
     if await run_in_threadpool(node_req.check_node):
         crud.create_node(db, request)
-        logger.info(f"Node added successfully: {request.address}:{request.port}")
+        logger.info("Node added successfully: %s:%s", request.address, request.port)
         return True
 
-    logger.warning(f"Failed to add node: {request.address}:{request.port}")
+    logger.warning("Failed to add node: %s:%s", request.address, request.port)
     return False
 
 async def update_node_handler(node_id: int, request: NodeCreate, db: Session) -> bool:
@@ -158,7 +158,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         return False
 
     crud.update_node(db, node_id, request)
-    logger.info(f"Node updated: {request.address}:{request.port}")
+    logger.info("Node updated: %s:%s", request.address, request.port)
     return True
 
 async def delete_node_handler(node_id: int, db: Session) -> bool:
@@ -183,7 +183,7 @@ async def delete_node_handler(node_id: int, db: Session) -> bool:
             logger.info("Skipping usage snapshot for inactive node before delete: %s", node.name)
 
         crud.delete_node(db, node.id)
-        logger.info(f"Node deleted successfully: {node.name}; user total usage preserved")
+        logger.info("Node deleted successfully: %s; user total usage preserved", node.name)
         return True
     logger.warning("Failed to delete node: node id %s not found", node_id)
     return False

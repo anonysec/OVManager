@@ -2,6 +2,7 @@ import asyncio
 import re
 from collections import Counter
 from datetime import datetime
+from datetime import UTC
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
@@ -40,7 +41,7 @@ def _parse_log_line(line: str, common_name: str = "") -> dict:
     m_time = re.match(r"([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})", line)
     if m_time:
         try:
-            year = datetime.utcnow().year
+            year = datetime.now(UTC).year
             dt = datetime.strptime(f"{year} {m_time.group(1)} {m_time.group(2)} {m_time.group(3)}", "%Y %b %d %H:%M:%S")
             dt_utc = dt.replace(tzinfo=ZoneInfo("UTC"))
             ts = dt_utc.timestamp()

@@ -73,7 +73,7 @@ async def check_user_used_traffic():
                     user = all_users.get(clean_username)
 
                     if not user:
-                        logger.warning(f"User not found: {clean_username}")
+                        logger.warning("User not found: %s", clean_username)
                         continue
 
                     # node_usage maps node_name -> {session_key: last_seen_bytes}
@@ -128,7 +128,7 @@ async def check_user_used_traffic():
                 # commit per node
                 db.commit()
 
-                logger.info(f"Traffic data committed for node {node.address}")
+                logger.info("Traffic data committed for node %s", node.address)
 
             except Exception as e:
                 db.rollback()
