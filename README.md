@@ -2,7 +2,7 @@
   <img width="150px" src="./docs/images/logo.png" alt="OV-Panel Logo">
 
   # **OV-Panel**
-  Free, open-source and lightweight panel for managing **OpenVPN** servers and users.
+  Free, open-source OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 </div>
 
   ![OV-Panel Screenshot](docs/images/panel.png)
