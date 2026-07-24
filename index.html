@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OVManager — OpenVPN Management Panel</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+:root{--color-primary:#1E3A5F;--color-on-primary:#FFFFFF;--color-secondary:#334155;--color-accent:#22C55E;--color-background:#0F172A;--color-foreground:#FFFFFF;--color-muted:#10192E;--color-border:rgba(255,255,255,0.08);--color-destructive:#DC2626;--font-heading:'Fira Code',monospace;--font-body:'Fira Sans',sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--color-background);color:var(--color-foreground);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--color-accent);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%}
+.nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;background:rgba(15,23,42,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--color-border)}
+.nav-brand{font-family:var(--font-heading);font-size:1.25rem;font-weight:700;color:var(--color-foreground)}.nav-brand span{color:var(--color-accent)}
+.nav-links{display:flex;gap:1.5rem;list-style:none}
+.nav-links a{color:var(--color-foreground);font-size:.9rem;font-weight:500;transition:color 150ms}
+.nav-links a:hover{color:var(--color-accent);text-decoration:none}
+.nav-cta{display:inline-block;padding:.5rem 1.25rem;background:var(--color-accent);color:#000;font-weight:600;border-radius:6px;font-size:.875rem;transition:opacity 150ms}
+.nav-cta:hover{opacity:.85;text-decoration:none}
+.hero{max-width:1100px;margin:0 auto;padding:6rem 2rem 4rem;text-align:center}
+.hero-badge{display:inline-block;padding:.25rem .75rem;background:var(--color-muted);border:1px solid var(--color-border);border-radius:999px;font-size:.75rem;font-weight:500;color:var(--color-accent);margin-bottom:1.5rem}
+.hero h1{font-family:var(--font-heading);font-size:clamp(2rem,5vw,3.5rem);font-weight:700;line-height:1.15;margin-bottom:1rem}
+.hero h1 span{color:var(--color-accent)}
+.hero p{font-size:1.125rem;color:rgba(255,255,255,0.6);max-width:600px;margin:0 auto 2rem}
+.hero-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.7rem 1.5rem;border-radius:8px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;transition:transform 150ms,opacity 150ms}
+.btn:hover{transform:translateY(-1px);opacity:.9}
+.btn-primary{background:var(--color-accent);color:#000}
+.btn-outline{background:transparent;border:1px solid var(--color-border);color:var(--color-foreground)}
+section{max-width:1100px;margin:0 auto;padding:4rem 2rem}
+.section-label{font-family:var(--font-heading);font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--color-accent);margin-bottom:.5rem}
+section h2{font-family:var(--font-heading);font-size:1.75rem;font-weight:700;margin-bottom:.75rem}
+section>p{color:rgba(255,255,255,0.5);max-width:600px;margin-bottom:2rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+.card{background:var(--color-muted);border:1px solid var(--color-border);border-radius:12px;padding:2rem;transition:border-color 150ms}
+.card:hover{border-color:rgba(34,197,94,0.3)}
+.card-icon{width:48px;height:48px;border-radius:10px;background:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1rem}
+.card h3{font-family:var(--font-heading);font-size:1rem;font-weight:600;margin-bottom:.5rem}
+.card p{color:rgba(255,255,255,0.5);font-size:.9rem}
+.steps{display:flex;flex-direction:column;gap:2rem;max-width:700px;margin:0 auto}
+.step{display:flex;gap:1.5rem;align-items:flex-start}
+.step-num{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--color-accent);color:#000;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:.875rem}
+.step h4{font-size:1rem;font-weight:600;margin-bottom:.25rem}
+.step p{color:rgba(255,255,255,0.5);font-size:.9rem}
+.stats{display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin:3rem 0}
+.stat{text-align:center}
+.stat-value{font-family:var(--font-heading);font-size:2rem;font-weight:700;color:var(--color-accent)}
+.stat-label{font-size:.8rem;color:rgba(255,255,255,0.4);margin-top:.25rem}
+.footer{border-top:1px solid var(--color-border);padding:2rem;text-align:center;font-size:.8rem;color:rgba(255,255,255,0.3)}
+@media(max-width:768px){.nav{padding:.75rem 1rem}.nav-links{display:none}.hero{padding:4rem 1rem 2rem}section{padding:3rem 1rem}.stats{gap:1.5rem}}
+:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<nav class="nav" role="navigation" aria-label="Main navigation">
+  <div class="nav-brand"><span>OV</span>Manager</div>
+  <ul class="nav-links"><li><a href="#features">Features</a></li><li><a href="#how-it-works">How It Works</a></li><li><a href="#nodes">Nodes</a></li><li><a href="https://github.com/anonysec/OVManager">GitHub</a></li></ul>
+</nav>
+<section class="hero">
+  <div class="hero-badge">Open-Source · FastAPI · Docker</div>
+  <h1>Manage Your <span>OpenVPN</span> Infrastructure</h1>
+  <p>OVManager is a modern, lightweight web panel for managing OpenVPN servers, users, connections, and traffic — from a single dashboard.</p>
+  <div class="hero-actions">
+    <a href="https://github.com/anonysec/OVManager" class="btn btn-primary">View on GitHub</a>
+    <a href="https://github.com/anonysec/OVNode" class="btn btn-outline">OVNode Agent →</a>
+  </div>
+</section>
+<section><div class="stats"><div class="stat"><div class="stat-value">2</div><div class="stat-label">Repositories</div></div><div class="stat"><div class="stat-value">🔒 JWT</div><div class="stat-label">Auth</div></div><div class="stat"><div class="stat-value">🐳 Docker</div><div class="stat-label">Deploy</div></div><div class="stat"><div class="stat-value">📡 OpenVPN</div><div class="stat-label">Protocol</div></div></div></section>
+<section id="features"><div class="section-label">Features</div><h2>Everything you need to manage VPN users</h2><p>A clean dashboard with real-time stats, user management, node orchestration, and subscription-based access.</p><div class="grid"><div class="card"><div class="card-icon">👥</div><h3>User Management</h3><p>Create, edit, and disable users. Set traffic limits, expiry dates, and max simultaneous logins per user.</p></div><div class="card"><div class="card-icon">🖥️</div><h3>Multi-Node Support</h3><p>Manage multiple OpenVPN nodes from one panel. Push user configs and limits across all nodes in parallel.</p></div><div class="card"><div class="card-icon">🔑</div><h3>JWT Authentication</h3><p>Role-based access with main_admin and admin roles. Rate-limited login with bcrypt password hashing.</p></div><div class="card"><div class="card-icon">📊</div><h3>Live Metrics</h3><p>Real-time traffic usage, active connections, and per-node health monitoring on the dashboard.</p></div><div class="card"><div class="card-icon">📱</div><h3>Telegram Bot</h3><p>Fully interactive bot for user management — search, edit, renew, download configs via inline buttons.</p></div><div class="card"><div class="card-icon">🔒</div><h3>Secure by Design</h3><p>TLS support via Let's Encrypt, parameterized queries throughout, input validation on all endpoints.</p></div></div></section>
+<section id="how-it-works"><div class="section-label">Architecture</div><h2>How It Works</h2><p>OVManager is the control panel. OVNode is the agent that runs on each VPN server.</p><div class="steps"><div class="step"><div class="step-num">1</div><div><h4>Deploy OVManager</h4><p>Run the panel via Docker Compose with a single command. The web UI is served on port 2095.</p></div></div><div class="step"><div class="step-num">2</div><div><h4>Deploy OVNode on Each Server</h4><p>Install the node agent on each OpenVPN server. It communicates back to the panel over HTTP with an API key.</p></div></div><div class="step"><div class="step-num">3</div><div><h4>Manage from the Dashboard</h4><p>Create users, set limits, monitor traffic — all from the panel. OVNode handles OpenVPN config generation and cert lifecycle automatically.</p></div></div></div></section>
+<section id="nodes"><div class="section-label">Node Agent</div><h2>OVNode — The Node Agent</h2><p>OVNode runs alongside OpenVPN on each server, handling PKI, user certs, CCD files, and usage tracking. It talks to OVManager via a sync API.</p><div class="grid"><div class="card"><div class="card-icon">🛡️</div><h3>Automatic PKI</h3><p>Initializes CA, generates server certs, and manages client certificates — idempotent and Docker-volume persistent.</p></div><div class="card"><div class="card-icon">🔄</div><h3>Sync API</h3><p>Pull-based sync from panel to node. Supports user creation, status changes, usage limits, and OVPN config downloads.</p></div><div class="card"><div class="card-icon">📈</div><h3>Usage Tracking</h3><p>Tracks per-user traffic consumption and active sessions, reported back to the panel for real-time dashboards.</p></div></div></section>
+<section style="text-align:center;padding:4rem 2rem"><h2>Ready to get started?</h2><p style="margin-bottom:2rem">Deploy OVManager and OVNode with Docker Compose.</p><a href="https://github.com/anonysec/OVManager" class="btn btn-primary">Get Started on GitHub</a></section>
+<footer class="footer"><p>OVManager &amp; OVNode — Open-source OpenVPN management. <a href="https://github.com/anonysec/OVManager">GitHub</a></p></footer>
+</body>
+</html>
