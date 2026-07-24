@@ -24,7 +24,7 @@ services:
     environment:
       - PORT=2095
       - HOST=0.0.0.0
-      - PUBLIC_URL=http://91.107.164.180:2095
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:2095}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:2095/health', timeout=3); print('ok')"]
       interval: 30s

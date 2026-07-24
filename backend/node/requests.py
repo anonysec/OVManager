@@ -27,7 +27,7 @@ class NodeRequests:
         address: str,
         port: int,
         api_key: str,
-        tunnel_address: str = "ovpanel.com",
+        tunnel_address: str = "",
         protocol: str = "tcp",
         ovpn_port: int = 1194,
         set_new_setting: bool = False,
