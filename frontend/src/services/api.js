@@ -3,6 +3,8 @@ import axios from 'axios';
 const basePath = (import.meta.env.VITE_URLPATH || '').trim().replace(/^\/+|\/+$/g, '');
 const apiBase = basePath ? `/${basePath}/api` : '/api';
 
+export const urlPath = basePath ? `/${basePath}` : '';
+
 const apiClient = axios.create({ baseURL: apiBase });
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 export const API_ERROR_EVENT = 'api:error';
@@ -28,7 +30,15 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('userRole');
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     } else if (!isLoginRequest) {
-      const message = error.response?.data?.detail || error.response?.data?.msg || error.message || 'Request failed';
+      const detail = error.response?.data?.detail;
+      let message;
+      if (Array.isArray(detail)) {
+        message = detail.map(d => d.msg || JSON.stringify(d)).join(', ');
+      } else if (typeof detail === 'object' && detail !== null) {
+        message = JSON.stringify(detail);
+      } else {
+        message = detail || error.response?.data?.msg || error.message || 'Request failed';
+      }
       window.dispatchEvent(new CustomEvent(API_ERROR_EVENT, {
         detail: { status, message, url: requestUrl },
       }));

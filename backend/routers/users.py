@@ -10,6 +10,7 @@ from backend.schema.output import ResponseModel, Users
 from backend.schema._input import CreateUser, UpdateUser
 from backend.db.engine import get_db
 from backend.db import crud
+from backend.db.models import User
 from backend.auth.auth import get_current_user
 from backend.node.task import (
     delete_user_on_all_nodes,
@@ -21,6 +22,30 @@ from backend.node.task import (
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get("/next-username", response_model=ResponseModel)
+async def get_next_username(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    admin = crud.get_admin_by_username(db, username=user.get("username"))
+    prefix = admin.username_prefix if admin else None
+    if not prefix:
+        return ResponseModel(success=False, msg="No username prefix configured for this admin")
+
+    existing = db.query(User.name).filter(User.name.like(f"{prefix}%")).all()
+    taken = {n[0] for n in existing}
+
+    i = 1
+    while f"{prefix}{i}" in taken:
+        i += 1
+
+    return ResponseModel(
+        success=True,
+        msg="Next username generated",
+        data={"username": f"{prefix}{i}"},
+    )
 
 
 @router.get("/", response_model=ResponseModel)
@@ -67,8 +92,13 @@ async def get_all_users(
     )
 
 
-@router.get("/{uuid}", response_model=ResponseModel)
-async def reset_user_usage(uuid: str, db: Session = Depends(get_db)):
+@router.post("/{uuid}/reset-usage", response_model=ResponseModel)
+async def reset_user_usage(uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    db_user = crud.get_user_by_uuid(db, uuid)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["type"] == "admin" and db_user.owner != user["username"]:
+        return ResponseModel(success=False, msg="Unauthorized access", data=None)
     reset = crud.reset_user_usage(db, uuid)
     if not reset:
         raise HTTPException(status_code=404, detail="User not found")
@@ -112,23 +142,18 @@ async def update_user(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    result = crud.update_user(db, uuid, request)
-    if result:
-        db_user = crud.get_user_by_uuid(db, uuid)
-        used = db_user.used or 0
-        # total=None means unlimited traffic, so it is never "exceeded".
-        not_expired = db_user.expiry_date >= datetime.today().date()
-        has_traffic = db_user.total is None or db_user.total > used
-        # Mirror crud.update_user: manual status wins, but expiry/traffic
-        # violations still force-disable on the nodes too.
-        final_active = bool(request.status) and not_expired and has_traffic
-        await change_user_status_on_all_nodes(uuid, request.name, final_active, db)
-        # Push the (possibly updated) simultaneous-login limit to all nodes.
-        await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db)
+    db_user = crud.get_user_by_uuid(db, uuid)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    crud.update_user(db, uuid, request)
+    db_user = crud.get_user_by_uuid(db, uuid)
+    final_active = bool(request.status) and db_user.is_active
+    await change_user_status_on_all_nodes(uuid, request.name, final_active, db)
+    await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, uuid)
     # enforce_user_limits is async; must be awaited or it silently never runs.
     await enforce_user_limits()
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
-    return ResponseModel(success=True, msg="User updated successfully", data=result)
+    return ResponseModel(success=True, msg="User updated successfully")
 
 
 @router.put("/{uuid}/status", response_model=ResponseModel)
@@ -155,7 +180,7 @@ async def user_sessions(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] == "admin" and db_user.owner != user["username"]:
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
-    data = await get_user_session_diagnostics(db_user.name, db, hours=hours)
+    data = await get_user_session_diagnostics(uuid, db, hours=hours)
     return ResponseModel(success=True, msg="User session diagnostics", data=data)
 
 
@@ -170,7 +195,7 @@ async def disconnect_user_sessions(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] == "admin" and db_user.owner != user["username"]:
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
-    data = await disconnect_user_on_all_nodes(db_user.name, db)
+    data = await disconnect_user_on_all_nodes(db_user.name, uuid, db)
     log_event(db, "user.disconnect", actor=user.get("username"), target=db_user.name, detail="Disconnect requested")
     return ResponseModel(success=True, msg="Disconnect command processed", data=data)
 
@@ -183,7 +208,7 @@ async def delete_user(
     if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
 
-    if await delete_user_on_all_nodes(db_user.name, db):
+    if await delete_user_on_all_nodes(db_user.name, uuid, db):
         name = db_user.name
         crud.delete_user(db, name)
         log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")

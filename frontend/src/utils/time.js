@@ -78,3 +78,18 @@ export function daysUntil(expiry) {
   const now = new Date();
   return Math.ceil((d - now) / 86400000);
 }
+
+// Format uptime seconds into human-readable "Xd Yh Zm"
+export function formatUptime(seconds) {
+  if (!seconds || seconds === '-') return '-';
+  const n = Number(seconds);
+  if (isNaN(n) || n < 0) return '-';
+  const d = Math.floor(n / 86400);
+  const h = Math.floor((n % 86400) / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+  return parts.join(' ');
+}

@@ -15,7 +15,7 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), cls: 'idle' };
 };
 
-const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, onCopyId, onToggleStatus }) => {
+const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, _onCopyId, onToggleStatus }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   if (!user) return null;

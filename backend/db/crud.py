@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from datetime import datetime
 from uuid import uuid4
@@ -35,10 +36,54 @@ def create_admin(db: Session, admin: AdminCreate):
 
 def update_admin(db: Session, existing_admin: Admin, admin: AdminCreate):
     existing_admin.password = hash_password(admin.password)
+    existing_admin.telegram_id = admin.telegram_id
+    existing_admin.username_prefix = admin.username_prefix
 
     db.commit()
     db.refresh(existing_admin)
     return existing_admin
+
+
+def get_admin_by_telegram_id(db: Session, tg_id: int):
+    return db.query(Admin).filter(Admin.telegram_id == tg_id).first()
+
+
+def update_bot_config(db: Session, **kwargs):
+    s = db.query(Settings).first()
+    if not s:
+        s = Settings(port=1194, protocol="tcp")
+        db.add(s)
+        db.flush()
+    for k, v in kwargs.items():
+        if hasattr(s, k) and v is not None:
+            setattr(s, k, v)
+    db.commit()
+    db.refresh(s)
+    return s
+
+
+def get_bot_config(db: Session):
+    s = db.query(Settings).first()
+    if not s:
+        return {}
+    return {
+        "bot_token": s.bot_token,
+        "bot_enabled": s.bot_enabled,
+        "default_days": s.default_days,
+        "default_traffic_gb": s.default_traffic_gb,
+        "default_max_users": s.default_max_users,
+        "owner_telegram_id": s.owner_telegram_id,
+    }
+
+
+def patch_admin_telegram_id(db: Session, username: str, tg_id: int | None):
+    admin = db.query(Admin).filter(Admin.username == username).first()
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    admin.telegram_id = tg_id
+    db.commit()
+    db.refresh(admin)
+    return admin
 
 
 def get_user_by_name(db: Session, name: str):
@@ -58,11 +103,6 @@ def get_user_by_uuid(db: Session, uuid: str):
 def create_user(db: Session, request: CreateUser, owner: str):
     username = request.name.replace(" ", "_")
 
-    if db.query(User).filter(User.name == username).first():
-        raise HTTPException(
-            status_code=400, detail="user with this name already exists"
-        )
-
     new_user = User(
         name=username,
         expiry_date=request.expiry_date,
@@ -73,8 +113,14 @@ def create_user(db: Session, request: CreateUser, owner: str):
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail="user with this name already exists"
+        )
     logger.info(f"user created successfully: {request.name}")
     return new_user
 
@@ -103,14 +149,17 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
 
 
 def change_user_status(db: Session, uuid: str, status: bool) -> bool:
+    user = db.query(User).filter(User.uuid == uuid).first()
+    if not user:
+        logger.error("change_user_status: user not found for uuid=%s", uuid)
+        return False
     try:
-        user = db.query(User).filter(User.uuid == uuid).first()
         user.is_active = status
         db.commit()
         db.refresh(user)
         return True
     except Exception as e:
-        logger.error(f"Error when change status for user:{user.name} on db: {e}")
+        logger.error("Error changing status for user %s on db: %s", user.name, e)
         return False
 
 def reset_user_usage(db: Session, uuid: str) -> bool:
@@ -129,7 +178,7 @@ def reset_user_usage(db: Session, uuid: str) -> bool:
 def get_expired_users(db: Session):
     return (
         db.query(User)
-        .filter(User.expiry_date < datetime.now(), User.is_active == True)
+        .filter(User.expiry_date < datetime.now().date(), User.is_active == True)
         .all()
     )
 
@@ -194,6 +243,7 @@ def create_node(db: Session, request: NodeCreate):
         port=request.port,
         key=request.key,
         status=request.status,
+        use_tls=request.use_tls,
     )
 
     db.add(new_node)
@@ -214,6 +264,7 @@ def update_node(db: Session, node_id: int, request: NodeCreate):
     node.protocol = request.protocol
     node.port = request.port
     node.status = request.status
+    node.use_tls = request.use_tls
 
     # Only overwrite API key if a non-empty value is provided
     if request.key and request.key.strip():

@@ -4,11 +4,12 @@ import apiClient from '../services/api';
 import AddAdminModal from '../components/AddAdminModal';
 import EditAdminModal from '../components/EditAdminModal';
 import AdminTable from '../components/AdminTable';
-import UserStatCard from '../components/UserStatCard';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 
 
 const AdminManagement = () => {
+    const { addToast } = useToast();
     const [admins, setAdmins] = useState([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -54,6 +55,7 @@ const AdminManagement = () => {
 
     const handleAdminCreated = () => {
         setIsAddModalOpen(false);
+        addToast('Admin created successfully.', 'success');
         fetchAdmins();
     };
 
@@ -65,6 +67,7 @@ const AdminManagement = () => {
     const handleAdminUpdated = () => {
         setIsEditModalOpen(false);
         setSelectedAdmin(null);
+        addToast('Admin updated successfully.', 'success');
         fetchAdmins();
     };
 
@@ -94,14 +97,14 @@ const AdminManagement = () => {
                 </button>
             </div>
 
-            <div className="stats-grid" style={{ marginBottom: '30px' }}>
-                <UserStatCard
-                    icon={<FiUsers className="icon" />}
-                    label={t('adminsTotal')}
-                    value={adminStats.total}
-                    color="var(--accent-color)"
-                    className="card-orange"
-                />
+            <div className="user-stats-row">
+                <div className="user-stat" style={{ '--us-accent': '#90caf9' }}>
+                  <span className="us-ico"><FiUsers /></span>
+                  <span className="us-body">
+                    <span className="us-label">{t('adminsTotal')}</span>
+                    <span className="us-value">{adminStats.total}</span>
+                  </span>
+                </div>
             </div>
 
             <div className="search-pagination-controls">

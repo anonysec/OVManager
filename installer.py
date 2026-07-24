@@ -1,3 +1,8 @@
+"""
+OVManager Installer - Fixed and Enhanced Version
+Manages OpenVPN server through a web-based dashboard
+"""
+
 import base64
 import getpass
 import os
@@ -14,7 +19,7 @@ from colorama import Fore, Style, init
 
 init(autoreset=True)
 
-VERSION = "1.4.0"
+VERSION = "1.4.1-fix"
 APP_NAME = "ovmanager"
 INSTALL_DIR = Path(f"/opt/{APP_NAME}")
 REPO = "anonysec/ov"
@@ -32,7 +37,9 @@ def safe_clear() -> None:
 
 def get_server_ip() -> str:
     try:
-        result = subprocess.run(["hostname", "-I"], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, check=True
+        )
         ips = result.stdout.strip().split()
         return ips[0] if ips else "your-server-ip"
     except Exception:
@@ -54,21 +61,28 @@ def get_uv_path() -> str:
 
 def command_env() -> dict:
     env = os.environ.copy()
-    env["PATH"] = f"{os.path.expanduser('~/.local/bin')}:/root/.local/bin:{env.get('PATH', '')}"
+    env["PATH"] = (
+        f"{os.path.expanduser('~/.local/bin')}:/root/.local/bin:{env.get('PATH', '')}"
+    )
     return env
 
 
 def run_command(cmd, cwd=None, check=True):
-    return subprocess.run(cmd, cwd=cwd, env=command_env(), check=check)
+    return subprocess.run(
+        cmd, cwd=cwd, env=command_env(), check=check
+    )
 
 
 def download_latest_tarball(filename: str) -> None:
-    # Prefer the latest GitHub release, fallback to main branch.
     api = f"https://api.github.com/repos/{REPO}/releases/latest"
     url = ""
     try:
         result = subprocess.run(
-            ["bash", "-lc", f"curl -fsSL {api!r} | grep '\"tarball_url\"' | cut -d '\"' -f 4"],
+            [
+                "bash",
+                "-lc",
+                f"curl -fsSL {api!r} | grep '\"tarball_url\"' | cut -d '\"' -f 4",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -87,7 +101,9 @@ def extract_repo_subdir(tarball: str, subdir: str, destination: Path) -> None:
         members = []
         for member in tar.getmembers():
             parts = member.name.split("/", 2)
-            if len(parts) < 3 or parts[1] != subdir:
+            if len(parts) < 3:
+                continue
+            if parts[1] != subdir:
                 continue
             member.name = parts[2]
             if member.name:
@@ -100,14 +116,20 @@ def extract_repo_subdir(tarball: str, subdir: str, destination: Path) -> None:
 def display_panel_info(port: str, path: str) -> None:
     server_ip = get_server_ip()
     clean_path = path.strip("/")
-    url = f"http://{server_ip}:{port}/{clean_path}" if clean_path else f"http://{server_ip}:{port}/"
+    url = (
+        f"http://{server_ip}:{port}/{clean_path}"
+        if clean_path
+        else f"http://{server_ip}:{port}/"
+    )
     print(f"\n{Fore.CYAN}Access URL: {url}{Style.RESET_ALL}\n")
 
 
 def ask_user(prompt: str, allow_empty: bool = False, input_type: str = "text") -> str:
     while True:
         try:
-            value = getpass.getpass(prompt) if input_type == "password" else input(prompt)
+            value = (
+                getpass.getpass(prompt) if input_type == "password" else input(prompt)
+            )
             value = value.strip()
             if not allow_empty and not value:
                 print(Fore.RED + "Input cannot be empty. Please try again...")
@@ -131,6 +153,22 @@ def ask_user(prompt: str, allow_empty: bool = False, input_type: str = "text") -
 def ask_password(prompt: str) -> str:
     while True:
         password = ask_user(prompt, input_type="password")
+        if len(password) < 8:
+            print(Fore.RED + "Password must be at least 8 characters long." + Style.RESET_ALL)
+            time.sleep(1)
+            continue
+        if not any(c.isupper() for c in password):
+            print(Fore.RED + "Password must contain at least one uppercase letter." + Style.RESET_ALL)
+            time.sleep(1)
+            continue
+        if not any(c.islower() for c in password):
+            print(Fore.RED + "Password must contain at least one lowercase letter." + Style.RESET_ALL)
+            time.sleep(1)
+            continue
+        if not any(c.isdigit() for c in password):
+            print(Fore.RED + "Password must contain at least one digit." + Style.RESET_ALL)
+            time.sleep(1)
+            continue
         confirm = ask_user("Confirm password: ", input_type="password")
         if password == confirm:
             return password
@@ -238,7 +276,9 @@ def validate_panel_path(path: str) -> str:
     if path in reserved:
         raise ValueError(f"Panel path '{path}' is reserved. Choose another path.")
     if path and not re.fullmatch(r"[A-Za-z0-9._-]+", path):
-        raise ValueError("Panel path may only contain letters, numbers, dot, dash and underscore.")
+        raise ValueError(
+            "Panel path may only contain letters, numbers, dot, dash and underscore."
+        )
     return path
 
 
@@ -250,7 +290,9 @@ def setup_panel() -> None:
 
         username = ask_user(f"{Fore.GREEN}> Panel username: {Style.RESET_ALL}")
         password = ask_password(f"{Fore.RED}> Panel password: {Style.RESET_ALL}")
-        port = ask_user(f"{Fore.GREEN}> Panel port number: {Style.RESET_ALL}", input_type="port")
+        port = ask_user(
+            f"{Fore.GREEN}> Panel port number: {Style.RESET_ALL}", input_type="port"
+        )
         panel_path = validate_panel_path(
             ask_user(f"{Fore.GREEN}> Panel path (optional): {Style.RESET_ALL}", allow_empty=True)
         )
@@ -284,13 +326,83 @@ def setup_panel() -> None:
         main_menu()
 
 
+def build_frontend() -> bool:
+    try:
+        root = Path.cwd()
+        frontend_dir = root / "frontend"
+        if not frontend_dir.is_dir():
+            frontend_dir = INSTALL_DIR / "frontend"
+        if not frontend_dir.is_dir():
+            print(
+                Fore.RED
+                + f"Frontend directory not found: {frontend_dir}"
+                + Style.RESET_ALL
+            )
+            return False
+        print(
+            Fore.YELLOW
+            + f"Building frontend in {frontend_dir}..."
+            + Style.RESET_ALL
+        )
+        run_command(["npm", "install"], cwd=frontend_dir)
+        run_command(["npm", "run", "build"], cwd=frontend_dir)
+        return True
+    except Exception as e:
+        print(Fore.RED + f"Failed to build frontend: {e}" + Style.RESET_ALL)
+        return False
+
+
+def apply_migrations() -> None:
+    current = Path.cwd()
+    backend_dir = (
+        current / "backend"
+        if (current / "backend").is_dir()
+        else INSTALL_DIR / "backend"
+    )
+    if not backend_dir.is_dir() or not (backend_dir / "alembic.ini").exists():
+        return
+    try:
+        print(Fore.YELLOW + "Running Alembic migrations..." + Style.RESET_ALL)
+        run_command(
+            [get_uv_path(), "run", "alembic", "upgrade", "head"], cwd=backend_dir
+        )
+        print(Fore.GREEN + "Database migrated successfully!" + Style.RESET_ALL)
+    except Exception as e:
+        print(Fore.RED + f"Database migration failed: {e}" + Style.RESET_ALL)
+
+
+def start_service() -> None:
+    service_file = Path("/etc/systemd/system/ovmanager.service")
+    service_file.write_text(
+        f"""[Unit]
+Description=OVManager App
+After=network.target
+
+[Service]
+WorkingDirectory={INSTALL_DIR}
+ExecStart={get_uv_path()} run main.py
+Restart=always
+RestartSec=5
+User=root
+Environment="PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=multi-user.target
+""",
+        encoding="utf-8",
+    )
+    run_command(["systemctl", "daemon-reload"], check=False)
+    run_command(["systemctl", "enable", "ovmanager"], check=False)
+    run_command(["systemctl", "restart", "ovmanager"], check=False)
+
+
 def refresh_panel() -> None:
-    install_dir = INSTALL_DIR
-    env_file = install_dir / ".env"
-    data_dir = install_dir / "data"
+    env_file = Path(".env")
+    data_dir = Path("data")
     backup_env = Path("/tmp/ovmanager.env.bak")
     backup_data = Path("/tmp/ovmanager.data.bak")
     tarball = "/tmp/ovmanager-latest.tar.gz"
+    install_dir = INSTALL_DIR
 
     if not install_dir.exists():
         print(Fore.RED + "OVManager is not installed." + Style.RESET_ALL)
@@ -319,12 +431,13 @@ def refresh_panel() -> None:
             shutil.move(str(backup_data), str(data_dir))
 
         os.chdir(install_dir)
-        run_command([get_uv_path(), "sync", "--refresh"])
+        run_command([get_uv_path(), "sync", "--refresh"], check=True)
         if not build_frontend():
             print(Fore.RED + "Frontend build failed!" + Style.RESET_ALL)
             return
         apply_migrations()
         start_service()
+
         print(f"\n{Fore.GREEN}Update Complete!{Style.RESET_ALL}\n")
         input("Press Enter to return to menu...")
         main_menu()
@@ -341,7 +454,7 @@ def restart_panel() -> None:
         main_menu()
         return
     try:
-        run_command(["systemctl", "restart", "ovmanager"])
+        run_command(["systemctl", "restart", "ovmanager"], check=False)
         print(Fore.GREEN + "OVManager restarted successfully!" + Style.RESET_ALL)
     except Exception as e:
         print(Fore.RED + f"Restart failed: {e}" + Style.RESET_ALL)
@@ -368,63 +481,6 @@ def remove_panel() -> None:
     print(Fore.GREEN + "OVManager removed." + Style.RESET_ALL)
     input("Press Enter to return to menu...")
     main_menu()
-
-
-def build_frontend() -> bool:
-    try:
-        root = Path.cwd()
-        frontend_dir = root / "frontend"
-        if not frontend_dir.is_dir():
-            frontend_dir = INSTALL_DIR / "frontend"
-        if not frontend_dir.is_dir():
-            print(Fore.RED + f"Frontend directory not found: {frontend_dir}" + Style.RESET_ALL)
-            return False
-        print(Fore.YELLOW + f"Building frontend in {frontend_dir}..." + Style.RESET_ALL)
-        run_command(["npm", "install"], cwd=frontend_dir)
-        run_command(["npm", "run", "build"], cwd=frontend_dir)
-        return True
-    except Exception as e:
-        print(Fore.RED + f"Failed to build frontend: {e}" + Style.RESET_ALL)
-        return False
-
-
-def apply_migrations() -> None:
-    current = Path.cwd()
-    backend_dir = current / "backend" if (current / "backend").is_dir() else INSTALL_DIR / "backend"
-    if not backend_dir.is_dir() or not (backend_dir / "alembic.ini").exists():
-        return
-    try:
-        print(Fore.YELLOW + "Running Alembic migrations..." + Style.RESET_ALL)
-        run_command([get_uv_path(), "run", "alembic", "upgrade", "head"], cwd=backend_dir)
-        print(Fore.GREEN + "Database migrated successfully!" + Style.RESET_ALL)
-    except Exception as e:
-        print(Fore.RED + f"Database migration failed: {e}" + Style.RESET_ALL)
-
-
-def start_service() -> None:
-    service_file = Path("/etc/systemd/system/ovmanager.service")
-    uv_bin = get_uv_path()
-    service_file.write_text(
-        f"""[Unit]
-Description=OVManager App
-After=network.target
-
-[Service]
-WorkingDirectory={INSTALL_DIR}
-ExecStart={uv_bin} run main.py
-Restart=always
-RestartSec=5
-User=root
-Environment="PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
-
-[Install]
-WantedBy=multi-user.target
-""",
-        encoding="utf-8",
-    )
-    run_command(["systemctl", "daemon-reload"], check=False)
-    run_command(["systemctl", "enable", "ovmanager"], check=False)
-    run_command(["systemctl", "restart", "ovmanager"], check=False)
 
 
 def stop_service() -> None:

@@ -44,7 +44,14 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
         setError(response.data.msg);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'An error occurred. The username might already exist.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setError(JSON.stringify(detail));
+      } else {
+        setError(detail || 'An error occurred. The username might already exist.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -66,13 +73,24 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
         </div>
         <div className="input-group">
           <label htmlFor="new-user-expiry">{t('modal_expiryDate')}</label>
-          <input
-            type="date"
-            id="new-user-expiry"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-            required
-          />
+          <div className="date-input-wrap">
+            <input
+              type="date"
+              id="new-user-expiry"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              required
+              className="date-input"
+            />
+            <div className="date-shortcuts">
+              {[['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]].map(([label, days]) => (
+                <button key={label} type="button" className="date-chip" onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() + days);
+                  setExpiryDate(d.toISOString().split('T')[0]);
+                }}>{label}</button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="input-group">
           <label htmlFor="new-user-total">{t('modal_totalTraffic')}</label>
@@ -89,15 +107,23 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
         </div>
         <div className="input-group">
           <label htmlFor="new-user-max-logins">{t('modal_maxLogins')}</label>
-          <input
-            type="number"
-            id="new-user-max-logins"
-            value={maxLogins}
-            onChange={(e) => setMaxLogins(e.target.value)}
-            min="0"
-            step="1"
-            placeholder={t('modal_maxLoginsPlaceholder')}
-          />
+          <div className="shortcut-row">
+            <input
+              type="number"
+              id="new-user-max-logins"
+              value={maxLogins}
+              onChange={(e) => setMaxLogins(e.target.value)}
+              min="1"
+              step="1"
+              placeholder={t('modal_maxLoginsPlaceholder')}
+              className="shortcut-input"
+            />
+            <div className="shortcut-btns">
+              <button type="button" className={`shortcut-chip${maxLogins === '1' ? ' active' : ''}`} onClick={() => setMaxLogins('1')}>1</button>
+              <button type="button" className={`shortcut-chip${maxLogins === '2' ? ' active' : ''}`} onClick={() => setMaxLogins('2')}>2</button>
+              <button type="button" className={`shortcut-chip${maxLogins === '0' ? ' active' : ''}`} onClick={() => setMaxLogins('0')}>∞</button>
+            </div>
+          </div>
           <small className="input-hint">{t('modal_maxLoginsHint')}</small>
         </div>
         <div className="modal-footer">

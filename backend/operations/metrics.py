@@ -60,7 +60,7 @@ def ensure_metrics_tables(db: Session) -> None:
 
 async def _node_snapshot(node) -> dict[str, Any]:
     start = time.perf_counter()
-    req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+    req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
     try:
         info, sessions = await asyncio.gather(
             run_in_threadpool(req.get_node_info),

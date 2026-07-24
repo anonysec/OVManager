@@ -33,6 +33,8 @@ class Admin(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str] = mapped_column()
+    telegram_id: Mapped[int] = mapped_column(nullable=True, unique=True)
+    username_prefix: Mapped[str] = mapped_column(nullable=True)
 
 
 class Node(Base):
@@ -47,6 +49,7 @@ class Node(Base):
     port: Mapped[int] = mapped_column()
     key: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[bool] = mapped_column(default=True)
+    use_tls: Mapped[bool] = mapped_column(default=False)
 
 
 class Settings(Base):
@@ -59,3 +62,12 @@ class Settings(Base):
     # Operator-configured display timezone (IANA name, e.g. "Asia/Tehran").
     # Used by the UI to render "last online", logs, and expiry times.
     timezone: Mapped[str] = mapped_column(default="UTC", nullable=False)
+    # Prefix for auto-generated usernames (e.g. "420" → 4201, 4202...).
+    # Null/empty = manual naming only.
+    # Telegram bot config
+    bot_token: Mapped[str] = mapped_column(nullable=True)
+    bot_enabled: Mapped[bool] = mapped_column(default=False)
+    default_days: Mapped[int] = mapped_column(default=30)
+    default_traffic_gb: Mapped[int] = mapped_column(default=100)
+    default_max_users: Mapped[int] = mapped_column(default=1)
+    owner_telegram_id: Mapped[int] = mapped_column(nullable=True)

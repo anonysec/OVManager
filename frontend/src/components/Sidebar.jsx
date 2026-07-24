@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import { FiGrid, FiUsers, FiServer, FiShield, FiSettings } from 'react-icons/fi';
-import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../context/AuthContext';
 import logoSrc from '../assets/ovmanager-character.webp';
 
 const Sidebar = () => {
-  const { t } = useTranslation();
+  // i18n not used in sidebar
   const { userRole } = useAuth();
 
   return (

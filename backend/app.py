@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,21 +15,25 @@ from backend.config import config
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
 from backend.version import __version__
+from backend.tls_config import TLSConfig
 
 
 def _run_migrations():
-    """Create any missing tables and add columns added after initial schema."""
     from sqlalchemy import text as _text
     from backend.db.engine import Base
 
     db = SessionLocal()
     try:
-        # Ensure every model's table exists (idempotent; no-op if already there).
         Base.metadata.create_all(bind=db.get_bind())
-        for table, column, coltype in (
+        _ALLOWED_TABLES = {"users", "settings", "nodes", "admins"}
+        _ALLOWED_COLUMNS = {
             ("users", "last_online", "DATETIME"),
             ("settings", "timezone", "VARCHAR NOT NULL DEFAULT 'UTC'"),
-        ):
+            ("nodes", "use_tls", "BOOLEAN DEFAULT 0"),
+        }
+        for table, column, coltype in _ALLOWED_COLUMNS:
+            if table not in _ALLOWED_TABLES:
+                continue
             existing = {
                 r[1] for r in db.execute(_text(f"PRAGMA table_info({table})")).fetchall()
             }
@@ -40,13 +44,18 @@ def _run_migrations():
         db.close()
 
 
-# Normalize the configured URL path (strip slashes). Empty -> served at root.
 URLPATH = (config.URLPATH or "").strip("/")
-
-# Dynamic API prefix support (for URLPATH subpath installs)
-# This ensures /dash/api/login, /myapp/api/users etc. work correctly.
 API_PREFIX = f"/{URLPATH}/api" if URLPATH else "/api"
 DOC_PREFIX = f"/{URLPATH}" if URLPATH else ""
+
+# TLS Configuration - Load from environment, support Let's Encrypt via imkoris.info
+try:
+    tls_config = TLSConfig.get_ssl_config()
+except Exception:
+    tls_config = {"cert_file": "", "key_file": "", "acme_enabled": False}
+
+ssl_keyfile = tls_config.get("key_file") or None
+ssl_certfile = tls_config.get("cert_file") or None
 
 api = FastAPI(
     title="OVPanel API",
@@ -56,16 +65,24 @@ api = FastAPI(
     openapi_url=f"{DOC_PREFIX}/openapi.json" if config.DOC else None,
 )
 
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @api.get(f"{API_PREFIX}/health", tags=["Health"])
 async def health_check():
-    """Simple health check endpoint - URL-prefixed."""
     return {"status": "ok", "version": __version__}
 
 
 @api.get("/health", include_in_schema=False)
 async def health_check_public():
-    """Public health check - no auth, no URLPATH dependency. For Docker healthchecks."""
     return {"status": "ok", "version": __version__}
+
 
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 assets_path = os.path.join(frontend_build_path, "assets")
@@ -75,14 +92,6 @@ if os.path.isdir(assets_path):
         StaticFiles(directory=assets_path),
         name="assets",
     )
-
-api.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 async def auto_sync_limits_job():
@@ -102,28 +111,21 @@ async def auto_clean_stale_job():
 
 
 def start_scheduler():
-    """This function starts scheduled maintenance tasks."""
-    # Scheduled jobs can perform network I/O against nodes and then write to
-    # SQLite. Prevent overlapping copies of the same job from piling up if a
-    # node is slow, which reduces write contention and avoids locked database
-    # errors during admin UI activity.
     scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
     scheduler.add_job(
         check_user_used_traffic,
-        CronTrigger(minute="*/5"),   # reduced frequency → significantly lower CPU/RAM
+        CronTrigger(minute="*/5"),
         id="check_user_used_traffic",
         replace_existing=True,
         misfire_grace_time=60,
     )
-
     scheduler.add_job(
         enforce_user_limits,
-        CronTrigger(minute="*/10"),  # reduced frequency
+        CronTrigger(minute="*/10"),
         id="enforce_user_limits",
         replace_existing=True,
         misfire_grace_time=60,
     )
-
     scheduler.add_job(
         collect_metrics,
         CronTrigger(minute="*/5"),
@@ -131,7 +133,6 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=60,
     )
-
     scheduler.add_job(
         auto_sync_limits_job,
         CronTrigger(minute="*/30"),
@@ -139,7 +140,6 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=60,
     )
-
     scheduler.add_job(
         auto_clean_stale_job,
         CronTrigger(minute="*/15"),
@@ -147,20 +147,15 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=60,
     )
-
     scheduler.start()
 
 
 @api.on_event("startup")
 async def startup_event():
-    # Run lightweight schema migrations before serving (add missing columns).
     try:
         _run_migrations()
-    except Exception as e:  # never block startup on a migration hiccup
+    except Exception as e:
         print("migration warning:", e)
-    # Start serving immediately. Maintenance jobs are scheduled below; running
-    # them synchronously during startup can block the panel when a node is
-    # powered off or removed by the ISP.
     start_scheduler()
 
 
@@ -172,8 +167,6 @@ api.include_router(subscription_router, prefix=f"/{URLPATH}" if URLPATH else "")
 
 async def _serve_react():
     index_path = os.path.join(frontend_build_path, "index.html")
-    # no-cache on the HTML so new frontend builds are picked up immediately
-    # (hashed asset filenames are safe to cache, but the HTML must not be).
     return FileResponse(
         index_path,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -181,18 +174,15 @@ async def _serve_react():
 
 
 if URLPATH:
-    # Serve the SPA under the configured path.
     @api.get(f"/{URLPATH}")
     @api.get(f"/{URLPATH}/{{path:path}}")
     async def serve_react_path():
         return await _serve_react()
 
-    # Redirect the bare root to the panel path so users don't have to know it.
     @api.get("/")
     async def root_redirect():
         return RedirectResponse(url=f"/{URLPATH}")
 else:
-    # No path configured: serve the SPA directly at the root.
     @api.get("/")
     @api.get("/{path:path}")
     async def serve_react_root(path: str = ""):

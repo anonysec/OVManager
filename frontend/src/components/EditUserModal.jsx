@@ -8,7 +8,6 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
   const [expiryDate, setExpiryDate] = useState('');
   const [totalTraffic, setTotalTraffic] = useState('');
   const [maxLogins, setMaxLogins] = useState('1');
-  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useTranslation();
@@ -36,7 +35,6 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
     if (user) {
       setTotalTraffic(gbFromBytes(user.total));
       setMaxLogins(user.max_logins === null || user.max_logins === undefined ? '1' : user.max_logins.toString());
-      setIsActive(Boolean(user.is_active));
     }
   }, [user]);
 
@@ -50,7 +48,6 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
       expiry_date: expiryDate,
       total: bytesFromGB(totalTraffic),
       max_logins: Number.isNaN(parsedLogins) ? 1 : parsedLogins,
-      status: isActive,
     };
     try {
       const response = await apiClient.put(`/users/${user.uuid}`, payload);
@@ -60,7 +57,14 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
         setError(response.data.msg || 'Failed to update user.');
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'An error occurred while updating the user.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setError(JSON.stringify(detail));
+      } else {
+        setError(detail || 'An error occurred while updating the user.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +79,17 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
         </div>
         <div className="input-group">
           <label htmlFor="edit-user-expiry">{t('modal_expiryDate')}</label>
-          <input type="date" id="edit-user-expiry" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} required />
+          <div className="date-input-wrap">
+            <input type="date" id="edit-user-expiry" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} required className="date-input" />
+            <div className="date-shortcuts">
+              {[['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]].map(([label, days]) => (
+                <button key={label} type="button" className="date-chip" onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() + days);
+                  setExpiryDate(d.toISOString().split('T')[0]);
+                }}>{label}</button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="input-group">
           <label htmlFor="edit-user-total">{t('modal_totalTraffic')}</label>
@@ -84,15 +98,17 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
         </div>
         <div className="input-group">
           <label htmlFor="edit-user-max-logins">{t('modal_maxLogins')}</label>
-          <input type="number" id="edit-user-max-logins" value={maxLogins} onChange={(e) => setMaxLogins(e.target.value)} min="0" step="1" placeholder={t('modal_maxLoginsPlaceholder')} />
+          <div className="shortcut-row">
+            <input type="number" id="edit-user-max-logins" value={maxLogins} onChange={(e) => setMaxLogins(e.target.value)} min="1" step="1" placeholder={t('modal_maxLoginsPlaceholder')} className="shortcut-input" />
+            <div className="shortcut-btns">
+              <button type="button" className={`shortcut-chip${maxLogins === '1' ? ' active' : ''}`} onClick={() => setMaxLogins('1')}>1</button>
+              <button type="button" className={`shortcut-chip${maxLogins === '2' ? ' active' : ''}`} onClick={() => setMaxLogins('2')}>2</button>
+              <button type="button" className={`shortcut-chip${maxLogins === '0' ? ' active' : ''}`} onClick={() => setMaxLogins('0')}>∞</button>
+            </div>
+          </div>
           <small className="input-hint">{t('modal_maxLoginsHint')}</small>
         </div>
-        <div className="input-group input-group-row">
-          <label htmlFor="edit-user-active" className="checkbox-label">
-            <input type="checkbox" id="edit-user-active" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            <span>{t('accountActive')}</span>
-          </label>
-        </div>
+        {/* Status removed — managed by expiry/traffic automatically */}
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           <LoadingButton isLoading={isLoading} type="submit" className="btn">{t('updateUserButton', 'Update User')}</LoadingButton>

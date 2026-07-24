@@ -297,6 +297,59 @@ html {
   background-color: #01a28d;
 }
 
+/* --- Close Modal Button --- */
+.close-modal-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: grid;
+  place-items: center;
+}
+.close-modal-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+/* --- Small Button Variant --- */
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+/* --- Segment Tab Buttons --- */
+.seg-tab {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.seg-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.seg-tab.active {
+  background: var(--accent-color);
+  color: #000000;
+}
+
 .error-message {
   color: var(--danger-color);
   margin-top: 15px;
@@ -441,7 +494,7 @@ html {
   gap: 12px;
 }
 
-.ops-userbar button {
+.ops-userbar button:not(.lang-option) {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -454,7 +507,7 @@ html {
   justify-content: center;
 }
 
-.ops-userbar button:hover {
+.ops-userbar button:not(.lang-option):hover {
   color: var(--accent-color);
   background: rgba(252, 122, 30, 0.1);
 }
@@ -849,4 +902,86 @@ html {
   .ops-panel {
     break-inside: avoid;
   }
+}
+
+/* --- Error Boundary --- */
+.error-boundary-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.error-boundary-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.error-boundary-icon {
+  color: var(--danger-color);
+  margin-bottom: 20px;
+}
+
+.error-boundary-card h2 {
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  font-size: 24px;
+}
+
+.error-boundary-message {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.error-boundary-details {
+  text-align: left;
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 20px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  color: var(--accent-color);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.error-boundary-details pre {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Pagination --- */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
 }

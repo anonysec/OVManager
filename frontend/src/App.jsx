@@ -8,6 +8,8 @@ import UserManagement from './pages/UserManagement';
 import NodeManagement from './pages/NodeManagement';
 import Settings from './pages/Settings';
 import AuditLog from './pages/AuditLog';
+import Maintenance from './pages/Maintenance';
+import AdminManagement from './pages/AdminManagement';
 
 import favicon from './assets/ovmanager-character-clean.png';
 
@@ -38,8 +40,10 @@ function App() {
         element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
         <Route index element={<ServerStats />} />
         <Route path="users" element={<UserManagement />} />
-        {userRole !== 'admin' && <Route path="nodes" element={<NodeManagement />} />}
+        <Route path="nodes" element={<NodeManagement />} />
         {userRole === 'main_admin' && <Route path="audit" element={<AuditLog />} />}
+        {userRole === 'main_admin' && <Route path="maintenance" element={<Maintenance />} />}
+        {userRole === 'main_admin' && <Route path="admins" element={<AdminManagement />} />}
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />

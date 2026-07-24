@@ -18,6 +18,7 @@ class Users(BaseModel):
     expiry_date: date
     owner: str
     uuid: str
+    last_online: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -40,11 +41,19 @@ class Settings(BaseModel):
     subscription_path: str
     timezone: str = "UTC"
     panel_version: str = "1.4.0"
+    bot_token: Optional[str] = None
+    bot_enabled: bool = False
+    default_days: int = 30
+    default_traffic_gb: int = 100
+    default_max_users: int = 1
+    owner_telegram_id: Optional[int] = None
 
 
 class Admins(BaseModel):
     username: str
     users_count: int = 0
+    telegram_id: Optional[int] = None
+    username_prefix: Optional[str] = None
 
     class Config:
         from_attributes = True

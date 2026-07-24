@@ -1,4 +1,6 @@
 import asyncio
+import json
+import re
 import time
 
 from io import BytesIO
@@ -14,23 +16,28 @@ from .requests import NodeRequests
 from backend.db import crud
 from backend.db.models import Node
 
+# Inline UUID<->CN conversion logic (shared/ module lives outside Docker build context)
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")
 
-def _base_username_for_node(client_name: str, node_name: str) -> str:
-    suffix = f"-{node_name}"
-    if client_name.endswith(suffix):
-        return client_name[: -len(suffix)]
-    return client_name.rsplit("-", 1)[0] if "-" in client_name else client_name
+def is_uuid(value: str) -> bool:
+    return bool(_UUID_RE.match(value))
+
+def cn_from_uid(uid: str) -> str:
+    if is_uuid(uid):
+        return uid.replace("-", "")
+    return uid
 
 
 def _apply_node_usage_to_db(node: Node, usage: dict, db: Session) -> None:
     """Accumulate one node's current usage into users.used without resetting.
 
-    Important for node deletion: before removing a node from the panel we snapshot
-    its latest counters, but we never zero `used` and we leave `node_usage` in
-    place. If the node is later re-added with the same name, the old baseline
-    prevents double-counting; if it is gone forever, total used remains intact.
+    The usage dict from the node is keyed by CN (derived from panel UUID).
+    We look up the user by UUID, deriving the CN from each user's UUID.
+
+    Uses SELECT ... FOR UPDATE to prevent concurrent writers from overwriting
+    each other's node_usage JSON updates.
     """
-    import json
+    from sqlalchemy import text as _text
 
     if not usage:
         return
@@ -39,23 +46,37 @@ def _apply_node_usage_to_db(node: Node, usage: dict, db: Session) -> None:
     if not per_user_total:
         return
 
-    all_users = {u.name: u for u in crud.get_all_users(db)}
-    for client_name, total_bytes in per_user_total.items():
-        clean_username = _base_username_for_node(client_name, node.name)
-        user = all_users.get(clean_username)
-        if not user:
-            logger.warning("User not found while applying node usage: %s", clean_username)
+    all_users = {u.uuid: u for u in crud.get_all_users(db)}
+    # Build a reverse lookup: CN -> UUID
+    cn_to_uuid = {cn_from_uid(uid): uid for uid in all_users}
+    for cn, total_bytes in per_user_total.items():
+        uuid = cn_to_uuid.get(cn)
+        if not uuid:
+            logger.warning("User not found for CN '%s' while applying node usage", cn)
+            continue
+
+        # Lock the user row to prevent concurrent node_usage JSON overwrites.
+        # SQLite FOR UPDATE is a no-op but works on PostgreSQL if migrated.
+        user = db.execute(
+            _text("SELECT * FROM users WHERE uuid = :uuid FOR UPDATE"),
+            {"uuid": uuid}
+        ).fetchone()
+        if user is None:
+            continue
+        # Re-fetch as ORM object for attribute access
+        user_obj = db.get(type(all_users[uuid]), all_users[uuid].id)
+        if not user_obj:
             continue
 
         try:
-            node_usage = json.loads(user.node_usage or "{}")
+            node_usage = json.loads(user_obj.node_usage or "{}")
             if not isinstance(node_usage, dict):
                 node_usage = {}
         except (ValueError, TypeError):
             node_usage = {}
 
         prev = node_usage.get(node.name)
-        sessions = per_user_sessions.get(client_name)
+        sessions = per_user_sessions.get(cn)
         delta = 0
         if isinstance(sessions, dict) and isinstance(prev, dict):
             for skey, cur in sessions.items():
@@ -76,10 +97,10 @@ def _apply_node_usage_to_db(node: Node, usage: dict, db: Session) -> None:
 
         if delta < 0:
             delta = 0
-        user.used = (user.used or 0) + delta
+        user_obj.used = (user_obj.used or 0) + delta
         node_usage[node.name] = new_state
-        user.node_usage = json.dumps(node_usage)
-        logger.info("[%s] delete-node snapshot node=%s total=%s delta=%s", clean_username, node.name, int(total_bytes or 0), delta)
+        user_obj.node_usage = json.dumps(node_usage)
+        logger.info("[%s] node-usage snapshot node=%s total=%s delta=%s", user_obj.name, node.name, int(total_bytes or 0), delta)
 
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
@@ -102,6 +123,7 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
         request.protocol,
         request.ovpn_port,
         request.set_new_setting,
+        use_tls=request.use_tls,
     )
     if await run_in_threadpool(node_req.check_node):
         crud.create_node(db, request)
@@ -126,6 +148,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
         set_new_setting=True,
+        use_tls=request.use_tls,
     )
 
     # Validate/apply settings before saving. If the new address/key is wrong,
@@ -175,13 +198,13 @@ async def list_nodes_handler(db: Session) -> list:
             "id": node.id,
             "name": node.name,
             "address": node.address,
-            "tunnel-address": node.tunnel_address,
             "tunnel_address": node.tunnel_address,
             "ovpn_port": node.ovpn_port,
             "protocol": node.protocol,
             "port": node.port,
             "key": node.key,
             "status": bool(node.status),
+            "use_tls": bool(node.use_tls),
         }
         nodes_list.append(node_info)
     return nodes_list
@@ -207,7 +230,7 @@ async def get_node_status_handler(node_id: int, db: Session):
         # slow/unreachable node can't block the event loop. Keep dashboard
         # probes short because powered-off/removed nodes otherwise make the UI
         # wait for every request timeout.
-        node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        node_req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         node_status, session_diagnostics = await asyncio.gather(
             run_in_threadpool(node_req.get_node_info, 3),
             run_in_threadpool(node_req.get_sessions, None, 8, 3),
@@ -232,18 +255,23 @@ async def get_node_status_handler(node_id: int, db: Session):
     return None
 
 
-async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1):
-    """Create a user on all nodes (concurrently, off the event loop)."""
+async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, uuid: str = None):
+    """Create a user on all nodes (concurrently, off the event loop).
+
+    The panel UUID is passed as `user_id` to the node API. The composed name
+    (name-node_name) is still sent as `name` for display purposes.
+    """
     nodes = crud.get_all_nodes(db)
     if not nodes:
         return
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         if req.check_node():
-            req.create_user(f"{name}-{node.name}", max_logins=max_logins)
+            client_name = f"{name}-{node.name}"
+            req.create_user(client_name, max_logins=max_logins, uid=uuid)
             logger.info(
-                f"User '{name}-{node.name}' created on node {node.address}:{node.port}"
+                f"User '{client_name}' created on node {node.address}:{node.port}"
             )
         else:
             logger.warning(
@@ -268,13 +296,14 @@ async def change_user_status_on_all_nodes(
         return
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         if req.check_node():
+            client_name = f"{name}-{node.name}"
             req.change_user_status(
-                f"{name}-{node.name}", status, max_logins=max_logins
+                client_name, status, max_logins=max_logins, uid=uuid
             )
             logger.info(
-                f"User '{name}-{node.name}' changed status on node {node.address}:{node.port}"
+                f"User '{client_name}' changed status on node {node.address}:{node.port}"
             )
         else:
             logger.warning(
@@ -286,18 +315,18 @@ async def change_user_status_on_all_nodes(
     )
 
 
-async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session):
+async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, uuid: str = None):
     """Push the max simultaneous logins limit for a user to all nodes."""
     nodes = crud.get_all_nodes(db)
     if not nodes:
         return
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         if req.check_node():
-            req.set_user_limit(f"{name}-{node.name}", max_logins)
+            req.set_user_limit(uuid, max_logins)
             logger.info(
-                f"User '{name}-{node.name}' login limit set to {max_logins} "
+                f"User '{name}' (uuid={uuid}) login limit set to {max_logins} "
                 f"on node {node.address}:{node.port}"
             )
         else:
@@ -320,37 +349,36 @@ async def download_ovpn_client_from_node(
     if not node or not user:
         return None
     node_request = NodeRequests(
-        address=node.address, port=node.port, api_key=node.key
+        address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls
     )
-    client_name = f"{user.name}-{node.name}"
 
-    # Make sure the client exists before downloading. Creating users through
-    # OpenVPN's bash installer can be slow, especially on the first request, so
-    # keep it off the event loop and allow a longer download timeout below.
+    # The node now uses the panel UUID as the primary key. Send the UUID
+    # as the `id` field and the composed name as the display `name`.
     try:
         await run_in_threadpool(
             node_request.create_user,
-            client_name,
+            f"{user.name}-{node.name}",
             user.max_logins if user.max_logins is not None else 1,
+            uid=uuid,
         )
         await run_in_threadpool(
             node_request.set_user_limit,
-            client_name,
+            uuid,
             user.max_logins if user.max_logins is not None else 1,
         )
     except Exception as e:
-        logger.warning(f"Could not pre-create/sync user '{client_name}' before download: {e}")
+        logger.warning(f"Could not pre-create/sync user '{uuid}' before download: {e}")
 
     # Blocking HTTP -> threadpool. Use a longer timeout because a node may need
     # to generate the .ovpn file on-demand.
     result = await run_in_threadpool(
         node_request.download_ovpn_client,
-        client_name,
+        uuid,
         120,
     )
     if result:
         logger.info(
-            f"OVPN client downloaded for user '{client_name}' on node {node.address}:{node.port}"
+            f"OVPN client downloaded for user '{uuid}' on node {node.address}:{node.port}"
         )
         return result
     return None
@@ -363,7 +391,7 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
         return None
 
     users = crud.get_all_users(db)
-    node_request = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+    node_request = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
     zip_buffer = BytesIO()
     errors: list[str] = []
 
@@ -376,12 +404,15 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
                     node_request.create_user(
                         client_name,
                         user.max_logins if user.max_logins is not None else 1,
+                        uid=user.uuid,
                     )
                     node_request.set_user_limit(
-                        client_name,
+                        user.uuid,
                         user.max_logins if user.max_logins is not None else 1,
                     )
-                    response = node_request.download_ovpn_client(client_name, timeout=120)
+                    response = node_request.download_ovpn_client(
+                        user.uuid or client_name, timeout=120
+                    )
                     body = getattr(response, "body", None) if response else None
                     if not body:
                         errors.append(f"{client_name}: download failed")
@@ -405,22 +436,25 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     )
 
 
-async def delete_user_on_all_nodes(name: str, db: Session) -> bool:
-    """Delete a user from all nodes (concurrently, off the event loop)."""
+async def delete_user_on_all_nodes(name: str, uuid: str, db: Session) -> bool:
+    """Delete a user from all nodes (concurrently, off the event loop).
+
+    The panel UUID is passed as the node's primary key.
+    """
     nodes = crud.get_all_nodes(db)
     if not nodes:
         return False
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         if req.check_node():
-            req.delete_user(f"{name}-{node.name}")
+            req.delete_user(uuid)
             logger.info(
-                f"User '{name}-{node.name}' deleted on node {node.address}:{node.port}"
+                f"User '{name}' (uuid={uuid}) deleted on node {node.address}:{node.port}"
             )
         else:
             logger.warning(
-                f"Failed to delete user '{name}-{node.name}' on node {node.address}:{node.port}"
+                f"Failed to delete user '{name}' (uuid={uuid}) on node {node.address}:{node.port}"
             )
 
     await asyncio.gather(
@@ -438,14 +472,13 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     nodes = [node for node in crud.get_all_nodes(db) if bool(node.status)]
     counts: dict[str, int] = {}
 
-    def base_username(common_name: str, node_name: str) -> str:
-        suffix = f"-{node_name}"
-        if common_name.endswith(suffix):
-            return common_name[: -len(suffix)]
-        return common_name.rsplit("-", 1)[0] if "-" in common_name else common_name
+    # Build CN -> UUID mapping from all users
+    all_users = crud.get_all_users(db)
+    cn_to_uuid = {cn_from_uid(u.uuid): u.uuid for u in all_users}
+    uuid_to_name = {u.uuid: u.name for u in all_users}
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         # Short dashboard timeout; failed nodes are ignored for live counts.
         try:
             data = req.get_sessions(hours=1, timeout=3)
@@ -458,7 +491,10 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
             common_name = session.get("common_name") or ""
             if not common_name:
                 continue
-            username = base_username(common_name, node.name)
+            uuid = cn_to_uuid.get(common_name)
+            if not uuid:
+                continue
+            username = uuid_to_name.get(uuid, uuid)
             local[username] = local.get(username, 0) + 1
         return local
 
@@ -474,20 +510,20 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     return counts
 
 
-async def get_user_session_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
+async def get_user_session_diagnostics(uuid: str, db: Session, hours: int = 8) -> dict:
     """Collect live sessions/stale markers/auth rejects for one panel user."""
     nodes = crud.get_all_nodes(db)
     results = []
+    cn = cn_from_uid(uuid)
 
     def work(node):
-        common_name = f"{name}-{node.name}"
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
-        data = req.get_sessions(common_name=common_name, hours=hours)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        data = req.get_sessions(common_name=cn, hours=hours)
         if data is False:
             return {
                 "node_id": node.id,
                 "node_name": node.name,
-                "common_name": common_name,
+                "uid": uuid,
                 "reachable": False,
             }
         return {
@@ -495,7 +531,7 @@ async def get_user_session_diagnostics(name: str, db: Session, hours: int = 8) -
             "node_name": node.name,
             "address": node.address,
             "port": node.port,
-            "common_name": common_name,
+            "uid": uuid,
             "reachable": True,
             **data,
         }
@@ -516,30 +552,29 @@ async def get_user_session_diagnostics(name: str, db: Session, hours: int = 8) -
         "rejects": sum(int(r.get("rejects") or 0) for r in results),
         "global_rejects": sum(int(r.get("global_rejects") or 0) for r in results),
     }
-    return {"username": name, "hours": hours, "totals": totals, "nodes": results}
+    return {"username": cn, "uuid": uuid, "hours": hours, "totals": totals, "nodes": results}
 
 
-async def disconnect_user_on_all_nodes(name: str, db: Session) -> dict:
+async def disconnect_user_on_all_nodes(name: str, uuid: str, db: Session) -> dict:
     """Best-effort per-user disconnect/cleanup on all nodes."""
     nodes = crud.get_all_nodes(db)
     results = []
 
     def work(node):
-        common_name = f"{name}-{node.name}"
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
-        data = req.disconnect_user(common_name)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        data = req.disconnect_user(uuid)
         if data is False:
             return {
                 "node_id": node.id,
                 "node_name": node.name,
-                "common_name": common_name,
+                "uid": uuid,
                 "reachable": False,
                 "success": False,
             }
         return {
             "node_id": node.id,
             "node_name": node.name,
-            "common_name": common_name,
+            "uid": uuid,
             "reachable": True,
             "success": True,
             **data,
@@ -562,7 +597,7 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
     get_users_usage() uses blocking requests, so run it in a threadpool to keep
     the event loop free.
     """
-    node_requests = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+    node_requests = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
     response = await run_in_threadpool(node_requests.get_users_usage)
 
     if not response:
@@ -570,11 +605,12 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
     return response
 
 
-def _panel_username_from_cn(common_name: str, node_name: str) -> str:
-    suffix = f"-{node_name}"
-    if common_name.endswith(suffix):
-        return common_name[: -len(suffix)]
-    return common_name.rsplit("-", 1)[0] if "-" in common_name else common_name
+def _panel_username_from_cn(common_name: str, cn_to_uuid: dict, uuid_to_name: dict) -> str:
+    """Map a node CN back to the panel username."""
+    uuid = cn_to_uuid.get(common_name)
+    if uuid:
+        return uuid_to_name.get(uuid, uuid)
+    return common_name
 
 
 async def login_health_summary(db: Session, hours: int = 8) -> dict:
@@ -586,8 +622,12 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
     auth_counts: dict[str, int] = {}
     node_rows = []
 
+    # Build CN -> UUID -> name mappings
+    cn_to_uuid = {cn_from_uid(u.uuid): u.uuid for u in users}
+    uuid_to_name = {u.uuid: u.name for u in users}
+
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         data = req.get_sessions(hours=hours)
         return node, (data if isinstance(data, dict) else {})
 
@@ -600,15 +640,15 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
         live_sessions = data.get("live_sessions") or []
         stale_markers = data.get("stale_markers") or []
         for sess in live_sessions:
-            username = _panel_username_from_cn(sess.get("common_name") or "", node.name)
+            username = _panel_username_from_cn(sess.get("common_name") or "", cn_to_uuid, uuid_to_name)
             active_counts[username] = active_counts.get(username, 0) + 1
         for marker in stale_markers:
-            username = _panel_username_from_cn(marker.get("common_name") or "", node.name)
+            username = _panel_username_from_cn(marker.get("common_name") or "", cn_to_uuid, uuid_to_name)
             stale_counts[username] = stale_counts.get(username, 0) + 1
         last_error = data.get("last_error") or {}
         if isinstance(last_error, dict):
             for cn in last_error.keys():
-                username = _panel_username_from_cn(cn, node.name)
+                username = _panel_username_from_cn(cn, cn_to_uuid, uuid_to_name)
                 auth_counts[username] = auth_counts.get(username, 0) + 1
         node_rows.append({
             "node": node.name,
@@ -672,9 +712,9 @@ async def sync_all_user_limits(db: Session) -> dict:
     results = []
 
     def work(node, user):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         cn = f"{user.name}-{node.name}"
-        ok = req.set_user_limit(cn, int(user.max_logins or 0))
+        ok = req.set_user_limit(user.uuid, int(user.max_logins or 0))
         return {"node": node.name, "user": user.name, "common_name": cn, "max_logins": int(user.max_logins or 0), "success": bool(ok)}
 
     tasks = [run_in_threadpool(work, n, u) for n in nodes for u in users]
@@ -693,7 +733,7 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
     results = []
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         data = req.get_sessions(hours=8)
         if not isinstance(data, dict):
             return {"node": node.name, "success": False, "error": "diagnostics unavailable", "removed": []}
@@ -728,7 +768,7 @@ async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> 
     reachable_nodes: set[str] = set()
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key)
+        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         data = req.get_sessions(hours=1)
         return node, data if isinstance(data, dict) else {}
 

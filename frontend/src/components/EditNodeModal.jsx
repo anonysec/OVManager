@@ -8,7 +8,7 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '', address: '', tunnel_address: '', protocol: 'tcp',
-    ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true,
+    ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: false,
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,6 +19,7 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
         name: node.name || '', address: node.address || '', tunnel_address: node.tunnel_address || '',
         protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
         key: '', status: node.status === 'active' || node.status === true, set_new_setting: true,
+        use_tls: node.use_tls === true,
       });
     }
   }, [node]);
@@ -91,10 +92,7 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
             <input type="text" id="edit-key" name="key" value={formData.key} onChange={handleChange} placeholder={t('keyKeepExistingHint', 'Leave blank to keep existing key')} />
           </div>
         </div>
-        <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-          <input type="checkbox" id="edit-status" name="status" checked={formData.status} onChange={handleChange} />
-          <label htmlFor="edit-status" style={{ marginBottom: 0 }}>{t('status_active')}</label>
-        </div>
+
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           <LoadingButton isLoading={isLoading} type="submit" className="btn">{t('updateNodeButton', 'Update Node')}</LoadingButton>

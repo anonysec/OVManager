@@ -1,27 +1,39 @@
-import { FiEdit, FiTrash2, FiUser, FiUsers } from 'react-icons/fi';
-import { useTranslation } from 'react-i18next';
+import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 
 const AdminTable = ({ admins, isLoading, onEdit, onDelete }) => {
-  const { t } = useTranslation();
-  if (isLoading) return <div className="empty-state">{t('loading', 'Loading...')}</div>;
-  if (!admins || admins.length === 0) return <div className="empty-state">{t('noAdminsFound', 'No admins found.')}</div>;
+  if (isLoading) return <div className="table-skeleton">Loading admins…</div>;
 
   return (
-    <div className="table-container list-table-container">
-      <table className="list-table admin-list-table">
+    <div className="list-table-container">
+      <table className="list-table">
         <thead>
-          <tr><th>{t('th_admin')}</th><th>{t('th_users_col')}</th><th>{t('th_role')}</th><th>{t('th_actions')}</th></tr>
+          <tr>
+            <th>{'Admin'}</th>
+            <th>{'Users'}</th>
+            <th>{'Bot'}</th>
+            <th>{'Prefix'}</th>
+            <th>{'Status'}</th>
+            <th>{'Actions'}</th>
+          </tr>
         </thead>
         <tbody>
           {admins.map((admin) => (
             <tr key={admin.username}>
-              <td className="identity-cell"><span className="row-avatar"><FiUser /></span><div><strong>{admin.username}</strong><small>{t('administrator')}</small></div></td>
-              <td><FiUsers /> {admin.users_count || 0}</td>
-              <td><span className="pill online">{t('adminRole')}</span></td>
-              <td><div className="row-actions">
-                <button title={t('edit')} onClick={() => onEdit(admin)}><FiEdit /></button>
-                <button className="danger" title={t('delete')} onClick={() => onDelete(admin)}><FiTrash2 /></button>
-              </div></td>
+              <td><strong>{admin.username}</strong></td>
+              <td>{admin.users_count || 0}</td>
+              <td>
+                {admin.telegram_id ? (
+                  <span className="status-pill ok" title={`Telegram ID: ${admin.telegram_id}`}>✅ {admin.telegram_id}</span>
+                ) : (
+                  <span className="status-pill" style={{ opacity: 0.5 }}>❌</span>
+                )}
+              </td>
+              <td>{admin.username_prefix || <span style={{ opacity: 0.4 }}>—</span>}</td>
+              <td><span className="status-pill ok">Active</span></td>
+              <td className="row-actions">
+                <button className="icon-btn" onClick={() => onEdit(admin)} title="Edit"><FiEdit3 /></button>
+                <button className="icon-btn danger" onClick={() => onDelete(admin)} title="Delete"><FiTrash2 /></button>
+              </td>
             </tr>
           ))}
         </tbody>

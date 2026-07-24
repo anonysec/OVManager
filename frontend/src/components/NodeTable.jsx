@@ -33,7 +33,12 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
             const info = nodeInfo[node.id] || {};
             return (
               <tr key={node.id}>
-                <td className="identity-cell"><span className="row-avatar node-avatar">{node.name.slice(0, 2).toUpperCase()}</span><div><strong>{node.name}</strong><small>#{node.id}</small></div></td>
+                <td style={{ minWidth: 160 }}>
+                  <div className="identity-cell">
+                    <span className="row-avatar node-avatar">{node.name.slice(0, 2).toUpperCase()}</span>
+                    <div><strong style={{ fontSize: 13 }}>{node.name}</strong><small>#{node.id}</small></div>
+                  </div>
+                </td>
                 <td>{node.address}:{node.port}</td>
                 <td>{node.protocol}</td>
                 <td>{node.ovpn_port}</td>
@@ -41,10 +46,10 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
                 <td><strong className={usageClass(info.cpu_usage)}>{info.cpu_usage !== undefined ? `${info.cpu_usage}%` : '-'}</strong></td>
                 <td><strong className={usageClass(info.memory_usage)}>{info.memory_usage !== undefined ? `${info.memory_usage}%` : '-'}</strong></td>
                 <td><div className="row-actions">
-                  <button title={t('check')} onClick={() => onCheckStatus(node.id)}><FiRefreshCw /></button>
-                  <button title={t('downloadAll')} onClick={() => onDownloadAll?.(node)}><FiDownloadCloud /></button>
-                  <button title={t('edit')} onClick={() => onEdit(node)}><FiEdit3 /></button>
-                  <button className="danger" title={t('delete')} onClick={() => onDelete(node.id, node.name)}><FiTrash2 /></button>
+                  <button className="icon-btn" title={t('check')} onClick={() => onCheckStatus(node.id)}><FiRefreshCw /></button>
+                  <button className="icon-btn" title={t('downloadAll')} onClick={() => onDownloadAll?.(node)}><FiDownloadCloud /></button>
+                  <button className="icon-btn" title={t('edit')} onClick={() => onEdit(node)}><FiEdit3 /></button>
+                  <button className="icon-btn danger" title={t('delete')} onClick={() => onDelete(node.id, node.name)}><FiTrash2 /></button>
                 </div></td>
               </tr>
             );

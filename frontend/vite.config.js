@@ -1,3 +1,4 @@
+/* global __dirname, process */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import dotenv from 'dotenv'
@@ -8,12 +9,10 @@ import path from 'path'
 const envPath = path.resolve(__dirname, '../.env')
 const localEnvPath = path.resolve(__dirname, '.env')
 
-// Try loading from project root first, then from local dir
-try {
-    dotenv.config({ path: envPath })
-} catch {
-    dotenv.config({ path: localEnvPath })
-}
+// Try loading from local dir first (Docker copy), then from project root
+const loadDotenv = (p) => { try { const r = dotenv.config({ path: p }); if (r.error) throw r.error; } catch { /* skip */ } };
+loadDotenv(localEnvPath);
+loadDotenv(envPath);
 
 const rawPath = (process.env.VITE_URLPATH || process.env.URLPATH || '').trim()
 const urlPath = rawPath.replace(/^\/+|\/+$/g, '') || ''

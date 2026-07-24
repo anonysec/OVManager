@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
 import { copyText } from '../utils/clipboard';
@@ -26,19 +26,25 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       const a = anchorRef?.current;
       if (!a) return;
       const r = a.getBoundingClientRect();
-      const menuW = 180;
-      const menuH = 184;
+      // Measure the actual rendered menu instead of guessing — the CSS allows
+      // 150-200px depending on content/locale, and a hardcoded width caused
+      // the menu to overflow past the viewport edge on the right.
+      const menuW = ref.current?.offsetWidth || 180;
+      const menuH = ref.current?.offsetHeight || 184;
       let left = r.right - menuW;
       let top = r.bottom + 6;
       if (left < 8) left = 8;
+      if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
       if (top + menuH > window.innerHeight - 8) top = r.top - menuH - 6;
       setPos({ top, left, ready: true });
     };
-    place();
+    // Measure after paint so offsetWidth/offsetHeight are accurate.
+    const raf = requestAnimationFrame(place);
     const onScroll = () => onClose();
     window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
@@ -89,10 +95,24 @@ const UserTable = ({
   onSort,
 }) => {
   const { t } = useTranslation();
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
   const allSelected = users.length > 0 && selected.length === users.length;
   const someSelected = selected.length > 0 && !allSelected;
   const [menuFor, setMenuFor] = useState(null);
   const anchorRefs = useRef({});
+
+  // Paginated users
+  const totalPages = Math.ceil(users.length / PAGE_SIZE) || 1;
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return users.slice(start, start + PAGE_SIZE);
+  }, [users, currentPage]);
+
+  // Reset to page 1 when users change (e.g., after search/filter)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [users]);
 
   if (isLoading) {
     return <div className="table-skeleton">{t('loading')}</div>;
@@ -151,7 +171,7 @@ const UserTable = ({
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => {
+            {paginatedUsers.map((user) => {
               const isSel = selected.includes(user.uuid);
               const d = daysUntil(user.expiry_date);
               const st = statusOf(user, t);
@@ -177,6 +197,7 @@ const UserTable = ({
                   <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>
                   <td data-label="Owner">{user.owner || '—'}</td>
                   <td data-label="Actions" className="actions-cell">
+                    <div className="row-actions">
                     <button className="icon-btn" onClick={() => onEdit(user)} title="Edit"><FiEdit2 /></button>
                     <button className="icon-btn danger" onClick={() => onDelete(user)} title="Delete"><FiTrash2 /></button>
                     <div className="row-menu-wrap">
@@ -201,6 +222,7 @@ const UserTable = ({
                         />
                       )}
                     </div>
+                    </div>
                   </td>
                 </tr>
               );
@@ -208,6 +230,27 @@ const UserTable = ({
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="pagination-controls">
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            <FiChevronLeft size={14} /> {t('prev', 'Previous')}
+          </button>
+          <span className="pagination-info">
+            {t('pageOf', 'Page {{current}} of {{total}}', { current: currentPage, total: totalPages })}
+          </span>
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            {t('next', 'Next')} <FiChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </>
   );
 };

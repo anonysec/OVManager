@@ -18,7 +18,7 @@ const LoginPage = () => {
     try {
       await login(username, password);
       navigate('/');
-    } catch (err) { 
+    } catch (_err) { 
       setError(t('loginError'));
     }
   };

@@ -3,14 +3,14 @@ import { initReactI18next } from 'react-i18next';
 
 import enTranslation from './lang/en.json';
 import faTranslation from './lang/fa.json';
+import ruTranslation from './lang/ru.json';
+import cnTranslation from './lang/cn.json';
 
 const resources = {
-  en: {
-    translation: enTranslation,
-  },
-  fa: {
-    translation: faTranslation,
-  },
+  en: { translation: enTranslation },
+  fa: { translation: faTranslation },
+  ru: { translation: ruTranslation },
+  cn: { translation: cnTranslation },
 };
 
 i18n
@@ -19,10 +19,7 @@ i18n
     resources,
     lng: localStorage.getItem('ovmanager-lang') || 'en',
     fallbackLng: 'en',
-
-    interpolation: {
-      escapeValue: false, 
-    },
+    interpolation: { escapeValue: false },
   });
 
 export default i18n;

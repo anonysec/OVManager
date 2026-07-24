@@ -6,12 +6,18 @@ import Modal from './Modal';
 
 const EditAdminModal = ({ admin, isOpen, onClose, onAdminUpdated }) => {
   const { t } = useTranslation();
-  const [formData, setFormData] = useState({ username: '', password: '' });
+  const [formData, setFormData] = useState({ username: '', password: '', telegram_id: '', username_prefix: '' });
   const [error, setError] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (admin) setFormData({ username: admin.username, password: '' });
+    if (admin) setFormData({
+      username: admin.username,
+      password: '',
+      telegram_id: admin.telegram_id != null ? String(admin.telegram_id) : '',
+      username_prefix: admin.username_prefix || '',
+    });
   }, [admin]);
 
   const handleChange = (event) => {
@@ -28,14 +34,27 @@ const EditAdminModal = ({ admin, isOpen, onClose, onAdminUpdated }) => {
     }
     setIsLoading(true);
     try {
-      const response = await apiClient.put('/admin/', formData);
+      const payload = {
+        username: formData.username,
+        password: formData.password,
+        telegram_id: formData.telegram_id ? parseInt(formData.telegram_id, 10) : null,
+        username_prefix: formData.username_prefix || null,
+      };
+      const response = await apiClient.put('/admin/', payload);
       if (response.data.success) {
         onAdminUpdated();
       } else {
         setError(response.data.msg || t('unableToUpdateAdmin'));
       }
     } catch (err) {
-      setError(err.response?.data?.detail || t('errorUpdatingAdmin'));
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setError(JSON.stringify(detail));
+      } else {
+        setError(detail || t('errorUpdatingAdmin'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -51,6 +70,14 @@ const EditAdminModal = ({ admin, isOpen, onClose, onAdminUpdated }) => {
         <div className="input-group">
           <label htmlFor="password">{t('newPassword')}</label>
           <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required placeholder={t('enterNewPassword')} />
+        </div>
+        <div className="input-group">
+          <label htmlFor="telegram_id">Telegram ID</label>
+          <input type="number" id="telegram_id" name="telegram_id" value={formData.telegram_id} onChange={handleChange} placeholder="123456789 (empty = no access)" />
+        </div>
+        <div className="input-group">
+          <label htmlFor="username_prefix">Username Prefix</label>
+          <input type="text" id="username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder="420 (auto-generates 4201, 4202...)" />
         </div>
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>

@@ -2,10 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
-import './styles-premium.css'
+import './styles.css'
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './i18n';
 
 const raw = (import.meta.env.VITE_URLPATH || '').trim().replace(/^\/+|\/+$/g, '');
@@ -16,7 +18,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter basename={base ? `/${base}` : ''}>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <ToastProvider>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

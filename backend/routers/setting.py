@@ -32,6 +32,12 @@ async def get_settings(
         subscription_url_prefix=subscription_prefix,
         timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
         panel_version=__version__,
+        bot_token=getattr(db_settings, "bot_token", None) or None,
+        bot_enabled=bool(getattr(db_settings, "bot_enabled", False)),
+        default_days=getattr(db_settings, "default_days", 30) or 30,
+        default_traffic_gb=getattr(db_settings, "default_traffic_gb", 100) or 100,
+        default_max_users=getattr(db_settings, "default_max_users", 1) or 1,
+        owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
     )
     return ResponseModel(
         success=True,
@@ -47,6 +53,15 @@ class TimezoneUpdate(BaseModel):
 class SubscriptionUpdate(BaseModel):
     subscription_url_prefix: str | None = None
     subscription_path: str | None = None
+
+
+class BotConfigUpdate(BaseModel):
+    bot_token: str | None = None
+    bot_enabled: bool | None = None
+    default_days: int | None = None
+    default_traffic_gb: int | None = None
+    default_max_users: int | None = None
+    owner_telegram_id: int | None = None
 
 
 @router.put("/settings/timezone", response_model=ResponseModel)
@@ -76,6 +91,21 @@ async def update_subscription(
             "subscription_url_prefix": config.SUBSCRIPTION_URL_PREFIX,
             "subscription_path": config.SUBSCRIPTION_PATH,
         },
+    )
+
+
+@router.put("/settings/bot", response_model=ResponseModel)
+async def update_bot_config(
+    payload: BotConfigUpdate,
+    db: Session = Depends(get_db),
+    user: str = Depends(get_current_user),
+):
+    kwargs = payload.model_dump(exclude_unset=True)
+    s = crud.update_bot_config(db, **kwargs)
+    return ResponseModel(
+        success=True,
+        msg="Bot config updated",
+        data=crud.get_bot_config(db),
     )
 
 

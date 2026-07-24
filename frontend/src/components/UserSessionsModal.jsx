@@ -56,18 +56,16 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
                   <th>{t('commonName', 'Common name')}</th>
                   <th>{t('lastSeen', 'Last seen')}</th>
                   <th>{t('node', 'Node')}</th>
-                  <th>{t('stale', 'Stale')}</th>
                 </tr>
               </thead>
               <tbody>
                 {registry.length ? registry.map((r, i) => (
                   <tr key={i}>
                     <td>{r.common_name}</td>
-                    <td>{r.last_seen}</td>
-                    <td>{r.node || '-'}</td>
-                    <td>{r.stale ? '⚠' : '—'}</td>
+                    <td>{r.updated_at ? new Date(r.updated_at * 1000).toLocaleString() : (r.created_at_utc ? new Date(r.created_at_utc).toLocaleString() : '—')}</td>
+                    <td>{r.node_name || r.node || '-'}</td>
                   </tr>
-                )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noRegistryEntries', 'No registry entries.')}</td></tr>}
+                )) : <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noRegistryEntries', 'No registry entries.')}</td></tr>}
               </tbody>
             </table>
           </div>

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
-import apiClient from '../services/api';
+import apiClient, { urlPath } from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiCpu, FiThermometer, FiWifi, FiAlertTriangle, FiClock, FiGlobe, FiHardDrive } from 'react-icons/fi';
-import { fmtRelative, daysUntil } from '../utils/time';
+import { fmtRelative, daysUntil, formatUptime } from '../utils/time';
 
 const formatBytes = (bytes) => {
   if (!Number(bytes)) return '0 B';
@@ -83,7 +83,7 @@ const WorldMap = ({ nodes, nodeStatus }) => {
       </div>
       <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
         <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-          style={{ width: `${100 * zoom}%`, height: 'auto' }}
+          style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: '100%', height: 'auto' }}
           onMouseLeave={() => setHover(null)}>
           <defs>
             <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
@@ -327,7 +327,7 @@ const ServerStats = () => {
                       <td>{formatBytes(u.used || 0)}</td>
                       <td>{u.active_connections || 0}</td>
                       <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
-                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`/dash/users?user=${u.uuid}`)}>{t('manage')}</button></td>
+                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`${urlPath}/users?user=${u.uuid}`)}>{t('manage')}</button></td>
                     </tr>
                   ))}
                   {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noUsersOnline')}</td></tr>}

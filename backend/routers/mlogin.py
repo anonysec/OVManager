@@ -148,7 +148,8 @@ def _live_sessions_for_user(
     nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
     for node in nodes:
-        api = f"http://{node.address}:{node.port}/sync/usage"
+        scheme = "https" if node.use_tls else "http"
+        api = f"{scheme}://{node.address}:{node.port}/sync/usage"
         try:
             resp = requests.get(api, headers={"key": node.key}, timeout=NODE_USAGE_TIMEOUT)
             if resp.status_code != 200:
@@ -256,7 +257,7 @@ def _disconnect_user_everywhere(username: str, db: Session) -> None:
     for node in nodes:
         common_name = f"{username}-{node.name}"
         try:
-            NodeRequests(address=node.address, port=node.port, api_key=node.key).disconnect_user(common_name)
+            NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls).disconnect_user(common_name)
         except Exception as e:
             logger.warning("single-login takeover: failed to disconnect %s on %s: %s", common_name, node.name, e)
     db.execute(text("DELETE FROM global_mlogin_sessions WHERE username = :username"), {"username": username})
