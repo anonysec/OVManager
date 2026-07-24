@@ -94,11 +94,11 @@ const Settings = () => {
     setDefaultUsers(s.default_max_users || 1);
   };
 
-  useEffect(() => { loadSettings(); load(); }, [load]);
+  useEffect(() => { loadSettings(); load(); }, []);
 
   // Live auto-refresh — polls stats every 8s, does NOT touch form fields
   const { refreshTick } = useLive();
-  useEffect(() => { load().catch(() => {}); }, [refreshTick, load]);
+  useEffect(() => { load().catch(() => {}); }, [refreshTick]);
 
   const saveTimezone = async (tz) => {
     setTimezoneState(tz);
