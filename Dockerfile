@@ -1,41 +1,33 @@
-# OVManager Panel - Docker image
-# Builds the Vue frontend (frontend/dist) then runs the FastAPI panel.
+# Stage 1: Build frontend
 FROM node:22-slim AS frontend
 WORKDIR /src/frontend
-
-# Set VITE_URLPATH for Vite build BEFORE copying other files
-ENV VITE_URLPATH=dash
-
-# Copy .env to make it available for dotenv
-COPY .env ./
-
 COPY frontend/package*.json ./
 RUN npm ci || npm install
 COPY frontend/ ./
 RUN npm run build
 
+# Stage 2: Backend
 FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 \
-    UV_SYSTEM_PYTHON=1 \
-    PATH="/root/.local/bin:${PATH}"
-
 WORKDIR /app
 
-# Backend deps first for better layer caching
-COPY pyproject.toml uv.lock* ./
+# Install system dependencies if needed
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files
+COPY pyproject.toml .
+
+# Install dependencies
+RUN pip install --no-cache-dir .
+
+# Copy source code
 COPY backend/ ./backend/
 COPY .github/ ./.github/
-# Copy full project (excludes handled by .dockerignore)
-COPY . .
-
-# Bring in the built frontend assets
+COPY . ./
+# Note: the frontend dist will be copied from the builder stage
 COPY --from=frontend /src/frontend/dist ./frontend/dist
-
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir uv \
-    && uv sync --frozen || uv sync
 
 EXPOSE 2095
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -sf http://localhost:2095/health || exit 1
-CMD ["sh", "-c", "uv run main.py"]
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:2095/health', timeout=1)" || exit 1
+
+CMD ["python", "main.py"]

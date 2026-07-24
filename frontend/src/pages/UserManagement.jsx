@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../services/api';
+import { useToast } from '../context/ToastContext';
 import UserTable from '../components/UserTable';
 import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
@@ -27,6 +28,7 @@ const UserManagement = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const { t } = useTranslation();
+  const { addToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [view, setView] = useState('all'); // 'all' | 'online' | 'inactive' | 'expiring'
@@ -74,7 +76,7 @@ const UserManagement = () => {
       searchParams.delete('user');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [users]);
+  }, [users, searchParams, setSearchParams]);
 
   const userStats = useMemo(() => {
     const activeUsersCount = users.filter(user => user.is_active).length;
@@ -141,11 +143,11 @@ const UserManagement = () => {
     if (!window.confirm(`Are you sure you want to delete user ${user.name}?`)) return;
     try {
       await apiClient.delete(`/users/${user.uuid}`);
-      console.warn(`User ${user.name} deleted successfully.`);
+      addToast(`User ${user.name} deleted successfully.`, 'success');
       setSelected((s) => s.filter((x) => x !== user.uuid));
       fetchUsers();
     } catch {
-      console.warn('Error deleting user.');
+      addToast('Error deleting user.', 'error');
     }
   };
 
@@ -165,21 +167,19 @@ const UserManagement = () => {
     const newStatus = !user.is_active;
     const statusLabel = newStatus ? 'activate' : 'deactivate';
     if (!window.confirm(`Are you sure you want to ${statusLabel} user ${user.name}?`)) return;
-
     try {
       const response = await apiClient.put(`/users/${user.uuid}/status`, {
         name: user.name,
-        status: !user.is_active,
-        expiry_date: null
+        status: !user.is_active
       });
       if (response.data.success) {
-        console.warn(`User ${statusLabel}d successfully.`);
+        addToast(`User ${user.name} ${statusLabel}d successfully.`, 'success');
         fetchUsers();
       } else {
-        console.warn(`Failed to ${statusLabel} user.`);
+        addToast(`Failed to ${statusLabel} user.`, 'error');
       }
     } catch {
-      console.warn(`Error ${statusLabel}ing user.`);
+      addToast(`Error ${statusLabel}ing user.`, 'error');
     }
   };
 
@@ -189,13 +189,13 @@ const UserManagement = () => {
     try {
       const response = await apiClient.get(`/users/${user.uuid}`);
       if (response.data.success) {
-        console.warn(`Usage for ${user.name} has been reset.`);
+        addToast(`Usage for ${user.name} has been reset.`, 'Success');
         fetchUsers();
       } else {
-        console.warn(`Failed to reset usage for ${user.name}.`);
+        addToast(`Failed to reset usage for ${user.name}.`, 'Error');
       }
     } catch {
-      console.warn('Error resetting usage.');
+      addToast('Error resetting usage.', 'Error');
     }
   };
 
@@ -211,7 +211,14 @@ const UserManagement = () => {
         setSessionError(response.data.msg || 'Failed to load session diagnostics.');
       }
     } catch (err) {
-      setSessionError(err.response?.data?.detail || 'Failed to load session diagnostics.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setSessionError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setSessionError(JSON.stringify(detail));
+      } else {
+        setSessionError(detail || 'Failed to load session diagnostics.');
+      }
     } finally {
       setSessionLoading(false);
     }
@@ -236,7 +243,14 @@ const UserManagement = () => {
       }
       await fetchSessionDiagnostics(selectedUser);
     } catch (err) {
-      setSessionError(err.response?.data?.detail || 'Disconnect failed.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setSessionError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setSessionError(JSON.stringify(detail));
+      } else {
+        setSessionError(detail || 'Disconnect failed.');
+      }
     } finally {
       setSessionLoading(false);
     }
@@ -249,6 +263,7 @@ const UserManagement = () => {
 
   const handleUserAdded = () => {
     setIsAddModalOpen(false);
+    addToast('User created successfully.', 'success');
     fetchUsers();
   };
 
@@ -265,6 +280,7 @@ const UserManagement = () => {
   const handleUserUpdated = () => {
     setIsEditModalOpen(false);
     setSelectedUser(null);
+    addToast('User updated successfully.', 'success');
     fetchUsers();
   };
 
@@ -289,12 +305,6 @@ const UserManagement = () => {
       <div className="view-header">
         <h2>{t('users')}</h2>
         <div className="view-header-actions">
-          <div className="seg-toggle" role="tablist" aria-label="User view">
-            <button type="button" role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>{t('tabAll')}</button>
-            <button type="button" role="tab" aria-selected={view === 'online'} className={view === 'online' ? 'active' : ''} onClick={() => setView('online')}>{t('tabOnline')}</button>
-            <button type="button" role="tab" aria-selected={view === 'inactive'} className={view === 'inactive' ? 'active' : ''} onClick={() => setView('inactive')}>{t('tabInactive')}</button>
-            <button type="button" role="tab" aria-selected={view === 'expiring'} className={view === 'expiring' ? 'active' : ''} onClick={() => setView('expiring')}>{t('tabExpiring')}</button>
-          </div>
           <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
         </div>
       </div>
@@ -330,18 +340,17 @@ const UserManagement = () => {
         </div>
       </div>
 
-      <div className="search-pagination-controls">
-        <label className="search-field">
+      <div className="search-with-filters">
+        <label className="search-field" style={{ flex: 1, maxWidth: 380 }}>
           <FiSearch className="search-icon" aria-hidden="true" />
-          <input
-            type="search"
-            placeholder="Search by username..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-            aria-label="Search users by username"
-          />
+          <input type="search" placeholder="Search by username..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label="Search users by username" />
         </label>
+        <div className="seg-toggle" role="tablist" aria-label="User view">
+          <button type="button" role="tab" aria-selected={view === 'all'} className={`seg-tab${view === 'all' ? ' active' : ''}`} onClick={() => setView('all')}>{t('tabAll')}</button>
+          <button type="button" role="tab" aria-selected={view === 'online'} className={`seg-tab${view === 'online' ? ' active' : ''}`} onClick={() => setView('online')}>{t('tabOnline')}</button>
+          <button type="button" role="tab" aria-selected={view === 'inactive'} className={`seg-tab${view === 'inactive' ? ' active' : ''}`} onClick={() => setView('inactive')}>{t('tabInactive')}</button>
+          <button type="button" role="tab" aria-selected={view === 'expiring'} className={`seg-tab${view === 'expiring' ? ' active' : ''}`} onClick={() => setView('expiring')}>{t('tabExpiring')}</button>
+        </div>
       </div>
 
       <UserTable

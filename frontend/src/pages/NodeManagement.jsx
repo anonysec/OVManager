@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiServer, FiCheckCircle, FiXCircle, FiSearch } from 'react-icons/fi';
+import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiActivity } from 'react-icons/fi';
 import apiClient from '../services/api';
 import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
 import NodeTable from '../components/NodeTable';
-import UserStatCard from '../components/UserStatCard';
+import LoadingButton from '../components/LoadingButton';
 import { useTranslation } from 'react-i18next';
-
+import { useToast } from '../context/ToastContext';
 
 const NodeManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,7 +18,7 @@ const NodeManagement = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useTranslation();
-
+  const { addToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -50,7 +50,7 @@ const NodeManagement = () => {
       searchParams.delete('node');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [nodes]);
+  }, [nodes, searchParams, setSearchParams]);
 
 
   useEffect(() => {
@@ -101,7 +101,6 @@ const NodeManagement = () => {
     setSearchTerm(event.target.value);
   };
 
-
   const handleDelete = async (nodeId, nodeName) => {
     if (!window.confirm(`${t('deleteNodeConfirm')} ${nodeName}?`)) {
       return;
@@ -109,15 +108,15 @@ const NodeManagement = () => {
     try {
       const response = await apiClient.delete(`/nodes/${nodeId}`);
       if (response.data.success) {
-        window.alert(response.data.msg || 'Node deleted successfully.');
+        addToast(response.data.msg || 'Node deleted successfully.', 'success');
       } else {
-        window.alert(response.data.msg || 'Unable to delete node.');
+        addToast(response.data.msg || 'Unable to delete node.', 'error');
       }
     } catch (error) {
       if (error.response?.status === 404) {
-        window.alert('Node is already removed from the server. Refreshing list.');
+        addToast('Node is already removed from the server.', 'error');
       } else {
-        window.alert(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.');
+        addToast(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.', 'error');
       }
     } finally {
       fetchNodes();
@@ -157,6 +156,7 @@ const NodeManagement = () => {
 
   const handleNodeCreated = () => {
     setIsAddModalOpen(false);
+    addToast('Node created successfully.', 'success');
     fetchNodes();
   };
 
@@ -168,6 +168,7 @@ const NodeManagement = () => {
   const handleNodeUpdated = () => {
     setIsEditModalOpen(false);
     setSelectedNode(null);
+    addToast('Node updated successfully.', 'success');
     fetchNodes();
   };
 
@@ -180,28 +181,28 @@ const NodeManagement = () => {
         </button>
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: '30px' }}>
-        <UserStatCard
-          icon={<FiServer className="icon" />}
-          label={t('nodesTotal')}
-          value={nodeStats.total}
-          color="var(--accent-color)"
-          className="card-orange"
-        />
-        <UserStatCard
-          icon={<FiCheckCircle className="icon" />}
-          label={t('nodesActive')}
-          value={nodeStats.active}
-          color="var(--success-color)"
-          className="card-green"
-        />
-        <UserStatCard
-          icon={<FiXCircle className="icon" />}
-          label={t('nodesInactive')}
-          value={nodeStats.inactive}
-          color="var(--danger-color)"
-          className="card-red"
-        />
+      <div className="user-stats-row">
+        <div className="user-stat" style={{ '--us-accent': '#90caf9' }}>
+          <span className="us-ico"><FiServer /></span>
+          <span className="us-body">
+            <span className="us-label">{t('nodesTotal')}</span>
+            <span className="us-value">{nodeStats.total}</span>
+          </span>
+        </div>
+        <div className="user-stat" style={{ '--us-accent': '#43a047' }}>
+          <span className="us-ico"><FiCheckCircle /></span>
+          <span className="us-body">
+            <span className="us-label">{t('nodesActive')}</span>
+            <span className="us-value">{nodeStats.active}</span>
+          </span>
+        </div>
+        <div className="user-stat" style={{ '--us-accent': '#e53935' }}>
+          <span className="us-ico"><FiXCircle /></span>
+          <span className="us-body">
+            <span className="us-label">{t('nodesInactive')}</span>
+            <span className="us-value">{nodeStats.inactive}</span>
+          </span>
+        </div>
       </div>
 
       <div className="search-pagination-controls">

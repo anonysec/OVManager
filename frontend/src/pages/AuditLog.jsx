@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import apiClient from '../services/api';
-import { useTranslation } from 'react-i18next';
 import { FiActivity, FiRefreshCw } from 'react-icons/fi';
 
 const ACTION_COLORS = {
@@ -15,7 +14,6 @@ const fmtTs = (ts) => {
 };
 
 const AuditLog = () => {
-  const { t } = useTranslation();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +27,14 @@ const AuditLog = () => {
       if (res.data.success) setEvents(res.data.data || []);
       else setError('Failed to load activity.');
     } catch (e) {
-      setError(e.response?.data?.detail || 'Failed to load activity.');
+      const detail = e.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setError(detail.map(d => d.msg || JSON.stringify(d)).join(', '));
+      } else if (typeof detail === 'object' && detail !== null) {
+        setError(JSON.stringify(detail));
+      } else {
+        setError(detail || 'Failed to load activity.');
+      }
     } finally {
       setLoading(false);
     }
