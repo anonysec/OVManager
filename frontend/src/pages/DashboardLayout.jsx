@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { LiveProvider } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiGlobe, FiMoon, FiSun, FiSettings, FiLogOut, FiUser } from 'react-icons/fi';
-import apiClient, { API_ERROR_EVENT } from '../services/api';
+import apiClient from '../services/api';
 import Logo from '../components/Logo';
 
 const DashboardLayout = () => {
@@ -103,16 +103,6 @@ const DashboardLayout = () => {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    const onApiError = (event) => {
-      const id = `${Date.now()}-${Math.random()}`;
-      setToasts((items) => [...items.slice(-2), { id, ...event.detail }]);
-      setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 5200);
-    };
-    window.addEventListener(API_ERROR_EVENT, onApiError);
-    return () => window.removeEventListener(API_ERROR_EVENT, onApiError);
-  }, []);
-
   const navItems = useMemo(() => {
     const adminOnly = userRole === 'main_admin' ? [{ to: '/admins', label: t('admins', 'Admins') }] : [];
     return [
@@ -122,15 +112,6 @@ const DashboardLayout = () => {
       ...adminOnly,
     ];
   }, [t, userRole]);
-
-  const LANGUAGES = ['en', 'fa', 'ru', 'cn'];
-  const changeLanguage = () => {
-    const idx = LANGUAGES.indexOf(i18n.language);
-    const next = LANGUAGES[(idx + 1) % LANGUAGES.length];
-    i18n.changeLanguage(next);
-    document.documentElement.dir = next === 'fa' ? 'rtl' : 'ltr';
-    localStorage.setItem('ovmanager-lang', next);
-  };
 
   const notifCount = notifications.length;
   const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
