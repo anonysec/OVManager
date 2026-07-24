@@ -98,7 +98,7 @@ const Settings = () => {
 
   // Live auto-refresh — polls stats every 8s, does NOT touch form fields
   const { refreshTick } = useLive();
-  useEffect(() => { load().catch(() => {}); }, [refreshTick]);
+  useEffect(() => { load().catch(() => {}); }, [refreshTick, load]);
 
   const saveTimezone = async (tz) => {
     setTimezoneState(tz);
