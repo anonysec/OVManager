@@ -5,7 +5,7 @@ Free, open-source OpenVPN management panel. Works with [OVNode](https://github.c
 ## Install
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
 ```
 
 With options:

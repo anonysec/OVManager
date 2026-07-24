@@ -1,7 +1,7 @@
 #!/bash
 # OVManager OpenVPN Panel Installer
 # Supports: native install, docker compose, update, uninstall
-# Usage: curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh | bash
+# Usage: curl -sSL https://anonysec.github.io/OVManager/install.sh | bash
 #        curl -sSL URL | bash -s -- --port 2095 --path dash --tls-key /path/key --tls-cert /path/cert
 
 set -euo pipefail
@@ -58,7 +58,7 @@ Env vars (used if flags not provided):
   PANEL_PORT, PANEL_PATH, ADMIN_USER, ADMIN_PASS, SSL_KEYFILE, SSL_CERTFILE
 
 Examples:
-  curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh | bash
+  curl -sSL https://anonysec.github.io/OVManager/install.sh | bash
   curl -sSL URL | bash -s -- --port 2095 --path dash
   curl -sSL URL | bash -s -- --admin-user admin --admin-pass secret --docker
 EOF
