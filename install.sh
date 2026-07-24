@@ -131,8 +131,9 @@ check_deps() {
 verify_prereqs() {
     [[ "$EUID" -ne 0 ]] && error_exit "This script must be run as root. Use sudo."
     command -v systemctl >/dev/null || error_exit "systemctl not found. This script requires systemd."
-    [[ $DOCKER_FLAG -eq 1 ]] && command -v docker-compose >/dev/null || true
-    [[ $DOCKER_FLAG -eq 1 ]] && command -v docker >/dev/null || error_exit "docker not found. Install docker first."
+    if [[ $DOCKER_FLAG -eq 1 ]]; then
+        command -v docker >/dev/null 2>&1 || error_exit "docker not found. Install docker first."
+    fi
     [[ -d "$INSTALL_DIR" ]] && error_exit "Installation directory $INSTALL_DIR already exists. Remove it first."
 }
 
@@ -234,17 +235,17 @@ write_env() {
         -e "s|^URLPATH=.*|URLPATH=$PATHPREFIX|" \
         -e "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=$ADMIN_USER|" \
         -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PASS|" \
-        -e "s|^VITE_URLPATH=.*|VITE_URLPATH=/$PATHPREFIX/|" \
+        -e "s|^VITE_URLPATH=.*|VITE_URLPATH=$PATHPREFIX|" \
         -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$jwt_secret|" \
         -e "s|^HOST=.*|HOST=0.0.0.0|" \
         > "$env_file"
 
     # Override with TLS if provided
     if [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]]; then
-        echo "TLS_KEY=$TLS_KEY" >>"$env_file"
+        echo "SSL_KEYFILE=$TLS_KEY" >>"$env_file"
     fi
     if [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]]; then
-        echo "TLS_CERT=$TLS_CERT" >>"$env_file"
+        echo "SSL_CERTFILE=$TLS_CERT" >>"$env_file"
     fi
 
     log "Configuration written to $env_file"
@@ -316,7 +317,7 @@ $(printf '      %s\n' \
         "ADMIN_USERNAME: ${ADMIN_USER}" \
         "ADMIN_PASSWORD: ${ADMIN_PASS}" \
         "VITE_URLPATH: /${PATHPREFIX}/" \
-        "JWT_SECRET_KEY: $(openssl rand -base64 48 2>/dev || head -c 48 /dev/urandom | base64)")
+        "JWT_SECRET_KEY: $(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)")
 $( [[ -n "$tls_config" ]] && printf '      TLS_KEY_FILE: /run/secrets/server.key\n      TLS_CERT_FILE: /run/secrets/server.crt\n' )
     volumes:
 $( [[ -n "$TLS_KEY" ]] && printf '      - ./server.key:/run/secrets/server.key:ro\n' )
