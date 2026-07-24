@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Start OVManager panel and bot together in the same container.
+Start OVManager panel.
 """
 import sys
 import os
 import subprocess
 import signal
+from pathlib import Path
 
-# Ensure we're in the right directory
-os.chdir('/app')
-sys.path.insert(0, '/app')
+# Use script's directory for native installs, /app for Docker
+APP_DIR = "/app" if Path("/app").is_dir() else str(Path(__file__).resolve().parent)
+os.chdir(APP_DIR)
+sys.path.insert(0, APP_DIR)
 
 from backend.config import config
 import uvicorn
@@ -18,7 +20,7 @@ import uvicorn
 def main():
     """Run both OVManager panel and bot."""
     # Start bot in a subprocess
-    bot_proc = subprocess.Popen([sys.executable, "-m", "bot.main"], cwd="/app")
+    bot_proc = subprocess.Popen([sys.executable, "-m", "bot.main"], cwd=APP_DIR)
     
     # Run panel in foreground
     try:

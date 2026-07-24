@@ -129,12 +129,12 @@ check_deps() {
 
 # ———————— Verify prerequisites ————————
 verify_prereqs() {
-    [[ "$EUID" -ne 0 ]] && error_exit "This script must be run as root. Use sudo."
+    if [[ "$EUID" -ne 0 ]]; then error_exit "This script must be run as root. Use sudo."; fi
     command -v systemctl >/dev/null || error_exit "systemctl not found. This script requires systemd."
     if [[ $DOCKER_FLAG -eq 1 ]]; then
         command -v docker >/dev/null 2>&1 || error_exit "docker not found. Install docker first."
     fi
-    [[ -d "$INSTALL_DIR" ]] && error_exit "Installation directory $INSTALL_DIR already exists. Remove it first."
+    if [[ -d "$INSTALL_DIR" ]]; then error_exit "Installation directory $INSTALL_DIR already exists. Remove it first."; fi
 }
 
 # ———————— Download / clone repo ————————
@@ -188,8 +188,7 @@ setup_backend() {
     fi
 
     log "Setting up virtual environment..."
-    uv venv "$VENV_DIR" || error_exit "Failed to create venv"
-    uv sync --venv "$VENV_DIR" --directory "$INSTALL_DIR" || error_exit "uv sync failed"
+    cd "$INSTALL_DIR" && uv sync || error_exit "uv sync failed"
     log "Backend setup complete"
 }
 
@@ -256,6 +255,8 @@ write_env() {
 setup_systemd() {
     log_b "Creating systemd service..."
     local service_file="/etc/systemd/system/$SYSTEMD_SERVICE"
+    local real_uv
+    real_uv=$(command -v uv || echo "/usr/local/bin/uv")
     
     cat >"$service_file" << EOF
 [Unit]
@@ -267,7 +268,7 @@ Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
 Environment="PATH=$INSTALL_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=$INSTALL_DIR/.venv/bin/uv run main.py
+ExecStart=$real_uv run main.py
 Restart=on-failure
 RestartSec=3
 
