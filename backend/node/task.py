@@ -15,6 +15,7 @@ from backend.schema._input import NodeCreate
 from .requests import NodeRequests
 from backend.db import crud
 from backend.db.models import Node
+from backend.operations.geolocation import geolocate
 
 # Inline UUID<->CN conversion logic (shared/ module lives outside Docker build context)
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$")

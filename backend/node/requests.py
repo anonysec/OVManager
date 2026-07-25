@@ -125,7 +125,12 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=CREATE_USER_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error("Node %s create_user returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
+                logger.error(
+                    "Node %s create_user returned HTTP %s: %s",
+                    self.address,
+                    resp.status_code,
+                    resp.text[:200],
+                )
                 return False
             response = resp.json()
             if response.get("success"):
@@ -155,7 +160,12 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=DEFAULT_LONG_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error("Node %s change_user_status returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
+                logger.error(
+                    "Node %s change_user_status returned HTTP %s: %s",
+                    self.address,
+                    resp.status_code,
+                    resp.text[:200],
+                )
                 return False
             response = resp.json()
 
@@ -237,7 +247,12 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=DEFAULT_LONG_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error("Node %s set_user_limit returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
+                logger.error(
+                    "Node %s set_user_limit returned HTTP %s: %s",
+                    self.address,
+                    resp.status_code,
+                    resp.text[:200],
+                )
                 return False
             response = resp.json()
             if response.get("success"):
@@ -301,5 +316,5 @@ class NodeRequests:
                 )
                 return False
         except Exception as e:
-            logger.error("Error when getting users usage on node %s: %s", self.address, e)
+            logger.error("Error getting users usage on node %s: %s", self.address, e)
             return False

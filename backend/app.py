@@ -1,6 +1,7 @@
 import os
 
-from fastapi import FastAPI, Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -161,7 +162,6 @@ async def startup_event():
     async def _start_bot():
         try:
             from bot.main import async_init
-            from telegram.ext import Application
             app = await async_init()
             if app:
                 await app.initialize()
@@ -185,10 +185,6 @@ async def _serve_react():
         index_path,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
-
-
-from starlette.middleware.base import BaseHTTPMiddleware
-import starlette.requests
 
 
 class SPAFallbackMiddleware(BaseHTTPMiddleware):

@@ -1,5 +1,4 @@
 import os
-import secrets
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -10,12 +9,18 @@ def _validate_jwt_secret(v: str) -> str:
     if len(v) < 32:
         raise ValueError("JWT_SECRET_KEY must be at least 32 characters (256 bits for HS256)")
     # Reject common placeholders
-    placeholders = {"changeme", "secret", "changeme123", "supersecret", "dev", "test", "your-secret"}
+    placeholders = {
+        "changeme", "secret", "changeme123", "supersecret",
+        "dev", "test", "your-secret",
+    }
     if v.lower().strip() in placeholders:
         raise ValueError("JWT_SECRET_KEY cannot be a default/placeholder value")
     # Reject low-entropy secrets (e.g. all same char, or dictionary word)
     if len(set(v)) < 8:
-        raise ValueError("JWT_SECRET_KEY has low character diversity; use a cryptographically random secret")
+        raise ValueError(
+            "JWT_SECRET_KEY has low character diversity; "
+            "use a cryptographically random secret"
+        )
     return v
 
 
