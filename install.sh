@@ -279,14 +279,14 @@ issue_lets_encrypt() {
         --standalone \
         $extra_args \
         --accountemail "$email" \
-        --force 2>&1 | tail -5 || die "Failed to issue Let's Encrypt certificate for $domain"
+        --force 2>&1 | grep -E "Cert success|Error|error" || die "Failed to issue Let's Encrypt certificate for $domain"
 
-    # Install cert to our target directory
+    # Install cert to our target directory (no-op reload — service not created yet)
     ~/.acme.sh/acme.sh \
         --install-cert -d "$domain" \
         --key-file "$outdir/privkey.pem" \
         --fullchain-file "$outdir/fullchain.pem" \
-        --reloadcmd "systemctl restart ovmanager.service" 2>&1 | tail -3 || die "Failed to install certificate to $outdir"
+        --reloadcmd "true" 2>&1 | tail -3 || die "Failed to install certificate to $outdir"
 
     step "Certificate installed to $outdir"
 }
@@ -400,6 +400,14 @@ SVCEOF
         systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
         systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
         spinner "Service started" $!
+
+        # Update acme.sh reloadcmd now that service exists
+        if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && [[ -n "$TLS_DOMAIN" ]]; then
+            ~/.acme.sh/acme.sh --install-cert -d "$TLS_DOMAIN" \
+                --key-file "/etc/letsencrypt/$TLS_DOMAIN/privkey.pem" \
+                --fullchain-file "/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem" \
+                --reloadcmd "systemctl restart ovmanager.service" >/dev/null 2>&1
+        fi
     fi
 
     sep
