@@ -163,13 +163,15 @@ interactive_setup() {
             *) TLS_MODE="none" ;;
         esac
     fi
-    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]]; then
+    if [[ "$TLS_MODE" == "le-ip" ]]; then
+        [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN=$(hostname -I | awk '{print $1}')
+    elif [[ "$TLS_MODE" == "le" ]]; then
         if [[ -z "$TLS_DOMAIN" ]]; then
             if [[ -t 0 ]]; then
-                printf "  Domain/IP [] : "
+                printf "  ${WH}Domain${NC} [] : "
                 read -r TLS_DOMAIN
             fi
-            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$PORT"
+            [[ -z "$TLS_DOMAIN" ]] && die "Domain is required for Let's Encrypt"
         fi
     fi
     sep
