@@ -71,12 +71,17 @@ banner() {
     [[ -z "$TERM" || "$TERM" == "dumb" ]] && export TERM=xterm-256color
     clear
     echo -e ""
-    echo -e "  ${BLUE}+==============================================+${R}"
-    echo -e "  ${BLUE}|${R}                                              ${BLUE}|${R}"
-    echo -e "  ${BLUE}|${R}   ${BOLD}${WHITE}O  V  M  A  N  A  G  E  R${R}                 ${BLUE}|${R}"
-    echo -e "  ${BLUE}|${R}   ${DIM}OpenVPN Panel  |  v1.5${R}                    ${BLUE}|${R}"
-    echo -e "  ${BLUE}|${R}                                              ${BLUE}|${R}"
-    echo -e "  ${BLUE}+==============================================+${R}"
+    echo -e "  ${BLUE}+================================================+${R}"
+    echo -e "  ${BLUE}|${R}                                                ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${RED}${BOLD}  ___  __   ______  _____  ______  _____  ___  ${R}  ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${RED}${BOLD} / _ \/ /  / __/ / / / _ \/ __/ / / / _  \/ _ \ ${R} ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${RED}${BOLD}/ // / /__/ /_/ /_/ / __/ _/ /_/ / / /  /  __/ ${R} ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${RED}${BOLD}\___/\____/\__/\____/_/  \_\____/_/ /_/\___/  ${R}  ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}                                                ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${DIM}OpenVPN Panel  ·  Free & Open Source  ·  v1.5${R}  ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}  ${DIM}https://github.com/anonysec/OVManager${R}         ${BLUE}|${R}"
+    echo -e "  ${BLUE}|${R}                                                ${BLUE}|${R}"
+    echo -e "  ${BLUE}+================================================+${R}"
     echo -e ""
 }
 
