@@ -1,6 +1,8 @@
 #!/bin/bash
 # OVManager — OpenVPN Panel Installer
 # Usage: bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
+#        bash <(curl -Ls URL) update
+#        bash <(curl -Ls URL) uninstall
 
 set -uo pipefail
 
@@ -9,12 +11,13 @@ set -uo pipefail
 # ═══════════════════════════════════════
 REPO="anonysec/OVManager"
 INSTALL_DIR="/opt/ovmanager"
+DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_PATH="dash"
 DEFAULT_USER="admin"
 DEFAULT_PASS="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.5"
+VERSION="1.6"
 
 # ═══════════════════════════════════════
 #  C O L O R S
@@ -84,15 +87,18 @@ show_help() {
     --path URLPATH      URL path prefix (default: dash)
     --admin-user USER   Admin username
     --admin-pass PASS   Admin password
-    --tls-key PATH      TLS private key
-    --tls-cert PATH     TLS certificate
+    --tls-le DOMAIN     Let's Encrypt (domain, requires port 80 + DNS)
+    --tls-ip            Let's Encrypt (IP, short-lived ~6 days, port 80)
+    --tls-self          Self-signed certificate
+    --tls-custom KEY CERT  Custom cert path (copied to /etc/letsencrypt/<domain>/)
+    --tls-none          No TLS (HTTP only)
     --docker            Use Docker
     --help              Show this help
 EOF
     exit 0
 }
 
-PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS="" TLS_KEY="" TLS_CERT=""
+PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS="" TLS_MODE="" TLS_KEY="" TLS_CERT=""
 DOCKER_FLAG=0 ACTION="install"
 
 parse_args() {
@@ -102,8 +108,11 @@ parse_args() {
             --path)       PATHPREFIX="$2"; shift 2 ;;
             --admin-user) ADMIN_USER="$2"; shift 2 ;;
             --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
-            --tls-key)    TLS_KEY="$2"; shift 2 ;;
-            --tls-cert)   TLS_CERT="$2"; shift 2 ;;
+            --tls-le)     TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
+            --tls-ip)     TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I | awk '{print $1}')"; shift ;;
+            --tls-self)   TLS_MODE="self" ;;
+            --tls-custom) TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
+            --tls-none)   TLS_MODE="none" ;;
             --docker)     DOCKER_FLAG=1; shift ;;
             --uninstall)  ACTION="uninstall"; shift ;;
             --help|-h)    show_help ;;
@@ -115,6 +124,19 @@ parse_args() {
 }
 
 # ═══════════════════════════════════════
+#  P O R T   C H E C K
+# ═══════════════════════════════════════
+port_in_use() {
+    ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'
+}
+
+check_port_available() {
+    if port_in_use "$1"; then
+        die "Port $1 is already in use. Please free port $1 or choose a different port."
+    fi
+}
+
+# ═══════════════════════════════════════
 #  S E T U P
 # ═══════════════════════════════════════
 interactive_setup() {
@@ -123,7 +145,36 @@ interactive_setup() {
     prompt_val ADMIN_USER "Admin user" "$DEFAULT_USER"
     prompt_val ADMIN_PASS "Admin pass" "$DEFAULT_PASS" "h"
     sep
+    if [[ -t 0 ]]; then
+        printf "  TLS mode\n"
+        line "  1)  Let's Encrypt (domain)"
+        line "  2)  Let's Encrypt (IP)"
+        line "  3)  Self-signed cert"
+        line "  4)  Custom cert path"
+        line "  5)  None (HTTP)"
+        printf "  Select [${GR}5${NC}] : "
+        read -r tls_choice
+        case "$tls_choice" in
+            1) TLS_MODE="le" ;;
+            2) TLS_MODE="le-ip" ;;
+            3) TLS_MODE="self" ;;
+            4) TLS_MODE="custom" ;;
+            5) TLS_MODE="none" ;;
+            *) TLS_MODE="none" ;;
+        esac
+    fi
+    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]]; then
+        if [[ -z "$TLS_DOMAIN" ]]; then
+            if [[ -t 0 ]]; then
+                printf "  Domain/IP [] : "
+                read -r TLS_DOMAIN
+            fi
+            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$PORT"
+        fi
+    fi
+    sep
     field "Install dir" "$INSTALL_DIR"
+    field "Data dir"    "$DATA_DIR"
     field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
     sep
     if [[ -t 0 ]]; then
@@ -150,10 +201,69 @@ check_deps() {
 }
 
 # ═══════════════════════════════════════
+#  L E T ' S   E N C R Y P T
+# ═══════════════════════════════════════
+generate_self_signed() {
+    info "Generating self-signed certificate..."
+    mkdir -p /etc/ssl/self-signed
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout /etc/ssl/self-signed/privkey.pem \
+        -out /etc/ssl/self-signed/fullchain.pem \
+        -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=$(hostname -I | awk '{print $1}')" 2>/dev/null
+    TLS_KEY="/etc/ssl/self-signed/privkey.pem"
+    TLS_CERT="/etc/ssl/self-signed/fullchain.pem"
+    step "Self-signed certificate generated"
+}
+
+get_acme_email() {
+    local email="acme-$(openssl rand -hex 4)@example.com"
+    echo "$email"
+}
+
+install_acme() {
+    if [[ ! -x "$HOME/.acme.sh/acme.sh" ]]; then
+        info "Installing acme.sh..."
+        curl -s https://get.acme.sh | sh
+    fi
+    source "$HOME/.acme.sh/acme.sh.env"
+}
+
+issue_lets_encrypt() {
+    local domain="$1" is_ip="$2"
+    install_acme
+    local email=$(get_acme_email)
+    local standalone_arg="--standalone"
+    
+    if [[ "$is_ip" == "1" ]]; then
+        info "Issuing short-lived certificate for IP $domain (6 days)..."
+        ~/.acme.sh/acme.sh \
+            --issue -d "$domain" \
+            $standalone_arg \
+            --certificate-profile shortlived \
+            --days 6 \
+            --key-file /etc/letsencrypt/$domain/privkey.pem \
+            --fullchain-file /etc/letsencrypt/$domain/fullchain.pem \
+            --reloadcmd "systemctl restart ovmanager.service" \
+            --accountemail "$email" 2>/dev/null || die "Failed to issue Let's Encrypt certificate for $domain"
+    else
+        info "Issuing certificate for domain $domain..."
+        ~/.acme.sh/acme.sh \
+            --issue -d "$domain" \
+            $standalone_arg \
+            --key-file /etc/letsencrypt/$domain/privkey.pem \
+            --fullchain-file /etc/letsencrypt/$domain/fullchain.pem \
+            --reloadcmd "systemctl restart ovmanager.service" \
+            --accountemail "$email" 2>/dev/null || die "Failed to issue Let's Encrypt certificate for $domain"
+    fi
+    step "Certificate issued and auto-renewal configured"
+}
+
+# ═══════════════════════════════════════
 #  I N S T A L L
 # ═══════════════════════════════════════
 do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed. Use --uninstall first."
+    [[ -d "$DATA_DIR" ]] || mkdir -p "$DATA_DIR"
 
     sep
     info "Cloning OVManager repository..."
@@ -185,24 +295,45 @@ do_install() {
         -e "s|^VITE_URLPATH=.*|VITE_URLPATH=${PATHPREFIX}|" \
         -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"${jwt_secret}\"|" \
         "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
-    [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && echo "SSL_KEYFILE=\"${TLS_KEY}\"" >> "$INSTALL_DIR/.env"
-    [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]] && echo "SSL_CERTFILE=\"${TLS_CERT}\"" >> "$INSTALL_DIR/.env"
-    step "Configuration saved to $INSTALL_DIR/.env"
-
-    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
-        info "Building frontend (this may take a minute)..."
-        cd "$INSTALL_DIR/frontend"
-        npm ci --silent >/dev/null 2>&1 &
-        spinner "Node.js dependencies installed" $!
-        npm run build --silent >/dev/null 2>&1 &
-        spinner "Frontend assets built" $!
-    fi
+    
+    # TLS configuration
+    case "$TLS_MODE" in
+        le)
+            check_port_available 80
+            issue_lets_encrypt "$TLS_DOMAIN" "0"
+            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
+            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
+            ;;
+        le-ip)
+            check_port_available 80
+            issue_lets_encrypt "$TLS_DOMAIN" "1"
+            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
+            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
+            ;;
+        self)
+            generate_self_signed
+            echo "SSL_KEYFILE=\"$TLS_KEY\"" >> "$INSTALL_DIR/.env"
+            echo "SSL_CERTFILE=\"$TLS_CERT\"" >> "$INSTALL_DIR/.env"
+            ;;
+        custom)
+            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Custom cert/key files not found"
+            mkdir -p /etc/letsencrypt/"$TLS_DOMAIN"
+            cp "$TLS_KEY" /etc/letsencrypt/"$TLS_DOMAIN"/privkey.pem
+            cp "$TLS_CERT" /etc/letsencrypt/"$TLS_DOMAIN"/fullchain.pem
+            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
+            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
+            ;;
+        none)
+            # No TLS variables set
+            ;;
+    esac
 
     if [[ $DOCKER_FLAG -eq 1 ]]; then
         setup_docker
     else
         info "Setting up systemd service..."
         local real_uv; real_uv=$(command -v uv)
+        local start_after="multi-user.target"
         cat > "/etc/systemd/system/${SYSTEMD_SERVICE}" << SVCEOF
 [Unit]
 Description=OVManager OpenVPN Panel
@@ -213,13 +344,16 @@ Type=simple
 User=root
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="DATA_DIR=${DATA_DIR}"
 ExecStart=${real_uv} run main.py
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=${start_after}.target
 SVCEOF
+        # Also write env file for systemd
+        echo "DATA_DIR=${DATA_DIR}" >> "$INSTALL_DIR/.env"
         systemctl daemon-reload >/dev/null 2>&1
         systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
         systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
@@ -238,8 +372,14 @@ SVCEOF
     line ""
 }
 
+# ═══════════════════════════════════════
+#  D O C K E R
+# ═══════════════════════════════════════
 setup_docker() {
+    info "Docker mode: setting up docker-compose..."
+    local data_dir_abs=$(cd "$DATA_DIR" && pwd)
     local jwt_secret; jwt_secret=$(openssl rand -base64 48 2>/dev/null)
+    
     cat > "$INSTALL_DIR/docker-compose.yml" << EOF
 version: '3.8'
 services:
@@ -255,8 +395,12 @@ services:
       - PORT=${PORT}
       - URLPATH=${PATHPREFIX}
       - JWT_SECRET_KEY=${jwt_secret}
+      - DATA_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      - ${data_dir_abs}:/app/data
+$( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - /etc/letsencrypt/${TLS_DOMAIN}:/app/certs:ro")
+$( [[ "$TLS_MODE" == "self" ]] && echo "      - /etc/ssl/self-signed:/app/certs:ro")
+$( [[ "$TLS_MODE" == "custom" ]] && echo "      - /etc/letsencrypt/${TLS_DOMAIN}:/app/certs:ro")
     networks:
       - ovmanager-net
   db:
@@ -281,6 +425,9 @@ EOF
     spinner "Docker containers started" $!
 }
 
+# ═══════════════════════════════════════
+#  U P D A T E
+# ═══════════════════════════════════════
 do_update() {
     [[ ! -d "$INSTALL_DIR" ]] && die "Not installed"
     line ""
@@ -303,6 +450,9 @@ do_update() {
     line ""
 }
 
+# ═══════════════════════════════════════
+#  U N I N S T A L L
+# ═══════════════════════════════════════
 do_uninstall() {
     if [[ -t 0 ]]; then
         printf "  Remove OVManager and stop service? [y/N] : "; read -r c
@@ -313,6 +463,7 @@ do_uninstall() {
     rm -f "/etc/systemd/system/${SYSTEMD_SERVICE}"
     systemctl daemon-reload 2>/dev/null
     rm -rf "$INSTALL_DIR"
+    rm -rf "$DATA_DIR"
     step "Uninstalled"
     line ""
 }
@@ -329,7 +480,6 @@ main() {
     sep
     line ""
 
-    # Handle subcommands
     case "$ACTION" in
         uninstall)
             do_uninstall; exit 0 ;;
@@ -337,11 +487,9 @@ main() {
             do_update; exit 0 ;;
     esac
 
-    # If already installed, check for updates
     if [[ -d "$INSTALL_DIR" ]]; then
         warn "OVManager is already installed"
         line ""
-        # Check if remote has new commits
         cd "$INSTALL_DIR" 2>/dev/null
         git fetch origin main --quiet 2>/dev/null
         local LOCAL=$(git rev-parse HEAD 2>/dev/null)
@@ -388,6 +536,7 @@ main() {
         field "URL path"   "/${PATHPREFIX}/"
         field "Admin user" "$ADMIN_USER"
         field "Install dir" "$INSTALL_DIR"
+        field "Data dir"    "$DATA_DIR"
         field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
         sep
     fi
