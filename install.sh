@@ -1,270 +1,317 @@
-#!/bash
-# OVManager OpenVPN Panel Installer
-# Supports: native install, docker compose, update, uninstall
-# Usage: curl -sSL https://anonysec.github.io/OVManager/install.sh | bash
-#        curl -sSL URL | bash -s -- --port 2095 --path dash --tls-key /path/key --tls-cert /path/cert
+#!/bin/bash
+# OVManager OpenVPN Panel Installer — TUI Edition
+# Usage: bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
+#        curl -Ls URL | bash -s -- --port 2095 --path dash
 
-set -euo pipefail
+set -uo pipefail
 
-# ———————— Defaults ————————
+# ══════════════════════════════════════════════════
+#  C O N F I G
+# ══════════════════════════════════════════════════
 REPO="anonysec/OVManager"
 INSTALL_DIR="/opt/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_PATH="dash"
-DOCKER_COMPOSE_FILE="docker-compose.yml"
+DEFAULT_USER="admin"
+DEFAULT_PASS="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-FRONTEND_DIR="frontend"
 
-# ———————— Color definitions ————————
-GREEN=$(tput setaf 2 2>/dev/null || echo '\033[32m')
-RED=$(tput setaf 1 2>/dev/null || echo '\033[31m')
-YELLOW=$(tput setaf 3 2>/dev/null || echo '\033[33m')
-BLUE=$(tput setaf 4 2>/dev/null || echo '\033[34m')
-NC=$(tput sgr0 2>/dev/null || echo '\033[0m')
-BOLD=$(tput bold 2>/dev/null || echo '\033[1m')
+# ══════════════════════════════════════════════════
+#  C O L O R S
+# ══════════════════════════════════════════════════
+C='\033'
+R="${C}[0m"
+BOLD="${C}[1m"
+DIM="${C}[2m"
+RED="${C}[31m"
+GREEN="${C}[32m"
+YELLOW="${C}[33m"
+BLUE="${C}[34m"
+CYAN="${C}[36m"
+WHITE="${C}[97m"
+BG_BLUE="${C}[44m"
+BG_GREEN="${C}[42m"
+BG_RED="${C}[41m"
 
-# ———————— Logging helpers ————————
-log()   { echo -e "  [${GREEN}✓${NC}] $1" ;}
-log_y() { echo -e "  [${YELLOW}⚠${NC}] $1" ;}
-log_r() { echo -e "  [${RED}✗${NC}] $1" ;}
-log_b() { echo -e "  [${BLUE}ℹ${NC}] $1" ; }
+# ══════════════════════════════════════════════════
+#  H E L P E R S
+# ══════════════════════════════════════════════════
+clear_line() { printf "\r\033[K"; }
+spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
 
-# ———————— Error handling ————————
-error_exit() {
-    log_r "ERROR: $1"
+spinner() {
+    local msg="$1" pid=$2 logfile="${3:-}"
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  ${CYAN}%s${R} %s" "${spin_chars:$((i%10)):1}" "$msg"
+        sleep 0.1
+        ((i++))
+    done
+    wait "$pid" 2>/dev/null
+    local rc=$?
+    clear_line
+    if [[ $rc -eq 0 ]]; then
+        printf "  ${GREEN}✓${R} %s\n" "$msg"
+    else
+        printf "  ${RED}✗${R} %s (exit code: %d)\n" "$msg" "$rc"
+        return 1
+    fi
+    return 0
+}
+
+step_ok()   { echo -e "  ${GREEN}✓${R} $1"; }
+step_warn() { echo -e "  ${YELLOW}⚠${R} $1"; }
+step_fail() { echo -e "  ${RED}✗${R} $1"; }
+step_info() { echo -e "  ${BLUE}●${R} $1"; }
+step_dim()  { echo -e "  ${DIM}$1${R}"; }
+
+box_line() { echo -e "  ${CYAN}│${R} $1"; }
+
+banner() {
+    clear
+    printf "\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}                                                              ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ███╗   ███╗██╗   ██╗██╗  ███████╗███╗   ███╗ █████╗ ██████╗ ██╗  ██╗███████╗  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ████╗ ████║██║   ██║██║  ██╔════╝████╗ ████║██╔══██╗██╔══██╗██║ ██╔╝██╔════╝  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ██╔████╔██║██║   ██║██║  █████╗  ██╔████╔██║███████║██████╔╝█████╔╝ ███████╗  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ██║╚██╔╝██║██║   ██║██║  ██╔══╝  ██║╚██╔╝██║██╔══██║██╔══██╗██╔═██╗ ╚════██║  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ██║ ╚═╝ ██║╚██████╔╝██║  ███████╗██║ ╚═╝ ██║██║  ██║██║  ██║██║  ██╗███████║  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}    ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝  ${R}\n"
+    printf "  ${BG_BLUE}${WHITE}${BOLD}                                                              ${R}\n"
+    printf "\n"
+    printf "  ${DIM}OpenVPN Panel Installer${R}  ${DIM}v1.5${R}\n"
+    printf "  ${DIM}https://github.com/${REPO}${R}\n"
+    printf "\n"
+}
+
+divider() {
+    printf "  ${DIM}──────────────────────────────────────────────────────────────${R}\n"
+}
+
+header() {
+    printf "\n  ${BOLD}${BLUE}┌──────────────────────────────────────┐${R}\n"
+    printf "  ${BOLD}${BLUE}│${R}  ${BOLD}${WHITE}%-36s${R}  ${BOLD}${BLUE}│${R}\n" "$1"
+    printf "  ${BOLD}${BLUE}└──────────────────────────────────────┘${R}\n\n"
+}
+
+# ══════════════════════════════════════════════════
+#  E R R O R   H A N D L I N G
+# ══════════════════════════════════════════════════
+die() {
+    printf "\n  ${BG_RED}${WHITE}${BOLD} ERROR ${R} %s\n\n" "$1" >&2
     exit 1
 }
 
-trap 'error_exit "Installation interrupted."' INT TERM
+trap 'die "Installation interrupted by user"' INT TERM
 
-# ———————— Help ————————
+# ══════════════════════════════════════════════════
+#  H E L P
+# ══════════════════════════════════════════════════
 show_help() {
-    cat << EOF
-OVManager OpenVPN Panel Installer
+    cat << 'EOF'
 
-Usage: $0 [OPTIONS]
+  OVManager OpenVPN Panel Installer
 
-Options:
-  --port PORT         Panel port (default: ${DEFAULT_PORT})
-  --path URLPATH      URL path prefix (default: ${DEFAULT_PATH})
-  --admin-user USER   Admin username (prompted if not provided)
-  --admin-pass PASS   Admin password (prompted if not provided)
-  --tls-key PATH      Path to TLS private key (optional)
-  --tls-cert PATH     Path to TLS certificate (optional)
-  --docker            Use docker-compose instead of native install
-  --help              Show this help
+  Usage:
+    bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
+    curl -Ls URL | bash -s -- --port 2095 --path dash --admin-user admin --admin-pass secret
 
-Env vars (used if flags not provided):
-  PANEL_PORT, PANEL_PATH, ADMIN_USER, ADMIN_PASS, SSL_KEYFILE, SSL_CERTFILE
+  Flags:
+    --port PORT         Panel port (default: 2095)
+    --path URLPATH      URL path prefix (default: dash)
+    --admin-user USER   Admin username (default: admin)
+    --admin-pass PASS   Admin password (default: admin)
+    --tls-key PATH      TLS private key (optional)
+    --tls-cert PATH     TLS certificate (optional)
+    --docker            Use Docker instead of native install
+    --uninstall         Remove OVManager
+    --help              Show this help
 
-Examples:
-  curl -sSL https://anonysec.github.io/OVManager/install.sh | bash
-  curl -sSL URL | bash -s -- --port 2095 --path dash
-  curl -sSL URL | bash -s -- --admin-user admin --admin-pass secret --docker
 EOF
+    exit 0
 }
 
-# ———————— Parse arguments ————————
+# ══════════════════════════════════════════════════
+#  P A R S E   A R G S
+# ══════════════════════════════════════════════════
+PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS="" TLS_KEY="" TLS_CERT=""
+DOCKER_FLAG=0 UNINSTALL=0
+
 parse_args() {
-    PORT=""; PATHPREFIX=""; ADMIN_USER=""; ADMIN_PASS=""; TLS_KEY=""; TLS_CERT=""; DOCKER_FLAG=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --port)      PORT="$2"; shift 2 ;;
-            --path)      PATHPREFIX="$2"; shift 2 ;;
-            --admin-user)ADMIN_USER="$2"; shift 2 ;;
-            --admin-pass)ADMIN_PASS="$2"; shift 2 ;;
-            --tls-key)   TLS_KEY="$2"; shift 2 ;;
-            --tls-cert)  TLS_CERT="$2"; shift 2 ;;
-            --docker)    DOCKER_FLAG=1; shift ;;
-            --help)      show_help; exit 0 ;;
-            *)           error_exit "Unknown option: $1" ;;
+            --port)       PORT="$2"; shift 2 ;;
+            --path)       PATHPREFIX="$2"; shift 2 ;;
+            --admin-user) ADMIN_USER="$2"; shift 2 ;;
+            --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
+            --tls-key)    TLS_KEY="$2"; shift 2 ;;
+            --tls-cert)   TLS_CERT="$2"; shift 2 ;;
+            --docker)     DOCKER_FLAG=1; shift ;;
+            --uninstall)  UNINSTALL=1; shift ;;
+            --help|-h)    show_help ;;
+            *)            die "Unknown option: $1" ;;
         esac
     done
 }
 
-# ———————— Interactive prompts ————————
-prompt_input() {
-    local var_name="$1" prompt="$2" default="$3"
-    local input=""
+# ══════════════════════════════════════════════════
+#  I N T E R A C T I V E   M E N U
+# ══════════════════════════════════════════════════
+prompt_value() {
+    local var_name="$1" label="$2" default="$3" hidden="${4:-}"
+    local val=""
     if [[ -t 0 ]]; then
-        read -r -p "$prompt [$default]: " input 2>/dev/null || true
+        if [[ "$hidden" == "hidden" ]]; then
+            printf "  ${WHITE}%-18s${R} [${DIM}%s${R}]: " "$label" "$default"
+            read -rs val
+            printf "\n"
+        else
+            printf "  ${WHITE}%-18s${R} [${DIM}%s${R}]: " "$label" "$default"
+            read -r val
+        fi
     fi
-    if [[ -z "$input" ]]; then
-        eval "$var_name='$default'"
+    [[ -z "$val" ]] && val="$default"
+    eval "$var_name='$val'"
+}
+
+prompt_choice() {
+    local var_name="$1" label="$2" default="$3"
+    shift 3
+    local options=("$@")
+    if [[ -t 0 ]]; then
+        printf "  ${WHITE}%s${R}\n" "$label"
+        for i in "${!options[@]}"; do
+            local marker=" "
+            [[ "${options[$i]}" == "$default" ]] && marker="${GREEN}●${R}"
+            printf "    %b %d) %s\n" "$marker" $((i+1)) "${options[$i]}"
+        done
+        printf "  ${DIM}Press Enter for default [%s]${R}: " "$default"
+        read -r choice
+        if [[ -z "$choice" ]]; then
+            eval "$var_name='$default'"
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#options[@]} ]]; then
+            eval "$var_name='${options[$((choice-1))]}'"
+        else
+            eval "$var_name='$choice'"
+        fi
     else
-        eval "$var_name='$input'"
+        eval "$var_name='$default'"
     fi
 }
 
-read_config() {
-    # Use provided flags first, then env vars, then defaults
-    : "${PORT:=${PANEL_PORT:-}}"
-    : "${PATHPREFIX:=${PANEL_PATH:-}}"
-    : "${ADMIN_USER:=${ADMIN_USER:-}}"
-    : "${ADMIN_PASS:=${ADMIN_PASS:-}}"
-    : "${TLS_KEY:=${SSL_KEYFILE:-}}"
-    : "${TLS_CERT:=${SSL_CERTFILE:-}}"
+interactive_setup() {
+    header "Configuration"
 
-    [[ -z "$PORT" ]]       && prompt_input PORT       "Port"              "$DEFAULT_PORT"
-    [[ -z "$PATHPREFIX" ]] && prompt_input PATHPREFIX "URL path prefix" "$DEFAULT_PATH"
-    [[ -z "$ADMIN_USER" ]] && prompt_input ADMIN_USER "Admin username"   "admin"
-    [[ -z "$ADMIN_PASS" ]] && prompt_input ADMIN_PASS "Admin password"   "CHANGE_ME" # intentionally insecure for prompt flow
+    prompt_value PORT "Port" "$DEFAULT_PORT"
+    prompt_value PATHPREFIX "URL path" "$DEFAULT_PATH"
+    prompt_value ADMIN_USER "Admin user" "$DEFAULT_USER"
+    prompt_value ADMIN_PASS "Admin password" "$DEFAULT_PASS" hidden
+
+    divider
+    printf "\n  ${BOLD}Summary:${R}\n"
+    box_line "Port:        ${CYAN}${PORT}${R}"
+    box_line "URL path:    ${CYAN}/${PATHPREFIX}/${R}"
+    box_line "Admin user:  ${CYAN}${ADMIN_USER}${R}"
+    box_line "Install dir: ${CYAN}${INSTALL_DIR}${R}"
+    box_line "Mode:        ${CYAN}$([ $DOCKER_FLAG -eq 1 ] && echo 'Docker' || echo 'Native (systemd)')${R}"
+    printf "\n"
+
+    if [[ -t 0 ]]; then
+        printf "  ${BOLD}Proceed with installation?${R} [${GREEN}Y${R}/n]: "
+        read -r confirm
+        if [[ "$confirm" =~ ^[Nn]$ ]]; then
+            die "Installation cancelled."
+        fi
+    fi
 }
 
-# ———————— Dependency checks ————————
+# ══════════════════════════════════════════════════
+#  D E P S
+# ══════════════════════════════════════════════════
+check_root() {
+    [[ "$EUID" -ne 0 ]] && die "Must run as root. Use: sudo bash <(curl -Ls URL)"
+}
+
 check_deps() {
     local missing=()
-    for cmd in curl tar systemctl openssl; do
+    for cmd in curl tar openssl git; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
-        log_y "Missing dependencies: ${missing[*]}"
-        if [[ -t 0 ]]; then
-            read -r -p "Attempt to install missing deps with apt-get? [y/N] " resp
-        else
-            resp="y"
-        fi
-        if [[ "$resp" =~ ^[Yy]$ ]]; then
-            apt-get update -qq && apt-get install -y -qq "${missing[@]}" 2>/dev/null || error_exit "Failed to install dependencies"
-            log "Installed missing dependencies"
-        else
-            error_exit "Required tools missing: ${missing[*]}"
-        fi
+        step_warn "Installing missing deps: ${missing[*]}"
+        apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 \
+            || die "Failed to install: ${missing[*]}"
+        step_ok "Dependencies installed"
+    else
+        step_ok "All dependencies found"
     fi
 }
 
-# ———————— Verify prerequisites ————————
-verify_prereqs() {
-    if [[ "$EUID" -ne 0 ]]; then error_exit "This script must be run as root. Use sudo."; fi
-    command -v systemctl >/dev/null || error_exit "systemctl not found. This script requires systemd."
-    if [[ $DOCKER_FLAG -eq 1 ]]; then
-        command -v docker >/dev/null 2>&1 || error_exit "docker not found. Install docker first."
-    fi
-    if [[ -d "$INSTALL_DIR" ]]; then error_exit "Installation directory $INSTALL_DIR already exists. Remove it first."; fi
-}
+# ══════════════════════════════════════════════════
+#  I N S T A L L
+# ══════════════════════════════════════════════════
+do_install() {
+    [[ -d "$INSTALL_DIR" ]] && die "Already installed at $INSTALL_DIR. Run with --uninstall first."
 
-# ———————— Download / clone repo ————————
-get_source() {
-    log_b "Preparing source..."
-    local repo_url="https://github.com/${REPO}.git"
-    
+    header "Installing OVManager"
+
+    # 1. Source
+    step_info "Downloading source..."
     if command -v git >/dev/null 2>&1; then
-        log "Cloning repository..."
-        git clone --depth 1 --branch main "$repo_url" "$INSTALL_DIR" 2>/dev/null || \
-        git clone --depth 1 "$repo_url" "$INSTALL_DIR" || error_exit "Failed to clone repository"
-    elif [[ -f /tmp/ovmanager.tar.gz ]]; then
-        log "Using cached tarball..."
-        tar -xzf /tmp/ovmanager.tar.gz -C /opt/ || error_exit "Failed to extract tarball"
-        mv /opt/OVManager "$INSTALL_DIR" || error_exit "Failed to move extracted files"
+        git clone --depth 1 --branch main "https://github.com/${REPO}.git" "$INSTALL_DIR" >/dev/null 2>&1 &
+        spinner "Cloning repository" $!
     else
-        log "Downloading repository tarball..."
-        curl -sSLo /tmp/ovmanager.tar.gz "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" || \
-        curl -sSLo /tmp/ovmanager.tar.gz "https://api.github.com/repos/${REPO}/tarball/" || \
-        error_exit "Failed to download repository"
-        tar -xzf /tmp/ovmanager.tar.gz -C /opt/ || error_exit "Failed to extract tarball"
-        # Find the extracted directory
-        local extracted_dir
-        extracted_dir=$(ls -d /opt/$(basename ${REPO})-*) || error_exit "Could not find extracted directory"
-        mv "$extracted_dir" "$INSTALL_DIR" || error_exit "Failed to move extracted files"
-    fi
-    log "Source ready at $INSTALL_DIR"
-}
-
-# ———————— Setup Python/uv ————————
-setup_backend() {
-    log_b "Setting up backend..."
-    local VENV_DIR="$INSTALL_DIR/.venv"
-    
-    if command -v python3 >/dev/null 2>&1; then
-        log "Using system python3"
-    elif command -v python >/dev/null 2>&1 && python --version 2>&1 | grep -q "Python 3"; then
-        ln -sf $(command -v python) /usr/local/bin/python3 2>/dev/null || true
-    else
-        error_exit "python3 not found. Please install python3."
+        curl -sSLo /tmp/ovmanager.tar.gz "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" >/dev/null 2>&1 &
+        spinner "Downloading tarball" $!
+        tar -xzf /tmp/ovmanager.tar.gz -C /opt/ 2>/dev/null
+        mv "/opt/$(basename ${REPO})-main" "$INSTALL_DIR" 2>/dev/null || \
+        mv "/opt/OVManager-main" "$INSTALL_DIR" 2>/dev/null || \
+        die "Failed to extract"
+        rm -f /tmp/ovmanager.tar.gz
     fi
 
-    # Install uv if not present
-    if ! command -v uv >/dev/null 2>&1; then
-        log "Installing uv..."
-        python3 -m pip install --quiet --upgrade pip 2>/dev/null || \
-        python -m pip install --quiet --upgrade pip 2>/dev/null || true
-        python3 -m pip install --quiet uv 2>/dev/null || \
-        python -m pip install --quiet uv 2>/dev/null || \
-        error_exit "Failed to install uv. Install manually or ensure pip can install packages."
+    # 2. Backend
+    step_info "Setting up backend..."
+    cd "$INSTALL_DIR"
+    uv sync --quiet 2>&1 &
+    spinner "Installing Python dependencies" $!
+
+    # 3. Frontend
+    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
+        step_info "Building frontend..."
+        cd "$INSTALL_DIR/frontend"
+        npm ci --silent >/dev/null 2>&1 &
+        spinner "Installing Node.js dependencies" $!
+        npm run build --silent >/dev/null 2>&1 &
+        spinner "Building frontend assets" $!
     fi
 
-    log "Setting up virtual environment..."
-    cd "$INSTALL_DIR" && uv sync || error_exit "uv sync failed"
-    log "Backend setup complete"
-}
-
-# ———————— Setup frontend ————————
-setup_frontend() {
-    log_b "Setting up frontend..."
-    
-    if [[ ! -f "$INSTALL_DIR/$FRONTEND_DIR/package.json" ]]; then
-        log_y "No package.json found in frontend/ - skipping frontend install"
-        return 0
-    fi
-
-    # Try npm
-    if command -v npm >/dev/null 2>&1; then
-        log "Running npm ci in frontend..."
-        cd "$INSTALL_DIR/$FRONTEND_DIR" && npm ci 2>/dev/null && npm run build 2>/dev/null && log "Frontend build complete" || log_y "Frontend build may have warnings"
-    # Try npx
-    elif command -v npx >/dev/null 2>&1; then
-        log "Running npx npm ci in frontend..."
-        cd "$INSTALL_DIR/$FRONTEND_DIR" && npx npm ci 2>/dev/null && npx npm run build 2>/dev/null && log "Frontend build complete" || log_y "Frontend build may have warnings"
-    else
-        log_y "npm not found, skipping frontend build"
-    fi
-}
-
-# ———————— Write .env ————————
-write_env() {
-    log_b "Writing configuration..."
-    local env_file="$INSTALL_DIR/.env"
+    # 4. Config
+    step_info "Writing configuration..."
     local jwt_secret
     jwt_secret=$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)
 
-    [[ -f "$INSTALL_DIR/.env.example" ]] || error_exit ".env.example not found in repository"
+    [[ -f "$INSTALL_DIR/.env.example" ]] || die ".env.example not found in repository"
+    sed \
+        -e "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${ADMIN_USER}|" \
+        -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${ADMIN_PASS}|" \
+        -e "s|^PORT=.*|PORT=${PORT}|" \
+        -e "s|^URLPATH=.*|URLPATH=${PATHPREFIX}|" \
+        -e "s|^VITE_URLPATH=.*|VITE_URLPATH=${PATHPREFIX}|" \
+        -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"${jwt_secret}\"|" \
+        "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
+    [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && echo "SSL_KEYFILE=\"${TLS_KEY}\"" >> "$INSTALL_DIR/.env"
+    [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]] && echo "SSL_CERTFILE=\"${TLS_CERT}\"" >> "$INSTALL_DIR/.env"
+    step_ok "Configuration written"
 
-    cat "$INSTALL_DIR/.env.example" | sed \
-        -e "s|^APP_ENV=.*|APP_ENV=production|" \
-        -e "s|^APP_DEBUG=.*|APP_DEBUG=false|" \
-        -e "s|^DB_HOST=.*|DB_HOST=127.0.0.1|" \
-        -e "s|^DB_DATABASE=.*|DB_DATABASE=ovmanager|" \
-        -e "s|^DB_USERNAME=.*|DB_USERNAME=ovmanager|" \
-        -e "s|^DB_PASSWORD=.*|DB_PASSWORD=ovmanager|" \
-        -e "s|^PORT=.*|PORT=$PORT|" \
-        -e "s|^URLPATH=.*|URLPATH=$PATHPREFIX|" \
-        -e "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=$ADMIN_USER|" \
-        -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PASS|" \
-        -e "s|^VITE_URLPATH=.*|VITE_URLPATH=$PATHPREFIX|" \
-        -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=$jwt_secret|" \
-        -e "s|^HOST=.*|HOST=0.0.0.0|" \
-        > "$env_file"
-
-    # Override with TLS if provided
-    if [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]]; then
-        echo "SSL_KEYFILE=$TLS_KEY" >>"$env_file"
-    fi
-    if [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]]; then
-        echo "SSL_CERTFILE=$TLS_CERT" >>"$env_file"
-    fi
-
-    log "Configuration written to $env_file"
-    log_b "Generated JWT_SECRET_KEY"
-}
-
-# ———————— Systemd service ————————
-setup_systemd() {
-    log_b "Creating systemd service..."
-    local service_file="/etc/systemd/system/$SYSTEMD_SERVICE"
-    local real_uv
-    real_uv=$(command -v uv || echo "/usr/local/bin/uv")
-    
-    cat >"$service_file" << EOF
+    # 5. Service
+    if [[ $DOCKER_FLAG -eq 1 ]]; then
+        setup_docker
+    else
+        step_info "Creating systemd service..."
+        local real_uv
+        real_uv=$(command -v uv)
+        cat > "/etc/systemd/system/${SYSTEMD_SERVICE}" << SVCEOF
 [Unit]
 Description=OVManager OpenVPN Panel
 After=network.target
@@ -272,37 +319,40 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR
-Environment="PATH=$INSTALL_DIR/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=$real_uv run main.py
+WorkingDirectory=${INSTALL_DIR}
+Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=${real_uv} run main.py
 Restart=on-failure
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SVCEOF
+        systemctl daemon-reload >/dev/null 2>&1
+        systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
+        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
+        spinner "Starting ovmanager service" $!
+    fi
 
-    systemctl daemon-reload
-    systemctl enable "$SYSTEMD_SERVICE" || error_exit "Failed to enable service"
-    systemctl restart "$SYSTEMD_SERVICE" || error_exit "Failed to start service"
-    log "Systemd service $SYSTEMD_SERVICE configured and running"
+    # Done
+    divider
+    printf "\n"
+    printf "  ${BG_GREEN}${WHITE}${BOLD}  ✓  INSTALLED SUCCESSFULLY  ${R}\n\n"
+    printf "  ${BOLD}Access:${R}  ${CYAN}http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/${R}\n"
+    printf "  ${BOLD}Login:${R}   ${GREEN}${ADMIN_USER}${R} / ${GREEN}${ADMIN_PASS}${R}\n\n"
+    printf "  ${DIM}Commands:${R}\n"
+    printf "    ${DIM}systemctl status ${SYSTEMD_SERVICE}${R}\n"
+    printf "    ${DIM}systemctl restart ${SYSTEMD_SERVICE}${R}\n"
+    printf "    ${DIM}journalctl -u ${SYSTEMD_SERVICE} -f${R}\n\n"
 }
 
-# ———————— Docker compose ————————
 setup_docker() {
-    log_b "Generating docker-compose configuration..."
-    local compose_file="$INSTALL_DIR/$DOCKER_COMPOSE_FILE"
-    
-    # Generate TLS config lines
-    local tls_config=""
-    if [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]]; then
-        tls_config="    - ${TLS_KEY}:/run/secrets/server.key\n"
-    fi
-    if [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]]; then
-        tls_config+="    - ${TLS_CERT}:/run/secrets/server.crt\n"
-    fi
+    step_info "Setting up Docker..."
+    local compose_file="$INSTALL_DIR/docker-compose.yml"
+    local jwt_secret
+    jwt_secret=$(openssl rand -base64 48 2>/dev/null)
 
-    cat > "$compose_file" << EOF
+    cat > "$compose_file" << COMPEOF
 version: '3.8'
 services:
   ovmanager:
@@ -312,24 +362,14 @@ services:
     ports:
       - "${PORT}:${PORT}"
     environment:
-$(printf '      %s\n' \
-        "APP_ENV: production" \
-        "APP_DEBUG: false" \
-        "DB_HOST: db" \
-        "DB_DATABASE: ovmanager" \
-        "DB_USERNAME: ovmanager" \
-        "DB_PASSWORD: ovmanager" \
-        "PORT: ${PORT}" \
-        "URLPATH: ${PATHPREFIX}" \
-        "ADMIN_USERNAME: ${ADMIN_USER}" \
-        "ADMIN_PASSWORD: ${ADMIN_PASS}" \
-        "VITE_URLPATH: /${PATHPREFIX}/" \
-        "JWT_SECRET_KEY: $(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)")
-$( [[ -n "$tls_config" ]] && printf '      TLS_KEY_FILE: /run/secrets/server.key\n      TLS_CERT_FILE: /run/secrets/server.crt\n' )
+      - ADMIN_USERNAME=${ADMIN_USER}
+      - ADMIN_PASSWORD=${ADMIN_PASS}
+      - PORT=${PORT}
+      - URLPATH=${PATHPREFIX}
+      - VITE_URLPATH=${PATHPREFIX}
+      - JWT_SECRET_KEY=${jwt_secret}
     volumes:
-$( [[ -n "$TLS_KEY" ]] && printf '      - ./server.key:/run/secrets/server.key:ro\n' )
-$( [[ -n "$TLS_CERT" ]] && printf '      - ./server.crt:/run/secrets/server.crt:ro\n' )
-      - ./backend:/app
+      - ./data:/app/data
     networks:
       - ovmanager-net
 
@@ -346,102 +386,95 @@ $( [[ -n "$TLS_CERT" ]] && printf '      - ./server.crt:/run/secrets/server.crt:
       - db_data:/var/lib/postgresql/data
 
 networks:
-  ovmanager:
+  ovmanager-net:
     driver: bridge
 
 volumes:
   db_data:
-EOF
+COMPEOF
 
-    if command -v docker-compose >/dev/null 2>&1; then
-        cd "$INSTALL_DIR" && docker-compose up -d || error_exit "Docker compose failed"
-    elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-        cd "$INSTALL_DIR" && docker compose up -d || error_exit "Docker compose failed"
+    cd "$INSTALL_DIR"
+    if command -v docker compose >/dev/null 2>&1; then
+        docker compose up -d 2>&1 &
+    elif command -v docker-compose >/dev/null 2>&1; then
+        docker-compose up -d 2>&1 &
     else
-        error_exit "Neither docker-compose nor docker compose found"
+        die "Docker not found"
     fi
-    log "Docker compose deployment started"
+    spinner "Starting Docker containers" $!
 }
 
-# ———————— Update ————————
+# ══════════════════════════════════════════════════
+#  U P D A T E
+# ══════════════════════════════════════════════════
 do_update() {
-    log_b "Checking for updates..."
-    [[ ! -d "$INSTALL_DIR" ]] && error_exit "Not installed at $INSTALL_DIR"
-    log "Pulling latest changes..."
-    cd "$INSTALL_DIR" && git pull origin main || error_exit "Git pull failed"
-    setup_backend
-    setup_frontend
-    systemctl restart "$SYSTEMD_SERVICE" || error_exit "Failed to restart service"
-    log "Update complete"
-}
-
-# ———————— Uninstall ————————
-do_uninstall() {
-    log_b "Starting uninstall..."
-    read -r -p "Remove installation directory $INSTALL_DIR? [y/N] " resp
-    [[ "$resp" =~ ^[Yy]$ ]] && rm -rf "$INSTALL_DIR" && log "Removed $INSTALL_DIR"
-    read -r -p "Stop and remove systemd service? [y/N] " resp
-    if [[ "$resp" =~ ^[Yy]$ ]]; then
-        systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null || true
-        systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
-        rm -f "/etc/systemd/system/$SYSTEMD_SERVICE"
-        systemctl daemon-reload
-        log "Service removed"
+    [[ ! -d "$INSTALL_DIR" ]] && die "Not installed at $INSTALL_DIR"
+    header "Updating OVManager"
+    cd "$INSTALL_DIR"
+    git pull origin main 2>&1 &
+    spinner "Pulling latest changes" $!
+    uv sync 2>&1 | tail -1 &
+    spinner "Updating Python dependencies" $!
+    if [[ -f "frontend/package.json" ]]; then
+        cd frontend
+        npm ci --silent 2>/dev/null &
+        spinner "Updating Node.js dependencies" $!
+        npm run build --silent 2>/dev/null &
+        spinner "Rebuilding frontend" $!
     fi
-    log "Uninstall complete"
+    systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
+    spinner "Restarting service" $!
+    divider
+    printf "  ${BG_GREEN}${WHITE}${BOLD}  ✓  UPDATED  ${R}\n\n"
 }
 
-# ———————— Main ————————
+# ══════════════════════════════════════════════════
+#  U N I N S T A L L
+# ══════════════════════════════════════════════════
+do_uninstall() {
+    header "Uninstalling OVManager"
+    if [[ -t 0 ]]; then
+        printf "  ${RED}Remove ${INSTALL_DIR} and stop service?${R} [y/N]: "
+        read -r confirm
+        [[ ! "$confirm" =~ ^[Yy]$ ]] && die "Cancelled."
+    fi
+    systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null
+    systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null
+    rm -f "/etc/systemd/system/${SYSTEMD_SERVICE}"
+    systemctl daemon-reload 2>/dev/null
+    rm -rf "$INSTALL_DIR"
+    step_ok "Service removed"
+    step_ok "Installation directory removed"
+    divider
+    printf "  ${BG_GREEN}${WHITE}${BOLD}  ✓  UNINSTALLED  ${R}\n\n"
+}
+
+# ══════════════════════════════════════════════════
+#  M A I N
+# ══════════════════════════════════════════════════
 main() {
-    # Check for subcommands
-    if [[ "${1:-}" == "update" ]]; then
-        parse_args "$@"
-        verify_prereqs
-        do_update
-        exit 0
-    elif [[ "${1:-}" == "uninstall" ]]; then
-        parse_args "$@"
+    parse_args "$@"
+    banner
+
+    if [[ $UNINSTALL -eq 1 ]]; then
         do_uninstall
         exit 0
     fi
 
-    parse_args "$@"
-
-    log_b "${BOLD}══════════════════════════════════${NC}"
-    log_b " ${BOLD}O  V  M  A  N  A  G  E  R${NC}  OpenVPN Panel Installer"
-    log_b "══════════════════════════════════${NC}"
-
-    # Check for help or no args
-    if [[ $# -eq 0 ]]; then
-        read_config
+    # If no flags provided, run interactive setup
+    if [[ -z "$PORT" && -z "$ADMIN_USER" ]]; then
+        interactive_setup
+    else
+        # Fill defaults for any unset values
+        : "${PORT:=$DEFAULT_PORT}"
+        : "${PATHPREFIX:=$DEFAULT_PATH}"
+        : "${ADMIN_USER:=$DEFAULT_USER}"
+        : "${ADMIN_PASS:=$DEFAULT_PASS}"
     fi
 
+    check_root
     check_deps
-    verify_prereqs
-
-    log "Installing OVManager to $INSTALL_DIR"
-    get_source
-
-    setup_backend
-    setup_frontend
-    write_env
-
-    if [[ $DOCKER_FLAG -eq 1 ]]; then
-        setup_docker
-    else
-        setup_systemd
-    fi
-
-    log_b "══════════════════════════════════════════════════════════${NC}"
-    if [[ $DOCKER_FLAG -eq 1 ]]; then
-        log_b " ${GREEN}✓${NC} OVManager is running via Docker Compose"
-        log_b "   Access URL: https://localhost:$PORT/$PATHPREFIX/"
-    else
-        log_b " ${GREEN}✓${NC} OVManager is running via systemd"
-        log_b "   Access URL: http://localhost:$PORT/$PATHPREFIX/"
-    fi
-    log_b " Default credentials: $ADMIN_USER / $ADMIN_PASS"
-    log_b "══════════════════════════════════════════════════════════${NC}"
+    do_install
 }
 
 main "$@"
