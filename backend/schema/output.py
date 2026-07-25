@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
 from typing import Any, Optional
 
+from backend.version import __version__
+
 
 class ResponseModel(BaseModel):
     success: bool
@@ -40,7 +42,7 @@ class Settings(BaseModel):
     subscription_url_prefix: str
     subscription_path: str
     timezone: str = "UTC"
-    panel_version: str = "1.4.0"
+    panel_version: str = __version__
     bot_token: Optional[str] = None
     bot_enabled: bool = False
     default_days: int = 30

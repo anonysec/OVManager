@@ -132,7 +132,11 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
-    not_expired = request.expiry_date >= datetime.today().date()
+    not_expired = (
+        request.expiry_date >= datetime.today().date()
+        if request.expiry_date
+        else True
+    )
     has_traffic = request.total is None or request.total > used
     # Manual status (from the edit modal checkbox) wins, but expiry/traffic
     # violations still force-disable: an expired or out-of-traffic account
@@ -184,7 +188,12 @@ def get_expired_users(db: Session):
 
 
 def get_users_exceeded_traffic(db: Session):
-    return db.query(User).filter(User.used > User.total, User.is_active == True).all()
+    # Exclude users with NULL total (unlimited traffic)
+    return (
+        db.query(User)
+        .filter(User.total.isnot(None), User.used > User.total, User.is_active == True)
+        .all()
+    )
 
 
 def delete_user(db: Session, name: str):

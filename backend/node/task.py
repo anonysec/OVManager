@@ -367,7 +367,7 @@ async def download_ovpn_client_from_node(
             user.max_logins if user.max_logins is not None else 1,
         )
     except Exception as e:
-        logger.warning(f"Could not pre-create/sync user '{uuid}' before download: {e}")
+        logger.warning("Could not pre-create/sync user '%s' before download: %s", uuid, e)
 
     # Blocking HTTP -> threadpool. Use a longer timeout because a node may need
     # to generate the .ovpn file on-demand.

@@ -48,11 +48,8 @@ URLPATH = (config.URLPATH or "").strip("/")
 API_PREFIX = f"/{URLPATH}/api" if URLPATH else "/api"
 DOC_PREFIX = f"/{URLPATH}" if URLPATH else ""
 
-# TLS Configuration - Load from environment, support Let's Encrypt via imkoris.info
-try:
-    tls_config = TLSConfig.get_ssl_config()
-except Exception:
-    tls_config = {"cert_file": "", "key_file": "", "acme_enabled": False}
+# TLS Configuration - auto-detect from env vars / cert paths
+tls_config = TLSConfig.get_ssl_config()
 
 ssl_keyfile = tls_config.get("key_file") or None
 ssl_certfile = tls_config.get("cert_file") or None

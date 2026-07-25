@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from shutil import copy2
 import os
@@ -39,7 +39,7 @@ async def backup_database(user: dict = Depends(get_current_user)):
 
     try:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_path = BACKUP_DIR / f"ovpanel_backup_{ts}.db"
         # SQLite doesn't like being copied while open; use WAL checkpoint
         with engine.connect() as conn:
@@ -118,7 +118,7 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
     # Create backup of current DB before restore (in case restore fails or needs rollback)
     pre_restore_backup = None
     if DB_PATH.exists():
-        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         pre_restore_backup = BACKUP_DIR / f"pre_restore_backup_{ts}.db"
         try:
             # Checkpoint WAL first

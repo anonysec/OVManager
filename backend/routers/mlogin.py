@@ -64,7 +64,13 @@ def _global_lock():
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
+_mlogin_table_ready: bool = False
+
+
 def _ensure_table(db: Session) -> None:
+    global _mlogin_table_ready
+    if _mlogin_table_ready:
+        return
     db.execute(
         text(
             """
@@ -96,6 +102,7 @@ def _ensure_table(db: Session) -> None:
         )
     )
     db.commit()
+    _mlogin_table_ready = True
 
 
 def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node:

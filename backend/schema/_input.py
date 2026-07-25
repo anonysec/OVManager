@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class CreateUser(BaseModel):
-    name: str = Field(min_length=3, max_length=10)
+    name: str = Field(min_length=3, max_length=64)
     total: Optional[float] = None
     used: Optional[float] = None
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
