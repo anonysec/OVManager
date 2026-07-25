@@ -163,21 +163,30 @@ interactive_setup() {
             *) TLS_MODE="none" ;;
         esac
     fi
-    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]]; then
-        local ip_hint=$(hostname -I | awk '{print $1}')
+    if [[ "$TLS_MODE" == "le" ]]; then
+        # Domain only
         if [[ -z "$TLS_DOMAIN" ]]; then
             if [[ -t 0 ]]; then
-                printf "  ${WH}Domain/IP${NC} [${GR}%s${NC}] : " "$ip_hint"
+                printf "  ${WH}Domain${NC} [] : "
                 read -r TLS_DOMAIN
             fi
-            # Empty = use IP, otherwise = domain
-            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$ip_hint"
+            [[ -z "$TLS_DOMAIN" ]] && die "Domain is required for Let's Encrypt"
         fi
+    elif [[ "$TLS_MODE" == "le-ip" ]]; then
+        # Auto-generate IP, no prompt
+        [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN=$(hostname -I | awk '{print $1}')
     fi
+    local server_ip=$(hostname -I | awk '{print $1}')
     sep
-    field "Install dir" "$INSTALL_DIR"
-    field "Data dir"    "$DATA_DIR"
+    field "Server IP"     "$server_ip"
+    field "Install dir"  "$INSTALL_DIR"
+    field "Data dir"     "$DATA_DIR"
     field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
+    if [[ "$TLS_MODE" == "le" ]]; then
+        field "TLS domain" "$TLS_DOMAIN"
+    elif [[ "$TLS_MODE" == "le-ip" ]]; then
+        field "TLS IP"     "$TLS_DOMAIN"
+    fi
     sep
     if [[ -t 0 ]]; then
         printf "  Proceed with installation? [${GR}Y${NC}/n] : "
