@@ -167,7 +167,7 @@ interactive_setup() {
         # Domain only — must enter
         while [[ -z "$TLS_DOMAIN" ]]; do
             if [[ -t 0 ]]; then
-                printf "  ${WH}Domain${NC} [] : "
+                printf "  ${WH}Domain${NC} [${GY}example.com${NC}] : "
                 read -r TLS_DOMAIN
             else
                 die "Domain is required for Let's Encrypt (use --tls-le DOMAIN)"
