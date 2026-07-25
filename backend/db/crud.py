@@ -245,7 +245,7 @@ def get_node_by_name(db: Session, name: str):
     return db.query(Node).filter(Node.name == name).first()
 
 
-def create_node(db: Session, request: NodeCreate):
+def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
     new_node = Node(
         name=request.name,
         address=request.address,
@@ -256,6 +256,9 @@ def create_node(db: Session, request: NodeCreate):
         key=request.key,
         status=request.status,
         use_tls=request.use_tls,
+        country_code=geolocation.get("country_code") if geolocation else None,
+        latitude=geolocation.get("latitude") if geolocation else None,
+        longitude=geolocation.get("longitude") if geolocation else None,
     )
 
     db.add(new_node)
@@ -264,7 +267,7 @@ def create_node(db: Session, request: NodeCreate):
     return new_node
 
 
-def update_node(db: Session, node_id: int, request: NodeCreate):
+def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dict = None):
     node = db.query(Node).filter(Node.id == node_id).first()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
@@ -275,6 +278,10 @@ def update_node(db: Session, node_id: int, request: NodeCreate):
     node.ovpn_port = request.ovpn_port
     node.protocol = request.protocol
     node.port = request.port
+    if geolocation:
+        node.country_code = geolocation.get("country_code")
+        node.latitude = geolocation.get("latitude")
+        node.longitude = geolocation.get("longitude")
     node.status = request.status
     node.use_tls = request.use_tls
 

@@ -126,8 +126,9 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
         use_tls=request.use_tls,
     )
     if await run_in_threadpool(node_req.check_node):
-        crud.create_node(db, request)
-        logger.info("Node added successfully: %s:%s", request.address, request.port)
+        geo = geolocate(request.address)
+        crud.create_node(db, request, geolocation=geo)
+        logger.info("Node added successfully: %s:%s (geo=%s)", request.address, request.port, geo)
         return True
 
     logger.warning("Failed to add node: %s:%s", request.address, request.port)
@@ -157,8 +158,9 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         logger.warning("Failed to update node; new node settings are unreachable: %s:%s", request.address, request.port)
         return False
 
-    crud.update_node(db, node_id, request)
-    logger.info("Node updated: %s:%s", request.address, request.port)
+    geo = geolocate(request.address)
+    crud.update_node(db, node_id, request, geolocation=geo)
+    logger.info("Node updated successfully: %s (geo=%s)", request.address, geo)
     return True
 
 async def delete_node_handler(node_id: int, db: Session) -> bool:
@@ -205,6 +207,9 @@ async def list_nodes_handler(db: Session) -> list:
             "key": node.key,
             "status": bool(node.status),
             "use_tls": bool(node.use_tls),
+            "country_code": node.country_code,
+            "latitude": node.latitude,
+            "longitude": node.longitude,
         }
         nodes_list.append(node_info)
     return nodes_list

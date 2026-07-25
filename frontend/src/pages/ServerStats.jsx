@@ -29,8 +29,18 @@ const CODES = {
   JP: { name: 'Japan', flag: '🇯🇵', coords: [138, 36] },
 };
 const nodeMeta = (node) => {
+  // Use backend-provided geolocation data if available
+  if (node.latitude && node.longitude) {
+    const country = CODES[node.country_code] || {};
+    return {
+      name: country.name || node.country_code || node.name || 'Node',
+      flag: country.flag || '🏳️',
+      coords: [node.longitude, node.latitude],
+    };
+  }
+  // Fallback: try matching name against CODES
   const code = String(node.name || '').toUpperCase();
-  return CODES[code] || { name: node.name || 'Node', flag: '🏳️', coords: [20, 25] };
+  return CODES[code] || { name: node.name || 'Node', flag: '🏳️', coords: [0, 0] };
 };
 
 /* eslint-disable-next-line no-unused-vars */
