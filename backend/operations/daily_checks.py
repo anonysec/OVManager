@@ -26,7 +26,7 @@ async def enforce_user_limits():
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Error in users expiration check -> {e}")
+        logger.error("Error in users expiration check -> %s", e)
 
     finally:
         db.close()
@@ -141,7 +141,7 @@ async def check_user_used_traffic():
     except Exception as e:
         db.rollback()
 
-        logger.error(f"Error in check_user_used_traffic -> {e}", exc_info=True)
+        logger.error("Error in check_user_used_traffic -> %s", e, exc_info=True)
 
     finally:
         db.close()

@@ -110,7 +110,7 @@ async def get_subscription(
         return sub_error_page(403, "Account Disabled", "This user account is currently disabled. Contact your administrator to reactivate it.")
     if user.total is not None and used >= user.total:
         return sub_error_page(403, "Traffic Limit Reached", "This user has used all allocated traffic. Contact your administrator to increase the limit.")
-    nodes = [n for n in crud.get_all_nodes(db) if n.status]
+    nodes = crud.get_active_nodes(db)
     ovpn_download_links = {}
 
     # check_node() is blocking (requests); run all nodes concurrently in a

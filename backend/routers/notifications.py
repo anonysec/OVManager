@@ -10,7 +10,6 @@ from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
-
 @router.get("/", response_model=ResponseModel)
 async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     nodes = crud.get_all_nodes(db)

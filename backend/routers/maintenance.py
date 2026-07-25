@@ -22,6 +22,7 @@ router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 DB_DIR = BASE_DIR.parent.parent / "data"
 DB_PATH = DB_DIR / "ov-panel.db"
 BACKUP_DIR = DB_DIR / "backups"
+_MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
 
 @router.get("/backup", response_model=ResponseModel)
@@ -46,6 +47,17 @@ async def backup_database(user: dict = Depends(get_current_user)):
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE, full=1)")
             conn.commit()
         copy2(str(DB_PATH), str(backup_path))
+        # Prune old backups — keep only the most recent _MAX_BACKUPS
+        all_backups = sorted(
+            BACKUP_DIR.glob("ovpanel_backup_*.db"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old in all_backups[_MAX_BACKUPS:]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
         log_event(
             None,
             "maintenance.backup",
@@ -127,7 +139,7 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
                 conn.commit()
             copy2(str(DB_PATH), str(pre_restore_backup))
         except Exception as e:
-            logger.warning(f"Failed to create pre-restore backup: {e}")
+            logger.warning("Failed to create pre-restore backup: %s", e)
 
     # Close all connections and dispose engine
     engine.dispose()

@@ -67,7 +67,7 @@ class NodeRequests:
             }
             resp = requests.get(api, headers=self.headers, json=data, timeout=DEFAULT_TIMEOUT)
             if resp.status_code != 200:
-                logger.error(f"Node {self.address} returned {resp.status_code}")
+                logger.error("Node %s returned %s", self.address, resp.status_code)
                 return False
             response = resp.json()
             if response.get("success"):
@@ -82,10 +82,10 @@ class NodeRequests:
                     return False
                 return True
             else:
-                logger.error(f"Node {self.address} is not reachable: {response.get('msg')}")
+                logger.error("Node %s is not reachable: %s", self.address, response.get('msg'))
                 return False
         except Exception as e:
-            logger.error(f"Error checking node {self.address}: {e}")
+            logger.error("Error checking node %s: %s", self.address, e)
             return False
 
     def get_node_info(self, timeout: int | float = DEFAULT_TIMEOUT) -> dict:
@@ -104,11 +104,11 @@ class NodeRequests:
                 return response.get("data")
             else:
                 logger.error(
-                    f"Failed to get node info on {self.address}: {response.get('msg')}"
+                    "Failed to get node info on %s: %s", self.address, response.get('msg')
                 )
                 return {}
         except Exception as e:
-            logger.error(f"Error getting node info on {self.address}: {e}")
+            logger.error("Error getting node info on %s: %s", self.address, e)
             return {}
 
     def create_user(self, display_name: str, max_logins: int = 1, uid: str = None) -> bool:
@@ -125,18 +125,18 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=CREATE_USER_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error(f"Node {self.address} create_user returned HTTP {resp.status_code}: {resp.text[:200]}")
+                logger.error("Node %s create_user returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
                 return False
             response = resp.json()
             if response.get("success"):
                 return True
             else:
                 logger.error(
-                    f"Failed to create user on node {self.address}: {response.get('msg')}"
+                    "Failed to create user on node %s: %s", self.address, response.get('msg')
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error creating user on node {self.address}: {e}")
+            logger.error("Error creating user on node %s: %s", self.address, e)
             return False
 
     def change_user_status(self, display_name, status, max_logins: int | None = None, uid: str = None):
@@ -155,7 +155,7 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=DEFAULT_LONG_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error(f"Node {self.address} change_user_status returned HTTP {resp.status_code}: {resp.text[:200]}")
+                logger.error("Node %s change_user_status returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
                 return False
             response = resp.json()
 
@@ -163,11 +163,11 @@ class NodeRequests:
                 return True
             else:
                 logger.error(
-                    f"Failed to change user status on node {self.address}: {response.get('msg')}"
+                    "Failed to change user status on node %s: %s", self.address, response.get('msg')
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error change user status on node {self.address}: {e}")
+            logger.error("Error change user status on node %s: %s", self.address, e)
             return False
 
     def download_ovpn_client(self, uid: str, timeout: int = DOWNLOAD_OVPN_TIMEOUT) -> Response:
@@ -204,7 +204,7 @@ class NodeRequests:
                 text_start[:120],
             )
         except Exception as e:
-            logger.error(f"Error downloading OVPN client from node {self.address}: {e}")
+            logger.error("Error downloading OVPN client from node %s: %s", self.address, e)
         return None
 
     def delete_user(self, uid: str) -> bool:
@@ -218,11 +218,11 @@ class NodeRequests:
                 return True
             else:
                 logger.error(
-                    f"Failed to delete user on node {self.address}: {response.get('msg')}"
+                    "Failed to delete user on node %s: %s", self.address, response.get('msg')
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error deleting user on node {self.address}: {e}")
+            logger.error("Error deleting user on node %s: %s", self.address, e)
             return False
 
     def set_user_limit(self, uid: str, max_logins: int) -> bool:
@@ -237,18 +237,18 @@ class NodeRequests:
                 api, headers=self.headers, json=data, timeout=DEFAULT_LONG_TIMEOUT
             )
             if resp.status_code != 200:
-                logger.error(f"Node {self.address} set_user_limit returned HTTP {resp.status_code}: {resp.text[:200]}")
+                logger.error("Node %s set_user_limit returned HTTP %s: %s", self.address, resp.status_code, resp.text[:200])
                 return False
             response = resp.json()
             if response.get("success"):
                 return True
             else:
                 logger.error(
-                    f"Failed to set user limit on node {self.address}: {response.get('msg')}"
+                    "Failed to set user limit on node %s: %s", self.address, response.get('msg')
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error setting user limit on node {self.address}: {e}")
+            logger.error("Error setting user limit on node %s: %s", self.address, e)
             return False
 
     def get_sessions(
@@ -266,11 +266,11 @@ class NodeRequests:
             if response.get("success"):
                 return response.get("data") or {}
             logger.error(
-                f"Failed to get sessions on node {self.address}: {response.get('msg')}"
+                "Failed to get sessions on node %s: %s", self.address, response.get('msg')
             )
             return False
         except Exception as e:
-            logger.error(f"Error when getting sessions on node {self.address}: {e}")
+            logger.error("Error when getting sessions on node %s: %s", self.address, e)
             return False
 
     def disconnect_user(self, uid: str) -> dict | bool:
@@ -285,7 +285,7 @@ class NodeRequests:
             )
             return False
         except Exception as e:
-            logger.error(f"Error disconnecting user on node {self.address}: {e}")
+            logger.error("Error disconnecting user on node %s: %s", self.address, e)
             return False
 
     def get_users_usage(self) -> dict | bool:
@@ -293,13 +293,13 @@ class NodeRequests:
         try:
             response = requests.get(api, headers=self.headers, timeout=DEFAULT_LONG_TIMEOUT).json()
             if response.get("success"):
-                logger.info(f"get users usage on node {self.address}: {response.get('msg')}")
+                logger.info("get users usage on node %s: %s", self.address, response.get('msg'))
                 return response.get("data")
             else:
                 logger.error(
-                    f"Failed to get users usage on node {self.address}: {response.get('msg')}"
+                    "Failed to get users usage on node %s: %s", self.address, response.get('msg')
                 )
                 return False
         except Exception as e:
-            logger.error(f"Error when getting users usage on node {self.address}: {e}")
+            logger.error("Error when getting users usage on node %s: %s", self.address, e)
             return False

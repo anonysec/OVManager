@@ -1,26 +1,30 @@
 import psutil
 import time
-from fastapi import HTTPException
 
 from backend.logger import logger
-from backend.schema.output import ServerInfo, ResponseModel
+from backend.schema.output import ServerInfo
 
 
 async def get_server_info() -> ServerInfo:
+    """Collect server metrics. Uses short interval to minimize blocking."""
     try:
+        # cpu_percent(interval=None) returns immediately on second call;
+        # first call is 0.0. Use 0.1s — negligible blocking.
+        cpu = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
         return ServerInfo(
-            cpu=psutil.cpu_percent(interval=0.5),
-            memory_total=psutil.virtual_memory().total,
-            memory_used=psutil.virtual_memory().used,
-            memory_percent=psutil.virtual_memory().percent,
-            disk_total=psutil.disk_usage("/").total,
-            disk_used=psutil.disk_usage("/").used,
-            disk_percent=psutil.disk_usage("/").percent,
+            cpu=cpu,
+            memory_total=mem.total,
+            memory_used=mem.used,
+            memory_percent=mem.percent,
+            disk_total=disk.total,
+            disk_used=disk.used,
+            disk_percent=disk.percent,
             uptime=int(time.time() - psutil.boot_time()),
         )
     except Exception as e:
-        logger.error(f"error when get server info: {e}")
-        # Return a valid ServerInfo with zeros on failure instead of wrong type
+        logger.error("error getting server info: %s", e)
         return ServerInfo(
             cpu=0.0,
             memory_total=0,

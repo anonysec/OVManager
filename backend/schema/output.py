@@ -34,8 +34,7 @@ class ServerInfo(BaseModel):
     disk_percent: float
     uptime: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Settings(BaseModel):
@@ -57,5 +56,4 @@ class Admins(BaseModel):
     telegram_id: Optional[int] = None
     username_prefix: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

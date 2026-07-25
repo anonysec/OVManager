@@ -121,7 +121,7 @@ def create_user(db: Session, request: CreateUser, owner: str):
         raise HTTPException(
             status_code=400, detail="user with this name already exists"
         )
-    logger.info(f"user created successfully: {request.name}")
+    logger.info("user created successfully: %s", request.name)
     return new_user
 
 
@@ -212,10 +212,8 @@ def get_all_admins(db: Session):
 
 
 def it_is_admin(db: Session, username: str):
-    admin = db.query(Admin).filter(Admin.username == username).first()
-    if not admin:
-        return False
-    return admin
+    """Return the Admin object if found, else None."""
+    return db.query(Admin).filter(Admin.username == username).first()
 
 
 def delete_admin(db: Session, admin: Admin):
@@ -228,6 +226,11 @@ def delete_admin(db: Session, admin: Admin):
 def get_all_nodes(db: Session):
     nodes = db.query(Node).all()
     return nodes
+
+
+def get_active_nodes(db: Session):
+    """Return only nodes with status=True."""
+    return db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
 
 def get_node_by_address(db: Session, address: str):
