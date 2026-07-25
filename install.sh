@@ -85,8 +85,10 @@ parse_args() {
 # ———————— Interactive prompts ————————
 prompt_input() {
     local var_name="$1" prompt="$2" default="$3"
-    local input
-    read -r -p "$prompt [$default]: " input 2>/dev/null || error_exit "Failed to read input"
+    local input=""
+    if [[ -t 0 ]]; then
+        read -r -p "$prompt [$default]: " input 2>/dev/null || true
+    fi
     if [[ -z "$input" ]]; then
         eval "$var_name='$default'"
     else
@@ -117,7 +119,11 @@ check_deps() {
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_y "Missing dependencies: ${missing[*]}"
-        read -r -p "Attempting to install missing deps with apt-get... " -p "Continue? [y/N] " resp
+        if [[ -t 0 ]]; then
+            read -r -p "Attempt to install missing deps with apt-get? [y/N] " resp
+        else
+            resp="y"
+        fi
         if [[ "$resp" =~ ^[Yy]$ ]]; then
             apt-get update -qq && apt-get install -y -qq "${missing[@]}" 2>/dev/null || error_exit "Failed to install dependencies"
             log "Installed missing dependencies"
