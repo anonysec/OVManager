@@ -15,7 +15,7 @@ import fcntl
 import os
 import time
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, UTC
 from typing import Iterable
 
 import requests
@@ -499,7 +499,7 @@ def _panel_now() -> str:
         from zoneinfo import ZoneInfo
         return datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
-        return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @router.get("/status/{username}", response_model=ResponseModel)

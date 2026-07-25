@@ -164,8 +164,9 @@ async def collect_metrics() -> None:
 
         # Keep roughly 30 days at 5-minute interval.
         cutoff = now - 30 * 24 * 3600
-        for table in ("node_health_snapshots", "traffic_snapshots", "security_snapshots"):
-            db.execute(text(f"DELETE FROM {table} WHERE ts < :cutoff"), {"cutoff": cutoff})
+        _SNAPSHOT_TABLES = ("node_health_snapshots", "traffic_snapshots", "security_snapshots")
+        for table in _SNAPSHOT_TABLES:
+            db.execute(text("DELETE FROM {} WHERE ts < :cutoff".format(table)), {"cutoff": cutoff})
         db.commit()
         logger.info("metrics: snapshot collected nodes=%s active_connections=%s", len(clean_rows), active_connections)
     except Exception as e:

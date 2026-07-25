@@ -8,9 +8,7 @@ from backend.schema.output import ServerInfo
 async def get_server_info() -> ServerInfo:
     """Collect server metrics. Uses short interval to minimize blocking."""
     try:
-        # cpu_percent(interval=None) returns immediately on second call;
-        # first call is 0.0. Use 0.1s — negligible blocking.
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu = psutil.cpu_percent(interval=None)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("/")
         return ServerInfo(

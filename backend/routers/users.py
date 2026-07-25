@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from backend.operations.daily_checks import enforce_user_limits
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel, Users
 from backend.schema._input import CreateUser, UpdateUser, StatusToggle, NodeCreate
@@ -151,8 +150,8 @@ async def update_user(
     final_active = bool(request.status) and db_user.is_active
     await change_user_status_on_all_nodes(uuid, request.name, final_active, db)
     await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, uuid)
-    # enforce_user_limits is async; must be awaited or it silently never runs.
-    await enforce_user_limits()
+    # enforce_user_limits runs as a daily background job in app.py;
+    # calling it per user update is O(n²) — each call queries all expired/exceeded users.
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
     return ResponseModel(success=True, msg="User updated successfully")
 
