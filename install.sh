@@ -1,5 +1,5 @@
 #!/bin/bash
-# OVManager OpenVPN Panel Installer
+# OVManager — OpenVPN Panel Installer
 # Usage: bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
 
 set -uo pipefail
@@ -14,67 +14,35 @@ DEFAULT_PATH="dash"
 DEFAULT_USER="admin"
 DEFAULT_PASS="admin"
 SYSTEMD_SERVICE="ovmanager.service"
+VERSION="1.5"
 
 # ═══════════════════════════════════════
 #  C O L O R S
 # ═══════════════════════════════════════
-NC=$'\033[0m'
-B=$'\033[1m'
-D=$'\033[2m'
-WH=$'\033[97m'
-GR=$'\033[32m'
-RD=$'\033[31m'
-YL=$'\033[33m'
-BL=$'\033[34m'
-CY=$'\033[36m'
-GY=$'\033[90m'
+NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
+WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
+YL=$'\033[33m'; BL=$'\033[34m'; CY=$'\033[36m'; GY=$'\033[90m'
 
 # ═══════════════════════════════════════
-#  U I   H E L P E R S
+#  U I
 # ═══════════════════════════════════════
-W=58  # inner width
-
-pad() { printf "%-${W}s" "$1"; }
-
-box_top()    { echo -e "  ${BL}┌$(printf '─%.0s' $(seq 1 $W))┐${NC}"; }
-box_mid()    { echo -e "  ${BL}├$(printf '─%.0s' $(seq 1 $W))┤${NC}"; }
-box_bot()    { echo -e "  ${BL}└$(printf '─%.0s' $(seq 1 $W))┘${NC}"; }
-box_line()   { printf "  ${BL}│${NC} %-$((W-2))s${BL}│${NC}\n" "$1"; }
-box_empty()  { echo -e "  ${BL}│${NC}$(printf '%*s' $W '')${BL}│${NC}"; }
-
-title() {
-    box_empty
-    box_line "  ${B}$1${NC}"
-    [[ -n "${2:-}" ]] && box_line "  ${GY}$2${NC}"
-    box_empty
-}
-
-field() {
-    local label="$1" value="$2"
-    printf "  ${BL}│${NC}   ${GY}%-14s${NC}%s${BL}│${NC}\n" "$label" "$value"
-}
-
-step() {
-    printf "  ${BL}│${NC}  %s %-$((W-4))s${BL}│${NC}\n" "$1" "$2"
-}
+line()   { echo -e "  $1"; }
+step()   { line "${GR}  ✓${NC} $1"; }
+info()   { line "${CY}  →${NC} $1"; }
+warn()   { line "${YL}  ⚠${NC} $1"; }
+field()  { printf "  ${GY}%-16s${NC} %s\n" "$1" "$2"; }
+sep()    { line "${GY}$(printf '%.0s─' {1..52})${NC}"; }
 
 spinner() {
-    local msg="$1" pid=$2
-    local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+    local msg="$1" pid=$2 chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r  ${BL}│${NC}  ${CY}%s${NC} %-$((W-4))s${BL}│${NC}" "${chars:$((i%9)):1}" "$msg"
-        sleep 0.1
-        ((i++))
+        printf "\r  ${CY}%s${NC} %-48s" "${chars:$((i%9)):1}" "$msg"
+        sleep 0.1; ((i++))
     done
     wait "$pid" 2>/dev/null
     local rc=$?
     printf "\r\033[K"
-    if [[ $rc -eq 0 ]]; then
-        step "${GR}✓${NC}" "$msg"
-    else
-        step "${RD}✗${NC}" "$msg"
-        return 1
-    fi
+    [[ $rc -eq 0 ]] && step "$msg" || { line "${RD}  ✗${NC} $msg"; return 1; }
 }
 
 prompt_val() {
@@ -82,10 +50,10 @@ prompt_val() {
     local val=""
     if [[ -t 0 ]]; then
         if [[ "$hidden" == "h" ]]; then
-            printf "  ${BL}│${NC}   ${WH}%-14s${NC} ${GY}[${default}]${NC} : " "$label"
+            printf "  ${WH}%-16s${NC} ${GY}[%s]${NC} : " "$label" "$default"
             read -rs val; printf "\n"
         else
-            printf "  ${BL}│${NC}   ${WH}%-14s${NC} ${GY}[${default}]${NC} : " "$label"
+            printf "  ${WH}%-16s${NC} ${GY}[%s]${NC} : " "$label" "$default"
             read -r val
         fi
     fi
@@ -93,7 +61,7 @@ prompt_val() {
     eval "$var='$val'"
 }
 
-die() { echo -e "\n  ${RD}ERROR:${NC} $1\n"; exit 1; }
+die() { echo -e "\n  ${RD}Error:${NC} $1\n"; exit 1; }
 trap 'echo -e "\n  ${RD}Interrupted.${NC}"; exit 1' INT TERM
 
 # ═══════════════════════════════════════
@@ -140,28 +108,23 @@ parse_args() {
 }
 
 # ═══════════════════════════════════════
-#  I N T E R A C T I V E   S E T U P
+#  S E T U P
 # ═══════════════════════════════════════
 interactive_setup() {
     prompt_val PORT       "Port"       "$DEFAULT_PORT"
     prompt_val PATHPREFIX "URL path"   "$DEFAULT_PATH"
     prompt_val ADMIN_USER "Admin user" "$DEFAULT_USER"
     prompt_val ADMIN_PASS "Admin pass" "$DEFAULT_PASS" "h"
-
-    box_mid
+    sep
     field "Install dir" "$INSTALL_DIR"
-    field "Mode"        "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native-systemd)"
-    box_mid
-
+    field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
+    sep
     if [[ -t 0 ]]; then
-        printf "  ${BL}│${NC}   Proceed? [${GR}Y${NC}/n] : "
+        printf "  Proceed with installation? [${GR}Y${NC}/n] : "
         read -r c; [[ "$c" =~ ^[Nn]$ ]] && die "Cancelled."
     fi
 }
 
-# ═══════════════════════════════════════
-#  D E P S
-# ═══════════════════════════════════════
 check_root() {
     [[ "$EUID" -ne 0 ]] && die "Must run as root."
 }
@@ -172,11 +135,11 @@ check_deps() {
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
-        step "${YL}↓${NC}" "Installing: ${missing[*]}"
+        info "Installing missing dependencies: ${missing[*]}"
         apt-get update -qq >/dev/null && apt-get install -y -qq "${missing[@]}" >/dev/null \
             || die "Failed to install: ${missing[*]}"
     fi
-    step "${GR}✓${NC}" "Dependencies OK"
+    step "All system dependencies are available"
 }
 
 # ═══════════════════════════════════════
@@ -185,11 +148,8 @@ check_deps() {
 do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed at $INSTALL_DIR. Use --uninstall first."
 
-    box_empty; box_mid; box_empty
-    box_line "  ${B}${WH}Installing${NC}"
-    box_empty
-
-    # Source
+    sep
+    info "Cloning OVManager repository..."
     if command -v git >/dev/null 2>&1; then
         git clone --depth 1 --branch main "https://github.com/${REPO}.git" "$INSTALL_DIR" >/dev/null 2>&1 &
         spinner "Cloning repository" $!
@@ -201,12 +161,12 @@ do_install() {
         rm -f /tmp/ovm.tar.gz
     fi
 
-    # Backend
+    info "Installing Python packages with uv..."
     cd "$INSTALL_DIR"
     uv sync --quiet 2>&1 &
-    spinner "Installing Python dependencies" $!
+    spinner "Python packages installed" $!
 
-    # Config (before frontend build — Vite needs VITE_URLPATH)
+    info "Writing .env configuration..."
     local jwt_secret
     jwt_secret=$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)
     [[ -f "$INSTALL_DIR/.env.example" ]] || die ".env.example not found"
@@ -220,21 +180,21 @@ do_install() {
         "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
     [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && echo "SSL_KEYFILE=\"${TLS_KEY}\"" >> "$INSTALL_DIR/.env"
     [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]] && echo "SSL_CERTFILE=\"${TLS_CERT}\"" >> "$INSTALL_DIR/.env"
-    step "${GR}✓${NC}" "Configuration written"
+    step "Configuration saved to $INSTALL_DIR/.env"
 
-    # Frontend
     if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
+        info "Building frontend (this may take a minute)..."
         cd "$INSTALL_DIR/frontend"
         npm ci --silent >/dev/null 2>&1 &
-        spinner "Installing Node.js dependencies" $!
+        spinner "Node.js dependencies installed" $!
         npm run build --silent >/dev/null 2>&1 &
-        spinner "Building frontend assets" $!
+        spinner "Frontend assets built" $!
     fi
 
-    # Service
     if [[ $DOCKER_FLAG -eq 1 ]]; then
         setup_docker
     else
+        info "Setting up systemd service..."
         local real_uv; real_uv=$(command -v uv)
         cat > "/etc/systemd/system/${SYSTEMD_SERVICE}" << SVCEOF
 [Unit]
@@ -256,21 +216,19 @@ SVCEOF
         systemctl daemon-reload >/dev/null 2>&1
         systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
         systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
-        spinner "Starting service" $!
+        spinner "Service started" $!
     fi
 
-    # Done
-    box_mid; box_empty
-    box_line "  ${GR}${B}✓  INSTALLED${NC}"
-    box_empty
-    box_line "  ${WH}http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/${NC}"
-    box_line "  ${GY}Login: ${WH}${ADMIN_USER}${NC} / ${WH}${ADMIN_PASS}${NC}"
-    box_empty
-    box_line "  ${GY}systemctl status ${SYSTEMD_SERVICE}${NC}"
-    box_line "  ${GY}systemctl restart ${SYSTEMD_SERVICE}${NC}"
-    box_empty
-    box_bot
-    echo ""
+    sep
+    line ""
+    step "${B}Installation complete!${NC}"
+    line ""
+    line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+    line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / ${GR}${ADMIN_PASS}${NC}"
+    line ""
+    line "  ${GY}Manage:${NC}  systemctl status ${SYSTEMD_SERVICE}"
+    line "  ${GY}Logs:${NC}    journalctl -u ${SYSTEMD_SERVICE} -f"
+    line ""
 }
 
 setup_docker() {
@@ -313,31 +271,34 @@ volumes:
 EOF
     cd "$INSTALL_DIR"
     docker compose up -d 2>/dev/null &
-    spinner "Starting Docker containers" $!
+    spinner "Docker containers started" $!
 }
 
 do_update() {
-    [[ ! -d "$INSTALL_DIR" ]] && die "Not installed"
+    [[ ! -d "$INSTALL_DIR" ]] && die "Not installed at $INSTALL_DIR"
+    line ""
+    info "Updating OVManager..."
     cd "$INSTALL_DIR"
     git pull origin main 2>&1 &
-    spinner "Pulling changes" $!
+    spinner "Pulling latest changes" $!
     uv sync --quiet 2>&1 &
-    spinner "Updating dependencies" $!
+    spinner "Updating Python dependencies" $!
     if [[ -f "frontend/package.json" ]]; then
         cd frontend
         npm ci --silent >/dev/null 2>&1 &
-        spinner "Updating frontend" $!
+        spinner "Updating Node.js dependencies" $!
         npm run build --silent >/dev/null 2>&1 &
         spinner "Rebuilding frontend" $!
     fi
     systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
-    spinner "Restarting service" $!
-    box_empty; step "${GR}✓${NC}" "Updated"; box_bot; echo ""
+    spinner "Service restarted" $!
+    step "Update complete"
+    line ""
 }
 
 do_uninstall() {
     if [[ -t 0 ]]; then
-        printf "  Remove ${INSTALL_DIR}? [y/N] : "; read -r c
+        printf "  Remove ${INSTALL_DIR} and stop service? [y/N] : "; read -r c
         [[ ! "$c" =~ ^[Yy]$ ]] && die "Cancelled."
     fi
     systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null
@@ -345,7 +306,8 @@ do_uninstall() {
     rm -f "/etc/systemd/system/${SYSTEMD_SERVICE}"
     systemctl daemon-reload 2>/dev/null
     rm -rf "$INSTALL_DIR"
-    echo -e "  ${GR}✓ Uninstalled${NC}\n"
+    step "Uninstalled"
+    line ""
 }
 
 # ═══════════════════════════════════════
@@ -357,8 +319,10 @@ main() {
 
     [[ $UNINSTALL -eq 1 ]] && { do_uninstall; exit 0; }
 
-    box_top
-    title "OVManager" "OpenVPN Panel Installer  v1.5"
+    line ""
+    line "  ${B}OVManager${NC} — OpenVPN Panel Installer ${GY}v${VERSION}${NC}"
+    sep
+    line ""
 
     if [[ -z "$PORT" && -z "$ADMIN_USER" ]]; then
         interactive_setup
@@ -370,8 +334,9 @@ main() {
         field "Port"       "$PORT"
         field "URL path"   "/${PATHPREFIX}/"
         field "Admin user" "$ADMIN_USER"
-        field "Mode"       "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native-systemd)"
-        box_mid
+        field "Install dir" "$INSTALL_DIR"
+        field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
+        sep
     fi
 
     check_root
