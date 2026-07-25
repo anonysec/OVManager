@@ -276,17 +276,7 @@ do_install() {
     uv sync --quiet 2>&1 &
     spinner "Installing Python dependencies" $!
 
-    # 3. Frontend
-    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
-        step_info "Building frontend..."
-        cd "$INSTALL_DIR/frontend"
-        npm ci --silent >/dev/null 2>&1 &
-        spinner "Installing Node.js dependencies" $!
-        npm run build --silent >/dev/null 2>&1 &
-        spinner "Building frontend assets" $!
-    fi
-
-    # 4. Config
+    # 3. Config (before frontend build so Vite picks up VITE_URLPATH)
     step_info "Writing configuration..."
     local jwt_secret
     jwt_secret=$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)
@@ -303,6 +293,16 @@ do_install() {
     [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && echo "SSL_KEYFILE=\"${TLS_KEY}\"" >> "$INSTALL_DIR/.env"
     [[ -n "$TLS_CERT" && -f "$TLS_CERT" ]] && echo "SSL_CERTFILE=\"${TLS_CERT}\"" >> "$INSTALL_DIR/.env"
     step_ok "Configuration written"
+
+    # 4. Frontend (after config so VITE_URLPATH is available)
+    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
+        step_info "Building frontend..."
+        cd "$INSTALL_DIR/frontend"
+        npm ci --silent >/dev/null 2>&1 &
+        spinner "Installing Node.js dependencies" $!
+        npm run build --silent >/dev/null 2>&1 &
+        spinner "Building frontend assets" $!
+    fi
 
     # 5. Service
     if [[ $DOCKER_FLAG -eq 1 ]]; then
