@@ -9,12 +9,14 @@ const SystemTab = lazy(() => import('./Settings/SystemTab'));
 const SecurityTab = lazy(() => import('./Settings/SecurityTab'));
 const BackupTab = lazy(() => import('./Settings/BackupTab'));
 const ActivityTab = lazy(() => import('./Settings/ActivityTab'));
+const BotTab = lazy(() => import('./Settings/BotTab'));
 
 const TABS = [
   { id: 'general', label: 'General' },
   { id: 'system', label: 'System' },
   { id: 'security', label: 'Security' },
   { id: 'backup', label: 'Backup' },
+  { id: 'bot', label: 'Bot' },
   { id: 'activity', label: 'Activity' },
 ];
 
@@ -68,6 +70,7 @@ const Settings = () => {
         {activeTab === 'system' && <SystemTab />}
         {activeTab === 'security' && <SecurityTab />}
         {activeTab === 'backup' && <BackupTab />}
+        {activeTab === 'bot' && <BotTab />}
         {activeTab === 'activity' && <ActivityTab />}
       </Suspense>
     </div>
