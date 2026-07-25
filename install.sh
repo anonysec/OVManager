@@ -71,7 +71,13 @@ show_help() {
     cat << 'EOF'
   Usage:
     bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
-    curl -Ls URL | bash -s -- --port 2095 --path dash
+    bash <(curl -Ls URL) update
+    bash <(curl -Ls URL) uninstall
+
+  Commands:
+    (none)              Install or update OVManager
+    update              Pull latest changes and restart
+    uninstall           Remove OVManager completely
 
   Flags:
     --port PORT         Panel port (default: 2095)
@@ -81,14 +87,13 @@ show_help() {
     --tls-key PATH      TLS private key
     --tls-cert PATH     TLS certificate
     --docker            Use Docker
-    --uninstall         Remove OVManager
     --help              Show this help
 EOF
     exit 0
 }
 
 PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS="" TLS_KEY="" TLS_CERT=""
-DOCKER_FLAG=0 UNINSTALL=0
+DOCKER_FLAG=0 ACTION="install"
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
@@ -100,9 +105,11 @@ parse_args() {
             --tls-key)    TLS_KEY="$2"; shift 2 ;;
             --tls-cert)   TLS_CERT="$2"; shift 2 ;;
             --docker)     DOCKER_FLAG=1; shift ;;
-            --uninstall)  UNINSTALL=1; shift ;;
+            --uninstall)  ACTION="uninstall"; shift ;;
             --help|-h)    show_help ;;
-            *)            die "Unknown option: $1" ;;
+            uninstall)    ACTION="uninstall"; shift ;;
+            update)       ACTION="update"; shift ;;
+            *)            die "Unknown option: $1. Use --help for usage." ;;
         esac
     done
 }
@@ -317,12 +324,36 @@ main() {
     parse_args "$@"
     clear
 
-    [[ $UNINSTALL -eq 1 ]] && { do_uninstall; exit 0; }
-
     line ""
     line "  ${B}OVManager${NC} — OpenVPN Panel Installer ${GY}v${VERSION}${NC}"
     sep
     line ""
+
+    # Handle subcommands
+    case "$ACTION" in
+        uninstall)
+            do_uninstall; exit 0 ;;
+        update)
+            do_update; exit 0 ;;
+    esac
+
+    # If already installed, auto-update instead of failing
+    if [[ -d "$INSTALL_DIR" ]]; then
+        warn "OVManager is already installed at $INSTALL_DIR"
+        line ""
+        if [[ -t 0 ]]; then
+            printf "  What would you like to do? [${GR}1${NC}=Update / ${RD}2${NC}=Reinstall / q=Quit] : "
+            read -r choice
+            case "$choice" in
+                1|"") do_update; exit 0 ;;
+                2)    do_uninstall; do_install ;;
+                *)    line ""; die "Aborted." ;;
+            esac
+        else
+            info "Running update..."
+            do_update; exit 0
+        fi
+    fi
 
     if [[ -z "$PORT" && -z "$ADMIN_USER" ]]; then
         interactive_setup
