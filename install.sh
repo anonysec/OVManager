@@ -291,8 +291,7 @@ issue_lets_encrypt() {
         --issue -d "$domain" \
         --standalone \
         $extra_args \
-        --accountemail "$email" \
-        --force 2>&1 | grep -E "Cert success|Error|error" || die "Failed to issue Let's Encrypt certificate for $domain"
+        --accountemail "$email" 2>&1 | grep -E "Cert success|Error|error" || die "Failed to issue Let's Encrypt certificate for $domain"
 
     # Install cert to target directory (no-op reload — service not created yet)
     ~/.acme.sh/acme.sh \
@@ -405,7 +404,7 @@ Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=${start_after}.target
+WantedBy=multi-user.target
 SVCEOF
         # Also write env file for systemd
         echo "DATA_DIR=${DATA_DIR}" >> "$INSTALL_DIR/.env"
@@ -427,7 +426,11 @@ SVCEOF
     line ""
     step "${B}Installation complete!${NC}"
     line ""
-    line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+    if [[ "$TLS_MODE" != "none" ]]; then
+        line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+    else
+        line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+    fi
     line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / ${GR}${ADMIN_PASS}${NC}"
     line ""
     line "  ${GY}Manage:${NC}  systemctl status ${SYSTEMD_SERVICE}"
@@ -444,7 +447,7 @@ setup_docker() {
     local jwt_secret; jwt_secret=$(openssl rand -base64 48 2>/dev/null)
     
     cat > "$INSTALL_DIR/docker-compose.yml" << EOF
-version: '3.8'
+# version removed (deprecated)
 services:
   ovmanager:
     image: ghcr.io/anonysec/ovmanager:latest
