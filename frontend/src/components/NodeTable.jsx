@@ -1,4 +1,4 @@
-import { FiEdit3, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
+import { FiEdit3, FiRefreshCw, FiTrash2, FiDownloadCloud } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 
 function usageClass(value) {
