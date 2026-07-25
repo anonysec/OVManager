@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LiveProvider } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSettings, FiLogOut, FiUser } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { ToastProvider } from '../context/ToastContext';
