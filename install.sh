@@ -265,6 +265,19 @@ issue_lets_encrypt() {
     local outdir="/etc/letsencrypt/$domain"
     mkdir -p "$outdir"
 
+    # Check if valid cert already exists
+    if [[ -f "$outdir/fullchain.pem" ]]; then
+        local expiry=$(openssl x509 -enddate -noout -in "$outdir/fullchain.pem" 2>/dev/null | cut -d= -f2)
+        local expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null)
+        local now_epoch=$(date +%s)
+        local days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+        if [[ $days_left -gt 7 ]]; then
+            step "Existing certificate valid for $days_left more days ($outdir)"
+            return 0
+        fi
+        warn "Certificate expires in $days_left days — renewing..."
+    fi
+
     local extra_args=""
     if [[ "$is_ip" == "1" ]]; then
         info "Issuing short-lived certificate for IP $domain (6 days)..."
@@ -273,7 +286,7 @@ issue_lets_encrypt() {
         info "Issuing certificate for domain $domain..."
     fi
 
-    # Issue cert (no --key-file/--fullchain-file — let acme.sh store in its default location first)
+    # Issue cert
     ~/.acme.sh/acme.sh \
         --issue -d "$domain" \
         --standalone \
@@ -281,7 +294,7 @@ issue_lets_encrypt() {
         --accountemail "$email" \
         --force 2>&1 | grep -E "Cert success|Error|error" || die "Failed to issue Let's Encrypt certificate for $domain"
 
-    # Install cert to our target directory (no-op reload — service not created yet)
+    # Install cert to target directory (no-op reload — service not created yet)
     ~/.acme.sh/acme.sh \
         --install-cert -d "$domain" \
         --key-file "$outdir/privkey.pem" \
