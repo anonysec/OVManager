@@ -187,17 +187,29 @@ async def _serve_react():
     )
 
 
-if URLPATH:
-    @api.get(f"/{URLPATH}")
-    @api.get(f"/{URLPATH}/{{path:path}}")
-    async def serve_react_path():
+from starlette.middleware.base import BaseHTTPMiddleware
+import starlette.requests
+
+
+class SPAFallbackMiddleware(BaseHTTPMiddleware):
+    """Return index.html for browser navigations to unknown 404 paths.
+    Skips API routes, assets, static files."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if response.status_code != 404:
+            return response
+        accept = request.headers.get("accept", "")
+        path = request.url.path.lstrip("/")
+        if path.startswith("api") or ("text/html" not in accept and "*/*" not in accept):
+            from starlette.responses import JSONResponse
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         return await _serve_react()
 
+
+api.add_middleware(SPAFallbackMiddleware)
+
+if URLPATH:
     @api.get("/")
     async def root_redirect():
         return RedirectResponse(url=f"/{URLPATH}")
-else:
-    @api.get("/")
-    @api.get("/{path:path}")
-    async def serve_react_root(path: str = ""):
-        return await _serve_react()
