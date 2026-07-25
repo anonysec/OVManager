@@ -75,7 +75,6 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
 };
 
 const UserTableSkeleton = () => {
-  const { t } = useTranslation();
   return (
     <div className="table-skeleton">
       <div className="skeleton-header">

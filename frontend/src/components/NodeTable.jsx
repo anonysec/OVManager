@@ -9,7 +9,6 @@ function usageClass(value) {
 }
 
 const NodeTableSkeleton = () => {
-  const { t } = useTranslation();
   return (
     <div className="table-skeleton">
       <div className="skeleton-header">

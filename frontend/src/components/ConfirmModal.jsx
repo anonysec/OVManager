@@ -1,6 +1,6 @@
 import Modal from './Modal';
 
-const ConfirmModal = ({ open, onClose, onConfirm, title, message, confirmLabel = 'Delete', danger = true }) => {
+const ConfirmModal = ({ open, onClose, onConfirm, title, message, confirmLabel = 'Delete', cancelLabel = 'Cancel', danger = true }) => {
   if (!open) return null;
 
   return (

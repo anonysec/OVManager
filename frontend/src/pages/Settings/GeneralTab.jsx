@@ -1,7 +1,59 @@
+import { useState, useEffect, useCallback } from 'react';
 import { FiLink, FiSave, FiCopy } from 'react-icons/fi';
-import { buildSubUrl } from '../../utils/settingsHelpers';
+import { useTranslation } from 'react-i18next';
+import apiClient from '../../services/api';
+import { useLive } from '../../context/LiveContext';
+import { validateSubscription, buildSubUrl } from '../../utils/settingsHelpers';
+import { copyText } from '../../utils/clipboard';
 
-const GeneralTab = ({ t, subPrefix, subPath, subError, subSaved, setSubPrefix, setSubPath, copyLink, saveSubscription }) => {
+const GeneralTab = () => {
+  const { t } = useTranslation();
+  const { refreshTick } = useLive();
+  const [subPrefix, setSubPrefix] = useState('');
+  const [subPath, setSubPath] = useState('');
+  const [subError, setSubError] = useState('');
+  const [subSaved, setSubSaved] = useState(false);
+
+
+  const addToast = useCallback((message, type = 'success') => {
+    window.dispatchEvent(new CustomEvent('addToast', { detail: { message, type } }));
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/server/settings');
+      const s = res.data?.data || {};
+      setSubPrefix(s.subscription_url_prefix || '');
+      setSubPath(s.subscription_path || '');
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadSettings(); }, [loadSettings, refreshTick]);
+
+  const saveSubscription = async () => {
+    const error = validateSubscription(subPrefix, subPath, t);
+    if (error) {
+      setSubError(error);
+      return;
+    }
+    setSubError('');
+    try {
+      await apiClient.put('/server/settings/subscription', { prefix: subPrefix, path: subPath });
+      setSubSaved(true);
+      addToast('Subscription settings saved', 'success');
+      setTimeout(() => setSubSaved(false), 2000);
+    } catch {
+      addToast('Failed to save subscription settings', 'error');
+    }
+  };
+
+  const copyLink = async () => {
+    const url = buildSubUrl(subPrefix, subPath);
+    if (!url) return;
+    const ok = await copyText(url);
+    addToast(ok ? 'Link copied to clipboard' : 'Failed to copy link', ok ? 'success' : 'error');
+  };
+
   return (
     <div className="settings-section">
       <div className="setting-card">

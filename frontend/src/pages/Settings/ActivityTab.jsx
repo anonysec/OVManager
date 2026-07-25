@@ -1,6 +1,20 @@
+import { useState, useEffect, useCallback } from 'react';
 import { FiActivity } from 'react-icons/fi';
+import apiClient from '../../services/api';
 
-const ActivityTab = ({ t, activity }) => {
+const ActivityTab = () => {
+  const [activity, setActivity] = useState([]);
+
+  const loadActivity = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/activity/?limit=25');
+      const data = res.data?.data || [];
+      setActivity(Array.isArray(data) ? data : []);
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadActivity(); }, [loadActivity]);
+
   return (
     <div className="settings-section">
       <div className="setting-card">
