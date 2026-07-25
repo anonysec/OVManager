@@ -262,30 +262,33 @@ issue_lets_encrypt() {
     local domain="$1" is_ip="$2"
     install_acme
     local email=$(get_acme_email)
-    local standalone_arg="--standalone"
-    
+    local outdir="/etc/letsencrypt/$domain"
+    mkdir -p "$outdir"
+
+    local extra_args=""
     if [[ "$is_ip" == "1" ]]; then
         info "Issuing short-lived certificate for IP $domain (6 days)..."
-        ~/.acme.sh/acme.sh \
-            --issue -d "$domain" \
-            $standalone_arg \
-            --certificate-profile shortlived \
-            --days 6 \
-            --key-file /etc/letsencrypt/$domain/privkey.pem \
-            --fullchain-file /etc/letsencrypt/$domain/fullchain.pem \
-            --reloadcmd "systemctl restart ovmanager.service" \
-            --accountemail "$email" 2>/dev/null || die "Failed to issue Let's Encrypt certificate for $domain"
+        extra_args="--certificate-profile shortlived --days 6"
     else
         info "Issuing certificate for domain $domain..."
-        ~/.acme.sh/acme.sh \
-            --issue -d "$domain" \
-            $standalone_arg \
-            --key-file /etc/letsencrypt/$domain/privkey.pem \
-            --fullchain-file /etc/letsencrypt/$domain/fullchain.pem \
-            --reloadcmd "systemctl restart ovmanager.service" \
-            --accountemail "$email" 2>/dev/null || die "Failed to issue Let's Encrypt certificate for $domain"
     fi
-    step "Certificate issued and auto-renewal configured"
+
+    # Issue cert (no --key-file/--fullchain-file — let acme.sh store in its default location first)
+    ~/.acme.sh/acme.sh \
+        --issue -d "$domain" \
+        --standalone \
+        $extra_args \
+        --accountemail "$email" \
+        --force 2>&1 | tail -5 || die "Failed to issue Let's Encrypt certificate for $domain"
+
+    # Install cert to our target directory
+    ~/.acme.sh/acme.sh \
+        --install-cert -d "$domain" \
+        --key-file "$outdir/privkey.pem" \
+        --fullchain-file "$outdir/fullchain.pem" \
+        --reloadcmd "systemctl restart ovmanager.service" 2>&1 | tail -3 || die "Failed to install certificate to $outdir"
+
+    step "Certificate installed to $outdir"
 }
 
 # ═══════════════════════════════════════
