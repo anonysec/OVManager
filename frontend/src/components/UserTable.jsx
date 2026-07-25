@@ -26,9 +26,6 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       const a = anchorRef?.current;
       if (!a) return;
       const r = a.getBoundingClientRect();
-      // Measure the actual rendered menu instead of guessing — the CSS allows
-      // 150-200px depending on content/locale, and a hardcoded width caused
-      // the menu to overflow past the viewport edge on the right.
       const menuW = ref.current?.offsetWidth || 180;
       const menuH = ref.current?.offsetHeight || 184;
       let left = r.right - menuW;
@@ -38,7 +35,6 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       if (top + menuH > window.innerHeight - 8) top = r.top - menuH - 6;
       setPos({ top, left, ready: true });
     };
-    // Measure after paint so offsetWidth/offsetHeight are accurate.
     const raf = requestAnimationFrame(place);
     const onScroll = () => onClose();
     window.addEventListener('resize', place);
@@ -78,6 +74,38 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
   );
 };
 
+const UserTableSkeleton = () => {
+  const { t } = useTranslation();
+  return (
+    <div className="table-skeleton">
+      <div className="skeleton-header">
+        {[...Array(9)].map((_, i) => <div key={i} className="sk-line sk-header" style={{ width: i === 8 ? '20%' : '40%' }} />)}
+      </div>
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="skeleton-row">
+          {[...Array(9)].map((_, j) => <div key={j} className="sk-line" style={{ width: j === 8 ? '20%' : j === 0 ? '60%' : '30%' }} />)}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const EmptyState = ({ title, detail }) => (
+  <div className="empty-state">
+    <div className="empty-illustration" aria-hidden="true">
+      <svg viewBox="0 0 120 120" width="120" height="120">
+        <circle cx="60" cy="60" r="54" fill="none" stroke="var(--line)" strokeWidth="2" />
+        <circle cx="46" cy="50" r="16" fill="none" stroke="var(--orange)" strokeWidth="3" />
+        <path d="M24 96c0-14 12-22 26-22s26 8 26 22" fill="none" stroke="var(--orange)" strokeWidth="3" />
+        <line x1="78" y1="74" x2="100" y2="96" stroke="var(--orange)" strokeWidth="3" strokeLinecap="round" />
+        <circle cx="88" cy="86" r="9" fill="var(--panel)" stroke="var(--orange)" strokeWidth="3" />
+      </svg>
+    </div>
+    <h3>{title}</h3>
+    {detail && <p>{detail}</p>}
+  </div>
+);
+
 const UserTable = ({
   users = [],
   isLoading = false,
@@ -102,38 +130,22 @@ const UserTable = ({
   const [menuFor, setMenuFor] = useState(null);
   const anchorRefs = useRef({});
 
-  // Paginated users
   const totalPages = Math.ceil(users.length / PAGE_SIZE) || 1;
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return users.slice(start, start + PAGE_SIZE);
   }, [users, currentPage]);
 
-  // Reset to page 1 when users change (e.g., after search/filter)
   useEffect(() => {
     setCurrentPage(1);
   }, [users]);
 
   if (isLoading) {
-    return <div className="table-skeleton">{t('loading')}</div>;
+    return <UserTableSkeleton />;
   }
 
   if (!users.length) {
-    return (
-      <div className="empty-state">
-        <div className="empty-illustration" aria-hidden="true">
-          <svg viewBox="0 0 120 120" width="120" height="120">
-            <circle cx="60" cy="60" r="54" fill="none" stroke="var(--line)" strokeWidth="2" />
-            <circle cx="46" cy="50" r="16" fill="none" stroke="var(--orange)" strokeWidth="3" />
-            <path d="M24 96c0-14 12-22 26-22s26 8 26 22" fill="none" stroke="var(--orange)" strokeWidth="3" />
-            <line x1="78" y1="74" x2="100" y2="96" stroke="var(--orange)" strokeWidth="3" strokeLinecap="round" />
-            <circle cx="88" cy="86" r="9" fill="var(--panel)" stroke="var(--orange)" strokeWidth="3" />
-          </svg>
-        </div>
-        <h3>{t('noUsersTitle')}</h3>
-        <p>{t('noUsersBody')}</p>
-      </div>
-    );
+    return <EmptyState title={t('noUsersTitle')} detail={t('noUsersBody')} />;
   }
 
   return (
