@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.auth.auth import get_current_user
 from backend.db.engine import BASE_DIR, engine, get_db
 from backend.node.task import clean_global_mlogin_registry, clean_stale_sessions_all_nodes, login_diagnostics, login_health_summary, sync_all_user_limits
+from sqlalchemy import text as _text
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
@@ -44,7 +45,7 @@ async def backup_database(user: dict = Depends(get_current_user)):
         backup_path = BACKUP_DIR / f"ovpanel_backup_{ts}.db"
         # SQLite doesn't like being copied while open; use WAL checkpoint
         with engine.connect() as conn:
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE, full=1)")
+            conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE, full=1)"))
             conn.commit()
         copy2(str(DB_PATH), str(backup_path))
         # Prune old backups — keep only the most recent _MAX_BACKUPS
@@ -135,7 +136,7 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
         try:
             # Checkpoint WAL first
             with engine.connect() as conn:
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE, full=1)")
+                conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE, full=1)"))
                 conn.commit()
             copy2(str(DB_PATH), str(pre_restore_backup))
         except Exception as e:

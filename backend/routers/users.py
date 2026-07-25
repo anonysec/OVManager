@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.operations.daily_checks import enforce_user_limits
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel, Users
-from backend.schema._input import CreateUser, UpdateUser
+from backend.schema._input import CreateUser, UpdateUser, StatusToggle, NodeCreate
 from backend.db.engine import get_db
 from backend.db import crud
 from backend.db.models import User
@@ -160,7 +160,7 @@ async def update_user(
 @router.put("/{uuid}/status", response_model=ResponseModel)
 async def change_user_status(
     uuid: str,
-    request: UpdateUser,
+    request: StatusToggle,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):

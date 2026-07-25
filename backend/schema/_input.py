@@ -47,3 +47,8 @@ class AdminUpdate(BaseModel):
     password: Optional[str] = Field(default=None, min_length=6, max_length=20)
     telegram_id: Optional[int] = Field(default=None, ge=0)
     username_prefix: Optional[str] = Field(default=None, max_length=20)
+
+
+class StatusToggle(BaseModel):
+    name: str
+    status: bool

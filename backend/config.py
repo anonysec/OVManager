@@ -35,6 +35,8 @@ class Setting(BaseSettings):
     SUBSCRIPTION_URL_PREFIX: Optional[str] = None
     SUBSCRIPTION_PATH: str = "sub"
     TRUSTED_PROXY: bool = False  # Set true behind nginx/caddy to trust X-Forwarded-For
+    # Installer metadata (ignored by app, used by install.sh for state)
+    DATA_DIR: str = ""
 
     model_config = {"env_file": os.path.join(os.path.dirname(__file__), "..", ".env")}
 

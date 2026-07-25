@@ -29,7 +29,7 @@ YL=$'\033[33m'; BL=$'\033[34m'; CY=$'\033[36m'; GY=$'\033[90m'
 # ═══════════════════════════════════════
 #  U I
 # ═══════════════════════════════════════
-line()   { echo -e "  $1"; }
+line()   { echo -e "  $1" >&2; }
 step()   { line "${GR}  ✓${NC} $1"; }
 info()   { line "${CY}  →${NC} $1"; }
 warn()   { line "${YL}  ⚠${NC} $1"; }
@@ -39,12 +39,12 @@ sep()    { line "${GY}$(printf '%.0s─' {1..52})${NC}"; }
 spinner() {
     local msg="$1" pid=$2 chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r  ${CY}%s${NC} %-48s" "${chars:$((i%9)):1}" "$msg"
+        printf "\r  ${CY}%s${NC} %-48s" "${chars:$((i%9)):1}" "$msg" >&2
         sleep 0.1; ((i++))
     done
     wait "$pid" 2>/dev/null
     local rc=$?
-    printf "\r\033[K"
+    printf "\r\033[K" >&2
     [[ $rc -eq 0 ]] && step "$msg" || { line "${RD}  ✗${NC} $msg"; return 1; }
 }
 
@@ -110,9 +110,9 @@ parse_args() {
             --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
             --tls-le)     TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
             --tls-ip)     TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I | awk '{print $1}')"; shift ;;
-            --tls-self)   TLS_MODE="self" ;;
+            --tls-self)   TLS_MODE="self"; shift ;;
             --tls-custom) TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
-            --tls-none)   TLS_MODE="none" ;;
+            --tls-none)   TLS_MODE="none"; shift ;;
             --docker)     DOCKER_FLAG=1; shift ;;
             --uninstall)  ACTION="uninstall"; shift ;;
             --help|-h)    show_help ;;
