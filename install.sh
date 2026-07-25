@@ -164,17 +164,25 @@ interactive_setup() {
         esac
     fi
     if [[ "$TLS_MODE" == "le" ]]; then
-        # Domain only
-        if [[ -z "$TLS_DOMAIN" ]]; then
+        # Domain only — must enter
+        while [[ -z "$TLS_DOMAIN" ]]; do
             if [[ -t 0 ]]; then
                 printf "  ${WH}Domain${NC} [] : "
                 read -r TLS_DOMAIN
+            else
+                die "Domain is required for Let's Encrypt (use --tls-le DOMAIN)"
             fi
-            [[ -z "$TLS_DOMAIN" ]] && die "Domain is required for Let's Encrypt"
-        fi
+        done
     elif [[ "$TLS_MODE" == "le-ip" ]]; then
-        # Auto-generate IP, no prompt
-        [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN=$(hostname -I | awk '{print $1}')
+        # Show real IP, user can override or press Enter
+        local real_ip=$(hostname -I | awk '{print $1}')
+        if [[ -z "$TLS_DOMAIN" ]]; then
+            if [[ -t 0 ]]; then
+                printf "  ${WH}IP${NC} [${GR}%s${NC}] : " "$real_ip"
+                read -r TLS_DOMAIN
+            fi
+            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$real_ip"
+        fi
     fi
     local server_ip=$(hostname -I | awk '{print $1}')
     sep
