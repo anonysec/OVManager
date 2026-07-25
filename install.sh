@@ -154,6 +154,7 @@ interactive_setup() {
         line "  5)  None (HTTP)"
         printf "  Select [${GR}2${NC}] : "
         read -r tls_choice
+        : "${tls_choice:=2}"
         case "$tls_choice" in
             1) TLS_MODE="le" ;;
             2) TLS_MODE="le-ip" ;;
@@ -183,6 +184,16 @@ interactive_setup() {
             fi
             [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$real_ip"
         fi
+    fi
+    # Install mode
+    if [[ $DOCKER_FLAG -eq 0 && -t 0 ]]; then
+        line "  Install mode"
+        line "  ${WH}1${NC})  Native (systemd)"
+        line "  ${WH}2${NC})  Docker"
+        printf "  Select [${GR}1${NC}] : "
+        read -r mode_choice
+        : "${mode_choice:=1}"
+        [[ "$mode_choice" == "2" ]] && DOCKER_FLAG=1
     fi
     local server_ip=$(hostname -I | awk '{print $1}')
     sep
@@ -347,6 +358,15 @@ do_install() {
             ;;
     esac
 
+    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
+        info "Building frontend..."
+        cd "$INSTALL_DIR/frontend"
+        npm ci --silent >/dev/null 2>&1 &
+        spinner "Node.js dependencies installed" $!
+        npm run build --silent >/dev/null 2>&1 &
+        spinner "Frontend built" $!
+    fi
+
     if [[ $DOCKER_FLAG -eq 1 ]]; then
         setup_docker
     else
@@ -415,6 +435,10 @@ services:
       - URLPATH=${PATHPREFIX}
       - JWT_SECRET_KEY=${jwt_secret}
       - DATA_DIR=/app/data
+      - VITE_URLPATH=${PATHPREFIX}
+$( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
+$( [[ "$TLS_MODE" == "self" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
+$( [[ "$TLS_MODE" == "custom" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
     volumes:
       - ${data_dir_abs}:/app/data
 $( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - /etc/letsencrypt/${TLS_DOMAIN}:/app/certs:ro")
