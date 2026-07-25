@@ -152,7 +152,7 @@ interactive_setup() {
         line "  3)  Self-signed cert"
         line "  4)  Custom cert path"
         line "  5)  None (HTTP)"
-        printf "  Select [${GR}5${NC}] : "
+        printf "  Select [${GR}2${NC}] : "
         read -r tls_choice
         case "$tls_choice" in
             1) TLS_MODE="le" ;;
@@ -163,15 +163,15 @@ interactive_setup() {
             *) TLS_MODE="none" ;;
         esac
     fi
-    if [[ "$TLS_MODE" == "le-ip" ]]; then
-        [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN=$(hostname -I | awk '{print $1}')
-    elif [[ "$TLS_MODE" == "le" ]]; then
+    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]]; then
+        local ip_hint=$(hostname -I | awk '{print $1}')
         if [[ -z "$TLS_DOMAIN" ]]; then
             if [[ -t 0 ]]; then
-                printf "  ${WH}Domain${NC} [] : "
+                printf "  ${WH}Domain/IP${NC} [${GR}%s${NC}] : " "$ip_hint"
                 read -r TLS_DOMAIN
             fi
-            [[ -z "$TLS_DOMAIN" ]] && die "Domain is required for Let's Encrypt"
+            # Empty = use IP, otherwise = domain
+            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$ip_hint"
         fi
     fi
     sep
