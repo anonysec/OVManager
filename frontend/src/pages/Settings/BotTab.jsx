@@ -28,7 +28,7 @@ const BotTab = () => {
         bot_enabled: enabled,
         owner_telegram_id: ownerId ? Number(ownerId) : null,
       };
-      const r = await apiClient.put('/settings/bot', payload);
+      const r = await apiClient.put('/server/settings/bot', payload);
       setMsg(r.data?.msg || t('saved', 'Saved'));
     } catch (e) {
       setMsg(e.response?.data?.detail || t('error', 'Error'));
