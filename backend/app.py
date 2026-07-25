@@ -159,6 +159,22 @@ async def startup_event():
         logger.error("migration warning: %s", e)
     start_scheduler()
 
+    # Start Telegram bot as background task
+    import asyncio
+    async def _start_bot():
+        try:
+            from bot.main import async_init
+            from telegram.ext import Application
+            app = await async_init()
+            if app:
+                await app.initialize()
+                await app.start()
+                await app.updater.start_polling()
+        except Exception as e:
+            from backend.logger import logger
+            logger.error("Bot startup failed: %s", e)
+    asyncio.create_task(_start_bot())
+
 
 for router in all_routers:
     api.include_router(prefix=API_PREFIX, router=router)
