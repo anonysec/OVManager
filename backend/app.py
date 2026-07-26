@@ -159,7 +159,7 @@ async def startup_event():
 
     # Start Telegram bot as background thread
     import logging
-    bot_logger = logging.getLogger("ovmanager.bot")
+    bot_logger = logging.getLogger("backend.bot")
     import threading
 
     def _run_bot():
@@ -175,6 +175,8 @@ async def startup_event():
                 if app:
                     await app.initialize()
                     await app.start()
+                    for h in bot_logger.handlers:
+                        h.flush()
                     bot_logger.info("Bot polling started")
                     await app.updater.start_polling()
             except Exception as e:
