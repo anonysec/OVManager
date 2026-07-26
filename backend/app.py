@@ -157,20 +157,18 @@ async def startup_event():
         logger.error("migration warning: %s", e)
     start_scheduler()
 
-    # Start Telegram bot as background thread
-    import threading
-
-    def _run_bot():
-        from bot.main import run_bot_threaded
-        import logging
-        logging.getLogger("backend.bot").info("Bot thread starting...")
-        try:
-            run_bot_threaded()
-        except Exception as e:
-            logging.getLogger("backend.bot").error("Bot startup failed: %s", e)
-
-    bot_thread = threading.Thread(target=_run_bot, daemon=True)
-    bot_thread.start()
+    # Start Telegram bot as background process (avoids uvicorn event loop issues)
+    import subprocess
+    import sys
+    bot_process = subprocess.Popen(
+        [sys.executable, "-m", "bot.main"],
+        cwd="/opt/ovmanager" if os.path.exists("/opt/ovmanager") else None,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    from backend.logger import logger
+    logger.info(f"Bot started as subprocess PID {bot_process.pid}")
 
 
 for router in all_routers:
