@@ -161,11 +161,11 @@ async def startup_event():
     import threading
 
     def _run_bot():
-        from bot.main import main
+        from bot.main import run_bot_threaded
         import logging
         logging.getLogger("backend.bot").info("Bot thread starting...")
         try:
-            main()  # Uses asyncio.run() with proper stop handler
+            run_bot_threaded()
         except Exception as e:
             logging.getLogger("backend.bot").error("Bot startup failed: %s", e)
 

@@ -1,6 +1,7 @@
 import logging
 import signal
 import asyncio
+import threading
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from bot.handlers import handle_message, handle_callback, handle_start
 from bot.config import config
@@ -69,6 +70,8 @@ async def run_bot_async():
             loop.add_signal_handler(sig, _signal_handler)
         except NotImplementedError:
             pass  # Windows
+        except RuntimeError:
+            pass  # Not in main thread
 
     await stop
 
@@ -84,6 +87,59 @@ def main():
     """Run the bot."""
     log.info("Bot starting up...")
     asyncio.run(run_bot_async())
+
+
+def run_bot_threaded():
+    """Run bot in a thread-safe manner (for uvicorn startup)."""
+    # Check if we're in main thread (call from command line) or a worker thread
+    if threading.current_thread() is threading.main_thread():
+        main()
+    else:
+        # In thread: use custom event loop without signal handlers
+        _run_bot_in_thread()
+
+
+def _run_bot_in_thread():
+    """Bot loop for thread execution - avoids signal handler issues."""
+    log.info("Bot thread starting...")
+
+    # Create a new event loop (no signal handlers)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def _bot_loop():
+        try:
+            app = await async_init()
+            if not app:
+                log.warning("Bot not started — check Settings page")
+                return
+
+            log.info("Starting bot polling (thread mode)...")
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling()
+
+            # Keep running - start_polling() starts background task, we wait forever
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            log.error("Bot error: %s", e)
+        finally:
+            try:
+                await app.updater.stop()
+                await app.stop()
+                await app.shutdown()
+            except Exception:
+                pass
+            log.info("Bot stopped")
+
+    try:
+        loop.run_until_complete(_bot_loop())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
