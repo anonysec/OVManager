@@ -161,25 +161,13 @@ async def startup_event():
     import threading
 
     def _run_bot():
-        import asyncio
-        from bot.main import async_init
-        from backend.logger import logger
-
-        logger.info("Bot thread starting...")
-
-        async def _bot_loop():
-            try:
-                app = await async_init()
-                logger.info("Bot initialized: %s", app is not None)
-                if app:
-                    await app.initialize()
-                    await app.start()
-                    logger.info("Bot polling started")
-                    await app.updater.start_polling()
-            except Exception as e:
-                logger.error("Bot startup failed: %s", e)
-
-        asyncio.run(_bot_loop())
+        from bot.main import main
+        import logging
+        logging.getLogger("backend.bot").info("Bot thread starting...")
+        try:
+            main()  # Uses asyncio.run() with proper stop handler
+        except Exception as e:
+            logging.getLogger("backend.bot").error("Bot startup failed: %s", e)
 
     bot_thread = threading.Thread(target=_run_bot, daemon=True)
     bot_thread.start()
