@@ -370,7 +370,7 @@ async def _show_user(update: Update, u: dict):
         else:
             status_icon = "🔴 Disabled"
         total = u.get("total")
-        used = u.get("used", 0)
+        used = u.get("used") or 0
         total_s = _fmt_bytes(total) if total else "♾️ Unlimited"
         used_s = _fmt_bytes(used)
         pct = f" ({used / total * 100:.0f}%)" if total and total > 0 else ""
