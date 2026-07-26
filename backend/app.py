@@ -158,29 +158,26 @@ async def startup_event():
     start_scheduler()
 
     # Start Telegram bot as background thread
-    import logging
-    bot_logger = logging.getLogger("backend.bot")
     import threading
 
     def _run_bot():
         import asyncio
         from bot.main import async_init
+        from backend.logger import logger
 
-        bot_logger.info("Bot thread starting...")
+        logger.info("Bot thread starting...")
 
         async def _bot_loop():
             try:
                 app = await async_init()
-                bot_logger.info("Bot initialized: %s", app is not None)
+                logger.info("Bot initialized: %s", app is not None)
                 if app:
                     await app.initialize()
                     await app.start()
-                    for h in bot_logger.handlers:
-                        h.flush()
-                    bot_logger.info("Bot polling started")
+                    logger.info("Bot polling started")
                     await app.updater.start_polling()
             except Exception as e:
-                bot_logger.error("Bot startup failed: %s", e)
+                logger.error("Bot startup failed: %s", e)
 
         asyncio.run(_bot_loop())
 
