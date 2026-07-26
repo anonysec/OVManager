@@ -148,6 +148,22 @@ def start_scheduler():
     scheduler.start()
 
 
+def start_bot():
+    """Start the Telegram bot as a subprocess."""
+    import subprocess
+    import sys
+
+    bot_path = os.path.join(os.path.dirname(__file__), "..", "bot", "main.py")
+    if os.path.exists(bot_path):
+        subprocess.Popen(
+            [sys.executable, "-m", "bot.main"],
+            cwd=os.path.dirname(__file__),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+
 @api.on_event("startup")
 async def startup_event():
     try:
@@ -156,19 +172,7 @@ async def startup_event():
         from backend.logger import logger
         logger.error("migration warning: %s", e)
     start_scheduler()
-
-    # Start Telegram bot as background process (avoids uvicorn event loop issues)
-    import subprocess
-    import sys
-    bot_process = subprocess.Popen(
-        [sys.executable, "-m", "bot.main"],
-        cwd="/opt/ovmanager" if os.path.exists("/opt/ovmanager") else None,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    from backend.logger import logger
-    logger.info(f"Bot started as subprocess PID {bot_process.pid}")
+    start_bot()
 
 
 for router in all_routers:
