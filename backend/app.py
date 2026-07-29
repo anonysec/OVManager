@@ -45,9 +45,9 @@ def _run_migrations():
         db.close()
 
 
-URLPATH = (config.URLPATH or "").strip("/")
-API_PREFIX = f"/{URLPATH}/api" if URLPATH else "/api"
-DOC_PREFIX = f"/{URLPATH}" if URLPATH else ""
+URLPATH = "x"  # enforced path prefix - only /x/ routes work
+API_PREFIX = f"/{URLPATH}/api"
+DOC_PREFIX = f"/{URLPATH}"
 
 # TLS Configuration - auto-detect from env vars / cert paths
 tls_config = TLSConfig.get_ssl_config()
@@ -205,9 +205,17 @@ class SPAFallbackMiddleware(BaseHTTPMiddleware):
         return await _serve_react()
 
 
-api.add_middleware(SPAFallbackMiddleware)
+# api.add_middleware(SPAFallbackMiddleware)  # disabled - only serve prefixed routes
 
 if URLPATH:
     @api.get("/")
     async def root_redirect():
         return RedirectResponse(url=f"/{URLPATH}")
+
+    @api.get(f"/{URLPATH}")
+    async def path_root():
+        return await _serve_react()
+
+    @api.get(f"/{URLPATH}/{path:path}")
+    async def path_catchall(path: str):
+        return await _serve_react()
