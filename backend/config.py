@@ -27,8 +27,7 @@ def _validate_jwt_secret(v: str) -> str:
 class Setting(BaseSettings):
     ADMIN_USERNAME: str
     ADMIN_PASSWORD: str
-    URLPATH: str = "dashboard"
-    VITE_URLPATH: str = "dashboard"
+    URLPATH: str = ""  # Initial default for DB urlpath; runtime changes via web UI
     HOST: str = "0.0.0.0"
     PORT: int = 9000
     DEBUG: str = "WARNING"

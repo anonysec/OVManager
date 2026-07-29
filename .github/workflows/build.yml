@@ -1,4 +1,4 @@
-name: Build and Test OV-Panel
+name: Build and Test OVManager
 
 on:
   release:

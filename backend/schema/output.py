@@ -48,6 +48,7 @@ class Settings(BaseModel):
     default_traffic_gb: int = 100
     default_max_users: int = 1
     owner_telegram_id: Optional[int] = None
+    urlpath: str = ""
 
 
 class Admins(BaseModel):

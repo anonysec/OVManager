@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
 from backend.db.engine import get_db
+from backend.db import crud
 from backend.schema.output import ResponseModel
 from backend.schema._input import NodeCreate
 from backend.node.task import (
@@ -91,7 +92,10 @@ async def download_ovpn_client(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    response = await download_ovpn_client_from_node(db=db, uuid=uuid, node_id=node_id)
+    user = crud.get_user_by_uuid(db, uuid)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    response = await download_ovpn_client_from_node(user_id=user.id, node_id=node_id, db=db)
     if response:
         return response
     raise HTTPException(status_code=404, detail="OVPN file not found")

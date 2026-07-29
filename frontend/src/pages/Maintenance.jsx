@@ -50,7 +50,7 @@ const Maintenance = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'ov-panel-backup.db';
+      link.download = 'ovmanager-backup.db';
       document.body.appendChild(link);
       link.click();
       link.remove();

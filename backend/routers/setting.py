@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.db.engine import get_db
 from backend.db import crud
 from backend.auth.auth import get_current_user
+from backend.auth.authz import require_main_admin
 from backend.operations.server_info import get_server_info
 from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
 from backend.version import __version__
+from backend.urlpath import set_urlpath as _set_urlpath, get_urlpath as _get_urlpath, invalidate_cache
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 
@@ -20,15 +22,24 @@ async def get_settings(
     db: Session = Depends(get_db),
     user: str = Depends(get_current_user),
 ):
-    urlpath = (config.URLPATH or "").strip("/")
+    db_settings = crud.get_settings(db)
+    urlpath = _get_urlpath()
+
+    # Subscription prefix: DB-persisted > env config > request base URL
+    db_prefix = getattr(db_settings, "subscription_url_prefix", None)
+    sub_prefix_source = db_prefix if db_prefix else config.SUBSCRIPTION_URL_PREFIX
     subscription_prefix = (
-        config.SUBSCRIPTION_URL_PREFIX.rstrip("/") + "/"
-        if config.SUBSCRIPTION_URL_PREFIX
+        sub_prefix_source.rstrip("/") + "/"
+        if sub_prefix_source
         else str(request.base_url).rstrip("/") + (f"/{urlpath}/" if urlpath else "/")
     )
-    db_settings = crud.get_settings(db)
+
+    # Subscription path: DB-persisted > env config
+    db_sub_path = getattr(db_settings, "subscription_path", None) or "sub"
+    sub_path = db_sub_path if db_sub_path else config.SUBSCRIPTION_PATH
+
     settings = Settings(
-        subscription_path=config.SUBSCRIPTION_PATH.strip("/"),
+        subscription_path=sub_path.strip("/"),
         subscription_url_prefix=subscription_prefix,
         timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
         panel_version=__version__,
@@ -38,6 +49,7 @@ async def get_settings(
         default_traffic_gb=getattr(db_settings, "default_traffic_gb", 100) or 100,
         default_max_users=getattr(db_settings, "default_max_users", 1) or 1,
         owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
+        urlpath=urlpath,
     )
     return ResponseModel(
         success=True,
@@ -64,6 +76,10 @@ class BotConfigUpdate(BaseModel):
     owner_telegram_id: int | None = None
 
 
+class URLPathUpdate(BaseModel):
+    urlpath: str = Field(default="", description="Panel URL path prefix. Empty = root. Alphanumeric, dashes, underscores only.")
+
+
 @router.put("/settings/timezone", response_model=ResponseModel)
 async def update_timezone(
     payload: TimezoneUpdate,
@@ -71,6 +87,10 @@ async def update_timezone(
     user: str = Depends(get_current_user),
 ):
     tz = (payload.timezone or "UTC").strip() or "UTC"
+    # Validate IANA timezone name
+    from zoneinfo import ZoneInfo, available_timezones
+    if tz != "UTC" and tz not in available_timezones():
+        return ResponseModel(success=False, msg=f"Invalid timezone: {tz}", data=None)
     crud.update_setting_timezone(db, tz)
     return ResponseModel(success=True, msg="Timezone updated", data={"timezone": tz})
 
@@ -78,18 +98,24 @@ async def update_timezone(
 @router.put("/settings/subscription", response_model=ResponseModel)
 async def update_subscription(
     payload: SubscriptionUpdate,
+    db: Session = Depends(get_db),
     user: str = Depends(get_current_user),
 ):
+    # Persist to DB so settings survive restarts
+    db_settings = crud.get_settings(db)
     if payload.subscription_url_prefix is not None:
+        db_settings.subscription_url_prefix = payload.subscription_url_prefix.strip()
         config.SUBSCRIPTION_URL_PREFIX = payload.subscription_url_prefix.strip()
     if payload.subscription_path is not None:
+        db_settings.subscription_path = payload.subscription_path.strip()
         config.SUBSCRIPTION_PATH = payload.subscription_path.strip()
+    db.commit()
     return ResponseModel(
         success=True,
         msg="Subscription link settings updated",
         data={
-            "subscription_url_prefix": config.SUBSCRIPTION_URL_PREFIX,
-            "subscription_path": config.SUBSCRIPTION_PATH,
+            "subscription_url_prefix": db_settings.subscription_url_prefix or "",
+            "subscription_path": db_settings.subscription_path,
         },
     )
 
@@ -106,6 +132,52 @@ async def update_bot_config(
         success=True,
         msg="Bot config updated",
         data=crud.get_bot_config(db),
+    )
+
+
+@router.put("/settings/urlpath", response_model=ResponseModel)
+async def update_urlpath(
+    payload: URLPathUpdate,
+    user: dict = Depends(require_main_admin),
+):
+    """Change the panel URL path prefix at runtime.
+
+    - Empty string → panel served at root (/)
+    - Non-empty → panel served only at /<urlpath>/...
+    - When set, root and other paths return empty response (security)
+    - Takes effect within 5 seconds (cache TTL) — no restart needed
+
+    Only main_admin can change this.
+    """
+    import re
+
+    value = (payload.urlpath or "").strip("/")
+
+    # Validate: only allow safe characters (alphanumeric, dash, underscore)
+    if value and not re.match(r'^[A-Za-z0-9_-]+$', value):
+        return ResponseModel(
+            success=False,
+            msg="URL path must contain only letters, numbers, dashes, and underscores",
+            data=None,
+        )
+
+    # Max length to prevent abuse
+    if len(value) > 64:
+        return ResponseModel(
+            success=False,
+            msg="URL path must be 64 characters or less",
+            data=None,
+        )
+
+    new_value = _set_urlpath(value)
+
+    return ResponseModel(
+        success=True,
+        msg="URL path updated. Takes effect within 5 seconds." if new_value else "URL path cleared — panel now served at root.",
+        data={
+            "urlpath": new_value,
+            "panel_url": f"/{new_value}" if new_value else "/",
+        },
     )
 
 

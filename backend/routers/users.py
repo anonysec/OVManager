@@ -50,17 +50,23 @@ async def get_next_username(
 
 @router.get("/", response_model=ResponseModel)
 async def get_all_users(
-    db: Session = Depends(get_db), user: dict = Depends(get_current_user)
+    page: int = 1,
+    page_size: int = 100,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
+    # Clamp pagination params
+    page = max(1, min(page, 10_000))
+    page_size = max(1, min(page_size, 500))
+
     active_counts = await get_active_connection_counts(db)
 
     def serialize(db_user):
         item = Users.model_validate(db_user).model_dump()
         item["active_connections"] = int(active_counts.get(db_user.name, 0) or 0)
         item["online"] = item["active_connections"] > 0
-        # Track the last time this user had a live connection.
-        if item["active_connections"] > 0:
-            db_user.last_online = datetime.now(UTC)
+        # last_online is updated by the background metrics job, not here.
+        # GET endpoints must not modify data.
         item["last_online"] = (
             db_user.last_online.isoformat() if db_user.last_online else None
         )
@@ -68,22 +74,26 @@ async def get_all_users(
 
     if user["type"] == "main_admin":
         all_users = crud.get_all_users(db)
-        users_list = [serialize(u) for u in all_users]
-        db.commit()  # persist last_online updates
+        total = len(all_users)
+        start = (page - 1) * page_size
+        end = start + page_size
+        users_list = [serialize(u) for u in all_users[start:end]]
         return ResponseModel(
             success=True,
             msg="Users retrieved successfully",
-            data=users_list,
+            data={"users": users_list, "total": total, "page": page, "page_size": page_size},
         )
 
     elif user["type"] == "admin":
         admin_users = crud.get_users_by_admin(db, admin_username=user["username"])
-        users_list = [serialize(u) for u in admin_users]
-        db.commit()
+        total = len(admin_users)
+        start = (page - 1) * page_size
+        end = start + page_size
+        users_list = [serialize(u) for u in admin_users[start:end]]
         return ResponseModel(
             success=True,
             msg="Users retrieved successfully",
-            data=users_list,
+            data={"users": users_list, "total": total, "page": page, "page_size": page_size},
         )
 
     return ResponseModel(
@@ -148,8 +158,8 @@ async def update_user(
     crud.update_user(db, uuid, request)
     db_user = crud.get_user_by_uuid(db, uuid)
     final_active = bool(request.status) and db_user.is_active
-    await change_user_status_on_all_nodes(uuid, request.name, final_active, db)
-    await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, uuid)
+    await change_user_status_on_all_nodes(db_user.id, request.name, final_active, db)
+    await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, db_user.id)
     # enforce_user_limits runs as a daily background job in app.py;
     # calling it per user update is O(n²) — each call queries all expired/exceeded users.
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
@@ -163,7 +173,10 @@ async def change_user_status(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    await change_user_status_on_all_nodes(uuid, request.name, request.status, db)
+    db_user = crud.get_user_by_uuid(db, uuid)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await change_user_status_on_all_nodes(db_user.id, request.name, request.status, db)
     log_event(db, "user.status", actor=user.get("username"), target=request.name, detail=f"status={request.status}")
     return ResponseModel(success=True, msg="Changed user status successfully")
 
@@ -180,7 +193,7 @@ async def user_sessions(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] == "admin" and db_user.owner != user["username"]:
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
-    data = await get_user_session_diagnostics(uuid, db, hours=hours)
+    data = await get_user_session_diagnostics(db_user.id, db, hours=hours)
     return ResponseModel(success=True, msg="User session diagnostics", data=data)
 
 
@@ -195,7 +208,7 @@ async def disconnect_user_sessions(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] == "admin" and db_user.owner != user["username"]:
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
-    data = await disconnect_user_on_all_nodes(db_user.name, uuid, db)
+    data = await disconnect_user_on_all_nodes(db_user.name, db_user.id, db)
     log_event(db, "user.disconnect", actor=user.get("username"), target=db_user.name, detail="Disconnect requested")
     return ResponseModel(success=True, msg="Disconnect command processed", data=data)
 
@@ -208,7 +221,7 @@ async def delete_user(
     if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
 
-    if await delete_user_on_all_nodes(db_user.name, uuid, db):
+    if await delete_user_on_all_nodes(db_user.name, db_user.id, db):
         name = db_user.name
         crud.delete_user(db, name)
         log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")

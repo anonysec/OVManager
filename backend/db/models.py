@@ -74,3 +74,11 @@ class Settings(Base):
     default_traffic_gb: Mapped[int] = mapped_column(default=100)
     default_max_users: Mapped[int] = mapped_column(default=1)
     owner_telegram_id: Mapped[int] = mapped_column(nullable=True)
+    # Subscription link settings — persisted to DB (was in-memory only).
+    subscription_url_prefix: Mapped[str] = mapped_column(nullable=True)
+    subscription_path: Mapped[str] = mapped_column(default="sub", nullable=False)
+    # Dynamic URL path prefix for the panel (like 3x-ui's "panel path" feature).
+    # Empty = serve at root (/). Non-empty = serve at /<urlpath>/... only.
+    # When set, requests to root or other paths get an empty response (no 404).
+    # Changeable at runtime via the web UI — no restart required.
+    urlpath: Mapped[str] = mapped_column(default="", nullable=False)

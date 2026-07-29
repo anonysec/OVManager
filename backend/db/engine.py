@@ -5,7 +5,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DATABASE_URL = f"sqlite:///{BASE_DIR.parent.parent}/data/ov-panel.db"
+DATABASE_URL = f"sqlite:///{BASE_DIR.parent.parent}/data/ovmanager.db"
 
 # OVManager uses SQLite by default. The panel performs scheduled writes while
 # admins may also be using the UI, so the default SQLite settings can raise

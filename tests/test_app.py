@@ -1,17 +1,12 @@
 """Basic tests for OVManager panel.
 
-These are environment-aware: the API prefix depends on config.URLPATH, so we
-derive the real prefix from the app's config instead of hardcoding /api.
+Routes are registered at /api/... (no prefix). The URLPathMiddleware handles
+any dynamic prefix at the ASGI level. These tests use TestClient which
+exercises the app directly, so they test the unprefixed routes.
 """
 from fastapi.testclient import TestClient
 
 from backend.app import api
-from backend.config import config
-
-
-def _api_prefix():
-    urlpath = (config.URLPATH or "").strip("/")
-    return f"/{urlpath}/api" if urlpath else "/api"
 
 
 def test_app_imports():
@@ -26,8 +21,42 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
-def test_urlprefixed_health():
+def test_api_users_requires_auth():
+    """API endpoints require authentication."""
     client = TestClient(api)
-    response = client.get(f"{_api_prefix()}/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    response = client.get("/api/users/")
+    assert response.status_code in (401, 403)
+
+
+def test_urlpath_middleware_blocks_non_matching():
+    """When URLPATH is set, non-matching paths get empty response."""
+    from backend.urlpath import set_urlpath, set_urlpath as _set
+
+    client = TestClient(api)
+    try:
+        _set("mysecret")
+        # Matching path: should be handled
+        response = client.get("/mysecret/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+
+        # Non-matching path: should get empty 200
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.content == b""
+    finally:
+        _set("")
+
+
+def test_urlpath_empty_serves_root():
+    """When URLPATH is empty, all paths are served at root."""
+    from backend.urlpath import set_urlpath
+
+    client = TestClient(api)
+    try:
+        set_urlpath("")
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+    finally:
+        set_urlpath("")

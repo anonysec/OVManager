@@ -8,7 +8,7 @@ from backend.node.task import change_user_status_on_all_nodes, get_users_used_tr
 
 
 async def enforce_user_limits():
-    """Disable users who are expired or exceeded traffic"""
+    """Disable users who are expired or exceeded traffic."""
     db = next(get_db())
 
     try:
@@ -19,7 +19,7 @@ async def enforce_user_limits():
 
         for user in users_to_disable:
             user.is_active = False
-            await change_user_status_on_all_nodes(uuid=user.uuid, name=user.name, status=False, db=db)
+            await change_user_status_on_all_nodes(user_id=user.id, name=user.name, status=False, db=db)
             await asyncio.sleep(0.5)
 
         db.commit()
@@ -32,12 +32,122 @@ async def enforce_user_limits():
         db.close()
 
 
+# ── Traffic delta computation ────────────────────────────────────
+
+def _compute_session_delta(
+    sessions: dict | None,
+    prev_state: dict | int | None,
+    legacy_total: float | int,
+) -> tuple[int, dict | int]:
+    """Compute the traffic delta for one user on one node.
+
+    Returns (delta_bytes, new_state) where new_state is the updated
+    per-session map (or legacy int total if sessions data unavailable).
+
+    The delta logic handles three cases:
+    1. Per-session diff — both current and previous are dicts (accurate path)
+    2. First-time sessions — sessions dict exists but prev is absent/legacy
+    3. Legacy fallback — no per-session data from the node
+    """
+    if isinstance(sessions, dict) and isinstance(prev_state, dict):
+        # Per-session diff (accurate path).
+        delta = 0
+        for skey, cur in sessions.items():
+            last = int(prev_state.get(skey, 0) or 0)
+            delta += (cur - last) if cur >= last else cur
+        new_state = {k: int(v) for k, v in sessions.items()}
+        return delta, new_state
+
+    if isinstance(sessions, dict):
+        # First time we see sessions for this node.
+        prev_int = int(prev_state or 0) if not isinstance(prev_state, dict) else 0
+        cur_total = int(sum(sessions.values()))
+        delta = cur_total - prev_int if cur_total >= prev_int else cur_total
+        new_state = {k: int(v) for k, v in sessions.items()}
+        return delta, new_state
+
+    # Legacy fallback: node didn't send per-session data.
+    prev_int = int(prev_state or 0) if not isinstance(prev_state, dict) else 0
+    cur_total = int(legacy_total)
+    delta = cur_total - prev_int if cur_total >= prev_int else cur_total
+    return delta, cur_total
+
+
+def _extract_username(client_name: str, node_name: str) -> str:
+    """Extract the panel username from an OpenVPN client CN.
+
+    CNs are named "<username>-<node_name>". We strip the exact node suffix
+    (not just rsplit on "-") so usernames containing dashes work correctly.
+    """
+    suffix = f"-{node_name}"
+    if client_name.endswith(suffix):
+        return client_name[: -len(suffix)]
+    # Fallback for legacy/unexpected names
+    return client_name.rsplit("-", 1)[0]
+
+
+def _load_node_usage(user) -> dict:
+    """Safely parse the user's per-node usage map from JSON."""
+    try:
+        parsed = json.loads(user.node_usage or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+# ── Main traffic collection loop ─────────────────────────────────
+
+async def _collect_node_traffic(node, all_users: dict, db) -> None:
+    """Collect traffic data from a single node and update user records."""
+    usage = await get_users_used_traffic(node, db=db)
+    if not usage:
+        return
+
+    per_user_total = usage.get("users", {}) or {}
+    per_user_sessions = usage.get("sessions", {}) or {}
+    if not per_user_total:
+        return
+
+    for client_name, total_bytes in per_user_total.items():
+        username = _extract_username(client_name, node.name)
+        user = all_users.get(username)
+
+        if not user:
+            logger.warning("User not found: %s", username)
+            continue
+
+        node_usage = _load_node_usage(user)
+        prev_state = node_usage.get(node.name)
+        sessions = per_user_sessions.get(client_name)
+
+        delta, new_state = _compute_session_delta(sessions, prev_state, total_bytes)
+        delta = max(delta, 0)
+
+        user.used = (user.used or 0) + delta
+        node_usage[node.name] = new_state
+        user.node_usage = json.dumps(node_usage)
+
+        logger.info(
+            "[%s] node=%s total=%d delta=%d",
+            username, node.name, int(total_bytes), delta,
+        )
+
+    db.commit()
+    logger.info("Traffic data committed for node %s", node.address)
+
+
 async def check_user_used_traffic():
+    """Poll all nodes for traffic usage and update user records.
+
+    Runs every 5 minutes as a background job. For each node, fetches the
+    current byte counters, computes per-session deltas (to avoid
+    double-counting on session disconnect/reconnect), and persists the
+    updated totals.
+    """
     db = next(get_db())
 
     try:
         nodes = crud.get_all_nodes(db)
-
         if not nodes:
             logger.warning("No nodes found")
             return
@@ -46,102 +156,16 @@ async def check_user_used_traffic():
 
         for node in nodes:
             try:
-                usage = await get_users_used_traffic(node, db=db)
-
-                if not usage:
-                    continue
-
-                per_user_total = usage.get("users", {}) or {}
-                per_user_sessions = usage.get("sessions", {}) or {}
-
-                if not per_user_total:
-                    continue
-
-                # The node names every client "<panel_username>-<node_name>".
-                # Strip exactly that node suffix instead of splitting on the
-                # first "-", so usernames that themselves contain dashes
-                # (e.g. "my-vpn") are matched and counted correctly.
-                suffix = f"-{node.name}"
-
-                for client_name, total_bytes in per_user_total.items():
-                    if client_name.endswith(suffix):
-                        clean_username = client_name[: -len(suffix)]
-                    else:
-                        # Fallback for legacy/unexpected names.
-                        clean_username = client_name.rsplit("-", 1)[0]
-
-                    user = all_users.get(clean_username)
-
-                    if not user:
-                        logger.warning("User not found: %s", clean_username)
-                        continue
-
-                    # node_usage maps node_name -> {session_key: last_seen_bytes}
-                    # so each session is diffed independently. This avoids
-                    # double-counting when one of several simultaneous sessions
-                    # disconnects (which would otherwise look like a counter
-                    # reset on a summed total).
-                    try:
-                        node_usage = json.loads(user.node_usage or "{}")
-                        if not isinstance(node_usage, dict):
-                            node_usage = {}
-                    except (ValueError, TypeError):
-                        node_usage = {}
-
-                    prev = node_usage.get(node.name)
-                    sessions = per_user_sessions.get(client_name)
-
-                    delta = 0
-                    if isinstance(sessions, dict) and isinstance(prev, dict):
-                        # Per-session diff (accurate path).
-                        for skey, cur in sessions.items():
-                            last = int(prev.get(skey, 0) or 0)
-                            delta += (cur - last) if cur >= last else cur
-                        new_state = {k: int(v) for k, v in sessions.items()}
-                    elif isinstance(sessions, dict):
-                        # First time we see sessions for this node: count all
-                        # current bytes once, then start tracking per session.
-                        # `prev` here is either absent or a legacy int total.
-                        prev_int = int(prev or 0) if not isinstance(prev, dict) else 0
-                        cur_total = int(sum(sessions.values()))
-                        delta = cur_total - prev_int if cur_total >= prev_int else cur_total
-                        new_state = {k: int(v) for k, v in sessions.items()}
-                    else:
-                        # Legacy fallback: node didn't send per-session data.
-                        prev_int = int(prev or 0) if not isinstance(prev, dict) else 0
-                        cur_total = int(total_bytes)
-                        delta = cur_total - prev_int if cur_total >= prev_int else cur_total
-                        new_state = cur_total
-
-                    if delta < 0:
-                        delta = 0
-
-                    user.used = (user.used or 0) + delta
-                    node_usage[node.name] = new_state
-                    user.node_usage = json.dumps(node_usage)
-
-                    logger.info(
-                        f"[{clean_username}] node={node.name} "
-                        f"total={int(total_bytes)} delta={delta}"
-                    )
-
-                # commit per node
-                db.commit()
-
-                logger.info("Traffic data committed for node %s", node.address)
-
+                await _collect_node_traffic(node, all_users, db)
             except Exception as e:
                 db.rollback()
-
                 logger.error(
-                    f"Error while processing node " f"{node.address} -> {e}",
-                    exc_info=True,
+                    "Error while processing node %s -> %s",
+                    node.address, e, exc_info=True,
                 )
 
     except Exception as e:
         db.rollback()
-
         logger.error("Error in check_user_used_traffic -> %s", e, exc_info=True)
-
     finally:
         db.close()

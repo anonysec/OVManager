@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException
 from datetime import datetime
 from uuid import uuid4
 
 from backend.auth.hash import hash_password
+from backend.db.exceptions import NotFoundError, ConflictError
 from backend.logger import logger
 from backend.schema._input import AdminCreate, CreateUser, UpdateUser, NodeCreate
 from .models import User, Admin, Node, Settings
@@ -79,7 +79,7 @@ def get_bot_config(db: Session):
 def patch_admin_telegram_id(db: Session, username: str, tg_id: int | None):
     admin = db.query(Admin).filter(Admin.username == username).first()
     if not admin:
-        raise HTTPException(status_code=404, detail="Admin not found")
+        raise NotFoundError("Admin", username)
     admin.telegram_id = tg_id
     db.commit()
     db.refresh(admin)
@@ -118,9 +118,7 @@ def create_user(db: Session, request: CreateUser, owner: str):
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=400, detail="user with this name already exists"
-        )
+        raise ConflictError("User", "name", username)
     logger.info("user created successfully: %s", request.name)
     return new_user
 
@@ -128,7 +126,7 @@ def create_user(db: Session, request: CreateUser, owner: str):
 def update_user(db: Session, uuid: str, request: UpdateUser):
     user = db.query(User).filter(User.uuid == uuid).first()
     if not user:
-        raise HTTPException(status_code=404, detail="user not found on database")
+        raise NotFoundError("User", uuid)
     
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
@@ -199,7 +197,7 @@ def get_users_exceeded_traffic(db: Session):
 def delete_user(db: Session, name: str):
     user = db.query(User).filter(User.name == name).first()
     if not user:
-        raise HTTPException(status_code=404, detail="user not found on database")
+        raise NotFoundError("User", name)
 
     db.delete(user)
     db.commit()
@@ -270,7 +268,7 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
 def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dict = None):
     node = db.query(Node).filter(Node.id == node_id).first()
     if not node:
-        raise HTTPException(status_code=404, detail="Node not found")
+        raise NotFoundError("Node", str(node_id))
 
     node.name = request.name
     node.address = request.address
@@ -297,7 +295,7 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
 def delete_node(db: Session, id: int):
     node = db.query(Node).filter(Node.id == id).first()
     if not node:
-        raise HTTPException(status_code=404, detail="Node not found")
+        raise NotFoundError("Node", str(id))
     db.delete(node)
     db.commit()
     return {"detail": "Node deleted successfully"}

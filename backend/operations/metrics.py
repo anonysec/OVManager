@@ -103,6 +103,9 @@ async def _node_snapshot(node) -> dict[str, Any]:
 
 async def collect_metrics() -> None:
     """Collect a compact operational snapshot for graphs and trend widgets."""
+    from datetime import datetime, UTC as UTC_DT
+    from backend.node.task import get_active_connection_counts
+
     db = SessionLocal()
     now = time.time()
     try:
@@ -124,6 +127,19 @@ async def collect_metrics() -> None:
         inactive_users = len(users) - active_users
         full_users = 0
         total_used = sum(float(u.used or 0) for u in users)
+
+        # Update last_online for users with active connections.
+        # This was previously done in the GET /users handler (a side effect).
+        # Moved here to the background job where writes belong.
+        try:
+            active_counts = await get_active_connection_counts(db)
+            for u in users:
+                if int(active_counts.get(u.name, 0) or 0) > 0:
+                    u.last_online = datetime.now(UTC_DT)
+            db.commit()
+        except Exception as e:
+            logger.warning("metrics: failed to update last_online: %s", e)
+            db.rollback()
 
         for row in clean_rows:
             db.execute(text("""

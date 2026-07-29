@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
 DB_DIR = BASE_DIR.parent.parent / "data"
-DB_PATH = DB_DIR / "ov-panel.db"
+DB_PATH = DB_DIR / "ovmanager.db"
 BACKUP_DIR = DB_DIR / "backups"
 _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
@@ -42,7 +42,7 @@ async def backup_database(user: dict = Depends(get_current_user)):
     try:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        backup_path = BACKUP_DIR / f"ovpanel_backup_{ts}.db"
+        backup_path = BACKUP_DIR / f"ovmanager_backup_{ts}.db"
         # SQLite doesn't like being copied while open; use WAL checkpoint
         with engine.connect() as conn:
             conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
@@ -50,7 +50,7 @@ async def backup_database(user: dict = Depends(get_current_user)):
         copy2(str(DB_PATH), str(backup_path))
         # Prune old backups — keep only the most recent _MAX_BACKUPS
         all_backups = sorted(
-            BACKUP_DIR.glob("ovpanel_backup_*.db"),
+            BACKUP_DIR.glob("ovmanager_backup_*.db"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
@@ -190,7 +190,11 @@ async def restore_backup(
     try:
         if restore_from_server:
             # Restore from a backup file already on the server
-            src_path = BACKUP_DIR / restore_from_server
+            # Security: resolve and verify the path stays within BACKUP_DIR
+            src_path = (BACKUP_DIR / restore_from_server).resolve()
+            backup_dir_resolved = BACKUP_DIR.resolve()
+            if not str(src_path).startswith(str(backup_dir_resolved)):
+                return ResponseModel(success=False, msg="Invalid backup path", data=None)
             if not src_path.exists() or not src_path.is_file():
                 return ResponseModel(success=False, msg=f"Backup file '{restore_from_server}' not found", data=None)
             if not restore_from_server.endswith(".db"):

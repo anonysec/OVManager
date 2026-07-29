@@ -57,12 +57,15 @@ def _fmt_date(value) -> str:
 # Render a clean, on-brand HTML error page instead of a raw JSON
 # {"detail": "..."} body (which is what clients/users see otherwise).
 def sub_error_page(status_code: int, title: str, message: str) -> HTMLResponse:
+    from html import escape as _esc
+    safe_title = _esc(title)
+    safe_message = _esc(message)
     html = f"""<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{title}</title>
+<title>{safe_title}</title>
 <style>
   :root {{ --bg:#0f172a; --surface:#1e293b; --text:#f8fafc; --muted:#94a3b8; --border:#334155; --orange:#ea7e20; }}
   * {{ box-sizing:border-box; margin:0; padding:0; }}
@@ -80,8 +83,8 @@ def sub_error_page(status_code: int, title: str, message: str) -> HTMLResponse:
 </head>
 <body>
   <div class="card">
-    <div class="badge">● {title}</div>
-    <h2>{message}</h2>
+    <div class="badge">● {safe_title}</div>
+    <h2>{safe_message}</h2>
     <p>This is an <span class="ovpn">OpenVPN</span> panel. To connect, download the <b>.ovpn</b> config
        from your provider's dashboard (per-node <b>Get Config</b>) and import it into an OpenVPN client.
        OpenVPN does not use HTTP subscription links.</p>
@@ -172,7 +175,7 @@ async def download_ovpn(
     node_obj = crud.get_node_by_name(db, node_name)
     if not node_obj:
         return sub_error_page(404, "Not Found", "The requested node was not found.")
-    response = await download_ovpn_client_from_node(user.uuid, node_obj.id, db)
+    response = await download_ovpn_client_from_node(user.id, node_obj.id, db)
     if not response:
         return sub_error_page(404, "Not Found", "The configuration file could not be generated.")
     return response

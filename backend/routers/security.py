@@ -20,7 +20,7 @@ TEHRAN = ZoneInfo("Asia/Tehran")
 
 
 def _parse_log_line(line: str, common_name: str = "") -> dict:
-    """Convert raw ovpanel-mlogin line to a clean max-login error object."""
+    """Convert raw ovmanager-mlogin line to a clean max-login error object."""
     cn = common_name
     m_cn = re.search(r"CN=([^\s]+)", line)
     if m_cn:

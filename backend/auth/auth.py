@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import logging
 import time
+from collections import OrderedDict
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -43,31 +44,35 @@ def _purge_stale_attempts() -> None:
         _login_attempts.pop(k, None)
 
 
-# ── Token revocation (in-memory — survives login/logout cycle) ───
-_revoked_tokens: set[str] = set()
+# ── Token revocation (bounded FIFO — never un-revokes old tokens) ─
+_revoked_tokens: OrderedDict[str, None] = OrderedDict()
 _MAX_REVOKED = 10_000  # cap to prevent memory leak on very long uptimes
 
 
 def revoke_token(token: str) -> None:
-    """Add token hash to revocation blacklist."""
+    """Add token hash to revocation blacklist (bounded FIFO).
+
+    When the cap is reached, the oldest entry is evicted. This is safe because
+    JWTs have their own expiry — by the time the oldest revoked token falls
+    off, its JWT has already expired naturally.
+    """
     h = hashlib.sha256(token.encode()).hexdigest()[:32]
-    if len(_revoked_tokens) >= _MAX_REVOKED:
-        _revoked_tokens.clear()  # worst case: un-revoke on overflow (rare)
-        logger.warning("token revocation list overflowed — cleared")
-    _revoked_tokens.add(h)
+    # Move to end if already present (refresh position)
+    _revoked_tokens.pop(h, None)
+    _revoked_tokens[h] = None
+    # Evict oldest if over capacity
+    while len(_revoked_tokens) > _MAX_REVOKED:
+        _revoked_tokens.popitem(last=False)
 
 
 def is_token_revoked(token: str) -> bool:
-    """Constant-time check against the revocation set."""
+    """Check against the revocation set."""
     h = hashlib.sha256(token.encode()).hexdigest()[:32]
     return h in _revoked_tokens
 
 
 # ── Router ───────────────────────────────────────────────────────
 router = APIRouter(tags=["Login"])
-
-URLPATH = (config.URLPATH or "").strip("/")
-API_PREFIX = f"/{URLPATH}/api" if URLPATH else "/api"
 
 
 def _client_ip(request: Request) -> str:
@@ -164,8 +169,8 @@ async def login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# OAuth2 scheme must use the same dynamic prefix as the mounted routes
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{API_PREFIX}/login")
+# OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)):

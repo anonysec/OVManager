@@ -1,22 +1,23 @@
 import os
 
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 
 from backend.operations.daily_checks import enforce_user_limits, check_user_used_traffic
 from backend.operations.metrics import collect_metrics
 from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.db.engine import SessionLocal
+from backend.db.exceptions import NotFoundError, ConflictError
 from backend.config import config
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
 from backend.version import __version__
 from backend.tls_config import TLSConfig
+from backend.urlpath import URLPathMiddleware
 
 
 def _run_migrations():
@@ -30,6 +31,9 @@ def _run_migrations():
         _ALLOWED_COLUMNS = {
             ("users", "last_online", "DATETIME"),
             ("settings", "timezone", "VARCHAR NOT NULL DEFAULT 'UTC'"),
+            ("settings", "subscription_url_prefix", "VARCHAR"),
+            ("settings", "subscription_path", "VARCHAR NOT NULL DEFAULT 'sub'"),
+            ("settings", "urlpath", "VARCHAR NOT NULL DEFAULT ''"),
             ("nodes", "use_tls", "BOOLEAN DEFAULT 0"),
         }
         for table, column, coltype in _ALLOWED_COLUMNS:
@@ -40,29 +44,49 @@ def _run_migrations():
             }
             if column not in existing:
                 db.execute(_text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
+        # Seed initial URLPATH from config if Settings row exists and urlpath is empty
+        try:
+            initial_urlpath = (config.URLPATH or "").strip("/")
+            row = db.execute(_text("SELECT urlpath FROM settings LIMIT 1")).fetchone()
+            if row is not None and not (row[0] or "").strip():
+                db.execute(_text("UPDATE settings SET urlpath = :v"), {"v": initial_urlpath})
+        except Exception:
+            pass
         db.commit()
     finally:
         db.close()
 
 
-URLPATH = "x"  # enforced path prefix - only /x/ routes work
-API_PREFIX = f"/{URLPATH}/api"
-DOC_PREFIX = f"/{URLPATH}"
-
-# TLS Configuration - auto-detect from env vars / cert paths
+# ── TLS Configuration ─────────────────────────────────────────────
 tls_config = TLSConfig.get_ssl_config()
-
 ssl_keyfile = tls_config.get("key_file") or None
 ssl_certfile = tls_config.get("cert_file") or None
 
+# ── FastAPI app (routes registered at root — URLPathMiddleware handles prefix) ─
+# All routes are at /api/..., /doc, /health, etc.
+# The URLPathMiddleware strips /{urlpath}/ prefix before routing.
 api = FastAPI(
-    title="OVPanel API",
-    description="API for managing OVPanel",
+    title="OVManager API",
+    description="API for managing OVManager",
     version=__version__,
-    docs_url=f"{DOC_PREFIX}/doc" if config.DOC else None,
-    openapi_url=f"{DOC_PREFIX}/openapi.json" if config.DOC else None,
+    docs_url="/doc" if config.DOC else None,
+    openapi_url="/openapi.json" if config.DOC else None,
 )
 
+# ── Exception handlers (domain → HTTP) ────────────────────────────
+@api.exception_handler(NotFoundError)
+async def not_found_handler(request, exc: NotFoundError):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@api.exception_handler(ConflictError)
+async def conflict_handler(request, exc: ConflictError):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+# ── CORS ──────────────────────────────────────────────────────────
 api.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
@@ -72,26 +96,21 @@ api.add_middleware(
 )
 
 
-@api.get(f"{API_PREFIX}/health", tags=["Health"])
+# ── Health check (always at /health — hidden by middleware when URLPATH set) ─
+@api.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "ok", "version": __version__}
 
 
-@api.get("/health", include_in_schema=False)
-async def health_check_public():
-    return {"status": "ok", "version": __version__}
-
-
+# ── Frontend static assets ────────────────────────────────────────
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 assets_path = os.path.join(frontend_build_path, "assets")
+
 if os.path.isdir(assets_path):
-    api.mount(
-        f"/{URLPATH}/assets" if URLPATH else "/assets",
-        StaticFiles(directory=assets_path),
-        name="assets",
-    )
+    api.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 
+# ── Background jobs ───────────────────────────────────────────────
 async def auto_sync_limits_job():
     db = SessionLocal()
     try:
@@ -164,6 +183,7 @@ def start_bot():
         )
 
 
+# ── Startup ───────────────────────────────────────────────────────
 @api.on_event("startup")
 async def startup_event():
     try:
@@ -175,47 +195,42 @@ async def startup_event():
     start_bot()
 
 
+# ── Register API routers (no prefix — URLPathMiddleware handles it) ─
 for router in all_routers:
-    api.include_router(prefix=API_PREFIX, router=router)
+    api.include_router(prefix="/api", router=router)
 
-api.include_router(subscription_router, prefix=f"/{URLPATH}" if URLPATH else "")
+# Subscription router (public, also goes through middleware)
+api.include_router(subscription_router)
 
 
+# ── SPA catch-all (serve React index.html for unknown paths) ──────
 async def _serve_react():
     index_path = os.path.join(frontend_build_path, "index.html")
-    return FileResponse(
-        index_path,
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-    )
+    if os.path.isfile(index_path):
+        return FileResponse(
+            index_path,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": "Frontend not built"}, status_code=404)
 
 
-class SPAFallbackMiddleware(BaseHTTPMiddleware):
-    """Return index.html for browser navigations to unknown 404 paths.
-    Skips API routes, assets, static files."""
-
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        if response.status_code != 404:
-            return response
-        accept = request.headers.get("accept", "")
-        path = request.url.path.lstrip("/")
-        if path.startswith("api") or ("text/html" not in accept and "*/*" not in accept):
-            from starlette.responses import JSONResponse
-            return JSONResponse({"detail": "Not Found"}, status_code=404)
-        return await _serve_react()
+# Catch-all for SPA — must be registered LAST to not shadow API routes
+@api.get("/")
+async def spa_root():
+    return await _serve_react()
 
 
-# api.add_middleware(SPAFallbackMiddleware)  # disabled - only serve prefixed routes
+@api.get("/{path:path}", include_in_schema=False)
+async def spa_catchall(path: str):
+    # Don't catch API, doc, health, asset, or subscription paths
+    if path.startswith(("api/", "doc", "openapi.json", "health", "assets/", "sub/")):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    return await _serve_react()
 
-if URLPATH:
-    @api.get("/")
-    async def root_redirect():
-        return RedirectResponse(url=f"/{URLPATH}")
 
-    @api.get(f"/{URLPATH}")
-    async def path_root():
-        return await _serve_react()
-
-    @api.get(f"/{URLPATH}/{path:path}")
-    async def path_catchall(path: str):
-        return await _serve_react()
+# ── URLPathMiddleware (MUST be added last — it wraps everything) ──
+# This is the outermost middleware: it runs first on every request.
+# When URLPATH is set, it strips /{urlpath}/ prefix and hides non-matching paths.
+api.add_middleware(URLPathMiddleware)
