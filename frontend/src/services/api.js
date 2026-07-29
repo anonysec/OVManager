@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const basePath = (import.meta.env.VITE_URLPATH || '').trim().replace(/^\/+|\/+$/g, '');
+const basePath = (window.__OV_URLPATH__ || '').trim().replace(/^\/+|\/+$/g, '');
 const apiBase = basePath ? `/${basePath}/api` : '/api';
 
 export const urlPath = basePath ? `/${basePath}` : '';

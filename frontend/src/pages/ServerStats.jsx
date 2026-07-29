@@ -326,7 +326,7 @@ const ServerStats = () => {
                       <td>{formatBytes(u.used || 0)}</td>
                       <td>{u.active_connections || 0}</td>
                       <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
-                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => window.location.assign(`/dash/users?user=${u.uuid}`)}>{t('manage')}</button></td>
+                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => { const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : ''; window.location.assign(`${base}/users?user=${u.uuid}`); }}>{t('manage')}</button></td>
                     </tr>
                   ))}
                   {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noUsersOnline')}</td></tr>}

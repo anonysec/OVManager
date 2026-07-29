@@ -5,11 +5,40 @@ from bot.config import config
 logger = logging.getLogger("ovmanager")
 TIMEOUT = 30.0
 MAX_RETRIES = 2
+USER_CACHE_TTL = 30  # seconds
 
 
 class OVManager:
     def __init__(self):
-        self.base = config.resolve_api_url().rstrip("/")
+        raw = config.resolve_api_url().rstrip("/")
+        # Append URLPATH so HTTP calls reach /{urlpath}/api/...
+        try:
+            from backend.config import config as panel_config
+            urlpath = (getattr(panel_config, "URLPATH", None) or "").strip("/")
+            if urlpath:
+                self.base = f"{raw}/{urlpath}/api"
+            else:
+                self.base = f"{raw}/api"
+        except Exception:
+            self.base = f"{raw}/api"
+        self._users_cache: list = []
+        self._users_cache_time: float = 0
+
+    def _users_cached(self) -> bool:
+        """Return True if we have fresh cached users list."""
+        import time
+        now = time.time()
+        return (
+            self._users_cache
+            and self._users_cache_time > 0
+            and now - self._users_cache_time < USER_CACHE_TTL
+        )
+
+    def _refresh_users_cache(self, users: list):
+        """Refresh users cache and update timestamp."""
+        import time
+        self._users_cache = users or []
+        self._users_cache_time = time.time()
 
     async def _get(self, path: str):
         if not self.base:

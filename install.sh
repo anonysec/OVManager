@@ -337,7 +337,6 @@ do_install() {
         -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${ADMIN_PASS}|" \
         -e "s|^PORT=.*|PORT=${PORT}|" \
         -e "s|^URLPATH=.*|URLPATH=${PATHPREFIX}|" \
-        -e "s|^VITE_URLPATH=.*|VITE_URLPATH=${PATHPREFIX}|" \
         -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"${jwt_secret}\"|" \
         "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
     
@@ -462,7 +461,6 @@ services:
       - URLPATH=${PATHPREFIX}
       - JWT_SECRET_KEY=${jwt_secret}
       - DATA_DIR=/app/data
-      - VITE_URLPATH=${PATHPREFIX}
 $( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
 $( [[ "$TLS_MODE" == "self" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
 $( [[ "$TLS_MODE" == "custom" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )

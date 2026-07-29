@@ -10,7 +10,7 @@ import { ToastProvider } from './context/ToastContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './i18n';
 
-const raw = (import.meta.env.VITE_URLPATH || '').trim().replace(/^\/+|\/+$/g, '');
+const raw = (window.__OV_URLPATH__ || '').trim().replace(/^\/+|\/+$/g, '');
 const base = raw ? raw : '';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
