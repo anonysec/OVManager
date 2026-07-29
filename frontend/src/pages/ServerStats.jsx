@@ -189,7 +189,7 @@ const ServerStats = () => {
           apiClient.get('/server/info'),
           apiClient.get('/users/'),
           apiClient.get('/nodes/'),
-          apiClient.get('/metrics'),
+          apiClient.get("/metrics/history?hours=24"),
           apiClient.get('/security/summary?hours=8'),
         ]);
         setStats(statsRes.data?.data || null);
