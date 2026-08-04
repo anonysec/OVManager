@@ -207,7 +207,7 @@
     "onboardCelebrateTitle": "All set! 🎉",
     "onboardCelebrateDesc": "Your VPN is ready to go.",
     "onboardSkip": "Skip for now",
-    "onboardProgress": "{done}/{total} steps done",
+    "onboardProgress": "{{done}}/{{total}} steps complete",
     "onboardDismiss": "Dismiss setup guide",
     "onboardComplete": "Complete",
     "onboardGo": "Go to step",

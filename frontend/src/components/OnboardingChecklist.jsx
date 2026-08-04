@@ -224,7 +224,7 @@ const OnboardingChecklist = () => {
           </svg>
           <div className="progress-center">
             <span className="progress-pct">{pct}%</span>
-            <span className="progress-label">{t('onboardProgress', '{done}/{total} steps done', { done: doneCount, total: STEPS.length })}</span>
+            <span className="progress-label">{t('onboardProgress', '{{done}}/{{total}} steps complete', { done: doneCount, total: STEPS.length })}</span>
           </div>
         </div>
 
@@ -282,7 +282,7 @@ const OnboardingChecklist = () => {
                           onClick={() => navigate(step.path)}
                         >
                           {t(step.actionLabel)}
-                          <FiArrowRight />
+                          <FiChevronRight />
                         </button>
                       ) : (
                         <button 
@@ -342,9 +342,9 @@ const OnboardingChecklist = () => {
       {/* Celebration confetti */}
       {celebrate && (
         <div className="celebration-overlay" aria-hidden="true">
-          <FiAward className="confetti-burst" />
+          <FiStar className="confetti-burst" />
           <div className="celebration-text">
-            <FiAward className="award-icon" />
+            <FiStar className="award-icon" />
             <h3>{t('onboardCelebrateTitle', 'All set! 🎉')}</h3>
             <p>{t('onboardCelebrateDesc', 'Your VPN is ready to go.')}</p>
           </div>
