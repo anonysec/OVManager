@@ -87,11 +87,10 @@ show_help() {
     --path URLPATH      URL path prefix (default: dash)
     --admin-user USER   Admin username
     --admin-pass PASS   Admin password
-    --tls-le DOMAIN     Let's Encrypt (domain, requires port 80 + DNS)
-    --tls-ip            Let's Encrypt (IP, short-lived ~6 days, port 80)
-    --tls-self          Self-signed certificate
-    --tls-custom KEY CERT  Custom cert path (copied to /etc/letsencrypt/<domain>/)
-    --tls-none          No TLS (HTTP only)
+    --tls METHOD        TLS method: le, le-ip, self, custom, none (default: le-ip)
+    --tls-domain DOM    Domain for Let's Encrypt
+    --tls-key KEY       Path to existing TLS key
+    --tls-cert CERT     Path to existing TLS cert
     --docker            Use Docker
     --help              Show this help
 EOF
@@ -110,6 +109,7 @@ parse_args() {
             --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
             --tls-le)     TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
             --tls-ip)     TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I | awk '{print $1}')"; shift ;;
+            --tls)        TLS_MODE="$2"; shift 2 ;;
             --tls-self)   TLS_MODE="self"; shift ;;
             --tls-custom) TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
             --tls-none)   TLS_MODE="none"; shift ;;
@@ -333,12 +333,19 @@ do_install() {
     jwt_secret=$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)
     [[ -f "$INSTALL_DIR/.env.example" ]] || die ".env.example not found"
     sed \
-        -e "s|^ADMIN_USERNAME=.*|ADMIN_USERNAME=${ADMIN_USER}|" \
-        -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${ADMIN_PASS}|" \
-        -e "s|^PORT=.*|PORT=${PORT}|" \
+        -e "s|^HOST=.*|HOST=0.0.0.0|" \
         -e "s|^URLPATH=.*|URLPATH=${PATHPREFIX}|" \
-        -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\"${jwt_secret}\"|" \
+        -e "s|^PORT=.*|PORT=${PORT}|" \
         "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
+    # Required vars are commented out in .env.example — write them active (leading blank line)
+    printf "\n" >> "$INSTALL_DIR/.env"
+    cat >> "$INSTALL_DIR/.env" << EOF
+ADMIN_USERNAME=${ADMIN_USER}
+ADMIN_PASSWORD=${ADMIN_PASS}
+JWT_SECRET_KEY=${jwt_secret}
+JWT_ACCESS_TOKEN_EXPIRES=1800
+JWT_REFRESH_TOKEN_EXPIRES=604800
+EOF
     
     # TLS configuration
     case "$TLS_MODE" in
