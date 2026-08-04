@@ -3,7 +3,7 @@ import hashlib
 import logging
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -123,14 +123,14 @@ def authenticate_user(db: Session, username: str, password: str):
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.now(tz=datetime.UTC) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
+    expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.now(tz=datetime.UTC) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
+    expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
