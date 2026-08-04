@@ -87,12 +87,19 @@ def _run_migrations():
             }
             if column not in existing:
                 db.execute(_text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
-        # Seed initial URLPATH from config if Settings row exists and urlpath is empty
+        # Seed initial URLPATH from config if Settings row exists and urlpath is empty.
+        # On a fresh DB, the settings table is empty — use INSERT OR IGNORE to create
+        # the row first so the URLPATH from .env gets seeded.
         try:
             initial_urlpath = (config.URLPATH or "").strip("/")
-            row = db.execute(_text("SELECT urlpath FROM settings LIMIT 1")).fetchone()
-            if row is not None and not (row[0] or "").strip():
-                db.execute(_text("UPDATE settings SET urlpath = :v"), {"v": initial_urlpath})
+            db.execute(_text(
+                "INSERT OR IGNORE INTO settings (port, protocol, urlpath) "
+                "VALUES (1194, 'tcp', '')"
+            ))
+            db.execute(
+                _text("UPDATE settings SET urlpath = :v WHERE (urlpath IS NULL OR urlpath = '')"),
+                {"v": initial_urlpath},
+            )
         except Exception:
             pass
         db.commit()
