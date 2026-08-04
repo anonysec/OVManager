@@ -49,6 +49,11 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             auth = request.headers.get("Authorization")
             # Allow public endpoints (login, subscription) and API key auth
             path = request.url.path
+            # Strip URLPATH prefix so CSRF check works for both
+            # /api/login and /<urlpath>/api/login
+            _up = _get_urlpath()
+            if _up and path.startswith(f"/{_up}/"):
+                path = path[len(f"/{_up}"):]
             if auth and auth.startswith("Bearer "):
                 return await call_next(request)
             if path.startswith("/api/sub/") or path == "/api/login":
