@@ -1,88 +1,113 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiLink, FiSave, FiCopy } from 'react-icons/fi';
+import { FiLink, FiEdit2, FiCheck, FiX, FiExternalLink } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
 import { useLive } from '../../context/LiveContext';
-import { validateSubscription, buildSubUrl } from '../../utils/settingsHelpers';
-import { copyText } from '../../utils/clipboard';
+import LoadingButton from '../../components/LoadingButton';
+import '../../components/SettingsStyles.css';
 
 const GeneralTab = () => {
   const { t } = useTranslation();
   const { refreshTick } = useLive();
-  const [subPrefix, setSubPrefix] = useState('');
-  const [subPath, setSubPath] = useState('');
-  const [subError, setSubError] = useState('');
-  const [subSaved, setSubSaved] = useState(false);
-
-
-  const addToast = useCallback((message, type = 'success') => {
-    window.dispatchEvent(new CustomEvent('addToast', { detail: { message, type } }));
-  }, []);
+  const [urlPath, setUrlPath] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const loadSettings = useCallback(async () => {
     try {
       const res = await apiClient.get('/server/settings');
       const s = res.data?.data || {};
-      setSubPrefix(s.subscription_url_prefix || '');
-      setSubPath(s.subscription_path || '');
+      setUrlPath(s.urlpath || '');
     } catch { /* noop */ }
   }, []);
 
   useEffect(() => { loadSettings(); }, [loadSettings, refreshTick]);
 
-  const saveSubscription = async () => {
-    const error = validateSubscription(subPrefix, subPath, t);
-    if (error) {
-      setSubError(error);
-      return;
-    }
-    setSubError('');
+  const handleEdit = () => {
+    setEditValue(urlPath);
+    setEditing(true);
+    setError('');
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setError('');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
     try {
-      await apiClient.put('/server/settings/subscription', { prefix: subPrefix, path: subPath });
-      setSubSaved(true);
-      addToast('Subscription settings saved', 'success');
-      setTimeout(() => setSubSaved(false), 2000);
-    } catch {
-      addToast('Failed to save subscription settings', 'error');
+      const value = editValue.trim().replace(/^\/+|\/+$/g, '');
+      if (value && !/^[A-Za-z0-9_-]+$/.test(value)) {
+        setError('URL path must contain only letters, numbers, dashes, and underscores');
+        return;
+      }
+      if (value.length > 64) {
+        setError('URL path must be 64 characters or less');
+        return;
+      }
+      await apiClient.put('/server/settings/urlpath', { urlpath: value });
+      setUrlPath(value);
+      setEditing(false);
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Failed to update URL path');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const copyLink = async () => {
-    const url = buildSubUrl(subPrefix, subPath);
-    if (!url) return;
-    const ok = await copyText(url);
-    addToast(ok ? 'Link copied to clipboard' : 'Failed to copy link', ok ? 'success' : 'error');
-  };
+  const panelUrl = typeof window !== 'undefined' ? `${window.location.origin}/${urlPath}/` : `/${urlPath}/`;
 
   return (
     <div className="settings-section">
       <div className="setting-card">
-        <div className="setting-card-header"><FiLink /> Subscription Link</div>
+        <div className="setting-card-header"><FiLink /> Panel URL</div>
         <div className="setting-card-body">
-          <div className="input-group">
-            <label>URL prefix</label>
-            <input
-              value={subPrefix}
-              onChange={(e) => setSubPrefix(e.target.value)}
-              placeholder="https://domain.tld"
-            />
+          <div className="urlpath-display">
+            <span className="urlpath-label">{t('panelBasePath', 'Base path')}</span>
+            <code className="urlpath-value">{urlPath ? `/${urlPath}/` : '/'}</code>
+            {!editing && (
+              <button type="button" className="urlpath-edit-btn" onClick={handleEdit} aria-label={t('change', 'Change')}>
+                <FiEdit2 size={14} />
+              </button>
+            )}
           </div>
-          <div className="input-group">
-            <label>Path</label>
-            <input
-              value={subPath}
-              onChange={(e) => setSubPath(e.target.value)}
-              placeholder="sub"
-            />
-          </div>
-          {subError && <p className="error-message">{subError}</p>}
-          <div className="card-actions">
-            <button className="btn btn-sm" onClick={saveSubscription}><FiSave size={14} /> {subSaved ? 'Saved' : 'Save'}</button>
-            <button className="btn btn-sm btn-secondary" onClick={copyLink}><FiCopy size={14} /> Copy link</button>
-          </div>
-          {buildSubUrl(subPrefix, subPath) && (
-            <div className="sub-url-display">{buildSubUrl(subPrefix, subPath)}</div>
+          {editing && (
+            <div className="urlpath-edit-form">
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder={t('enterPath', 'Enter path (e.g. dash)')}
+                className="urlpath-input"
+                autoFocus
+              />
+              {error && <p className="error-message">{error}</p>}
+              <div className="urlpath-edit-actions">
+                <LoadingButton type="button" className="btn" isLoading={saving} onClick={handleSave}>
+                  <FiCheck size={14} /> {t('save', 'Save')}
+                </LoadingButton>
+                <button type="button" className="btn btn-secondary" onClick={handleCancel}>
+                  <FiX size={14} /> {t('cancel', 'Cancel')}
+                </button>
+              </div>
+            </div>
           )}
+          <p className="input-hint">
+            {urlPath
+              ? t('urlpathActive', 'Panel is served at /{path}/... — clear path to serve at root.', { path: urlPath })
+              : t('urlpathRoot', 'Panel is served at root (/).')}
+          </p>
+          <div className="urlpath-preview">
+            <span className="preview-label">{t('panelUrl', 'Panel URL')}</span>
+            <a href={panelUrl} target="_blank" rel="noopener noreferrer" className="preview-link">
+              {panelUrl}
+              <FiExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </div>
     </div>

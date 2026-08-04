@@ -1,85 +1,138 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-/* --- 🎨 NEW COLOR PALETTE: Black & Orange --- */
+/* --- 🎨 COLOR TOKENS: Black & Orange, semantic + elevation scale ---
+   Dark is the default (:root). Light overrides via html[data-theme="light"].
+   styles.css aliases several of these to its own --bg/--panel set — keep
+   both in sync when touching surfaces. */
 :root {
+  /* Typography */
   --font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Space Grotesk', 'Manrope', ui-sans-serif, system-ui, sans-serif;
 
-  /* Black/Dark Grey Tones */
-  --background-primary: #000000;
-  --background-secondary: #1c1c1e;
-  --background-card-hover: #2c2c2e;
-  --card-base-bg: #151419;
-  --body-bg: #232228;
+  /* Native form controls / scrollbars follow the active theme */
+  color-scheme: dark;
+
+  /* Base surfaces (elevation scale: bg < elevated < surface-1 < surface-2 < surface-3) */
+  --bg: #0d0f14;
+  --bg-elevated: #131722;
+  --surface-1: #181d29;
+  --surface-2: #1f2534;
+  --surface-3: #2a3144;
+
+  /* Borders */
+  --border: #2b3344;
+  --border-strong: #3d465c;
+
+  /* Text */
+  --text-primary: #e8ebf1;
+  --text-secondary: #9aa4b5;
+  --text-muted: #6d7689;
 
   /* Orange Accent */
   --accent-color: #fc7a1e;
-  --accent-color-hover: #f06c0e;
-  --accent-color-transparent: rgba(252, 122, 30, 0.1);
-  --sidebar-active-bg: rgba(252, 122, 30, 0.15);
+  --accent-color-hover: #ff8f3d;
+  --accent-color-transparent: rgba(252, 122, 30, 0.12);
+  --sidebar-active-bg: rgba(252, 122, 30, 0.16);
 
-  /* Text & Borders */
-  --text-primary: #e0e1dd;
-  --text-secondary: #a0aec0;
-  --border-color: #424146;
-  --border-color-hover: #555459;
-  /* Lighter border for hover */
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
-
-  /* Surfaces */
-  --surface-color: #202024;
-  --surface-hover: #2a2a2e;
-  --focus-ring: #fc7a1e;
-
-  /* Status & Card Colors */
-  --danger-color: #a63d2a;
+  /* Status colors */
+  --danger-color: #e5484d;
   --success-color: #01c3a8;
-  --info-color: #1890ff;
+  --info-color: #38a1ff;
+
+  /* Overlays & focus */
+  --overlay: rgba(5, 7, 11, 0.72);
+  --focus-ring: var(--accent-color);
+
+  /* Shadows */
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);
 
   /* Smooth transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
+
+  /* --- Legacy aliases (keep existing consumers working) --- */
+  --background-primary: var(--surface-1);
+  --background-secondary: var(--surface-2);
+  --background-card-hover: var(--surface-3);
+  --card-base-bg: var(--surface-1);
+  --body-bg: var(--bg);
+  --surface-color: var(--surface-2);
+  --surface-hover: var(--surface-3);
+  --border-color: var(--border);
+  --border-color-hover: var(--border-strong);
+  
+  /* Settings.css aliases */
+  --panel: var(--background-secondary);
+  --line: var(--border);
+  --muted: var(--text-muted);
+  --bg: var(--bg);
 }
 
 /* --- Light theme: equally polished set --- */
 html[data-theme="light"] {
-  --background-primary: #ffffff;
-  --background-secondary: #f6f7f9;
-  --background-card-hover: #eceef2;
-  --card-base-bg: #fcfcfd;
-  --body-bg: #eef1f6;
+  color-scheme: light;
+
+  --bg: #eef1f6;
+  --bg-elevated: #ffffff;
+  --surface-1: #ffffff;
+  --surface-2: #f3f6fb;
+  --surface-3: #e7ecf4;
+
+  --border: #d7dde7;
+  --border-strong: #b9c2cf;
+
+  --text-primary: #1b2230;
+  --text-secondary: #5b6675;
+  --text-muted: #8a93a3;
+
   --accent-color: #e86a0c;
   --accent-color-hover: #d15f08;
   --accent-color-transparent: rgba(232, 106, 12, 0.12);
   --sidebar-active-bg: rgba(232, 106, 12, 0.14);
-  --text-primary: #1c2330;
-  --text-secondary: #5b6675;
-  --border-color: #d7dde7;
-  --border-color-hover: #b9c2cf;
-  --shadow: 0 4px 14px rgba(30, 40, 60, 0.10);
-  --shadow-sm: 0 2px 6px rgba(30, 40, 60, 0.08);
-  --shadow-lg: 0 16px 44px rgba(30, 40, 60, 0.16);
-  --surface-color: #f0f2f6;
-  --surface-hover: #e4e7ee;
-  --focus-ring: #e86a0c;
+
   --danger-color: #c0392b;
   --success-color: #0e9f85;
   --info-color: #0f7cc0;
+
+  --overlay: rgba(20, 28, 45, 0.45);
+  --focus-ring: var(--accent-color);
+
+  --shadow: 0 4px 14px rgba(30, 40, 60, 0.10);
+  --shadow-sm: 0 2px 6px rgba(30, 40, 60, 0.08);
+  --shadow-lg: 0 16px 44px rgba(30, 40, 60, 0.16);
 }
 
-/* --- Global Styles --- */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* --- Smooth theme switching: applied briefly by ThemeContext while the
+   theme flips, then removed. Targets colors only so layout/animation
+   transitions defined per-component keep working afterwards. --- */
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition:
+    background-color var(--transition-normal),
+    color var(--transition-normal),
+    border-color var(--transition-normal),
+    box-shadow var(--transition-normal),
+    fill var(--transition-normal),
+    stroke var(--transition-normal) !important;
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
+/* Selection follows the accent */
+::selection {
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
+}
+
+/* --- Login Page --- */
+#login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, var(--bg) 0%, var(--surface-1) 50%, var(--surface-2) 100%);
 }
 
 /* Skip link - hidden by default, visible on focus */
@@ -112,15 +165,6 @@ html {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* --- Login Page --- */
-#login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #0a0a0a 0%, #151419 50%, #1c1c1e 100%);
 }
 
 .login-box {
@@ -188,7 +232,7 @@ html {
 .login-box h2 {
   margin-bottom: 25px;
   font-size: 32px;
-  background: linear-gradient(90deg, var(--accent-color), #ffffff);
+  background: linear-gradient(90deg, var(--accent-color), var(--text-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -524,6 +568,144 @@ html {
   background: rgba(252, 122, 30, 0.1);
 }
 
+.ops-profile.active {
+  color: var(--accent-color);
+  background: rgba(252, 122, 30, 0.15);
+}
+
+.avatar-xs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.avatar-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-color);
+  color: #000;
+  font-size: 16px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.ops-username {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.ops-role-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(252, 122, 30, 0.15);
+  color: var(--accent-color);
+  white-space: nowrap;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 220px;
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-top: 8px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 100;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.96);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.profile-dropdown.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.profile-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.profile-dropdown-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+
+.profile-dropdown-role {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.profile-dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0;
+}
+
+.profile-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  border-radius: 0;
+}
+
+.profile-dropdown-item:hover {
+  background: rgba(252, 122, 30, 0.1);
+  color: var(--accent-color);
+}
+
+.profile-dropdown-item.danger:hover {
+  background: rgba(166, 61, 42, 0.15);
+  color: var(--danger-color);
+}
+
+.profile-dropdown-item svg,
+.profile-dropdown-item [class^="fi-"] {
+  font-size: 15px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 18px;
+}
+
+.profile-dropdown-item:hover svg,
+.profile-dropdown-item:hover [class^="fi-"] {
+  color: var(--accent-color);
+}
+
 
 
 
@@ -808,6 +990,10 @@ html {
   .ops-profile {
     display: none;
   }
+  
+  .profile-wrap {
+    order: -1;
+  }
 
   .ops-main {
     padding: 16px;
@@ -920,8 +1106,9 @@ html {
   color: var(--text-secondary);
 }
 .empty-state-icon {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 72px;
   height: 72px;
   border-radius: 50%;

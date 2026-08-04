@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LiveProvider } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import OnboardingChecklist from '../components/OnboardingChecklist';
@@ -19,6 +19,8 @@ const DashboardLayout = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const tokenPayload = (() => {
     try {
@@ -38,14 +40,15 @@ const DashboardLayout = () => {
   }, [i18n.language]);
 
   useEffect(() => {
-    if (!notifOpen && !langOpen) return;
+    if (!notifOpen && !langOpen && !profileOpen) return;
     const onDoc = (e) => {
       if (!e.target.closest('.notification-wrap')) setNotifOpen(false);
       if (!e.target.closest('.lang-picker-wrap')) setLangOpen(false);
+      if (!e.target.closest('.profile-wrap')) setProfileOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [notifOpen, langOpen]);
+  }, [notifOpen, langOpen, profileOpen]);
 
   const skipToContent = () => {
     const main = document.querySelector('.ops-main');
@@ -133,7 +136,7 @@ const DashboardLayout = () => {
           <div className="ops-userbar">
             <div className="lang-picker-wrap" ref={langRef}>
               <button type="button" className={`lang-picker-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')}>
-                <LockIcon size={16} />
+                <LangIcon size={16} />
               </button>
               <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
                 <button className={`lang-option${i18n.language === 'fa' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('fa'); document.documentElement.dir = 'rtl'; localStorage.setItem('ovmanager-lang', 'fa'); setLangOpen(false); }}>
@@ -193,13 +196,34 @@ const DashboardLayout = () => {
                 )}
               </div>
             </div>
-            <div className="ops-user-corner">
-              <div className="ops-profile" title={`${t('loggedInAs') || 'Logged in as'}: ${username}`}>
+            <div className="profile-wrap">
+              <button type="button" className={`ops-profile${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs') || 'Logged in as'}>
                 <span className="avatar-xs">{username.slice(0, 1).toUpperCase()}</span>
                 <span className="ops-username">{username}</span>
                 <span className="ops-role-badge">{userRole === 'main_admin' ? 'Admin' : 'Op'}</span>
+                <FiChevronDown size={14} />
+              </button>
+              <div className={`profile-dropdown${profileOpen ? ' open' : ''}`} role="menu">
+                <div className="profile-dropdown-header">
+                  <span className="avatar-sm">{username.slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <div className="profile-dropdown-name">{username}</div>
+                    <div className="profile-dropdown-role">{userRole === 'main_admin' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</div>
+                  </div>
+                </div>
+                <div className="profile-dropdown-divider" />
+                <NavLink to="/settings" className="profile-dropdown-item" role="menuitem" onClick={() => setProfileOpen(false)}>
+                  <FiSettings /> <span>{t('settings', 'Settings')}</span>
+                </NavLink>
+                <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setProfileOpen(false); }}>
+                  {theme === 'dark' ? <FiSun /> : <FiMoon />}
+                  <span>{theme === 'dark' ? t('lightMode', 'Light Mode') : t('darkMode', 'Dark Mode')}</span>
+                </button>
+                <div className="profile-dropdown-divider" />
+                <button type="button" className="profile-dropdown-item danger" role="menuitem" onClick={() => { setProfileOpen(false); logout(); }}>
+                  <FiLogOut /> <span>{t('logout', 'Logout')}</span>
+                </button>
               </div>
-              <button type="button" className="ops-logout-btn" onClick={logout} title={t('logout')} aria-label={t('logout')}><FiLogOut /></button>
             </div>
           </div>
         </header>
@@ -214,9 +238,11 @@ const DashboardLayout = () => {
   );
 };
 
-const LockIcon = ({ size = 16 }) => (
+const LangIcon = ({ size = 16 }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 11a1 1 0 000 2h.01M12 11a1 1 0 000 2h.01M17 11h-.01M5 11a1 1 0 011-1h12a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zm3-1a3 3 0 00-6 0v6a3 3 0 006 0Vz" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2 12h20" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
   </svg>
 );
 

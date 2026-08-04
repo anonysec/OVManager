@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FiCheck, FiArrowRight, FiX, FiServer, FiUserPlus, FiLink, FiDownload, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiZap, FiMonitor, FiWifi, FiKey, FiAward, FiHelpCircle } from 'react-icons/fi';
+import { FiCheck, FiX, FiServer, FiUserPlus, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiHelpCircle } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useLive } from '../context/LiveContext';
 import './OnboardingChecklist.css';
@@ -28,29 +28,7 @@ const STEPS = [
     actionLabel: 'onboardStepUserAction',
     done: (s) => s.users > 0,
     feature: 'users'
-  },
-  { 
-    key: 'link', 
-    icon: FiLink, 
-    path: '/users', 
-    illustration: 'link',
-    title: 'onboardStepLinkTitle',
-    desc: 'onboardStepLinkDesc',
-    actionLabel: 'onboardStepLinkAction',
-    done: (s) => s.users > 0,
-    feature: 'link'
-  },
-  { 
-    key: 'config', 
-    icon: FiDownload, 
-    path: '/users', 
-    illustration: 'config',
-    title: 'onboardStepConfigTitle',
-    desc: 'onboardStepConfigDesc',
-    actionLabel: 'onboardStepConfigAction',
-    done: (s) => s.users > 0 && s.nodes > 0,
-    feature: 'config'
-  },
+  }
 ];
 
 const ILLUSTRATIONS = {
@@ -85,37 +63,6 @@ const ILLUSTRATIONS = {
       <circle cx="60" cy="40" r="6" fill="#fde047" className="status-dot"/>
     </svg>
   ),
-  link: (
-    <svg viewBox="0 0 120 120" className="onboard-illustration" aria-hidden="true">
-      <defs>
-        <linearGradient id="linkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.3"/>
-          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.1"/>
-        </linearGradient>
-      </defs>
-      <circle cx="60" cy="60" r="50" fill="url(#linkGrad)" stroke="#14b8a6" strokeWidth="2" strokeDasharray="8 4" className="pulse-ring"/>
-      <path d="M35 60 Q45 40 60 40 Q75 40 85 60" stroke="#14b8a6" strokeWidth="3" fill="none" strokeLinecap="round" className="arc-link"/>
-      <path d="M35 60 Q45 80 60 80 Q75 80 85 60" stroke="#3b82f6" strokeWidth="3" fill="none" strokeLinecap="round" className="arc-link reverse"/>
-      <circle cx="60" cy="60" r="8" fill="#14b8a6" opacity="0.3" className="pulse-center"/>
-      <circle cx="60" cy="60" r="4" fill="#22c55e" className="status-dot"/>
-    </svg>
-  ),
-  config: (
-    <svg viewBox="0 0 120 120" className="onboard-illustration" aria-hidden="true">
-      <defs>
-        <linearGradient id="configGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3"/>
-          <stop offset="100%" stopColor="#ef4444" stopOpacity="0.1"/>
-        </linearGradient>
-      </defs>
-      <circle cx="60" cy="60" r="50" fill="url(#configGrad)" stroke="#f59e0b" strokeWidth="2" strokeDasharray="8 4" className="pulse-ring"/>
-      <rect x="30" y="35" width="60" height="50" rx="6" fill="#f59e0b" opacity="0.2" stroke="#f59e0b" strokeWidth="2"/>
-      <line x1="45" y1="50" x2="75" y2="50" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
-      <line x1="45" y1="62" x2="75" y2="62" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
-      <line x1="45" y1="74" x2="65" y2="74" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
-      <circle cx="82" cy="42" r="6" fill="#22c55e" className="status-dot"/>
-    </svg>
-  ),
 };
 
 const OnboardingChecklist = () => {
@@ -125,9 +72,6 @@ const OnboardingChecklist = () => {
   const [state, setState] = useState({ nodes: 0, users: 0 });
   const [dismissed, setDismissed] = useState(() => localStorage.getItem('ovmanager-onboard-dismissed') === '1');
   const [currentStep, setCurrentStep] = useState(0);
-  const [celebrate, setCelebrate] = useState(false);
-  const [showCoaching, setShowCoaching] = useState(false);
-  const containerRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
@@ -156,14 +100,6 @@ const OnboardingChecklist = () => {
     }
   }, [state, doneCount]);
 
-  // Celebration trigger
-  useEffect(() => {
-    if (allDone && !dismissed) {
-      setCelebrate(true);
-      setTimeout(() => setCelebrate(false), 3000);
-    }
-  }, [allDone, dismissed]);
-
   if (dismissed || allDone) return null;
 
   const dismiss = () => {
@@ -179,26 +115,19 @@ const OnboardingChecklist = () => {
   };
 
   const current = STEPS[currentStep];
-  const isCurrentDone = current.done(state);
 
   return (
-    <>
-      {/* Main onboarding panel */}
-      <aside 
-        ref={containerRef}
-        className="onboarding-panel" 
-        role="complementary" 
-        aria-label={t('onboardTitle', 'Getting started')}
-      >
+    <div className="onboarding-modal" role="dialog" aria-modal="true" aria-label={t('onboardTitle', 'Getting started')}>
+      <aside className="onboarding-panel">
         <div className="onboarding-header">
           <div className="onboarding-brand">
             <FiShield className="brand-icon" />
             <span className="brand-text">{t('onboardTitle', 'Welcome to OVManager')}</span>
           </div>
-          <button 
-            type="button" 
-            className="onboarding-close" 
-            onClick={dismiss} 
+          <button
+            type="button"
+            className="onboarding-close"
+            onClick={dismiss}
             aria-label={t('onboardDismiss', 'Dismiss setup guide')}
           >
             <FiX />
@@ -208,14 +137,14 @@ const OnboardingChecklist = () => {
         {/* Progress ring */}
         <div className="onboarding-progress-ring" role="progressbar" aria-valuenow={doneCount} aria-valuemin={0} aria-valuemax={STEPS.length}>
           <svg width="120" height="120" className="progress-svg">
-            <circle 
-              className="progress-bg" 
-              cx="60" cy="60" r="52" 
+            <circle
+              className="progress-bg"
+              cx="60" cy="60" r="52"
               fill="none" stroke="var(--border-color)" strokeWidth="8"
             />
-            <circle 
-              className="progress-fill" 
-              cx="60" cy="60" r="52" 
+            <circle
+              className="progress-fill"
+              cx="60" cy="60" r="52"
               fill="none" stroke="var(--accent-color)" strokeWidth="8"
               strokeDasharray={`${(Math.PI * 104 * pct) / 100} ${Math.PI * 104}`}
               strokeLinecap="round"
@@ -230,8 +159,8 @@ const OnboardingChecklist = () => {
 
         {/* Step carousel */}
         <div className="onboarding-carousel">
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={`carousel-nav prev ${currentStep === 0 ? 'hidden' : ''}`}
             onClick={prevStep}
             aria-label={t('onboardPrev', 'Previous step')}
@@ -268,16 +197,16 @@ const OnboardingChecklist = () => {
                     {/* Action */}
                     <div className="step-actions">
                       {step.done(state) ? (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="step-btn completed"
                           disabled
                         >
                           <FiCheck /> {t('onboardComplete', 'Done')}
                         </button>
                       ) : index === currentStep ? (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="step-btn primary"
                           onClick={() => navigate(step.path)}
                         >
@@ -285,8 +214,8 @@ const OnboardingChecklist = () => {
                           <FiChevronRight />
                         </button>
                       ) : (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className="step-btn ghost"
                           onClick={() => { setCurrentStep(index); navigate(step.path); }}
                         >
@@ -300,8 +229,8 @@ const OnboardingChecklist = () => {
             </div>
           </div>
 
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={`carousel-nav next ${currentStep === STEPS.length - 1 ? 'hidden' : ''}`}
             onClick={nextStep}
             aria-label={t('onboardNext', 'Next step')}
@@ -330,39 +259,15 @@ const OnboardingChecklist = () => {
           ))}
         </div>
 
-        <button 
-          type="button" 
+        <button
+          type="button"
           className="onboarding-dismiss-link"
           onClick={dismiss}
         >
           {t('onboardSkip', 'Skip for now')}
         </button>
       </aside>
-
-      {/* Celebration confetti */}
-      {celebrate && (
-        <div className="celebration-overlay" aria-hidden="true">
-          <FiStar className="confetti-burst" />
-          <div className="celebration-text">
-            <FiStar className="award-icon" />
-            <h3>{t('onboardCelebrateTitle', 'All set! 🎉')}</h3>
-            <p>{t('onboardCelebrateDesc', 'Your VPN is ready to go.')}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Coaching marks for first-time features */}
-      {showCoaching && (
-        <div className="coaching-overlay" onClick={() => setShowCoaching(false)} aria-hidden="true">
-          <div className="coaching-spotlight" style={{ '--spotlight-left': 'var(--coach-left)', '--spotlight-top': 'var(--coach-top)', '--spotlight-width': 'var(--coach-width)', '--spotlight-height': 'var(--coach-height)' }} />
-          <div className="coaching-tooltip" style={{ '--tooltip-left': 'var(--tip-left)', '--tooltip-top': 'var(--tip-top)' }}>
-            <FiStar />
-            <p>{t('onboardCoachTip', 'Click here to get started')}</p>
-            <button onClick={() => setShowCoaching(false)}>{t('onboardGotIt', 'Got it')}</button>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 };
 

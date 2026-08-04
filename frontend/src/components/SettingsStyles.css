@@ -1,0 +1,126 @@
+/* Settings cards */
+.setting-card {
+  background: var(--panel);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 200ms ease;
+}
+.setting-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+.setting-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-color);
+}
+.setting-card-body {
+  padding: 16px 18px;
+}
+.settings-section {
+  margin-bottom: 20px;
+}
+
+/* Panel URL display */
+.urlpath-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.urlpath-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.urlpath-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-color);
+  background: transparent;
+  padding: 0;
+}
+.urlpath-edit-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 150ms ease;
+}
+.urlpath-edit-btn:hover {
+  color: var(--accent-color);
+  background: var(--accent-color-transparent);
+}
+.urlpath-edit-form {
+  margin-top: 8px;
+}
+.urlpath-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.urlpath-input:focus {
+  border-color: var(--accent-color);
+}
+.urlpath-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.urlpath-preview {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.preview-link {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: var(--accent-color);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  word-break: break-all;
+}
+.preview-link:hover {
+  text-decoration: underline;
+}

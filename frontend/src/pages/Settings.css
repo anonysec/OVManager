@@ -228,6 +228,105 @@
   user-select: all;
 }
 
+/* ── URL Path display ── */
+.urlpath-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: var(--font-family);
+}
+.urlpath-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.urlpath-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 14px;
+  color: var(--accent-color);
+  background: transparent;
+  padding: 0;
+}
+.urlpath-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+.urlpath-edit-btn:hover {
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
+}
+.urlpath-edit-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.urlpath-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-family);
+  transition: all 0.2s ease;
+}
+.urlpath-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(252, 122, 30, 0.12);
+}
+.urlpath-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.urlpath-preview {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.preview-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+.preview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  color: var(--accent-color);
+  text-decoration: none;
+  word-break: break-all;
+}
+.preview-link:hover {
+  text-decoration: underline;
+}
+
 /* ── Theme toggle pills ── */
 .theme-pills {
   display: flex;
