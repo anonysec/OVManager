@@ -19,12 +19,14 @@ export const AuthProvider = ({ children }) => {
     });
 
     const newToken = response.data.access_token;
+    const refreshToken = response.data.refresh_token;
 
     // Decode token to get user role
     const payload = JSON.parse(atob(newToken.split('.')[1]));
     const role = payload.type;
 
     localStorage.setItem('authToken', newToken);
+    localStorage.setItem('refreshToken', refreshToken);
     localStorage.setItem('userRole', role);
     setToken(newToken);
     setUserRole(role);
@@ -32,6 +34,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('userRole');
     setToken(null);
     setUserRole(null);

@@ -17,6 +17,13 @@ import uvicorn
 
 def main():
     """Run OVManager panel."""
+    if config.SSL_KEYFILE or config.SSL_CERTFILE:
+        key = config.SSL_KEYFILE
+        cert = config.SSL_CERTFILE
+        if key and not os.path.isfile(key):
+            raise SystemExit(f"SSL key file not found: {key}")
+        if cert and not os.path.isfile(cert):
+            raise SystemExit(f"SSL cert file not found: {cert}")
     uvicorn.run(
         "backend.app:api",
         host=str(config.HOST),

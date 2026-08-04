@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import StatusBadge from '../components/ui/StatusBadge';
 import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
@@ -8,11 +9,11 @@ import { copyText } from '../utils/clipboard';
 
 const statusOf = (user, t) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
-  if (online) return { label: t('statusOnline'), cls: 'online' };
+  if (online) return { label: t('statusOnline'), status: 'online' };
   const d = daysUntil(user.expiry_date);
-  if (d < 0) return { label: t('expired'), cls: 'expired' };
-  if (user.is_active === false) return { label: t('disabled'), cls: 'offline' };
-  return { label: t('statusOffline'), cls: 'idle' };
+  if (d < 0) return { label: t('expired'), status: 'warning' };
+  if (user.is_active === false) return { label: t('disabled'), status: 'offline' };
+  return { label: t('statusOffline'), status: 'idle' };
 };
 
 const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRef }) => {
@@ -63,12 +64,12 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       role="menu"
       style={{ position: 'fixed', top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}
     >
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
-      <button type="button" className={`row-menu-item ${user.is_active ? '' : 'danger'}`} role="menuitem" onClick={() => { onToggleStatus?.(user); onClose(); }}>{user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}</button>
-      <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Edit ${user.name}`} onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`View sessions for ${user.name}`} onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Copy user ID for ${user.name}`} onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Download config for ${user.name}`} onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
+      <button type="button" className={`row-menu-item ${user.is_active ? '' : 'danger'}`} role="menuitem" aria-label={user.is_active ? `Disable ${user.name}` : `Enable ${user.name}`} onClick={() => { onToggleStatus?.(user); onClose(); }}>{user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}</button>
+      <button type="button" className="row-menu-item danger" role="menuitem" aria-label={`Delete ${user.name}`} onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
     </div>,
     document.body
   );
@@ -198,23 +199,39 @@ const UserTable = ({
                       <span className="uname">{user.name}</span>
                     </div>
                   </td>
-                  <td data-label="Status"><span className={`status-pill ${st.cls}`}>{st.label}</span></td>
-                  <td data-label="Expiry Date"><span className={d >= 0 && d <= 7 ? 'expiry-soon' : ''}>{formatDate(user.expiry_date)}</span></td>
+                  <td data-label="Status"><StatusBadge status={st.status} label={st.label} /></td>
+                  <td data-label="Expiry Date">
+                    <span
+                      className={`expiry-chip ${d < 0 ? 'is-expired' : d <= 7 ? 'is-soon' : 'is-ok'}`}
+                      title={d < 0 ? t('expiredAgo', { days: Math.abs(d) }) : t('expiresIn', { days: d })}
+                    >
+                      {formatDate(user.expiry_date)}
+                    </span>
+                  </td>
                   <td data-label="Total Traffic" className="traffic-cell">
                     <span className="traffic-used">{formatTraffic(user.used)}</span>
                     <span className="traffic-limit">/ {Number(user.total) > 0 ? formatTraffic(user.total) : '∞'}</span>
+                    {Number(user.total) > 0 && (
+                      <span className="usage-bar" role="img" aria-label={t('usageOf', { used: formatTraffic(user.used), total: formatTraffic(user.total) })}>
+                        <span
+                          className={`usage-bar-fill ${(user.used / user.total) > 0.8 ? 'bad' : (user.used / user.total) > 0.5 ? 'warn' : 'good'}`}
+                          style={{ width: `${Math.min(100, (user.used / user.total) * 100)}%` }}
+                        />
+                      </span>
+                    )}
                   </td>
                   <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
                   <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>
                   <td data-label="Owner">{user.owner || '—'}</td>
                   <td data-label="Actions" className="actions-cell">
                     <div className="row-actions">
-                    <button className="icon-btn" onClick={() => onEdit(user)} title="Edit"><FiEdit2 /></button>
-                    <button className="icon-btn danger" onClick={() => onDelete(user)} title="Delete"><FiTrash2 /></button>
+                    <button className="icon-btn" onClick={() => onEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}><FiEdit2 /></button>
+                    <button className="icon-btn danger" onClick={() => onDelete(user)} title="Delete" aria-label={`Delete ${user.name}`}><FiTrash2 /></button>
                     <div className="row-menu-wrap">
                       <button
                         className="icon-btn"
                         title="More"
+                        aria-label={`More actions for ${user.name}`}
                         ref={(el) => { anchorRefs.current[user.uuid] = el; }}
                         onClick={() => setMenuFor(open ? null : user.uuid)}
                         aria-haspopup="menu"

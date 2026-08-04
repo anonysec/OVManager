@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiX, FiEdit2, FiActivity, FiDownload, FiCopy, FiCheck, FiWifi, FiHardDrive, FiClock, FiUsers, FiUserX, FiUserCheck } from 'react-icons/fi';
 import Modal from './Modal';
 import { formatTraffic } from '../utils/format';
 import { daysUntil, formatDate } from '../utils/time';
 import { copyText } from '../utils/clipboard';
+
+// QR encoder is only needed when the detail modal is open — load on demand.
+const QRCode = lazy(() => import('qrcode'));
 
 const statusOf = (user, t) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
@@ -18,10 +21,18 @@ const statusOf = (user, t) => {
 const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, onToggleStatus }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const [qr, setQr] = useState('');
   if (!user) return null;
 
   const st = statusOf(user, t);
   const d = daysUntil(user.expiry_date);
+
+  // Generate the subscription QR lazily the first time the modal renders.
+  if (!qr && subscriptionLink) {
+    QRCode.toDataURL(subscriptionLink, { margin: 1, width: 240, color: { dark: '#0f1115', light: '#ffffff' } })
+      .then(setQr)
+      .catch(() => setQr(''));
+  }
 
   const copyLink = async () => {
     if (!subscriptionLink) return;
@@ -71,6 +82,11 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
               {copied ? <FiCheck /> : <FiCopy />}
             </button>
           </div>
+          {qr && (
+            <div className="udetail-qr" aria-label={t('qrAlt', 'VPN config QR code')}>
+              <img src={qr} alt="" />
+            </div>
+          )}
           <p className="udetail-note">{t('subIsOpenvpn')}</p>
         </div>
 

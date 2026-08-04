@@ -20,13 +20,37 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
     const isLoginRequest = requestUrl.includes('/login');
+    const isRefreshRequest = requestUrl.includes('/refresh');
 
-    if (status === 401 && !isLoginRequest) {
+    if (status === 401 && !isLoginRequest && !isRefreshRequest) {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const res = await axios.post(
+            `${apiBase}/refresh`,
+            {},
+            { headers: { Authorization: `Bearer ${refreshToken}` } }
+          );
+          const newToken = res.data.access_token;
+          localStorage.setItem('authToken', newToken);
+          // Retry original request with new token
+          error.config.headers.Authorization = `Bearer ${newToken}`;
+          return apiClient(error.config);
+        } catch (refreshError) {
+          // Refresh failed — force logout
+        }
+      }
       localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('userRole');
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    } else if (status === 401 && isRefreshRequest) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('userRole');
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     } else if (!isLoginRequest) {

@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 # Cache: IP → {country_code, lat, lon}
 _geo_cache: dict[str, dict] = {}
+_GEO_CACHE_TTL = 3600  # 1 hour
+_GEO_CACHE_MAX = 10_000
+_GEO_CACHE_HITS = 0
+_GEO_CACHE_MISSES = 0
+
+import time as _time
 
 # Timeout for geolocation requests
 _TIMEOUT = 5.0
@@ -35,9 +41,17 @@ def geolocate(address: str) -> Optional[dict]:
     if not host:
         return None
 
-    # Check cache
+    # Check cache (TTL + size bound)
     if host in _geo_cache:
-        return _geo_cache[host]
+        entry = _geo_cache[host]
+        if entry.get("_ts", 0) > _time.time() - _GEO_CACHE_TTL:
+            return entry["data"]
+        del _geo_cache[host]
+
+    # Bound cache size: evict oldest entries when over max
+    if len(_geo_cache) >= _GEO_CACHE_MAX:
+        for k in sorted(_geo_cache, key=lambda k: _geo_cache[k].get("_ts", 0))[:1000]:
+            del _geo_cache[k]
 
     # Resolve hostname to IP
     ip = resolve_ip(host)
@@ -57,7 +71,7 @@ def geolocate(address: str) -> Optional[dict]:
                 "latitude": data.get("lat", 0.0),
                 "longitude": data.get("lon", 0.0),
             }
-            _geo_cache[host] = result
+            _geo_cache[host] = {"data": result, "_ts": _time.time()}
             return result
     except Exception as e:
         logger.error("Geolocation failed for %s: %s", host, e)

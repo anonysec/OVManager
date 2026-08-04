@@ -1,5 +1,6 @@
 import { FiEdit3, FiRefreshCw, FiTrash2, FiDownloadCloud } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
+import StatusBadge from '../components/ui/StatusBadge';
 
 function usageClass(value) {
   if (value === undefined || value === null) return '';
@@ -79,14 +80,14 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
                 <td>{node.address}:{node.port}</td>
                 <td>{node.protocol}</td>
                 <td>{node.ovpn_port}</td>
-                <td><span className={node.status ? 'pill online' : 'pill'}>{node.status ? t('active') : t('inactive')}</span></td>
+                <td><StatusBadge status={node.status ? 'online' : 'offline'} label={node.status ? t('active') : t('inactive')} /></td>
                 <td><strong className={usageClass(info.cpu_usage)}>{info.cpu_usage !== undefined ? `${info.cpu_usage}%` : '-'}</strong></td>
                 <td><strong className={usageClass(info.memory_usage)}>{info.memory_usage !== undefined ? `${info.memory_usage}%` : '-'}</strong></td>
                 <td><div className="row-actions">
-                  <button className="icon-btn" title={t('check')} onClick={() => onCheckStatus(node.id)}><FiRefreshCw /></button>
-                  <button className="icon-btn" title={t('downloadAll')} onClick={() => onDownloadAll?.(node)}><FiDownloadCloud /></button>
-                  <button className="icon-btn" title={t('edit')} onClick={() => onEdit(node)}><FiEdit3 /></button>
-                  <button className="icon-btn danger" title={t('delete')} onClick={() => onDelete(node.id, node.name)}><FiTrash2 /></button>
+                  <button className="icon-btn" title={t('check')} aria-label={`${t('check')} ${node.name}`} onClick={() => onCheckStatus(node.id)}><FiRefreshCw /></button>
+                  <button className="icon-btn" title={t('downloadAll')} aria-label={`${t('downloadAll')} ${node.name}`} onClick={() => onDownloadAll?.(node)}><FiDownloadCloud /></button>
+                  <button className="icon-btn" title={t('edit')} aria-label={`${t('edit')} ${node.name}`} onClick={() => onEdit(node)}><FiEdit3 /></button>
+                  <button className="icon-btn danger" title={t('delete')} aria-label={`${t('delete')} ${node.name}`} onClick={() => onDelete(node.id, node.name)}><FiTrash2 /></button>
                 </div></td>
               </tr>
             );

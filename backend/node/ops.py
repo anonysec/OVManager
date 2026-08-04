@@ -7,6 +7,7 @@ creating, activating/deactivating, deleting users, and downloading configs.
 import asyncio
 import io
 import zipfile
+from zipfile import ZIP_DEFLATED
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response, StreamingResponse
@@ -212,9 +213,14 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
 async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> bool:
     """Delete a user from every active node. Uses numeric user ID."""
     nodes = crud.get_active_nodes(db)
+    if not nodes:
+        return True
     tasks = []
     for n in nodes:
         nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    return all(r is True for r in results if not isinstance(r, Exception))
+    # True only if at least one node succeeded AND no exceptions from others
+    success_results = [r for r in results if r is True]
+    exception_results = [r for r in results if isinstance(r, Exception)]
+    return len(success_results) > 0 and len(exception_results) == 0

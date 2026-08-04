@@ -5,8 +5,8 @@ from typing import Optional
 
 class CreateUser(BaseModel):
     name: str = Field(min_length=3, max_length=64)
-    total: Optional[float] = None
-    used: Optional[float] = None
+    total: Optional[int] = None
+    used: Optional[int] = None
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: int = Field(default=1, ge=0, le=1000)
     expiry_date: date
@@ -14,8 +14,8 @@ class CreateUser(BaseModel):
 
 class UpdateUser(BaseModel):
     name: str
-    total: Optional[float] = None
-    used: Optional[float] = None
+    total: Optional[int] = None
+    used: Optional[int] = None
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: Optional[int] = Field(default=None, ge=0, le=1000)
     expiry_date: Optional[date]

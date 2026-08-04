@@ -5,7 +5,12 @@ const THEME_KEY = 'ovmanager-theme';
 const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setThemeState] = useState(() => localStorage.getItem(THEME_KEY) || 'dark');
+  const [theme, setThemeState] = useState(() => {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+    // First visit: follow the OS preference.
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
 
   // Apply on mount and whenever theme changes.
   useEffect(() => {

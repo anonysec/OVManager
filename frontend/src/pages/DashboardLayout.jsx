@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
+import OnboardingChecklist from '../components/OnboardingChecklist';
+import CommandPalette from '../components/CommandPalette';
 import { ToastProvider } from '../context/ToastContext';
 
 const DashboardLayout = () => {
@@ -203,8 +205,10 @@ const DashboardLayout = () => {
         </header>
 
         <main id="main-content" className="ops-main" tabIndex="-1">
+          <OnboardingChecklist />
           <Outlet />
         </main>
+        <CommandPalette userRole={userRole} />
       </div>
     </LiveProvider>
   );

@@ -14,6 +14,10 @@ from bot.config import config
 logger = logging.getLogger(__name__)
 TIMEOUT = 30.0
 
+# Webhook support: the bot can receive updates via HTTP webhook
+# in addition to polling. Set WEBHOOK_URL to enable.
+WEBHOOK_URL = config.WEBHOOK_URL or ""
+
 
 class OVManager:
     """HTTP client for the OVManager panel API."""

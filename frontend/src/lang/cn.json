@@ -289,5 +289,12 @@
     "serverInfo": "系统信息",
     "stale": "过期",
     "status": "状态",
-    "timezone": "时区"
+    "timezone": "时区",
+    "loadFailedTitle": "仪表盘数据不可用",
+    "loadFailedMessage": "无法连接 API。请检查面板连接后重试。",
+    "retry": "重试",
+    "noData": "无数据",
+    "noDataDesc": "暂无内容。",
+    "noUsersOnlineDesc": "用户连接后此处显示。",
+    "noNodesDesc": "添加节点以在地图和表格中查看其实时状态。"
 }

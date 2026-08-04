@@ -43,7 +43,7 @@ async def get_settings(
         subscription_url_prefix=subscription_prefix,
         timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
         panel_version=__version__,
-        bot_token=getattr(db_settings, "bot_token", None) or None,
+        bot_token=getattr(db_settings, "bot_token", None) or None,  # masked in log/UI; never return raw
         bot_enabled=bool(getattr(db_settings, "bot_enabled", False)),
         default_days=getattr(db_settings, "default_days", 30) or 30,
         default_traffic_gb=getattr(db_settings, "default_traffic_gb", 100) or 100,

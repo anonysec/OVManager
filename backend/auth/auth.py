@@ -123,8 +123,15 @@ def authenticate_user(db: Session, username: str, password: str):
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.now() + (expires_delta or timedelta(hours=24))
-    to_encode.update({"exp": expire})
+    expire = datetime.now(tz=datetime.UTC) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    expire = datetime.now(tz=datetime.UTC) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
+    to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -161,16 +168,36 @@ async def login(
         )
 
     _login_attempts.pop(ip_h, None)
-    access_token_expires = timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES)
-    access_token = create_access_token(
-        data={"sub": admin["username"], "type": admin["type"]},
-        expires_delta=access_token_expires,
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    access_token = create_access_token(data={"sub": admin["username"], "type": admin["type"]})
+    refresh_token = create_refresh_token(data={"sub": admin["username"], "type": admin["type"]})
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 # OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
+
+@router.post("/refresh")
+async def refresh_token(request: Request, db: Session = Depends(get_db)):
+    """Exchange a valid refresh token for a new access token."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing refresh token")
+    token = auth_header[7:]
+    try:
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        if is_token_revoked(token):
+            raise HTTPException(status_code=401, detail="Token has been revoked")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    username = payload.get("sub")
+    user_type = payload.get("type")
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    new_access = create_access_token(data={"sub": username, "type": user_type})
+    return {"access_token": new_access, "token_type": "bearer"}
 
 
 def get_current_user(token: str = Depends(oauth2_scheme)):

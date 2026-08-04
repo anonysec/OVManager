@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime
+from datetime import datetime, UTC
 from uuid import uuid4
 
 from backend.auth.hash import hash_password
@@ -55,7 +55,12 @@ def update_bot_config(db: Session, **kwargs):
         db.add(s)
         db.flush()
     for k, v in kwargs.items():
-        if hasattr(s, k) and v is not None:
+        if v is None:
+            continue
+        if k == "bot_token" and v:
+            # encrypt at rest
+            v = _fernet.encrypt(v.encode()).decode()
+        if hasattr(s, k):
             setattr(s, k, v)
     db.commit()
     db.refresh(s)
@@ -66,8 +71,14 @@ def get_bot_config(db: Session):
     s = db.query(Settings).first()
     if not s:
         return {}
+    token = s.bot_token
+    if token:
+        try:
+            token = _fernet.decrypt(token.encode()).decode()
+        except Exception:
+            token = None
     return {
-        "bot_token": s.bot_token,
+        "bot_token": token,
         "bot_enabled": s.bot_enabled,
         "default_days": s.default_days,
         "default_traffic_gb": s.default_traffic_gb,
@@ -180,7 +191,7 @@ def reset_user_usage(db: Session, uuid: str) -> bool:
 def get_expired_users(db: Session):
     return (
         db.query(User)
-        .filter(User.expiry_date < datetime.now().date(), User.is_active == True)
+        .filter(User.expiry_date < datetime.now(UTC).date(), User.is_active == True)
         .all()
     )
 

@@ -1417,3 +1417,207 @@ html[dir="rtl"] .lang-check { margin-left: 0; margin-right: auto; }
   color: var(--text);
   font-family: var(--font-display);
 }
+/* ===== Panel transitions & hover polish ===== */
+.ops-panel {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.ops-panel:hover {
+  box-shadow: 0 24px 44px rgba(0,0,0,.3);
+  transform: translateY(-1px);
+}
+html[data-theme="light"] .ops-panel:hover {
+  box-shadow: 0 16px 36px rgba(20,30,50,.12);
+}
+
+/* ===== ErrorState styles ===== */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 14px;
+  color: var(--text);
+}
+.error-state-icon {
+  display: inline-flex;
+  color: var(--danger-color);
+  opacity: 0.9;
+}
+.error-state h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.error-state p {
+  margin: 0;
+  max-width: 420px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.error-state-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.btn-retry, .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border-color);
+}
+.btn-retry {
+  background: var(--accent-color);
+  color: #111;
+  border-color: var(--accent-color);
+}
+.btn-retry:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 16px rgba(255,106,26,.35);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+}
+.btn-secondary:hover {
+  background: rgba(255,255,255,.06);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+html[data-theme="light"] .btn-secondary {
+  color: var(--text-primary);
+}
+html[data-theme="light"] .btn-secondary:hover {
+  background: rgba(0,0,0,.04);
+  color: var(--accent-color);
+}
+.ops-error-wrap {
+  animation: fadeUp 0.3s ease both;
+}
+
+/* ===== EmptyState (shared) polish ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 42px 24px;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+.empty-state-icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+.empty-state h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.empty-state p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.empty-state-action {
+  margin-top: 8px;
+}
+
+/* ===== PanelSkeleton (shared) ===== */
+.panel-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.skeleton-shimmer {
+  display: block;
+  height: 14px;
+  background: linear-gradient(90deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.06) 100%);
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== StatusBadge (shared) ===== */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.status-badge svg {
+  flex-shrink: 0;
+}
+.status-badge.status-online {
+  background: rgba(47,240,212,.16);
+  color: #2ff0d4;
+}
+.status-badge.status-idle {
+  background: rgba(255,255,255,.07);
+  color: var(--text-secondary);
+}
+.status-badge.status-offline {
+  background: rgba(255,83,104,.16);
+  color: #ff7a8a;
+}
+.status-badge.status-warning {
+  background: rgba(255,180,84,.16);
+  color: #ffb454;
+}
+.status-badge.status-danger {
+  background: rgba(255,83,104,.16);
+  color: #ff7a8a;
+}
+
+/* ===== Resource chips hover ===== */
+.resource-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  transition: color 0.15s ease;
+}
+.resource-chips span:hover {
+  color: var(--accent-color);
+}
+
+/* ===== Map marker focus ring ===== */
+.map-marker {
+  transition: opacity 0.15s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ops-panel,
+  .status-badge,
+  .resource-chips span {
+    transition: none;
+  }
+  .skeleton-shimmer {
+    animation: none;
+  }
+}

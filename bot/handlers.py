@@ -36,6 +36,43 @@ PLANS = {
     "gold": (0, 0, 0),
 }
 
+# Rate limiting: {user_id: [timestamps]}
+_CMD_RATES: dict[int, list[float]] = {}
+_CMD_RATE_LIMIT = 5  # max commands
+_CMD_RATE_WINDOW = 60  # seconds
+_CMD_RATE_CLEANUP_INTERVAL = 300  # cleanup every 5 min
+_last_rate_cleanup = 0.0
+
+
+def _check_rate_limit(user_id: int) -> bool:
+    """Returns True if within rate limit, False if exceeded."""
+    global _last_rate_cleanup
+    now = time.time()
+    if now - _last_rate_cleanup > _CMD_RATE_CLEANUP_INTERVAL:
+        for uid in list(_CMD_RATES.keys()):
+            _CMD_RATES[uid] = [t for t in _CMD_RATES[uid] if now - t < _CMD_RATE_WINDOW]
+            if not _CMD_RATES[uid]:
+                del _CMD_RATES[uid]
+        _last_rate_cleanup = now
+    _CMD_RATES.setdefault(user_id, [])
+    _CMD_RATES[user_id] = [t for t in _CMD_RATES[user_id] if now - t < _CMD_RATE_WINDOW]
+    if len(_CMD_RATES[user_id]) >= _CMD_RATE_LIMIT:
+        return False
+    _CMD_RATES[user_id].append(now)
+    return True
+
+
+def _safe_handler(func):
+    """Decorator for error-handling in bot handlers."""
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            logger.exception("Handler error: %s", e)
+            if update.effective_chat:
+                await update.message.reply_text("❌ An error occurred. Contact admin.")
+    return wrapper
+
 HELP_TEXT = """🤖 <b>OVManager Bot</b>
 
 <b>Users</b>
@@ -141,6 +178,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "⛔ Access Denied\nContact your panel admin to link your Telegram ID."
             )
+            return
+        uid = update.effective_user.id
+        if not _check_rate_limit(uid):
+            await update.message.reply_text("⚠️ Too many commands. Slow down.")
             return
         mode, args = _parse_args(text)
         if mode is None:

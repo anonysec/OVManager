@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
@@ -6,12 +6,13 @@ import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiCpu, FiThermometer, FiWifi, FiAlertTriangle, FiClock, FiGlobe, FiHardDrive } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
+import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
 const formatBytes = (bytes) => {
   if (!Number(bytes)) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / 1024 ** i).toFixed(1)} ${u[i]}`;
+  return `${(bytes / 1024 ** i).toFixed(1)} ${u[i]}`
 };
 
 const CODES = {
@@ -45,20 +46,21 @@ const nodeMeta = (node) => {
 
 /* eslint-disable-next-line no-unused-vars */
 const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', children }) => (
-  <section className={`ops-panel ${tone === 'cyan' ? 'cyan' : ''} ${className}`}>
-    <header><h3><Icon style={{ verticalAlign: -3, marginRight: 8 }} />{title}</h3>{tip && <span className="has-tip panel-tip" data-tip={tip} aria-label="info" />}</header>
+  <section className={`ops-panel ${tone === 'cyan' ? 'cyan' : ''} ${className}`} data-tone={tone || 'orange'}>
+    <header>
+      <h3><Icon style={{ verticalAlign: -3, marginRight: 8 }} />{title}</h3>
+      {tip && <span className="has-tip panel-tip" data-tip={tip} aria-label={tip} role="img" />}
+    </header>
     <div className="ops-panel-body">{children}</div>
   </section>
 );
 
 const Skeleton = ({ lines = 3 }) => (
-  <div className="panel-skeleton">
-    {Array.from({ length: lines }).map((_, i) => <span key={i} className="sk-line" style={{ width: `${90 - i * 12}%` }} />)}
-  </div>
+  <PanelSkeleton lines={lines} label="Loading" />
 );
 
 const StatCell = ({ label, value, tip, tone, spark }) => (
-  <div className="ops-stat-cell has-tip" data-tip={tip || ''}>
+  <div className="ops-stat-cell has-tip" data-tip={tip || ''} role="group" aria-label={label}>
     <span>{label}</span>
     <strong className={tone === 'danger' ? 'tone-danger' : tone === 'warn' ? 'tone-warn' : tone === 'ok' ? 'tone-ok' : ''}>{value}</strong>
     {spark && spark.length > 1 && <MiniLine values={spark} />}
@@ -70,7 +72,7 @@ const MiniLine = ({ values = [] }) => {
   const max = Math.max(...values, 1);
   const pts = values.map((v, i) => `${(i / (values.length - 1 || 1)) * 100},${100 - (v / max) * 90 - 5}`).join(' ');
   return (
-    <svg className="mini-line" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <svg className="mini-line" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="sparkline">
       <polyline points={pts} fill="none" stroke="var(--orange)" strokeWidth="3" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -87,14 +89,18 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   const clamp = (z) => Math.max(1, Math.min(4, Math.round(z * 10) / 10));
   return (
     <div className="map-zoom-wrap">
-      <div className="map-zoom-controls" role="group" aria-label="Map zoom">
-        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+</button>
-        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−</button>
-        {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢</button>}
+      <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
+        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+
+        </button>
+        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−
+        </button>
+        {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢
+        </button>}
       </div>
       <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
         <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
           style={{ width: `${100 * zoom}%`, height: 'auto' }}
+          role="img" aria-label="World map of node locations"
           onMouseLeave={() => setHover(null)}>
           <defs>
             <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
@@ -110,6 +116,8 @@ const WorldMap = ({ nodes, nodeStatus }) => {
               className="country"
               d={pathGen(feat) || ''}
               onMouseOver={() => setHover(feat.properties.name)}
+              tabIndex={-1}
+              aria-label={feat.properties.name}
             >
               <title>{feat.properties.name}</title>
             </path>
@@ -125,9 +133,9 @@ const WorldMap = ({ nodes, nodeStatus }) => {
             const st = nodeStatus[node.id] || {};
             const online = node.status && st.session_diagnostics?.live_count != null && st.node_info !== undefined;
             return (
-              <g key={node.id} className="map-marker" transform={`translate(${x},${y})`}>
-                {online && <circle className="pulse" r={6} />}
-                <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} />
+              <g key={node.id} className="map-marker" transform={`translate(${x},${y})`} aria-label={`${node.name} — ${online ? 'online' : 'offline'}`}>
+                {online && <circle className="pulse" r={6} aria-hidden="true" />}
+                <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} aria-hidden="true" />
                 <text x={7} y={4} className="node-country-label">{node.name}</text>
               </g>
             );
@@ -143,7 +151,7 @@ const SecurityScoreRing = ({ score }) => {
   const off = c - (score / 100) * c;
   const color = score >= 85 ? '#2ff0d4' : score >= 65 ? '#ffb454' : '#ff7a8a';
   return (
-    <svg className="score-ring" width="92" height="92" viewBox="0 0 92 92">
+    <svg className="score-ring" width="92" height="92" viewBox="0 0 92 92" role="img" aria-label={`Security score ${score} out of 100`}>
       <circle cx="46" cy="46" r={r} className="ring-bg" />
       <circle cx="46" cy="46" r={r} className="ring-fg" stroke={color}
         strokeDasharray={c} strokeDashoffset={off} transform="rotate(-90 46 46)" />
@@ -180,45 +188,54 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [security, setSecurity] = useState(null);
   const [trafficHistory, setTrafficHistory] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    let nodesData = [];
+    try {
+      const [statsRes, usersRes, nodesRes, metricsRes, secRes] = await Promise.all([
+        apiClient.get('/server/info'),
+        apiClient.get('/users/'),
+        apiClient.get('/nodes/'),
+        apiClient.get("/metrics/history?hours=24"),
+        apiClient.get('/security/summary?hours=8'),
+      ]);
+      setStats(statsRes.data?.data || null);
+      setUsers(usersRes.data?.data || []);
+      nodesData = nodesRes.data?.data || [];
+      setNodes(nodesData);
+      setSecurity(secRes.data?.data || null);
+      const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
+      const point = Number(lastTraffic?.active_connections ?? 0);
+      setTrafficHistory((h) => [...h.slice(-19), point]);
+    } catch (e) {
+      console.error('Dashboard load failed:', e);
+      setError(e);
+    }
+
+    // node status: per-node, non-blocking, short timeout
+    try {
+      const ns = nodesData;
+      const results = await Promise.all(ns.map(async (n) => {
+        if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0 }];
+        try {
+          const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
+          return [n.id, r.data?.data || {}];
+        } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
+      }));
+      setNodeStatus(Object.fromEntries(results));
+    } catch { /* keep previous */ }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      let nodesData = [];
-      try {
-        const [statsRes, usersRes, nodesRes, metricsRes, secRes] = await Promise.all([
-          apiClient.get('/server/info'),
-          apiClient.get('/users/'),
-          apiClient.get('/nodes/'),
-          apiClient.get("/metrics/history?hours=24"),
-          apiClient.get('/security/summary?hours=8'),
-        ]);
-        setStats(statsRes.data?.data || null);
-        setUsers(usersRes.data?.data || []);
-        nodesData = nodesRes.data?.data || [];
-        setNodes(nodesData);
-        setSecurity(secRes.data?.data || null);
-        const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
-        const point = Number(lastTraffic?.active_connections ?? 0);
-        setTrafficHistory((h) => [...h.slice(-19), point]);
-      } catch (e) { console.error('Dashboard load failed:', e); }
-
-      // node status: per-node, non-blocking, short timeout
-      try {
-        const ns = nodesData;
-        const results = await Promise.all(ns.map(async (n) => {
-          if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0 }];
-          try {
-            const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
-            return [n.id, r.data?.data || {}];
-          } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0 }]; }
-        }));
-        setNodeStatus(Object.fromEntries(results));
-      } catch { /* keep previous */ }
-    };
-    load();
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
+    loadData();
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') loadData(); }, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadData]);
 
   const onlineNodes = (nodes || []).filter((n) => {
     if (!n.status) return false;
@@ -248,130 +265,179 @@ const ServerStats = () => {
     .sort((a, b) => Number(b.active_connections || 0) - Number(a.active_connections || 0))
     .slice(0, 6);
 
+  const hasData = stats && users && nodes;
+
   return (
     <div className="ops-dashboard compact">
       <h2>{t('operationalOverview')}</h2>
 
-      <div className="ops-overview-grid">
-        <Panel title={t('networkStatus')} tone="orange" icon={FiActivity} tip={t('networkStatus')}>
-          {stats && users && nodes ? (
-            <div className="network-card-grid">
-              <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} tip={t('activeConnections')} spark={trafficHistory} />
-              <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
-              <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
-              <StatCell label={t('avgLatency')} value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip={t('avgLatency')} />
-            </div>
-          ) : <Skeleton />}
-        </Panel>
-
-        <Panel title={t('serverHealth')} tone="cyan" icon={FiServer} tip={t('serverHealth')}>
-          {stats ? (
-            <div className="health-grid">
-              <StatCell label={t('panelCPU')} value={`${stats.cpu.toFixed(0)}%`} tip={t('panelCPU')} tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
-              <StatCell label={t('panelMemory')} value={`${stats.memory_percent.toFixed(0)}%`} tip={t('panelMemory')} tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
-              <StatCell label={t('disk')} value={`${stats.disk_percent.toFixed(0)}%`} tip={t('disk')} tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
-              <StatCell label={t('nodesOnline')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('nodesOnline')} tone={offlineNodes ? 'warn' : 'ok'} />
-            </div>
-          ) : <Skeleton />}
-          <div className="resource-chips">
-            <span><FiCpu /> {stats ? stats.cpu.toFixed(0) : '–'}% CPU</span>
-            <span><FiThermometer /> {stats ? stats.memory_percent.toFixed(0) : '–'}% Mem</span>
-            <span><FiHardDrive /> {stats ? stats.disk_percent.toFixed(0) : '–'}% Disk</span>
-            <span><FiWifi /> {onlineNodes} nodes</span>
-          </div>
-        </Panel>
-
-        <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
-          {security ? (
-            <>
-              <div className="security-flex">
-                <SecurityScoreRing score={securityScore} />
-                <div className="security-facts">
-                  <StatCell label={t('activeAlerts')} value={String(activeAlerts).padStart(2, '0')} tip={t('activeAlerts')} tone={activeAlerts ? 'warn' : 'ok'} />
-                  <StatCell label={t('authErrors8h')} value={String(authErrors)} tip={t('authErrors8h')} tone={authErrors ? 'danger' : 'ok'} />
-                  <StatCell label={t('rejects8h')} value={String(rejects)} tip={t('rejects8h')} tone={rejects ? 'warn' : 'ok'} />
-                </div>
-              </div>
-              <p className={`security-verdict ${securityScore >= 85 ? 'ok' : securityScore >= 65 ? 'warn' : 'bad'}`}>
-                {securityScore >= 85 ? t('verdictHealthy')
-                  : securityScore >= 65 ? t('verdictWatch')
-                  : t('verdictCritical')}
-              </p>
-              {latestErrors.length > 0 && (
-                <ul className="security-errors">
-                  {latestErrors.slice(0, 3).map((_e, i) => (
-                    <li key={i}>{_e.time_tehran || ''} — {_e.common_name}: {_e.reason} ({_e.active || '?'}/{_e.limit || '?'})</li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : <Skeleton />}
-        </Panel>
-      </div>
-
-      <div className="ops-lower-grid">
-        <Panel title={t('onlineUsers')} tone="orange" className="users-panel" icon={FiUsers} tip={t('onlineUsers')}>
-          {users ? (
-            <>
-              <table className="ops-table">
-                <thead>
-                  <tr><th>{t('th_user')}</th><th>{t('th_plan')}</th><th>{t('th_status')}</th><th>{t('th_dataUsed')}</th><th>{t('th_sessions')}</th><th>{t('th_lastOnline')}</th><th>{t('th_actions')}</th></tr>
-                </thead>
-                <tbody>
-                  {previewUsers.map((u) => (
-                    <tr key={u.uuid || u.name} title={`${u.name}: ${u.active_connections || 0}/${u.max_logins || '∞'} sessions, ${formatBytes(u.used || 0)} used`}>
-                      <td><span className="avatar-mini">{u.name.slice(0, 1).toUpperCase()}</span>{u.name}</td>
-                      <td>{u.max_logins === 0 ? t('unlimited') : t('devicesCount', { count: u.max_logins })}</td>
-                      <td><span className={u.online ? 'dot online' : 'dot'} />{u.online ? t('statusOnline') : t('statusOffline')}</td>
-                      <td>{formatBytes(u.used || 0)}</td>
-                      <td>{u.active_connections || 0}</td>
-                      <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
-                      <td><button type="button" className="mini-btn" title={`${t('manage')} ${u.name}`} onClick={() => { const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : ''; window.location.assign(`${base}/users?user=${u.uuid}`); }}>{t('manage')}</button></td>
-                    </tr>
-                  ))}
-                  {previewUsers.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)' }}>{t('noUsersOnline')}</td></tr>}
-                </tbody>
-              </table>
-            </>
-          ) : <Skeleton />}
-        </Panel>
-
-        <Panel title={t('serverNodes')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('serverNodes')}>
-          {nodes ? (
-            <>
-              <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
-              <table className="ops-table compact">
-                <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
-                <tbody>
-                  {nodes.slice(0, 8).map((node) => {
-                    const meta = nodeMeta(node);
-                    const status = nodeStatus[node.id] || {};
-                    const cpu = status.node_info?.cpu_usage;
-                    const conns = Number(status.session_diagnostics?.live_count || 0);
-                    const reachable = node.status && status.node_info !== undefined;
-                    return (
-                      <tr key={node.id} title={`${node.name}: ${conns} live sessions, API ${node.address}:${node.port}`}>
-                        <td>{node.name}</td>
-                        <td>{meta.name}</td>
-                        <td><span className={reachable ? 'dot online' : 'dot'} />{reachable ? t('statusOnline') : (node.status ? t('statusDown') : t('statusOff'))}</td>
-                        <td>{Number.isFinite(Number(cpu)) ? `${Number(cpu).toFixed(0)}%` : '-'}</td>
-                        <td>{conns} <small className="latency-note">{status.latency_ms ? `${status.latency_ms}ms` : ''}</small></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          ) : <Skeleton />}
-        </Panel>
-      </div>
-
-      {notifications.length > 0 && (
-        <div className="ops-notice-strip">
-          <FiAlertTriangle /> {notifications.length} {t(notifications.length === 1 ? 'alertOne' : 'alertsMany')}:{' '}
-          {notifications.slice(0, 4).map((n) => <span key={n.id} className={`ntag ${n.level}`}>{n.title}</span>)}
-          {notifications.length > 4 && <span className="ntag">{t('moreN', { count: notifications.length - 4 })}</span>}
+      {error && !hasData ? (
+        <div className="ops-error-wrap">
+          <ErrorState
+            title={t('loadFailedTitle')}
+            message={t('loadFailedMessage')}
+            onRetry={loadData}
+            retryLabel={t('retry')}
+          />
         </div>
+      ) : (
+        <>
+          <div className="ops-overview-grid">
+            <Panel title={t('networkStatus')} tone="orange" icon={FiActivity} tip={t('networkStatus')}>
+              {loading ? <Skeleton /> : (stats && users && nodes ? (
+                <div className="network-card-grid">
+                  <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} tip={t('activeConnections')} spark={trafficHistory} />
+                  <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
+                  <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
+                  <StatCell label={t('avgLatency')} value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip={t('avgLatency')} />
+                </div>
+              ) : (
+                <EmptyState title={t('noData')} description={t('noDataDesc')} />
+              ))}
+            </Panel>
+
+            <Panel title={t('serverHealth')} tone="cyan" icon={FiServer} tip={t('serverHealth')}>
+              {loading ? <Skeleton /> : (stats ? (
+                <div className="health-grid">
+                  <StatCell label={t('panelCPU')} value={`${stats.cpu.toFixed(0)}%`} tip={t('panelCPU')} tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
+                  <StatCell label={t('panelMemory')} value={`${stats.memory_percent.toFixed(0)}%`} tip={t('panelMemory')} tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
+                  <StatCell label={t('disk')} value={`${stats.disk_percent.toFixed(0)}%`} tip={t('disk')} tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
+                  <StatCell label={t('nodesOnline')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('nodesOnline')} tone={offlineNodes ? 'warn' : 'ok'} />
+                </div>
+              ) : (
+                <EmptyState title={t('noData')} description={t('noDataDesc')} />
+              ))}
+              <div className="resource-chips">
+            <span><FiCpu aria-hidden="true" /> {stats ? `${stats.cpu.toFixed(0)}%` : '–'} CPU</span>
+            <span><FiThermometer aria-hidden="true" /> {stats ? `${stats.memory_percent.toFixed(0)}%` : '–'} Mem</span>
+            <span><FiHardDrive aria-hidden="true" /> {stats ? `${stats.disk_percent.toFixed(0)}%` : '–'} Disk</span>
+            <span><FiWifi aria-hidden="true" /> {onlineNodes} {t('nodesOnline')}</span>
+          </div>
+            </Panel>
+
+            <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
+              {loading ? <Skeleton /> : (security ? (
+                <>
+                  <div className="security-flex">
+                    <SecurityScoreRing score={securityScore} />
+                    <div className="security-facts">
+                      <StatCell label={t('activeAlerts')} value={String(activeAlerts).padStart(2, '0')} tip={t('activeAlerts')} tone={activeAlerts ? 'warn' : 'ok'} />
+                      <StatCell label={t('authErrors8h')} value={String(authErrors)} tip={t('authErrors8h')} tone={authErrors ? 'danger' : 'ok'} />
+                      <StatCell label={t('rejects8h')} value={String(rejects)} tip={t('rejects8h')} tone={rejects ? 'warn' : 'ok'} />
+                    </div>
+                  </div>
+                  <p className={`security-verdict ${securityScore >= 85 ? 'ok' : securityScore >= 65 ? 'warn' : 'bad'}`}>
+                    {securityScore >= 85 ? t('verdictHealthy')
+                      : securityScore >= 65 ? t('verdictWatch')
+                      : t('verdictCritical')}
+                  </p>
+                  {latestErrors.length > 0 && (
+                    <ul className="security-errors">
+                      {latestErrors.slice(0, 3).map((_e, i) => (
+                        <li key={i}>{_e.time_tehran || ''} — {_e.common_name}: {_e.reason} ({_e.active || '?'}/{_e.limit || '?'})</li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <EmptyState title={t('noData')} description={t('noDataDesc')} />
+              ))}
+            </Panel>
+          </div>
+
+          <div className="ops-lower-grid">
+            <Panel title={t('onlineUsers')} tone="orange" className="users-panel" icon={FiUsers} tip={t('onlineUsers')}>
+              {loading ? <Skeleton /> : (users ? (
+                <>
+                  {previewUsers.length > 0 ? (
+                    <table className="ops-table">
+                      <thead>
+                        <tr><th>{t('th_user')}</th><th>{t('th_plan')}</th><th>{t('th_status')}</th><th>{t('th_dataUsed')}</th><th>{t('th_sessions')}</th><th>{t('th_lastOnline')}</th><th>{t('th_actions')}</th></tr>
+                      </thead>
+                      <tbody>
+                        {previewUsers.map((u) => (
+                          <tr key={u.uuid || u.name} title={`${u.name}: ${u.active_connections || 0}/${u.max_logins || '∞'} sessions, ${formatBytes(u.used || 0)} used`}>
+                            <td><span className="avatar-mini" aria-hidden="true">{u.name.slice(0, 1).toUpperCase()}</span>{u.name}</td>
+                            <td>{u.max_logins === 0 ? t('unlimited') : t('devicesCount', { count: u.max_logins })}</td>
+                            <td>
+                              <StatusBadge status={u.online ? 'online' : 'idle'} label={u.online ? t('statusOnline') : t('statusOffline')} />
+                            </td>
+                            <td>{formatBytes(u.used || 0)}</td>
+                            <td>{u.active_connections || 0}</td>
+                            <td className="col-last-online">{u.online ? t('statusOnline') : fmtRelative(u.last_online)}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="mini-btn"
+                                title={`${t('manage')} ${u.name}`}
+                                aria-label={`${t('manage')} ${u.name}`}
+                                onClick={() => { const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : ''; window.location.assign(`${base}/users?user=${u.uuid}`); }}
+                              >{t('manage')}</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <EmptyState title={t('noUsersOnline')} description={t('noUsersOnlineDesc')} />
+                  )}
+                </>
+              ) : (
+                <EmptyState title={t('noData')} description={t('noDataDesc')} />
+              ))}
+            </Panel>
+
+            <Panel title={t('serverNodes')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('serverNodes')}>
+              {loading ? <Skeleton /> : (nodes ? (
+                <>
+                  {nodes.length > 0 ? (
+                    <>
+                      <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
+                      <table className="ops-table compact">
+                        <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
+                        <tbody>
+                          {nodes.slice(0, 8).map((node) => {
+                            const meta = nodeMeta(node);
+                            const status = nodeStatus[node.id] || {};
+                            const cpu = status.node_info?.cpu_usage;
+                            const conns = Number(status.session_diagnostics?.live_count || 0);
+                            const reachable = node.status && status.node_info !== undefined;
+                            return (
+                              <tr key={node.id} title={`${node.name}: ${conns} live sessions, API ${node.address}:${node.port}`}>
+                                <td>{node.name}</td>
+                                <td>{meta.name}</td>
+                                <td>
+                                  <StatusBadge
+                                    status={reachable ? 'online' : node.status ? 'warning' : 'offline'}
+                                    label={reachable ? t('statusOnline') : (node.status ? t('statusDown') : t('statusOff'))}
+                                  />
+                                </td>
+                                <td>{Number.isFinite(Number(cpu)) ? `${Number(cpu).toFixed(0)}%` : '-'}</td>
+                                <td>{conns} <small className="latency-note">{status.latency_ms ? `${status.latency_ms}ms` : ''}</small></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </>
+                  ) : (
+                    <EmptyState title={t('noNodes')} description={t('noNodesDesc')} icon={FiGlobe} />
+                  )}
+                </>
+              ) : (
+                <EmptyState title={t('noData')} description={t('noDataDesc')} />
+              ))}
+            </Panel>
+          </div>
+
+          {notifications.length > 0 && (
+            <div className="ops-notice-strip">
+              <FiAlertTriangle aria-hidden="true" /> {notifications.length} {t(notifications.length === 1 ? 'alertOne' : 'alertsMany')}:{' '}
+              {notifications.slice(0, 4).map((n) => <span key={n.id} className={`ntag ${n.level}`}>{n.title}</span>)}
+              {notifications.length > 4 && <span className="ntag">{t('moreN', { count: notifications.length - 4 })}</span>}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

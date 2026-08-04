@@ -35,7 +35,8 @@ class Setting(BaseSettings):
     SSL_KEYFILE: Optional[str] = None
     SSL_CERTFILE: Optional[str] = None
     JWT_SECRET_KEY: str
-    JWT_ACCESS_TOKEN_EXPIRES: int = 86400  # in seconds
+    JWT_ACCESS_TOKEN_EXPIRES: int = 1800  # 30 min (short-lived access tokens)
+    JWT_REFRESH_TOKEN_EXPIRES: int = 604800  # 7 days
     SUBSCRIPTION_URL_PREFIX: Optional[str] = None
     SUBSCRIPTION_PATH: str = "sub"
     TRUSTED_PROXY: bool = False  # Set true behind nginx/caddy to trust X-Forwarded-For

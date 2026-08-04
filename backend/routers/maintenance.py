@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from werkzeug.utils import secure_filename
 
 from backend.auth.auth import get_current_user
 from backend.db.engine import BASE_DIR, engine, get_db
@@ -17,6 +18,8 @@ from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
 logger = logging.getLogger(__name__)
+
+MAX_BACKUP_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
@@ -110,7 +113,7 @@ async def list_backups(user: dict = Depends(get_current_user)):
         files.append({
             "name": b.name,
             "size": b.stat().st_size,
-            "modified": datetime.fromtimestamp(b.stat().st_mtime).isoformat(),
+            "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=datetime.UTC).isoformat(),
         })
     return ResponseModel(success=True, msg="Backups listed", data=files)
 
@@ -202,12 +205,26 @@ async def restore_backup(
             return _atomic_db_restore(src_path, user, f"Restored from server backup: {restore_from_server}")
 
         # Original path: restore from uploaded file
-        if not file.filename.endswith(".db"):
+        if not file.filename or not file.filename.endswith(".db"):
             return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
 
-        # Save uploaded file temporarily
-        tmp_path = BACKUP_DIR / f"restore_{file.filename}"
+        # Sanitize filename to prevent path traversal
+        safe_name = secure_filename(file.filename)
+        if not safe_name:
+            return ResponseModel(success=False, msg="Invalid filename", data=None)
+
+        # Read with size limit to prevent disk fill DoS
         content = await file.read()
+        if len(content) > MAX_BACKUP_FILE_SIZE:
+            return ResponseModel(success=False, msg=f"File too large (max {MAX_BACKUP_FILE_SIZE} bytes)", data=None)
+
+        tmp_path = BACKUP_DIR / f"restore_{safe_name}"
+        # Ensure tmp_path stays inside BACKUP_DIR
+        try:
+            tmp_path.relative_to(BACKUP_DIR)
+        except ValueError:
+            return ResponseModel(success=False, msg="Invalid backup path", data=None)
+
         tmp_path.write_bytes(content)
 
         result = _atomic_db_restore(tmp_path, user, f"Restored from: {file.filename}")

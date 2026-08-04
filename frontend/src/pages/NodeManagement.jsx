@@ -6,6 +6,10 @@ import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
 import NodeTable from '../components/NodeTable';
 import LoadingButton from '../components/LoadingButton';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import PanelSkeleton from '../components/ui/PanelSkeleton';
+import StatusBadge from '../components/ui/StatusBadge';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 
@@ -17,6 +21,7 @@ const NodeManagement = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const { t } = useTranslation();
   const { addToast } = useToast();
 
@@ -24,6 +29,7 @@ const NodeManagement = () => {
 
   const fetchNodes = useCallback(async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const response = await apiClient.get('/nodes/');
       if (response.data.success) {
@@ -31,6 +37,7 @@ const NodeManagement = () => {
       }
     } catch (error) {
       console.error('Error fetching nodes:', error);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -218,15 +225,31 @@ const NodeManagement = () => {
         </div>
       </div>
 
-      <NodeTable
-        nodes={filteredNodes}
-        isLoading={isLoading}
-        nodeInfo={nodeInfo}
-        onDelete={handleDelete}
-        onCheckStatus={handleCheckStatus}
-        onEdit={handleOpenEditModal}
-        onDownloadAll={handleDownloadAllConfigs}
-      />
+      {loadError ? (
+        <ErrorState
+          title={t('loadError', 'Could not load nodes')}
+          message={t('loadErrorDetail', 'We had trouble reaching the server.')}
+          onRetry={fetchNodes}
+          retryLabel={t('retry', 'Retry')}
+        />
+      ) : !isLoading && nodes.length === 0 ? (
+        <EmptyState
+          title={t('noNodes', 'No nodes configured')}
+          description={t('noNodesBody', 'Add your first OVNode to get started.')}
+          actionLabel={t('addNewNode', 'Add Node')}
+          onAction={() => setIsAddModalOpen(true)}
+        />
+      ) : (
+        <NodeTable
+          nodes={filteredNodes}
+          isLoading={isLoading}
+          nodeInfo={nodeInfo}
+          onDelete={handleDelete}
+          onCheckStatus={handleCheckStatus}
+          onEdit={handleOpenEditModal}
+          onDownloadAll={handleDownloadAllConfigs}
+        />
+      )}
 
       {isAddModalOpen && (
         <AddNodeModal

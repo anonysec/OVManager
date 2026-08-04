@@ -1,0 +1,39 @@
+/* Shared design tokens for OVManager.
+   Used by subscription.html and imported by the React app.
+   Keep in sync between light and dark themes. */
+
+:root {
+  /* Typography */
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'Manrope', ui-sans-serif, sans-serif;
+
+  /* Accent */
+  --accent-color: #fc7a1e;
+  --accent-color-hover: #f06c0e;
+  --accent-color-transparent: rgba(252, 122, 30, 0.1);
+
+  /* Semantic */
+  --danger-color: #a63d2a;
+  --success-color: #01c3a8;
+  --info-color: #1890ff;
+
+  /* Dark mode */
+  --bg-color: #0b1120;
+  --bg-glow-1: rgba(34, 197, 94, 0.14);
+  --bg-glow-2: rgba(56, 189, 248, 0.10);
+  --surface-color: #111a2e;
+  --primary-color: #22c55e;
+  --border-color: rgba(148, 163, 184, 0.16);
+  --text-primary: #e0e1dd;
+  --text-secondary: #a0aec0;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-color: #f1f5f9;
+    --bg-glow-1: rgba(22, 163, 74, 0.12);
+    --bg-glow-2: rgba(59, 130, 246, 0.10);
+    --surface-color: #ffffff;
+    --primary-color: #16a34a;
+  }
+}

@@ -8,7 +8,10 @@ import EditUserModal from '../components/EditUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
 import UserDetailModal from '../components/UserDetailModal';
-import { FiSearch } from 'react-icons/fi';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import PanelSkeleton from '../components/ui/PanelSkeleton';
+import { FiSearch, FiPlus } from 'react-icons/fi';
 import { BsPersonFill, BsPersonCheckFill, BsPersonXFill, BsPersonPlusFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
 import { daysUntil } from '../utils/time';
@@ -35,8 +38,10 @@ const UserManagement = () => {
   const [selected, setSelected] = useState([]);
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
   const [_bulkBusy, setBulkBusy] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const fetchUsers = async () => {
+    setLoadError(false);
     try {
       const response = await apiClient.get('/users/');
       if (response.data.success && Array.isArray(response.data.data)) {
@@ -47,6 +52,7 @@ const UserManagement = () => {
     } catch (error) {
       console.error("Error fetching users:", error);
       setUsers([]);
+      setLoadError(true);
     }
   };
 
@@ -305,7 +311,7 @@ const UserManagement = () => {
       <div className="view-header">
         <h2>{t('users')}</h2>
         <div className="view-header-actions">
-          <button onClick={() => setIsAddModalOpen(true)} className="btn">{t('addNewUser')}</button>
+          <button onClick={() => setIsAddModalOpen(true)} className="btn" aria-label={t('addNewUser')}>{t('addNewUser')}</button>
         </div>
       </div>
 
@@ -353,25 +359,43 @@ const UserManagement = () => {
         </div>
       </div>
 
-      <UserTable
-        users={filteredUsers}
-        isLoading={false}
-        onUserClick={handleUserClick}
-        onDelete={handleDelete}
-        onSessions={handleShowSessions}
-        onBulkDelete={handleBulkDelete}
-        selected={selected}
-        onSelect={handleSelect}
-        onSelectAll={handleSelectAll}
-        sort={sort}
-        onSort={handleSort}
-        onDownload={handleOpenDownloadModal}
-        onEdit={handleEdit}
-        onToggleStatus={handleToggleStatus}
-        onResetUsage={handleResetUsage}
-        onShowSessions={handleShowSessions}
-        getSubscriptionLink={getSubscriptionLink}
-      />
+      {loadError ? (
+        <ErrorState
+          title={t('loadError', 'Could not load users')}
+          message={t('loadErrorDetail', 'We had trouble reaching the server.')}
+          onRetry={fetchUsers}
+          retryLabel={t('retry', 'Retry')}
+        />
+      ) : users.length === 0 ? (
+        <EmptyState
+          title={t('noUsersTitle', 'No users yet')}
+          description={t('noUsersBody', 'Create a user to start handing out VPN access. They\'ll appear here with live status.')}
+          actionLabel={t('addNewUser', 'Add User')}
+          onAction={() => setIsAddModalOpen(true)}
+        />
+      ) : (
+        <div className="view-content-fade">
+          <UserTable
+            users={filteredUsers}
+            isLoading={false}
+            onUserClick={handleUserClick}
+            onDelete={handleDelete}
+            onSessions={handleShowSessions}
+            onBulkDelete={handleBulkDelete}
+            selected={selected}
+            onSelect={handleSelect}
+            onSelectAll={handleSelectAll}
+            sort={sort}
+            onSort={handleSort}
+            onDownload={handleOpenDownloadModal}
+            onEdit={handleEdit}
+            onToggleStatus={handleToggleStatus}
+            onResetUsage={handleResetUsage}
+            onShowSessions={handleShowSessions}
+            getSubscriptionLink={getSubscriptionLink}
+          />
+        </div>
+      )}
       {isDetailModalOpen && (
         <UserDetailModal
           isOpen={isDetailModalOpen}

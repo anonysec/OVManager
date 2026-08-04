@@ -16,7 +16,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install uv
         run: pip install uv
@@ -30,6 +30,27 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Audit Python dependencies
+        run: uv run pip-audit --desc || true
+
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Audit frontend dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate || true
+
       - name: Test project startup
         run: |
           timeout 5s uv run main.py || true
+
+      - name: Scan Docker image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ovmanager:latest'
+          format: 'sarif'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'

@@ -278,5 +278,12 @@
     "serverInfo": "System info",
     "stale": "Stale",
     "status": "Status",
-    "timezone": "Timezone"
+    "timezone": "Timezone",
+    "loadFailedTitle": "داده‌های داشبورد در دسترس نیست",
+    "loadFailedMessage": "اتصال به API برقرار نشد. اتصال پنل را بررسی و دوباره تلاش کنید.",
+    "retry": "تلاش مجدد",
+    "noData": "بدون داده",
+    "noDataDesc": "هنوز چیزی برای نمایش نیست.",
+    "noUsersOnlineDesc": "کاربران پس از اتصال اینجا نمایش داده می‌شوند.",
+    "noNodesDesc": "برای دیدن وضعیت زنده روی نقشه و جدول، یک نود اضافه کنید."
 }
