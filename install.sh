@@ -13,7 +13,7 @@ REPO="anonysec/OVManager"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
-DEFAULT_PATH="dash"
+DEFAULT_PATH=""
 DEFAULT_USER="admin"
 DEFAULT_PASS="admin"
 SYSTEMD_SERVICE="ovmanager.service"
@@ -84,7 +84,7 @@ show_help() {
 
   Flags:
     --port PORT         Panel port (default: 2095)
-    --path URLPATH      URL path prefix (default: dash)
+    --path URLPATH      URL path prefix (default: root/empty)
     --admin-user USER   Admin username
     --admin-pass PASS   Admin password
     --tls METHOD        TLS method: le, le-ip, self, custom, none (default: le-ip)
@@ -104,7 +104,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --port)       PORT="$2"; shift 2 ;;
-            --path)       PATHPREFIX="$2"; shift 2 ;;
+            --path)       PATHPREFIX="$(echo "$2" | sed 's|^/\+||; s|/\+$||')"; shift 2 ;;
             --admin-user) ADMIN_USER="$2"; shift 2 ;;
             --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
             --tls-le)     TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
@@ -433,9 +433,17 @@ SVCEOF
     step "${B}Installation complete!${NC}"
     line ""
     if [[ "$TLS_MODE" != "none" ]]; then
-        line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+        if [[ -n "$PATHPREFIX" ]]; then
+            line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+        else
+            line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/"
+        fi
     else
-        line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+        if [[ -n "$PATHPREFIX" ]]; then
+            line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
+        else
+            line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/"
+        fi
     fi
     line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / ${GR}${ADMIN_PASS}${NC}"
     line ""
