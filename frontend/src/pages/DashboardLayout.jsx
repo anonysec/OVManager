@@ -154,8 +154,8 @@ const DashboardLayout = () => {
             <header className="ops-topbar-minimal" role="banner">
               <div className="ops-userbar">
                 <div className="lang-picker-wrap" ref={langRef}>
-                  <button type="button" className={`lang-picker-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')}>
-                    <LangIcon size={16} />
+                  <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label="Change language">
+                    <LangIcon size={18} />
                   </button>
                   <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
                     <button className={`lang-option${i18n.language === 'fa' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('fa'); document.documentElement.dir = 'rtl'; localStorage.setItem('ovmanager-lang', 'fa'); setLangOpen(false); }}>
@@ -180,13 +180,13 @@ const DashboardLayout = () => {
                     </button>
                   </div>
                 </div>
-                <button type="button" className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={t('theme', 'Theme')} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-                  {theme === 'dark' ? <FiSun /> : <FiMoon />}
+                <button type="button" className="icon-btn" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); }} title={t('theme', 'Theme')} aria-label="Toggle theme">
+                  {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
                 </button>
-                <NavLink to="/settings" className="ops-settings-link" title={t('settings', 'Settings')} aria-label="Settings"><FiSettings /></NavLink>
+                <NavLink to="/settings" className="icon-btn" title={t('settings', 'Settings')} aria-label="Settings"><FiSettings /></NavLink>
                 <div className="notification-wrap">
-                  <button type="button" className={`ops-bell${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
-                    <FiBell />{notifCount > 0 && <span>{notifCount > 9 ? '9+' : notifCount}</span>}
+                  <button type="button" className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
+                    <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
                   </button>
                   <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label={t('notifTitle')}>
                     <div className="notif-head">
@@ -216,11 +216,8 @@ const DashboardLayout = () => {
                   </div>
                 </div>
                 <div className="profile-wrap">
-                  <button type="button" className={`ops-profile${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs') || 'Logged in as'}>
+                  <button type="button" className={`icon-btn${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs') || 'Logged in as'}>
                     <span className="avatar-xs">{username.slice(0, 1).toUpperCase()}</span>
-                    <span className="ops-username">{username}</span>
-                    <span className="ops-role-badge">{userRole === 'main_admin' ? 'Admin' : 'Op'}</span>
-                    <FiChevronDown size={14} />
                   </button>
                   <div className={`profile-dropdown${profileOpen ? ' open' : ''}`} role="menu">
                     <div className="profile-dropdown-header">

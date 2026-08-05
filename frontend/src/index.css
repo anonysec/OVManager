@@ -612,29 +612,70 @@ html.theme-transition *::after {
   border-radius: 2px;
 }
 
-/* --- User Bar --- */
-.ops-userbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.ops-userbar button {
+/* --- Icon Buttons (uniform size/style) --- */
+.icon-btn {
   background: none;
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 8px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  position: relative;
 }
 
-.ops-userbar button:hover {
-  color: var(--accent-color);
+.icon-btn:hover {
+  color: var(--text-primary);
   background: rgba(252, 122, 30, 0.1);
+}
+
+.icon-btn.active {
+  color: var(--accent-color);
+  background: rgba(252, 122, 30, 0.15);
+}
+
+.icon-btn.has-alerts::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: var(--danger-color);
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+
+.icon-btn-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  background: var(--danger-color);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.0625rem 0.25rem;
+  border-radius: 0.5rem;
+  line-height: 1;
+}
+
+/* --- User Bar --- */
+.ops-userbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* --- Profile dropdown --- */
+.profile-wrap {
+  position: relative;
 }
 
 .ops-profile {
