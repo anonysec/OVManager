@@ -103,10 +103,10 @@ const Sidebar = () => {
           </button>
         )}
 
-        {/* Logo */}
+        {/* Logo — always visible in both rail and expanded mode */}
         <div className="sidebar-brand">
           <Logo size={28} />
-          {showLabels && <strong className="sidebar-brand-text">OV<span className="brand-accent">Manager</span></strong>}
+          <strong className="sidebar-brand-text">OV<span className="brand-accent">Manager</span></strong>
         </div>
 
         {/* Navigation */}

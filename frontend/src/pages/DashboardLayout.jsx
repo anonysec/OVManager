@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -227,9 +227,6 @@ const DashboardLayout = () => {
                       </div>
                     </div>
                     <div className="profile-dropdown-divider" />
-                    <NavLink to="/settings" className="profile-dropdown-item" role="menuitem" onClick={() => setProfileOpen(false)}>
-                      <FiSettings /> <span>{t('settings', 'Settings')}</span>
-                    </NavLink>
                     <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); setProfileOpen(false); }}>
                       {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
                       <span>{theme === 'ultra' ? 'Ultra' : theme === 'dark' ? t('lightMode', 'Light Mode') : t('darkMode', 'Dark Mode')}</span>

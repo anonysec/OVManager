@@ -1665,6 +1665,12 @@ html.theme-transition *::after {
   width: 72px;
 }
 
+/* Rail mode: brand text hidden, logo/icon keeps showing */
+.ops-sidebar--rail .sidebar-brand-text {
+  display: none;
+}
+
+/* Mobile: full width */
 .ops-sidebar--mobile {
   transform: translateX(-100%);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
