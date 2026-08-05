@@ -125,6 +125,13 @@ class URLPathMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # Always allow these paths through regardless of URLPATH
+        path = scope.get("path", "")
+        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health", "/doc", "/openapi.json")
+        if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
+            await self.app(scope, receive, send)
+            return
+
         prefix = f"/{urlpath}"
 
         if path == prefix:

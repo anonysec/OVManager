@@ -14,13 +14,14 @@ const loadDotenv = (p) => { try { const r = dotenv.config({ path: p }); if (r.er
 loadDotenv(localEnvPath);
 loadDotenv(envPath);
 
-const rawPath = (process.env.VITE_URLPATH || process.env.URLPATH || '').trim()
-const urlPath = rawPath.replace(/^\/+|\/+$/g, '') || ''
-const base = urlPath ? `/${urlPath}/` : '/'
+// Runtime URL path: built from / (no prefix) so assets resolve relative to document base.
+// window.__OV_URLPATH__ is injected by the backend at request time so the
+// basename can change without rebuilding the frontend.
+const urlPath = (process.env.VITE_URLPATH || process.env.URLPATH || '').trim().replace(/^\/+|\/+$/g, '') || ''
 
 export default defineConfig({
   plugins: [react()],
-  base,
+  base: '/',
   define: {
     'import.meta.env.VITE_URLPATH': JSON.stringify(urlPath),
   },

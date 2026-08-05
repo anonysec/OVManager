@@ -167,6 +167,14 @@ async def health_check():
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 assets_path = os.path.join(frontend_build_path, "assets")
 
+# Fix MIME types for starlette 0.48.0
+import mimetypes
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/wasm", ".wasm")
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("application/json", ".json")
+
 if os.path.isdir(assets_path):
     api.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 

@@ -29,23 +29,28 @@ def test_api_users_requires_auth():
 
 
 def test_urlpath_middleware_blocks_non_matching():
-    """When URLPATH is set, non-matching paths get empty response."""
-    from backend.urlpath import set_urlpath, set_urlpath as _set
+    """When URLPATH is set, non-matching paths get empty response.
+    But /assets/ and /health are always allowed through."""
+    from backend.urlpath import set_urlpath
 
     client = TestClient(api)
     try:
-        _set("mysecret")
+        set_urlpath("mysecret")
         # Matching path: should be handled
         response = client.get("/mysecret/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
         # Non-matching path: should get empty 200
-        response = client.get("/health")
+        response = client.get("/other-path")
         assert response.status_code == 200
         assert response.content == b""
+
+        # /health without prefix is now allowed through (not blocked)
+        response = client.get("/health")
+        assert response.status_code == 200
     finally:
-        _set("")
+        set_urlpath("")
 
 
 def test_urlpath_empty_serves_root():
