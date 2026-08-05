@@ -1662,12 +1662,22 @@ html.theme-transition *::after {
 }
 
 .ops-sidebar--rail {
-  width: 72px;
+  width: 96px;
 }
 
-/* Rail mode: brand text hidden, logo/icon keeps showing */
+/* In rail mode, keep brand area compact but visible */
+.ops-sidebar--rail .sidebar-brand {
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
 .ops-sidebar--rail .sidebar-brand-text {
-  display: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 /* Mobile: full width */
