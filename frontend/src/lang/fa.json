@@ -120,6 +120,8 @@
     "securityOverview": "نمای امنیتی",
     "onlineUsers": "کاربران آنلاین",
     "serverNodes": "نودهای سرور",
+    "nodeMap": "نقشه نودها",
+    "nodeMapTip": "توزیع جغرافیایی نودهای سرور",
     "activeConnections": "اتصالات فعال",
     "totalTraffic": "کل ترافیک",
     "onlineNodes": "نودهای آنلاین",

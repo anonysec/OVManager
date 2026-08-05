@@ -4,7 +4,7 @@ import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
-import { FiShield, FiActivity, FiServer, FiUsers, FiCpu, FiThermometer, FiWifi, FiAlertTriangle, FiClock, FiGlobe, FiHardDrive } from 'react-icons/fi';
+import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
@@ -16,32 +16,51 @@ const formatBytes = (bytes) => {
 };
 
 const CODES = {
-  DE: { name: 'Germany', flag: '🇩🇪', coords: [10.4, 51.1] },
-  TR: { name: 'Turkey', flag: '🇹🇷', coords: [35.2, 39.1] },
-  FL: { name: 'Finland', flag: '🇫🇮', coords: [25.7, 61.9] },
-  FR: { name: 'France', flag: '🇫🇷', coords: [2.2, 46.6] },
-  NL: { name: 'Netherlands', flag: '🇳🇱', coords: [5.3, 52.1] },
-  USA: { name: 'USA', flag: '🇺🇸', coords: [-98.5, 39.8] },
-  AE: { name: 'UAE', flag: '🇦🇪', coords: [54, 24] },
-  RU: { name: 'Russia', flag: '🇷🇺', coords: [90, 61.5] },
-  GB: { name: 'UK', flag: '🇬🇧', coords: [-1.5, 52.5] },
-  CA: { name: 'Canada', flag: '🇨🇦', coords: [-106, 56] },
-  SG: { name: 'Singapore', flag: '🇸🇬', coords: [103.8, 1.35] },
-  JP: { name: 'Japan', flag: '🇯🇵', coords: [138, 36] },
+  DE: { name: 'Germany', coords: [10.4, 51.1] },
+  TR: { name: 'Turkey', coords: [35.2, 39.1] },
+  FL: { name: 'Finland', coords: [25.7, 61.9] },
+  FR: { name: 'France', coords: [2.2, 46.6] },
+  NL: { name: 'Netherlands', coords: [5.3, 52.1] },
+  USA: { name: 'USA', coords: [-98.5, 39.8] },
+  AE: { name: 'UAE', coords: [54, 24] },
+  RU: { name: 'Russia', coords: [90, 61.5] },
+  GB: { name: 'UK', coords: [-1.5, 52.5] },
+  CA: { name: 'Canada', coords: [-106, 56] },
+  SG: { name: 'Singapore', coords: [103.8, 1.35] },
+  JP: { name: 'Japan', coords: [138, 36] },
 };
+
+const FLAG_SVGS = {
+  DE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ffce00"/><rect width="640" height="160" fill="#000"/><rect y="320" width="640" height="160" fill="#d00"/></svg>',
+  TR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#e30a0a"/><circle cx="220" cy="240" r="70" fill="#fff"/><circle cx="220" cy="240" r="30" fill="#e30a0a"/></svg>',
+  FL: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><rect x="213" width="54" height="480" fill="#003897"/><rect y="213" width="640" height="54" fill="#003897"/></svg>',
+  FR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="213" height="480" fill="#002395"/><rect x="213" width="214" height="480" fill="#fff"/><rect x="427" width="213" height="480" fill="#ef4135"/></svg>',
+  NL: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="160" fill="#ae1c28"/><rect y="160" width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#21468b"/></svg>',
+  USA: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#b22234"/><rect width="640" height="80" fill="#fff"/><rect width="640" height="80" y="400" fill="#fff"/><rect width="640" height="80" y="80" fill="#fff"/><rect width="640" height="80" y="320" fill="#fff"/><g fill="#fff"><rect x="0" y="0" width="80" height="80"/><rect x="160" y="0" width="80" height="80"/><rect x="320" y="0" width="80" height="80"/><rect x="480" y="0" width="80" height="80"/><rect x="80" y="80" width="80" height="80"/><rect x="240" y="80" width="80" height="80"/><rect x="400" y="80" width="80" height="80"/><rect x="0" y="160" width="80" height="80"/><rect x="160" y="160" width="80" height="80"/><rect x="320" y="160" width="80" height="80"/><rect x="480" y="160" width="80" height="80"/><rect x="80" y="240" width="80" height="80"/><rect x="240" y="240" width="80" height="80"/><rect x="400" y="240" width="80" height="80"/><rect x="0" y="320" width="80" height="80"/><rect x="160" y="320" width="80" height="80"/><rect x="320" y="320" width="80" height="80"/><rect x="480" y="320" width="80" height="80"/></g></svg>',
+  AE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#00732f"/><rect y="160" width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#000"/><rect width="160" height="480" fill="#ce1126"/></svg>',
+  RU: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="160" fill="#fff"/><rect y="160" width="640" height="160" fill="#0039a6"/><rect y="320" width="640" height="160" fill="#d52b1e"/></svg>',
+  GB: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#012169"/><path d="M0 0L640 480M640 0L0 480" stroke="#fff" stroke-width="40"/><path d="M320 0v480M0 240h640" stroke="#fff" stroke-width="20"/><path d="M0 0l240 240M0 240l240 0M400 0l240 240M400 240l240 0" stroke="#c8102e" stroke-width="20"/></svg>',
+  CA: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ff0000"/><rect width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#fff"/><rect x="240" y="160" width="160" height="160" fill="#ff0000"/><circle cx="320" cy="240" r="40" fill="#fff"/></svg>',
+  SG: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ed2939"/><rect width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#fff"/><circle cx="320" cy="240" r="40" fill="#000"/><circle cx="320" cy="240" r="20" fill="#fff"/></svg>',
+  JP: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><circle cx="320" cy="240" r="80" fill="#bc002d"/></svg>',
+};
+
+const FlagIcon = ({ code }) => (
+  <span className="flag-icon" dangerouslySetInnerHTML={{ __html: FLAG_SVGS[code] || FLAG_SVGS.DE }} />
+);
+
 const nodeMeta = (node) => {
-  // Use backend-provided geolocation data if available
   if (node.latitude && node.longitude) {
-    const country = CODES[node.country_code] || {};
+    const entry = CODES[node.country_code] || {};
     return {
-      name: country.name || node.country_code || node.name || 'Node',
-      flag: country.flag || '🏳️',
+      name: entry.name || node.country_code || node.name || 'Node',
+      flagCode: node.country_code || null,
       coords: [node.longitude, node.latitude],
     };
   }
-  // Fallback: try matching name against CODES
   const code = String(node.name || '').toUpperCase();
-  return CODES[code] || { name: node.name || 'Node', flag: '🏳️', coords: [0, 0] };
+  const entry = CODES[code];
+  return entry ? { name: entry.name, flagCode: code, coords: entry.coords } : { name: node.name || 'Node', flagCode: null, coords: [0, 0] };
 };
 
 /* eslint-disable-next-line no-unused-vars */
@@ -307,12 +326,6 @@ const ServerStats = () => {
               ) : (
                 <EmptyState title={t('noData')} description={t('noDataDesc')} />
               ))}
-              <div className="resource-chips">
-            <span><FiCpu aria-hidden="true" /> {stats ? `${stats.cpu.toFixed(0)}%` : '–'} CPU</span>
-            <span><FiThermometer aria-hidden="true" /> {stats ? `${stats.memory_percent.toFixed(0)}%` : '–'} Mem</span>
-            <span><FiHardDrive aria-hidden="true" /> {stats ? `${stats.disk_percent.toFixed(0)}%` : '–'} Disk</span>
-            <span><FiWifi aria-hidden="true" /> {onlineNodes} {t('nodesOnline')}</span>
-          </div>
             </Panel>
 
             <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
@@ -387,7 +400,7 @@ const ServerStats = () => {
               ))}
             </Panel>
 
-            <Panel title={t('serverNodes')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('serverNodes')}>
+            <Panel title={t('nodeMap')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('nodeMapTip')}>
               {loading ? <Skeleton /> : (nodes ? (
                 <>
                   {nodes.length > 0 ? (

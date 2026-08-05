@@ -23,16 +23,15 @@ const SystemTab = () => {
         apiClient.get('/server/info'),
         apiClient.get('/metrics/history?hours=24'),
         apiClient.get('/maintenance/login-health?hours=8'),
-        apiClient.get('/notifications/'),
-        apiClient.get('/metrics/history?hours=24'),
       ]);
       setSysInfo(infoRes.data?.data || {});
-      const histData = metricsHistRes.data?.data || [];
-      if (Array.isArray(histData) && histData.length > 0) {
-        const totalBytes = histData.reduce((s, h) => s + (h.bytes_in || 0) + (h.bytes_out || 0), 0);
+      const histData = metricsHistRes.data?.data || {};
+      const traffic = histData.traffic || [];
+      if (Array.isArray(traffic) && traffic.length > 0) {
+        const totalBytes = traffic.reduce((s, h) => s + (Number(h.total_used) || 0), 0);
         setMetricMin(totalBytes);
       }
-      setTraffic(infoRes.data?.data?.traffic || infoRes.data?.data || {});
+      setTraffic(histData.traffic?.[traffic.length - 1] || {});
       setSec(loginRes.data?.data || null);
     } catch { /* noop */ }
   }, []);

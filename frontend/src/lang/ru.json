@@ -120,6 +120,8 @@
     "securityOverview": "Обзор безопасности",
     "onlineUsers": "Онлайн пользователи",
     "serverNodes": "Узлы сервера",
+    "nodeMap": "Карта узлов",
+    "nodeMapTip": "Географическое распределение узлов сервера",
     "activeConnections": "Активные соединения",
     "totalTraffic": "Общий трафик",
     "onlineNodes": "Онлайн узлы",

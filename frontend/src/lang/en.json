@@ -120,6 +120,8 @@
     "securityOverview": "Security Overview",
     "onlineUsers": "Online Users",
     "serverNodes": "Server Nodes",
+    "nodeMap": "Node Map",
+    "nodeMapTip": "Geographic distribution of server nodes",
     "activeConnections": "Active Connections",
     "totalTraffic": "Total Traffic",
     "onlineNodes": "Online Nodes",

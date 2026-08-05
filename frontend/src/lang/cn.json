@@ -120,6 +120,8 @@
     "securityOverview": "安全概览",
     "onlineUsers": "在线用户",
     "serverNodes": "服务器节点",
+    "nodeMap": "节点地图",
+    "nodeMapTip": "服务器节点地理分布",
     "activeConnections": "活跃连接",
     "totalTraffic": "总流量",
     "onlineNodes": "在线节点",

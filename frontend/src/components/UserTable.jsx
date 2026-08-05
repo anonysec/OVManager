@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import StatusBadge from '../components/ui/StatusBadge';
+import EmptyState from '../components/ui/EmptyState';
 import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
@@ -22,26 +23,39 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
   const [pos, setPos] = useState({ top: 0, left: 0, ready: false });
   const [copied, setCopied] = useState(false);
 
+  // Measure the REAL rendered menu size and place it so it never overflows the viewport.
+  // (Previously used a hardcoded 184px height guess that broke with longer
+  // translations and small screens.) Runs twice: once before paint via rAF,
+  // then again after layout settles so fonts/wrapping are taken into account.
   useEffect(() => {
     const place = () => {
       const a = anchorRef?.current;
-      if (!a) return;
+      const menu = ref.current;
+      if (!a || !menu) return;
       const r = a.getBoundingClientRect();
-      const menuW = ref.current?.offsetWidth || 180;
-      const menuH = ref.current?.offsetHeight || 184;
+      const menuW = menu.offsetWidth;
+      const menuH = menu.offsetHeight;
+      const MARGIN = 8;
+      const GAP = 6;
       let left = r.right - menuW;
-      let top = r.bottom + 6;
-      if (left < 8) left = 8;
-      if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
-      if (top + menuH > window.innerHeight - 8) top = r.top - menuH - 6;
+      let top = r.bottom + GAP;
+      if (left < MARGIN) left = MARGIN;
+      if (left + menuW > window.innerWidth - MARGIN) left = window.innerWidth - menuW - MARGIN;
+      if (top + menuH > window.innerHeight - MARGIN) {
+        // Flip above the anchor; if still too tall, CSS max-height + scroll takes over
+        top = r.top - menuH - GAP;
+        if (top < MARGIN) top = MARGIN;
+      }
       setPos({ top, left, ready: true });
     };
     const raf = requestAnimationFrame(place);
+    const raf2 = requestAnimationFrame(place);
     const onScroll = () => onClose();
     window.addEventListener('resize', place);
     window.addEventListener('scroll', onScroll, true);
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf2);
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
@@ -53,8 +67,18 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
         onClose();
       }
     };
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    // Move focus into the menu so keyboard users can operate it
+    const focusTimer = setTimeout(() => ref.current?.querySelector?.('button')?.focus(), 0);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+      clearTimeout(focusTimer);
+      // Return focus to the trigger button on close
+      anchorRef?.current?.focus?.();
+    };
   }, [onClose, anchorRef]);
 
   return createPortal(
@@ -89,22 +113,6 @@ const UserTableSkeleton = () => {
     </div>
   );
 };
-
-const EmptyState = ({ title, detail }) => (
-  <div className="empty-state">
-    <div className="empty-illustration" aria-hidden="true">
-      <svg viewBox="0 0 120 120" width="120" height="120">
-        <circle cx="60" cy="60" r="54" fill="none" stroke="var(--line)" strokeWidth="2" />
-        <circle cx="46" cy="50" r="16" fill="none" stroke="var(--orange)" strokeWidth="3" />
-        <path d="M24 96c0-14 12-22 26-22s26 8 26 22" fill="none" stroke="var(--orange)" strokeWidth="3" />
-        <line x1="78" y1="74" x2="100" y2="96" stroke="var(--orange)" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="88" cy="86" r="9" fill="var(--panel)" stroke="var(--orange)" strokeWidth="3" />
-      </svg>
-    </div>
-    <h3>{title}</h3>
-    {detail && <p>{detail}</p>}
-  </div>
-);
 
 const UserTable = ({
   users = [],
@@ -145,7 +153,7 @@ const UserTable = ({
   }
 
   if (!users.length) {
-    return <EmptyState title={t('noUsersTitle')} detail={t('noUsersBody')} />;
+    return <EmptyState title={t('noUsersTitle')} description={t('noUsersBody')} />;
   }
 
   return (
