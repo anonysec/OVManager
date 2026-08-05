@@ -1789,6 +1789,9 @@ html.theme-transition *::after {
   white-space: nowrap;
   overflow: hidden;
   transition: background 0.15s ease, color 0.15s ease;
+  border-left: 3px solid transparent;
+  margin-left: -3px;
+  padding-left: 15px;
 }
 
 .sidebar-nav-link:hover {
@@ -1799,6 +1802,7 @@ html.theme-transition *::after {
 .sidebar-nav-link.active {
   background: var(--accent-color, var(--orange));
   color: #000;
+  border-left-color: #000;
 }
 
 .sidebar-nav-icon {

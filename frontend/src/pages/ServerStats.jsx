@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
@@ -200,6 +201,7 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
 };
 
 const ServerStats = () => {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState(null);
@@ -392,7 +394,12 @@ const ServerStats = () => {
                       </tbody>
                     </table>
                   ) : (
-                    <EmptyState title={t('noUsersOnline')} description={t('noUsersOnlineDesc')} />
+                    <EmptyState 
+                      title={t('noUsersOnline')} 
+                      description={t('noUsersOnlineDesc')} 
+                      actionLabel={t('addUser', 'Add User')}
+                      onAction={() => navigate('/users')}
+                    />
                   )}
                 </>
               ) : (
@@ -434,8 +441,14 @@ const ServerStats = () => {
                       </table>
                     </>
                   ) : (
-                    <EmptyState title={t('noNodes')} description={t('noNodesDesc')} icon={FiGlobe} />
-                  )}
+                  <EmptyState 
+                    title={t('noNodes')} 
+                    description={t('noNodesDesc')} 
+                    icon={FiGlobe}
+                    actionLabel={t('addNode', 'Add Node')}
+                    onAction={() => navigate('/nodes')}
+                  />
+                )}
                 </>
               ) : (
                 <EmptyState title={t('noData')} description={t('noDataDesc')} />
