@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiSettings, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
