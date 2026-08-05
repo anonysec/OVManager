@@ -7,47 +7,66 @@ const ThemeContext = createContext(null);
 export const ThemeProvider = ({ children }) => {
   const [theme, setThemeState] = useState(() => {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') return saved;
-    // First visit: follow the OS preference.
-    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (saved === 'light' || saved === 'dark' || saved === 'system' || saved === 'ultra') return saved;
+    // First visit: follow the OS preference
+    return 'system';
   });
 
   const [transitioning, setTransitioning] = useState(false);
   const isInitialMount = useRef(true);
 
-  // Apply on mount and whenever theme changes.
+  // Apply on mount and whenever theme changes
   useEffect(() => {
     const root = document.documentElement;
-    
+
     // Set the theme attribute
-    root.dataset.theme = theme;
-    
+    if (theme === 'system') {
+      const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
+      root.dataset.theme = isLight ? 'light' : 'dark';
+    } else {
+      root.dataset.theme = theme;
+    }
+
     // Add transition class for smooth theme switching (only on user toggle, not initial mount)
     if (!isInitialMount.current) {
       root.classList.add('theme-transition');
-      
-      // Force reflow for transition to work, then remove class
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           root.classList.remove('theme-transition');
         });
       });
     }
-    
     isInitialMount.current = false;
   }, [theme]);
 
+  // Listen for system theme changes when in 'system' mode
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    const handler = (e) => {
+      document.documentElement.dataset.theme = e.matches ? 'light' : 'dark';
+    };
+    mediaQuery.addEventListener?.('change', handler);
+    return () => mediaQuery.removeEventListener?.('change', handler);
+  }, [theme]);
+
   const setTheme = useCallback((next) => {
-    const value = next === 'light' ? 'light' : 'dark';
-    if (value === theme) return;
+    if (next === theme) return;
 
     // Trigger transition class for smooth animation
     setTransitioning(true);
     document.documentElement.classList.add('theme-transition');
 
-    setThemeState(value);
-    document.documentElement.dataset.theme = value;
-    localStorage.setItem(THEME_KEY, value);
+    setThemeState(next);
+    localStorage.setItem(THEME_KEY, next);
+
+    // Apply immediately for visual feedback
+    if (next === 'system') {
+      const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
+      document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
+    } else {
+      document.documentElement.dataset.theme = next;
+    }
 
     // Allow transition to complete
     requestAnimationFrame(() => {
@@ -58,16 +77,25 @@ export const ThemeProvider = ({ children }) => {
     });
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  // 3-state cycle: system → light → dark → ultra → system (3x-ui pattern)
+  const cycleTheme = useCallback(() => {
+    const cycle = ['system', 'light', 'dark', 'ultra'];
+    const idx = cycle.indexOf(theme);
+    const next = cycle[(idx + 1) % cycle.length];
+    setTheme(next);
   }, [theme, setTheme]);
 
-  // Keep every open tab in sync (theme toggled in one tab updates the others).
+  // Keep every open tab in sync
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === THEME_KEY && e.newValue && e.newValue !== theme) {
         setThemeState(e.newValue);
-        document.documentElement.dataset.theme = e.newValue;
+        if (e.newValue === 'system') {
+          const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
+          document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
+        } else {
+          document.documentElement.dataset.theme = e.newValue;
+        }
       }
     };
     window.addEventListener('storage', onStorage);
@@ -75,7 +103,7 @@ export const ThemeProvider = ({ children }) => {
   }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, transitioning }}>
+    <ThemeContext.Provider value={{ theme, setTheme, cycleTheme, toggleTheme: cycleTheme, transitioning }}>
       {children}
     </ThemeContext.Provider>
   );

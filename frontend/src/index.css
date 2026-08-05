@@ -95,7 +95,32 @@ html[data-theme="light"] {
 
   --danger-color: #c0392b;
   --success-color: #0e9f85;
-  --info-color: #0f7cc0;
+}
+
+/* --- Ultra-dark theme (3x-ui pattern) --- */
+html[data-theme="ultra"] {
+  color-scheme: dark;
+
+  --bg: #000000;
+  --bg-elevated: #0a0b0e;
+  --surface-1: #0c0d12;
+  --surface-2: #111318;
+  --surface-3: #15171d;
+
+  --border: #1f222a;
+  --border-strong: #2c303a;
+
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0ad;
+  --text-muted: #6b7280;
+
+  --accent-color: #ff7a1a;
+  --accent-color-hover: #ff9147;
+  --accent-color-transparent: rgba(255, 122, 26, 0.15);
+  --sidebar-active-bg: rgba(255, 122, 26, 0.18);
+
+  --danger-color: #ff4d4f;
+  --success-color: #34d399;
 
   --overlay: rgba(20, 28, 45, 0.45);
   --focus-ring: var(--accent-color);
@@ -444,6 +469,79 @@ html.theme-transition *::after {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+}
+
+/* --- Layout with Sidebar --- */
+.ops-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Main content column: sits to the right of the fixed sidebar.
+   Margin mirrors the sidebar width (220px expanded / 72px rail) so
+   content never overlaps it; transitions smoothly with the rail. */
+.ops-main-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-main-content {
+  flex: 1;
+  margin-left: 220px; /* expanded sidebar width */
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--body-bg);
+  transition: margin-left 0.2s ease;
+}
+
+.ops-main-content--rail {
+  margin-left: 72px; /* rail mode */
+}
+
+.ops-main-content--mobile {
+  margin-left: 0; /* sidebar is an overlay on mobile */
+}
+
+/* Minimal top bar: brand + nav + userbar (profile, language, notifications) */
+.ops-topbar-minimal {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 24px;
+  margin-left: 220px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-color);
+  transition: margin-left 0.2s ease;
+}
+
+.ops-topbar-minimal .ops-brand {
+  gap: 10px;
+}
+
+.ops-topbar-minimal .ops-nav {
+  flex: 1;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .ops-topbar-minimal {
+    margin-left: 0;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+  .ops-topbar-minimal .ops-nav {
+    display: none;
+  }
+  .ops-main-content {
+    padding: 16px;
+  }
 }
 
 /* --- Topbar --- */
@@ -1519,8 +1617,337 @@ html.theme-transition *::after {
   margin-right: 3px;
 }
 
+/* ============================================================
+   SIDEBAR — collapsible rail (x-ui / PasarGuard pattern)
+   ============================================================ */
+.ops-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  background: var(--surface-1, var(--background-secondary));
+  border-right: 1px solid var(--line, var(--border-color));
+  display: flex;
+  flex-direction: column;
+  z-index: 90;
+  transition: width 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+}
+
+.ops-sidebar--rail {
+  width: 72px;
+}
+
+.ops-sidebar--mobile {
+  transform: translateX(-100%);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  width: 280px;
+}
+
+.ops-sidebar--mobile.ops-sidebar--open {
+  transform: translateX(0);
+}
+
+.sidebar-mobile-trigger {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 85;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, var(--background-secondary));
+  border: 1px solid var(--line, var(--border-color));
+  border-radius: 10px;
+  color: var(--text, var(--text-primary));
+  cursor: pointer;
+}
+
+.sidebar-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 80;
+}
+
+.sidebar-pin-btn {
+  position: absolute;
+  top: 14px;
+  right: -12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-color, var(--orange));
+  color: #000;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 95;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ops-sidebar:hover .sidebar-pin-btn,
+.ops-sidebar--rail .sidebar-pin-btn {
+  opacity: 1;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-brand-text {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: var(--font-display, inherit);
+  color: var(--text, var(--text-primary));
+  letter-spacing: -0.02em;
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px;
+}
+
+.sidebar-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-nav-item {
+  position: relative;
+}
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--muted, var(--text-secondary));
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-nav-link:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  color: var(--text, var(--text-primary));
+}
+
+.sidebar-nav-link.active {
+  background: var(--accent-color, var(--orange));
+  color: #000;
+}
+
+.sidebar-nav-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar-nav-label {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-nav-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-nav-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.sidebar-submenu {
+  list-style: none;
+  margin: 2px 0 4px 32px;
+  padding: 0;
+  border-left: 2px solid var(--line, var(--border-color));
+}
+
+.sidebar-submenu-link {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--muted, var(--text-secondary));
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-submenu-link:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  color: var(--text, var(--text-primary));
+}
+
+.sidebar-submenu-link.active {
+  color: var(--accent-color, var(--orange));
+  font-weight: 600;
+}
+
+.sidebar-version {
+  padding: 8px 14px;
+  text-align: center;
+}
+
+.sidebar-version-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--line, var(--border-color));
+  color: var(--muted, var(--text-secondary));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted, var(--text-secondary));
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-logout:hover {
+  background: rgba(220, 53, 69, 0.12);
+  color: #dc3545;
+}
+
+/* Mobile: show hamburger, hide sidebar by default */
+@media (max-width: 768px) {
+  .sidebar-mobile-trigger {
+    display: flex;
+  }
+  .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(-100%);
+  }
+}
+
+/* Status pulse animations (3x-ui pattern) */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  animation: pulse-blink 1.5s ease-in-out infinite;
+}
+
+.status-dot.online {
+  background: var(--success-color, #0e9f85);
+  animation: pulse-online 1.5s ease-in-out infinite;
+}
+
+.status-dot.offline {
+  background: var(--text-muted, #6b7280);
+  animation: none;
+}
+
+.status-dot.danger {
+  background: var(--danger-color, #c0392b);
+  animation: pulse-danger 1.5s ease-in-out infinite;
+}
+
+.status-dot.warning {
+  background: #e6a700;
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+.status-dot.purple {
+  background: #722ed1;
+  animation: pulse-purple 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-online {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+@keyframes pulse-purple {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+@keyframes pulse-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Privacy eye toggle */
+.privacy-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border, var(--line));
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.privacy-toggle:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.05));
+  color: var(--text, var(--text-primary));
+}
+
 /* Respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
+  .status-dot,
+  .status-dot.online,
+  .status-dot.warning,
+  .status-dot.danger,
+  .status-dot.purple,
+  .privacy-toggle {
+    animation: none !important;
+    transition: none !important;
+  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

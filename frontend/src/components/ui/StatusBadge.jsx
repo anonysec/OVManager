@@ -8,11 +8,21 @@ const ICONS = {
   idle: FiCircle,
 };
 
-const StatusBadge = ({ status = 'idle', label }) => {
+const StatusBadge = ({ status = 'idle', label, showDot = true }) => {
   const Icon = ICONS[status] || FiHelpCircle;
+  const dotClass =
+    status === 'online' ? 'online' :
+    status === 'offline' ? 'offline' :
+    status === 'warning' ? 'warning' :
+    status === 'danger' ? 'danger' :
+    status === 'idle' ? 'offline' :
+    '';
   return (
     <span className={`status-badge status-${status}`}>
-      <Icon size={13} aria-hidden="true" />
+      {showDot && (
+        <span className={`status-dot ${dotClass}`} aria-hidden="true" />
+      )}
+      <Icon size={13} className="status-badge-icon" aria-hidden="true" />
       <span>{label}</span>
     </span>
   );

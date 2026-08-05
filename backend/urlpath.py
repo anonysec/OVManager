@@ -127,7 +127,7 @@ class URLPathMiddleware:
 
         # Always allow these paths through regardless of URLPATH
         path = scope.get("path", "")
-        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health", "/doc", "/openapi.json")
+        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health", "/doc", "/openapi.json", "/api/")
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
             return

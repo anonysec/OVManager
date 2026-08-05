@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { FiInfo, FiActivity } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useLive } from '../context/LiveContext';
@@ -24,8 +24,16 @@ const TabLoader = () => (
   <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</div>
 );
 
+// Extract tab from hash (e.g., "#general" -> "general")
+const getTabFromHash = () => {
+  if (typeof window === 'undefined') return 'general';
+  const hash = window.location.hash.slice(1); // remove leading #
+  const validTab = TABS.find(t => t.id === hash);
+  return validTab ? validTab.id : 'general';
+};
+
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState(() => getTabFromHash());
   const [panelVersion, setPanelVersion] = useState('');
 
   const loadSettings = async () => {
@@ -40,6 +48,24 @@ const Settings = () => {
 
   const { refreshTick } = useLive();
   useEffect(() => { loadSettings(); }, [refreshTick]);
+
+  // Sync activeTab with URL hash
+  useEffect(() => {
+    const onHashChange = () => {
+      const tab = getTabFromHash();
+      setActiveTab(tab);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Update hash when user clicks a tab (without scrolling)
+  const handleTabClick = useCallback((tabId) => {
+    setActiveTab(tabId);
+    if (typeof window !== 'undefined') {
+      window.location.hash = tabId;
+    }
+  }, []);
 
   return (
     <div className="view">
@@ -58,7 +84,7 @@ const Settings = () => {
           <button
             key={tab.id}
             className={`seg-tab${activeTab === tab.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabClick(tab.id)}
           >
             {tab.label}
           </button>
