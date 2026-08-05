@@ -950,6 +950,23 @@ html.theme-transition *::after {
   border: 1px solid var(--border-color);
   overflow: hidden;
   transition: all 0.2s ease;
+  position: relative;
+}
+
+/* Accent top border — consistent across ALL cards (x-ui pattern) */
+.ops-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--accent-color);
+  z-index: 1;
+}
+
+.ops-panel.cyan::before {
+  background: var(--cyan);
 }
 
 .ops-panel:hover {
