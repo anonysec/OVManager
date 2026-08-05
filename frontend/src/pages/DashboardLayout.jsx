@@ -169,8 +169,12 @@ const DashboardLayout = () => {
             <header className="ops-topbar-minimal" role="banner">
               <nav className="ops-breadcrumb" aria-label="Breadcrumb">
                 <ol>
-                  <li><Link to="/dashboard" className="ops-breadcrumb-link">Dashboard</Link></li>
-                  <li className="ops-breadcrumb-separator">/</li>
+                  {location.pathname !== '/' && (
+                    <>
+                      <li><Link to="/dashboard" className="ops-breadcrumb-link">Dashboard</Link></li>
+                      <li className="ops-breadcrumb-separator">/</li>
+                    </>
+                  )}
                   <li className="ops-current-page">{getPageTitle(location.pathname)}</li>
                 </ol>
               </nav>
