@@ -104,16 +104,6 @@ const DashboardLayout = () => {
     return () => clearInterval(id);
   }, [loadNotifications]);
 
-  const navItems = useMemo(() => {
-    const adminOnly = userRole === 'main_admin' ? [{ to: '/admins', label: t('admins', 'Admins') }] : [];
-    return [
-      { to: '/', label: t('dashboard', 'Dashboard'), end: true },
-      { to: '/users', label: t('users', 'Users') },
-      { to: '/nodes', label: t('nodes', 'Nodes') },
-      ...adminOnly,
-    ];
-  }, [t, userRole]);
-
   const notifCount = notifications.length;
   const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
 
@@ -162,19 +152,6 @@ const DashboardLayout = () => {
 
           <div className="ops-main-container">
             <header className="ops-topbar-minimal" role="banner">
-              <div className="ops-brand">
-                <Logo size={28} />
-                <strong>OV<span className="brand-accent">Manager</span></strong>
-              </div>
-
-              <nav className="ops-nav" aria-label="Main navigation">
-                {navItems.map((item) => (
-                  <NavLink key={`${item.label}-${item.to}`} to={item.to} end={item.end} className="ops-nav-link">
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
-
               <div className="ops-userbar">
                 <div className="lang-picker-wrap" ref={langRef}>
                   <button type="button" className={`lang-picker-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')}>

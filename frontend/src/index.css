@@ -504,43 +504,28 @@ html.theme-transition *::after {
   margin-left: 0; /* sidebar is an overlay on mobile */
 }
 
-/* Minimal top bar: brand + nav + userbar (profile, language, notifications) */
+/* Minimal top bar: user controls only (language, theme, notifications, profile) */
 .ops-topbar-minimal {
   position: sticky;
   top: 0;
   z-index: 60;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 24px;
-  margin-left: 220px;
-  background: rgba(0, 0, 0, 0.8);
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-color);
-  transition: margin-left 0.2s ease;
-}
-
-.ops-topbar-minimal .ops-brand {
-  gap: 10px;
-}
-
-.ops-topbar-minimal .ops-nav {
-  flex: 1;
-  justify-content: center;
 }
 
 @media (max-width: 768px) {
   .ops-topbar-minimal {
-    margin-left: 0;
-    flex-wrap: wrap;
-    padding: 10px 14px;
+    padding: 6px 12px;
+    gap: 8px;
   }
-  .ops-topbar-minimal .ops-nav {
-    display: none;
-  }
-  .ops-main-content {
-    padding: 16px;
+  .ops-topbar-minimal .ops-userbar {
+    gap: 8px;
   }
 }
 
