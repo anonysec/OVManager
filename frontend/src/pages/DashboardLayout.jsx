@@ -183,7 +183,6 @@ const DashboardLayout = () => {
                 <button type="button" className="icon-btn" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); }} title={t('theme', 'Theme')} aria-label="Toggle theme">
                   {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
                 </button>
-                <NavLink to="/settings" className="icon-btn" title={t('settings', 'Settings')} aria-label="Settings"><FiSettings /></NavLink>
                 <div className="notification-wrap">
                   <button type="button" className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
                     <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
@@ -231,9 +230,9 @@ const DashboardLayout = () => {
                     <NavLink to="/settings" className="profile-dropdown-item" role="menuitem" onClick={() => setProfileOpen(false)}>
                       <FiSettings /> <span>{t('settings', 'Settings')}</span>
                     </NavLink>
-                    <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setProfileOpen(false); }}>
-                      {theme === 'dark' ? <FiSun /> : <FiMoon />}
-                      <span>{theme === 'dark' ? t('lightMode', 'Light Mode') : t('darkMode', 'Dark Mode')}</span>
+                    <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); setProfileOpen(false); }}>
+                      {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
+                      <span>{theme === 'ultra' ? 'Ultra' : theme === 'dark' ? t('lightMode', 'Light Mode') : t('darkMode', 'Dark Mode')}</span>
                     </button>
                     <div className="profile-dropdown-divider" />
                     <button type="button" className="profile-dropdown-item danger" role="menuitem" onClick={() => { setProfileOpen(false); logout(); }}>
