@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
@@ -23,6 +23,22 @@ const DashboardLayout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const location = useLocation();
+
+  const getPageTitle = (pathname) => {
+    const map = {
+      '/': 'Dashboard',
+      '/users': 'Users',
+      '/nodes': 'Nodes',
+      '/admins': 'Admins',
+      '/traffic': 'Traffic Logs',
+      '/subscriptions': 'Subscriptions',
+      '/security': 'Security',
+      '/settings': 'Settings',
+      '/audit': 'Audit Log',
+      '/backup': 'Backup',
+    };
+    return map[pathname] || 'Dashboard';
+  };
 
   const tokenPayload = (() => {
     try {
@@ -108,37 +124,36 @@ const DashboardLayout = () => {
   const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
 
   // Sync sidebar state across this layout and the Sidebar component so the
-  // main-content margin matches the rendered sidebar width (220px / 72px rail)
-  // and reacts to pin toggles + viewport resizes without prop-drilling.
+  // main-content margin matches the rendered sidebar width (220px / 72px collapsed)
+  // and reacts to collapse toggles + viewport resizes without prop-drilling.
   const getIsMobile = () => (typeof window !== 'undefined' && window.innerWidth < 768);
-  const computeRail = () => (localStorage.getItem('ovmanager-sidebar-pinned') !== 'false' && !getIsMobile());
-  const [rail, setRail] = useState(computeRail);
+  const computeCollapsed = () => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile());
+  const [collapsed, setCollapsed] = useState(computeCollapsed);
   const [isMobile, setIsMobile] = useState(getIsMobile);
 
   useEffect(() => {
-    const applyRail = () => setRail(computeRail());
+    const applyCollapsed = () => setCollapsed(computeCollapsed());
     const onResize = () => {
       const mobile = getIsMobile();
       setIsMobile(mobile);
-      applyRail();
+      applyCollapsed();
     };
-    const onPin = () => applyRail();
     window.addEventListener('resize', onResize);
-    window.addEventListener('storage', applyRail);
-    window.addEventListener('sidebar-pin-change', onPin);
-    // In case the Sidebar mounts before us and emits the event immediately
+    window.addEventListener('storage', applyCollapsed);
+    // Sidebar emits this custom event on toggle
+    window.addEventListener('sidebar-pin-change', applyCollapsed);
     return () => {
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('storage', applyRail);
-      window.removeEventListener('sidebar-pin-change', onPin);
+      window.removeEventListener('storage', applyCollapsed);
+      window.removeEventListener('sidebar-pin-change', applyCollapsed);
     };
   }, []);
 
   const mainContentClass = [
     'ops-main-content',
-    rail ? 'ops-main-content--rail' : '',
+    collapsed ? 'ops-main-content--collapsed' : '',
     isMobile ? 'ops-main-content--mobile' : '',
-  ].join(' ').trim();
+  ].filter(Boolean).join(' ');
 
   const urlPath = window.__OV_URLPATH__ || '';
 
@@ -152,6 +167,13 @@ const DashboardLayout = () => {
 
           <div className="ops-main-container">
             <header className="ops-topbar-minimal" role="banner">
+              <nav className="ops-breadcrumb" aria-label="Breadcrumb">
+                <ol>
+                  <li><Link to="/dashboard" className="ops-breadcrumb-link">Dashboard</Link></li>
+                  <li className="ops-breadcrumb-separator">/</li>
+                  <li className="ops-current-page">{getPageTitle(location.pathname)}</li>
+                </ol>
+              </nav>
               <div className="ops-userbar">
                 <div className="lang-picker-wrap" ref={langRef}>
                   <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label="Change language">
