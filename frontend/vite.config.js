@@ -28,4 +28,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  test: {
+    include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    exclude: ['e2e', 'node_modules', 'dist'],
+  },
 })
