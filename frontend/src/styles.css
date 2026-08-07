@@ -233,9 +233,11 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .world-map-real { width: 100%; height: auto; min-width: 0; max-width: none; background: radial-gradient(120% 120% at 50% 30%, #0f2030 0%, #0a1420 60%, #070d16 100%); border-radius: 0; margin-bottom: 10px; display: block; }
 .map-zoom-wrap { position: relative; }
 .map-zoom-viewport { height: 300px; overflow: auto; display: flex; align-items: center; justify-content: center; border-radius: 0; }
-.map-zoom-controls { position: absolute; top: 8px; right: 8px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
-.map-zoom-btn { width: 2rem; height: 2rem; border-radius: 7px; border: 1px solid var(--line); background: rgba(20,28,40,.82); color: var(--text); font-size: 1.0625rem; font-weight: 700; line-height: 1; cursor: pointer; display: grid; place-items: center; backdrop-filter: blur(4px); transition: background .12s ease, border-color .12s ease; }
-.map-zoom-btn:hover { background: var(--orange); border-color: var(--orange); color: #111; }
+.map-zoom-controls { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; flex-direction: column; gap: 8px; background: rgba(15,20,30,.55); padding: 6px; border-radius: 10px; border: 1px solid var(--line); backdrop-filter: blur(6px); }
+.map-zoom-btn { width: 2.25rem; height: 2.25rem; border-radius: 8px; border: 1px solid var(--line); background: rgba(40,50,65,.9); color: var(--text); font-size: 1.125rem; font-weight: 800; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .12s ease, border-color .12s ease, transform .1s ease; }
+.map-zoom-btn:hover { background: var(--orange); border-color: var(--orange); color: #111; transform: scale(1.05); }
+.map-zoom-btn:active { transform: scale(0.95); }
+.map-zoom-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .map-zoom-reset { font-size: 14px; }
 .world-map-real svg { width: 100%; height: auto; display: block; }
 .world-map-real .sphere { fill: url(#sphereGrad); stroke: rgba(120,180,220,.18); stroke-width: 1; }
