@@ -3,13 +3,11 @@ import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 const STORAGE_KEY = 'ovmanager-mask-ips';
 
-const PrivacyContext = null;
-
 /**
  * PrivacyEye — toggle button for masking IP addresses in tables.
  * Persists preference to localStorage so the user's choice survives reloads.
  */
-const PrivacyEye = ({ className = '', size = 18, ...props }) => {
+const PrivacyEye = ({ className = '', size = 18, onToggle }) => {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -21,8 +19,8 @@ const PrivacyEye = ({ className = '', size = 18, ...props }) => {
     const next = !visible;
     setVisible(next);
     localStorage.setItem(STORAGE_KEY, String(next));
-    props.onToggle?.(next);
-  }, [visible]);
+    onToggle?.(next);
+  }, [visible, onToggle]);
 
   return (
     <button
@@ -32,24 +30,10 @@ const PrivacyEye = ({ className = '', size = 18, ...props }) => {
       aria-label={visible ? 'Show IPs' : 'Mask IPs'}
       aria-pressed={!visible}
       title={visible ? 'IPs visible — click to mask' : 'IPs masked — click to reveal'}
-      {...props}
     >
       {visible ? <FiEye size={size} /> : <FiEyeOff size={size} />}
     </button>
   );
-};
-
-/**
- * usePrivacyMask — hook to read the current IP-mask preference.
- * Falls back to true (masked) if no value is stored yet.
- */
-export const usePrivacyMask = () => {
-  const [maskIps, setMaskIps] = useState(true);
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    setMaskIps(saved === null ? true : saved === 'true');
-  }, []);
-  return maskIps;
 };
 
 export default PrivacyEye;

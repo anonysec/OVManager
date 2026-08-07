@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
 import apiClient from '../services/api';
@@ -21,7 +21,6 @@ const DashboardLayout = () => {
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef(null);
   const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef(null);
   const location = useLocation();
 
   const getPageTitle = (pathname) => {
@@ -156,6 +155,7 @@ const DashboardLayout = () => {
   ].filter(Boolean).join(' ');
 
   const urlPath = window.__OV_URLPATH__ || '';
+  void urlPath; /* used for future URLPATH-based adjustments */
 
   return (
     <LiveProvider>

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
 const Sidebar = () => {
-  const { userRole, logout, user } = useAuth();
+  const { userRole, logout } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('ovmanager-sidebar-collapsed') === 'true');

@@ -114,8 +114,6 @@ const OnboardingChecklist = () => {
     if (currentStep > 0) setCurrentStep(c => c - 1);
   };
 
-  const current = STEPS[currentStep];
-
   return (
     <div className="onboarding-modal" role="dialog" aria-modal="true" aria-label={t('onboardTitle', 'Getting started')}>
       <aside className="onboarding-panel">

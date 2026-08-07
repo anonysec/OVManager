@@ -40,7 +40,7 @@ apiClient.interceptors.response.use(
           // Retry original request with new token
           error.config.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(error.config);
-        } catch (refreshError) {
+        } catch {
           // Refresh failed — force logout
         }
       }
