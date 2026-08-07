@@ -1,6 +1,7 @@
 import os
 from pydantic_settings import BaseSettings
 from typing import Optional
+from cryptography.fernet import Fernet
 
 
 def _validate_jwt_secret(v: str) -> str:
@@ -24,6 +25,15 @@ def _validate_jwt_secret(v: str) -> str:
     return v
 
 
+def _validate_fernet_key(v: str) -> str:
+    """Validate Fernet key format (32 url-safe base64-encoded bytes)."""
+    try:
+        Fernet(v.encode())
+    except Exception:
+        raise ValueError("BOT_ENCRYPT_KEY must be a valid 32-byte URL-safe base64-encoded key")
+    return v
+
+
 class Setting(BaseSettings):
     ADMIN_USERNAME: str
     ADMIN_PASSWORD: str
@@ -40,6 +50,8 @@ class Setting(BaseSettings):
     SUBSCRIPTION_URL_PREFIX: Optional[str] = None
     SUBSCRIPTION_PATH: str = "sub"
     TRUSTED_PROXY: bool = False  # Set true behind nginx/caddy to trust X-Forwarded-For
+    # Encryption key for bot token at rest (Fernet)
+    BOT_ENCRYPT_KEY: Optional[str] = None
     # Installer metadata (ignored by app, used by install.sh for state)
     DATA_DIR: str = ""
 
@@ -49,6 +61,8 @@ class Setting(BaseSettings):
         super().__init__(**kwargs)
         # Validate JWT secret immediately on instantiation
         _validate_jwt_secret(self.JWT_SECRET_KEY)
+        if self.BOT_ENCRYPT_KEY:
+            _validate_fernet_key(self.BOT_ENCRYPT_KEY)
 
 
 config = Setting()

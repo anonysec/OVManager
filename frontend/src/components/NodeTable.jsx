@@ -1,6 +1,6 @@
 import { FiEdit3, FiRefreshCw, FiTrash2, FiDownloadCloud } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
-import StatusBadge from '../components/ui/StatusBadge';
+import EmptyState from './ui/EmptyState';
 import { usePrivacyMask, PrivacyEye } from './ui';
 
 function usageClass(value) {
@@ -29,23 +29,7 @@ const NodeTableSkeleton = () => {
   );
 };
 
-const EmptyState = ({ title, detail, iconSvg }) => (
-  <div className="empty-state">
-    <div className="empty-illustration" aria-hidden="true">
-      {iconSvg || (
-        <svg viewBox="0 0 120 120" width="120" height="120">
-          <circle cx="60" cy="60" r="54" fill="none" stroke="var(--line)" strokeWidth="2" />
-          <circle cx="46" cy="50" r="16" fill="none" stroke="var(--orange)" strokeWidth="3" />
-          <path d="M24 96c0-14 12-22 26-22s26 8 26 22" fill="none" stroke="var(--orange)" strokeWidth="3" />
-          <line x1="78" y1="74" x2="100" y2="96" stroke="var(--orange)" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="88" cy="86" r="9" fill="var(--panel)" stroke="var(--orange)" strokeWidth="3" />
-        </svg>
-      )}
-    </div>
-    <h3>{title}</h3>
-    {detail && <p>{detail}</p>}
-  </div>
-);
+
 
 const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, onEdit, onDownloadAll }) => {
   const { t } = useTranslation();
@@ -66,7 +50,7 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
   };
 
   if (isLoading) return <NodeTableSkeleton />;
-  if (!nodes.length) return <EmptyState title={t('noNodes')} detail={t('noNodesBody')} />;
+  if (!nodes.length) return <EmptyState title={t('noNodes')} description={t('noNodesBody')} />;
 
   return (
     <div className="table-container list-table-container">
@@ -93,10 +77,10 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
             const info = nodeInfo[node.id] || {};
             return (
               <tr key={node.id}>
-                <td style={{ minWidth: 160 }}>
+                <td className="node-name-cell">
                   <div className="identity-cell">
                     <span className="row-avatar node-avatar">{node.name.slice(0, 2).toUpperCase()}</span>
-                    <div><strong style={{ fontSize: 13 }}>{node.name}</strong><small>#{node.id}</small></div>
+                    <div><strong className="node-name-text">{node.name}</strong><small>#{node.id}</small></div>
                   </div>
                 </td>
                 <td><span className="node-address">{maskAddress(node.address)}:{node.port}</span></td>

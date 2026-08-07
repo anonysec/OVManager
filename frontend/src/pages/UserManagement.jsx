@@ -146,19 +146,19 @@ const UserManagement = () => {
   };
 
   const handleDelete = async (user) => {
-    if (!window.confirm(`Are you sure you want to delete user ${user.name}?`)) return;
+    if (!window.confirm(t('confirmDeleteUser', { name: user.name }))) return;
     try {
       await apiClient.delete(`/users/${user.uuid}`);
-      addToast(`User ${user.name} deleted successfully.`, 'success');
+      addToast(t('userDeleted', { name: user.name }), 'success');
       setSelected((s) => s.filter((x) => x !== user.uuid));
       fetchUsers();
     } catch {
-      addToast('Error deleting user.', 'error');
+      addToast(t('userDeleteError', { name: user.name }), 'error');
     }
   };
 
   const handleBulkDelete = async (uuids) => {
-    if (!window.confirm(`Delete ${uuids.length} selected user(s)? This cannot be undone.`)) return;
+    if (!window.confirm(t('confirmBulkDelete', { count: uuids.length }))) return;
     setBulkBusy(true);
     try {
       await Promise.all(uuids.map((uuid) => apiClient.delete(`/users/${uuid}`).catch(() => null)));
@@ -172,17 +172,17 @@ const UserManagement = () => {
   const handleToggleStatus = async (user) => {
     const newStatus = !user.is_active;
     const statusLabel = newStatus ? 'activate' : 'deactivate';
-    if (!window.confirm(`Are you sure you want to ${statusLabel} user ${user.name}?`)) return;
+    if (!window.confirm(t('confirmToggleStatus', { name: user.name, action: statusLabel }))) return;
     try {
       const response = await apiClient.put(`/users/${user.uuid}/status`, {
         name: user.name,
         status: !user.is_active
       });
       if (response.data.success) {
-        addToast(`User ${user.name} ${statusLabel}d successfully.`, 'success');
+        addToast(t('userStatusChanged', { name: user.name, action: statusLabel }), 'success');
         fetchUsers();
       } else {
-        addToast(`Failed to ${statusLabel} user.`, 'error');
+        addToast(t('userStatusFailed', { name: user.name, action: statusLabel }), 'error');
       }
     } catch {
       addToast(`Error ${statusLabel}ing user.`, 'error');
@@ -316,28 +316,28 @@ const UserManagement = () => {
       </div>
 
       <div className="user-stats-row">
-        <div className="user-stat" style={{ '--us-accent': '#90caf9' }}>
+        <div className="user-stat user-stat-total" style={{ '--us-accent': '#90caf9' }}>
           <span className="us-ico"><BsPersonFill /></span>
           <span className="us-body">
             <span className="us-label">{t('totalUsers')}</span>
             <span className="us-value">{userStats.total}</span>
           </span>
         </div>
-        <div className="user-stat" style={{ '--us-accent': '#43a047' }}>
+        <div className="user-stat user-stat-active" style={{ '--us-accent': '#43a047' }}>
           <span className="us-ico"><BsPersonCheckFill /></span>
           <span className="us-body">
             <span className="us-label">{t('activeUsers')}</span>
             <span className="us-value">{userStats.active}</span>
           </span>
         </div>
-        <div className="user-stat" style={{ '--us-accent': '#66bb6a' }}>
+        <div className="user-stat user-stat-online" style={{ '--us-accent': '#66bb6a' }}>
           <span className="us-ico"><BsPersonPlusFill /></span>
           <span className="us-body">
             <span className="us-label">{t('onlineUsers')}</span>
             <span className="us-value">{userStats.online}</span>
           </span>
         </div>
-        <div className="user-stat" style={{ '--us-accent': '#e53935' }}>
+        <div className="user-stat user-stat-inactive" style={{ '--us-accent': '#e53935' }}>
           <span className="us-ico"><BsPersonXFill /></span>
           <span className="us-body">
             <span className="us-label">{t('inactiveUsers')}</span>
@@ -349,7 +349,7 @@ const UserManagement = () => {
       <div className="search-with-filters">
         <label className="search-field" style={{ flex: 1, maxWidth: 380 }}>
           <FiSearch className="search-icon" aria-hidden="true" />
-          <input type="search" placeholder="Search by username..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label="Search users by username" />
+          <input type="search" placeholder={t('searchByUsername')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label="Search users by username" />
         </label>
         <div className="seg-toggle" role="tablist" aria-label="User view">
           <button type="button" role="tab" aria-selected={view === 'all'} className={`seg-tab${view === 'all' ? ' active' : ''}`} onClick={() => setView('all')}>{t('tabAll')}</button>

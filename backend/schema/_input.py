@@ -23,7 +23,7 @@ class UpdateUser(BaseModel):
 
 
 class NodeCreate(BaseModel):
-    name: str = Field(max_length=10)
+    name: str = Field(max_length=64)
     address: str
     tunnel_address: str = Field(default=None)
     protocol: str = Field(default="tcp")

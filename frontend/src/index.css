@@ -688,28 +688,28 @@ html.theme-transition *::after {
   background: rgba(252, 122, 30, 0.15);
 }
 
-.icon-btn.has-alerts::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 8px;
-  height: 8px;
+.icon-btn.has-alerts {
+  /* Show badge only - the icon-btn-badge spans color already */
   background: var(--danger-color);
-  border-radius: 50%;
-  border: 2px solid var(--bg);
+  color: #fff;
+  border: 1px solid var(--danger-color);
+  border-radius: 9999px;
+}
+.icon-btn.has-alerts::after {
+  /* Red dot removed - count badge is sufficient */
+  display: none;
 }
 
 .icon-btn-badge {
-  position: absolute;
-  top: 2px;
-  right: 0;
-  background: var(--danger-color);
+  /* Badge now shows inside the button itself when there are alerts */
+  position: static;
+  margin-left: 4px;
+  background: transparent;
   color: #fff;
   font-size: 0.625rem;
   font-weight: 700;
-  padding: 0.0625rem 0.25rem;
-  border-radius: 0.5rem;
+  padding: 0;
+  border-radius: 0;
   line-height: 1;
 }
 
@@ -1134,28 +1134,59 @@ html.theme-transition *::after {
 
 .toast {
   background: var(--background-secondary);
-  border-left: 4px solid var(--accent-color);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  border-left: 5px solid var(--accent-color);
   padding: 16px 20px;
   border-radius: 8px;
   box-shadow: var(--shadow);
   max-width: 360px;
+  color: var(--text-primary);
   animation: slideIn 0.3s ease, fadeOut 0.2s ease 5s forwards;
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-@keyframes fadeOut {
-  to { opacity: 0; transform: translateX(100%); }
 }
 
 .toast strong {
   color: var(--accent-color);
-  font-weight: 600;
+  font-weight: 700;
   display: block;
   margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+}
+
+.toast span,
+.toast-message {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  display: block;
+}
+
+.toast.toast-error {
+  background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
+  border-left: 5px solid var(--danger-color);
+}
+.toast.toast-error strong {
+  color: var(--danger-color);
+}
+
+.toast.toast-warning {
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
+  border-left: 5px solid var(--accent-color);
+}
+.toast.toast-warning strong {
+  color: var(--accent-color);
+}
+
+.toast.toast-success {
+  background: color-mix(in srgb, var(--success-color, #2fd276) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--success-color, #2fd276) 50%, transparent);
+  border-left: 5px solid var(--success-color, #2fd276);
+}
+.toast.toast-success strong {
+  color: var(--success-color, #2fd276);
 }
 
 /* --- Tooltip (single implementation; see styles-premium.css .has-tip) --- */
@@ -1711,12 +1742,13 @@ html.theme-transition *::after {
 /* ============================================================
    SIDEBAR — collapsible rail (x-ui / PasarGuard pattern)
    ============================================================ */
+/* Sidebar with variable width based on icon size (36px vs 32px) */
 .ops-sidebar {
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
-  width: 220px;
+  width: var(--sidebar-width, 220px);
   background: var(--surface-1, var(--background-secondary));
   border-right: 1px solid var(--line, var(--border-color));
   display: flex;
@@ -1724,6 +1756,32 @@ html.theme-transition *::after {
   z-index: 90;
   transition: width 0.2s ease, transform 0.2s ease;
   overflow: hidden;
+  min-width: 72px;
+  max-width: 280px;
+}
+
+.ops-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width, 72px);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin: 8px 8px 0;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.sidebar-brand-text {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ops-sidebar--collapsed {
@@ -1830,17 +1888,18 @@ html.theme-transition *::after {
 
 /* Sidebar toggle button (expand/collapse) */
 .sidebar-toggle {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   background: var(--surface-2, rgba(255, 255, 255, 0.05));
   border: 1px solid var(--line, var(--border-color));
-  border-radius: 8px;
+  border-radius: 50%;
   color: var(--muted, var(--text-secondary));
   cursor: pointer;
-  margin: 8px;
+  margin: 10px auto 8px;
   transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .sidebar-toggle:hover {

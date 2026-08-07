@@ -42,7 +42,7 @@ async def update_node(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    if user["type"] != "main_admin":
+    if user["type"] not in ("main_admin", "admin"):
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     result = await update_node_handler(node_id, request, db)

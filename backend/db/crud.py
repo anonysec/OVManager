@@ -8,6 +8,21 @@ from backend.db.exceptions import NotFoundError, ConflictError
 from backend.logger import logger
 from backend.schema._input import AdminCreate, CreateUser, UpdateUser, NodeCreate
 from .models import User, Admin, Node, Settings
+from cryptography.fernet import Fernet
+
+try:
+    from backend.config import config as panel_config
+    _fernet = Fernet(panel_config.BOT_ENCRYPT_KEY.encode()) if panel_config.BOT_ENCRYPT_KEY else None
+except Exception:
+    _fernet = None
+
+if _fernet is None:
+    import logging
+    logging.getLogger(__name__).warning(
+        "BOT_ENCRYPT_KEY not set — bot tokens stored in plaintext at rest. "
+        "Set BOT_ENCRYPT_KEY in .env for encryption: "
+        "python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    )
 
 
 def get_all_users(db: Session):
