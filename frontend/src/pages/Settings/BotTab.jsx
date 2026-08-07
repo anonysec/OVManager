@@ -24,7 +24,7 @@ const BotTab = () => {
     setMsg('');
     try {
       const payload = {
-        bot_token: token || null,
+        bot_token: token,
         bot_enabled: enabled,
         owner_telegram_id: ownerId ? Number(ownerId) : null,
       };
@@ -78,6 +78,15 @@ const BotTab = () => {
 
       <button className="btn" onClick={save} disabled={saving} style={{ marginTop: 16 }}>
         {saving ? t('saving', 'Saving...') : t('save', 'Save')}
+      </button>
+
+      <button
+        className="btn"
+        onClick={() => { setToken(''); save(); }}
+        disabled={saving}
+        style={{ marginTop: 8, marginLeft: 8, opacity: token ? 1 : 0.5 }}
+      >
+        Clear token
       </button>
 
       {msg && <p style={{ marginTop: 12, color: 'var(--accent-color)', fontSize: 14 }}>{msg}</p>}

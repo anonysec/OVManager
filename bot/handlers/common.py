@@ -16,6 +16,10 @@ STATE_TTL = 300  # 5 minutes
 _REQUEST_COUNTER = 0
 _CLEANUP_REQUEST_INTERVAL = 10  # Cleanup every 10 requests
 
+# Admin cache: { "data": list[dict], "ts": float }
+_ADMIN_CACHE: dict = {"data": None, "ts": 0.0}
+_ADMIN_CACHE_TTL = 60  # seconds
+
 
 def _cleanup_states():
     """Remove stale USER_STATES entries older than STATE_TTL seconds."""
@@ -168,9 +172,31 @@ def _days_remaining(expiry):
         return delta, f"🔋 {delta}d left"
 
 
+async def _get_admins_cached() -> list:
+    """Return cached admin list, refreshing from the API if the cache is stale.
+
+    The admin list rarely changes, so a 60s TTL avoids a panel API
+    round-trip on every single message without meaningfully delaying
+    permission changes.
+    """
+    global _ADMIN_CACHE
+    now = time.time()
+    if _ADMIN_CACHE["data"] is not None and now - _ADMIN_CACHE["ts"] < _ADMIN_CACHE_TTL:
+        return _ADMIN_CACHE["data"]
+    admins = await api.get_admins()
+    _ADMIN_CACHE = {"data": admins, "ts": now}
+    return admins
+
+
+def _clear_admin_cache():
+    """Invalidate the cached admin list (e.g. after an admin change)."""
+    global _ADMIN_CACHE
+    _ADMIN_CACHE = {"data": None, "ts": 0.0}
+
+
 async def _auth(update: Update) -> bool:
     uid = update.effective_user.id
-    admins = await api.get_admins()
+    admins = await _get_admins_cached()
     for a in admins:
         if a.get("telegram_id") == uid:
             return True

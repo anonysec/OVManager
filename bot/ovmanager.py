@@ -16,7 +16,7 @@ TIMEOUT = 30.0
 
 # Webhook support: the bot can receive updates via HTTP webhook
 # in addition to polling. Set WEBHOOK_URL to enable.
-WEBHOOK_URL = config.WEBHOOK_URL or ""
+WEBHOOK_URL = config.webhook_url or ""
 
 
 class OVManager:

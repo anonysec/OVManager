@@ -72,9 +72,11 @@ def update_bot_config(db: Session, **kwargs):
     for k, v in kwargs.items():
         if v is None:
             continue
-        if k == "bot_token" and v:
-            # encrypt at rest
-            v = _fernet.encrypt(v.encode()).decode()
+        if k == "bot_token":
+            if not v:
+                v = None  # clear token → NULL in DB
+            else:
+                v = _fernet.encrypt(v.encode()).decode()
         if hasattr(s, k):
             setattr(s, k, v)
     db.commit()
