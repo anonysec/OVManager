@@ -98,7 +98,7 @@ const OnboardingChecklist = () => {
     if (firstIncomplete !== -1 && firstIncomplete !== currentStep) {
       setCurrentStep(firstIncomplete);
     }
-  }, [state, doneCount]);
+  }, [state, doneCount, currentStep]);
 
   if (dismissed || allDone) return null;
 

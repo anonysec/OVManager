@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiLogOut, FiUser, FiChevronDown } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiLogOut, FiSearch, FiCommand } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -25,18 +25,19 @@ const DashboardLayout = () => {
 
   const getPageTitle = (pathname) => {
     const map = {
-      '/': 'Dashboard',
-      '/users': 'Users',
-      '/nodes': 'Nodes',
-      '/admins': 'Admins',
-      '/traffic': 'Traffic Logs',
-      '/subscriptions': 'Subscriptions',
-      '/security': 'Security',
-      '/settings': 'Settings',
-      '/audit': 'Audit Log',
-      '/backup': 'Backup',
+      '/': t('navDashboard', 'Dashboard'),
+      '/users': t('navUsers', 'Users'),
+      '/nodes': t('navNodes', 'Nodes'),
+      '/admins': t('navAdmins', 'Admins'),
+      '/settings': t('navSettings', 'Settings'),
+      '/audit': t('navAudit', 'Audit Log'),
+      '/maintenance': t('navMaintenance', 'Maintenance'),
     };
-    return map[pathname] || 'Dashboard';
+    if (map[pathname]) return map[pathname];
+    if (pathname.startsWith('/users')) return t('navUsers', 'Users');
+    if (pathname.startsWith('/nodes')) return t('navNodes', 'Nodes');
+    if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
+    return t('navDashboard', 'Dashboard');
   };
 
   const tokenPayload = (() => {
@@ -73,6 +74,10 @@ const DashboardLayout = () => {
       main.setAttribute('tabindex', '-1');
       main.focus();
     }
+  };
+
+  const openCommandPalette = () => {
+    window.dispatchEvent(new CustomEvent('ovmanager:open-palette'));
   };
 
   const loadNotifications = useCallback(async () => {
@@ -125,10 +130,10 @@ const DashboardLayout = () => {
   // Sync sidebar state across this layout and the Sidebar component so the
   // main-content margin matches the rendered sidebar width (220px / 72px collapsed)
   // and reacts to collapse toggles + viewport resizes without prop-drilling.
-  const getIsMobile = () => (typeof window !== 'undefined' && window.innerWidth < 768);
-  const computeCollapsed = () => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile());
-  const [collapsed, setCollapsed] = useState(computeCollapsed);
-  const [isMobile, setIsMobile] = useState(getIsMobile);
+  const getIsMobile = useCallback(() => (typeof window !== 'undefined' && window.innerWidth < 768), []);
+  const computeCollapsed = useCallback(() => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile()), [getIsMobile]);
+  const [collapsed, setCollapsed] = useState(computeCollapsed());
+  const [isMobile, setIsMobile] = useState(getIsMobile());
 
   useEffect(() => {
     const applyCollapsed = () => setCollapsed(computeCollapsed());
@@ -146,7 +151,7 @@ const DashboardLayout = () => {
       window.removeEventListener('storage', applyCollapsed);
       window.removeEventListener('sidebar-pin-change', applyCollapsed);
     };
-  }, []);
+  }, [computeCollapsed, getIsMobile]);
 
   const mainContentClass = [
     'ops-main-content',
@@ -171,7 +176,7 @@ const DashboardLayout = () => {
                 <ol>
                   {location.pathname !== '/' && (
                     <>
-                      <li><Link to="/dashboard" className="ops-breadcrumb-link">Dashboard</Link></li>
+                      <li><Link to="/" className="ops-breadcrumb-link">{t('navDashboard', 'Dashboard')}</Link></li>
                       <li className="ops-breadcrumb-separator">/</li>
                     </>
                   )}
@@ -179,6 +184,16 @@ const DashboardLayout = () => {
                 </ol>
               </nav>
               <div className="ops-userbar">
+                <button
+                  type="button"
+                  className="topbar-search-trigger"
+                  onClick={openCommandPalette}
+                  aria-label={t('palPlaceholder', 'Search pages, users, nodes…')}
+                >
+                  <FiSearch aria-hidden="true" />
+                  <span>{t('palSearch', 'Search')}</span>
+                  <kbd><FiCommand aria-hidden="true" />K</kbd>
+                </button>
                 <div className="lang-picker-wrap" ref={langRef}>
                   <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label="Change language">
                     <LangIcon size={18} />
@@ -296,7 +311,7 @@ const FaFlagIcon = () => (
       <circle r="2.6" fill="#d62828" />
       <g fill="#f4d35e">
         <circle r="2" /><polygon points="0,-7 1,-4 -1,-4" />
-        <circle r="2" /><polygon points="0,7 1,4 -1,4" />
+        <circle r="2" /><polygon points="0,7 1,-4 -1,-4" />
         <circle r="2" /><polygon points="-7,0 -4,1 -4,-1" />
         <circle r="2" /><polygon points="7,0 4,1 4,-1" />
       </g>
@@ -339,7 +354,7 @@ const ChinaFlagIcon = () => (
       <circle r="2.6" fill="#d62828" />
       <g fill="#f4d35e">
         <circle r="2" /><polygon points="0,-7 1,-4 -1,-4" />
-        <circle r="2" /><polygon points="0,7 1,4 -1,4" />
+        <circle r="2" /><polygon points="0,7 1,-4 -1,-4" />
         <polygon points="-7,0 -4,1 -4,-1" /><polygon points="7,0 4,1 4,-1" />
       </g>
     </g>

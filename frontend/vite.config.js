@@ -25,6 +25,10 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_URLPATH': JSON.stringify(urlPath),
   },
+  server: {
+    host: '0.0.0.0',
+    allowedHosts: true,
+  },
   build: {
     outDir: 'dist',
   },

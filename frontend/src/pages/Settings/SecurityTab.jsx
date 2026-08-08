@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FiShield } from 'react-icons/fi';
 import apiClient from '../../services/api';
 import ErrorState from '../../components/ui/ErrorState';
+import PanelSkeleton from '../../components/ui/PanelSkeleton';
 import { useLive } from '../../context/LiveContext';
 
 const SecurityTab = () => {
@@ -42,13 +43,17 @@ const SecurityTab = () => {
         <div className="setting-card">
           <div className="setting-card-header"><FiShield /> Security Summary</div>
           <div className="setting-card-body">
-            <div className="card-actions" style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, alignSelf: 'center' }}>Hours:</label>
-              {[4, 8, 12, 24, 48].map(h => (
-                <button key={h} className={`btn btn-sm ${secHours === h ? '' : 'btn-secondary'}`} onClick={() => setSecHours(h)}>{h}h</button>
-              ))}
-            </div>
-            {sec ? (
+            {loading ? (
+              <PanelSkeleton lines={4} label={t('loading', 'Loading security summary')} />
+            ) : (
+              <>
+                <div className="card-actions" style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600, alignSelf: 'center' }}>Hours:</label>
+                  {[4, 8, 12, 24, 48].map(h => (
+                    <button key={h} type="button" className={`btn btn-sm ${secHours === h ? '' : 'btn-secondary'}`} onClick={() => setSecHours(h)}>{h}h</button>
+                  ))}
+                </div>
+                {sec ? (
               <>
                 <div className="metric-mini-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                   <div className="metric-mini"><div className="metric-label">Auth Errors</div><div className={`metric-value ${sec.auth_errors > 0 ? 'danger' : ''}`}>{sec.auth_errors || 0}</div></div>
@@ -59,6 +64,8 @@ const SecurityTab = () => {
               </>
             ) : (
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>No security data available</p>
+                )}
+              </>
             )}
           </div>
         </div>

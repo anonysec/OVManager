@@ -10,7 +10,6 @@ import UserSessionsModal from '../components/UserSessionsModal';
 import UserDetailModal from '../components/UserDetailModal';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
-import PanelSkeleton from '../components/ui/PanelSkeleton';
 import { FiSearch, FiPlus } from 'react-icons/fi';
 import { BsPersonFill, BsPersonCheckFill, BsPersonXFill, BsPersonPlusFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
@@ -101,9 +100,9 @@ const UserManagement = () => {
 
   // Filter + sort Data
   const filteredUsers = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
     let list = users.filter((user) => {
-      if (!user.name.toLowerCase().includes(term)) return false;
+      if (!String(user.name || '').toLowerCase().includes(term)) return false;
       if (view === 'online') return user.online || Number(user.active_connections || 0) > 0;
       if (view === 'inactive') return !user.is_active;
       if (view === 'expiring') return daysUntil(user.expiry_date) >= 0 && daysUntil(user.expiry_date) <= 7;
@@ -314,7 +313,10 @@ const UserManagement = () => {
       <div className="view-header">
         <h2>{t('users')}</h2>
         <div className="view-header-actions">
-          <button onClick={() => setIsAddModalOpen(true)} className="btn" aria-label={t('addNewUser')}>{t('addNewUser')}</button>
+          <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn" aria-label={t('addNewUser')}>
+            <FiPlus aria-hidden="true" />
+            <span>{t('addNewUser')}</span>
+          </button>
         </div>
       </div>
 
@@ -359,6 +361,14 @@ const UserManagement = () => {
           <button type="button" role="tab" aria-selected={view === 'online'} className={`seg-tab${view === 'online' ? ' active' : ''}`} onClick={() => setView('online')}>{t('tabOnline')}</button>
           <button type="button" role="tab" aria-selected={view === 'inactive'} className={`seg-tab${view === 'inactive' ? ' active' : ''}`} onClick={() => setView('inactive')}>{t('tabInactive')}</button>
           <button type="button" role="tab" aria-selected={view === 'expiring'} className={`seg-tab${view === 'expiring' ? ' active' : ''}`} onClick={() => setView('expiring')}>{t('tabExpiring')}</button>
+        </div>
+        <div className="results-meta" aria-live="polite">
+          <strong>{filteredUsers.length}</strong> {t('results', 'results')}
+          {(searchTerm || view !== 'all') && (
+            <button type="button" className="toolbar-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>
+              {t('clear', 'Clear')}
+            </button>
+          )}
         </div>
       </div>
 

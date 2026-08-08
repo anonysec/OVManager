@@ -62,8 +62,9 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
   }, [anchorRef, onClose]);
 
   useEffect(() => {
+    const trigger = anchorRef?.current;
     const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target) && anchorRef?.current && !anchorRef.current.contains(e.target)) {
+      if (ref.current && !ref.current.contains(e.target) && trigger && !trigger.contains(e.target)) {
         onClose();
       }
     };
@@ -77,7 +78,7 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       document.removeEventListener('keydown', onKey);
       clearTimeout(focusTimer);
       // Return focus to the trigger button on close
-      anchorRef?.current?.focus?.();
+      trigger?.focus?.();
     };
   }, [onClose, anchorRef]);
 

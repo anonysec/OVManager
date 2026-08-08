@@ -28,7 +28,8 @@ const CommandPalette = ({ userRole }) => {
 
   const isAdmin = userRole === 'main_admin';
 
-  // Global shortcut: Ctrl/Cmd+K
+  // Global shortcut: Ctrl/Cmd+K. The topbar trigger emits the same event
+  // so keyboard and pointer users get the exact same search experience.
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -38,8 +39,13 @@ const CommandPalette = ({ userRole }) => {
         setOpen(false);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('ovmanager:open-palette', onOpen);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('ovmanager:open-palette', onOpen);
+    };
   }, []);
 
   const load = useCallback(async () => {

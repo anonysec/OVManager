@@ -5,7 +5,7 @@ import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
-import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle } from 'react-icons/fi';
+import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiPlus, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
@@ -209,6 +209,7 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [security, setSecurity] = useState(null);
   const [trafficHistory, setTrafficHistory] = useState([]);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -235,6 +236,7 @@ const ServerStats = () => {
       const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
       const point = Number(lastTraffic?.active_connections ?? 0);
       setTrafficHistory((h) => [...h.slice(-19), point]);
+      setLastUpdated(new Date());
     } catch (e) {
       console.error('Dashboard load failed:', e);
       setError(e);
@@ -293,7 +295,48 @@ const ServerStats = () => {
 
   return (
     <div className="ops-dashboard compact">
-      <h2>{t('operationalOverview')}</h2>
+      <div className="dashboard-heading">
+        <div className="dashboard-heading-copy">
+          <div className="dashboard-eyebrow">
+            <span className="live-indicator" aria-hidden="true" />
+            <span>{t('liveOperations', 'Live operations')}</span>
+            <span className="dashboard-heading-separator" aria-hidden="true">·</span>
+            <span className="dashboard-updated" aria-live="polite">
+              {lastUpdated ? `${t('updatedAt', 'Updated')} ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : t('syncing', 'Syncing data…')}
+            </span>
+          </div>
+          <h1>{t('operationalOverview')}</h1>
+          <p>{t('dashboardIntro', 'Keep an eye on nodes, users, traffic, and security from one place.')}</p>
+        </div>
+        <div className="dashboard-heading-actions">
+          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={loadData} disabled={loading}>
+            <FiRefreshCw className={loading ? 'is-spinning' : ''} aria-hidden="true" />
+            <span>{t('refresh', 'Refresh')}</span>
+          </button>
+          <button type="button" className="btn dashboard-primary-action" onClick={() => navigate('/users')}>
+            <FiPlus aria-hidden="true" />
+            <span>{t('addNewUser', 'Add user')}</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="dashboard-quick-links" aria-label={t('quickActions', 'Quick actions')}>
+        <button type="button" className="quick-link" onClick={() => navigate('/users')}>
+          <span className="quick-link-icon"><FiUsers aria-hidden="true" /></span>
+          <span><strong>{t('navUsers', 'Users')}</strong><small>{t('quickUsersHint', 'Manage access and sessions')}</small></span>
+          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
+        </button>
+        <button type="button" className="quick-link" onClick={() => navigate('/nodes')}>
+          <span className="quick-link-icon is-cyan"><FiServer aria-hidden="true" /></span>
+          <span><strong>{t('navNodes', 'Nodes')}</strong><small>{t('quickNodesHint', 'Check node health and capacity')}</small></span>
+          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
+        </button>
+        <button type="button" className="quick-link" onClick={() => navigate('/settings')}>
+          <span className="quick-link-icon is-neutral"><FiShield aria-hidden="true" /></span>
+          <span><strong>{t('navSettings', 'Settings')}</strong><small>{t('quickSettingsHint', 'Configure panel behavior')}</small></span>
+          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
+        </button>
+      </div>
 
       {error && !hasData ? (
         <div className="ops-error-wrap">

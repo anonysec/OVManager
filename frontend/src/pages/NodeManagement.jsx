@@ -1,15 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiActivity } from 'react-icons/fi';
+import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus } from 'react-icons/fi';
 import apiClient from '../services/api';
 import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
 import NodeTable from '../components/NodeTable';
-import LoadingButton from '../components/LoadingButton';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
-import PanelSkeleton from '../components/ui/PanelSkeleton';
-import StatusBadge from '../components/ui/StatusBadge';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 
@@ -99,8 +96,9 @@ const NodeManagement = () => {
 
 
   const filteredNodes = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
     return nodes.filter(node =>
-      node.name.toLowerCase().includes(searchTerm.toLowerCase())
+      String(node.name || '').toLowerCase().includes(term)
     );
   }, [nodes, searchTerm]);
 
@@ -183,8 +181,9 @@ const NodeManagement = () => {
     <div id="nodes-view" className="view">
       <div className="view-header">
         <h2>{t('nodes')}</h2>
-        <button onClick={() => setIsAddModalOpen(true)} className="btn">
-          {t('addNewNode')}
+        <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn">
+          <FiPlus aria-hidden="true" />
+          <span>{t('addNewNode')}</span>
         </button>
       </div>
 
@@ -222,6 +221,14 @@ const NodeManagement = () => {
             onChange={handleSearchChange}
             className="search-input"
           />
+        </div>
+        <div className="results-meta" aria-live="polite">
+          <strong>{filteredNodes.length}</strong> {t('results', 'results')}
+          {searchTerm && (
+            <button type="button" className="toolbar-clear" onClick={() => setSearchTerm('')}>
+              {t('clear', 'Clear')}
+            </button>
+          )}
         </div>
       </div>
 

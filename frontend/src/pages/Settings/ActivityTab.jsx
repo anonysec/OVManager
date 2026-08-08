@@ -4,6 +4,7 @@ import { FiActivity } from 'react-icons/fi';
 import apiClient from '../../services/api';
 import ErrorState from '../../components/ui/ErrorState';
 import EmptyState from '../../components/ui/EmptyState';
+import PanelSkeleton from '../../components/ui/PanelSkeleton';
 
 const ActivityTab = () => {
   const { t } = useTranslation();
@@ -40,7 +41,9 @@ const ActivityTab = () => {
         <div className="setting-card">
           <div className="setting-card-header"><FiActivity /> Recent Activity</div>
           <div className="setting-card-body">
-            {activity.length === 0 ? (
+            {loading ? (
+              <PanelSkeleton lines={5} label={t('loading', 'Loading activity')} />
+            ) : activity.length === 0 ? (
               <EmptyState
                 title={t('noActivity', 'No activity yet')}
                 description={t('activityWillAppear', 'System actions will appear here')}

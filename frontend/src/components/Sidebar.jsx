@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight, FiChevronDown, FiMenu, FiActivity, FiList, FiSearch, FiRefreshCw, FiGlobe, FiLock } from 'react-icons/fi';
+import { FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight, FiChevronDown, FiMenu, FiList } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
@@ -15,6 +15,7 @@ const Sidebar = () => {
 
   useEffect(() => {
     localStorage.setItem('ovmanager-sidebar-collapsed', String(collapsed));
+    window.dispatchEvent(new Event('sidebar-pin-change'));
   }, [collapsed]);
 
   useEffect(() => {
@@ -34,29 +35,30 @@ const Sidebar = () => {
 
   const isActiveClass = (item) => isActive(item) ? 'sidebar-nav-link active' : 'sidebar-nav-link';
 
+  // Keep navigation limited to routes that are actually available. Dead links
+  // are especially confusing in an operations panel because they look like
+  // a failed health check rather than an unfinished section.
   const navItems = [
-    { to: '/', label: t('dashboard'), icon: FiHome, end: true },
-    { to: '/users', label: t('users'), icon: FiUsers },
-    { to: '/nodes', label: t('nodes'), icon: FiServer, badge: 'online' },
+    { to: '/', label: t('navDashboard', 'Dashboard'), icon: FiHome, end: true, group: t('navGroupOverview', 'Overview') },
+    { to: '/users', label: t('navUsers', 'Users'), icon: FiUsers, group: t('navGroupManage', 'Manage') },
+    { to: '/nodes', label: t('navNodes', 'Nodes'), icon: FiServer, group: t('navGroupManage', 'Manage') },
   ];
 
   if (userRole === 'main_admin') {
     navItems.push(
-      { to: '/admins', label: t('admins'), icon: FiList },
+      { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupManage', 'Manage') },
+      { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiList, group: t('navGroupAdmin', 'Administration') },
+      { to: '/maintenance', label: t('navMaintenance', 'Maintenance'), icon: FiSettings, group: t('navGroupAdmin', 'Administration') },
     );
   }
 
-  // VPN-specific sections (x-ui / PasarGuard pattern)
-  navItems.push(
-    { to: '/traffic', label: t('navTrafficLogs'), icon: FiActivity },
-    { to: '/subscriptions', label: t('navSubscriptions'), icon: FiGlobe },
-    { to: '/security', label: t('navSecurity'), icon: FiLock },
-  );
+  const settingsItem = { to: '/settings', label: t('navSettings', 'Settings'), icon: FiSettings, group: t('navGroupSystem', 'System') };
 
-  const settingsItem = { to: '/settings', label: t('settings'), icon: FiSettings };
-
-  const renderNavItem = (item) => (
+  const renderNavItem = (item, index) => (
     <li key={item.to} className="sidebar-nav-item">
+      {!collapsed && (index === 0 || navItems[index - 1].group !== item.group) && (
+        <span className="sidebar-section-label">{item.group}</span>
+      )}
       <NavLink
         to={item.to}
         end={item.end}
@@ -89,7 +91,7 @@ const Sidebar = () => {
 
       {/* Sidebar */}
       <aside
-        className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''}`}
+        className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''} ${mobileOpen ? 'ops-sidebar--mobile ops-sidebar--open' : ''}`}
         aria-label="Main navigation"
       >
         {/* Brand — always shows icon, shows text when not collapsed */}
@@ -116,12 +118,9 @@ const Sidebar = () => {
               <NavLink
                 to={settingsItem.to}
                 className={`${isActiveClass(settingsItem)} ${settingsOpen ? 'open' : ''}`}
-                onClick={(e) => {
-                  if (!collapsed) {
-                    e.preventDefault();
-                    setSettingsOpen(o => !o);
-                  }
-                  mobileOpen && setMobileOpen(false);
+                onClick={() => {
+                  if (!collapsed) setSettingsOpen((open) => !open);
+                  if (mobileOpen) setMobileOpen(false);
                 }}
                 title={collapsed ? settingsItem.label : undefined}
               >
@@ -136,11 +135,11 @@ const Sidebar = () => {
               {!collapsed && settingsOpen && (
                 <ul className="sidebar-submenu">
                   <li><NavLink to="/settings#general" className="sidebar-submenu-link">General</NavLink></li>
-                  <li><NavLink to="/settings#appearance" className="sidebar-submenu-link">Appearance</NavLink></li>
-                  <li><NavLink to="/settings#security" className="sidebar-submenu-link">Security</NavLink></li>
-                  <li><NavLink to="/settings#notifications" className="sidebar-submenu-link">Notifications</NavLink></li>
-                  <li><NavLink to="/settings#backup" className="sidebar-submenu-link">Backup</NavLink></li>
                   <li><NavLink to="/settings#system" className="sidebar-submenu-link">System</NavLink></li>
+                  <li><NavLink to="/settings#security" className="sidebar-submenu-link">Security</NavLink></li>
+                  <li><NavLink to="/settings#backup" className="sidebar-submenu-link">Backup</NavLink></li>
+                  <li><NavLink to="/settings#bot" className="sidebar-submenu-link">Bot</NavLink></li>
+                  <li><NavLink to="/settings#activity" className="sidebar-submenu-link">Activity</NavLink></li>
                 </ul>
               )}
             </li>
