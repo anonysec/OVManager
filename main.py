@@ -30,7 +30,6 @@ def main():
         port=config.PORT,
         reload=False,
         workers=1,
-        limit_max_requests=1000,
         limit_concurrency=200,
         timeout_keep_alive=20,
         access_log=False,

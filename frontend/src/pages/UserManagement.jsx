@@ -44,8 +44,11 @@ const UserManagement = () => {
     setLoadError(false);
     try {
       const response = await apiClient.get('/users/');
-      if (response.data.success && Array.isArray(response.data.data)) {
-        setUsers(response.data.data.slice().reverse());
+      const raw = response.data?.data;
+      // Backend returns { users: [...], total: N } — tolerate both shapes
+      const list = Array.isArray(raw) ? raw : (raw?.users || []);
+      if (response.data.success) {
+        setUsers(list.slice().reverse());
       } else {
         setUsers([]);
       }

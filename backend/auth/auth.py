@@ -124,14 +124,16 @@ def authenticate_user(db: Session, username: str, password: str):
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.setdefault("type", "access")
+    to_encode["exp"] = expire
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.setdefault("type", "refresh")
+    to_encode["exp"] = expire
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 

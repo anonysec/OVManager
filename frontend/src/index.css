@@ -95,6 +95,11 @@ html[data-theme="light"] {
 
   --danger-color: #c0392b;
   --success-color: #0e9f85;
+  --info-color: #2563eb;
+  --overlay: rgba(120, 140, 170, 0.35);
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
 }
 
 /* --- Ultra-dark theme (3x-ui pattern) --- */
@@ -376,18 +381,6 @@ html.theme-transition *::after {
   font-size: 13px;
 }
 
-.btn.btn-secondary {
-  background-color: var(--surface-2);
-  color: var(--text-primary);
-}
-
-.btn.btn-secondary:hover {
-  background-color: var(--surface-3);
-  color: var(--accent-color);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(252, 122, 30, 0.2);
-}
-
 .btn.btn-danger {
   background-color: var(--danger-color);
   color: white;
@@ -404,17 +397,6 @@ html.theme-transition *::after {
 
 .btn.btn-success:hover {
   background-color: #01a28d;
-}
-
-.btn:focus-visible,
-.ops-nav-link:focus-visible,
-.lang-picker-btn:focus-visible,
-.ops-profile:focus-visible,
-.icon-btn:focus-visible,
-.row-actions button:focus-visible,
-.pagination-controls button:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 .error-message {
@@ -1298,22 +1280,6 @@ html.theme-transition *::after {
 .skeleton-row { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border-color); }
 .sk-line { height: 14px; border-radius: 4px; background: linear-gradient(90deg, var(--background-card-hover) 25%, var(--border-color) 50%, var(--background-card-hover) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
 .sk-header { height: 20px; border-radius: 6px; }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-/* Panel skeleton (dashboard panels) */
-.panel-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 8px 0;
-}
-.skeleton-shimmer {
-  height: 16px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--surface-color) 25%, var(--surface-hover) 50%, var(--surface-color) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite linear;
-}
 
 /* Empty state */
 .empty-state {
@@ -1339,50 +1305,6 @@ html.theme-transition *::after {
 .empty-state h3 { margin: 0 0 6px; font-size: 17px; color: var(--text-primary); }
 .empty-state p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; max-width: 360px; }
 .empty-state-action { margin-top: 4px; }
-
-/* Error state */
-.error-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--text-secondary);
-}
-.error-state-icon {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  margin-bottom: 16px;
-  background: rgba(214, 69, 48, 0.14);
-  color: var(--danger-color);
-}
-.error-state h3 { margin: 0 0 6px; font-size: 17px; color: var(--text-primary); }
-.error-state p { margin: 0 0 20px; font-size: 13px; line-height: 1.5; max-width: 380px; }
-.error-state-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-.btn-retry { background: var(--danger-color); }
-.btn-retry:hover { background: var(--danger-color); filter: brightness(1.1); }
-
-/* Status badge (icon + label, never color alone) */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-.status-online { background: rgba(1, 195, 168, 0.14); color: var(--success-color); }
-.status-offline { background: rgba(166, 61, 42, 0.14); color: var(--danger-color); }
-.status-warning { background: rgba(252, 122, 30, 0.16); color: var(--accent-color); }
-.status-danger { background: rgba(166, 61, 42, 0.16); color: var(--danger-color); }
-.status-idle { background: var(--surface-color); color: var(--text-secondary); }
 
 /* Onboarding checklist card */
 .onboarding-card {

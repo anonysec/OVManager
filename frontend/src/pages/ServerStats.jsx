@@ -225,10 +225,13 @@ const ServerStats = () => {
         apiClient.get('/security/summary?hours=8'),
       ]);
       setStats(statsRes.data?.data || null);
-      setUsers(usersRes.data?.data || []);
-      nodesData = nodesRes.data?.data || [];
+      const usersData = usersRes.data?.data;
+      setUsers(Array.isArray(usersData) ? usersData : usersData?.users || []);
+      const nodesDataRaw = nodesRes.data?.data;
+      nodesData = Array.isArray(nodesDataRaw) ? nodesDataRaw : nodesDataRaw?.nodes || [];
       setNodes(nodesData);
-      setSecurity(secRes.data?.data || null);
+      const secData = secRes.data?.data;
+      setSecurity(secData || {});
       const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
       const point = Number(lastTraffic?.active_connections ?? 0);
       setTrafficHistory((h) => [...h.slice(-19), point]);

@@ -31,6 +31,10 @@ html[data-theme="light"] {
   --text: #11161f;
   --muted: #5b6473;
   --line: #d7dde7;
+  --orange: #e86a0c;
+  --cyan: #0891b2;
+  --green: #0e9f85;
+  --red: #dc2626;
 }
 
 * { box-sizing: border-box; }
@@ -224,8 +228,8 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .audit-detail { color: var(--muted); font-size: 12px; max-width: 320px; }
 
 /* ---- responsive table scroll ---- */
-.list-table-container { max-height: calc(100vh - 320px); overflow: auto; }
-@media (max-width: 1180px) { .list-table-container { max-height: none; } }
+.view-content-fade { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.list-table-container { overflow-x: auto; }
 
 /* sparkline in stat cell */
 .ops-stat-cell .mini-line { position: absolute; right: 12px; bottom: 8px; width: 64px; height: 26px; opacity: .55; }
@@ -272,7 +276,7 @@ html[data-theme="light"] .country-label { fill: #1b2230; stroke: #fff; }
 
 /* list view override for users/nodes/admins */
 .user-board, .node-board, .admin-cards-container { display: block !important; }
-.list-table-container { padding: 0 !important; overflow: auto !important; max-height: calc(100vh - 220px); }
+.list-table-container { padding: 0 !important; overflow-x: auto !important; }
 .list-table, .user-list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
 .list-table thead th, .user-list-table thead th { position: sticky; top: 0; background: var(--panel); color: #c6cad2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .list-table thead th:first-child, .user-list-table thead th:first-child { border-top-left-radius: 10px; }
@@ -718,27 +722,6 @@ html[data-theme="light"] .segmented { background: rgba(0,0,0,.04); }
 .panel-skeleton { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
 .sk-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.14), rgba(255,255,255,.06)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-/* resource chips */
-.resource-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.resource-chips span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: rgba(255,255,255,.05); padding: 5px 9px; border-radius: 999px; }
-
-/* security ring */
-.security-flex { display: flex; align-items: center; gap: 14px; }
-.score-ring { flex: 0 0 auto; }
-.ring-bg { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 8; }
-.ring-fg { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
-.ring-num { font-family: var(--font-display); font-size: 24px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
-.security-facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; flex: 1; }
-.security-verdict { font-size: 12.5px; margin: 12px 0 0; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); font-weight: 600; line-height: 1.4; }
-.security-verdict.ok { background: rgba(47,242,212,.10); border-color: rgba(47,242,212,.35); color: #2ff0d4; }
-.security-verdict.warn { background: rgba(255,180,84,.10); border-color: rgba(255,180,84,.35); color: #ffb454; }
-.security-verdict.bad { background: rgba(255,83,104,.10); border-color: rgba(255,83,104,.35); color: #ff7a8a; }
-.panel-tip { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.18); position: relative; cursor: help; }
-.panel-tip::after { content: 'i'; font-size: 10px; font-weight: 800; color: var(--muted); position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); }
-.ops-panel.cyan header .panel-tip { background: rgba(0,0,0,.14); }
-.security-errors { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
-.security-errors li { padding: 3px 0; border-top: 1px solid var(--line); }
 
 /* mini line chart */
 .mini-line { width: 100%; height: 34px; display: block; }

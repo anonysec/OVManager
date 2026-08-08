@@ -1,17 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiBarChart2, FiZap, FiRefreshCw, FiDownload } from 'react-icons/fi';
 import apiClient from '../../services/api';
+import ErrorState from '../../components/ui/ErrorState';
 import { useLive } from '../../context/LiveContext';
 import { formatBytes } from '../../utils/format';
 import { formatUptime } from '../../utils/time';
 
 const SystemTab = () => {
+  const { t } = useTranslation();
   const { refreshTick } = useLive();
   const [traffic, setTraffic] = useState({});
   const [sec, setSec] = useState(null);
   const [sysInfo, setSysInfo] = useState(null);
   const [busy, setBusy] = useState(false);
   const [metricMin, setMetricMin] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const addToast = (message, type = 'success') => {
     window.dispatchEvent(new CustomEvent('addToast', { detail: { message, type } }));
@@ -19,6 +24,8 @@ const SystemTab = () => {
 
   const loadInfo = useCallback(async () => {
     try {
+      setLoading(true);
+      setError(null);
       const [infoRes, metricsHistRes, loginRes] = await Promise.all([
         apiClient.get('/server/info'),
         apiClient.get('/metrics/history?hours=24'),
@@ -33,8 +40,12 @@ const SystemTab = () => {
       }
       setTraffic(histData.traffic?.[traffic.length - 1] || {});
       setSec(loginRes.data?.data || null);
-    } catch { /* noop */ }
-  }, []);
+    } catch {
+      setError(t('failedToLoad', 'Failed to load data'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => { loadInfo(); }, [loadInfo, refreshTick]);
 
@@ -58,42 +69,53 @@ const SystemTab = () => {
 
   return (
     <div className="settings-section">
-      <div className="setting-card">
-        <div className="setting-card-header"><FiBarChart2 /> Metrics</div>
-        <div className="setting-card-body">
-          <div className="metric-mini-grid">
-            <div className="metric-mini"><div className="metric-label">Active Connections</div><div className="metric-value">{traffic.active_connections || traffic.active || 0}</div></div>
-            <div className="metric-mini"><div className="metric-label">Traffic (24h)</div><div className="metric-value">{metricMin != null ? formatBytes(metricMin) : '—'}</div></div>
-            <div className="metric-mini"><div className="metric-label">Login Health</div><div className="metric-value">{sec?.totals?.online || 0}/{sec?.totals?.users || 0}</div></div>
-          </div>
-          <div className="card-actions">
-            <button className="btn btn-sm" onClick={collectMetrics} disabled={busy}><FiZap size={14} /> Collect now</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="setting-card">
-        <div className="setting-card-header"><FiZap /> Maintenance</div>
-        <div className="setting-card-body">
-          <div className="card-actions">
-            <button className="btn btn-sm" onClick={syncLimits} disabled={busy}><FiZap size={14} /> Sync limits</button>
-            <button className="btn btn-sm btn-secondary" onClick={cleanStale} disabled={busy}><FiRefreshCw size={14} /> Clean stale</button>
-            <button className="btn btn-sm btn-secondary" onClick={cleanRegistry} disabled={busy}><FiBarChart2 size={14} /> Clean registry</button>
-          </div>
-        </div>
-      </div>
-
-      {sysInfo && (
-        <div className="setting-card">
-          <div className="setting-card-header"><FiBarChart2 /> Server Info</div>
-          <div className="setting-card-body">
-            <div className="metric-mini-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-              <div className="metric-mini"><div className="metric-label">Uptime</div><div className="metric-value">{formatUptime(sysInfo.uptime)}</div></div>
-              <div className="metric-mini"><div className="metric-label">Platform</div><div className="metric-value" style={{ fontSize: 14 }}>{sysInfo.platform || '—'}</div></div>
-              <div className="metric-mini"><div className="metric-label">Version</div><div className="metric-value" style={{ fontSize: 14 }}>{sysInfo.version || '—'}</div></div>
+      {error && (
+        <ErrorState
+          title={t('error', 'Error')}
+          message={error}
+          onRetry={loadInfo}
+        />
+      )}
+      {!error && !loading && (
+        <>
+          <div className="setting-card">
+            <div className="setting-card-header"><FiBarChart2 /> Metrics</div>
+            <div className="setting-card-body">
+              <div className="metric-mini-grid" aria-live="polite">
+                <div className="metric-mini"><div className="metric-label">Active Connections</div><div className="metric-value">{traffic.active_connections || traffic.active || 0}</div></div>
+                <div className="metric-mini"><div className="metric-label">Traffic (24h)</div><div className="metric-value">{metricMin != null ? formatBytes(metricMin) : '—'}</div></div>
+                <div className="metric-mini"><div className="metric-label">Login Health</div><div className="metric-value">{sec?.totals?.online || 0}/{sec?.totals?.users || 0}</div></div>
+              </div>
+              <div className="card-actions">
+                <button className="btn btn-sm" onClick={collectMetrics} disabled={busy}><FiZap size={14} /> Collect now</button>
+              </div>
             </div>
           </div>
-        </div>
+
+          <div className="setting-card">
+            <div className="setting-card-header"><FiZap /> Maintenance</div>
+            <div className="setting-card-body">
+              <div className="card-actions">
+                <button className="btn btn-sm" onClick={syncLimits} disabled={busy}><FiZap size={14} /> Sync limits</button>
+                <button className="btn btn-sm btn-secondary" onClick={cleanStale} disabled={busy}><FiRefreshCw size={14} /> Clean stale</button>
+                <button className="btn btn-sm btn-secondary" onClick={cleanRegistry} disabled={busy}><FiBarChart2 size={14} /> Clean registry</button>
+              </div>
+            </div>
+          </div>
+
+          {sysInfo && (
+            <div className="setting-card">
+              <div className="setting-card-header"><FiBarChart2 /> Server Info</div>
+              <div className="setting-card-body">
+                <div className="metric-mini-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                  <div className="metric-mini"><div className="metric-label">Uptime</div><div className="metric-value">{formatUptime(sysInfo.uptime)}</div></div>
+                  <div className="metric-mini"><div className="metric-label">Platform</div><div className="metric-value" style={{ fontSize: 14 }}>{sysInfo.platform || '—'}</div></div>
+                  <div className="metric-mini"><div className="metric-label">Version</div><div className="metric-value" style={{ fontSize: 14 }}>{sysInfo.version || '—'}</div></div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

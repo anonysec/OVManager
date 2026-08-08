@@ -1,6 +1,7 @@
 import { FiEdit3, FiRefreshCw, FiTrash2, FiDownloadCloud } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import EmptyState from './ui/EmptyState';
+import StatusBadge from './ui/StatusBadge';
 import { usePrivacyMask, PrivacyEye } from './ui';
 
 function usageClass(value) {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
 import { useLive } from '../../context/LiveContext';
 import LoadingButton from '../../components/LoadingButton';
+import ErrorState from '../../components/ui/ErrorState';
 import '../../components/SettingsStyles.css';
 
 const GeneralTab = () => {
@@ -13,14 +14,18 @@ const GeneralTab = () => {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [error, setError] = useState('');
 
   const loadSettings = useCallback(async () => {
+    setLoadError(null);
     try {
       const res = await apiClient.get('/server/settings');
       const s = res.data?.data || {};
       setUrlPath(s.urlpath || '');
-    } catch { /* noop */ }
+    } catch (err) {
+      setLoadError(err);
+    }
   }, []);
 
   useEffect(() => { loadSettings(); }, [loadSettings, refreshTick]);
@@ -63,6 +68,13 @@ const GeneralTab = () => {
 
   return (
     <div className="settings-section">
+      {loadError && (
+        <ErrorState
+          title={t('settingsLoadError', 'Failed to load settings')}
+          message={loadError.response?.data?.msg || loadError.message || t('settingsLoadErrorDetail', 'Could not fetch server settings.')}
+          onRetry={loadSettings}
+        />
+      )}
       <div className="setting-card">
         <div className="setting-card-header"><FiLink /> Panel URL</div>
         <div className="setting-card-body">
