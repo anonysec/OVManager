@@ -42,11 +42,8 @@ async def update_node(
     user: dict = Depends(require_owner),
 ):
 
-    result = await update_node_handler(node_id, request, db)
-    return ResponseModel(
-        success=result,
-        msg="Node updated successfully" if result else "Failed to update node",
-    )
+    success, msg = await update_node_handler(node_id, request, db)
+    return ResponseModel(success=success, msg=msg)
 
 
 @router.get("/{node_id}/status/", response_model=ResponseModel)

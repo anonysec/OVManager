@@ -1744,8 +1744,12 @@ html.theme-transition *::after {
   display: none;
 }
 
+/* In rail mode the nav icons sit centered, so pull the knob tighter to the
+   edge to keep it clear of them. */
 .ops-sidebar--collapsed .sidebar-toggle {
-  margin: 0 8px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
 }
 
 .ops-sidebar--collapsed .sidebar-footer {
@@ -1809,26 +1813,40 @@ html.theme-transition *::after {
   z-index: 80;
 }
 
-/* Sidebar toggle button (expand/collapse) */
+/* Sidebar toggle button (expand/collapse) — a minimal ghost knob pinned to
+   the center-right edge of the sidebar. */
 .sidebar-toggle {
-  width: 28px;
-  height: 28px;
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  background: var(--surface-2, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--line, var(--border-color));
-  border-radius: 50%;
-  color: var(--muted, var(--text-secondary));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted, var(--muted));
   cursor: pointer;
-  margin: 10px auto 8px;
-  transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 
 .sidebar-toggle:hover {
-  background: var(--accent-color, var(--orange));
-  border-color: var(--accent-color, var(--orange));
-  color: #000;
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  border-color: var(--border, var(--line));
+  color: var(--text-primary, var(--text));
+}
+
+.sidebar-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent-color));
+  outline-offset: 1px;
+}
+
+.sidebar-toggle svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Sidebar footer */

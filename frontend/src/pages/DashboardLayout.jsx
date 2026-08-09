@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiLogOut, FiSearch, FiCommand, FiChevronDown, FiMonitor } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiChevronDown, FiMonitor, FiSettings } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -12,9 +12,10 @@ import Logo from '../components/Logo';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CommandPalette from '../components/CommandPalette';
 import MobileNav from '../components/MobileNav';
+import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 
 const DashboardLayout = () => {
-  const { logout, userRole } = useAuth();
+  const { userRole } = useAuth();
   const { theme, cycleTheme } = useTheme();
   const { i18n, t } = useTranslation();
   const [notifications, setNotifications] = useState([]);
@@ -47,7 +48,7 @@ const DashboardLayout = () => {
       if (!token) return {};
       return JSON.parse(atob(token.split('.')[1] || ''));
     } catch { return {}; }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
   const username = tokenPayload.sub || '';
 
   useEffect(() => {
@@ -111,16 +112,29 @@ const DashboardLayout = () => {
       });
       if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${security.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null, action_path: null });
       if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${security.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null, action_path: null });
-      setNotifications(out);
+      // Respect the "Alerts & Dashboard" preferences from Settings.
+      const prefs = readPrefs();
+      setNotifications(out.filter((n) => {
+        const pref = alertPrefKey(n.id);
+        return !pref || prefs[pref] !== false;
+      }));
     } catch {
       // keep existing; API interceptor surfaces real errors as toasts
     }
   }, []);
 
+  // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
+  // immediately when the preference changes.
   useEffect(() => {
-    loadNotifications();
-    const id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, 30000);
-    return () => clearInterval(id);
+    let id = null;
+    const start = () => {
+      if (id) clearInterval(id);
+      const sec = readPrefs().refreshSec;
+      id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, sec * 1000);
+    };
+    start();
+    window.addEventListener('ovmanager-prefs-changed', start);
+    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', start); };
   }, [loadNotifications]);
 
   const notifCount = notifications.length;
@@ -282,14 +296,13 @@ const DashboardLayout = () => {
                       </div>
                     </div>
                     <div className="profile-dropdown-divider" />
-                    <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { cycleTheme(); setProfileOpen(false); }}>
-                      <ThemeIcon aria-hidden="true" />
-                      <span>{themeLabel}</span>
-                    </button>
-                    <div className="profile-dropdown-divider" />
-                    <button type="button" className="profile-dropdown-item danger" role="menuitem" onClick={() => { setProfileOpen(false); logout(); }}>
-                      <FiLogOut /> <span>{t('logout', 'Logout')}</span>
-                    </button>
+                    {/* Settings is the only menu action — theme lives in the top bar
+                        (one click, no open state) and logout lives at the bottom of
+                        the sidebar, so duplicating either here adds noise. */}
+                    <Link to="/settings" className="profile-dropdown-item" role="menuitem" onClick={() => setProfileOpen(false)}>
+                      <FiSettings aria-hidden="true" />
+                      <span>{t('navSettings', 'Settings')}</span>
+                    </Link>
                   </div>
                 </div>
               </div>

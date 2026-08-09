@@ -76,7 +76,7 @@ html[data-theme="light"] .ops-topbar { background: var(--panel); }
 .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); box-shadow: none; }
 .ops-nav-link.active::after { content: ''; position: absolute; height: 3px; left: 14px; right: 14px; bottom: 2px; background: var(--orange); border-radius: 3px; }
 .ops-userbar { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
-.ops-userbar button:not(.lang-option) { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--muted); border: 0; cursor: pointer; font-size: 20px; border-radius: 9px; transition: color .15s ease, background .15s ease; }
+.ops-userbar button:not(.lang-option):not(.profile-trigger):not(.topbar-search-trigger) { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--muted); border: 0; cursor: pointer; font-size: 20px; border-radius: 9px; transition: color .15s ease, background .15s ease; }
 .ops-userbar button:not(.lang-option):hover { color: var(--orange); background: rgba(255,255,255,.06); }
 .ops-bell { position: relative; }
 .ops-main { overflow: auto; }
@@ -113,7 +113,7 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 
 .users-panel, .nodes-map-panel { min-height: 26rem; }
 .ops-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ops-table th { color: var(--text-secondary); text-transform: uppercase; font-size: 12px; font-weight: 700; text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface-2); z-index: 2; }
+.ops-table th { color: var(--text-secondary); text-transform: uppercase; font-size: 12px; font-weight: 700; text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 64px; background: var(--surface-2); z-index: 2; }
 .ops-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); color: var(--text); }
 .ops-table tr:hover td { background: rgba(255,255,255,.035); }
 .avatar-mini { display: inline-grid; place-items: center; width: 31px; height: 31px; border-radius: 50%; margin-right: 9px; background: #3a414e; color: #fff; font-weight: 800; }
@@ -159,7 +159,10 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 .progress-track div { height: 100%; background: var(--orange); }
 .card-actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .card-actions-row button { display: inline-flex; align-items: center; gap: 6px; background: #303743 !important; }
-.card-actions-row button.danger, .danger { background: var(--red) !important; }
+/* Destructive-action utility background: scoped to buttons so it never
+   paints non-button elements (security/alert rows, badges, metric values)
+   with an unreadable solid red. */
+.card-actions-row button.danger, button.danger { background: var(--red) !important; }
 .modal-overlay { background: rgba(0,0,0,.75) !important; }
 .modal, .modal-content { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; }
 .actions-dropdown-menu { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; min-width: 190px; }
@@ -278,7 +281,7 @@ html[data-theme="light"] .country-label { fill: #1b2230; stroke: #fff; }
 .user-board, .node-board, .admin-cards-container { display: block !important; }
 .list-table-container { padding: 0 !important; overflow-x: auto !important; }
 .list-table, .user-list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
-.list-table thead th, .user-list-table thead th { position: sticky; top: 0; background: var(--panel); color: #c6cad2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.list-table thead th, .user-list-table thead th { position: sticky; top: 64px; background: var(--panel); color: #c6cad2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .list-table thead th:first-child, .user-list-table thead th:first-child { border-top-left-radius: 10px; }
 .list-table thead th:last-child, .user-list-table thead th:last-child { border-top-right-radius: 10px; }
 .list-table th { padding: 12px 14px; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
@@ -297,7 +300,7 @@ html[data-theme="light"] .country-label { fill: #1b2230; stroke: #fff; }
 /* Excel-style lists (users / nodes / audit) */
 .user-list-table, .node-list-table, .audit-table { border-collapse: collapse !important; border-spacing: 0 !important; min-width: 720px; font-variant-numeric: tabular-nums; }
 .user-list-table thead th, .node-list-table thead th, .audit-table thead th {
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: 64px; z-index: 5;
   background: var(--panel-2);
   color: var(--muted);
   font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
@@ -634,7 +637,7 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 .set-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .set-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .set-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.set-table th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,.04); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 11px; position: sticky; top: 0; }
+.set-table th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,.04); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 11px; position: sticky; top: 64px; }
 .set-table td { padding: 9px 12px; border-top: 1px solid var(--line); }
 .set-empty { color: var(--muted); text-align: center; padding: 18px; }
 .set-list { display: grid; gap: 8px; }
@@ -1672,7 +1675,9 @@ input[type="checkbox"]:focus-visible,
 
 /* App chrome */
 .ops-main-content {
-  padding: 28px clamp(16px, 3vw, 42px) 48px;
+  /* Top padding clears the fixed 64px topbar so page content (headings,
+     toolbars, table headers) never slides underneath it while scrolling. */
+  padding: calc(64px + 24px) clamp(16px, 3vw, 42px) 48px;
   background: var(--bg);
 }
 
@@ -3067,6 +3072,13 @@ body {
   box-shadow: 0 22px 55px rgba(0, 0, 0, .32);
 }
 
+/* In RTL the userbar sits at the left edge, so the dropdown must open
+   from the wrap's left side instead of overflowing off-screen. */
+html[dir="rtl"] .profile-dropdown {
+  left: 0;
+  right: auto;
+}
+
 .profile-dropdown-header {
   padding: 16px;
   background: color-mix(in srgb, var(--accent-color) 5%, transparent);
@@ -3172,6 +3184,28 @@ body {
   flex: 0 0 auto;
   width: 82px;
   height: 82px;
+}
+
+/* Security score ring: track + progress arc + centered value.
+   Without these the circles default to solid black fills. */
+.security-score-block .score-ring .ring-bg {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text-muted) 24%, transparent);
+  stroke-width: 8;
+}
+
+.security-score-block .score-ring .ring-fg {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .5s ease, stroke .3s ease;
+}
+
+.security-score-block .score-ring .ring-num {
+  font: 800 20px/1 var(--font-family);
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 .security-kicker {
@@ -3304,6 +3338,36 @@ body {
 .alert-center-item.danger .alert-center-item-dot {
   background: var(--danger-color);
   box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color) 55%, transparent);
+}
+
+/* Danger rows get a soft tinted surface with fully readable text —
+   never a solid bright red that text disappears into. */
+.security-review-item.danger {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--danger-color) 34%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
+}
+
+.security-review-item.danger strong {
+  color: var(--text-primary);
+}
+
+.security-review-item.danger small {
+  color: var(--text-muted);
+}
+
+.alert-center-item.danger {
+  border-color: color-mix(in srgb, var(--danger-color) 36%, var(--border));
+  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
+}
+
+.alert-center-item.danger .alert-center-item-copy strong {
+  color: var(--text-primary);
+}
+
+.alert-center-item.danger .alert-center-item-copy small {
+  color: var(--text-muted);
 }
 
 .security-review-item.clear {
@@ -3583,6 +3647,16 @@ html[data-theme="light"] .alert-center-item {
   background: #f7f9fc;
 }
 
+/* Keep the danger tint (readable red-on-light) even where the light theme
+   forces a neutral panel background. */
+html[data-theme="light"] .alert-center-item.danger {
+  background: color-mix(in srgb, var(--danger-color) 11%, #ffffff);
+}
+
+html[data-theme="light"] .security-review-item.danger {
+  background: color-mix(in srgb, var(--danger-color) 11%, #f7f9fc);
+}
+
 /* Mobile bottom navigation. The content receives matching safe-area padding
    so the last row/action is never hidden behind the browser-style bottom bar. */
 .mobile-nav {
@@ -3680,4 +3754,315 @@ html[data-theme="light"] .mobile-nav {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ATLAS — dashboard world map overhaul
+   Summary strip + interactive map (drag pan, wheel/button zoom,
+   hover tooltip, click-to-manage) + legend.
+═══════════════════════════════════════════════════════════ */
+.atlas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Summary strip ─────────────────────────────── */
+.atlas-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.atlas-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+
+.atlas-stat svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.atlas-stat strong {
+  font-size: 16px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-stat em {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.atlas-dot--online {
+  background: var(--success-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--success-color) 60%, transparent);
+}
+
+.atlas-dot--offline {
+  background: var(--danger-color);
+}
+
+/* ── Map chrome ────────────────────────────────── */
+.map-zoom-wrap {
+  position: relative;
+}
+
+.map-zoom-viewport {
+  touch-action: none; /* drag-to-pan handled in JS */
+}
+
+.map-marker {
+  cursor: pointer;
+}
+
+.map-marker--offline {
+  opacity: .82;
+}
+
+.map-marker--active .node-online,
+.map-marker--active .node-offline {
+  stroke-width: 2.5;
+}
+
+/* ── Hover tooltip ─────────────────────────────── */
+.atlas-tooltip {
+  position: absolute;
+  z-index: 30;
+  min-width: 178px;
+  max-width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--bg-elevated);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+  pointer-events: none;
+  animation: fadeUp .12s ease both;
+}
+
+.atlas-tooltip-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+.atlas-tooltip-title strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atlas-tooltip-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.atlas-tooltip-dot.online {
+  background: var(--success-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--success-color) 60%, transparent);
+}
+
+.atlas-tooltip-dot.offline {
+  background: var(--danger-color);
+}
+
+.atlas-tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.atlas-tooltip-row b {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.atlas-tooltip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.atlas-tooltip-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.atlas-tooltip-grid b {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-tooltip-hint {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* ── Light theme adjustments ───────────────────── */
+html[data-theme="light"] .atlas-tooltip {
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(20, 30, 50, .16);
+}
+
+@media (max-width: 560px) {
+  .atlas-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── EditNodeModal: "apply settings on node" checkbox row ── */
+.modal-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.modal-check-row input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  accent-color: var(--accent-color);
+}
+
+.modal-check-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ALERT STRIP — compact dashboard alert bar
+   One slim row: icon, short summary, "+n" overflow, review link.
+═══════════════════════════════════════════════════════════ */
+.ops-alert-center {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  font-size: 11px;
+}
+
+.ops-alert-center.has-alerts {
+  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-color) 7%, var(--surface-1)), var(--surface-1));
+}
+
+.ops-alert-center.is-clear {
+  border-color: color-mix(in srgb, var(--success-color) 22%, var(--border));
+}
+
+.ops-alert-mini-icon {
+  flex: 0 0 auto;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+  color: var(--accent-color);
+}
+
+.ops-alert-center.is-clear .ops-alert-mini-icon {
+  background: color-mix(in srgb, var(--success-color) 14%, transparent);
+  color: var(--success-color);
+}
+
+.ops-alert-mini-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ops-alert-mini-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-alert-center.has-alerts .ops-alert-mini-text {
+  color: var(--text-primary);
+}
+
+.ops-alert-mini-more {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ops-alert-mini-action {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 32%, var(--border));
+  border-radius: 7px;
+  background: transparent;
+  color: var(--accent-color);
+  font: 800 10px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.ops-alert-mini-action:hover {
+  border-color: var(--accent-color);
+  background: var(--accent-color-transparent);
 }

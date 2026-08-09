@@ -8,7 +8,7 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '', address: '', tunnel_address: '', protocol: 'tcp',
-    ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: false,
+    ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: false, use_tls: false,
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -18,7 +18,8 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
       setFormData({
         name: node.name || '', address: node.address || '', tunnel_address: node.tunnel_address || '',
         protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
-        key: '', status: node.status === 'active' || node.status === true, set_new_setting: true,
+        key: '', status: node.status === 'active' || node.status === true,
+        set_new_setting: false, // metadata edits must not require the node to be online
         use_tls: node.use_tls === true,
       });
     }
@@ -38,7 +39,7 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
     try {
       const response = await apiClient.put(`/nodes/${node.id}`, payload);
       if (response.data.success) {
-        onNodeUpdated();
+        onNodeUpdated(response.data.msg || 'Node updated successfully.');
       } else {
         setError(response.data.msg || 'Unable to update node.');
       }
@@ -91,6 +92,13 @@ const EditNodeModal = ({ node, isOpen, onClose, onNodeUpdated }) => {
             <label htmlFor="edit-key">{t('key')}</label>
             <input type="text" id="edit-key" name="key" value={formData.key} onChange={handleChange} placeholder={t('keyKeepExistingHint', 'Leave blank to keep existing key')} />
           </div>
+          <label className="modal-check-row" style={{ gridColumn: '1 / -1' }}>
+            <input type="checkbox" name="set_new_setting" checked={formData.set_new_setting} onChange={handleChange} />
+            <span>
+              {t('applyNodeSettings', 'Apply new VPN settings on the node')}
+              <small>{t('applyNodeSettingsHint', 'Re-writes OpenVPN protocol/port/tunnel on the node. Leave off to only update this panel record — works even when the node is offline.')}</small>
+            </span>
+          </label>
         </div>
 
         <div className="modal-footer">

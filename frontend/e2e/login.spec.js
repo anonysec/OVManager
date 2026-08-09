@@ -143,7 +143,15 @@ test.describe('OVManager E2E', () => {
     await page.goto(`${BASE}/settings`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
-    // Settings is now a single scroll page with sections (no sub-tabs)
+    // Settings is a single scroll page with a Simple/Advanced mode toggle.
+    // Simple mode shows daily sections; Advanced adds power-user sections.
+    const hasModeToggle = await page.locator('.sp-mode-toggle button').count();
+    expect(hasModeToggle).toBe(2);
+    const hasDefaults = await page.locator('h2').filter({ hasText: 'Defaults' }).count();
+    expect(hasDefaults).toBeGreaterThan(0);
+    // Switch to Advanced and confirm the power-user sections appear.
+    await page.locator('.sp-mode-toggle button').nth(1).click();
+    await page.waitForTimeout(500);
     const hasGeneral = await page.locator('h2').filter({ hasText: 'General' }).count();
     expect(hasGeneral).toBeGreaterThan(0);
   });

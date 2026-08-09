@@ -173,10 +173,10 @@ const NodeManagement = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleNodeUpdated = () => {
+  const handleNodeUpdated = (msg) => {
     setIsEditModalOpen(false);
     setSelectedNode(null);
-    addToast('Node updated successfully.', 'success');
+    addToast(msg || 'Node updated successfully.', 'success');
     fetchNodes();
   };
 

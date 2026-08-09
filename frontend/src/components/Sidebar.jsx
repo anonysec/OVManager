@@ -41,9 +41,7 @@ const Sidebar = () => {
 
   if (userRole === 'owner') {
     navItems.push(
-      { to: '/admins',      label: t('navAdmins',      'Admins'),      icon: FiList,     group: t('navGroupManage', 'Manage')          },
-      { to: '/audit',       label: t('navAudit',       'Audit Log'),   icon: FiList,     group: t('navGroupAdmin',  'Administration')  },
-      { to: '/maintenance', label: t('navMaintenance', 'Maintenance'), icon: FiSettings, group: t('navGroupAdmin',  'Administration')  },
+      { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupManage', 'Manage') },
     );
   }
 

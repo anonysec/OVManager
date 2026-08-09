@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { geoEquirectangular, geoPath } from 'd3-geo';
@@ -7,6 +7,7 @@ import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiCheckCircle, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
+import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
 const formatBytes = (bytes) => {
@@ -128,73 +129,214 @@ const MiniLine = ({ values = [] }) => {
 };
 
 const WorldMap = ({ nodes, nodeStatus }) => {
+  const { t } = useTranslation();
   // Equirectangular, full world framed inside the viewBox (no top/bottom clipping)
   const projection = geoEquirectangular().scale(106).translate([334, 167]);
   const pathGen = geoPath(projection);
   const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
-  const [hover, setHover] = useState(null);
+  const [hoverCountry, setHoverCountry] = useState(null);
+  const [activeNode, setActiveNode] = useState(null);
+  const [tooltip, setTooltip] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+  const viewportRef = useRef(null);
+  const dragRef = useRef(null);
   const clamp = (z) => Math.max(1, Math.min(4, z));
+
+  const markers = useMemo(() => nodes
+    .map((node) => {
+      const m = nodeMeta(node);
+      const projected = m.coords ? projection(m.coords) : null;
+      if (!projected) return null;
+      const st = nodeStatus[node.id] || {};
+      const online = node.status && (st.reachable === true || (st.reachable === undefined && st.session_diagnostics?.live_count != null && st.node_info !== undefined));
+      return { node, meta: m, x: projected[0], y: projected[1], st, online };
+    })
+    .filter(Boolean), [nodes, nodeStatus, projection]);
+
+  // Atlas summary strip
+  const atlasStats = useMemo(() => {
+    const countries = new Set(markers.map((mk) => mk.meta.flagCode).filter(Boolean));
+    const online = markers.filter((mk) => mk.online).length;
+    const latencies = markers.map((mk) => Number(mk.st?.latency_ms)).filter(Number.isFinite);
+    const avg = latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+    return { countries: countries.size, online, total: markers.length, avgLatency: avg };
+  }, [markers]);
+
+  // Drag-to-pan: the viewport is scrollable when zoomed in.
+  const onPointerDown = (e) => {
+    dragRef.current = { x: e.clientX, y: e.clientY, sl: viewportRef.current?.scrollLeft || 0, st: viewportRef.current?.scrollTop || 0 };
+  };
+  const onPointerMove = (e) => {
+    const vp = viewportRef.current;
+    if (!vp || !dragRef.current) return;
+    if (Math.abs(e.clientX - dragRef.current.x) + Math.abs(e.clientY - dragRef.current.y) < 3) return;
+    vp.scrollLeft = dragRef.current.sl - (e.clientX - dragRef.current.x);
+    vp.scrollTop = dragRef.current.st - (e.clientY - dragRef.current.y);
+    e.preventDefault();
+  };
+  const stopDrag = () => { dragRef.current = null; };
+
+  // Wheel zoom around the cursor (Ctrl+scroll or plain scroll on the map).
+  const onWheel = (e) => {
+    e.preventDefault();
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const next = clamp(zoom * factor);
+    if (next === zoom) return;
+    // Keep the point under the cursor fixed while scaling the canvas.
+    const rect = vp.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const ratio = next / zoom;
+    const newScrollLeft = (vp.scrollLeft + px) * ratio - px;
+    const newScrollTop = (vp.scrollTop + py) * ratio - py;
+    setZoom(next);
+    requestAnimationFrame(() => {
+      vp.scrollLeft = newScrollLeft;
+      vp.scrollTop = newScrollTop;
+    });
+  };
+
+  const handleNodeHover = (mk, e) => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    setActiveNode(mk);
+    // Position relative to the map wrap (which shares the viewport's origin),
+    // so the tooltip follows the cursor on screen regardless of pan/zoom.
+    setTooltip({
+      x: (e.clientX - (rect?.left || 0)) + 14,
+      y: (e.clientY - (rect?.top || 0)) - 8,
+    });
+  };
+
+  const navToNode = (id) => {
+    const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : '';
+    window.location.assign(`${base}/nodes?node=${id}`);
+  };
+
   return (
-    <div className="map-zoom-wrap">
-      <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
-        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+
-        </button>
-        <span className="map-zoom-level" aria-live="polite">{zoom.toFixed(2)}×</span>
-        <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−
-        </button>
-        {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢
-        </button>}
+    <div className="atlas-wrap">
+      {/* Summary strip */}
+      <div className="atlas-stats">
+        <span className="atlas-stat">
+          <i className="atlas-dot atlas-dot--online" aria-hidden="true" />
+          <strong>{atlasStats.online}</strong>
+          <em>{t('statusOnline', 'Online')}</em>
+        </span>
+        <span className="atlas-stat">
+          <i className="atlas-dot atlas-dot--offline" aria-hidden="true" />
+          <strong>{atlasStats.total - atlasStats.online}</strong>
+          <em>{t('statusOffline', 'Offline')}</em>
+        </span>
+        <span className="atlas-stat">
+          <FiGlobe aria-hidden="true" />
+          <strong>{atlasStats.countries}</strong>
+          <em>{t('mapCountries', 'Countries')}</em>
+        </span>
+        <span className="atlas-stat">
+          <FiActivity aria-hidden="true" />
+          <strong>{atlasStats.avgLatency ? `${Math.round(atlasStats.avgLatency)}ms` : '—'}</strong>
+          <em>{t('avgLatency', 'Avg latency')}</em>
+        </span>
       </div>
-      <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
-        <div className="map-zoom-canvas" style={{ width: `${100 * zoom}%`, minWidth: '100%' }}>
-          <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-            style={{ width: '100%', height: 'auto' }}
-          role="img" aria-label="World map of node locations"
-          onMouseLeave={() => setHover(null)}>
-          <defs>
-            <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
-              <stop offset="0%" stopColor="#13314a" />
-              <stop offset="60%" stopColor="#0c2236" />
-              <stop offset="100%" stopColor="#081320" />
-            </radialGradient>
-          </defs>
-          <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
-          {land.features.map((feat) => (
-            <path
-              key={feat.id || feat.properties.name}
-              className="country"
-              d={pathGen(feat) || ''}
-              onMouseOver={() => setHover(feat.properties.name)}
-              tabIndex={-1}
-              aria-label={feat.properties.name}
-            >
-              <title>{feat.properties.name}</title>
-            </path>
-          ))}
-          <path className="country-borders" d={pathGen(borders) || ''} />
-          {hover && (() => {
-            const c = pathGen.centroid(land.features.find((f) => f.properties.name === hover)) || [300, 150];
-            return <text x={c[0]} y={c[1]} className="country-label">{hover}</text>;
-          })()}
-          {nodes.map((node) => {
-            const m = nodeMeta(node);
-            const projected = m.coords ? projection(m.coords) : null;
-            if (!projected) return null;
-            const [x, y] = projected;
-            const st = nodeStatus[node.id] || {};
-            const online = node.status && (st.reachable === true || (st.reachable === undefined && st.session_diagnostics?.live_count != null && st.node_info !== undefined));
-            return (
-              <g key={node.id} className="map-marker" transform={`translate(${x},${y})`} aria-label={`${node.name} — ${online ? 'online' : 'offline'}`}>
-                {online && <circle className="pulse" r={6} aria-hidden="true" />}
-                <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} aria-hidden="true" />
-                <text x={7} y={4} className="node-country-label">{node.name}{m.approximate ? ' · approx.' : ''}</text>
-              </g>
-            );
-          })}
-          </svg>
+
+      <div className="map-zoom-wrap">
+        <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
+          <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+
+          </button>
+          <span className="map-zoom-level" aria-live="polite">{zoom.toFixed(2)}×</span>
+          <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−
+          </button>
+          {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢
+          </button>}
         </div>
+
+        <div
+          className="map-zoom-viewport"
+          ref={viewportRef}
+          style={{ overflow: zoom > 1 ? 'auto' : 'hidden', cursor: dragRef.current ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={stopDrag}
+          onPointerLeave={stopDrag}
+          onWheel={onWheel}
+        >
+          <div className="map-zoom-canvas" style={{ width: `${100 * zoom}%`, minWidth: '100%' }}>
+            <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
+              style={{ width: '100%', height: 'auto' }}
+              role="img" aria-label="World map of node locations"
+              onMouseLeave={() => { setHoverCountry(null); setActiveNode(null); }}>
+              <defs>
+                <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
+                  <stop offset="0%" stopColor="#13314a" />
+                  <stop offset="60%" stopColor="#0c2236" />
+                  <stop offset="100%" stopColor="#081320" />
+                </radialGradient>
+              </defs>
+              <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
+              {land.features.map((feat) => (
+                <path
+                  key={feat.id || feat.properties.name}
+                  className="country"
+                  d={pathGen(feat) || ''}
+                  onMouseOver={() => setHoverCountry(feat.properties.name)}
+                  tabIndex={-1}
+                  aria-label={feat.properties.name}
+                >
+                  <title>{feat.properties.name}</title>
+                </path>
+              ))}
+              <path className="country-borders" d={pathGen(borders) || ''} />
+              {hoverCountry && (() => {
+                const c = pathGen.centroid(land.features.find((f) => f.properties.name === hoverCountry)) || [300, 150];
+                return <text x={c[0]} y={c[1]} className="country-label">{hoverCountry}</text>;
+              })()}
+              {markers.map((mk) => (
+                <g
+                  key={mk.node.id}
+                  className={`map-marker${mk.online ? '' : ' map-marker--offline'}${activeNode?.node.id === mk.node.id ? ' map-marker--active' : ''}`}
+                  transform={`translate(${mk.x},${mk.y})`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${mk.node.name} — ${mk.online ? 'online' : 'offline'}`}
+                  onMouseMove={(e) => handleNodeHover(mk, e)}
+                  onMouseLeave={() => setActiveNode(null)}
+                  onClick={() => navToNode(mk.node.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navToNode(mk.node.id); } }}
+                >
+                  {mk.online && <circle className="pulse" r={6} aria-hidden="true" />}
+                  <circle r={mk.online ? 5 : 3.5} className={mk.online ? 'node-online' : 'node-offline'} aria-hidden="true" />
+                  <text x={7} y={4} className="node-country-label">{mk.node.name}{mk.meta.approximate ? ' · approx.' : ''}</text>
+                </g>
+              ))}
+            </svg>
+          </div>
+        </div>
+
+        {/* Hover tooltip */}
+        {activeNode && (
+          <div
+            className="atlas-tooltip"
+            style={{ left: tooltip.x, top: tooltip.y }}
+            role="tooltip"
+          >
+            <div className="atlas-tooltip-title">
+              <span className={`atlas-tooltip-dot ${activeNode.online ? 'online' : 'offline'}`} aria-hidden="true" />
+              <strong>{activeNode.node.name}</strong>
+            </div>
+            <div className="atlas-tooltip-row">
+              <span>{activeNode.meta.flagCode ? `${activeNode.meta.flagCode} · ` : ''}{activeNode.meta.name}</span>
+              <b>{activeNode.online ? t('statusOnline', 'Online') : t('statusOffline', 'Offline')}</b>
+            </div>
+            <div className="atlas-tooltip-grid">
+              <span>{t('th_conns', 'Conns')}<b>{Number(activeNode.st?.session_diagnostics?.live_count || 0)}</b></span>
+              <span>{t('th_cpu', 'CPU')}<b>{Number.isFinite(Number(activeNode.st?.node_info?.cpu_usage)) ? `${Number(activeNode.st?.node_info?.cpu_usage).toFixed(0)}%` : '—'}</b></span>
+              <span>{t('avgLatency', 'Latency')}<b>{Number.isFinite(Number(activeNode.st?.latency_ms)) ? `${Math.round(Number(activeNode.st?.latency_ms))}ms` : '—'}</b></span>
+            </div>
+            <div className="atlas-tooltip-hint">{t('mapClickManage', 'Click to manage node')}</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -209,7 +351,7 @@ const SecurityScoreRing = ({ score }) => {
       <circle cx="46" cy="46" r={r} className="ring-bg" />
       <circle cx="46" cy="46" r={r} className="ring-fg" stroke={color}
         strokeDasharray={c} strokeDashoffset={off} transform="rotate(-90 46 46)" />
-      <text x="46" y="46" className="ring-num" fill={color}>{score}</text>
+      <text x="46" y="46" className="ring-num" fill={color} textAnchor="middle" dominantBaseline="central">{score}</text>
     </svg>
   );
 };
@@ -235,7 +377,12 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
   if (Number(sec.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${sec.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null });
   if (Number(sec.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${sec.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null });
   if (Number(sec.stale_markers || 0) > 0) out.push({ id: 'stale', level: 'warning', title: `${sec.stale_markers} stale session markers`, detail: 'Review stale sessions in Security settings', action: null });
-  return out;
+  // Respect the "Alerts & Dashboard" preferences from Settings.
+  const prefs = readPrefs();
+  return out.filter((n) => {
+    const pref = alertPrefKey(n.id);
+    return !pref || prefs[pref] !== false;
+  });
 };
 
 const ServerStats = () => {
@@ -295,10 +442,19 @@ const ServerStats = () => {
     setLoading(false);
   }, []);
 
+  // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
+  // immediately when the preference changes.
   useEffect(() => {
     loadData();
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') loadData(); }, 30000);
-    return () => clearInterval(timer);
+    let id = null;
+    const start = () => {
+      if (id) clearInterval(id);
+      const sec = readPrefs().refreshSec;
+      id = setInterval(() => { if (document.visibilityState === 'visible') loadData(); }, sec * 1000);
+    };
+    start();
+    window.addEventListener('ovmanager-prefs-changed', start);
+    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', start); };
   }, [loadData]);
 
   const onlineNodes = (nodes || []).filter((n) => {
@@ -539,39 +695,28 @@ const ServerStats = () => {
             </Panel>
           </div>
 
-          <section className={`ops-alert-center ${notifications.length > 0 ? 'has-alerts' : 'is-clear'}`} aria-live="polite" aria-labelledby="alert-center-title">
-            <div className="alert-center-header">
-              <div className="alert-center-heading">
-                <span className="alert-center-icon" aria-hidden="true">
-                  {notifications.length > 0 ? <FiAlertTriangle /> : <FiCheckCircle />}
-                </span>
-                <div>
-                  <h3 id="alert-center-title">{notifications.length > 0 ? t('attentionRequired', 'Attention required') : t('allSystemsClear', 'All systems clear')}</h3>
-                  <p>{notifications.length > 0
-                    ? `${notifications.length} ${t(notifications.length === 1 ? 'alertOne' : 'alertsMany')} need review.`
-                    : t('allSystemsClearDetail', 'No active node, session, or authentication alerts.')}</p>
-                </div>
-              </div>
-              <button type="button" className="alert-center-action" onClick={() => navigate('/settings#security')}>
-                {t('reviewSecurity', 'Review security')} <FiArrowRight aria-hidden="true" />
+          {/* Minimal alert strip — one slim row, no big panel. */}
+          <section
+            className={`ops-alert-center ${notifications.length > 0 ? 'has-alerts' : 'is-clear'}`}
+            aria-live="polite"
+            aria-label={notifications.length > 0 ? t('attentionRequired', 'Attention required') : t('allSystemsClear', 'All systems clear')}
+            title={notifications.map((n) => n.title).join('\n') || t('allSystemsClear', 'All systems clear')}
+          >
+            <span className="ops-alert-mini-icon" aria-hidden="true">
+              {notifications.length > 0 ? <FiAlertTriangle /> : <FiCheckCircle />}
+            </span>
+            <span className="ops-alert-mini-text">
+              {notifications.length > 0
+                ? notifications.slice(0, 2).map((n) => n.title).join(' · ')
+                : t('allSystemsClear', 'All systems clear')}
+            </span>
+            {notifications.length > 2 && (
+              <span className="ops-alert-mini-more">+{notifications.length - 2}</span>
+            )}
+            {notifications.length > 0 && (
+              <button type="button" className="ops-alert-mini-action" onClick={() => navigate('/settings#security')}>
+                {t('reviewSecurity', 'Review')}
               </button>
-            </div>
-            {notifications.length > 0 ? (
-              <div className="alert-center-list">
-                {notifications.slice(0, 4).map((n) => (
-                  <div key={n.id} className={`alert-center-item ${n.level}`}>
-                    <span className="alert-center-item-dot" aria-hidden="true" />
-                    <span className="alert-center-item-copy"><strong>{n.title}</strong><small>{n.detail}</small></span>
-                    <span className="alert-center-severity">{n.level === 'danger' ? t('critical', 'Critical') : t('warning', 'Warning')}</span>
-                  </div>
-                ))}
-                {notifications.length > 4 && <span className="alert-center-more">{t('moreN', { count: notifications.length - 4 })}</span>}
-              </div>
-            ) : (
-              <div className="alert-center-clear-state">
-                <FiCheckCircle aria-hidden="true" />
-                <span>{t('monitoringNormally', 'Monitoring is running normally. We will surface issues here.')}</span>
-              </div>
             )}
           </section>
         </>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FiSearch, FiServer, FiUsers, FiSettings, FiShield, FiDatabase, FiUserCheck, FiFileText, FiArrowUp, FiCommand } from 'react-icons/fi';
+import { FiSearch, FiServer, FiUsers, FiSettings, FiUserCheck, FiFileText, FiArrowUp, FiCommand } from 'react-icons/fi';
 import apiClient from '../services/api';
 
 const PAGES = (t, isAdmin) => [
@@ -10,8 +10,6 @@ const PAGES = (t, isAdmin) => [
   { label: t('navNodes', 'Nodes'), path: '/nodes', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   { label: t('navSettings', 'Settings'), path: '/settings', icon: FiSettings, group: t('navGroupPages', 'Pages') },
   ...(isAdmin ? [
-    { label: t('navAudit', 'Audit Log'), path: '/audit', icon: FiShield, group: t('navGroupPages', 'Pages') },
-    { label: t('navMaintenance', 'Maintenance'), path: '/maintenance', icon: FiDatabase, group: t('navGroupPages', 'Pages') },
     { label: t('navAdmins', 'Admins'), path: '/admins', icon: FiUserCheck, group: t('navGroupPages', 'Pages') },
   ] : []),
 ];

@@ -1,12 +1,27 @@
 /**
- * Settings — single scrollable page, no sub-tabs.
- * All sections load together; anchor links jump to each category.
+ * Settings — single scrollable page with a Simple / Advanced mode toggle.
+ *
+ * Simple mode surfaces the settings an operator touches every day:
+ *   - New user defaults (days / traffic / devices)
+ *   - Telegram bot (token, enable, owner ID)
+ *   - Display timezone
+ *   - Appearance (theme + language)
+ *   - Alerts & Dashboard (which alerts to show, refresh cadence)
+ *
+ * Advanced mode adds power-user controls:
+ *   - Panel URL path & subscription prefix
+ *   - System info + on-demand maintenance jobs
+ *   - Security summary, backup/restore, activity feed
+ *
+ * The chosen mode is persisted so the page opens the way you left it.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
+import { useTheme } from '../context/ThemeContext';
+import { readPrefs, writePref, REFRESH_OPTIONS } from '../utils/notifPrefs';
 import LoadingButton from '../components/LoadingButton';
 import PanelSkeleton from '../components/ui/PanelSkeleton';
 import ErrorState from '../components/ui/ErrorState';
@@ -15,19 +30,22 @@ import {
   FiSliders, FiServer, FiShield, FiArchive, FiSend, FiActivity,
   FiLink, FiEdit2, FiCheck, FiX, FiExternalLink,
   FiZap, FiRefreshCw, FiDownload, FiUpload, FiDatabase,
-  FiBarChart2,
+  FiBarChart2, FiUserPlus, FiClock, FiSun, FiMoon, FiMonitor,
+  FiBell, FiGlobe, FiAlertTriangle,
 } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
 import { formatUptime, fmtDateTime } from '../utils/time';
 import './Settings.css';
 import '../components/SettingsStyles.css';
 
+const MODE_KEY = 'ovmanager-settings-mode';
+
 /* ─────────────────────────────────────────────
    Section header with anchor
 ───────────────────────────────────────────── */
 const SectionHeader = ({ id, icon: Icon, label, description }) => (
   <div className="sp-section-header" id={id}>
-    <span className="sp-section-icon"><Icon aria-hidden="true" /></span>
+    <span className="sp-section-icon">{Icon ? <Icon aria-hidden="true" /> : null}</span>
     <div>
       <h2>{label}</h2>
       {description && <p>{description}</p>}
@@ -69,11 +87,240 @@ const Stat = ({ label, value, tone }) => (
 );
 
 /* ═══════════════════════════════════════════════════════
-   GENERAL — Panel URL path
+   DEFAULTS — new user defaults (used by the Telegram bot)
+═══════════════════════════════════════════════════════ */
+const DefaultsSection = () => {
+  const { t } = useTranslation();
+  const { refreshTick } = useLive();
+  const { addToast } = useToast();
+  const [days, setDays] = useState(30);
+  const [trafficGb, setTrafficGb] = useState(100);
+  const [devices, setDevices] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/server/settings');
+      const s = res.data?.data || {};
+      setDays(Number(s.default_days) || 30);
+      setTrafficGb(Number(s.default_traffic_gb) || 100);
+      setDevices(Number(s.default_max_users) || 1);
+    } catch { /* noop */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load, refreshTick]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiClient.put('/server/settings/bot', {
+        default_days: Math.max(1, Math.min(3650, Number(days) || 30)),
+        default_traffic_gb: Math.max(1, Number(trafficGb) || 100),
+        default_max_users: Math.max(1, Math.min(1000, Number(devices) || 1)),
+      });
+      addToast(t('saved', 'Defaults saved.'), 'success');
+    } catch (e) {
+      addToast(e.response?.data?.msg || e.response?.data?.detail || t('error', 'Error'), 'error');
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+
+  return (
+    <div className="sp-cards">
+      <Card title={t('newUserDefaults', 'New User Defaults')} icon={FiUserPlus}>
+        <p className="sp-hint" style={{ marginBottom: 14 }}>
+          {t('defaultsDesc', 'Applied when the Telegram bot creates a new user without explicit values.')}
+        </p>
+        <div className="sp-two-col">
+          <Field label={t('defaultDays', 'Default expiry (days)')}>
+            <input className="sp-input" type="number" min={1} max={3650} value={days} onChange={e => setDays(e.target.value)} />
+          </Field>
+          <Field label={t('defaultTrafficGb', 'Default traffic (GB)')}>
+            <input className="sp-input" type="number" min={1} value={trafficGb} onChange={e => setTrafficGb(e.target.value)} />
+          </Field>
+        </div>
+        <Field label={t('defaultDevices', 'Default devices per user')} hint={t('defaultDevicesHint', 'Simultaneous logins allowed for each new user. 0 = unlimited.')}>
+          <input className="sp-input" type="number" min={0} max={1000} value={devices} onChange={e => setDevices(e.target.value)} />
+        </Field>
+        <div className="sp-btn-group" style={{ marginTop: 18 }}>
+          <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save}>
+            <FiCheck size={13} /> {t('save', 'Save defaults')}
+          </LoadingButton>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+   BOT — Telegram bot configuration (compact)
+═══════════════════════════════════════════════════════ */
+const BotSection = () => {
+  const { t } = useTranslation();
+  const { addToast } = useToast();
+  const [token, setToken] = useState('');
+  const [enabled, setEnabled] = useState(false);
+  const [ownerId, setOwnerId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [encryptKeyMissing, setEncryptKeyMissing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const r = await apiClient.get('/server/settings');
+      const d = r.data?.data || {};
+      setEnabled(d.bot_enabled || false);
+      setOwnerId(d.owner_telegram_id || '');
+      setEncryptKeyMissing(false);
+    } catch { /* noop */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        bot_enabled: enabled,
+        owner_telegram_id: ownerId ? Number(ownerId) : null,
+        ...(token ? { bot_token: token } : {}),
+      };
+      const r = await apiClient.put('/server/settings/bot', payload);
+      if (r.data?.success === false) {
+        const msg = r.data?.msg || '';
+        if (msg.toLowerCase().includes('encrypt')) setEncryptKeyMissing(true);
+        addToast(msg || t('error', 'Error'), 'error');
+      } else {
+        addToast(t('saved', 'Bot settings saved.'), 'success');
+        setToken(''); // token is write-only
+      }
+    } catch (e) {
+      const msg = e.response?.data?.detail || e.response?.data?.msg || t('error', 'Error');
+      if (msg.toLowerCase().includes('encrypt')) setEncryptKeyMissing(true);
+      addToast(msg, 'error');
+    } finally { setSaving(false); }
+  };
+
+  const clearToken = async () => {
+    setSaving(true);
+    try {
+      await apiClient.put('/server/settings/bot', { bot_token: null, bot_enabled: false });
+      setEnabled(false); setToken('');
+      addToast(t('tokenCleared', 'Bot token cleared.'), 'success');
+    } catch (e) { addToast(e.response?.data?.detail || t('error', 'Error'), 'error'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+
+  return (
+    <div className="sp-cards">
+      <Card title={t('telegramBot', 'Telegram Bot')} icon={FiSend}>
+        {encryptKeyMissing && (
+          <div className="settings-alert settings-alert--error" role="alert" style={{ marginBottom: 16 }}>
+            <strong>{t('botEncryptKeyMissing', 'BOT_ENCRYPT_KEY not set')}</strong>
+            <p>{t('botEncryptKeyMissingDesc', 'Set BOT_ENCRYPT_KEY in your .env before saving a token.')}</p>
+          </div>
+        )}
+
+        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'Obtain from @BotFather. Write-only — leave blank to keep the existing token.')}>
+          <input className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
+            placeholder="123456789:ABC…" disabled={encryptKeyMissing} />
+        </Field>
+
+        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint="Your personal Telegram user ID — receives alerts.">
+          <input className="sp-input" type="number" value={ownerId} onChange={e => setOwnerId(e.target.value)} placeholder="123456789" />
+        </Field>
+
+        <Field label={t('botEnabled', 'Enable Bot')} horizontal>
+          <label className="sp-toggle">
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} disabled={encryptKeyMissing} />
+            <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
+          </label>
+        </Field>
+
+        <div className="sp-btn-group" style={{ marginTop: 20 }}>
+          <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save} disabled={encryptKeyMissing}>
+            {t('save', 'Save settings')}
+          </LoadingButton>
+          <button className="btn btn-sm btn-secondary" onClick={clearToken} disabled={saving}>
+            {t('clearToken', 'Clear token')}
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+   DISPLAY — timezone used everywhere in the UI
+═══════════════════════════════════════════════════════ */
+const DisplaySection = () => {
+  const { t } = useTranslation();
+  const { addToast } = useToast();
+  const [timezone, setTimezone] = useState('UTC');
+  const [editing, setEditing] = useState(false);
+  const [tzValue, setTzValue] = useState('UTC');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await apiClient.get('/server/settings');
+      setTimezone(res.data?.data?.timezone || 'UTC');
+    } catch { /* noop */ } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiClient.put('/server/settings/timezone', { timezone: tzValue });
+      setTimezone(tzValue); setEditing(false);
+      addToast(t('saved', 'Saved.'), 'success');
+    } catch (e) { addToast(e.response?.data?.msg || t('error', 'Error'), 'error'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+
+  return (
+    <div className="sp-cards">
+      <Card title={t('timezoneCard', 'Display Timezone')} icon={FiClock}>
+        <div className="sp-url-row">
+          <code className="sp-code">{timezone}</code>
+          {!editing && (
+            <button className="sp-icon-btn" onClick={() => { setTzValue(timezone); setEditing(true); }} aria-label={t('change', 'Change')}>
+              <FiEdit2 size={14} />
+            </button>
+          )}
+        </div>
+        {editing && (
+          <div className="sp-inline-edit">
+            <input type="text" value={tzValue} autoFocus placeholder="Asia/Tehran" onChange={e => setTzValue(e.target.value)} className="sp-input" />
+            <div className="sp-row-btns">
+              <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
+              <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
+            </div>
+          </div>
+        )}
+        <p className="sp-hint">{t('timezoneDesc', 'IANA timezone name used for all date/time displays (e.g. UTC, Asia/Tehran, Europe/Amsterdam).')}</p>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+   GENERAL (advanced) — Panel URL path + subscription prefix
 ═══════════════════════════════════════════════════════ */
 const GeneralSection = () => {
   const { t } = useTranslation();
-  const { refreshTick } = useLive();
   const { addToast } = useToast();
   const [urlPath, setUrlPath] = useState('');
   const [editing, setEditing] = useState(false);
@@ -81,10 +328,6 @@ const GeneralSection = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [timezone, setTimezone] = useState('UTC');
-  const [tzEditing, setTzEditing] = useState(false);
-  const [tzValue, setTzValue] = useState('UTC');
-  const [tzSaving, setTzSaving] = useState(false);
   const [subPrefix, setSubPrefix] = useState('');
   const [subPrefixEditing, setSubPrefixEditing] = useState(false);
   const [subPrefixValue, setSubPrefixValue] = useState('');
@@ -96,12 +339,11 @@ const GeneralSection = () => {
       const res = await apiClient.get('/server/settings');
       const s = res.data?.data || {};
       setUrlPath(s.urlpath || '');
-      setTimezone(s.timezone || 'UTC');
       setSubPrefix(s.subscription_url_prefix || '');
     } catch { /* noop */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load, refreshTick]);
+  useEffect(() => { load(); }, [load]);
 
   const saveUrlPath = async () => {
     setSaving(true); setError('');
@@ -116,16 +358,6 @@ const GeneralSection = () => {
     finally { setSaving(false); }
   };
 
-  const saveTz = async () => {
-    setTzSaving(true);
-    try {
-      await apiClient.put('/server/settings/timezone', { timezone: tzValue });
-      setTimezone(tzValue); setTzEditing(false);
-      addToast(t('saved', 'Saved.'), 'success');
-    } catch (e) { addToast(e.response?.data?.msg || t('error', 'Error'), 'error'); }
-    finally { setTzSaving(false); }
-  };
-
   const saveSubPrefix = async () => {
     setSubPrefixSaving(true);
     try {
@@ -136,16 +368,14 @@ const GeneralSection = () => {
     finally { setSubPrefixSaving(false); }
   };
 
-  const panelUrl = urlPath
-    ? `${window.location.origin}/${urlPath}/`
-    : `${window.location.origin}/`;
+  const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
 
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
 
   return (
     <div className="sp-cards">
       {/* Panel URL */}
-      <Card title={t('panelUrl', 'Panel URL')} icon={FiLink}>
+      <Card title={t('panelUrl', 'Panel URL Path')} icon={FiLink}>
         <div className="sp-url-row">
           <code className="sp-code">{urlPath ? `/${urlPath}/` : '/'}</code>
           {!editing && (
@@ -179,28 +409,6 @@ const GeneralSection = () => {
         <p className="sp-hint">{urlPath ? t('urlpathActive', 'Panel served at /{path}/. Clear to serve at root.', { path: urlPath }) : t('urlpathRoot', 'Panel served at root (/).')}</p>
       </Card>
 
-      {/* Timezone */}
-      <Card title={t('timezoneCard', 'Display Timezone')} icon={FiSliders}>
-        <div className="sp-url-row">
-          <code className="sp-code">{timezone}</code>
-          {!tzEditing && (
-            <button className="sp-icon-btn" onClick={() => { setTzValue(timezone); setTzEditing(true); }} aria-label={t('change', 'Change')}>
-              <FiEdit2 size={14} />
-            </button>
-          )}
-        </div>
-        {tzEditing && (
-          <div className="sp-inline-edit">
-            <input type="text" value={tzValue} autoFocus placeholder="Asia/Tehran" onChange={e => setTzValue(e.target.value)} className="sp-input" />
-            <div className="sp-row-btns">
-              <LoadingButton className="btn btn-sm" isLoading={tzSaving} onClick={saveTz}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
-              <button className="btn btn-sm btn-secondary" onClick={() => setTzEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
-            </div>
-          </div>
-        )}
-        <p className="sp-hint">{t('timezoneDesc', 'IANA timezone name used for all date/time displays (e.g. UTC, Asia/Tehran, Europe/Amsterdam).')}</p>
-      </Card>
-
       {/* Subscription URL prefix */}
       <Card title={t('subscriptionLinkCard', 'Subscription URL Prefix')} icon={FiLink}>
         <div className="sp-url-row">
@@ -227,7 +435,7 @@ const GeneralSection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════
-   SYSTEM — Server info + maintenance actions
+   SYSTEM (advanced) — Server info + maintenance actions
 ═══════════════════════════════════════════════════════ */
 const SystemSection = () => {
   const { t } = useTranslation();
@@ -304,7 +512,7 @@ const SystemSection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════
-   SECURITY — Auth summary
+   SECURITY (advanced) — Auth summary
 ═══════════════════════════════════════════════════════ */
 const SecuritySection = () => {
   const { t } = useTranslation();
@@ -358,7 +566,7 @@ const SecuritySection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════
-   BACKUP — Create, download, restore
+   BACKUP (advanced) — Create, download, restore
 ═══════════════════════════════════════════════════════ */
 const BackupSection = () => {
   const { t } = useTranslation();
@@ -446,123 +654,7 @@ const BackupSection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════
-   BOT — Telegram bot configuration
-═══════════════════════════════════════════════════════ */
-const BotSection = () => {
-  const { t } = useTranslation();
-  const { addToast } = useToast();
-  const [token, setToken] = useState('');
-  const [enabled, setEnabled] = useState(false);
-  const [ownerId, setOwnerId] = useState('');
-  const [defaultDays, setDefaultDays] = useState(30);
-  const [defaultGb, setDefaultGb] = useState(100);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [encryptKeyMissing, setEncryptKeyMissing] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const r = await apiClient.get('/server/settings');
-      const d = r.data?.data || {};
-      setEnabled(d.bot_enabled || false);
-      setOwnerId(d.owner_telegram_id || '');
-      setDefaultDays(d.default_days || 30);
-      setDefaultGb(d.default_traffic_gb || 100);
-      setEncryptKeyMissing(false);
-    } catch { /* noop */ } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        bot_enabled: enabled,
-        owner_telegram_id: ownerId ? Number(ownerId) : null,
-        default_days: Number(defaultDays) || 30,
-        default_traffic_gb: Number(defaultGb) || 100,
-        ...(token ? { bot_token: token } : {}),
-      };
-      const r = await apiClient.put('/server/settings/bot', payload);
-      if (r.data?.success === false) {
-        const msg = r.data?.msg || '';
-        if (msg.toLowerCase().includes('encrypt')) setEncryptKeyMissing(true);
-        addToast(msg || t('error', 'Error'), 'error');
-      } else {
-        addToast(t('saved', 'Bot settings saved.'), 'success');
-        setToken(''); // clear token field — it's write-only
-      }
-    } catch (e) {
-      const msg = e.response?.data?.detail || e.response?.data?.msg || t('error', 'Error');
-      if (msg.toLowerCase().includes('encrypt')) setEncryptKeyMissing(true);
-      addToast(msg, 'error');
-    } finally { setSaving(false); }
-  };
-
-  const clearToken = async () => {
-    setSaving(true);
-    try {
-      await apiClient.put('/server/settings/bot', { bot_token: null, bot_enabled: false });
-      setEnabled(false); setToken('');
-      addToast(t('tokenCleared', 'Bot token cleared.'), 'success');
-    } catch (e) { addToast(e.response?.data?.detail || t('error', 'Error'), 'error'); }
-    finally { setSaving(false); }
-  };
-
-  if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
-
-  return (
-    <div className="sp-cards">
-      <Card title={t('telegramBot', 'Telegram Bot')} icon={FiSend}>
-        {encryptKeyMissing && (
-          <div className="settings-alert settings-alert--error" role="alert" style={{ marginBottom: 16 }}>
-            <strong>{t('botEncryptKeyMissing', 'BOT_ENCRYPT_KEY not set')}</strong>
-            <p>{t('botEncryptKeyMissingDesc', 'Set BOT_ENCRYPT_KEY in your .env before saving a token.')}</p>
-          </div>
-        )}
-
-        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'Obtain from @BotFather. Write-only — leave blank to keep the existing token.')}>
-          <input className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
-            placeholder="123456789:ABC…" disabled={encryptKeyMissing} />
-        </Field>
-
-        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint="Your personal Telegram user ID — receives alerts.">
-          <input className="sp-input" type="number" value={ownerId} onChange={e => setOwnerId(e.target.value)} placeholder="123456789" />
-        </Field>
-
-        <div className="sp-two-col">
-          <Field label={t('modal_expiryDate', 'Default Days')}>
-            <input className="sp-input" type="number" min={1} max={3650} value={defaultDays} onChange={e => setDefaultDays(e.target.value)} />
-          </Field>
-          <Field label="Default Traffic (GB)">
-            <input className="sp-input" type="number" min={1} value={defaultGb} onChange={e => setDefaultGb(e.target.value)} />
-          </Field>
-        </div>
-
-        <Field label={t('botEnabled', 'Enable Bot')} horizontal>
-          <label className="sp-toggle">
-            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} disabled={encryptKeyMissing} />
-            <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
-          </label>
-        </Field>
-
-        <div className="sp-btn-group" style={{ marginTop: 20 }}>
-          <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save} disabled={encryptKeyMissing}>
-            {t('save', 'Save settings')}
-          </LoadingButton>
-          <button className="btn btn-sm btn-secondary" onClick={clearToken} disabled={saving}>
-            {t('clearToken', 'Clear token')}
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════
-   ACTIVITY — Recent audit events
+   ACTIVITY (advanced) — Recent audit events
 ═══════════════════════════════════════════════════════ */
 const ActivitySection = () => {
   const { t } = useTranslation();
@@ -607,25 +699,173 @@ const ActivitySection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════
+   APPEARANCE — theme + language (front-end only)
+═══════════════════════════════════════════════════════ */
+const AppearanceSection = () => {
+  const { t, i18n } = useTranslation();
+  const { theme, setTheme } = useTheme();
+  const [lang, setLang] = useState(i18n.language || 'en');
+
+  const THEMES = [
+    { id: 'light', label: t('lightTheme', 'Light'), icon: FiSun },
+    { id: 'dark', label: t('darkTheme', 'Dark'), icon: FiMoon },
+    { id: 'system', label: t('systemTheme', 'System'), icon: FiMonitor },
+  ];
+
+  const LANGS = [
+    { id: 'fa', label: 'فارسی' },
+    { id: 'en', label: 'English' },
+    { id: 'ru', label: 'Русский' },
+    { id: 'cn', label: '中文' },
+  ];
+
+  const changeLanguage = (id) => {
+    i18n.changeLanguage(id);
+    document.documentElement.dir = id === 'fa' ? 'rtl' : 'ltr';
+    localStorage.setItem('ovmanager-lang', id);
+    setLang(id);
+  };
+
+  return (
+    <div className="sp-cards">
+      <Card title={t('themeCard', 'Theme')} icon={FiMonitor}>
+        <div className="sp-theme-pills" role="group" aria-label={t('themeCard', 'Theme')}>
+          {THEMES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`sp-theme-pill${theme === item.id ? ' active' : ''}`}
+              onClick={() => setTheme(item.id)}
+              aria-pressed={theme === item.id}
+            >
+              <item.icon size={15} aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+        <p className="sp-hint">{t('themeDesc', 'System follows your operating system preference.')}</p>
+      </Card>
+
+      <Card title={t('languageCard', 'Language')} icon={FiGlobe}>
+        <div className="sp-lang-row" role="group" aria-label={t('languageCard', 'Language')}>
+          {LANGS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`sp-lang-btn${lang === item.id ? ' active' : ''}`}
+              onClick={() => changeLanguage(item.id)}
+              aria-pressed={lang === item.id}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <p className="sp-hint">{t('languageDesc', 'Interface language. Persian switches the panel to RTL.')}</p>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+   ALERTS & DASHBOARD — which alerts to surface + refresh
+═══════════════════════════════════════════════════════ */
+const AlertsSection = () => {
+  const { t } = useTranslation();
+  const [prefs, setPrefs] = useState(readPrefs);
+
+  const toggle = (key, value) => {
+    writePref(key, value);
+    setPrefs(readPrefs());
+  };
+
+  const ALERTS = [
+    { key: 'nodeDown', label: t('alertNodeDown', 'Node offline / unreachable'), icon: FiAlertTriangle },
+    { key: 'maxLogins', label: t('alertMaxLogins', 'User at max logins'), icon: FiAlertTriangle },
+    { key: 'authErrors', label: t('alertAuthErrors', 'Authentication errors'), icon: FiAlertTriangle },
+    { key: 'rejects', label: t('alertRejects', 'Connection rejects'), icon: FiAlertTriangle },
+    { key: 'stale', label: t('alertStale', 'Stale session markers'), icon: FiAlertTriangle },
+  ];
+
+  return (
+    <div className="sp-cards">
+      <Card title={t('alertsCard', 'Alert Types')} icon={FiBell}>
+        <p className="sp-hint" style={{ marginBottom: 12 }}>{t('alertsDesc', 'Choose which alerts appear in the topbar bell and the dashboard strip.')}</p>
+        <div className="sp-alert-list">
+          {ALERTS.map((item) => (
+            <label key={item.key} className="sp-alert-row">
+              <span className="sp-alert-label"><item.icon size={13} aria-hidden="true" /> {item.label}</span>
+              <span className="sp-toggle">
+                <input type="checkbox" checked={prefs[item.key] !== false} onChange={(e) => toggle(item.key, e.target.checked)} />
+                <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </Card>
+
+      <Card title={t('refreshCard', 'Refresh Interval')} icon={FiRefreshCw}>
+        <Field label={t('refreshInterval', 'Dashboard refresh (seconds)')} hint={t('refreshDesc', 'How often the dashboard and notification bell poll for fresh data.')}>
+          <select className="sp-input" value={prefs.refreshSec} onChange={(e) => toggle('refreshSec', Number(e.target.value))}>
+            {REFRESH_OPTIONS.map((sec) => (
+              <option key={sec} value={sec}>{sec} {t('secondsUnit', 's')}</option>
+            ))}
+          </select>
+        </Field>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
    ROOT SETTINGS PAGE
 ═══════════════════════════════════════════════════════ */
 const SECTIONS = [
-  { id: 'general',  icon: FiSliders,  labelKey: 'settingsGeneral',  label: 'General',  descKey: 'settingsGeneralDesc',  desc: 'Panel URL, timezone and subscription settings', Component: GeneralSection  },
-  { id: 'system',   icon: FiServer,   labelKey: 'settingsSystem',   label: 'System',   descKey: 'settingsSystemDesc',   desc: 'Server info and maintenance actions',            Component: SystemSection   },
-  { id: 'security', icon: FiShield,   labelKey: 'settingsSecurity', label: 'Security', descKey: 'settingsSecurityDesc', desc: 'Authentication errors and session signals',      Component: SecuritySection },
-  { id: 'backup',   icon: FiArchive,  labelKey: 'settingsBackup',   label: 'Backup',   descKey: 'settingsBackupDesc',   desc: 'Create, download and restore the database',      Component: BackupSection   },
-  { id: 'bot',      icon: FiSend,     labelKey: 'settingsBot',      label: 'Bot',      descKey: 'settingsBotDesc',      desc: 'Telegram bot token and defaults',                Component: BotSection      },
-  { id: 'activity', icon: FiActivity, labelKey: 'settingsActivity', label: 'Activity', descKey: 'settingsActivityDesc', desc: 'Recent administrator actions',                   Component: ActivitySection },
+  { id: 'defaults',   icon: FiUserPlus,  labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, simple: true },
+  { id: 'bot',        icon: FiSend,      labelKey: 'settingsBot',        label: 'Bot',        descKey: 'settingsBotDesc',        desc: 'Telegram bot token, enable state and owner ID', Component: BotSection, simple: true },
+  { id: 'display',    icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, simple: true },
+  { id: 'appearance', icon: FiMonitor,   labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection, simple: true },
+  { id: 'alerts',     icon: FiBell,      labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection, simple: true },
+  { id: 'general',    icon: FiLink,      labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, simple: false },
+  { id: 'system',     icon: FiServer,    labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection, simple: false },
+  { id: 'security',   icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection, simple: false },
+  { id: 'backup',     icon: FiArchive,   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection, simple: false },
+  { id: 'activity',   icon: FiActivity,  labelKey: 'settingsActivity',   label: 'Activity',   descKey: 'settingsActivityDesc',   desc: 'Recent administrator actions', Component: ActivitySection, simple: false },
 ];
 
 const Settings = () => {
   const { t } = useTranslation();
+  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) === 'advanced' ? 'advanced' : 'simple');
+
+  useEffect(() => {
+    localStorage.setItem(MODE_KEY, mode);
+  }, [mode]);
+
+  const visible = SECTIONS.filter(s => mode === 'advanced' || s.simple);
 
   return (
     <div className="sp-page">
+      {/* Mode toggle: Simple = daily options, Advanced = everything */}
+      <div className="sp-modebar" role="group" aria-label={t('settingsMode', 'Settings mode')}>
+        <div className="sp-mode-toggle">
+          <button type="button" className={mode === 'simple' ? 'active' : ''} onClick={() => setMode('simple')}>
+            <FiSliders size={14} aria-hidden="true" />
+            <span>{t('settingsSimple', 'Simple')}</span>
+          </button>
+          <button type="button" className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>
+            <FiServer size={14} aria-hidden="true" />
+            <span>{t('settingsAdvanced', 'Advanced')}</span>
+          </button>
+        </div>
+        <p className="sp-mode-hint">
+          {mode === 'simple'
+            ? t('settingsSimpleHint', 'Daily settings: defaults for new users, the Telegram bot, and display timezone.')
+            : t('settingsAdvancedHint', 'Everything, including panel URL path, subscriptions, security, backup and maintenance.')}
+        </p>
+      </div>
+
       {/* Sticky jump-nav */}
       <nav className="sp-jumpnav" aria-label="Jump to section">
-        {SECTIONS.map(s => (
+        {visible.map(s => (
           <a key={s.id} href={`#${s.id}`} className="sp-jumpnav-link">
             <s.icon size={14} aria-hidden="true" />
             <span>{t(s.labelKey, s.label)}</span>
@@ -635,17 +875,20 @@ const Settings = () => {
 
       {/* All sections */}
       <div className="sp-sections">
-        {SECTIONS.map(({ id, icon, labelKey, label, descKey, desc, Component }) => (
-          <section key={id} className="sp-section">
-            <SectionHeader
-              id={id}
-              icon={icon}
-              label={t(labelKey, label)}
-              description={t(descKey, desc)}
-            />
-            <Component />
-          </section>
-        ))}
+        {visible.map((sec) => {
+          const Component = sec.Component;
+          return (
+            <section key={sec.id} className="sp-section">
+              <SectionHeader
+                id={sec.id}
+                icon={sec.icon}
+                label={t(sec.labelKey, sec.label)}
+                description={t(sec.descKey, sec.desc)}
+              />
+              <Component />
+            </section>
+          );
+        })}
       </div>
     </div>
   );

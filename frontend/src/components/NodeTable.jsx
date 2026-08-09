@@ -2,7 +2,6 @@ import { FiEdit3, FiRefreshCw, FiTrash2, FiDownloadCloud } from 'react-icons/fi'
 import { useTranslation } from 'react-i18next';
 import EmptyState from './ui/EmptyState';
 import StatusBadge from './ui/StatusBadge';
-import { usePrivacyMask, PrivacyEye } from './ui';
 
 function usageClass(value) {
   if (value === undefined || value === null) return '';
@@ -34,21 +33,6 @@ const NodeTableSkeleton = () => {
 
 const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, onEdit, onDownloadAll }) => {
   const { t } = useTranslation();
-  const maskIps = usePrivacyMask();
-
-  // Mask IP address but keep node name/port visible for usability
-  const maskAddress = (addr) => {
-    if (!maskIps || !addr) return addr;
-    const ipv4 = addr.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-    if (ipv4) {
-      return `${ipv4[1]}.*.*.${ipv4[4]}`;
-    }
-    const ipv6Match = addr.match(/^([0-9a-f:]{1,5})/i);
-    if (ipv6Match) {
-      return `${ipv6Match[1]}::...`;
-    }
-    return addr;
-  };
 
   if (isLoading) return <NodeTableSkeleton />;
   if (!nodes.length) return <EmptyState title={t('noNodes')} description={t('noNodesBody')} />;
@@ -59,12 +43,7 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
         <thead>
           <tr>
             <th>{t('th_node')}</th>
-            <th>
-              <span className="th-with-eye">
-                {t('th_address')}
-                <PrivacyEye className="th-privacy-eye" size={14} />
-              </span>
-            </th>
+            <th>{t('th_address')}</th>
             <th>{t('th_protocol')}</th>
             <th>{t('th_ovpnPort')}</th>
             <th>{t('th_status')}</th>
@@ -84,7 +63,7 @@ const NodeTable = ({ nodes, isLoading, nodeInfo = {}, onDelete, onCheckStatus, o
                     <div><strong className="node-name-text">{node.name}</strong><small>#{node.id}</small></div>
                   </div>
                 </td>
-                <td><span className="node-address">{maskAddress(node.address)}:{node.port}</span></td>
+                <td><span className="node-address">{node.address}:{node.port}</span></td>
                 <td>{node.protocol}</td>
                 <td>{node.ovpn_port}</td>
                 <td><StatusBadge status={node.status ? 'online' : 'offline'} label={node.status ? t('active') : t('inactive')} /></td>
