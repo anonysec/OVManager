@@ -29,6 +29,7 @@ build
 # Tests / docs
 tests
 *.md
+!README.md
 
 # Editor / OS
 .idea

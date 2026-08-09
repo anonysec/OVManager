@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { FiArchive, FiUpload, FiRefreshCw, FiDatabase, FiDownload } from 'react-icons/fi';
 import apiClient from '../../services/api';
 import { useLive } from '../../context/LiveContext';
+import { useToast } from '../../context/ToastContext';
 import { formatBytes } from '../../utils/format';
 
 const BackupTab = () => {
   const { refreshTick } = useLive();
+  const { addToast } = useToast();
   const [backupMsg, setBackupMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [restoreFile, setRestoreFile] = useState(null);
@@ -13,7 +15,7 @@ const BackupTab = () => {
 
   const loadBackups = useCallback(async () => {
     try {
-      const res = await apiClient.get('/maintenance/backup');
+      const res = await apiClient.get('/maintenance/backup/list');
       const data = res.data?.data || {};
       if (Array.isArray(data)) {
         setBackupList(data);
@@ -41,10 +43,6 @@ const BackupTab = () => {
     } finally {
       setBusy(false);
     }
-  };
-
-  const addToast = (message, type = 'success') => {
-    window.dispatchEvent(new CustomEvent('addToast', { detail: { message, type } }));
   };
 
   const downloadBackup = async () => {

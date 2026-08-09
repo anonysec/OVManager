@@ -54,6 +54,7 @@ class Setting(BaseSettings):
     BOT_ENCRYPT_KEY: Optional[str] = None
     # Installer metadata (ignored by app, used by install.sh for state)
     DATA_DIR: str = ""
+    PUBLIC_URL: Optional[str] = None
 
     model_config = {"env_file": os.path.join(os.path.dirname(__file__), "..", ".env")}
 

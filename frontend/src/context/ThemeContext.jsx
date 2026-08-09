@@ -7,8 +7,9 @@ const ThemeContext = createContext(null);
 export const ThemeProvider = ({ children }) => {
   const [theme, setThemeState] = useState(() => {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark' || saved === 'system' || saved === 'ultra') return saved;
-    // First visit: follow the OS preference
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    // First visit: follow the OS preference. Legacy "ultra" values are
+    // intentionally discarded so the panel only exposes light/dark modes.
     return 'system';
   });
 
@@ -51,21 +52,22 @@ export const ThemeProvider = ({ children }) => {
   }, [theme]);
 
   const setTheme = useCallback((next) => {
-    if (next === theme) return;
+    const safeTheme = ['system', 'light', 'dark'].includes(next) ? next : 'system';
+    if (safeTheme === theme) return;
 
     // Trigger transition class for smooth animation
     setTransitioning(true);
     document.documentElement.classList.add('theme-transition');
 
-    setThemeState(next);
-    localStorage.setItem(THEME_KEY, next);
+    setThemeState(safeTheme);
+    localStorage.setItem(THEME_KEY, safeTheme);
 
     // Apply immediately for visual feedback
-    if (next === 'system') {
+    if (safeTheme === 'system') {
       const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
       document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
     } else {
-      document.documentElement.dataset.theme = next;
+      document.documentElement.dataset.theme = safeTheme;
     }
 
     // Allow transition to complete
@@ -77,9 +79,9 @@ export const ThemeProvider = ({ children }) => {
     });
   }, [theme]);
 
-  // 3-state cycle: system → light → dark → ultra → system (3x-ui pattern)
+  // Three choices: system default, light, and dark.
   const cycleTheme = useCallback(() => {
-    const cycle = ['system', 'light', 'dark', 'ultra'];
+    const cycle = ['system', 'light', 'dark'];
     const idx = cycle.indexOf(theme);
     const next = cycle[(idx + 1) % cycle.length];
     setTheme(next);
@@ -88,13 +90,15 @@ export const ThemeProvider = ({ children }) => {
   // Keep every open tab in sync
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === THEME_KEY && e.newValue && e.newValue !== theme) {
-        setThemeState(e.newValue);
-        if (e.newValue === 'system') {
+      if (e.key === THEME_KEY && e.newValue) {
+        const next = ['system', 'light', 'dark'].includes(e.newValue) ? e.newValue : 'system';
+        if (next === theme) return;
+        setThemeState(next);
+        if (next === 'system') {
           const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
           document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
         } else {
-          document.documentElement.dataset.theme = e.newValue;
+          document.documentElement.dataset.theme = next;
         }
       }
     };

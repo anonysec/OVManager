@@ -195,7 +195,7 @@ const UserManagement = () => {
     if (!window.confirm(`Are you sure you want to reset usage for user ${user.name}?`)) return;
 
     try {
-      const response = await apiClient.get(`/users/${user.uuid}`);
+      const response = await apiClient.post(`/users/${user.uuid}/reset-usage`);
       if (response.data.success) {
         addToast(`Usage for ${user.name} has been reset.`, 'Success');
         fetchUsers();

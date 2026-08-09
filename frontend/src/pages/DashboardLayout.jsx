@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiLogOut, FiSearch, FiCommand } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiLogOut, FiSearch, FiCommand, FiChevronDown, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -11,10 +11,11 @@ import Sidebar from '../components/Sidebar';
 import Logo from '../components/Logo';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CommandPalette from '../components/CommandPalette';
+import MobileNav from '../components/MobileNav';
 
 const DashboardLayout = () => {
   const { logout, userRole } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, cycleTheme } = useTheme();
   const { i18n, t } = useTranslation();
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -87,8 +88,10 @@ const DashboardLayout = () => {
         apiClient.get('/nodes/'),
         apiClient.get('/security/summary?hours=8'),
       ]);
-      const users = usersRes.data?.data || [];
-      const nodes = nodesRes.data?.data || [];
+      const usersRaw = usersRes.data?.data;
+      const users = Array.isArray(usersRaw) ? usersRaw : (usersRaw?.users || []);
+      const nodesRaw = nodesRes.data?.data;
+      const nodes = Array.isArray(nodesRaw) ? nodesRaw : (nodesRaw?.nodes || []);
       const security = secRes.data?.data || {};
       const ns = await Promise.all(nodes.map(async (n) => {
         if (!n.status) return [n.id, { status: 'inactive' }];
@@ -101,7 +104,10 @@ const DashboardLayout = () => {
       const out = [];
       nodes.forEach((n) => {
         const st = nodeStatus[n.id] || {};
-        if (n.status && (st.node_info === undefined || st.session_diagnostics === undefined)) {
+        const reachable = st.reachable !== undefined
+          ? st.reachable
+          : st.node_info !== undefined && st.session_diagnostics !== undefined;
+        if (n.status && !reachable) {
           out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null, action_path: null });
         }
       });
@@ -126,14 +132,20 @@ const DashboardLayout = () => {
 
   const notifCount = notifications.length;
   const levelClass = (lvl) => (lvl === 'danger' ? 'danger' : lvl === 'info' ? 'info' : 'warning');
+  const ThemeIcon = theme === 'light' ? FiSun : theme === 'dark' ? FiMoon : FiMonitor;
+  const themeLabel = theme === 'light'
+    ? t('lightMode', 'Light mode')
+    : theme === 'dark'
+      ? t('darkMode', 'Dark mode')
+      : t('systemMode', 'System default');
 
   // Sync sidebar state across this layout and the Sidebar component so the
   // main-content margin matches the rendered sidebar width (220px / 72px collapsed)
   // and reacts to collapse toggles + viewport resizes without prop-drilling.
   const getIsMobile = useCallback(() => (typeof window !== 'undefined' && window.innerWidth < 768), []);
   const computeCollapsed = useCallback(() => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile()), [getIsMobile]);
-  const [collapsed, setCollapsed] = useState(computeCollapsed());
-  const [isMobile, setIsMobile] = useState(getIsMobile());
+  const [collapsed, setCollapsed] = useState(computeCollapsed);
+  const [isMobile, setIsMobile] = useState(getIsMobile);
 
   useEffect(() => {
     const applyCollapsed = () => setCollapsed(computeCollapsed());
@@ -170,8 +182,12 @@ const DashboardLayout = () => {
 
           <Sidebar />
 
-          <div className="ops-main-container">
+          <div className={`ops-main-container${collapsed ? ' ops-main-container--collapsed' : ''}${isMobile ? ' ops-main-container--mobile' : ''}`}>
             <header className="ops-topbar-minimal" role="banner">
+              <div className="topbar-brand" aria-label="OVManager">
+                <Logo size={30} />
+                <span>OV<span className="brand-accent">Manager</span></span>
+              </div>
               <nav className="ops-breadcrumb" aria-label="Breadcrumb">
                 <ol>
                   {location.pathname !== '/' && (
@@ -221,8 +237,8 @@ const DashboardLayout = () => {
                     </button>
                   </div>
                 </div>
-                <button type="button" className="icon-btn" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); }} title={t('theme', 'Theme')} aria-label="Toggle theme">
-                  {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
+                <button type="button" className="icon-btn" onClick={cycleTheme} title={`${t('theme', 'Theme')}: ${themeLabel}`} aria-label={`${t('theme', 'Theme')}: ${themeLabel}`}>
+                  <ThemeIcon aria-hidden="true" />
                 </button>
                 <div className="notification-wrap">
                   <button type="button" className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
@@ -256,8 +272,13 @@ const DashboardLayout = () => {
                   </div>
                 </div>
                 <div className="profile-wrap">
-                  <button type="button" className={`icon-btn${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs') || 'Logged in as'}>
+                  <button type="button" className={`profile-trigger${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs', 'Logged in as')}>
                     <span className="avatar-xs">{username.slice(0, 1).toUpperCase()}</span>
+                    <span className="profile-trigger-copy">
+                      <strong>{username}</strong>
+                      <small>{userRole === 'main_admin' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</small>
+                    </span>
+                    <FiChevronDown className={`profile-trigger-chevron${profileOpen ? ' is-open' : ''}`} aria-hidden="true" />
                   </button>
                   <div className={`profile-dropdown${profileOpen ? ' open' : ''}`} role="menu">
                     <div className="profile-dropdown-header">
@@ -268,9 +289,9 @@ const DashboardLayout = () => {
                       </div>
                     </div>
                     <div className="profile-dropdown-divider" />
-                    <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { const cycle = ['system','light','dark','ultra']; const idx = cycle.indexOf(theme); setTheme(cycle[(idx + 1) % cycle.length]); setProfileOpen(false); }}>
-                      {theme === 'ultra' ? <FiMoon /> : theme === 'dark' ? <FiSun /> : <FiMoon />}
-                      <span>{theme === 'ultra' ? 'Ultra' : theme === 'dark' ? t('lightMode', 'Light Mode') : t('darkMode', 'Dark Mode')}</span>
+                    <button type="button" className="profile-dropdown-item" role="menuitem" onClick={() => { cycleTheme(); setProfileOpen(false); }}>
+                      <ThemeIcon aria-hidden="true" />
+                      <span>{themeLabel}</span>
                     </button>
                     <div className="profile-dropdown-divider" />
                     <button type="button" className="profile-dropdown-item danger" role="menuitem" onClick={() => { setProfileOpen(false); logout(); }}>
@@ -287,6 +308,7 @@ const DashboardLayout = () => {
             </main>
           </div>
 
+          <MobileNav />
           <CommandPalette userRole={userRole} />
         </div>
       </ToastProvider>
@@ -311,7 +333,7 @@ const FaFlagIcon = () => (
       <circle r="2.6" fill="#d62828" />
       <g fill="#f4d35e">
         <circle r="2" /><polygon points="0,-7 1,-4 -1,-4" />
-        <circle r="2" /><polygon points="0,7 1,-4 -1,-4" />
+        <circle r="2" /><polygon points="0,7 1,4 -1,4" />
         <circle r="2" /><polygon points="-7,0 -4,1 -4,-1" />
         <circle r="2" /><polygon points="7,0 4,1 4,-1" />
       </g>
@@ -354,7 +376,7 @@ const ChinaFlagIcon = () => (
       <circle r="2.6" fill="#d62828" />
       <g fill="#f4d35e">
         <circle r="2" /><polygon points="0,-7 1,-4 -1,-4" />
-        <circle r="2" /><polygon points="0,7 1,-4 -1,-4" />
+        <circle r="2" /><polygon points="0,7 1,4 -1,4" />
         <polygon points="-7,0 -4,1 -4,-1" /><polygon points="7,0 4,1 4,-1" />
       </g>
     </g>

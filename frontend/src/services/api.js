@@ -6,6 +6,7 @@ const apiBase = basePath ? `/${basePath}/api` : '/api';
 export const urlPath = basePath ? `/${basePath}` : '';
 
 const apiClient = axios.create({ baseURL: apiBase });
+let refreshPromise = null;
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 export const API_ERROR_EVENT = 'api:error';
 
@@ -30,14 +31,21 @@ apiClient.interceptors.response.use(
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
-          const res = await axios.post(
-            `${apiBase}/refresh`,
-            {},
-            { headers: { Authorization: `Bearer ${refreshToken}` } }
-          );
-          const newToken = res.data.access_token;
-          localStorage.setItem('authToken', newToken);
-          // Retry original request with new token
+          if (!refreshPromise) {
+            refreshPromise = axios.post(
+              `${apiBase}/refresh`,
+              {},
+              { headers: { Authorization: `Bearer ${refreshToken}` } }
+            ).then((res) => {
+              const newToken = res.data.access_token;
+              localStorage.setItem('authToken', newToken);
+              return newToken;
+            }).finally(() => {
+              refreshPromise = null;
+            });
+          }
+          const newToken = await refreshPromise;
+          // Retry original request with the one shared refreshed token.
           error.config.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(error.config);
         } catch {

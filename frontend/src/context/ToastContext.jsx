@@ -14,7 +14,8 @@ export const ToastProvider = ({ children }) => {
 
   const addToast = useCallback((message, status = 'Success', duration = 3000) => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, status }]);
+    const normalizedStatus = String(status || 'success').toLowerCase();
+    setToasts((prev) => [...prev, { id, message, status: normalizedStatus }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, duration);
@@ -25,7 +26,7 @@ export const ToastProvider = ({ children }) => {
       {children}
       <div className="toast-stack" aria-live="polite" aria-atomic="true">
         {toasts.map((toast) => (
-          <div className={`toast ${toast.status}`} key={toast.id} role="alert">
+          <div className={`toast toast-${toast.status}`} key={toast.id} role="alert">
             <strong>{toast.status}</strong>
             <span>{toast.message}</span>
           </div>

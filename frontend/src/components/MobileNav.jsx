@@ -1,36 +1,28 @@
 import { NavLink } from 'react-router-dom';
-import { FiGrid, FiUsers, FiServer, FiSettings } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiServer, FiSettings, FiList } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 const MobileNav = () => {
   const { userRole } = useAuth();
+  const { t } = useTranslation();
+
+  const items = [
+    { to: '/', label: t('navDashboard', 'Dashboard'), icon: FiGrid, end: true },
+    { to: '/users', label: t('navUsers', 'Users'), icon: FiUsers },
+    { to: '/nodes', label: t('navNodes', 'Nodes'), icon: FiServer },
+    ...(userRole === 'main_admin' ? [{ to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList }] : []),
+    { to: '/settings', label: t('navSettings', 'Settings'), icon: FiSettings },
+  ];
 
   return (
-    <nav className="mobile-nav">
-      <NavLink to="/" end className="mobile-nav-link">
-        <FiGrid size={22} />
-        <span>Dashboard</span>
-      </NavLink>
-      <NavLink to="/users" className="mobile-nav-link">
-        <FiUsers size={22} />
-        <span>Users</span>
-      </NavLink>
-      {userRole !== 'admin' && (
-        <NavLink to="/nodes" className="mobile-nav-link">
-          <FiServer size={22} />
-          <span>Nodes</span>
+    <nav className={`mobile-nav mobile-nav--${items.length}`} aria-label={t('mobileNavigation', 'Mobile navigation')}>
+      {items.map((item) => (
+        <NavLink key={item.to} to={item.to} end={item.end} className="mobile-nav-link">
+          <item.icon aria-hidden="true" />
+          <span>{item.label}</span>
         </NavLink>
-      )}
-      {userRole === 'main_admin' && (
-        <NavLink to="/admins" className="mobile-nav-link">
-          <FiUsers size={22} />
-          <span>Admins</span>
-        </NavLink>
-      )}
-      <NavLink to="/settings" className="mobile-nav-link">
-        <FiSettings size={22} />
-        <span>Settings</span>
-      </NavLink>
+      ))}
     </nav>
   );
 };

@@ -75,6 +75,8 @@ def update_bot_config(db: Session, **kwargs):
         if k == "bot_token":
             if not v:
                 v = None  # clear token → NULL in DB
+            elif _fernet is None:
+                raise RuntimeError("BOT_ENCRYPT_KEY is required before saving a bot token")
             else:
                 v = _fernet.encrypt(v.encode()).decode()
         if hasattr(s, k):
@@ -87,15 +89,10 @@ def update_bot_config(db: Session, **kwargs):
 def get_bot_config(db: Session):
     s = db.query(Settings).first()
     if not s:
-        return {}
-    token = s.bot_token
-    if token:
-        try:
-            token = _fernet.decrypt(token.encode()).decode()
-        except Exception:
-            token = None
+        return {"bot_configured": False, "bot_enabled": False}
     return {
-        "bot_token": token,
+        # Never return plaintext or ciphertext token material to the browser.
+        "bot_configured": bool(s.bot_token),
         "bot_enabled": s.bot_enabled,
         "default_days": s.default_days,
         "default_traffic_gb": s.default_traffic_gb,
@@ -167,7 +164,8 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     # Manual status (from the edit modal checkbox) wins, but expiry/traffic
     # violations still force-disable: an expired or out-of-traffic account
     # must never be active even if the admin flipped the switch on.
-    user.is_active = bool(request.status) and not_expired and has_traffic
+    requested_status = user.is_active if request.status is None else bool(request.status)
+    user.is_active = requested_status and not_expired and has_traffic
     user.expiry_date = request.expiry_date
     user.total = request.total
     if request.max_logins is not None:

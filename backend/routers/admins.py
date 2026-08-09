@@ -7,6 +7,7 @@ from backend.db.models import User
 from backend.schema.output import Admins, ResponseModel
 from backend.schema._input import AdminCreate, AdminUpdate
 from backend.auth.auth import get_current_user
+from backend.auth.authz import require_main_admin
 from backend.auth.hash import hash_password
 
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/admin", tags=["Admins"])
 
 @router.get("/", response_model=ResponseModel)
 async def get_all_admins(
-    db: Session = Depends(get_db), user: dict = Depends(get_current_user)
+    db: Session = Depends(get_db), user: dict = Depends(require_main_admin)
 ):
     result = crud.get_all_admins(db)
     users = crud.get_all_users(db)

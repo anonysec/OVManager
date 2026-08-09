@@ -65,7 +65,7 @@ const NodeManagement = () => {
       await Promise.all(nodes.map(async (node) => {
         try {
           const res = await apiClient.get(`/nodes/${node.id}/status/`);
-          if (res.data.success && res.data.data && res.data.data.node_info) {
+          if (res.data.success && res.data.data && res.data.data.node_info && res.data.data.reachable !== false) {
             info[node.id] = res.data.data.node_info;
           }
         } catch { /* ignore */ }

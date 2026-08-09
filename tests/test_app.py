@@ -28,6 +28,17 @@ def test_api_users_requires_auth():
     assert response.status_code in (401, 403)
 
 
+def test_refresh_token_cannot_access_api():
+    """Refresh tokens are not valid API bearer tokens."""
+    from backend.auth.auth import create_access_token, create_refresh_token
+
+    client = TestClient(api)
+    access = create_access_token({"sub": "admin", "role": "main_admin"})
+    refresh = create_refresh_token({"sub": "admin", "role": "main_admin"})
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {access}"}).status_code == 200
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {refresh}"}).status_code == 401
+
+
 def test_urlpath_middleware_blocks_non_matching():
     """When URLPATH is set, non-matching paths get empty response.
     But /assets/ and /health are always allowed through."""

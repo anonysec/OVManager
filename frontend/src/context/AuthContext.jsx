@@ -23,7 +23,8 @@ export const AuthProvider = ({ children }) => {
 
     // Decode token to get user role
     const payload = JSON.parse(atob(newToken.split('.')[1]));
-    const role = payload.type;
+    const role = payload.role || (payload.type === 'admin' || payload.type === 'main_admin' ? payload.type : null);
+    if (!role) throw new Error('Invalid access token role');
 
     localStorage.setItem('authToken', newToken);
     localStorage.setItem('refreshToken', refreshToken);
@@ -33,6 +34,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = useCallback(() => {
+    const accessToken = localStorage.getItem('authToken');
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (accessToken || refreshToken) {
+      apiClient.post('/logout', null, {
+        headers: refreshToken ? { 'X-Refresh-Token': refreshToken } : undefined,
+      }).catch(() => { /* local logout must still complete */ });
+    }
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('userRole');

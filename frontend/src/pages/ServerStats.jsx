@@ -5,7 +5,7 @@ import { geoEquirectangular, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
-import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiPlus, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
+import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiCheckCircle, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
@@ -19,7 +19,7 @@ const formatBytes = (bytes) => {
 const CODES = {
   DE: { name: 'Germany', coords: [10.4, 51.1] },
   TR: { name: 'Turkey', coords: [35.2, 39.1] },
-  FL: { name: 'Finland', coords: [25.7, 61.9] },
+  FI: { name: 'Finland', coords: [25.7, 61.9] },
   FR: { name: 'France', coords: [2.2, 46.6] },
   NL: { name: 'Netherlands', coords: [5.3, 52.1] },
   USA: { name: 'USA', coords: [-98.5, 39.8] },
@@ -34,7 +34,7 @@ const CODES = {
 const FLAG_SVGS = {
   DE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ffce00"/><rect width="640" height="160" fill="#000"/><rect y="320" width="640" height="160" fill="#d00"/></svg>',
   TR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#e30a0a"/><circle cx="220" cy="240" r="70" fill="#fff"/><circle cx="220" cy="240" r="30" fill="#e30a0a"/></svg>',
-  FL: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><rect x="213" width="54" height="480" fill="#003897"/><rect y="213" width="640" height="54" fill="#003897"/></svg>',
+  FI: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><rect x="213" width="54" height="480" fill="#003897"/><rect y="213" width="640" height="54" fill="#003897"/></svg>',
   FR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="213" height="480" fill="#002395"/><rect x="213" width="214" height="480" fill="#fff"/><rect x="427" width="213" height="480" fill="#ef4135"/></svg>',
   NL: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="160" fill="#ae1c28"/><rect y="160" width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#21468b"/></svg>',
   USA: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#b22234"/><rect width="640" height="80" fill="#fff"/><rect width="640" height="80" y="400" fill="#fff"/><rect width="640" height="80" y="80" fill="#fff"/><rect width="640" height="80" y="320" fill="#fff"/><g fill="#fff"><rect x="0" y="0" width="80" height="80"/><rect x="160" y="0" width="80" height="80"/><rect x="320" y="0" width="80" height="80"/><rect x="480" y="0" width="80" height="80"/><rect x="80" y="80" width="80" height="80"/><rect x="240" y="80" width="80" height="80"/><rect x="400" y="80" width="80" height="80"/><rect x="0" y="160" width="80" height="80"/><rect x="160" y="160" width="80" height="80"/><rect x="320" y="160" width="80" height="80"/><rect x="480" y="160" width="80" height="80"/><rect x="80" y="240" width="80" height="80"/><rect x="240" y="240" width="80" height="80"/><rect x="400" y="240" width="80" height="80"/><rect x="0" y="320" width="80" height="80"/><rect x="160" y="320" width="80" height="80"/><rect x="320" y="320" width="80" height="80"/><rect x="480" y="320" width="80" height="80"/></g></svg>',
@@ -50,18 +50,47 @@ const FlagIcon = ({ code }) => (
   <span className="flag-icon" dangerouslySetInnerHTML={{ __html: FLAG_SVGS[code] || FLAG_SVGS.DE }} />
 );
 
-const nodeMeta = (node) => {
-  if (node.latitude && node.longitude) {
-    const entry = CODES[node.country_code] || {};
-    return {
-      name: entry.name || node.country_code || node.name || 'Node',
-      flagCode: node.country_code || null,
-      coords: [node.longitude, node.latitude],
-    };
+const COUNTRY_ALIASES = {
+  FL: 'FI',
+  UK: 'GB',
+  US: 'USA',
+  UNITEDSTATES: 'USA',
+  UAE: 'AE',
+  UNITEDARABEMIRATES: 'AE',
+};
+
+const normalizeCountryCode = (node) => {
+  const sources = [node.country_code, node.country, node.location, node.name]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toUpperCase());
+
+  for (const source of sources) {
+    const compact = source.replace(/[^A-Z]/g, '');
+    const alias = COUNTRY_ALIASES[compact] || compact;
+    if (CODES[alias]) return alias;
+    const match = Object.entries(CODES).find(([, entry]) => compact === entry.name.replace(/[^A-Z]/g, '').toUpperCase() || compact.includes(entry.name.replace(/[^A-Z]/g, '').toUpperCase()));
+    if (match) return match[0];
+    const codeMatch = source.match(/\b[A-Z]{2,3}\b/);
+    if (codeMatch && CODES[COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0]]) return COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0];
   }
-  const code = String(node.name || '').toUpperCase();
-  const entry = CODES[code];
-  return entry ? { name: entry.name, flagCode: code, coords: entry.coords } : { name: node.name || 'Node', flagCode: null, coords: [0, 0] };
+  return null;
+};
+
+const nodeMeta = (node) => {
+  const latitude = Number(node.latitude);
+  const longitude = Number(node.longitude);
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
+    && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
+    && !(latitude === 0 && longitude === 0);
+  const code = normalizeCountryCode(node);
+  const entry = code ? CODES[code] : null;
+
+  return {
+    name: entry?.name || (node.country_code ? String(node.country_code).toUpperCase() : 'Location unavailable'),
+    flagCode: code,
+    coords: hasCoordinates ? [longitude, latitude] : (entry?.coords || null),
+    approximate: !hasCoordinates && Boolean(entry?.coords),
+  };
 };
 
 /* eslint-disable-next-line no-unused-vars */
@@ -106,20 +135,22 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
   const [hover, setHover] = useState(null);
   const [zoom, setZoom] = useState(1);
-  const clamp = (z) => Math.max(1, Math.min(4, Math.round(z * 10) / 10));
+  const clamp = (z) => Math.max(1, Math.min(4, z));
   return (
     <div className="map-zoom-wrap">
       <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
         <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+
         </button>
+        <span className="map-zoom-level" aria-live="polite">{zoom.toFixed(2)}×</span>
         <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−
         </button>
         {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢
         </button>}
       </div>
       <div className="map-zoom-viewport" style={{ overflow: zoom > 1 ? 'auto' : 'hidden' }}>
-        <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-          style={{ width: `${100 * zoom}%`, height: 'auto' }}
+        <div className="map-zoom-canvas" style={{ width: `${100 * zoom}%`, minWidth: '100%' }}>
+          <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
+            style={{ width: '100%', height: 'auto' }}
           role="img" aria-label="World map of node locations"
           onMouseLeave={() => setHover(null)}>
           <defs>
@@ -149,18 +180,21 @@ const WorldMap = ({ nodes, nodeStatus }) => {
           })()}
           {nodes.map((node) => {
             const m = nodeMeta(node);
-            const [x, y] = projection(m.coords) || [0, 0];
+            const projected = m.coords ? projection(m.coords) : null;
+            if (!projected) return null;
+            const [x, y] = projected;
             const st = nodeStatus[node.id] || {};
-            const online = node.status && st.session_diagnostics?.live_count != null && st.node_info !== undefined;
+            const online = node.status && (st.reachable === true || (st.reachable === undefined && st.session_diagnostics?.live_count != null && st.node_info !== undefined));
             return (
               <g key={node.id} className="map-marker" transform={`translate(${x},${y})`} aria-label={`${node.name} — ${online ? 'online' : 'offline'}`}>
                 {online && <circle className="pulse" r={6} aria-hidden="true" />}
                 <circle r={online ? 5 : 3.5} className={online ? 'node-online' : 'node-offline'} aria-hidden="true" />
-                <text x={7} y={4} className="node-country-label">{node.name}</text>
+                <text x={7} y={4} className="node-country-label">{node.name}{m.approximate ? ' · approx.' : ''}</text>
               </g>
             );
           })}
-        </svg>
+          </svg>
+        </div>
       </div>
     </div>
   );
@@ -185,7 +219,10 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
   (nodes || []).forEach((n) => {
     if (!n.status) return; // DB-inactive nodes aren't "down"
     const st = nodeStatus?.[n.id] || {};
-    if (st.session_diagnostics === undefined || st.node_info === undefined) {
+    const reachable = st.reachable !== undefined
+      ? st.reachable
+      : st.session_diagnostics !== undefined && st.node_info !== undefined;
+    if (!reachable) {
       out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null });
     }
   });
@@ -197,6 +234,7 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
   const sec = security || {};
   if (Number(sec.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${sec.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null });
   if (Number(sec.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${sec.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null });
+  if (Number(sec.stale_markers || 0) > 0) out.push({ id: 'stale', level: 'warning', title: `${sec.stale_markers} stale session markers`, detail: 'Review stale sessions in Security settings', action: null });
   return out;
 };
 
@@ -266,7 +304,7 @@ const ServerStats = () => {
   const onlineNodes = (nodes || []).filter((n) => {
     if (!n.status) return false;
     const st = nodeStatus[n.id] || {};
-    return st.node_info !== undefined && st.session_diagnostics !== undefined;
+    return st.reachable === true || (st.reachable === undefined && st.node_info !== undefined && st.session_diagnostics !== undefined);
   }).length;
   const activeConnections = Object.values(nodeStatus).reduce((sum, status) => sum + Number(status?.session_diagnostics?.live_count || 0), 0);
   const avgLatency = (() => {
@@ -274,9 +312,9 @@ const ServerStats = () => {
     return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
   })();
   const totalUsed = (users || []).reduce((sum, u) => sum + Number(u.used || 0), 0);
-  const offlineNodes = (nodes || []).length - onlineNodes;
+  const activeNodeCount = (nodes || []).filter((node) => node.status).length;
+  const offlineNodes = Math.max(0, activeNodeCount - onlineNodes);
   const fullUsers = (users || []).filter((u) => Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins || 0));
-  const activeAlerts = offlineNodes + fullUsers.length;
 
   const sec = security || {};
   const authErrors = Number(sec.auth_errors || 0);
@@ -284,8 +322,8 @@ const ServerStats = () => {
   const stale = Number(sec.stale_markers || 0);
   const penalty = offlineNodes * 8 + fullUsers.length * 3 + Math.min(authErrors, 50) * 0.6 + Math.min(rejects, 50) * 0.4 + Math.min(stale, 50) * 0.4;
   const securityScore = Math.max(0, Math.min(100, Math.round(100 - penalty)));
-  const latestErrors = sec.last_errors || [];
   const notifications = deriveNotifications({ users, nodes, nodeStatus, security });
+  const activeAlerts = notifications.length;
   const previewUsers = (users || [])
     .filter((u) => Number(u.active_connections || 0) > 0)
     .sort((a, b) => Number(b.active_connections || 0) - Number(a.active_connections || 0))
@@ -313,29 +351,7 @@ const ServerStats = () => {
             <FiRefreshCw className={loading ? 'is-spinning' : ''} aria-hidden="true" />
             <span>{t('refresh', 'Refresh')}</span>
           </button>
-          <button type="button" className="btn dashboard-primary-action" onClick={() => navigate('/users')}>
-            <FiPlus aria-hidden="true" />
-            <span>{t('addNewUser', 'Add user')}</span>
-          </button>
         </div>
-      </div>
-
-      <div className="dashboard-quick-links" aria-label={t('quickActions', 'Quick actions')}>
-        <button type="button" className="quick-link" onClick={() => navigate('/users')}>
-          <span className="quick-link-icon"><FiUsers aria-hidden="true" /></span>
-          <span><strong>{t('navUsers', 'Users')}</strong><small>{t('quickUsersHint', 'Manage access and sessions')}</small></span>
-          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
-        </button>
-        <button type="button" className="quick-link" onClick={() => navigate('/nodes')}>
-          <span className="quick-link-icon is-cyan"><FiServer aria-hidden="true" /></span>
-          <span><strong>{t('navNodes', 'Nodes')}</strong><small>{t('quickNodesHint', 'Check node health and capacity')}</small></span>
-          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
-        </button>
-        <button type="button" className="quick-link" onClick={() => navigate('/settings')}>
-          <span className="quick-link-icon is-neutral"><FiShield aria-hidden="true" /></span>
-          <span><strong>{t('navSettings', 'Settings')}</strong><small>{t('quickSettingsHint', 'Configure panel behavior')}</small></span>
-          <FiArrowRight className="quick-link-arrow" aria-hidden="true" />
-        </button>
       </div>
 
       {error && !hasData ? (
@@ -377,29 +393,46 @@ const ServerStats = () => {
             </Panel>
 
             <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
-              {loading ? <Skeleton /> : (security ? (
-                <>
-                  <div className="security-flex">
-                    <SecurityScoreRing score={securityScore} />
-                    <div className="security-facts">
-                      <StatCell label={t('activeAlerts')} value={String(activeAlerts).padStart(2, '0')} tip={t('activeAlerts')} tone={activeAlerts ? 'warn' : 'ok'} />
-                      <StatCell label={t('authErrors8h')} value={String(authErrors)} tip={t('authErrors8h')} tone={authErrors ? 'danger' : 'ok'} />
-                      <StatCell label={t('rejects8h')} value={String(rejects)} tip={t('rejects8h')} tone={rejects ? 'warn' : 'ok'} />
+              {loading ? <Skeleton lines={4} /> : (security ? (
+                <div className="security-overview-content">
+                  <div className="security-posture">
+                    <div className="security-score-block">
+                      <SecurityScoreRing score={securityScore} />
+                      <div>
+                        <span className="security-kicker">{t('securityPosture', 'Security posture')}</span>
+                        <strong className={`security-state ${securityScore >= 85 ? 'ok' : securityScore >= 65 ? 'warn' : 'bad'}`}>
+                          {securityScore >= 85 ? t('postureHealthy', 'Healthy') : securityScore >= 65 ? t('postureWatch', 'Needs attention') : t('postureCritical', 'Critical')}
+                        </strong>
+                        <p>{securityScore >= 85 ? t('verdictHealthy') : securityScore >= 65 ? t('verdictWatch') : t('verdictCritical')}</p>
+                      </div>
+                    </div>
+                    <div className="security-metric-grid">
+                      <div className="security-metric"><span>{t('activeAlerts')}</span><strong className={activeAlerts ? 'warn' : 'ok'}>{activeAlerts}</strong></div>
+                      <div className="security-metric"><span>{t('authErrors8h')}</span><strong className={authErrors ? 'danger' : 'ok'}>{authErrors}</strong></div>
+                      <div className="security-metric"><span>{t('rejects8h')}</span><strong className={rejects ? 'warn' : 'ok'}>{rejects}</strong></div>
+                      <div className="security-metric"><span>{t('staleMarkers', 'Stale markers')}</span><strong className={stale ? 'warn' : 'ok'}>{stale}</strong></div>
                     </div>
                   </div>
-                  <p className={`security-verdict ${securityScore >= 85 ? 'ok' : securityScore >= 65 ? 'warn' : 'bad'}`}>
-                    {securityScore >= 85 ? t('verdictHealthy')
-                      : securityScore >= 65 ? t('verdictWatch')
-                      : t('verdictCritical')}
-                  </p>
-                  {latestErrors.length > 0 && (
-                    <ul className="security-errors">
-                      {latestErrors.slice(0, 3).map((_e, i) => (
-                        <li key={i}>{_e.time_tehran || ''} — {_e.common_name}: {_e.reason} ({_e.active || '?'}/{_e.limit || '?'})</li>
-                      ))}
-                    </ul>
-                  )}
-                </>
+                  <div className="security-review-row">
+                    <div className="security-review-list">
+                      {notifications.length > 0 ? notifications.slice(0, 2).map((item) => (
+                        <div key={item.id} className={`security-review-item ${item.level}`}>
+                          <span className="security-review-dot" />
+                          <span><strong>{item.title}</strong><small>{item.detail}</small></span>
+                        </div>
+                      )) : (
+                        <div className="security-review-item clear">
+                          <FiCheckCircle aria-hidden="true" />
+                          <span><strong>{t('securityClear', 'No active security issues')}</strong><small>{t('securityClearDetail', 'Authentication and node checks look normal.')}</small></span>
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className="security-review-button" onClick={() => navigate('/settings#security')}>
+                      {t('reviewSecurity', 'Review')}
+                      <FiArrowRight aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <EmptyState title={t('noData')} description={t('noDataDesc')} />
               ))}
@@ -467,11 +500,15 @@ const ServerStats = () => {
                             const status = nodeStatus[node.id] || {};
                             const cpu = status.node_info?.cpu_usage;
                             const conns = Number(status.session_diagnostics?.live_count || 0);
-                            const reachable = node.status && status.node_info !== undefined;
+                            const reachable = node.status && (status.reachable === true || (status.reachable === undefined && status.node_info !== undefined));
                             return (
                               <tr key={node.id} title={`${node.name}: ${conns} live sessions, API ${node.address}:${node.port}`}>
                                 <td>{node.name}</td>
-                                <td>{meta.name}</td>
+                                <td className="node-location-cell">
+                                  {meta.flagCode && <FlagIcon code={meta.flagCode} />}
+                                  <span>{meta.name}</span>
+                                  {meta.approximate && <small>{t('approximate', 'Approx.')}</small>}
+                                </td>
                                 <td>
                                   <StatusBadge
                                     status={reachable ? 'online' : node.status ? 'warning' : 'offline'}
@@ -502,13 +539,41 @@ const ServerStats = () => {
             </Panel>
           </div>
 
-          {notifications.length > 0 && (
-            <div className="ops-notice-strip">
-              <FiAlertTriangle aria-hidden="true" /> {notifications.length} {t(notifications.length === 1 ? 'alertOne' : 'alertsMany')}:{' '}
-              {notifications.slice(0, 4).map((n) => <span key={n.id} className={`ntag ${n.level}`}>{n.title}</span>)}
-              {notifications.length > 4 && <span className="ntag">{t('moreN', { count: notifications.length - 4 })}</span>}
+          <section className={`ops-alert-center ${notifications.length > 0 ? 'has-alerts' : 'is-clear'}`} aria-live="polite" aria-labelledby="alert-center-title">
+            <div className="alert-center-header">
+              <div className="alert-center-heading">
+                <span className="alert-center-icon" aria-hidden="true">
+                  {notifications.length > 0 ? <FiAlertTriangle /> : <FiCheckCircle />}
+                </span>
+                <div>
+                  <h3 id="alert-center-title">{notifications.length > 0 ? t('attentionRequired', 'Attention required') : t('allSystemsClear', 'All systems clear')}</h3>
+                  <p>{notifications.length > 0
+                    ? `${notifications.length} ${t(notifications.length === 1 ? 'alertOne' : 'alertsMany')} need review.`
+                    : t('allSystemsClearDetail', 'No active node, session, or authentication alerts.')}</p>
+                </div>
+              </div>
+              <button type="button" className="alert-center-action" onClick={() => navigate('/settings#security')}>
+                {t('reviewSecurity', 'Review security')} <FiArrowRight aria-hidden="true" />
+              </button>
             </div>
-          )}
+            {notifications.length > 0 ? (
+              <div className="alert-center-list">
+                {notifications.slice(0, 4).map((n) => (
+                  <div key={n.id} className={`alert-center-item ${n.level}`}>
+                    <span className="alert-center-item-dot" aria-hidden="true" />
+                    <span className="alert-center-item-copy"><strong>{n.title}</strong><small>{n.detail}</small></span>
+                    <span className="alert-center-severity">{n.level === 'danger' ? t('critical', 'Critical') : t('warning', 'Warning')}</span>
+                  </div>
+                ))}
+                {notifications.length > 4 && <span className="alert-center-more">{t('moreN', { count: notifications.length - 4 })}</span>}
+              </div>
+            ) : (
+              <div className="alert-center-clear-state">
+                <FiCheckCircle aria-hidden="true" />
+                <span>{t('monitoringNormally', 'Monitoring is running normally. We will surface issues here.')}</span>
+              </div>
+            )}
+          </section>
         </>
       )}
     </div>

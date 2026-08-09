@@ -4,6 +4,8 @@ Every method follows the same pattern: build URL, send request, check response.
 One _request() helper handles all of it.
 """
 
+from urllib.parse import urlsplit
+
 import requests as _req
 from fastapi.responses import Response
 from backend.logger import logger
@@ -16,9 +18,20 @@ class NodeRequests:
     __slots__ = ("address", "headers", "scheme")
 
     def __init__(self, address: str, port: int, api_key: str, use_tls: bool = False, **_):
-        self.address = f"{address}:{port}"
+        raw = str(address or "").strip()
+        parsed = urlsplit(raw if "://" in raw else f"//{raw}")
+        host = parsed.hostname
+        if not host:
+            raise ValueError("Node address must contain a hostname or IP")
+        try:
+            parsed_port = parsed.port
+        except ValueError as exc:
+            raise ValueError("Node address contains an invalid port") from exc
+        target_port = parsed_port or int(port)
+        host_for_url = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
-        self.scheme = "https" if use_tls else "http"
+        self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
 
     def _url(self, path: str) -> str:
         return f"{self.scheme}://{self.address}{path}"
@@ -48,6 +61,20 @@ class NodeRequests:
 
     def get_node_info(self, **settings) -> dict:
         return (self._request("get", "/sync/status", json=settings) or {}).get("data", {})
+
+    def get_usage(self) -> dict:
+        """Return per-user traffic counters from the node."""
+        return (self._request("get", "/sync/usage", timeout=LONG_TIMEOUT) or {}).get("data", {})
+
+    def update_config(self, *, tunnel_address: str, protocol: str, ovpn_port: int, set_new_setting: bool = True) -> bool:
+        """Apply OpenVPN endpoint settings on the node."""
+        payload = {
+            "tunnel_address": tunnel_address or "",
+            "protocol": protocol,
+            "ovpn_port": int(ovpn_port),
+            "set_new_setting": bool(set_new_setting),
+        }
+        return self._request("post", "/sync/config", json=payload, timeout=LONG_TIMEOUT) is not None
 
     # ── User operations ──────────────────────────────────────────
 

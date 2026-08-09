@@ -6,7 +6,6 @@ reconciliation.
 """
 
 import asyncio
-import json
 import time
 
 from fastapi.concurrency import run_in_threadpool
@@ -16,13 +15,13 @@ from sqlalchemy.orm import Session
 from backend.logger import logger
 from backend.node.requests import NodeRequests
 from backend.db import crud
-from backend.db.models import Node, User
+from backend.db.models import Node
 
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:
     """Fetch traffic usage data from a single node."""
     nr = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
-    return await run_in_threadpool(nr.get_node_info) or {}
+    return await run_in_threadpool(nr.get_usage) or {}
 
 
 async def sync_all_user_limits(db: Session) -> dict:

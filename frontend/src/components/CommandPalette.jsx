@@ -54,8 +54,12 @@ const CommandPalette = ({ userRole }) => {
         apiClient.get('/users/'),
         apiClient.get('/nodes/'),
       ]);
-      setUsers((u.data?.data || []).slice(0, 50));
-      setNodes((n.data?.data || []).slice(0, 50));
+      const usersData = u.data?.data;
+      const nodesData = n.data?.data;
+      const userList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
+      const nodeList = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
+      setUsers(userList.slice(0, 50));
+      setNodes(nodeList.slice(0, 50));
     } catch { /* palette stays usable with pages only */ }
   }, []);
 

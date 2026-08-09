@@ -19,7 +19,7 @@ class UpdateUser(BaseModel):
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: Optional[int] = Field(default=None, ge=0, le=1000)
     expiry_date: Optional[date]
-    status: bool = True
+    status: bool | None = None
 
 
 class NodeCreate(BaseModel):

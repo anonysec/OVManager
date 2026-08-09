@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ovmanager"
 version = "1.6.0"
@@ -11,7 +15,7 @@ dependencies = [
     "requests",
     "pydantic_settings",
     "alembic==1.15.1",
-    "SQLAlchemy==2.0",
+    "SQLAlchemy>=2.0.36,<2.1",
     "python-dotenv==1.1.0",
     "pexpect",
     "psutil",
@@ -27,6 +31,9 @@ dependencies = [
     "werkzeug>=3.1.8",
     "pip-audit>=2.10.1",
 ]
+
+[tool.setuptools.packages.find]
+include = ["backend*", "bot*"]
 
 [project.optional-dependencies]
 dev = [

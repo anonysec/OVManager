@@ -4,7 +4,7 @@
 #        bash <(curl -Ls URL) update
 #        bash <(curl -Ls URL) uninstall
 
-set -uo pipefail
+set -Eeuo pipefail
 
 # ═══════════════════════════════════════
 #  C O N F I G
@@ -15,7 +15,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_PATH=""
 DEFAULT_USER="admin"
-DEFAULT_PASS="admin"
+DEFAULT_PASS=""
 SYSTEMD_SERVICE="ovmanager.service"
 VERSION="1.6"
 
@@ -42,8 +42,8 @@ spinner() {
         printf "\r  ${CY}%s${NC} %-48s" "${chars:$((i%9)):1}" "$msg" >&2
         sleep 0.1; ((i++))
     done
-    wait "$pid" 2>/dev/null
-    local rc=$?
+    local rc=0
+    wait "$pid" 2>/dev/null || rc=$?
     printf "\r\033[K" >&2
     [[ $rc -eq 0 ]] && step "$msg" || { line "${RD}  ✗${NC} $msg"; return 1; }
 }
@@ -61,7 +61,13 @@ prompt_val() {
         fi
     fi
     [[ -z "$val" ]] && val="$default"
-    eval "$var='$val'"
+    case "$var" in
+        PORT) PORT="$val" ;;
+        PATHPREFIX) PATHPREFIX="$val" ;;
+        ADMIN_USER) ADMIN_USER="$val" ;;
+        ADMIN_PASS) ADMIN_PASS="$val" ;;
+        *) die "Unknown installer variable: $var" ;;
+    esac
 }
 
 die() { echo -e "\n  ${RD}Error:${NC} $1\n"; exit 1; }
@@ -144,6 +150,7 @@ interactive_setup() {
     prompt_val PATHPREFIX "URL path"   "$DEFAULT_PATH"
     prompt_val ADMIN_USER "Admin user" "$DEFAULT_USER"
     prompt_val ADMIN_PASS "Admin pass" "$DEFAULT_PASS" "h"
+    [[ -n "$ADMIN_PASS" ]] || die "Admin password is required and cannot be empty."
     sep
     if [[ -t 0 ]]; then
         printf "  TLS mode\n"
@@ -445,7 +452,7 @@ SVCEOF
             line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/"
         fi
     fi
-    line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / ${GR}${ADMIN_PASS}${NC}"
+    line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / password supplied during installation"
     line ""
     line "  ${GY}Manage:${NC}  systemctl status ${SYSTEMD_SERVICE}"
     line "  ${GY}Logs:${NC}    journalctl -u ${SYSTEMD_SERVICE} -f"
@@ -614,7 +621,7 @@ main() {
         : "${PORT:=$DEFAULT_PORT}"
         : "${PATHPREFIX:=$DEFAULT_PATH}"
         : "${ADMIN_USER:=$DEFAULT_USER}"
-        : "${ADMIN_PASS:=$DEFAULT_PASS}"
+        [[ -n "$ADMIN_PASS" ]] || die "--admin-pass is required for noninteractive installation."
         field "Port"       "$PORT"
         field "URL path"   "/${PATHPREFIX}/"
         field "Admin user" "$ADMIN_USER"

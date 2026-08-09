@@ -14,10 +14,13 @@ Usage:
     set_urlpath("newpath")
 """
 
+import logging
 import time
 import threading
 
 from backend.db.engine import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 # Thread-safe cache for the current URLPATH
 _lock = threading.Lock()
@@ -33,8 +36,9 @@ def _load_from_db() -> str:
         from backend.db import crud
         s = crud.get_settings(db)
         return (getattr(s, "urlpath", "") or "").strip("/")
-    except Exception:
-        return ""
+    except Exception as exc:
+        logger.error("Could not read URLPATH from database: %s", exc)
+        raise
     finally:
         db.close()
 
@@ -53,7 +57,19 @@ def get_urlpath() -> str:
         # Double-check after acquiring lock
         if now - _cache_ts < _CACHE_TTL:
             return _cache_value
-        _cache_value = _load_from_db()
+        try:
+            _cache_value = _load_from_db()
+        except Exception:
+            # Never replace a known protected path with root because the DB is
+            # temporarily locked/unavailable. On first boot, use the validated
+            # environment fallback until migrations create the Settings row.
+            if _cache_ts > 0:
+                return _cache_value
+            try:
+                from backend.config import config
+                _cache_value = (config.URLPATH or "").strip("/")
+            except Exception:
+                _cache_value = ""
         _cache_ts = now
     return _cache_value
 
@@ -61,8 +77,8 @@ def get_urlpath() -> str:
 def set_urlpath(value: str) -> str:
     """Update URLPATH in DB and invalidate cache.
 
-    Returns the normalized value that was stored.
-    If DB is unavailable (e.g., tests), still updates the in-memory cache.
+    Returns the normalized value that was persisted. Raises when persistence fails so
+    callers cannot report a security-sensitive path change that will be lost on restart.
     """
     global _cache_value, _cache_ts
     value = (value or "").strip("/")
@@ -76,9 +92,18 @@ def set_urlpath(value: str) -> str:
             db.commit()
         finally:
             db.close()
-    except Exception:
-        pass  # DB not available (e.g., tables not yet created in tests)
-    # Always update cache regardless of DB success
+    except Exception as exc:
+        # A fresh in-process test/first-boot can reach this before migrations
+        # create Settings. Keep the requested value in memory in that narrow
+        # case; all real persistence/locking errors remain failures.
+        if "no such table" in str(exc).lower():
+            logger.warning("URLPATH table is not ready; using in-memory value until migration")
+            with _lock:
+                _cache_value = value
+                _cache_ts = time.monotonic()
+            return value
+        logger.error("Could not persist URLPATH: %s", exc)
+        raise RuntimeError("URLPATH could not be persisted") from exc
     with _lock:
         _cache_value = value
         _cache_ts = time.monotonic()
@@ -127,7 +152,9 @@ class URLPathMiddleware:
 
         # Always allow these paths through regardless of URLPATH
         path = scope.get("path", "")
-        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health", "/doc", "/openapi.json", "/api/")
+        # Static assets and public subscription links intentionally remain
+        # reachable without the panel prefix. API/docs must not bypass it.
+        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health")
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
             return

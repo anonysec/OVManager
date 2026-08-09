@@ -79,10 +79,11 @@ const OnboardingChecklist = () => {
         apiClient.get('/nodes/'),
         apiClient.get('/users/'),
       ]);
-      setState({
-        nodes: (nodesRes.data?.data || []).length,
-        users: (usersRes.data?.data || []).length,
-      });
+      const nodesData = nodesRes.data?.data;
+      const usersData = usersRes.data?.data;
+      const nodeList = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
+      const userList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
+      setState({ nodes: nodeList.length, users: userList.length });
     } catch { /* keep last known state */ }
   }, []);
 

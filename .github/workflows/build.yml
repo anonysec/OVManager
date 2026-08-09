@@ -47,10 +47,14 @@ jobs:
         run: |
           timeout 5s uv run main.py || true
 
+      - name: Build Docker image for scanning
+        run: docker build --tag ovmanager:ci .
+
       - name: Scan Docker image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ovmanager:latest'
+          image-ref: 'ovmanager:ci'
           format: 'sarif'
-          exit-code: '0'
+          exit-code: '1'
+          ignore-unfixed: true
           severity: 'CRITICAL,HIGH'

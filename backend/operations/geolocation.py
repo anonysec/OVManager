@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import socket
 import logging
+import ipaddress
 from typing import Optional
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -22,8 +24,31 @@ import time as _time
 _TIMEOUT = 5.0
 
 
+def _extract_host(address: str) -> Optional[str]:
+    """Extract a hostname/IP from hostnames, URLs, host:port, and IPv6 input."""
+    raw = str(address or '').strip()
+    if not raw:
+        return None
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        pass
+
+    candidate = raw if '://' in raw else f'//{raw}'
+    try:
+        host = urlsplit(candidate).hostname
+    except ValueError:
+        host = None
+    return host.strip('[]') if host else None
+
+
 def resolve_ip(address: str) -> Optional[str]:
     """Resolve a hostname to an IP address."""
+    try:
+        ipaddress.ip_address(address)
+        return address
+    except ValueError:
+        pass
     try:
         return socket.gethostbyname(address)
     except (socket.gaierror, OSError):
@@ -36,8 +61,8 @@ def geolocate(address: str) -> Optional[dict]:
     Returns dict with keys: country_code, latitude, longitude
     or None if lookup fails.
     """
-    # Extract hostname from address (strip port if present)
-    host = address.split(":")[0].strip()
+    # Extract hostname/IP safely; splitting on ':' breaks IPv6 and URLs.
+    host = _extract_host(address)
     if not host:
         return None
 

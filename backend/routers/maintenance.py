@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
 from backend.auth.auth import get_current_user
-from backend.db.engine import BASE_DIR, engine, get_db
+from backend.db.engine import engine, get_db
+from backend.data_paths import DATA_DIR
 from backend.node.task import clean_global_mlogin_registry, clean_stale_sessions_all_nodes, login_diagnostics, login_health_summary, sync_all_user_limits
 from sqlalchemy import text as _text
 from backend.operations.audit import log_event
@@ -23,7 +24,7 @@ MAX_BACKUP_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 
-DB_DIR = BASE_DIR.parent.parent / "data"
+DB_DIR = DATA_DIR
 DB_PATH = DB_DIR / "ovmanager.db"
 BACKUP_DIR = DB_DIR / "backups"
 _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
@@ -86,7 +87,7 @@ async def download_backup(user: dict = Depends(get_current_user)):
     if not BACKUP_DIR.exists():
         raise HTTPException(status_code=404, detail="No backups found")
 
-    backups = sorted(BACKUP_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted((p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not backups:
         raise HTTPException(status_code=404, detail="No backups found")
 
@@ -107,7 +108,7 @@ async def list_backups(user: dict = Depends(get_current_user)):
     if not BACKUP_DIR.exists():
         return ResponseModel(success=True, msg="No backups", data=[])
 
-    backups = sorted(BACKUP_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted((p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"), key=lambda p: p.stat().st_mtime, reverse=True)
     files = []
     for b in backups:
         files.append({
@@ -196,7 +197,7 @@ async def restore_backup(
             # Security: resolve and verify the path stays within BACKUP_DIR
             src_path = (BACKUP_DIR / restore_from_server).resolve()
             backup_dir_resolved = BACKUP_DIR.resolve()
-            if not str(src_path).startswith(str(backup_dir_resolved)):
+            if not src_path.is_relative_to(backup_dir_resolved):
                 return ResponseModel(success=False, msg="Invalid backup path", data=None)
             if not src_path.exists() or not src_path.is_file():
                 return ResponseModel(success=False, msg=f"Backup file '{restore_from_server}' not found", data=None)

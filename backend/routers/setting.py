@@ -10,7 +10,7 @@ from backend.operations.server_info import get_server_info
 from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
 from backend.version import __version__
-from backend.urlpath import set_urlpath as _set_urlpath, get_urlpath as _get_urlpath, invalidate_cache
+from backend.urlpath import set_urlpath as _set_urlpath, get_urlpath as _get_urlpath
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 
@@ -28,10 +28,11 @@ async def get_settings(
     # Subscription prefix: DB-persisted > env config > request base URL
     db_prefix = getattr(db_settings, "subscription_url_prefix", None)
     sub_prefix_source = db_prefix if db_prefix else config.SUBSCRIPTION_URL_PREFIX
+    public_base = (config.PUBLIC_URL or str(request.base_url)).rstrip("/")
     subscription_prefix = (
         sub_prefix_source.rstrip("/") + "/"
         if sub_prefix_source
-        else str(request.base_url).rstrip("/") + (f"/{urlpath}/" if urlpath else "/")
+        else public_base + (f"/{urlpath}/" if urlpath else "/")
     )
 
     # Subscription path: DB-persisted > env config
@@ -43,7 +44,8 @@ async def get_settings(
         subscription_url_prefix=subscription_prefix,
         timezone=getattr(db_settings, "timezone", "UTC") or "UTC",
         panel_version=__version__,
-        bot_token=getattr(db_settings, "bot_token", None) or None,  # masked in log/UI; never return raw
+        bot_token=None,
+        bot_configured=bool(getattr(db_settings, "bot_token", None)),
         bot_enabled=bool(getattr(db_settings, "bot_enabled", False)),
         default_days=getattr(db_settings, "default_days", 30) or 30,
         default_traffic_gb=getattr(db_settings, "default_traffic_gb", 100) or 100,
@@ -84,11 +86,11 @@ class URLPathUpdate(BaseModel):
 async def update_timezone(
     payload: TimezoneUpdate,
     db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
+    user: dict = Depends(require_main_admin),
 ):
     tz = (payload.timezone or "UTC").strip() or "UTC"
     # Validate IANA timezone name
-    from zoneinfo import ZoneInfo, available_timezones
+    from zoneinfo import available_timezones
     if tz != "UTC" and tz not in available_timezones():
         return ResponseModel(success=False, msg=f"Invalid timezone: {tz}", data=None)
     crud.update_setting_timezone(db, tz)
@@ -99,7 +101,7 @@ async def update_timezone(
 async def update_subscription(
     payload: SubscriptionUpdate,
     db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
+    user: dict = Depends(require_main_admin),
 ):
     # Persist to DB so settings survive restarts
     db_settings = crud.get_settings(db)
@@ -107,8 +109,14 @@ async def update_subscription(
         db_settings.subscription_url_prefix = payload.subscription_url_prefix.strip()
         config.SUBSCRIPTION_URL_PREFIX = payload.subscription_url_prefix.strip()
     if payload.subscription_path is not None:
-        db_settings.subscription_path = payload.subscription_path.strip()
-        config.SUBSCRIPTION_PATH = payload.subscription_path.strip()
+        requested_path = payload.subscription_path.strip("/")
+        if not requested_path or requested_path != config.SUBSCRIPTION_PATH.strip("/"):
+            return ResponseModel(
+                success=False,
+                msg="Subscription path changes require a restart and route configuration update",
+                data={"subscription_path": config.SUBSCRIPTION_PATH.strip("/")},
+            )
+        db_settings.subscription_path = requested_path
     db.commit()
     return ResponseModel(
         success=True,
@@ -124,10 +132,10 @@ async def update_subscription(
 async def update_bot_config(
     payload: BotConfigUpdate,
     db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
+    user: dict = Depends(require_main_admin),
 ):
     kwargs = payload.model_dump(exclude_unset=True)
-    s = crud.update_bot_config(db, **kwargs)
+    crud.update_bot_config(db, **kwargs)
     return ResponseModel(
         success=True,
         msg="Bot config updated",
@@ -169,7 +177,10 @@ async def update_urlpath(
             data=None,
         )
 
-    new_value = _set_urlpath(value)
+    try:
+        new_value = _set_urlpath(value)
+    except RuntimeError as exc:
+        return ResponseModel(success=False, msg=str(exc), data=None)
 
     return ResponseModel(
         success=True,

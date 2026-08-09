@@ -24,6 +24,12 @@ from backend.node.task import (
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
+def _require_user_access(db_user: User, current_user: dict) -> None:
+    """Enforce the same ownership rule for every user operation."""
+    if current_user.get("type") == "admin" and db_user.owner != current_user.get("username"):
+        raise HTTPException(status_code=403, detail="You do not have permission to access this resource")
+
+
 @router.get("/next-username", response_model=ResponseModel)
 async def get_next_username(
     db: Session = Depends(get_db),
@@ -107,8 +113,7 @@ async def reset_user_usage(uuid: str, db: Session = Depends(get_db), user: dict 
     db_user = crud.get_user_by_uuid(db, uuid)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user["type"] == "admin" and db_user.owner != user["username"]:
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+    _require_user_access(db_user, user)
     reset = crud.reset_user_usage(db, uuid)
     if not reset:
         raise HTTPException(status_code=404, detail="User not found")
@@ -155,11 +160,18 @@ async def update_user(
     db_user = crud.get_user_by_uuid(db, uuid)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
+    _require_user_access(db_user, user)
     crud.update_user(db, uuid, request)
     db_user = crud.get_user_by_uuid(db, uuid)
-    final_active = bool(request.status) and db_user.is_active
-    await change_user_status_on_all_nodes(db_user.id, request.name, final_active, db)
-    await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, db_user.id)
+    final_active = bool(db_user.is_active)
+    status_synced = await change_user_status_on_all_nodes(db_user.id, db_user.name, final_active, db)
+    limit_synced = await set_user_limit_on_all_nodes(db_user.name, db_user.max_logins, db, db_user.id)
+    if not status_synced or not limit_synced:
+        return ResponseModel(
+            success=False,
+            msg="User saved locally but one or more nodes failed to synchronize",
+            data={"status_synced": status_synced, "limit_synced": limit_synced},
+        )
     # enforce_user_limits runs as a daily background job in app.py;
     # calling it per user update is O(n²) — each call queries all expired/exceeded users.
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
@@ -176,7 +188,12 @@ async def change_user_status(
     db_user = crud.get_user_by_uuid(db, uuid)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    await change_user_status_on_all_nodes(db_user.id, request.name, request.status, db)
+    _require_user_access(db_user, user)
+    db_user.is_active = bool(request.status)
+    db.commit()
+    synced = await change_user_status_on_all_nodes(db_user.id, db_user.name, request.status, db)
+    if not synced:
+        return ResponseModel(success=False, msg="User status saved locally but node synchronization failed", data={"synced": False})
     log_event(db, "user.status", actor=user.get("username"), target=request.name, detail=f"status={request.status}")
     return ResponseModel(success=True, msg="Changed user status successfully")
 
@@ -191,8 +208,7 @@ async def user_sessions(
     db_user = crud.get_user_by_uuid(db, uuid)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if user["type"] == "admin" and db_user.owner != user["username"]:
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+    _require_user_access(db_user, user)
     data = await get_user_session_diagnostics(db_user.id, db, hours=hours)
     return ResponseModel(success=True, msg="User session diagnostics", data=data)
 
@@ -206,8 +222,7 @@ async def disconnect_user_sessions(
     db_user = crud.get_user_by_uuid(db, uuid)
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    if user["type"] == "admin" and db_user.owner != user["username"]:
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
+    _require_user_access(db_user, user)
     data = await disconnect_user_on_all_nodes(db_user.name, db_user.id, db)
     log_event(db, "user.disconnect", actor=user.get("username"), target=db_user.name, detail="Disconnect requested")
     return ResponseModel(success=True, msg="Disconnect command processed", data=data)
@@ -220,6 +235,7 @@ async def delete_user(
     db_user = crud.get_user_by_uuid(db, uuid)
     if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
+    _require_user_access(db_user, user)
 
     if await delete_user_on_all_nodes(db_user.name, db_user.id, db):
         name = db_user.name

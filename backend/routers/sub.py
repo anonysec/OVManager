@@ -123,7 +123,7 @@ async def get_subscription(
         try:
             return await run_in_threadpool(
                 NodeRequests(
-                    address=node.address, port=node.port, api_key=node.key
+                    address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls
                 ).check_node
             )
         except Exception:

@@ -121,18 +121,28 @@ def authenticate_user(db: Session, username: str, password: str):
     return None
 
 
+def _role_is_current(db: Session, username: str, role: str) -> bool:
+    if role == "main_admin":
+        return username == config.ADMIN_USERNAME
+    return role == "admin" and crud.get_admin_by_username(db, username=username) is not None
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
+    role = to_encode.pop("role", to_encode.pop("type", None))
     expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
-    to_encode.setdefault("type", "access")
+    to_encode["role"] = role
+    to_encode["type"] = "access"
     to_encode["exp"] = expire
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
+    role = to_encode.pop("role", to_encode.pop("type", None))
     expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
-    to_encode.setdefault("type", "refresh")
+    to_encode["role"] = role
+    to_encode["type"] = "refresh"
     to_encode["exp"] = expire
     return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
 
@@ -170,9 +180,25 @@ async def login(
         )
 
     _login_attempts.pop(ip_h, None)
-    access_token = create_access_token(data={"sub": admin["username"], "type": admin["type"]})
-    refresh_token = create_refresh_token(data={"sub": admin["username"], "type": admin["type"]})
+    access_token = create_access_token(data={"sub": admin["username"], "role": admin["type"]})
+    refresh_token = create_refresh_token(data={"sub": admin["username"], "role": admin["type"]})
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+
+@router.post("/logout")
+async def logout(request: Request):
+    """Revoke the presented access and refresh tokens when possible."""
+    tokens = []
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        tokens.append(auth_header[7:])
+    refresh = request.headers.get("X-Refresh-Token")
+    if refresh:
+        tokens.append(refresh)
+    for token in tokens:
+        if token:
+            revoke_token(token)
+    return {"detail": "Logged out"}
 
 
 # OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix
@@ -195,14 +221,14 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     username = payload.get("sub")
-    user_type = payload.get("type")
-    if not username:
+    user_role = payload.get("role")
+    if not username or user_role not in ("admin", "main_admin") or not _role_is_current(db, username, user_role):
         raise HTTPException(status_code=401, detail="Invalid token payload")
-    new_access = create_access_token(data={"sub": username, "type": user_type})
+    new_access = create_access_token(data={"sub": username, "role": user_role})
     return {"access_token": new_access, "token_type": "bearer"}
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
@@ -213,8 +239,10 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM]
         )
         username: str = payload.get("sub")
-        user_type: str = payload.get("type")
-        if username is None:
+        user_type: str = payload.get("role")
+        if payload.get("type") != "access" or username is None or user_type not in ("admin", "main_admin"):
+            raise credentials_exception
+        if not _role_is_current(db, username, user_type):
             raise credentials_exception
         if is_token_revoked(token):
             raise HTTPException(status_code=401, detail="Token has been revoked")

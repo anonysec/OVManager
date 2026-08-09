@@ -21,14 +21,22 @@ from backend.routers.sub import router as subscription_router
 from backend.version import __version__
 from backend.tls_config import TLSConfig
 from backend.urlpath import URLPathMiddleware, get_urlpath as _get_urlpath
+from backend.logger import logger
+
+_scheduler = None
+_bot_process = None
 
 
 # ── Security Headers Middleware ───────────────────────────────────
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        # HSTS: 1 year, include subdomains, preload-ready
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        # HSTS is meaningful only on HTTPS. Trust forwarded proto only when
+        # the deployment explicitly trusts its reverse proxy.
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "").lower()
+        is_https = request.url.scheme == "https" or (config.TRUSTED_PROXY and forwarded_proto == "https")
+        if is_https:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         # Other hardening headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -56,7 +64,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 path = path[len(f"/{_up}"):]
             if auth and auth.startswith("Bearer "):
                 return await call_next(request)
-            if path.startswith("/api/sub/") or path == "/api/login":
+            if path.startswith("/api/sub/") or path in ("/api/login", "/api/logout", "/api/refresh"):
                 return await call_next(request)
             # Require custom header for browser-based form submissions
             if not request.headers.get("X-Requested-With"):
@@ -151,9 +159,9 @@ _allow_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if
 api.add_middleware(
     CORSMiddleware,
     allow_origins=_allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Refresh-Token"],
 )
 
 
@@ -197,6 +205,9 @@ async def auto_clean_stale_job():
 
 
 def start_scheduler():
+    global _scheduler
+    if _scheduler and _scheduler.running:
+        return _scheduler
     scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
     scheduler.add_job(
         check_user_used_traffic,
@@ -234,34 +245,57 @@ def start_scheduler():
         misfire_grace_time=60,
     )
     scheduler.start()
+    _scheduler = scheduler
+    return scheduler
 
 
 def start_bot():
-    """Start the Telegram bot as a subprocess."""
+    """Start one supervised Telegram bot subprocess from the app root."""
+    global _bot_process
     import subprocess
     import sys
 
-    bot_path = os.path.join(os.path.dirname(__file__), "..", "bot", "main.py")
-    if os.path.exists(bot_path):
-        subprocess.Popen(
+    app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    bot_path = os.path.join(app_root, "bot", "main.py")
+    if not os.path.exists(bot_path):
+        return None
+    if _bot_process and _bot_process.poll() is None:
+        return _bot_process
+    try:
+        _bot_process = subprocess.Popen(
             [sys.executable, "-m", "bot.main"],
-            cwd=os.path.dirname(__file__),
+            cwd=app_root,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
+            stderr=subprocess.STDOUT,
+            start_new_session=False,
         )
+        return _bot_process
+    except OSError as exc:
+        logger.error("Could not start Telegram bot: %s", exc)
+        return None
 
 
 # ── Startup ───────────────────────────────────────────────────────
 @api.on_event("startup")
 async def startup_event():
-    try:
-        _run_migrations()
-    except Exception as e:
-        from backend.logger import logger
-        logger.error("migration warning: %s", e)
+    _run_migrations()
     start_scheduler()
     start_bot()
+
+
+@api.on_event("shutdown")
+async def shutdown_event():
+    global _scheduler, _bot_process
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
+    _scheduler = None
+    if _bot_process and _bot_process.poll() is None:
+        _bot_process.terminate()
+        try:
+            _bot_process.wait(timeout=5)
+        except Exception:
+            _bot_process.kill()
+    _bot_process = None
 
 
 # ── Register API routers (no prefix — URLPathMiddleware handles it) ─

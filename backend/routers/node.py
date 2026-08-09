@@ -62,6 +62,8 @@ async def get_node_status(
         return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     node_status = await get_node_status_handler(node_id, db)
+    if node_status is None:
+        raise HTTPException(status_code=404, detail="Node not found")
     return ResponseModel(
         success=True,
         msg="Node status retrieved successfully",
@@ -97,6 +99,11 @@ async def download_ovpn_client(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] != "main_admin" and db_user.owner != user["username"]:
         raise HTTPException(status_code=403, detail="Not your user")
+    from datetime import date
+    if not db_user.is_active or (db_user.expiry_date and db_user.expiry_date < date.today()):
+        raise HTTPException(status_code=403, detail="User account is not active")
+    if db_user.total is not None and (db_user.used or 0) >= db_user.total:
+        raise HTTPException(status_code=403, detail="User traffic limit reached")
     response = await download_ovpn_client_from_node(user_id=db_user.id, node_id=node_id, db=db)
     if response:
         return response

@@ -2,11 +2,11 @@ import logging
 import os
 
 from backend.config import config
+from backend.data_paths import DATA_DIR
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE = os.path.join(os.path.dirname(BASE_DIR), "data", "app.log")
+LOG_FILE = str(DATA_DIR / "app.log")
 
-os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
 level_map = {
     "DEBUG": logging.DEBUG,

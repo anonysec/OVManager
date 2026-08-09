@@ -18,13 +18,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.db.engine import get_db
+from backend.data_paths import DATA_DIR as DATA_ROOT
 from backend.db.models import Node, User
 from backend.logger import logger
 from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/mlogin", tags=["Global Multi-login"])
 
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+DATA_DIR = str(DATA_ROOT)
 LOCK_PATH = os.path.join(DATA_DIR, "global_mlogin.lock")
 _NODE_TIMEOUT = float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))
 _SESSION_TTL = int(os.getenv("OVMANAGER_MLOGIN_SESSION_TTL", "86400"))

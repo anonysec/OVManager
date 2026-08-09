@@ -1,17 +1,8 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from typing import Any, Optional
 
-from cryptography.fernet import Fernet
-import os
-
 from backend.version import __version__
-
-
-_ENCRYPTION_KEY = os.environ.get("BOT_TOKEN_ENCRYPTION_KEY")
-if not _ENCRYPTION_KEY:
-    _ENCRYPTION_KEY = Fernet.generate_key().decode()
-_fernet = Fernet(_ENCRYPTION_KEY.encode())
 
 
 class ResponseModel(BaseModel):
@@ -51,7 +42,8 @@ class Settings(BaseModel):
     subscription_path: str
     timezone: str = "UTC"
     panel_version: str = __version__
-    bot_token: Optional[str] = None  # masked — never expose raw token
+    bot_token: Optional[str] = None  # write-only; never populated in responses
+    bot_configured: bool = False
     bot_enabled: bool = False
     default_days: int = 30
     default_traffic_gb: int = 100

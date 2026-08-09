@@ -6,18 +6,18 @@ creating, activating/deactivating, deleting users, and downloading configs.
 
 import asyncio
 import io
+import time
 import zipfile
 from zipfile import ZIP_DEFLATED
 
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.logger import logger
 from backend.schema._input import NodeCreate
 from backend.node.requests import NodeRequests
 from backend.db import crud
-from backend.db.models import Node
 from backend.operations.geolocation import geolocate
 
 
@@ -40,18 +40,34 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     if not ok:
         return False
 
+    if request.set_new_setting:
+        configured = await run_in_threadpool(
+            nr.update_config,
+            tunnel_address=request.tunnel_address or "",
+            protocol=request.protocol,
+            ovpn_port=request.ovpn_port,
+            set_new_setting=True,
+        )
+        if not configured:
+            logger.error("Node %s accepted health check but rejected configuration", request.address)
+            return False
+
     crud.create_node(db, request, geo)
     return True
 
 
 async def update_node_handler(node_id: int, request: NodeCreate, db: Session) -> bool:
     """Update an existing node's configuration."""
+    existing = crud.get_node_by_id(db, node_id)
+    if not existing:
+        return False
     geo = geolocate(request.address)
+    api_key = request.key or existing.key
 
     nr = NodeRequests(
         address=request.address,
         port=request.port,
-        api_key=request.key,
+        api_key=api_key,
         tunnel_address=request.tunnel_address or "",
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
@@ -62,6 +78,18 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     ok = await run_in_threadpool(nr.check_node)
     if not ok:
         return False
+
+    if request.set_new_setting:
+        configured = await run_in_threadpool(
+            nr.update_config,
+            tunnel_address=request.tunnel_address or "",
+            protocol=request.protocol,
+            ovpn_port=request.ovpn_port,
+            set_new_setting=True,
+        )
+        if not configured:
+            logger.error("Node %s rejected configuration update", request.address)
+            return False
 
     crud.update_node(db, node_id, request, geo)
     return True
@@ -108,8 +136,13 @@ async def get_node_status_handler(node_id: int, db: Session):
         use_tls=node.use_tls,
     )
 
-    info = await run_in_threadpool(nr.get_node_info)
-    sessions = await run_in_threadpool(nr.get_sessions, None, 8)
+    started = time.perf_counter()
+    info, sessions = await asyncio.gather(
+        run_in_threadpool(nr.get_node_info),
+        run_in_threadpool(nr.get_sessions, None, 8),
+    )
+    info = info if isinstance(info, dict) else {}
+    sessions = sessions if isinstance(sessions, dict) else {}
 
     return {
         "node": {
@@ -118,8 +151,10 @@ async def get_node_status_handler(node_id: int, db: Session):
             "address": node.address,
             "status": node.status,
         },
-        "info": info,
-        "sessions": sessions,
+        "node_info": info,
+        "session_diagnostics": sessions,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+        "reachable": bool(info),
     }
 
 
@@ -140,7 +175,7 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
 
 async def change_user_status_on_all_nodes(
     user_id: int, name: str, status: bool, db: Session, max_logins: int = None
-):
+) -> bool:
     """Toggle user status on every active node. Uses numeric user ID."""
     nodes = crud.get_active_nodes(db)
     uid = str(user_id)
@@ -148,10 +183,13 @@ async def change_user_status_on_all_nodes(
     for n in nodes:
         nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.change_user_status, name, status, max_logins, uid))
-    await asyncio.gather(*tasks, return_exceptions=True)
+    if not tasks:
+        return True
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return all(result is True for result in results)
 
 
-async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, user_id: int = None):
+async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, user_id: int = None) -> bool:
     """Push max_login limit to every active node. Uses numeric user ID."""
     nodes = crud.get_active_nodes(db)
     uid = str(user_id) if user_id else name
@@ -159,7 +197,10 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     for n in nodes:
         nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.set_user_limit, uid, int(max_logins or 0)))
-    await asyncio.gather(*tasks, return_exceptions=True)
+    if not tasks:
+        return True
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return all(result is True for result in results)
 
 
 async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session):
@@ -220,7 +261,7 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> bool
         nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    # True only if at least one node succeeded AND no exceptions from others
-    success_results = [r for r in results if r is True]
-    exception_results = [r for r in results if isinstance(r, Exception)]
-    return len(success_results) > 0 and len(exception_results) == 0
+    # Every active node must acknowledge the deletion. A partial success must
+    # remain visible so the Manager does not remove its source-of-truth row
+    # while a client certificate survives on another node.
+    return bool(results) and all(r is True for r in results)
