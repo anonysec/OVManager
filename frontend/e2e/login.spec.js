@@ -64,7 +64,7 @@ test.describe('OVManager E2E', () => {
     await page.waitForTimeout(2000);
     
     const beforeCount = await page.locator('tbody tr').count();
-    const newUser = `pw_${Date.now()}`;
+    const newUser = `pw${Math.floor(1000 + Math.random() * 9000)}`;
     
     await page.click('text=Add New User');
     await page.waitForTimeout(500);
@@ -134,7 +134,7 @@ test.describe('OVManager E2E', () => {
     await page.waitForTimeout(2000);
     const tabs = ['General', 'Bot', 'System', 'Security', 'Activity'];
     for (const tab of tabs) {
-      await page.locator(`button:has-text("${tab}")`).first().click();
+      await page.locator('.settings-nav-item').filter({ hasText: tab }).first().click();
       await page.waitForTimeout(1000);
       const errorCount = await page.locator('.error-state').count();
       expect(errorCount).toBe(0);
