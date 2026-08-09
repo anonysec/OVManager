@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from backend.db.engine import get_db
 from backend.db import crud
 from backend.auth.auth import get_current_user
-from backend.auth.authz import require_main_admin
+from backend.auth.authz import require_owner
 from backend.operations.server_info import get_server_info
 from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
@@ -86,7 +86,7 @@ class URLPathUpdate(BaseModel):
 async def update_timezone(
     payload: TimezoneUpdate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_main_admin),
+    user: dict = Depends(require_owner),
 ):
     tz = (payload.timezone or "UTC").strip() or "UTC"
     # Validate IANA timezone name
@@ -101,13 +101,15 @@ async def update_timezone(
 async def update_subscription(
     payload: SubscriptionUpdate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_main_admin),
+    user: dict = Depends(require_owner),
 ):
-    # Persist to DB so settings survive restarts
+    # Persist to DB so settings survive restarts.
+    # Do NOT mutate the in-memory config object — it is a pydantic-settings
+    # singleton and changes are not atomic, not thread-safe, and are lost on
+    # restart anyway. The DB is the single source of truth.
     db_settings = crud.get_settings(db)
     if payload.subscription_url_prefix is not None:
         db_settings.subscription_url_prefix = payload.subscription_url_prefix.strip()
-        config.SUBSCRIPTION_URL_PREFIX = payload.subscription_url_prefix.strip()
     if payload.subscription_path is not None:
         requested_path = payload.subscription_path.strip("/")
         if not requested_path or requested_path != config.SUBSCRIPTION_PATH.strip("/"):
@@ -132,10 +134,18 @@ async def update_subscription(
 async def update_bot_config(
     payload: BotConfigUpdate,
     db: Session = Depends(get_db),
-    user: dict = Depends(require_main_admin),
+    user: dict = Depends(require_owner),
 ):
     kwargs = payload.model_dump(exclude_unset=True)
-    crud.update_bot_config(db, **kwargs)
+    try:
+        crud.update_bot_config(db, **kwargs)
+    except RuntimeError as exc:
+        # BOT_ENCRYPT_KEY is not set — surface as a clear 400, not a 500
+        return ResponseModel(
+            success=False,
+            msg=str(exc) + ". Set BOT_ENCRYPT_KEY in your .env file before saving a bot token.",
+            data=None,
+        )
     return ResponseModel(
         success=True,
         msg="Bot config updated",
@@ -146,7 +156,7 @@ async def update_bot_config(
 @router.put("/settings/urlpath", response_model=ResponseModel)
 async def update_urlpath(
     payload: URLPathUpdate,
-    user: dict = Depends(require_main_admin),
+    user: dict = Depends(require_owner),
 ):
     """Change the panel URL path prefix at runtime.
 
@@ -155,7 +165,7 @@ async def update_urlpath(
     - When set, root and other paths return empty response (security)
     - Takes effect within 5 seconds (cache TTL) — no restart needed
 
-    Only main_admin can change this.
+    Only owner can change this.
     """
     import re
 

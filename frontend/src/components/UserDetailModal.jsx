@@ -1,13 +1,10 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiX, FiEdit2, FiActivity, FiDownload, FiCopy, FiCheck, FiWifi, FiHardDrive, FiClock, FiUsers, FiUserX, FiUserCheck } from 'react-icons/fi';
+import { FiEdit2, FiActivity, FiDownload, FiCopy, FiCheck, FiWifi, FiHardDrive, FiClock, FiUsers, FiUserX, FiUserCheck } from 'react-icons/fi';
 import Modal from './Modal';
 import { formatTraffic } from '../utils/format';
 import { daysUntil, formatDate } from '../utils/time';
 import { copyText } from '../utils/clipboard';
-
-// QR encoder is only needed when the detail modal is open — load on demand.
-const QRCode = lazy(() => import('qrcode'));
 
 const statusOf = (user, t) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
@@ -22,17 +19,29 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
+
+  // Generate QR code via a plain dynamic import — lazy() is for React components,
+  // not for calling library functions directly.
+  useEffect(() => {
+    if (!subscriptionLink || !isOpen) return;
+    let cancelled = false;
+    import('qrcode').then(({ default: QRLib }) => {
+      QRLib.toDataURL(subscriptionLink, { margin: 1, width: 240, color: { dark: '#0f1115', light: '#ffffff' } })
+        .then((dataUrl) => { if (!cancelled) setQr(dataUrl); })
+        .catch(() => { if (!cancelled) setQr(''); });
+    }).catch(() => { if (!cancelled) setQr(''); });
+    return () => { cancelled = true; };
+  }, [subscriptionLink, isOpen]);
+
+  // Reset QR when modal closes so it regenerates fresh on next open
+  useEffect(() => {
+    if (!isOpen) setQr('');
+  }, [isOpen]);
+
   if (!user) return null;
 
   const st = statusOf(user, t);
   const d = daysUntil(user.expiry_date);
-
-  // Generate the subscription QR lazily the first time the modal renders.
-  if (!qr && subscriptionLink) {
-    QRCode.toDataURL(subscriptionLink, { margin: 1, width: 240, color: { dark: '#0f1115', light: '#ffffff' } })
-      .then(setQr)
-      .catch(() => setQr(''));
-  }
 
   const copyLink = async () => {
     if (!subscriptionLink) return;
@@ -83,7 +92,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
             </button>
           </div>
           {qr && (
-            <div className="udetail-qr" aria-label={t('qrAlt', 'VPN config QR code')}>
+            <div className="udetail-qr" aria-label={t('qrAlt', 'Subscription link QR code')}>
               <img src={qr} alt="" />
             </div>
           )}

@@ -3,6 +3,7 @@ import { FiDatabase, FiRefreshCw, FiUpload, FiDownload } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import LoadingButton from '../components/LoadingButton';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Maintenance = () => {
   const { t } = useTranslation();
@@ -11,6 +12,9 @@ const Maintenance = () => {
   const [restoreFile, setRestoreFile] = useState(null);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const openConfirm = (title, msg, onConfirm) => setConfirm({ open: true, title, message: msg, onConfirm });
+  const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
 
   const fetchBackups = async () => {
     setIsLoading(true);
@@ -65,7 +69,7 @@ const Maintenance = () => {
   };
 
   const handleRestoreFromServer = async (backupName) => {
-    if (!window.confirm(`Restore from backup "${backupName}"? This will overwrite current data.`)) return;
+    // confirmation handled via ConfirmModal — caller wraps this in openConfirm
     setIsRestoreLoading(true);
     setMessage('');
     try {
@@ -168,7 +172,7 @@ const Maintenance = () => {
                   <td>{(backup.size / 1024).toFixed(1)} KB</td>
                   <td>{new Date(backup.modified).toLocaleString()}</td>
                   <td>
-                    <button onClick={() => handleRestoreFromServer(backup.name)} className="btn">
+                    <button onClick={() => openConfirm(t('restoreButton','Restore'), `Restore from "${backup.name}"? This will overwrite current data.`, () => handleRestoreFromServer(backup.name))} className="btn">
                       {t('restoreButton')}
                     </button>
                   </td>
@@ -180,6 +184,7 @@ const Maintenance = () => {
       </div>
 
       {message && <div className="notification" style={{ marginTop: '20px' }}>{message}</div>}
+      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("restoreButton","Restore")} cancelLabel={t("cancelButton","Cancel")} />
     </div>
   );
 };

@@ -64,7 +64,9 @@ const GeneralTab = () => {
     }
   };
 
-  const panelUrl = typeof window !== 'undefined' ? `${window.location.origin}/${urlPath}/` : `/${urlPath}/`;
+  const panelUrl = typeof window !== 'undefined'
+    ? (urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`)
+    : (urlPath ? `/${urlPath}/` : '/');
 
   return (
     <div className="settings-section">

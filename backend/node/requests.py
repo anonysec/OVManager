@@ -124,3 +124,19 @@ class NodeRequests:
             params["common_name"] = common_name
         r = self._request("get", "/sync/sessions", params=params, timeout=LONG_TIMEOUT)
         return (r or {}).get("data", {})
+
+    def download_ovpn_bytes(self, uid: str) -> bytes | None:
+        """Return the raw .ovpn file bytes (for ZIP bundling etc.)."""
+        try:
+            r = _req.get(
+                self._url(f"/sync/download/ovpn/{uid}"),
+                headers={**self.headers, "Accept": "application/x-openvpn-profile"},
+                timeout=120,
+            )
+            body = r.content
+            if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
+                return body
+            logger.error("Node %s OVPN bytes %s: invalid response", self.address, uid)
+        except Exception as e:
+            logger.error("Node %s OVPN bytes %s: %s", self.address, uid, e)
+        return None

@@ -15,14 +15,21 @@ async def enforce_user_limits():
         expired_users = crud.get_expired_users(db)
         exceeded_users = crud.get_users_exceeded_traffic(db)
 
-        users_to_disable = {u.id: u for u in expired_users + exceeded_users}.values()
+        users_to_disable = list({u.id: u for u in expired_users + exceeded_users}.values())
 
+        # Disable all users in the DB first, then push to nodes concurrently.
+        # Eliminates the per-user asyncio.sleep(0.5) that could run for minutes
+        # on large user counts and exceed the 10-minute cron interval.
         for user in users_to_disable:
             user.is_active = False
-            await change_user_status_on_all_nodes(user_id=user.id, name=user.name, status=False, db=db)
-            await asyncio.sleep(0.5)
-
         db.commit()
+
+        # Push status to all nodes concurrently (gather all at once)
+        if users_to_disable:
+            await asyncio.gather(*[
+                change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db)
+                for u in users_to_disable
+            ], return_exceptions=True)
 
     except Exception as e:
         db.rollback()

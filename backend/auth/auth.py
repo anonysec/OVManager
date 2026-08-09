@@ -99,16 +99,16 @@ def authenticate_user(db: Session, username: str, password: str):
     Main admin password is compared with constant-time hmac to avoid
     timing side-channels.
     """
-    main_admin_username = config.ADMIN_USERNAME
-    main_admin_password = config.ADMIN_PASSWORD
+    owner_username = config.ADMIN_USERNAME
+    owner_password = config.ADMIN_PASSWORD
 
-    if username == main_admin_username:
+    if username == owner_username:
         # Constant-time comparison — even if lengths differ, hmac.compare_digest
         # handles that safely by padding the shorter string.
         if hmac.compare_digest(
-            password.encode(), main_admin_password.encode()
+            password.encode(), owner_password.encode()
         ):
-            return {"username": username, "type": "main_admin"}
+            return {"username": username, "type": "owner"}
         # Avoid leaking whether the *username* was correct: still check DB
         # (main admin won't be in DB, so this returns None, but the timing
         # path is identical for wrong-user vs wrong-pass).
@@ -122,7 +122,7 @@ def authenticate_user(db: Session, username: str, password: str):
 
 
 def _role_is_current(db: Session, username: str, role: str) -> bool:
-    if role == "main_admin":
+    if role == "owner":
         return username == config.ADMIN_USERNAME
     return role == "admin" and crud.get_admin_by_username(db, username=username) is not None
 
@@ -222,10 +222,14 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     username = payload.get("sub")
     user_role = payload.get("role")
-    if not username or user_role not in ("admin", "main_admin") or not _role_is_current(db, username, user_role):
+    if not username or user_role not in ("admin", "owner") or not _role_is_current(db, username, user_role):
         raise HTTPException(status_code=401, detail="Invalid token payload")
+    # Rotate: revoke the consumed refresh token and issue a fresh one.
+    # This bounds the exposure window of a leaked refresh token to a single use.
+    revoke_token(token)
     new_access = create_access_token(data={"sub": username, "role": user_role})
-    return {"access_token": new_access, "token_type": "bearer"}
+    new_refresh = create_refresh_token(data={"sub": username, "role": user_role})
+    return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -240,7 +244,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         )
         username: str = payload.get("sub")
         user_type: str = payload.get("role")
-        if payload.get("type") != "access" or username is None or user_type not in ("admin", "main_admin"):
+        if payload.get("type") != "access" or username is None or user_type not in ("admin", "owner"):
             raise credentials_exception
         if not _role_is_current(db, username, user_type):
             raise credentials_exception

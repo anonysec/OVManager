@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
-from backend.auth.auth import get_current_user
+from backend.auth.authz import require_owner
 from backend.db.engine import engine, get_db
 from backend.data_paths import DATA_DIR
 from backend.node.task import clean_global_mlogin_registry, clean_stale_sessions_all_nodes, login_diagnostics, login_health_summary, sync_all_user_limits
@@ -31,14 +31,12 @@ _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
 
 @router.get("/backup", response_model=ResponseModel)
-async def backup_database(user: dict = Depends(get_current_user)):
+async def backup_database(user: dict = Depends(require_owner)):
     """Create a backup of the panel database.
 
     Exports a SQLite copy + config snapshot. Downloadable as .db file.
-    Only main_admin can access this.
+    Only owner can access this.
     """
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
 
     if not DB_PATH.exists():
         return ResponseModel(success=False, msg="Database file not found", data=None)
@@ -79,10 +77,8 @@ async def backup_database(user: dict = Depends(get_current_user)):
 
 
 @router.get("/backup/download", response_class=FileResponse)
-async def download_backup(user: dict = Depends(get_current_user)):
+async def download_backup(user: dict = Depends(require_owner)):
     """Download the latest backup as a .db file."""
-    if user["type"] != "main_admin":
-        raise HTTPException(status_code=403, detail="Unauthorized")
 
     if not BACKUP_DIR.exists():
         raise HTTPException(status_code=404, detail="No backups found")
@@ -100,10 +96,8 @@ async def download_backup(user: dict = Depends(get_current_user)):
 
 
 @router.get("/backup/list", response_model=ResponseModel)
-async def list_backups(user: dict = Depends(get_current_user)):
+async def list_backups(user: dict = Depends(require_owner)):
     """List all available backups."""
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
 
     if not BACKUP_DIR.exists():
         return ResponseModel(success=True, msg="No backups", data=[])
@@ -177,19 +171,17 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
 @router.post("/backup/restore", response_model=ResponseModel)
 async def restore_backup(
     file: UploadFile = File(...),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
     restore_from_server: str = None,
 ):
     """Restore the database from a backup file.
 
     The panel will be stopped during restore. The backup file must be a valid SQLite DB.
-    Only main_admin can access this.
+    Only owner can access this.
 
     If `restore_from_server` is provided (as a form field), the backup is read
     from the server's backup directory instead of the uploaded file.
     """
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
 
     try:
         if restore_from_server:
@@ -238,39 +230,33 @@ async def restore_backup(
 
 
 @router.get("/login-health", response_model=ResponseModel)
-async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await login_health_summary(db, hours=hours)
     return ResponseModel(success=True, msg="Login health", data=data)
 
 
 @router.post("/sync-limits", response_model=ResponseModel)
-async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
+async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await sync_all_user_limits(db)
     log_event(db, "maintenance.sync_limits", actor=user.get("username"), detail=f"{data.get('success')}/{data.get('total')} synced")
     return ResponseModel(success=True, msg="Login limits synced", data=data)
 
 
 @router.post("/clean-stale", response_model=ResponseModel)
-async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
+async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await clean_stale_sessions_all_nodes(db)
     log_event(db, "maintenance.clean_stale", actor=user.get("username"), detail=f"removed={data.get('removed_total')}")
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
 
 
 @router.post("/clean-global-registry", response_model=ResponseModel)
-async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized", data=None)
+async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await clean_global_mlogin_registry(db)
     log_event(db, "maintenance.clean_global_registry", actor=user.get("username"), detail=f"removed={len(data.get('removed') or [])}")
     return ResponseModel(success=True, msg="Global login registry cleaned", data=data)
 
 
 @router.get("/login-diagnostics/{username}", response_model=ResponseModel)
-async def user_login_diagnostics(username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def user_login_diagnostics(username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await login_diagnostics(username, db, hours=hours)
     return ResponseModel(success=True, msg="Login diagnostics", data=data)

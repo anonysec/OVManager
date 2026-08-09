@@ -12,19 +12,19 @@ from backend.db.engine import get_db
 from backend.db import crud
 
 
-def require_main_admin(user: dict = Depends(get_current_user)):
-    """Dependency: require the user to be a main_admin."""
-    if user.get("type") != "main_admin":
+def require_owner(user: dict = Depends(get_current_user)):
+    """Dependency: require the user to be the owner (superadmin)."""
+    if user.get("type") != "owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires main admin privileges",
+            detail="This action requires owner privileges",
         )
     return user
 
 
 def require_admin_or_main(user: dict = Depends(get_current_user)):
-    """Dependency: require the user to be at least an admin (or main_admin)."""
-    if user.get("type") not in ("admin", "main_admin"):
+    """Dependency: require the user to be at least an admin (or owner)."""
+    if user.get("type") not in ("admin", "owner"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires admin privileges",
@@ -42,7 +42,7 @@ def require_ownership(user: dict = Depends(get_current_user), db: Session = Depe
             pass
     """
     def check(uuid: str, user_name: str = None) -> bool:
-        if user.get("type") == "main_admin":
+        if user.get("type") == "owner":
             return True
         if user.get("type") == "admin":
             if user_name is not None and user_name != user.get("username"):

@@ -40,7 +40,14 @@ async def get_next_username(
     if not prefix:
         return ResponseModel(success=False, msg="No username prefix configured for this admin")
 
-    existing = db.query(User.name).filter(User.name.like(f"{prefix}%")).all()
+    # Fetch only names that start with the prefix and end with digits.
+    # Limit to 100_000 to bound memory; in practice admins have far fewer users.
+    existing = (
+        db.query(User.name)
+        .filter(User.name.like(f"{prefix}%"))
+        .limit(100_000)
+        .all()
+    )
     taken = {n[0] for n in existing}
 
     i = 1
@@ -78,7 +85,7 @@ async def get_all_users(
         )
         return item
 
-    if user["type"] == "main_admin":
+    if user["type"] == "owner":
         all_users = crud.get_all_users(db)
         total = len(all_users)
         start = (page - 1) * page_size
@@ -135,7 +142,9 @@ async def create_user(
             success=False, msg="User with this name already exists", data=None
         )
 
-    owner = user["username"] if user["type"] == "admin" else "owner"
+    # Use the actual username as the owner so users created by the panel owner
+    # are associated with a real identity, not the generic sentinel "owner".
+    owner = user["username"]
     new_user = crud.create_user(db, request, owner)
 
     # Do NOT synchronously create the user on every node here. The OpenVPN client

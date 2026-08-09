@@ -9,6 +9,7 @@ import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 const NodeManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,6 +19,9 @@ const NodeManagement = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const openConfirm = (title, message, onConfirm) => setConfirm({ open: true, title, message, onConfirm });
+  const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
   const [loadError, setLoadError] = useState(false);
   const { t } = useTranslation();
   const { addToast } = useToast();
@@ -106,26 +110,25 @@ const NodeManagement = () => {
     setSearchTerm(event.target.value);
   };
 
-  const handleDelete = async (nodeId, nodeName) => {
-    if (!window.confirm(`${t('deleteNodeConfirm')} ${nodeName}?`)) {
-      return;
-    }
-    try {
-      const response = await apiClient.delete(`/nodes/${nodeId}`);
-      if (response.data.success) {
-        addToast(response.data.msg || 'Node deleted successfully.', 'success');
-      } else {
-        addToast(response.data.msg || 'Unable to delete node.', 'error');
+  const handleDelete = (nodeId, nodeName) => {
+    openConfirm(
+      t('deleteButton', 'Delete Node'),
+      `${t('deleteNodeConfirm', 'Delete node')} "${nodeName}"?`,
+      async () => {
+        try {
+          const response = await apiClient.delete(`/nodes/${nodeId}`);
+          if (response.data.success) {
+            addToast(response.data.msg || 'Node deleted successfully.', 'success');
+          } else {
+            addToast(response.data.msg || 'Unable to delete node.', 'error');
+          }
+        } catch (error) {
+          addToast(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.', 'error');
+        } finally {
+          fetchNodes();
+        }
       }
-    } catch (error) {
-      if (error.response?.status === 404) {
-        addToast('Node is already removed from the server.', 'error');
-      } else {
-        addToast(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.', 'error');
-      }
-    } finally {
-      fetchNodes();
-    }
+    );
   };
 
   const handleCheckStatus = async (nodeId) => {
@@ -139,7 +142,7 @@ const NodeManagement = () => {
   };
 
   const handleDownloadAllConfigs = async (node) => {
-    if (!window.confirm(`Download all OVPN configs for node ${node.name}? This can take a while.`)) return;
+    // User already clicked 'Download all' — no extra confirmation needed for downloads
     try {
       const response = await apiClient.get(`/nodes/ovpn-all/${node.id}`, {
         responseType: 'blob',
@@ -274,6 +277,7 @@ const NodeManagement = () => {
           onNodeUpdated={handleNodeUpdated}
         />
       )}
+      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("deleteButton","Delete")} cancelLabel={t("cancelButton","Cancel")} />
 
     </div>
   );

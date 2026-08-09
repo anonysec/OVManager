@@ -1,5 +1,7 @@
 import os
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -125,6 +127,35 @@ tls_config = TLSConfig.get_ssl_config()
 ssl_keyfile = tls_config.get("key_file") or None
 ssl_certfile = tls_config.get("cert_file") or None
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application startup and shutdown via the modern lifespan API."""
+    # ── Startup ──────────────────────────────────────────────────────
+    _run_migrations()
+    from backend.operations.audit import ensure_audit_table
+    from backend.db.engine import SessionLocal as _SL
+    _db = _SL()
+    try:
+        ensure_audit_table(_db)
+    finally:
+        _db.close()
+    start_scheduler()
+    start_bot()
+    yield
+    # ── Shutdown ─────────────────────────────────────────────────────
+    global _scheduler, _bot_process
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
+    _scheduler = None
+    if _bot_process and _bot_process.poll() is None:
+        _bot_process.terminate()
+        try:
+            _bot_process.wait(timeout=5)
+        except Exception:
+            _bot_process.kill()
+    _bot_process = None
+
+
 # ── FastAPI app (routes registered at root — URLPathMiddleware handles prefix) ─
 # All routes are at /api/..., /doc, /health, etc.
 # The URLPathMiddleware strips /{urlpath}/ prefix before routing.
@@ -134,6 +165,7 @@ api = FastAPI(
     version=__version__,
     docs_url="/doc" if config.DOC else None,
     openapi_url="/openapi.json" if config.DOC else None,
+    lifespan=lifespan,
 )
 
 # ── Exception handlers (domain → HTTP) ────────────────────────────
@@ -244,6 +276,13 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=60,
     )
+    scheduler.add_job(
+        _watchdog_bot,
+        CronTrigger(minute="*/1"),
+        id="watchdog_bot",
+        replace_existing=True,
+        misfire_grace_time=30,
+    )
     scheduler.start()
     _scheduler = scheduler
     return scheduler
@@ -269,33 +308,25 @@ def start_bot():
             stderr=subprocess.STDOUT,
             start_new_session=False,
         )
+        logger.info("Telegram bot process started (pid=%s)", _bot_process.pid)
         return _bot_process
     except OSError as exc:
         logger.error("Could not start Telegram bot: %s", exc)
         return None
 
 
-# ── Startup ───────────────────────────────────────────────────────
-@api.on_event("startup")
-async def startup_event():
-    _run_migrations()
-    start_scheduler()
-    start_bot()
+def _watchdog_bot():
+    """Restart the bot process if it has died. Called by scheduler every minute."""
+    global _bot_process
+    if _bot_process is None:
+        return  # Bot was never started (no bot.main.py)
+    rc = _bot_process.poll()
+    if rc is not None:
+        logger.warning("Telegram bot exited (rc=%s) — restarting", rc)
+        start_bot()
 
 
-@api.on_event("shutdown")
-async def shutdown_event():
-    global _scheduler, _bot_process
-    if _scheduler and _scheduler.running:
-        _scheduler.shutdown(wait=False)
-    _scheduler = None
-    if _bot_process and _bot_process.poll() is None:
-        _bot_process.terminate()
-        try:
-            _bot_process.wait(timeout=5)
-        except Exception:
-            _bot_process.kill()
-    _bot_process = None
+# Startup/shutdown are now managed by the lifespan context manager above.
 
 
 # ── Register API routers (no prefix — URLPathMiddleware handles it) ─

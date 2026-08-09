@@ -457,6 +457,7 @@ html.theme-transition *::after {
 .ops-layout {
   display: flex;
   min-height: 100vh;
+  position: relative;
 }
 
 /* Main content column: sits to the right of the fixed sidebar.
@@ -467,12 +468,14 @@ html.theme-transition *::after {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
 .ops-main-content {
   flex: 1;
   margin-left: 220px; /* expanded sidebar width */
   padding: 24px;
+  padding-top: calc(52px + 24px); /* topbar height + original padding */
   overflow-y: auto;
   background: var(--body-bg);
   transition: margin-left 0.2s ease;
@@ -490,11 +493,13 @@ html.theme-transition *::after {
   margin-left: 0; /* sidebar is an overlay on mobile */
 }
 
-/* Minimal top bar: user controls only (language, theme, notifications, profile) */
+/* Topbar — fixed across the full viewport width, above sidebar */
 .ops-topbar-minimal {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 60;
+  left: 0;
+  right: 0;
+  z-index: 110;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1667,7 +1672,7 @@ html.theme-transition *::after {
 /* Sidebar with variable width based on icon size (36px vs 32px) */
 .ops-sidebar {
   position: fixed;
-  top: 0;
+  top: 52px;
   left: 0;
   bottom: 0;
   width: var(--sidebar-width, 220px);
@@ -1675,7 +1680,7 @@ html.theme-transition *::after {
   border-right: 1px solid var(--line, var(--border-color));
   display: flex;
   flex-direction: column;
-  z-index: 90;
+  z-index: 70;
   transition: width 0.2s ease, transform 0.2s ease;
   overflow: hidden;
   min-width: 72px;
@@ -1736,10 +1741,6 @@ html.theme-transition *::after {
 }
 
 .ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-label {
-  display: none;
-}
-
-.ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-chevron {
   display: none;
 }
 
@@ -1941,43 +1942,6 @@ html.theme-transition *::after {
   flex-shrink: 0;
 }
 
-.sidebar-nav-chevron {
-  flex: 0 0 auto;
-  transition: transform 0.2s ease;
-}
-
-.sidebar-nav-chevron.rotated {
-  transform: rotate(180deg);
-}
-
-.sidebar-submenu {
-  list-style: none;
-  margin: 2px 0 4px 32px;
-  padding: 0;
-  border-left: 2px solid var(--line, var(--border-color));
-}
-
-.sidebar-submenu-link {
-  display: block;
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: var(--muted, var(--text-secondary));
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 500;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.sidebar-submenu-link:hover {
-  background: var(--surface-2, rgba(255, 255, 255, 0.05));
-  color: var(--text, var(--text-primary));
-}
-
-.sidebar-submenu-link.active {
-  color: var(--accent-color, var(--orange));
-  font-weight: 600;
-}
-
 .sidebar-version {
   padding: 8px 14px;
   text-align: center;
@@ -2128,4 +2092,71 @@ html.theme-transition *::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ═══════════════════════════════════════════
+   Bottom safe-area bar
+   Always visible — gives breathing room above
+   mobile browser chrome and on-screen keyboard.
+═══════════════════════════════════════════ */
+.bottom-safe-bar {
+  height: env(safe-area-inset-bottom, 0px);
+  min-height: 0;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* On mobile the bottom-nav is 66px; add extra clearance */
+@media (max-width: 760px) {
+  .bottom-safe-bar {
+    height: calc(66px + env(safe-area-inset-bottom, 0px));
+    min-height: 16px;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   Topbar — override: full width, above sidebar
+═══════════════════════════════════════════ */
+.ops-topbar-minimal {
+  /* height anchor for sidebar top offset and content padding-top */
+  height: 52px;
+}
+
+/* Sidebar starts below the topbar on mobile too */
+@media (max-width: 768px) {
+  .ops-sidebar {
+    top: 52px;
+    /* on mobile: overlay starts below topbar */
+  }
+  .ops-sidebar--mobile {
+    top: 52px;
+  }
+  .sidebar-hamburger {
+    top: 10px;
+    left: 10px;
+    z-index: 105; /* above sidebar, below topbar */
+  }
+  .ops-main-content,
+  .ops-main-content--collapsed,
+  .ops-main-content--mobile {
+    /* topbar is 52px fixed; content starts below it on mobile */
+    margin-left: 0;
+  }
+}
+
+/* Topbar brand — visible on all screen sizes */
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary, var(--text));
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.topbar-brand .brand-accent {
+  color: var(--accent-color, var(--orange));
 }

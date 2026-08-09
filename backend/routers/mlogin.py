@@ -7,13 +7,15 @@ panel-side registry for cross-node session tracking.
 from __future__ import annotations
 
 import fcntl
+import hmac
 import os
 import time
 from contextlib import contextmanager
 from typing import Iterable
 
 import requests
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -55,10 +57,12 @@ def _ensure_table(db: Session) -> None:
 
 
 def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node:
+    """Authenticate a node request using constant-time key comparison."""
     if not node_name or not key:
         raise HTTPException(status_code=401, detail="Missing node name/key")
     node = db.query(Node).filter(Node.name == node_name).first()
-    if not node or node.key != key:
+    # Use hmac.compare_digest to prevent timing side-channel leaking key bytes.
+    if not node or not hmac.compare_digest(node.key, key):
         raise HTTPException(status_code=401, detail="Invalid node key")
     return node
 
@@ -70,38 +74,60 @@ def _split_addr(addr: str) -> tuple[str, str]:
     return addr, ""
 
 
-def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[str]]:
-    """Query all active nodes for live sessions of this user."""
+def _fetch_node_usage(node) -> dict | None:
+    """Blocking HTTP call to fetch usage from a single node (run in threadpool)."""
+    try:
+        scheme = "https" if node.use_tls else "http"
+        r = requests.get(
+            f"{scheme}://{node.address}:{node.port}/sync/usage",
+            headers={"key": node.key},
+            timeout=_NODE_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        payload = r.json()
+        if not payload.get("success"):
+            return None
+        return payload.get("data") or {}
+    except Exception as e:
+        logger.warning("mlogin: node %s unavailable: %s", node.name, e)
+        return None
+
+
+async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[str]]:
+    """Query all active nodes for live sessions of this user (async, non-blocking)."""
+    import asyncio
     live: set[tuple] = set()
     reachable: set[str] = set()
     nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
-    for node in nodes:
-        try:
-            scheme = "https" if node.use_tls else "http"
-            r = requests.get(f"{scheme}://{node.address}:{node.port}/sync/usage",
-                             headers={"key": node.key}, timeout=_NODE_TIMEOUT)
-            if r.status_code != 200:
+    # Build id→name map once for all nodes
+    id_to_name = {str(u.id): u.name for u in db.query(User).all()}
+
+    async def check_node(node):
+        data = await run_in_threadpool(_fetch_node_usage, node)
+        return node, data
+
+    results = await asyncio.gather(*[check_node(n) for n in nodes], return_exceptions=True)
+
+    for item in results:
+        if isinstance(item, Exception):
+            continue
+        node, data = item
+        if data is None:
+            continue
+        reachable.add(node.name)
+        for cn, sessions in data.get("sessions", {}).items():
+            name = id_to_name.get(cn)
+            if not name or name != username:
                 continue
-            payload = r.json()
-            if not payload.get("success"):
-                continue
-            reachable.add(node.name)
-            for cn, sessions in (payload.get("data") or {}).get("sessions", {}).items():
-                try:
-                    user = db.query(User).filter(User.id == int(cn)).first()
-                except (ValueError, TypeError):
-                    continue
-                if not user or user.name != username:
-                    continue
-                if isinstance(sessions, dict) and sessions:
-                    for addr in sessions:
-                        ip, port = _split_addr(str(addr))
-                        live.add((node.name, cn, ip, port))
-                else:
-                    live.add((node.name, cn, "", ""))
-        except Exception as e:
-            logger.warning("mlogin: node %s unavailable: %s", node.name, e)
+            if isinstance(sessions, dict) and sessions:
+                for addr in sessions:
+                    ip, port = _split_addr(str(addr))
+                    live.add((node.name, cn, ip, port))
+            else:
+                live.add((node.name, cn, "", ""))
+
     return live, reachable
 
 
@@ -135,14 +161,39 @@ def _cleanup(db: Session, live: set[tuple], reachable: set[str], now: float) -> 
 @router.get("/status/{username}", response_model=ResponseModel)
 async def global_mlogin_status(
     username: str,
+    request: Request,
     db: Session = Depends(get_db),
     key: str | None = Header(default=None),
     x_node_name: str | None = Header(default=None, alias="X-Node-Name"),
 ):
-    """Global session count for a user across all reachable nodes."""
-    _authorize_node(db, x_node_name, key)
+    """Global session count for a user across all reachable nodes.
+
+    Accepts two caller types:
+    1. OVNode hook: authenticates with X-Node-Name + key headers.
+    2. Panel UI (owner only): authenticates with Bearer JWT in Authorization header.
+    """
+    from fastapi import Request as _Request
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        # Panel-user path: validate JWT and require owner role
+        from backend.auth.auth import get_current_user, oauth2_scheme
+        from backend.db.engine import get_db as _get_db
+        try:
+            from jose import jwt as _jwt
+            from backend.config import config as _cfg
+            token = auth_header[7:]
+            payload = _jwt.decode(token, _cfg.JWT_SECRET_KEY, algorithms=["HS256"])
+            if payload.get("type") != "access" or payload.get("role") != "owner":
+                raise HTTPException(status_code=403, detail="Owner privileges required")
+        except Exception as exc:
+            if isinstance(exc, HTTPException):
+                raise
+            raise HTTPException(status_code=401, detail="Invalid token")
+    else:
+        # OVNode hook path: authenticate by node name + API key
+        _authorize_node(db, x_node_name, key)
     now = time.time()
-    live, reachable = _live_sessions(username, db)
+    live, reachable = await _live_sessions(username, db)
     with _global_lock():
         _ensure_table(db)
         _cleanup(db, live, reachable, now)

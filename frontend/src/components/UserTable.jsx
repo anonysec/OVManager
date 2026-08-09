@@ -136,6 +136,10 @@ const UserTable = ({
   const PAGE_SIZE = 25;
   const allSelected = users.length > 0 && selected.length === users.length;
   const someSelected = selected.length > 0 && !allSelected;
+  const headerCheckRef = useRef(null);
+  useEffect(() => {
+    if (headerCheckRef.current) headerCheckRef.current.indeterminate = someSelected;
+  }, [someSelected]);
   const [menuFor, setMenuFor] = useState(null);
   const anchorRefs = useRef({});
 
@@ -176,7 +180,7 @@ const UserTable = ({
                 <input
                   type="checkbox"
                   checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  ref={headerCheckRef}
                   onChange={(e) => onSelectAll(e.target.checked)}
                   aria-label="Select all users"
                 />

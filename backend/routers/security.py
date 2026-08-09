@@ -3,7 +3,7 @@ import re
 from collections import Counter
 from datetime import datetime
 from datetime import UTC
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
@@ -16,11 +16,22 @@ from backend.node.requests import NodeRequests
 from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/security", tags=["Security"])
-TEHRAN = ZoneInfo("Asia/Tehran")
 
 
-def _parse_log_line(line: str, common_name: str = "") -> dict:
+def _get_panel_tz(db: Session) -> ZoneInfo:
+    """Return the operator-configured timezone from DB, falling back to UTC."""
+    try:
+        settings = crud.get_settings(db)
+        tz_name = (getattr(settings, "timezone", None) or "UTC").strip() or "UTC"
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, Exception):
+        return ZoneInfo("UTC")
+
+
+def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None) -> dict:
     """Convert raw ovmanager-mlogin line to a clean max-login error object."""
+    if panel_tz is None:
+        panel_tz = ZoneInfo("UTC")
     cn = common_name
     m_cn = re.search(r"CN=([^\s]+)", line)
     if m_cn:
@@ -36,7 +47,7 @@ def _parse_log_line(line: str, common_name: str = "") -> dict:
     active = re.search(r"(?:global_active|active_files)=([^\s;]+)", line)
     msg = re.search(r"msg=([^\n]+)$", line)
     # journal line format: Jul 03 06:20:02 host tag: ... (server timezone is UTC)
-    tehran_time = None
+    local_time = None
     ts = 0.0
     m_time = re.match(r"([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})", line)
     if m_time:
@@ -45,14 +56,14 @@ def _parse_log_line(line: str, common_name: str = "") -> dict:
             dt = datetime.strptime(f"{year} {m_time.group(1)} {m_time.group(2)} {m_time.group(3)}", "%Y %b %d %H:%M:%S")
             dt_utc = dt.replace(tzinfo=ZoneInfo("UTC"))
             ts = dt_utc.timestamp()
-            tehran_time = dt_utc.astimezone(TEHRAN).strftime("%Y-%m-%d %H:%M:%S")
+            local_time = dt_utc.astimezone(panel_tz).strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
-            tehran_time = None
+            local_time = None
             ts = 0.0
     username = cn.rsplit("-", 1)[0] if "-" in cn else cn
     return {
         "ts": ts,
-        "time_tehran": tehran_time,
+        "time_local": local_time,
         "username": username,
         "common_name": cn,
         "scope": scope,
@@ -67,6 +78,8 @@ def _parse_log_line(line: str, common_name: str = "") -> dict:
 @router.get("/summary", response_model=ResponseModel)
 async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     nodes = crud.get_all_nodes(db)
+    panel_tz = _get_panel_tz(db)
+    tz_name = str(panel_tz)
 
     async def node_diag(node):
         req = NodeRequests(node.address, node.port, node.key, use_tls=node.use_tls)
@@ -88,9 +101,9 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
         stale += int(data.get("stale_marker_count") or 0)
         le = data.get("last_error")
         if isinstance(le, dict):
-            clean_errors.extend([{**_parse_log_line(v, k), "node": node_name} for k, v in le.items()])
+            clean_errors.extend([{**_parse_log_line(v, k, panel_tz), "node": node_name} for k, v in le.items()])
         elif le:
-            clean_errors.append({**_parse_log_line(le), "node": node_name})
+            clean_errors.append({**_parse_log_line(le, panel_tz=panel_tz), "node": node_name})
         per_node.append({
             "node": node_name,
             "auth_errors": int(data.get("auth_errors") or 0),
@@ -103,7 +116,7 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
     top = Counter(e["common_name"] for e in clean_errors if e.get("common_name"))
     return ResponseModel(success=True, msg="Security summary", data={
         "hours": hours,
-        "timezone": "Asia/Tehran",
+        "timezone": tz_name,
         "auth_errors": auth_errors,
         "rejects": rejects,
         "stale_markers": stale,

@@ -6,12 +6,16 @@ import EditAdminModal from '../components/EditAdminModal';
 import AdminTable from '../components/AdminTable';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 
 const AdminManagement = () => {
     const { addToast } = useToast();
     const [admins, setAdmins] = useState([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+    const openConfirm = (title, message, onConfirm) => setConfirm({ open: true, title, message, onConfirm });
+    const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedAdmin, setSelectedAdmin] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -71,21 +75,24 @@ const AdminManagement = () => {
         fetchAdmins();
     };
 
-    const handleDelete = async (admin) => {
-        if (!window.confirm(`${t('deleteAdminConfirm')} ${admin.username}?`)) {
-            return;
-        }
-        try {
-            const response = await apiClient.delete(`/admin/${admin.username}`);
-            if (response.data.success) {
-                console.warn(t('adminDeletedSuccess'));
-                fetchAdmins();
-            } else {
-                console.warn(response.data.msg || t('unableToDeleteAdmin'));
+    const handleDelete = (admin) => {
+        openConfirm(
+            t('deleteAdminConfirm', 'Delete Admin'),
+            `Delete admin "${admin.username}"? Their users will remain but become unassigned.`,
+            async () => {
+                try {
+                    const response = await apiClient.delete(`/admin/${admin.username}`);
+                    if (response.data.success) {
+                        addToast(t('adminDeletedSuccess', 'Admin deleted.'), 'success');
+                        fetchAdmins();
+                    } else {
+                        addToast(response.data.msg || t('unableToDeleteAdmin'), 'error');
+                    }
+                } catch {
+                    addToast(t('errorDeletingAdmin'), 'error');
+                }
             }
-        } catch {
-            console.warn(t('errorDeletingAdmin'));
-        }
+        );
     };
 
     return (
@@ -143,6 +150,7 @@ const AdminManagement = () => {
                     onAdminUpdated={handleAdminUpdated}
                 />
             )}
+      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("deleteButton","Delete")} cancelLabel={t("cancelButton","Cancel")} />
         </div>
     );
 };

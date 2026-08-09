@@ -21,7 +21,7 @@ dependencies = [
     "psutil",
     "passlib",
     "pyjwt",
-    "bcrypt==4.0.1",
+    "bcrypt>=4.0.1",
     "python-jose[cryptography]",
     "python-multipart",
     "apscheduler",

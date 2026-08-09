@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiLogOut, FiSearch, FiCommand, FiChevronDown, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
@@ -41,14 +41,14 @@ const DashboardLayout = () => {
     return t('navDashboard', 'Dashboard');
   };
 
-  const tokenPayload = (() => {
+  const tokenPayload = useMemo(() => {
     try {
       const token = localStorage.getItem('authToken');
       if (!token) return {};
       return JSON.parse(atob(token.split('.')[1] || ''));
     } catch { return {}; }
-  })();
-  const username = tokenPayload.sub || 'admin';
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const username = tokenPayload.sub || '';
 
   useEffect(() => {
     const lang = i18n.language || 'en';
@@ -81,6 +81,10 @@ const DashboardLayout = () => {
     window.dispatchEvent(new CustomEvent('ovmanager:open-palette'));
   };
 
+  // Notification bell: lightweight poll — avoids duplicating the heavy per-node
+  // status calls that ServerStats already makes on the same 30-second cycle.
+  // We only use the fast /nodes/ list (DB-side status flag) + /security/summary.
+  // Per-node reachability checks belong in ServerStats, not in the topbar.
   const loadNotifications = useCallback(async () => {
     try {
       const [usersRes, nodesRes, secRes] = await Promise.all([
@@ -93,22 +97,11 @@ const DashboardLayout = () => {
       const nodesRaw = nodesRes.data?.data;
       const nodes = Array.isArray(nodesRaw) ? nodesRaw : (nodesRaw?.nodes || []);
       const security = secRes.data?.data || {};
-      const ns = await Promise.all(nodes.map(async (n) => {
-        if (!n.status) return [n.id, { status: 'inactive' }];
-        try {
-          const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
-          return [n.id, r.data?.data || {}];
-        } catch { return [n.id, { status: 'unreachable', node_info: undefined, session_diagnostics: undefined }]; }
-      }));
-      const nodeStatus = Object.fromEntries(ns);
       const out = [];
+      // Surface nodes that are marked inactive in the DB
       nodes.forEach((n) => {
-        const st = nodeStatus[n.id] || {};
-        const reachable = st.reachable !== undefined
-          ? st.reachable
-          : st.node_info !== undefined && st.session_diagnostics !== undefined;
-        if (n.status && !reachable) {
-          out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null, action_path: null });
+        if (!n.status) {
+          out.push({ id: `node-${n.id}`, level: 'warning', title: `Node ${n.name} is disabled`, detail: 'Marked offline in panel database', action: null, action_path: null });
         }
       });
       users.forEach((u) => {
@@ -259,13 +252,13 @@ const DashboardLayout = () => {
                           : n.id?.startsWith('exp-') || n.id?.startsWith('full-') || n.id?.startsWith('inact-') ? `${prefix}/users?user=${n.id.replace(/^(exp|full|inact)-/, '')}`
                           : `${prefix}/settings`;
                         return (
-                          <a key={n.id ?? i} href={href} className={`notification-item ${levelClass(n.level)}`} onClick={() => setNotifOpen(false)}>
+                          <Link key={n.id ?? i} to={href.replace(window.location.origin, '')} className={`notification-item ${levelClass(n.level)}`} onClick={() => setNotifOpen(false)}>
                             <span className="dot" />
                             <div>
                               <div className="n-title">{n.title}</div>
                               {n.detail && <div className="n-time">{n.detail}</div>}
                             </div>
-                          </a>
+                          </Link>
                         );
                       })
                     )}
@@ -276,7 +269,7 @@ const DashboardLayout = () => {
                     <span className="avatar-xs">{username.slice(0, 1).toUpperCase()}</span>
                     <span className="profile-trigger-copy">
                       <strong>{username}</strong>
-                      <small>{userRole === 'main_admin' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</small>
+                      <small>{userRole === 'owner' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</small>
                     </span>
                     <FiChevronDown className={`profile-trigger-chevron${profileOpen ? ' is-open' : ''}`} aria-hidden="true" />
                   </button>
@@ -285,7 +278,7 @@ const DashboardLayout = () => {
                       <span className="avatar-sm">{username.slice(0, 1).toUpperCase()}</span>
                       <div>
                         <div className="profile-dropdown-name">{username}</div>
-                        <div className="profile-dropdown-role">{userRole === 'main_admin' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</div>
+                        <div className="profile-dropdown-role">{userRole === 'owner' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</div>
                       </div>
                     </div>
                     <div className="profile-dropdown-divider" />
@@ -310,6 +303,8 @@ const DashboardLayout = () => {
 
           <MobileNav />
           <CommandPalette userRole={userRole} />
+          {/* Bottom safe-area spacer — keeps content above mobile keyboard / browser chrome */}
+          <div className="bottom-safe-bar" aria-hidden="true" />
         </div>
       </ToastProvider>
     </LiveProvider>

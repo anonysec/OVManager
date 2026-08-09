@@ -39,6 +39,12 @@ apiClient.interceptors.response.use(
             ).then((res) => {
               const newToken = res.data.access_token;
               localStorage.setItem('authToken', newToken);
+              // Store the rotated refresh token returned by the server.
+              // The backend revokes the old one on each use, so we must
+              // persist the new one or the next refresh call will fail.
+              if (res.data.refresh_token) {
+                localStorage.setItem('refreshToken', res.data.refresh_token);
+              }
               return newToken;
             }).finally(() => {
               refreshPromise = null;

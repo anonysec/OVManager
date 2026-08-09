@@ -33,8 +33,9 @@ def test_refresh_token_cannot_access_api():
     from backend.auth.auth import create_access_token, create_refresh_token
 
     client = TestClient(api)
-    access = create_access_token({"sub": "admin", "role": "main_admin"})
-    refresh = create_refresh_token({"sub": "admin", "role": "main_admin"})
+    # Use 'owner' role since that checks against config.ADMIN_USERNAME, not DB
+    access = create_access_token({"sub": "admin", "role": "owner"})
+    refresh = create_refresh_token({"sub": "admin", "role": "owner"})
     assert client.get("/api/server/info", headers={"Authorization": f"Bearer {access}"}).status_code == 200
     assert client.get("/api/server/info", headers={"Authorization": f"Bearer {refresh}"}).status_code == 401
 

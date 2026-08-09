@@ -19,14 +19,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package metadata and Python sources before installing the project.
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock* README.md ./
 COPY backend/ ./backend/
 COPY bot/ ./bot/
 COPY main.py ./
 COPY .env.example ./.env.example
 
-# Install locked application dependencies through the explicit setuptools package config.
-RUN pip install --no-cache-dir .
+# Install uv then sync from the lock file for fully reproducible builds.
+RUN pip install --no-cache-dir uv \
+    && uv sync --frozen || uv sync
 
 # The application writes SQLite, audit, metrics, backup, and log data here.
 RUN mkdir -p /app/data \
@@ -42,4 +43,4 @@ EXPOSE 2095
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:2095/health', timeout=1)" || exit 1
 
-CMD ["python", "main.py"]
+CMD ["uv", "run", "main.py"]

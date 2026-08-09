@@ -52,9 +52,9 @@ function App() {
             <Route index element={<ServerStats />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="nodes" element={<NodeManagement />} />
-            {userRole === 'main_admin' && <Route path="audit" element={<AuditLog />} />}
-            {userRole === 'main_admin' && <Route path="maintenance" element={<Maintenance />} />}
-            {userRole === 'main_admin' && <Route path="admins" element={<AdminManagement />} />}
+            {userRole === 'owner' && <Route path="audit" element={<AuditLog />} />}
+            {userRole === 'owner' && <Route path="maintenance" element={<Maintenance />} />}
+            {userRole === 'owner' && <Route path="admins" element={<AdminManagement />} />}
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />

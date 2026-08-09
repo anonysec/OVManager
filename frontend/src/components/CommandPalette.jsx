@@ -26,7 +26,7 @@ const CommandPalette = ({ userRole }) => {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef(null);
 
-  const isAdmin = userRole === 'main_admin';
+  const isAdmin = userRole === 'owner';
 
   // Global shortcut: Ctrl/Cmd+K. The topbar trigger emits the same event
   // so keyboard and pointer users get the exact same search experience.

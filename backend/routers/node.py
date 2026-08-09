@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
+from backend.auth.authz import require_owner
 from backend.db.engine import get_db
 from backend.db import crud
 from backend.schema.output import ResponseModel
@@ -23,10 +24,8 @@ router = APIRouter(prefix="/nodes", tags=["Nodes"])
 async def add_node(
     request: NodeCreate,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     new_node = await add_node_handler(request, db)
     return ResponseModel(
@@ -40,10 +39,8 @@ async def update_node(
     node_id: int,
     request: NodeCreate,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] not in ("main_admin", "admin"):
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     result = await update_node_handler(node_id, request, db)
     return ResponseModel(
@@ -56,10 +53,8 @@ async def update_node(
 async def get_node_status(
     node_id: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     node_status = await get_node_status_handler(node_id, db)
     if node_status is None:
@@ -97,10 +92,11 @@ async def download_ovpn_client(
     db_user = crud.get_user_by_uuid(db, uuid)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user["type"] != "main_admin" and db_user.owner != user["username"]:
+    if user["type"] != "owner" and db_user.owner != user["username"]:
         raise HTTPException(status_code=403, detail="Not your user")
-    from datetime import date
-    if not db_user.is_active or (db_user.expiry_date and db_user.expiry_date < date.today()):
+    from datetime import datetime, timezone
+    today_utc = datetime.now(timezone.utc).date()
+    if not db_user.is_active or (db_user.expiry_date and db_user.expiry_date < today_utc):
         raise HTTPException(status_code=403, detail="User account is not active")
     if db_user.total is not None and (db_user.used or 0) >= db_user.total:
         raise HTTPException(status_code=403, detail="User traffic limit reached")
@@ -117,10 +113,8 @@ async def download_ovpn_client(
 async def download_all_ovpn_clients(
     node_id: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        raise HTTPException(status_code=403, detail="Unauthorized access")
     response = await download_all_ovpn_clients_from_node(node_id=node_id, db=db)
     if response:
         return response
@@ -131,10 +125,8 @@ async def download_all_ovpn_clients(
 async def delete_node(
     node_id: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(success=False, msg="Unauthorized access", data=None)
 
     result = await delete_node_handler(node_id, db)
     return ResponseModel(

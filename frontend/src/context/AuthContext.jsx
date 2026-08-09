@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
 
     // Decode token to get user role
     const payload = JSON.parse(atob(newToken.split('.')[1]));
-    const role = payload.role || (payload.type === 'admin' || payload.type === 'main_admin' ? payload.type : null);
+    const role = payload.role || (payload.type === 'admin' || payload.type === 'owner' ? payload.type : null);
     if (!role) throw new Error('Invalid access token role');
 
     localStorage.setItem('authToken', newToken);

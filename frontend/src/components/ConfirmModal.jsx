@@ -1,21 +1,35 @@
 import Modal from './Modal';
 
-const ConfirmModal = ({ open, onClose, onConfirm, title, message, confirmLabel = 'Delete', cancelLabel = 'Cancel', danger = true }) => {
-  if (!open) return null;
-
-  return (
-    <div className="confirm-modal-overlay" onClick={onClose}>
-      <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="close-modal-btn" onClick={onClose} aria-label="Close">×</button>
-        <h3>{title}</h3>
-        <p>{message}</p>
-        <div className="confirm-modal-actions">
-          <button className="btn btn-secondary" onClick={onClose}>{cancelLabel}</button>
-          <button className={`btn ${danger ? 'btn-danger' : ''}`} onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </div>
+/**
+ * A portal-based confirmation dialog that reuses Modal for proper focus trap,
+ * Escape-key handling, ARIA attributes, and backdrop click-to-cancel.
+ */
+const ConfirmModal = ({
+  open,
+  onClose,
+  onConfirm,
+  title = 'Are you sure?',
+  message,
+  confirmLabel = 'Delete',
+  cancelLabel = 'Cancel',
+  danger = true,
+}) => (
+  <Modal isOpen={open} onClose={onClose} title={title} size="small">
+    {message && <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{message}</p>}
+    <div className="confirm-modal-actions">
+      <button type="button" className="btn btn-secondary" onClick={onClose}>
+        {cancelLabel}
+      </button>
+      <button
+        type="button"
+        className={`btn${danger ? ' btn-danger' : ''}`}
+        onClick={() => { onConfirm(); onClose(); }}
+        autoFocus
+      >
+        {confirmLabel}
+      </button>
     </div>
-  );
-};
+  </Modal>
+);
 
 export default ConfirmModal;

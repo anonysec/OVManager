@@ -9,10 +9,18 @@ export const useToast = () => {
   return ctx;
 };
 
+// Human-readable label + icon for each toast level.
+const TOAST_LABELS = {
+  success: '✓',
+  error: '✕',
+  warning: '⚠',
+  info: 'ℹ',
+};
+
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, status = 'Success', duration = 3000) => {
+  const addToast = useCallback((message, status = 'success', duration = 3500) => {
     const id = Date.now() + Math.random();
     const normalizedStatus = String(status || 'success').toLowerCase();
     setToasts((prev) => [...prev, { id, message, status: normalizedStatus }]);
@@ -24,10 +32,11 @@ export const ToastProvider = ({ children }) => {
   return (
     <ToastContext.Provider value={{ addToast }}>
       {children}
-      <div className="toast-stack" aria-live="polite" aria-atomic="true">
+      <div className="toast-stack" role="region" aria-label="Notifications" aria-live="polite" aria-atomic="false">
         {toasts.map((toast) => (
           <div className={`toast toast-${toast.status}`} key={toast.id} role="alert">
-            <strong>{toast.status}</strong>
+            {/* Icon prefix instead of raw status string */}
+            <strong aria-hidden="true">{TOAST_LABELS[toast.status] || '•'}</strong>
             <span>{toast.message}</span>
           </div>
         ))}

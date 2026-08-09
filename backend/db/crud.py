@@ -156,7 +156,7 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
     not_expired = (
-        request.expiry_date >= datetime.today().date()
+        request.expiry_date >= datetime.now(UTC).date()
         if request.expiry_date
         else True
     )

@@ -238,9 +238,10 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
         for user in users:
-            resp = await run_in_threadpool(nr.download_ovpn_client, str(user.id))
-            if resp and hasattr(resp, "body"):
-                content = resp.body
+            # Use download_ovpn_bytes() which returns raw bytes — avoids
+            # depending on the internal .body attribute of starlette Response.
+            content = await run_in_threadpool(nr.download_ovpn_bytes, str(user.id))
+            if content:
                 zf.writestr(f"{user.name}.ovpn", content)
 
     buf.seek(0)

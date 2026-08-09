@@ -29,7 +29,7 @@ class NodeCreate(BaseModel):
     protocol: str = Field(default="tcp")
     ovpn_port: int = Field(default=1194)
     port: int = 2083
-    key: Optional[str] = Field(default=None, min_length=10, max_length=40)
+    key: Optional[str] = Field(default=None, min_length=16, max_length=128)
     status: bool = Field(default=True)
     set_new_setting: bool = Field(default=False)
     use_tls: bool = Field(default=False)
@@ -37,14 +37,14 @@ class NodeCreate(BaseModel):
 
 class AdminCreate(BaseModel):
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=6, max_length=20)
+    password: str = Field(min_length=8, max_length=128)
     telegram_id: Optional[int] = Field(default=None, ge=0)
     username_prefix: Optional[str] = Field(default=None, max_length=20)
 
 
 class AdminUpdate(BaseModel):
     username: str
-    password: Optional[str] = Field(default=None, min_length=6, max_length=20)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=128)
     telegram_id: Optional[int] = Field(default=None, ge=0)
     username_prefix: Optional[str] = Field(default=None, max_length=20)
 

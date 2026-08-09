@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiArchive, FiUpload, FiRefreshCw, FiDatabase, FiDownload } from 'react-icons/fi';
 import apiClient from '../../services/api';
 import { useLive } from '../../context/LiveContext';
@@ -6,6 +7,7 @@ import { useToast } from '../../context/ToastContext';
 import { formatBytes } from '../../utils/format';
 
 const BackupTab = () => {
+  const { t } = useTranslation();
   const { refreshTick } = useLive();
   const { addToast } = useToast();
   const [backupMsg, setBackupMsg] = useState('');
@@ -17,11 +19,8 @@ const BackupTab = () => {
     try {
       const res = await apiClient.get('/maintenance/backup/list');
       const data = res.data?.data || {};
-      if (Array.isArray(data)) {
-        setBackupList(data);
-      } else if (data.backups) {
-        setBackupList(data.backups);
-      }
+      if (Array.isArray(data)) setBackupList(data);
+      else if (data.backups) setBackupList(data.backups);
     } catch { /* noop */ }
   }, []);
 
@@ -33,11 +32,12 @@ const BackupTab = () => {
     try {
       const res = await apiClient.post('/maintenance/backup');
       const data = res.data?.data || res.data || {};
-      setBackupMsg(data.message || data.msg || 'Backup created successfully');
-      addToast(data.message || data.msg || 'Backup created', 'success');
+      const msg = data.message || data.msg || t('createBackup', 'Backup created');
+      setBackupMsg(msg);
+      addToast(msg, 'success');
       loadBackups();
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Failed to create backup';
+      const msg = err.response?.data?.detail || t('error', 'Failed to create backup');
       setBackupMsg(msg);
       addToast(msg, 'error');
     } finally {
@@ -55,9 +55,10 @@ const BackupTab = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      addToast('Backup downloaded', 'success');
+      window.URL.revokeObjectURL(url);
+      addToast(t('downloadLatest', 'Backup downloaded'), 'success');
     } catch {
-      addToast('Failed to download backup', 'error');
+      addToast(t('error', 'Failed to download backup'), 'error');
     }
   };
 
@@ -71,9 +72,10 @@ const BackupTab = () => {
       await apiClient.post('/maintenance/backup/restore', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      addToast('Backup restored successfully', 'success');
+      addToast(t('restoreButton', 'Backup restored successfully'), 'success');
+      setRestoreFile(null);
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Restore failed';
+      const msg = err.response?.data?.detail || t('error', 'Restore failed');
       setBackupMsg(msg);
       addToast(msg, 'error');
     } finally {
@@ -86,26 +88,43 @@ const BackupTab = () => {
   return (
     <div className="settings-section">
       <div className="setting-card">
-        <div className="setting-card-header"><FiArchive /> Backup & Restore</div>
+        <div className="setting-card-header"><FiArchive /> {t('backupTitle', 'Backup & Restore')}</div>
         <div className="setting-card-body">
           <div className="card-actions" style={{ marginBottom: 16 }}>
-            <button className="btn btn-sm" onClick={createBackup} disabled={busy}><FiUpload size={14} /> Create backup</button>
-            <button className="btn btn-sm btn-secondary" onClick={downloadBackup}><FiDownload size={14} /> Download latest</button>
+            <button className="btn btn-sm" onClick={createBackup} disabled={busy}>
+              <FiUpload size={14} /> {t('createBackup', 'Create backup')}
+            </button>
+            <button className="btn btn-sm btn-secondary" onClick={downloadBackup}>
+              <FiDownload size={14} /> {t('downloadLatest', 'Download latest')}
+            </button>
           </div>
+
           <div className="input-group file-input-wrap">
-            <label>Restore from file</label>
-            <input type="file" accept=".db" onChange={(e) => setRestoreFile(e.target.files?.[0] || null)} />
+            <label>{t('restoreSection', 'Restore from file')}</label>
+            <input
+              type="file"
+              accept=".db"
+              onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+              aria-label={t('restoreSection', 'Select backup file to restore')}
+            />
           </div>
           <div className="card-actions">
-            <button className="btn btn-sm btn-secondary" onClick={handleRestore} disabled={busy || !restoreFile}><FiRefreshCw size={14} /> Restore</button>
+            <button className="btn btn-sm btn-secondary" onClick={handleRestore} disabled={busy || !restoreFile}>
+              <FiRefreshCw size={14} /> {t('restoreButton', 'Restore')}
+            </button>
           </div>
-          {backupMsg && <p className="error-message">{backupMsg}</p>}
+
+          {backupMsg && <p className="input-hint" style={{ marginTop: 8 }}>{backupMsg}</p>}
+
           {backupList.length > 0 && (
-            <div className="backup-tag"><FiDatabase size={12} /> {backupList.length} backup(s) available</div>
+            <div className="backup-tag" style={{ marginTop: 12 }}>
+              <FiDatabase size={12} /> {backupList.length} {t('backupHistory', 'backup(s) available')}
+            </div>
           )}
           {latestBackup && typeof latestBackup === 'object' && (
-            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-              Latest: {latestBackup.name || latestBackup.filename || 'backup.db'} {latestBackup.size ? `(${formatBytes(latestBackup.size)})` : ''}
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+              {t('fileName', 'Latest')}: {latestBackup.name || latestBackup.filename || 'backup.db'}
+              {latestBackup.size ? ` (${formatBytes(latestBackup.size)})` : ''}
             </div>
           )}
         </div>

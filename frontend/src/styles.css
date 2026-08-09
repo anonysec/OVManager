@@ -3673,3 +3673,11 @@ html[data-theme="light"] .mobile-nav {
   .mobile-nav--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mobile-nav--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+/* ── ConfirmModal actions row (reuses Modal portal, no custom overlay) ── */
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}

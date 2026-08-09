@@ -85,7 +85,7 @@ def geolocate(address: str) -> Optional[dict]:
 
     try:
         resp = httpx.get(
-            f"http://ip-api.com/json/{ip}",
+            f"https://ip-api.com/json/{ip}",
             timeout=_TIMEOUT,
             params={"fields": "status,countryCode,lat,lon"},
         )

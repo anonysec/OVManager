@@ -10,8 +10,10 @@ const BotTab = () => {
   const [ownerId, setOwnerId] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [msgType, setMsgType] = useState('success'); // 'success' | 'error'
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [encryptKeyMissing, setEncryptKeyMissing] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -22,6 +24,9 @@ const BotTab = () => {
       setToken(d.bot_token || '');
       setEnabled(d.bot_enabled || false);
       setOwnerId(d.owner_telegram_id || '');
+      // If bot_configured is false and bot_enabled is false, the encryption
+      // key may not be set. We detect this on a failed save — reset flag here.
+      setEncryptKeyMissing(false);
     } catch {
       setError(t('failedToLoad', 'Failed to load data'));
     } finally {
@@ -36,14 +41,48 @@ const BotTab = () => {
     setMsg('');
     try {
       const payload = {
-        bot_token: token,
+        bot_token: token || undefined,
         bot_enabled: enabled,
         owner_telegram_id: ownerId ? Number(ownerId) : null,
       };
       const r = await apiClient.put('/server/settings/bot', payload);
-      setMsg(r.data?.msg || t('saved', 'Saved'));
+      if (r.data?.success === false) {
+        const detail = r.data?.msg || t('error', 'Error');
+        // Detect missing encryption key scenario
+        if (detail.toLowerCase().includes('bot_encrypt_key') || detail.toLowerCase().includes('encrypt')) {
+          setEncryptKeyMissing(true);
+        }
+        setMsg(detail);
+        setMsgType('error');
+      } else {
+        setMsg(r.data?.msg || t('saved', 'Saved'));
+        setMsgType('success');
+        setEncryptKeyMissing(false);
+      }
+    } catch (e) {
+      const detail = e.response?.data?.detail || e.response?.data?.msg || t('error', 'Error');
+      if (detail.toLowerCase().includes('bot_encrypt_key') || detail.toLowerCase().includes('encrypt')) {
+        setEncryptKeyMissing(true);
+      }
+      setMsg(detail);
+      setMsgType('error');
+    }
+    setSaving(false);
+  };
+
+  const clearToken = async () => {
+    setSaving(true);
+    setMsg('');
+    try {
+      await apiClient.put('/server/settings/bot', { bot_token: null, bot_enabled: false });
+      setToken('');
+      setEnabled(false);
+      setMsg(t('tokenCleared', 'Bot token cleared.'));
+      setMsgType('success');
+      setEncryptKeyMissing(false);
     } catch (e) {
       setMsg(e.response?.data?.detail || t('error', 'Error'));
+      setMsgType('error');
     }
     setSaving(false);
   };
@@ -69,6 +108,18 @@ const BotTab = () => {
             {t('botDesc', 'Configure the Telegram bot for user management and notifications.')}
           </p>
 
+          {encryptKeyMissing && (
+            <div className="settings-alert settings-alert--error" role="alert">
+              <strong>{t('botEncryptKeyMissing', 'Encryption key not configured')}</strong>
+              <p style={{ marginTop: 4, fontSize: '0.875rem' }}>
+                {t('botEncryptKeyMissingDesc',
+                  'BOT_ENCRYPT_KEY is not set in your .env file. Bot tokens cannot be saved without it. ' +
+                  'Generate one with: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+                )}
+              </p>
+            </div>
+          )}
+
           <div className="input-group">
             <label htmlFor="bot-token">{t('botToken', 'Bot Token')}</label>
             <input
@@ -77,6 +128,7 @@ const BotTab = () => {
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="123456789:ABCdefGHI..."
+              disabled={encryptKeyMissing}
             />
           </div>
 
@@ -99,23 +151,28 @@ const BotTab = () => {
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
               style={{ width: 'auto' }}
+              disabled={encryptKeyMissing}
             />
           </div>
 
-          <button className="btn btn-mt-16" onClick={save} disabled={saving}>
+          <button className="btn btn-mt-16" onClick={save} disabled={saving || encryptKeyMissing}>
             {saving ? t('saving', 'Saving...') : t('save', 'Save')}
           </button>
 
           <button
             className="btn btn-mt-8"
-            onClick={() => { setToken(''); save(); }}
+            onClick={clearToken}
             disabled={saving}
-            style={{ opacity: token ? 1 : 0.5 }}
+            style={{ marginLeft: 8 }}
           >
-            Clear token
+            {t('clearToken', 'Clear token')}
           </button>
 
-          {msg && <p className="msg-accent">{msg}</p>}
+          {msg && (
+            <p className={`msg-accent${msgType === 'error' ? ' msg-accent--error' : ''}`}>
+              {msg}
+            </p>
+          )}
         </>
       )}
     </div>

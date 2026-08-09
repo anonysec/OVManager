@@ -124,3 +124,44 @@
 .preview-link:hover {
   text-decoration: underline;
 }
+/* ── BotTab alert banner ─────────────────────────────────────────── */
+.settings-alert {
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--info-color, #38a1ff) 10%, transparent);
+  margin-bottom: 16px;
+}
+.settings-alert--error {
+  border-color: color-mix(in srgb, var(--danger-color) 40%, transparent);
+  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+}
+.settings-alert strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--danger-color);
+}
+.settings-alert p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* ── Feedback message in BotTab / any settings form ─────────────── */
+.msg-accent {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--success-color);
+  font-weight: 500;
+}
+.msg-accent--error {
+  color: var(--danger-color);
+}
+
+/* ── Vertical spacing helpers for stacked buttons ────────────────── */
+.btn-mt-8  { margin-top: 8px; }
+.btn-mt-16 { margin-top: 16px; }

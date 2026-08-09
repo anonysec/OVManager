@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from sqlalchemy import func
 from backend.db.engine import get_db
 from backend.db import crud
-from backend.db.models import User
 from backend.schema.output import Admins, ResponseModel
 from backend.schema._input import AdminCreate, AdminUpdate
-from backend.auth.auth import get_current_user
-from backend.auth.authz import require_main_admin
+from backend.auth.authz import require_owner
 from backend.auth.hash import hash_password
 
 
@@ -16,15 +15,20 @@ router = APIRouter(prefix="/admin", tags=["Admins"])
 
 @router.get("/", response_model=ResponseModel)
 async def get_all_admins(
-    db: Session = Depends(get_db), user: dict = Depends(require_main_admin)
+    db: Session = Depends(get_db), user: dict = Depends(require_owner)
 ):
+    from backend.db.models import User as _User, Admin as _Admin
+    # Single GROUP BY query instead of O(n×m) Python loop
+    counts = dict(
+        db.query(_User.owner, func.count(_User.id))
+        .group_by(_User.owner)
+        .all()
+    )
     result = crud.get_all_admins(db)
-    users = crud.get_all_users(db)
-
     admin_list = []
     for admin in result:
         admin_data = Admins.model_validate(admin)
-        admin_data.users_count = sum(1 for u in users if u.owner == admin.username)
+        admin_data.users_count = counts.get(admin.username, 0)
         admin_list.append(admin_data)
 
     return ResponseModel(
@@ -38,13 +42,8 @@ async def get_all_admins(
 async def create_admin(
     admin: AdminCreate,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(
-            success=False, msg="You do not have permission for this action", data=None
-        )
-
     existing_admin = crud.get_admin_by_username(db, username=admin.username)
     if existing_admin:
         return ResponseModel(
@@ -63,13 +62,8 @@ async def create_admin(
 async def update_admin(
     admin: AdminUpdate,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(
-            success=False, msg="You do not have permission for this action", data=None
-        )
-
     existing_admin = crud.get_admin_by_username(db, username=admin.username)
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
@@ -98,13 +92,8 @@ async def update_admin(
 async def delete_admin(
     username: str,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
-    if user["type"] != "main_admin":
-        return ResponseModel(
-            success=False, msg="You do not have permission for this action", data=None
-        )
-
     existing_admin = crud.get_admin_by_username(db, username=username)
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
