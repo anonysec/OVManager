@@ -1,4 +1,3 @@
-import asyncio
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -13,7 +12,6 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 @router.get("/", response_model=ResponseModel)
 async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     nodes = crud.get_all_nodes(db)
-    users = crud.get_all_users(db)
     items = []
     for n in nodes:
         if not n.status:

@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from sqlalchemy import func
-from backend.db.engine import get_db
-from backend.db import crud
-from backend.schema.output import Admins, ResponseModel
-from backend.schema._input import AdminCreate, AdminUpdate
 from backend.auth.authz import require_owner
 from backend.auth.hash import hash_password
-
+from backend.db import crud
+from backend.db.engine import get_db
+from backend.schema._input import AdminCreate, AdminUpdate
+from backend.schema.output import Admins, ResponseModel
 
 router = APIRouter(prefix="/admin", tags=["Admins"])
 
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/admin", tags=["Admins"])
 async def get_all_admins(
     db: Session = Depends(get_db), user: dict = Depends(require_owner)
 ):
-    from backend.db.models import User as _User, Admin as _Admin
+    from backend.db.models import User as _User
     # Single GROUP BY query instead of O(n×m) Python loop
     counts = dict(
         db.query(_User.owner, func.count(_User.id))

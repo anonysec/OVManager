@@ -1,9 +1,9 @@
-import hmac
 import hashlib
+import hmac
 import logging
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -130,7 +130,7 @@ def _role_is_current(db: Session, username: str, role: str) -> bool:
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     role = to_encode.pop("role", to_encode.pop("type", None))
-    expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
+    expire = datetime.now(tz=UTC) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
     to_encode["role"] = role
     to_encode["type"] = "access"
     to_encode["exp"] = expire
@@ -140,7 +140,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     role = to_encode.pop("role", to_encode.pop("type", None))
-    expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
+    expire = datetime.now(tz=UTC) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
     to_encode["role"] = role
     to_encode["type"] = "refresh"
     to_encode["exp"] = expire
@@ -219,7 +219,7 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
         if is_token_revoked(token):
             raise HTTPException(status_code=401, detail="Token has been revoked")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token") from None
     username = payload.get("sub")
     user_role = payload.get("role")
     if not username or user_role not in ("admin", "owner") or not _role_is_current(db, username, user_role):
@@ -251,5 +251,5 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if is_token_revoked(token):
             raise HTTPException(status_code=401, detail="Token has been revoked")
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
     return {"username": username or "", "type": user_type or ""}

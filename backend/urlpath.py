@@ -15,8 +15,8 @@ Usage:
 """
 
 import logging
-import time
 import threading
+import time
 
 from backend.db.engine import SessionLocal
 

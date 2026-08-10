@@ -33,6 +33,6 @@ def get_10_logs():
     """Get the last 10 logs from the log file."""
     if not os.path.exists(LOG_FILE):
         return []
-    with open(LOG_FILE, "r") as f:
+    with open(LOG_FILE) as f:
         lines = f.readlines()
     return lines[-10:]

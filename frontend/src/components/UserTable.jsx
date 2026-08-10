@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import StatusBadge from '../components/ui/StatusBadge';
 import EmptyState from '../components/ui/EmptyState';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight, FiLink, FiClock, FiPower, FiCheck } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
 import { copyText } from '../utils/clipboard';
@@ -17,7 +17,7 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), status: 'idle' };
 };
 
-const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRef }) => {
+const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRef, onCopyLink, onShowQR, onExtend, onDisconnect }) => {
   const { t } = useTranslation();
   const ref = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0, ready: false });
@@ -90,6 +90,10 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       style={{ position: 'fixed', top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}
     >
       <button type="button" className="row-menu-item" role="menuitem" aria-label={`Edit ${user.name}`} onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Copy subscription link for ${user.name}`} onClick={async () => { await onCopyLink?.(user); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiLink /> {copied ? <><FiCheck /> {t('copied')}</> : t('copyLink', 'Copy subscription link')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Show QR for ${user.name}`} onClick={() => { onShowQR?.(user); onClose(); }}><FiActivity /> {t('showQR', 'Show QR')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Extend ${user.name}`} onClick={() => { onExtend?.(user); onClose(); }}><FiClock /> {t('extend30d', 'Extend +30 days')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Disconnect ${user.name}`} onClick={() => { onDisconnect?.(user); onClose(); }}><FiPower /> {t('disconnect', 'Disconnect')}</button>
       <button type="button" className="row-menu-item" role="menuitem" aria-label={`View sessions for ${user.name}`} onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
       <button type="button" className="row-menu-item" role="menuitem" aria-label={`Copy user ID for ${user.name}`} onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
       <button type="button" className="row-menu-item" role="menuitem" aria-label={`Download config for ${user.name}`} onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
@@ -115,6 +119,22 @@ const UserTableSkeleton = () => {
   );
 };
 
+const UsageMeter = ({ used, total }) => {
+  const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+  const r = 11, c = 2 * Math.PI * r;
+  const color = pct > 85 ? 'var(--danger-color)' : pct > 60 ? 'var(--accent-color)' : 'var(--success-color)';
+  return (
+    <span className="usage-meter" role="img" aria-label={`${Math.round(pct)}% used`}>
+      <svg width="30" height="30">
+        <circle cx="15" cy="15" r={r} fill="none" stroke="#2a3039" strokeWidth="3" />
+        <circle cx="15" cy="15" r={r} fill="none" stroke={color} strokeWidth="3"
+          strokeDasharray={c} strokeDashoffset={c - (pct / 100) * c} strokeLinecap="round" transform="rotate(-90 15 15)" />
+      </svg>
+      <b style={{ color }}>{Math.round(pct)}%</b>
+    </span>
+  );
+};
+
 const UserTable = ({
   users = [],
   isLoading = false,
@@ -124,12 +144,16 @@ const UserTable = ({
   onSessions,
   onDownload,
   onToggleStatus,
-  onBulkDelete,
   selected = [],
   onSelect,
   onSelectAll,
   sort,
   onSort,
+  onCopyLink,
+  onShowQR,
+  onExtend,
+  onDisconnect,
+  density = 'comfortable',
 }) => {
   const { t } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
@@ -163,16 +187,7 @@ const UserTable = ({
 
   return (
     <>
-      {selected.length > 0 && (
-        <div className="bulk-bar">
-          <span className="bulk-count">{selected.length} {t('selected')}</span>
-          <button className="btn btn-danger btn-sm" onClick={() => onBulkDelete(selected)}>
-            <FiTrash2 /> {t('deleteSelected')}
-          </button>
-          <button className="btn btn-sm" onClick={() => onSelectAll(false)}>{t('clear')}</button>
-        </div>
-      )}
-      <div className="list-table-container">
+      <div className={`list-table-container${density === 'compact' ? ' table-compact' : ''}`}>
         <table className="list-table user-list-table">
           <thead>
             <tr>
@@ -222,16 +237,13 @@ const UserTable = ({
                     </span>
                   </td>
                   <td data-label="Total Traffic" className="traffic-cell">
+                    {Number(user.total) > 0 ? (
+                      <UsageMeter used={Number(user.used) || 0} total={Number(user.total)} />
+                    ) : (
+                      <span className="usage-meter"><svg width="30" height="30"><circle cx="15" cy="15" r="11" fill="none" stroke="#2a3039" strokeWidth="3"/><circle cx="15" cy="15" r="11" fill="none" stroke="var(--cyan)" strokeWidth="3" strokeDasharray="69.1" strokeDashoffset="0" strokeLinecap="round"/></svg><b>∞</b></span>
+                    )}
                     <span className="traffic-used">{formatTraffic(user.used)}</span>
                     <span className="traffic-limit">/ {Number(user.total) > 0 ? formatTraffic(user.total) : '∞'}</span>
-                    {Number(user.total) > 0 && (
-                      <span className="usage-bar" role="img" aria-label={t('usageOf', { used: formatTraffic(user.used), total: formatTraffic(user.total) })}>
-                        <span
-                          className={`usage-bar-fill ${(user.used / user.total) > 0.8 ? 'bad' : (user.used / user.total) > 0.5 ? 'warn' : 'good'}`}
-                          style={{ width: `${Math.min(100, (user.used / user.total) * 100)}%` }}
-                        />
-                      </span>
-                    )}
                   </td>
                   <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
                   <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>
@@ -258,6 +270,10 @@ const UserTable = ({
                           onDelete={onDelete}
                           onSessions={onSessions}
                           onDownload={onDownload}
+                          onCopyLink={onCopyLink}
+                          onShowQR={onShowQR}
+                          onExtend={onExtend}
+                          onDisconnect={onDisconnect}
                           onToggleStatus={onToggleStatus}
                           onClose={() => setMenuFor(null)}
                         />

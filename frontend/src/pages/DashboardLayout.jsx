@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiChevronDown, FiMonitor, FiSettings } from 'react-icons/fi';
+import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +12,7 @@ import Logo from '../components/Logo';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CommandPalette from '../components/CommandPalette';
 import MobileNav from '../components/MobileNav';
+import RouteProgress from '../components/RouteProgress';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 
 const DashboardLayout = () => {
@@ -22,7 +23,6 @@ const DashboardLayout = () => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef(null);
-  const [profileOpen, setProfileOpen] = useState(false);
   const location = useLocation();
 
   const getPageTitle = (pathname) => {
@@ -32,8 +32,6 @@ const DashboardLayout = () => {
       '/nodes': t('navNodes', 'Nodes'),
       '/admins': t('navAdmins', 'Admins'),
       '/settings': t('navSettings', 'Settings'),
-      '/audit': t('navAudit', 'Audit Log'),
-      '/maintenance': t('navMaintenance', 'Maintenance'),
     };
     if (map[pathname]) return map[pathname];
     if (pathname.startsWith('/users')) return t('navUsers', 'Users');
@@ -41,15 +39,6 @@ const DashboardLayout = () => {
     if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
     return t('navDashboard', 'Dashboard');
   };
-
-  const tokenPayload = useMemo(() => {
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!token) return {};
-      return JSON.parse(atob(token.split('.')[1] || ''));
-    } catch { return {}; }
-  }, []);
-  const username = tokenPayload.sub || '';
 
   useEffect(() => {
     const lang = i18n.language || 'en';
@@ -60,15 +49,14 @@ const DashboardLayout = () => {
   }, [i18n.language]);
 
   useEffect(() => {
-    if (!notifOpen && !langOpen && !profileOpen) return;
+    if (!notifOpen && !langOpen) return;
     const onDoc = (e) => {
       if (!e.target.closest('.notification-wrap')) setNotifOpen(false);
       if (!e.target.closest('.lang-picker-wrap')) setLangOpen(false);
-      if (!e.target.closest('.profile-wrap')) setProfileOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [notifOpen, langOpen, profileOpen]);
+  }, [notifOpen, langOpen]);
 
   const skipToContent = () => {
     const main = document.querySelector('.ops-main-content');
@@ -102,16 +90,16 @@ const DashboardLayout = () => {
       // Surface nodes that are marked inactive in the DB
       nodes.forEach((n) => {
         if (!n.status) {
-          out.push({ id: `node-${n.id}`, level: 'warning', title: `Node ${n.name} is disabled`, detail: 'Marked offline in panel database', action: null, action_path: null });
+          out.push({ id: `node-${n.id}`, level: 'warning', title: t('notifNodeDisabled', 'Node {{name}} is disabled', { name: n.name }), detail: t('notifNodeDisabledDetail', 'Marked offline in panel database'), action: null, action_path: null });
         }
       });
       users.forEach((u) => {
         if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
-          out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null, action_path: null });
+          out.push({ id: `full-${u.uuid}`, level: 'warning', title: t('notifUserAtMax', 'User {{name}} at max logins', { name: u.name }), detail: t('notifUserAtMaxDetail', '{{active}}/{{max}} sessions', { active: u.active_connections, max: u.max_logins }), action: null, action_path: null });
         }
       });
-      if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${security.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null, action_path: null });
-      if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${security.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null, action_path: null });
+      if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: security.auth_errors }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
+      if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: security.rejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null, action_path: null });
       // Respect the "Alerts & Dashboard" preferences from Settings.
       const prefs = readPrefs();
       setNotifications(out.filter((n) => {
@@ -121,20 +109,23 @@ const DashboardLayout = () => {
     } catch {
       // keep existing; API interceptor surfaces real errors as toasts
     }
-  }, []);
+  }, [t]);
 
   // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
-  // immediately when the preference changes.
+  // immediately when the preference changes. The bell always loads once on
+  // mount so it isn't empty for the first interval period.
   useEffect(() => {
     let id = null;
-    const start = () => {
+    const start = (immediate = false) => {
       if (id) clearInterval(id);
+      if (immediate) loadNotifications();
       const sec = readPrefs().refreshSec;
       id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, sec * 1000);
     };
-    start();
-    window.addEventListener('ovmanager-prefs-changed', start);
-    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', start); };
+    start(true);
+    const onPrefs = () => start(true);
+    window.addEventListener('ovmanager-prefs-changed', onPrefs);
+    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', onPrefs); };
   }, [loadNotifications]);
 
   const notifCount = notifications.length;
@@ -178,14 +169,12 @@ const DashboardLayout = () => {
     isMobile ? 'ops-main-content--mobile' : '',
   ].filter(Boolean).join(' ');
 
-  const urlPath = window.__OV_URLPATH__ || '';
-  void urlPath; /* used for future URLPATH-based adjustments */
-
   return (
     <LiveProvider>
       <ToastProvider>
         <div className="ops-layout">
-          <a href="#main-content" className="skip-link" onClick={skipToContent}>Skip to content</a>
+          <RouteProgress />
+          <a href="#main-content" className="skip-link" onClick={skipToContent}>{t('skipToContent', 'Skip to content')}</a>
 
           <Sidebar />
 
@@ -260,13 +249,13 @@ const DashboardLayout = () => {
                       <p className="notification-empty">{t('notifEmpty')}</p>
                     ) : (
                       notifications.map((n, i) => {
-                        const urlpath = import.meta.env.VITE_URLPATH || '';
-                        const prefix = urlpath ? `/${urlpath}` : '';
-                        const href = n.id?.startsWith('node-') ? `${prefix}/nodes?node=${n.id.replace('node-','')}`
-                          : n.id?.startsWith('exp-') || n.id?.startsWith('full-') || n.id?.startsWith('inact-') ? `${prefix}/users?user=${n.id.replace(/^(exp|full|inact)-/, '')}`
-                          : `${prefix}/settings`;
+                        // Router paths only — <Link> resolves them against the
+                        // basename, so including the URLPATH here would double it.
+                        const href = n.id?.startsWith('node-') ? `/nodes?node=${n.id.replace('node-','')}`
+                          : n.id?.startsWith('exp-') || n.id?.startsWith('full-') || n.id?.startsWith('inact-') ? `/users?user=${n.id.replace(/^(exp|full|inact)-/, '')}`
+                          : '/settings';
                         return (
-                          <Link key={n.id ?? i} to={href.replace(window.location.origin, '')} className={`notification-item ${levelClass(n.level)}`} onClick={() => setNotifOpen(false)}>
+                          <Link key={n.id ?? i} to={href} className={`notification-item ${levelClass(n.level)}`} onClick={() => setNotifOpen(false)}>
                             <span className="dot" />
                             <div>
                               <div className="n-title">{n.title}</div>
@@ -276,33 +265,6 @@ const DashboardLayout = () => {
                         );
                       })
                     )}
-                  </div>
-                </div>
-                <div className="profile-wrap">
-                  <button type="button" className={`profile-trigger${profileOpen ? ' active' : ''}`} onClick={() => setProfileOpen(o => !o)} aria-expanded={profileOpen} aria-haspopup="true" title={t('loggedInAs', 'Logged in as')}>
-                    <span className="avatar-xs">{username.slice(0, 1).toUpperCase()}</span>
-                    <span className="profile-trigger-copy">
-                      <strong>{username}</strong>
-                      <small>{userRole === 'owner' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</small>
-                    </span>
-                    <FiChevronDown className={`profile-trigger-chevron${profileOpen ? ' is-open' : ''}`} aria-hidden="true" />
-                  </button>
-                  <div className={`profile-dropdown${profileOpen ? ' open' : ''}`} role="menu">
-                    <div className="profile-dropdown-header">
-                      <span className="avatar-sm">{username.slice(0, 1).toUpperCase()}</span>
-                      <div>
-                        <div className="profile-dropdown-name">{username}</div>
-                        <div className="profile-dropdown-role">{userRole === 'owner' ? t('administrator', 'Administrator') : t('operator', 'Operator')}</div>
-                      </div>
-                    </div>
-                    <div className="profile-dropdown-divider" />
-                    {/* Settings is the only menu action — theme lives in the top bar
-                        (one click, no open state) and logout lives at the bottom of
-                        the sidebar, so duplicating either here adds noise. */}
-                    <Link to="/settings" className="profile-dropdown-item" role="menuitem" onClick={() => setProfileOpen(false)}>
-                      <FiSettings aria-hidden="true" />
-                      <span>{t('navSettings', 'Settings')}</span>
-                    </Link>
                   </div>
                 </div>
               </div>

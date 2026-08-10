@@ -8,8 +8,8 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
-from backend.db.engine import get_db
 from backend.db import crud
+from backend.db.engine import get_db
 
 
 def require_owner(user: dict = Depends(get_current_user)):

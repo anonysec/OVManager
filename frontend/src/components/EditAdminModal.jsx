@@ -72,12 +72,12 @@ const EditAdminModal = ({ admin, isOpen, onClose, onAdminUpdated }) => {
           <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required placeholder={t('enterNewPassword')} />
         </div>
         <div className="input-group">
-          <label htmlFor="telegram_id">Telegram ID</label>
-          <input type="number" id="telegram_id" name="telegram_id" value={formData.telegram_id} onChange={handleChange} placeholder="123456789 (empty = no access)" />
+          <label htmlFor="telegram_id">{t("telegramId", "Telegram ID")}</label>
+          <input type="number" id="telegram_id" name="telegram_id" value={formData.telegram_id} onChange={handleChange} placeholder={t("telegramIdPlaceholder", "123456789 (empty = no access)")} />
         </div>
         <div className="input-group">
-          <label htmlFor="username_prefix">Username Prefix</label>
-          <input type="text" id="username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder="420 (auto-generates 4201, 4202...)" />
+          <label htmlFor="username_prefix">{t("usernamePrefix", "Username Prefix")}</label>
+          <input type="text" id="username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder={t("usernamePrefixPlaceholder", "420 (auto-generates 4201, 4202...)")} />
         </div>
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>

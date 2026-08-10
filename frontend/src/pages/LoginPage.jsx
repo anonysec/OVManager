@@ -40,9 +40,9 @@ const LoginPage = () => {
             <span>OV<span>Manager</span></span>
           </div>
           <div className="login-showcase-copy">
-            <span className="login-showcase-kicker"><FiActivity aria-hidden="true" /> OVNode Fleet Control</span>
-            <h1>One calm view of your VPN fleet.</h1>
-            <p>Monitor nodes, manage access, and resolve connection issues before they become incidents.</p>
+            <span className="login-showcase-kicker"><FiActivity aria-hidden="true" /> {t("fleetControl", "OVNode Fleet Control")}</span>
+            <h1>{t("loginHeroTitle", "One calm view of your VPN fleet.")}</h1>
+            <p>{t("loginHeroDesc", "Monitor nodes, manage access, and resolve connection issues before they become incidents.")}</p>
           </div>
           <div className="login-showcase-status">
             <div className="login-status-orbit" aria-hidden="true">
@@ -51,15 +51,15 @@ const LoginPage = () => {
               <span className="orbit-dot orbit-dot-two" />
             </div>
             <div className="login-status-copy">
-              <span className="status-kicker"><i /> Built for operators</span>
-              <strong>Secure access to the control room</strong>
-              <span>Everything you need to keep OpenVPN users online.</span>
+              <span className="status-kicker"><i /> {t("builtForOperators", "Built for operators")}</span>
+              <strong>{t("secureAccessTitle", "Secure access to the control room")}</strong>
+              <span>{t("secureAccessDesc", "Everything you need to keep OpenVPN users online.")}</span>
             </div>
           </div>
           <div className="login-feature-list">
-            <span><FiServer aria-hidden="true" /> Node health at a glance</span>
-            <span><FiShield aria-hidden="true" /> Session-aware security signals</span>
-            <span><FiLock aria-hidden="true" /> Protected admin access</span>
+            <span><FiServer aria-hidden="true" /> {t("featureNodeHealth", "Node health at a glance")}</span>
+            <span><FiShield aria-hidden="true" /> {t("featureSecuritySignals", "Session-aware security signals")}</span>
+            <span><FiLock aria-hidden="true" /> {t("featureProtectedAccess", "Protected admin access")}</span>
           </div>
         </section>
 
@@ -114,7 +114,7 @@ const LoginPage = () => {
             </button>
             {error && <p className="error-message" role="alert" aria-live="assertive">{error}</p>}
           </form>
-          <p className="login-footnote"><FiShield aria-hidden="true" /> Access is limited to authorized administrators.</p>
+          <p className="login-footnote"><FiShield aria-hidden="true" /> {t("loginFootnote", "Access is limited to authorized administrators.")}</p>
         </section>
       </div>
     </div>

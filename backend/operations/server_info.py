@@ -1,5 +1,6 @@
-import psutil
 import time
+
+import psutil
 
 from backend.logger import logger
 from backend.schema.output import ServerInfo

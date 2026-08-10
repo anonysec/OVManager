@@ -1,9 +1,9 @@
 import asyncio
 import json
 
-from backend.logger import logger
 from backend.db import crud
 from backend.db.engine import get_db
+from backend.logger import logger
 from backend.node.task import change_user_status_on_all_nodes, get_users_used_traffic
 
 

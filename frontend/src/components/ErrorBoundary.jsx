@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { withTranslation } from 'react-i18next';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -15,6 +16,7 @@ class ErrorBoundary extends Component {
   }
 
   render() {
+    const { t } = this.props;
     if (this.state.hasError) {
       return (
         <div style={{
@@ -23,9 +25,9 @@ class ErrorBoundary extends Component {
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
         }}>
           <h1 style={{ fontSize: '48px', margin: '0 0 16px', color: '#ff7a8a' }}>⚠</h1>
-          <h2 style={{ margin: '0 0 8px' }}>Something went wrong</h2>
+          <h2 style={{ margin: '0 0 8px' }}>{t('errorBoundaryTitle', 'Something went wrong')}</h2>
           <p style={{ color: '#888', maxWidth: 500, marginBottom: 24 }}>
-            An unexpected error occurred. Please try refreshing the page.
+            {t('errorBoundaryDesc', 'An unexpected error occurred. Please try refreshing the page.')}
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -34,11 +36,11 @@ class ErrorBoundary extends Component {
               border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px'
             }}
           >
-            Reload page
+            {t('reloadPage', 'Reload page')}
           </button>
           {this.state.error && (
             <details style={{ marginTop: 24, textAlign: 'left', maxWidth: 600 }}>
-              <summary style={{ cursor: 'pointer', color: '#888' }}>Error details</summary>
+              <summary style={{ cursor: 'pointer', color: '#888' }}>{t('errorDetails', 'Error details')}</summary>
               <pre style={{ fontSize: '12px', color: '#666', marginTop: 8, whiteSpace: 'pre-wrap' }}>
                 {this.state.error.toString()}
               </pre>
@@ -52,4 +54,5 @@ class ErrorBoundary extends Component {
   }
 }
 
-export default ErrorBoundary;
+const TranslatedErrorBoundary = withTranslation()(ErrorBoundary);
+export default TranslatedErrorBoundary;

@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import BigInteger, DateTime
-from .engine import Base
 from datetime import date, datetime
+
+from sqlalchemy import BigInteger, DateTime
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .engine import Base
 
 
 class User(Base):

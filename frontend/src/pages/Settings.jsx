@@ -22,6 +22,7 @@ import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { readPrefs, writePref, REFRESH_OPTIONS } from '../utils/notifPrefs';
+import { getUiPref, setUiPref, getUiStyle, setUiStyle } from '../utils/uiPrefs';
 import LoadingButton from '../components/LoadingButton';
 import PanelSkeleton from '../components/ui/PanelSkeleton';
 import ErrorState from '../components/ui/ErrorState';
@@ -31,7 +32,7 @@ import {
   FiLink, FiEdit2, FiCheck, FiX, FiExternalLink,
   FiZap, FiRefreshCw, FiDownload, FiUpload, FiDatabase,
   FiBarChart2, FiUserPlus, FiClock, FiSun, FiMoon, FiMonitor,
-  FiBell, FiGlobe, FiAlertTriangle,
+  FiBell, FiGlobe, FiAlertTriangle, FiLayout, FiGrid, FiMinus,
 } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
 import { formatUptime, fmtDateTime } from '../utils/time';
@@ -351,9 +352,14 @@ const GeneralSection = () => {
       const v = editValue.trim().replace(/^\/+|\/+$/g, '');
       if (v && !/^[A-Za-z0-9_-]+$/.test(v)) { setError(t('urlInvalid', 'Only letters, numbers, dashes and underscores.')); return; }
       if (v.length > 64) { setError(t('urlInvalid', 'Max 64 characters.')); return; }
-      await apiClient.put('/server/settings/urlpath', { urlpath: v });
+      const res = await apiClient.put('/server/settings/urlpath', { urlpath: v });
       setUrlPath(v); setEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
+      // The panel moves to the new prefix — the old URL stops serving the app
+      // (URLPathMiddleware hides non-matching paths), so redirect there now.
+      const newBase = v ? `/${v}` : '';
+      setTimeout(() => { window.location.assign(`${window.location.origin}${newBase}/settings`); }, 600);
+      void res;
     } catch (e) { setError(e.response?.data?.msg || t('error', 'Error')); }
     finally { setSaving(false); }
   };
@@ -726,8 +732,54 @@ const AppearanceSection = () => {
     setLang(id);
   };
 
+  const ACCENTS = [
+    { hex: '#ff6a1a', name: 'Orange' },
+    { hex: '#2fd276', name: 'Emerald' },
+    { hex: '#6366f1', name: 'Indigo' },
+    { hex: '#ec4899', name: 'Rose' },
+    { hex: '#19d3e9', name: 'Cyan' },
+    { hex: '#eab308', name: 'Amber' },
+  ];
+  const [accent, setAccent] = useState(() => getUiPref('accent', ''));
+  const chooseAccent = (hex) => {
+    setAccent(hex);
+    setUiPref('accent', hex);
+    document.documentElement.style.setProperty('--accent-color', hex);
+  };
+
+  const [uiStyle, setUiStyleState] = useState(() => getUiStyle());
+  const chooseUiStyle = (style) => {
+    setUiStyle(style);
+    setUiStyleState(style);
+  };
+
   return (
     <div className="sp-cards">
+      <Card title={t('accentCard', 'Accent color')} icon={FiSun}>
+        <div className="accent-picker" role="group" aria-label={t('accentCard', 'Accent color')}>
+          <button
+            type="button"
+            className={`accent-swatch${accent === '' ? ' active' : ''}`}
+            style={{ background: 'var(--accent-color)' }}
+            onClick={() => chooseAccent('')}
+            title={t('accentDefault', 'Default')}
+            aria-label={t('accentDefault', 'Default')}
+          />
+          {ACCENTS.map((a) => (
+            <button
+              key={a.hex}
+              type="button"
+              className={`accent-swatch${accent === a.hex ? ' active' : ''}`}
+              style={{ background: a.hex }}
+              onClick={() => chooseAccent(a.hex)}
+              title={a.name}
+              aria-label={a.name}
+            />
+          ))}
+        </div>
+        <p className="sp-hint">{t('accentDesc', 'Changes the brand color across the panel. Saved per browser.')}</p>
+      </Card>
+
       <Card title={t('themeCard', 'Theme')} icon={FiMonitor}>
         <div className="sp-theme-pills" role="group" aria-label={t('themeCard', 'Theme')}>
           {THEMES.map((item) => (
@@ -744,6 +796,30 @@ const AppearanceSection = () => {
           ))}
         </div>
         <p className="sp-hint">{t('themeDesc', 'System follows your operating system preference.')}</p>
+      </Card>
+
+      <Card title={t('styleCard', 'Panel style')} icon={FiLayout}>
+        <div className="sp-theme-pills sp-pills-2" role="group" aria-label={t('styleCard', 'Panel style')}>
+          <button
+            type="button"
+            className={`sp-theme-pill${uiStyle === 'normal' ? ' active' : ''}`}
+            onClick={() => chooseUiStyle('normal')}
+            aria-pressed={uiStyle === 'normal'}
+          >
+            <FiGrid size={15} aria-hidden="true" />
+            <span>{t('styleNormal', 'Normal')}</span>
+          </button>
+          <button
+            type="button"
+            className={`sp-theme-pill${uiStyle === 'minimal' ? ' active' : ''}`}
+            onClick={() => chooseUiStyle('minimal')}
+            aria-pressed={uiStyle === 'minimal'}
+          >
+            <FiMinus size={15} aria-hidden="true" />
+            <span>{t('styleMinimal', 'Minimal')}</span>
+          </button>
+        </div>
+        <p className="sp-hint">{t('styleDesc', 'Normal uses rich cards and soft shadows; Minimal is flat with hairline borders. Saved per browser.')}</p>
       </Card>
 
       <Card title={t('languageCard', 'Language')} icon={FiGlobe}>

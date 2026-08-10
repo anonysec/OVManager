@@ -1,21 +1,23 @@
+from datetime import UTC
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
-from backend.db.engine import get_db
 from backend.db import crud
-from backend.schema.output import ResponseModel
-from backend.schema._input import NodeCreate
+from backend.db.engine import get_db
 from backend.node.task import (
     add_node_handler,
-    update_node_handler,
     delete_node_handler,
-    download_ovpn_client_from_node,
     download_all_ovpn_clients_from_node,
-    list_nodes_handler,
+    download_ovpn_client_from_node,
     get_node_status_handler,
+    list_nodes_handler,
+    update_node_handler,
 )
+from backend.schema._input import NodeCreate
+from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/nodes", tags=["Nodes"])
 
@@ -91,8 +93,8 @@ async def download_ovpn_client(
         raise HTTPException(status_code=404, detail="User not found")
     if user["type"] != "owner" and db_user.owner != user["username"]:
         raise HTTPException(status_code=403, detail="Not your user")
-    from datetime import datetime, timezone
-    today_utc = datetime.now(timezone.utc).date()
+    from datetime import datetime
+    today_utc = datetime.now(UTC).date()
     if not db_user.is_active or (db_user.expiry_date and db_user.expiry_date < today_utc):
         raise HTTPException(status_code=403, detail="User account is not active")
     if db_user.total is not None and (db_user.used or 0) >= db_user.total:

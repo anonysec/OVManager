@@ -14,11 +14,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from backend.logger import logger
-from backend.schema._input import NodeCreate
-from backend.node.requests import NodeRequests
 from backend.db import crud
+from backend.logger import logger
+from backend.node.requests import NodeRequests
 from backend.operations.geolocation import geolocate
+from backend.schema._input import NodeCreate
 
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:

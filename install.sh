@@ -1,81 +1,122 @@
 #!/bin/bash
-# OVManager — OpenVPN Panel Installer
-# Usage: bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
-#        bash <(curl -Ls URL) update
-#        bash <(curl -Ls URL) uninstall
+# ══════════════════════════════════════════════════════════════════════
+#  OVManager — OpenVPN Panel Installer
+#
+#  Install :  bash <(curl -Ls https://anonysec.github.io/OVManager/install.sh)
+#  Update  :  bash <(curl -Ls URL) update
+#  Remove  :  bash <(curl -Ls URL) uninstall
+#
+#  A single, OS-aware installer for native (systemd) and Docker deploys.
+#  It bootstraps uv + Node.js, validates input, backs up data before every
+#  destructive step, and verifies the panel answers /health afterwards.
+# ══════════════════════════════════════════════════════════════════════
 
 set -Eeuo pipefail
 
-# ═══════════════════════════════════════
-#  C O N F I G
-# ═══════════════════════════════════════
+# ── Config ─────────────────────────────────────────────────────────────
 REPO="anonysec/OVManager"
+BRANCH="main"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_PATH=""
 DEFAULT_USER="admin"
-DEFAULT_PASS=""
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.6"
+VERSION="1.7"
 
-# ═══════════════════════════════════════
-#  C O L O R S
-# ═══════════════════════════════════════
+# ── Colors ─────────────────────────────────────────────────────────────
 NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
 WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
 YL=$'\033[33m'; BL=$'\033[34m'; CY=$'\033[36m'; GY=$'\033[90m'
+[[ -t 1 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; BL=''; CY=''; GY=''; }
 
-# ═══════════════════════════════════════
-#  U I
-# ═══════════════════════════════════════
-line()   { echo -e "  $1" >&2; }
-step()   { line "${GR}  ✓${NC} $1"; }
-info()   { line "${CY}  →${NC} $1"; }
-warn()   { line "${YL}  ⚠${NC} $1"; }
-field()  { printf "  ${GY}%-16s${NC} %s\n" "$1" "$2"; }
-sep()    { line "${GY}$(printf '%.0s─' {1..52})${NC}"; }
+# ── UI helpers ─────────────────────────────────────────────────────────
+line()  { echo -e "  $1" >&2; }
+step()  { line "${GR}  ✓${NC} $1"; }
+info()  { line "${CY}  →${NC} $1"; }
+warn()  { line "${YL}  ⚠${NC} $1"; }
+field() { printf "  ${GY}%-18s${NC} %s\n" "$1" "$2"; }
+sep()   { line "${GY}$(printf '%.0s─' {1..56})${NC}"; }
 
 spinner() {
-    local msg="$1" pid=$2 chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+    local msg="$1" pid=$2 chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0 rc=0
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r  ${CY}%s${NC} %-48s" "${chars:$((i%9)):1}" "$msg" >&2
-        sleep 0.1; ((i++))
+        printf "\r  ${CY}%s${NC} %-46s" "${chars:$((i%9)):1}" "$msg" >&2
+        sleep 0.1; i=$(( i + 1 ))
     done
-    local rc=0
     wait "$pid" 2>/dev/null || rc=$?
     printf "\r\033[K" >&2
     [[ $rc -eq 0 ]] && step "$msg" || { line "${RD}  ✗${NC} $msg"; return 1; }
 }
 
-prompt_val() {
-    local var="$1" label="$2" default="$3" hidden="${4:-}"
-    local val=""
-    if [[ -t 0 ]]; then
+die()  { echo -e "\n  ${RD}Error:${NC} $1\n" >&2; exit 1; }
+trap 'echo -e "\n  ${RD}Interrupted.${NC}" >&2; exit 1' INT TERM
+
+is_tty() { [[ -t 0 ]]; }
+ask() {  # ask <label> <default> [hidden]
+    local label="$1" default="$2" hidden="${3:-}" val=""
+    if is_tty; then
         if [[ "$hidden" == "h" ]]; then
-            printf "  ${WH}%-16s${NC} ${GY}[%s]${NC} : " "$label" "$default"
+            printf "  ${WH}%-18s${NC} ${GY}[%s]${NC} : " "$label" "$default"
             read -rs val; printf "\n"
         else
-            printf "  ${WH}%-16s${NC} ${GY}[%s]${NC} : " "$label" "$default"
+            printf "  ${WH}%-18s${NC} ${GY}[%s]${NC} : " "$label" "$default"
             read -r val
         fi
     fi
-    [[ -z "$val" ]] && val="$default"
-    case "$var" in
-        PORT) PORT="$val" ;;
-        PATHPREFIX) PATHPREFIX="$val" ;;
-        ADMIN_USER) ADMIN_USER="$val" ;;
-        ADMIN_PASS) ADMIN_PASS="$val" ;;
-        *) die "Unknown installer variable: $var" ;;
+    if [[ -z "$val" ]]; then val="$default"; fi
+    echo "$val"
+}
+
+confirm() {  # confirm <msg> → true/false; non-interactive = true with -y
+    [[ "$YES" -eq 1 ]] && return 0
+    if is_tty; then
+        printf "  %s [${GR}Y${NC}/n] : " "$1"
+        read -r c
+        [[ ! "$c" =~ ^[Nn]$ ]]
+    else
+        return 0
+    fi
+}
+
+# ── OS / package manager ───────────────────────────────────────────────
+OS_ID="" OS_NAME="" PKG_INSTALL="" PKG_UPDATE=""
+
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        OS_ID="${ID:-}"; OS_NAME="${PRETTY_NAME:-$OS_ID}"
+    else
+        die "Unsupported OS — no /etc/os-release found."
+    fi
+    case "$OS_ID" in
+        debian|ubuntu)      PKG_UPDATE="apt-get update -qq";  PKG_INSTALL="apt-get install -y -qq" ;;
+        rhel|centos|rocky|almalinux|fedora)
+            if command -v dnf >/dev/null 2>&1; then
+                PKG_UPDATE="dnf -q makecache"; PKG_INSTALL="dnf install -y -q"
+            else
+                PKG_UPDATE="yum -q makecache"; PKG_INSTALL="yum install -y -q"
+            fi ;;
+        arch)               PKG_UPDATE="pacman -Sy --noconfirm"; PKG_INSTALL="pacman -S --noconfirm" ;;
+        alpine)             PKG_UPDATE="apk update -q";         PKG_INSTALL="apk add -q" ;;
+        *) die "Unsupported distribution: ${OS_ID:-unknown}" ;;
     esac
 }
 
-die() { echo -e "\n  ${RD}Error:${NC} $1\n"; exit 1; }
-trap 'echo -e "\n  ${RD}Interrupted.${NC}"; exit 1' INT TERM
+pkg_install() {
+    info "Installing: $*"
+    $PKG_UPDATE >/dev/null 2>&1 || true
+    $PKG_INSTALL "$@" >/dev/null 2>&1 || die "Failed to install: $* (run the command manually: $PKG_INSTALL $*)"
+}
 
-# ═══════════════════════════════════════
-#  H E L P / A R G S
-# ═══════════════════════════════════════
+has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
+
+# ── Arg parsing ────────────────────────────────────────────────────────
+PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS=""
+TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
+PUBLIC_URL="" DOCKER_FLAG=0 ACTION="install" YES=0 PURGE=0
+
 show_help() {
     cat << 'EOF'
   Usage:
@@ -85,326 +126,211 @@ show_help() {
 
   Commands:
     (none)              Install or update OVManager
-    update              Pull latest changes and restart
-    uninstall           Remove OVManager completely
+    update              Pull latest changes, rebuild, restart (with backup)
+    uninstall           Remove OVManager (data kept unless --purge)
 
   Flags:
     --port PORT         Panel port (default: 2095)
-    --path URLPATH      URL path prefix (default: root/empty)
-    --admin-user USER   Admin username
-    --admin-pass PASS   Admin password
-    --tls METHOD        TLS method: le, le-ip, self, custom, none (default: le-ip)
-    --tls-domain DOM    Domain for Let's Encrypt
-    --tls-key KEY       Path to existing TLS key
-    --tls-cert CERT     Path to existing TLS cert
-    --docker            Use Docker
-    --help              Show this help
+    --path URLPATH      URL path prefix, e.g. mypanel (default: root)
+    --admin-user USER   Admin username (default: admin)
+    --admin-pass PASS   Admin password (required)
+    --public-url URL    Canonical public URL for subscription links
+    --tls-le DOMAIN     Let's Encrypt for a domain
+    --tls-ip            Let's Encrypt short-lived cert for the server IP
+    --tls-self          Self-signed certificate
+    --tls-custom K C    Use existing key + cert files
+    --tls-none          Plain HTTP
+    --docker            Deploy with Docker (builds from source)
+    --yes  | -y         Non-interactive: accept defaults, skip confirmations
+    --purge             With uninstall: also remove data and certificates
+    --help | -h         Show this help
 EOF
     exit 0
 }
 
-PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS="" TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
-DOCKER_FLAG=0 ACTION="install"
-
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --port)       PORT="$2"; shift 2 ;;
-            --path)       PATHPREFIX="$(echo "$2" | sed 's|^/\+||; s|/\+$||')"; shift 2 ;;
-            --admin-user) ADMIN_USER="$2"; shift 2 ;;
-            --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
-            --tls-le)     TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
-            --tls-ip)     TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I | awk '{print $1}')"; shift ;;
-            --tls)        TLS_MODE="$2"; shift 2 ;;
-            --tls-self)   TLS_MODE="self"; shift ;;
-            --tls-custom) TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
-            --tls-none)   TLS_MODE="none"; shift ;;
-            --docker)     DOCKER_FLAG=1; shift ;;
-            --uninstall)  ACTION="uninstall"; shift ;;
-            --help|-h)    show_help ;;
-            uninstall)    ACTION="uninstall"; shift ;;
-            update)       ACTION="update"; shift ;;
-            *)            die "Unknown option: $1. Use --help for usage." ;;
+            --port)        [[ $# -ge 2 ]] || die "--port needs a value"; PORT="$2"; shift 2 ;;
+            --path)        [[ $# -ge 2 ]] || die "--path needs a value"; PATHPREFIX="${2#/}"; PATHPREFIX="${PATHPREFIX%/}"; shift 2 ;;
+            --admin-user)  [[ $# -ge 2 ]] || die "--admin-user needs a value"; ADMIN_USER="$2"; shift 2 ;;
+            --admin-pass)  [[ $# -ge 2 ]] || die "--admin-pass needs a value"; ADMIN_PASS="$2"; shift 2 ;;
+            --public-url)  [[ $# -ge 2 ]] || die "--public-url needs a value"; PUBLIC_URL="$2"; shift 2 ;;
+            --tls-le)      [[ $# -ge 2 ]] || die "--tls-le needs a domain"; TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
+            --tls-ip)      TLS_MODE="le-ip"; shift ;;
+            --tls-self)    TLS_MODE="self"; shift ;;
+            --tls-custom)  [[ $# -ge 3 ]] || die "--tls-custom needs KEY CERT"; TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
+            --tls-none)    TLS_MODE="none"; shift ;;
+            --docker)      DOCKER_FLAG=1; shift ;;
+            --yes|-y)      YES=1; shift ;;
+            --purge)       PURGE=1; shift ;;
+            --uninstall)   ACTION="uninstall"; shift ;;
+            --help|-h)     show_help ;;
+            update)        ACTION="update"; shift ;;
+            uninstall)     ACTION="uninstall"; shift ;;
+            *)             die "Unknown option: $1 (--help for usage)" ;;
         esac
     done
 }
 
-# ═══════════════════════════════════════
-#  P O R T   C H E C K
-# ═══════════════════════════════════════
-port_in_use() {
-    ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'
+# ── Validation ─────────────────────────────────────────────────────────
+is_port() { [[ "$1" =~ ^[0-9]+$ ]] && (( $1 >= 1 && $1 <= 65535 )); }
+
+validate_input() {
+    is_port "$PORT"   || die "Invalid port: '$PORT'"
+    [[ -n "$ADMIN_USER" ]] || ADMIN_USER="$DEFAULT_USER"
+    [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_.-]{3,64}$ ]] || die "Invalid admin username (3-64 chars, letters/digits/._-)"
+    [[ -n "$ADMIN_PASS" ]] || die "Admin password is required (--admin-pass or interactive install)"
+    [[ ${#ADMIN_PASS} -ge 8 ]] || die "Admin password must be at least 8 characters"
+    if [[ -n "$PATHPREFIX" ]]; then
+        [[ "$PATHPREFIX" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "URL path may only contain letters, digits, dash and underscore"
+    fi
+    case "$TLS_MODE" in
+        le|le-ip|self|custom|none) ;;
+        *) die "Invalid TLS mode: '$TLS_MODE' (le | le-ip | self | custom | none)" ;;
+    esac
 }
 
-check_port_available() {
-    if port_in_use "$1"; then
-        die "Port $1 is already in use. Please free port $1 or choose a different port."
+port_in_use() { ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'; }
+
+# ── Dependency bootstrap ───────────────────────────────────────────────
+ensure_uv() {
+    if command -v uv >/dev/null 2>&1; then
+        UV_BIN="$(command -v uv)"; step "uv found: $UV_BIN"; return
     fi
+    info "Installing uv (Python package manager)..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 || \
+        python3 -m pip install --quiet uv >/dev/null 2>&1 || \
+        die "Could not install uv. Install it manually: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    UV_BIN="$(command -v uv 2>/dev/null || true)"
+    [[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
+    [[ -x "$UV_BIN" ]] || die "uv not found after install"
+    step "uv installed: $UV_BIN"
 }
 
-# ═══════════════════════════════════════
-#  S E T U P
-# ═══════════════════════════════════════
-interactive_setup() {
-    prompt_val PORT       "Port"       "$DEFAULT_PORT"
-    prompt_val PATHPREFIX "URL path"   "$DEFAULT_PATH"
-    prompt_val ADMIN_USER "Admin user" "$DEFAULT_USER"
-    prompt_val ADMIN_PASS "Admin pass" "$DEFAULT_PASS" "h"
-    [[ -n "$ADMIN_PASS" ]] || die "Admin password is required and cannot be empty."
-    sep
-    if [[ -t 0 ]]; then
-        printf "  TLS mode\n"
-        line "  1)  Let's Encrypt (domain)"
-        line "  2)  Let's Encrypt (IP)"
-        line "  3)  Self-signed cert"
-        line "  4)  Custom cert path"
-        line "  5)  None (HTTP)"
-        printf "  Select [${GR}2${NC}] : "
-        read -r tls_choice
-        : "${tls_choice:=2}"
-        case "$tls_choice" in
-            1) TLS_MODE="le" ;;
-            2) TLS_MODE="le-ip" ;;
-            3) TLS_MODE="self" ;;
-            4) TLS_MODE="custom" ;;
-            5) TLS_MODE="none" ;;
-            *) TLS_MODE="none" ;;
-        esac
-    fi
-    if [[ "$TLS_MODE" == "le" ]]; then
-        # Domain only — must enter
-        while [[ -z "$TLS_DOMAIN" ]]; do
-            if [[ -t 0 ]]; then
-                printf "  ${WH}Domain${NC} [${GY}example.com${NC}] : "
-                read -r TLS_DOMAIN
-            else
-                die "Domain is required for Let's Encrypt (use --tls-le DOMAIN)"
-            fi
-        done
-    elif [[ "$TLS_MODE" == "le-ip" ]]; then
-        # Show real IP, user can override or press Enter
-        local real_ip=$(hostname -I | awk '{print $1}')
-        if [[ -z "$TLS_DOMAIN" ]]; then
-            if [[ -t 0 ]]; then
-                printf "  ${WH}IP${NC} [${GR}%s${NC}] : " "$real_ip"
-                read -r TLS_DOMAIN
-            fi
-            [[ -z "$TLS_DOMAIN" ]] && TLS_DOMAIN="$real_ip"
+ensure_node() {
+    if command -v node >/dev/null 2>&1; then
+        local maj; maj="$(node -v 2>/dev/null | sed 's/^v//;s/\..*//')"
+        if (( maj < 20 )); then
+            warn "Node.js $(node -v) found — Vite 7 needs >= 20.19; install Node 22 LTS"
         fi
+        command -v npm >/dev/null 2>&1 || pkg_install npm
+        return
     fi
-    # Install mode
-    if [[ $DOCKER_FLAG -eq 0 && -t 0 ]]; then
-        line "  Install mode"
-        line "  ${WH}1${NC})  Native (systemd)"
-        line "  ${WH}2${NC})  Docker"
-        printf "  Select [${GR}1${NC}] : "
-        read -r mode_choice
-        : "${mode_choice:=1}"
-        [[ "$mode_choice" == "2" ]] && DOCKER_FLAG=1
-    fi
-    local server_ip=$(hostname -I | awk '{print $1}')
-    sep
-    field "Server IP"     "$server_ip"
-    field "Install dir"  "$INSTALL_DIR"
-    field "Data dir"     "$DATA_DIR"
-    field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
-    if [[ "$TLS_MODE" == "le" ]]; then
-        field "TLS domain" "$TLS_DOMAIN"
-    elif [[ "$TLS_MODE" == "le-ip" ]]; then
-        field "TLS IP"     "$TLS_DOMAIN"
-    fi
-    sep
-    if [[ -t 0 ]]; then
-        printf "  Proceed with installation? [${GR}Y${NC}/n] : "
-        read -r c; [[ "$c" =~ ^[Nn]$ ]] && die "Cancelled."
-    fi
-}
-
-check_root() {
-    [[ "$EUID" -ne 0 ]] && die "Must run as root."
+    info "Installing Node.js 22 LTS..."
+    case "$OS_ID" in
+        debian|ubuntu)
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1 \
+                && pkg_install nodejs \
+                || die "Could not install Node.js from NodeSource"
+            ;;
+        *) pkg_install nodejs npm ;;
+    esac
+    command -v node >/dev/null 2>&1 || die "Node.js installation failed"
+    step "Node.js $(node -v) ready"
 }
 
 check_deps() {
     local missing=()
-    for cmd in curl tar openssl git; do
+    for cmd in curl tar openssl git python3; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        info "Installing missing dependencies: ${missing[*]}"
-        apt-get update -qq >/dev/null && apt-get install -y -qq "${missing[@]}" >/dev/null \
-            || die "Failed to install: ${missing[*]}"
-    fi
-    step "All system dependencies are available"
+    [[ ${#missing[@]} -eq 0 ]] || pkg_install "${missing[@]}"
+    step "System dependencies present"
 }
 
-# ═══════════════════════════════════════
-#  L E T ' S   E N C R Y P T
-# ═══════════════════════════════════════
+# ── Backups ────────────────────────────────────────────────────────────
+backup_dir() {
+    local src="$1" label="$2"
+    [[ -d "$src" ]] || return 0
+    mkdir -p /var/backups
+    local stamp; stamp="$(date +%Y%m%d-%H%M%S)"
+    local base; base="$(basename "$src")"
+    local file="/var/backups/${label}-${base}-${stamp}.tar.gz"
+    info "Backing up ${label} data to $file ..."
+    tar -czf "$file" -C "$(dirname "$src")" "$base" 2>/dev/null \
+        || warn "Backup failed for $src — continuing anyway"
+    step "Backup saved: $file"
+}
+
+# ── TLS ────────────────────────────────────────────────────────────────
 generate_self_signed() {
     info "Generating self-signed certificate..."
     mkdir -p /etc/ssl/self-signed
+    local cn; cn="$(hostname -I 2>/dev/null | awk '{print $1}')"
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout /etc/ssl/self-signed/privkey.pem \
         -out /etc/ssl/self-signed/fullchain.pem \
-        -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=$(hostname -I | awk '{print $1}')" 2>/dev/null
+        -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=${cn}" >/dev/null 2>&1
     TLS_KEY="/etc/ssl/self-signed/privkey.pem"
     TLS_CERT="/etc/ssl/self-signed/fullchain.pem"
     step "Self-signed certificate generated"
 }
 
-get_acme_email() {
-    local email="acme-$(openssl rand -hex 4)@example.com"
-    echo "$email"
-}
-
-install_acme() {
+ensure_acme() {
     if [[ ! -x "$HOME/.acme.sh/acme.sh" ]]; then
         info "Installing acme.sh..."
-        curl -s https://get.acme.sh | sh
+        curl -s https://get.acme.sh | sh >/dev/null 2>&1 || die "Failed to install acme.sh"
     fi
-    source "$HOME/.acme.sh/acme.sh.env"
 }
 
 issue_lets_encrypt() {
     local domain="$1" is_ip="$2"
-    install_acme
-    local email=$(get_acme_email)
+    ensure_acme
+    local email="acme-$(openssl rand -hex 4)@example.com"
     local outdir="/etc/letsencrypt/$domain"
     mkdir -p "$outdir"
 
-    # Check if valid cert already exists
     if [[ -f "$outdir/fullchain.pem" ]]; then
-        local expiry=$(openssl x509 -enddate -noout -in "$outdir/fullchain.pem" 2>/dev/null | cut -d= -f2)
-        local expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null)
-        local now_epoch=$(date +%s)
-        local days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
-        if [[ $days_left -gt 7 ]]; then
-            step "Existing certificate valid for $days_left more days ($outdir)"
+        local expiry days_left=0
+        expiry="$(openssl x509 -enddate -noout -in "$outdir/fullchain.pem" 2>/dev/null | cut -d= -f2)"
+        days_left=$(( ($(date -d "$expiry" +%s 2>/dev/null || echo 0) - $(date +%s)) / 86400 ))
+        if (( days_left > 7 )); then
+            step "Existing certificate valid for ${days_left} more days"
             return 0
         fi
-        warn "Certificate expires in $days_left days — renewing..."
+        warn "Certificate expires soon (${days_left}d) — renewing..."
     fi
 
-    local extra_args=""
+    local extra_args=()
     if [[ "$is_ip" == "1" ]]; then
         info "Issuing short-lived certificate for IP $domain (6 days)..."
-        extra_args="--certificate-profile shortlived --days 6"
+        extra_args=(--certificate-profile shortlived --days 6)
     else
-        info "Issuing certificate for domain $domain..."
+        info "Issuing certificate for $domain..."
     fi
 
-    # Issue cert
-    ~/.acme.sh/acme.sh \
-        --issue -d "$domain" \
-        --standalone \
-        $extra_args \
-        --accountemail "$email" 2>&1 | grep -E "Cert success|Error|error" || die "Failed to issue Let's Encrypt certificate for $domain"
+    "$HOME/.acme.sh/acme.sh" --issue -d "$domain" --standalone "${extra_args[@]}" \
+        --accountemail "$email" >/dev/null 2>&1 \
+        || die "Failed to issue Let's Encrypt certificate for $domain"
 
-    # Install cert to target directory (no-op reload — service not created yet)
-    ~/.acme.sh/acme.sh \
-        --install-cert -d "$domain" \
+    # reloadcmd is set again after the service exists so renewals restart it
+    "$HOME/.acme.sh/acme.sh" --install-cert -d "$domain" \
         --key-file "$outdir/privkey.pem" \
         --fullchain-file "$outdir/fullchain.pem" \
-        --reloadcmd "true" 2>&1 | tail -3 || die "Failed to install certificate to $outdir"
-
+        --reloadcmd "systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || true" >/dev/null 2>&1 \
+        || die "Failed to install certificate to $outdir"
     step "Certificate installed to $outdir"
 }
 
-# ═══════════════════════════════════════
-#  I N S T A L L
-# ═══════════════════════════════════════
-do_install() {
-    [[ -d "$INSTALL_DIR" ]] && die "Already installed. Use --uninstall first."
-    [[ -d "$DATA_DIR" ]] || mkdir -p "$DATA_DIR"
-
-    sep
-    info "Cloning OVManager repository..."
-    if command -v git >/dev/null 2>&1; then
-        git clone --depth 1 --branch main "https://github.com/${REPO}.git" "$INSTALL_DIR" >/dev/null 2>&1 &
-        spinner "Cloning repository" $!
-    else
-        curl -sSLo /tmp/ovm.tar.gz "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" >/dev/null 2>&1 &
-        spinner "Downloading tarball" $!
-        tar -xzf /tmp/ovm.tar.gz -C /opt/ >/dev/null 2>&1
-        mv "/opt/OVManager-main" "$INSTALL_DIR" 2>/dev/null || die "Extract failed"
-        rm -f /tmp/ovm.tar.gz
+# ── Firewall ───────────────────────────────────────────────────────────
+open_firewall_port() {
+    local port="$1"
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        ufw allow "$port/tcp" >/dev/null 2>&1 && step "UFW: allowed port $port/tcp"
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        firewall-cmd --permanent --add-port="$port/tcp" >/dev/null 2>&1 && \
+        firewall-cmd --reload >/dev/null 2>&1 && step "firewalld: allowed port $port/tcp"
     fi
+}
 
-    info "Installing Python packages with uv..."
-    cd "$INSTALL_DIR"
-    uv sync --quiet 2>&1 &
-    spinner "Python packages installed" $!
-
-    info "Writing .env configuration..."
-    local jwt_secret
-    jwt_secret=$(openssl rand -base64 48 2>/dev/null || head -c 48 /dev/urandom | base64)
-    [[ -f "$INSTALL_DIR/.env.example" ]] || die ".env.example not found"
-    sed \
-        -e "s|^HOST=.*|HOST=0.0.0.0|" \
-        -e "s|^URLPATH=.*|URLPATH=${PATHPREFIX}|" \
-        -e "s|^PORT=.*|PORT=${PORT}|" \
-        "$INSTALL_DIR/.env.example" > "$INSTALL_DIR/.env"
-    # Required vars are commented out in .env.example — write them active (leading blank line)
-    printf "\n" >> "$INSTALL_DIR/.env"
-    cat >> "$INSTALL_DIR/.env" << EOF
-ADMIN_USERNAME=${ADMIN_USER}
-ADMIN_PASSWORD=${ADMIN_PASS}
-JWT_SECRET_KEY=${jwt_secret}
-JWT_ACCESS_TOKEN_EXPIRES=1800
-JWT_REFRESH_TOKEN_EXPIRES=604800
-EOF
-    
-    # TLS configuration
-    case "$TLS_MODE" in
-        le)
-            check_port_available 80
-            issue_lets_encrypt "$TLS_DOMAIN" "0"
-            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
-            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
-            ;;
-        le-ip)
-            check_port_available 80
-            issue_lets_encrypt "$TLS_DOMAIN" "1"
-            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
-            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
-            ;;
-        self)
-            generate_self_signed
-            echo "SSL_KEYFILE=\"$TLS_KEY\"" >> "$INSTALL_DIR/.env"
-            echo "SSL_CERTFILE=\"$TLS_CERT\"" >> "$INSTALL_DIR/.env"
-            ;;
-        custom)
-            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Custom cert/key files not found"
-            mkdir -p /etc/letsencrypt/"$TLS_DOMAIN"
-            cp "$TLS_KEY" /etc/letsencrypt/"$TLS_DOMAIN"/privkey.pem
-            cp "$TLS_CERT" /etc/letsencrypt/"$TLS_DOMAIN"/fullchain.pem
-            echo "SSL_KEYFILE=\"/etc/letsencrypt/$TLS_DOMAIN/privkey.pem\"" >> "$INSTALL_DIR/.env"
-            echo "SSL_CERTFILE=\"/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem\"" >> "$INSTALL_DIR/.env"
-            ;;
-        none)
-            # No TLS variables set
-            ;;
-    esac
-
-    if [[ -f "$INSTALL_DIR/frontend/package.json" ]]; then
-        info "Building frontend..."
-        cd "$INSTALL_DIR/frontend"
-        npm ci --silent >/dev/null 2>&1 &
-        spinner "Node.js dependencies installed" $!
-        npm run build --silent >/dev/null 2>&1 &
-        spinner "Frontend built" $!
-    fi
-
-    if [[ $DOCKER_FLAG -eq 1 ]]; then
-        setup_docker
-    else
-        info "Setting up systemd service..."
-        local real_uv; real_uv=$(command -v uv)
-        local start_after="multi-user.target"
-        cat > "/etc/systemd/system/${SYSTEMD_SERVICE}" << SVCEOF
+# ── Systemd ────────────────────────────────────────────────────────────
+write_systemd_unit() {
+    cat > "/etc/systemd/system/$SYSTEMD_SERVICE" << UNIT
 [Unit]
 Description=OVManager OpenVPN Panel
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -412,228 +338,398 @@ User=root
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
-ExecStart=${real_uv} run main.py
+ExecStart=${UV_BIN} run main.py
 Restart=on-failure
 RestartSec=3
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-SVCEOF
-        # Also write env file for systemd
-        echo "DATA_DIR=${DATA_DIR}" >> "$INSTALL_DIR/.env"
-        systemctl daemon-reload >/dev/null 2>&1
-        systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
-        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
-        spinner "Service started" $!
+UNIT
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
+    step "systemd unit written: /etc/systemd/system/$SYSTEMD_SERVICE"
+}
 
-        # Update acme.sh reloadcmd now that service exists
-        if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && [[ -n "$TLS_DOMAIN" ]]; then
-            ~/.acme.sh/acme.sh --install-cert -d "$TLS_DOMAIN" \
-                --key-file "/etc/letsencrypt/$TLS_DOMAIN/privkey.pem" \
-                --fullchain-file "/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem" \
-                --reloadcmd "systemctl restart ovmanager.service" >/dev/null 2>&1
-        fi
+wait_health() {
+    local url="$1" tries="${2:-30}"
+    local i
+    # -k: self-signed certs are fine for a loopback health probe
+    for i in $(seq 1 "$tries"); do
+        curl -fskS -o /dev/null --max-time 3 "$url" 2>/dev/null && return 0
+        sleep 1
+    done
+    return 1
+}
+
+# ── Install ────────────────────────────────────────────────────────────
+write_env() {
+    local jwt_secret bot_key=""
+    jwt_secret="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
+    # Fernet key for Telegram bot token encryption (optional but handy)
+    bot_key="$("$INSTALL_DIR/.venv/bin/python" -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())' 2>/dev/null || true)"
+
+    cat > "$INSTALL_DIR/.env" << EOF
+HOST=0.0.0.0
+PORT=${PORT}
+URLPATH=${PATHPREFIX}
+ADMIN_USERNAME=${ADMIN_USER}
+ADMIN_PASSWORD=${ADMIN_PASS}
+JWT_SECRET_KEY=${jwt_secret}
+JWT_ACCESS_TOKEN_EXPIRES=1800
+JWT_REFRESH_TOKEN_EXPIRES=604800
+DATA_DIR=${DATA_DIR}
+$( [[ -n "$PUBLIC_URL" ]] && echo "PUBLIC_URL=${PUBLIC_URL}" )
+$( [[ -n "$bot_key" ]] && echo "BOT_ENCRYPT_KEY=${bot_key}" )
+$( [[ -n "$TLS_KEY" ]] && echo "SSL_KEYFILE=${TLS_KEY}" )
+$( [[ -n "$TLS_CERT" ]] && echo "SSL_CERTFILE=${TLS_CERT}" )
+EOF
+    chmod 600 "$INSTALL_DIR/.env"
+    step "Configuration written to $INSTALL_DIR/.env"
+}
+
+setup_tls() {
+    case "$TLS_MODE" in
+        le)
+            port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it"
+            issue_lets_encrypt "$TLS_DOMAIN" "0"
+            TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
+            TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
+            ;;
+        le-ip)
+            port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it"
+            TLS_DOMAIN="${TLS_DOMAIN:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+            issue_lets_encrypt "$TLS_DOMAIN" "1"
+            TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
+            TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
+            ;;
+        self)
+            generate_self_signed
+            ;;
+        custom)
+            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Custom key/cert files not found: $TLS_KEY $TLS_CERT"
+            local out="/etc/letsencrypt/${TLS_DOMAIN:-panel}"
+            mkdir -p "$out"
+            cp "$TLS_KEY" "$out/privkey.pem"
+            cp "$TLS_CERT" "$out/fullchain.pem"
+            TLS_KEY="$out/privkey.pem"; TLS_CERT="$out/fullchain.pem"
+            ;;
+        none) ;;
+    esac
+}
+
+fetch_source() {
+    if command -v git >/dev/null 2>&1; then
+        git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$INSTALL_DIR" >/dev/null 2>&1 &
+        spinner "Cloning repository" $!
+    else
+        curl -sSLo /tmp/ovm.tar.gz "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz" &
+        spinner "Downloading source tarball" $!
+        mkdir -p "$INSTALL_DIR"
+        tar -xzf /tmp/ovm.tar.gz --strip-components=1 -C "$INSTALL_DIR" >/dev/null 2>&1 \
+            || die "Extract failed"
+        rm -f /tmp/ovm.tar.gz
     fi
+}
 
-    sep
-    line ""
+build_frontend() {
+    [[ -f "$INSTALL_DIR/frontend/package.json" ]] || return 0
+    info "Building frontend..."
+    cd "$INSTALL_DIR/frontend"
+    npm ci --no-audit --no-fund >/dev/null 2>&1 &
+    spinner "Node.js dependencies installed" $!
+    npm run build >/dev/null 2>&1 &
+    spinner "Frontend built" $!
+}
+
+start_service() {
+    systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
+    spinner "Service started" $!
+}
+
+do_install() {
+    if [[ -d "$INSTALL_DIR" ]]; then die "Already installed ($INSTALL_DIR exists). Use 'uninstall' first."; fi
+    mkdir -p "$DATA_DIR"
+
+    sep; info "Downloading OVManager ($BRANCH)..."
+    fetch_source
+
+    info "Installing Python dependencies (uv sync)..."
+    cd "$INSTALL_DIR"
+    "$UV_BIN" sync --quiet 2>&1 &
+    spinner "Python packages installed" $!
+
+    setup_tls
+    write_env
+
+    build_frontend
+
+    local scheme="http"
+    if [[ "$TLS_MODE" != "none" ]]; then scheme="https"; fi
+
+    if [[ "$DOCKER_FLAG" -eq 1 ]]; then
+        setup_docker
+    else
+        if ! has_systemd; then
+            die "systemd not found — native install requires systemd (use --docker instead)"
+        fi
+        write_systemd_unit
+        start_service
+    fi
+    wait_health "${scheme}://127.0.0.1:${PORT}/health" 30 \
+        || warn "Panel did not answer /health yet — check: journalctl -u $SYSTEMD_SERVICE -n 50"
+
+    # The app only seeds URLPATH (and other first-boot state) into the DB on
+    # its second start; restart once more so the configured prefix is live
+    # before we hand over the panel to the user.
+    info "Finalizing first-boot configuration..."
+    if [[ "$DOCKER_FLAG" -eq 1 ]]; then
+        docker restart ovmanager >/dev/null 2>&1 || true
+    else
+        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+    fi
+    wait_health "${scheme}://127.0.0.1:${PORT}/health" 30 \
+        || warn "Panel did not answer /health after finalize — check: journalctl -u $SYSTEMD_SERVICE -n 50"
+    open_firewall_port "$PORT"
+
+    local host; host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    local access="${scheme}://${host}:${PORT}/"
+    if [[ -n "$PATHPREFIX" ]]; then access="${scheme}://${host}:${PORT}/${PATHPREFIX}/"; fi
+
+    sep; line ""
     step "${B}Installation complete!${NC}"
     line ""
-    if [[ "$TLS_MODE" != "none" ]]; then
-        if [[ -n "$PATHPREFIX" ]]; then
-            line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
-        else
-            line "  ${WH}Access:${NC}  https://$(hostname -I | awk '{print $1}'):${PORT}/"
-        fi
-    else
-        if [[ -n "$PATHPREFIX" ]]; then
-            line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/${PATHPREFIX}/"
-        else
-            line "  ${WH}Access:${NC}  http://$(hostname -I | awk '{print $1}'):${PORT}/"
-        fi
-    fi
-    line "  ${WH}Login:${NC}   ${GR}${ADMIN_USER}${NC} / password supplied during installation"
+    field "Access"   "${WH}${access}${NC}"
+    field "Login"    "${GR}${ADMIN_USER}${NC} / (password you supplied)"
+    if [[ -n "$PATHPREFIX" ]]; then field "URL path" "/${PATHPREFIX}/"; fi
     line ""
-    line "  ${GY}Manage:${NC}  systemctl status ${SYSTEMD_SERVICE}"
-    line "  ${GY}Logs:${NC}    journalctl -u ${SYSTEMD_SERVICE} -f"
+    field "Manage"   "systemctl status ${SYSTEMD_SERVICE}"
+    field "Logs"     "journalctl -u ${SYSTEMD_SERVICE} -f"
+    field "Data"     "$DATA_DIR"
+    line ""
+    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]]; then
+        line "  ${GY}Note:${NC} certificates auto-renew via acme.sh (reloads the service)."
+    fi
+    line ""
+    info "Next: install an OVNode agent (its installer prints an API key),"
+    info "then add it in the panel under Nodes → Add Node."
     line ""
 }
 
-# ═══════════════════════════════════════
-#  D O C K E R
-# ═══════════════════════════════════════
+# ── Docker ─────────────────────────────────────────────────────────────
 setup_docker() {
-    info "Docker mode: setting up docker-compose..."
-    local data_dir_abs=$(cd "$DATA_DIR" && pwd)
-    local jwt_secret; jwt_secret=$(openssl rand -base64 48 2>/dev/null)
-    
-    cat > "$INSTALL_DIR/docker-compose.yml" << EOF
-# version removed (deprecated)
+    if ! command -v docker >/dev/null 2>&1; then
+        info "Installing Docker Engine..."
+        if [[ "$PKG_INSTALL" == apt* ]]; then
+            $PKG_UPDATE >/dev/null 2>&1 || true
+            $PKG_INSTALL docker.io >/dev/null 2>&1 \
+                || $PKG_INSTALL docker-ce >/dev/null 2>&1 \
+                || die "Could not install Docker via apt. Install manually: https://docs.docker.com/engine/install/"
+        else
+            pkg_install docker docker-compose-plugin >/dev/null 2>&1 || pkg_install docker
+        fi
+        command -v docker >/dev/null 2>&1 || die "Docker binary not found — install Docker Engine manually"
+    fi
+    command -v docker compose >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1 \
+        || die "Docker Compose v2 is required (docker compose plugin)"
+
+    mkdir -p "$DATA_DIR"
+    local compose="$DATA_DIR/ovmanager-compose.yml"
+    cat > "$compose" << COMPOSE
 services:
   ovmanager:
-    image: ghcr.io/anonysec/ovmanager:latest
+    build:
+      context: ${INSTALL_DIR}
+      dockerfile: Dockerfile
     container_name: ovmanager
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
-    environment:
-      - ADMIN_USERNAME=${ADMIN_USER}
-      - ADMIN_PASSWORD=${ADMIN_PASS}
-      - PORT=${PORT}
-      - URLPATH=${PATHPREFIX}
-      - JWT_SECRET_KEY=${jwt_secret}
-      - DATA_DIR=/app/data
-$( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
-$( [[ "$TLS_MODE" == "self" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
-$( [[ "$TLS_MODE" == "custom" ]] && echo "      - SSL_KEYFILE=/app/certs/privkey.pem" && echo "      - SSL_CERTFILE=/app/certs/fullchain.pem" )
+    env_file:
+      - ${INSTALL_DIR}/.env
     volumes:
-      - ${data_dir_abs}:/app/data
-$( [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && echo "      - /etc/letsencrypt/${TLS_DOMAIN}:/app/certs:ro")
-$( [[ "$TLS_MODE" == "self" ]] && echo "      - /etc/ssl/self-signed:/app/certs:ro")
-$( [[ "$TLS_MODE" == "custom" ]] && echo "      - /etc/letsencrypt/${TLS_DOMAIN}:/app/certs:ro")
-    networks:
-      - ovmanager-net
-  db:
-    image: postgres:15
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ovmanager
-      POSTGRES_USER: ovmanager
-      POSTGRES_PASSWORD: ovmanager
-    networks:
-      - ovmanager-net
-    volumes:
-      - db_data:/var/lib/postgresql/data
-networks:
-  ovmanager-net:
-    driver: bridge
-volumes:
-  db_data:
-EOF
-    cd "$INSTALL_DIR"
-    docker compose up -d 2>/dev/null &
-    spinner "Docker containers started" $!
+      - ${DATA_DIR}:/app/data
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /etc/ssl/self-signed:/etc/ssl/self-signed:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+COMPOSE
+
+    info "Building and starting Docker containers (first build takes a while)..."
+    ( cd "$INSTALL_DIR" && docker compose -f "$compose" up -d --build ) >/dev/null 2>&1 &
+    spinner "Docker stack started" $!
+    wait_health "http://127.0.0.1:${PORT}/health" 60 \
+        || warn "Panel did not answer /health — check: docker logs ovmanager"
 }
 
-# ═══════════════════════════════════════
-#  U P D A T E
-# ═══════════════════════════════════════
+# ── Update ─────────────────────────────────────────────────────────────
 do_update() {
-    [[ ! -d "$INSTALL_DIR" ]] && die "Not installed"
-    line ""
-    info "Updating OVManager..."
-    cd "$INSTALL_DIR"
-    git pull origin main 2>&1 &
-    spinner "Pulling latest changes" $!
-    uv sync --quiet 2>&1 &
-    spinner "Updating Python dependencies" $!
-    if [[ -f "frontend/package.json" ]]; then
-        cd frontend
-        npm ci --silent >/dev/null 2>&1 &
-        spinner "Updating Node.js dependencies" $!
-        npm run build --silent >/dev/null 2>&1 &
-        spinner "Rebuilding frontend" $!
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    line ""; info "Updating OVManager..."
+    # Auto-detect the deployment mode: a compose file in the data dir means
+    # this install was done with --docker, even when `update` is called
+    # without the flag (previously the systemd branch ran and reported
+    # success while the stale container kept serving).
+    if [[ -f "$DATA_DIR/ovmanager-compose.yml" ]]; then
+        DOCKER_FLAG=1
+        info "Detected Docker deployment (compose file present)"
     fi
-    systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 &
-    spinner "Service restarted" $!
+    ensure_uv
+    [[ "$DOCKER_FLAG" -eq 1 ]] || ensure_node
+    backup_dir "$DATA_DIR" "panel"
+
+    cd "$INSTALL_DIR"
+    if [[ -d .git ]]; then
+        git stash --quiet 2>/dev/null || true
+        git pull --rebase origin "$BRANCH" 2>&1 &
+        spinner "Pulling latest changes" $!
+        git stash pop --quiet 2>/dev/null || true
+    else
+        warn "No git checkout — re-downloading source over existing install (data/.env preserved)"
+        curl -sSLo /tmp/ovm.tar.gz "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz" &
+        spinner "Downloading source" $!
+        tar -xzf /tmp/ovm.tar.gz --strip-components=1 -C "$INSTALL_DIR" >/dev/null 2>&1 || die "Extract failed"
+        rm -f /tmp/ovm.tar.gz
+    fi
+
+    "$UV_BIN" sync --quiet 2>&1 &
+    spinner "Updating Python dependencies" $!
+    build_frontend
+
+    local scheme="http"
+    if [[ "$TLS_MODE" != "none" ]]; then scheme="https"; fi
+    if [[ "$DOCKER_FLAG" -eq 1 ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$DATA_DIR/ovmanager-compose.yml" up -d --build ) >/dev/null 2>&1 &
+        spinner "Recreating Docker stack" $!
+    else
+        start_service
+    fi
+    wait_health "${scheme}://127.0.0.1:${PORT}/health" 60 \
+        || warn "Panel did not answer /health — check: journalctl -u $SYSTEMD_SERVICE -n 50"
     step "Update complete"
     line ""
 }
 
-# ═══════════════════════════════════════
-#  U N I N S T A L L
-# ═══════════════════════════════════════
+# ── Uninstall ──────────────────────────────────────────────────────────
 do_uninstall() {
-    if [[ -t 0 ]]; then
-        printf "  Remove OVManager and stop service? [y/N] : "; read -r c
-        [[ ! "$c" =~ ^[Yy]$ ]] && die "Cancelled."
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    confirm "Remove OVManager and stop the service?" || die "Cancelled."
+
+    systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null || true
+    systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
+    rm -f "/etc/systemd/system/$SYSTEMD_SERVICE"
+    systemctl daemon-reload 2>/dev/null || true
+
+    if command -v docker >/dev/null 2>&1 && [[ -f "$DATA_DIR/ovmanager-compose.yml" ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$DATA_DIR/ovmanager-compose.yml" down ) >/dev/null 2>&1 || true
+        docker rm -f ovmanager >/dev/null 2>&1 || true
     fi
-    systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null
-    systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null
-    rm -f "/etc/systemd/system/${SYSTEMD_SERVICE}"
-    systemctl daemon-reload 2>/dev/null
+
     rm -rf "$INSTALL_DIR"
-    rm -rf "$DATA_DIR"
-    step "Uninstalled"
+    if [[ "$PURGE" -eq 1 ]]; then
+        backup_dir "$DATA_DIR" "panel-pre-purge"
+        rm -rf "$DATA_DIR"
+        step "Data directory removed"
+    else
+        step "App removed. Data kept at $DATA_DIR (use --purge to remove it too)"
+    fi
+    step "OVManager uninstalled"
     line ""
 }
 
-# ═══════════════════════════════════════
-#  M A I N
-# ═══════════════════════════════════════
+# ── Interactive setup ──────────────────────────────────────────────────
+interactive_setup() {
+    PORT="$(ask "Port" "$DEFAULT_PORT")"
+    PATHPREFIX="$(ask "URL path (empty=root)" "$DEFAULT_PATH")"
+    ADMIN_USER="$(ask "Admin user" "$DEFAULT_USER")"
+    ADMIN_PASS="$(ask "Admin pass" "" "h")"
+    [[ -n "$ADMIN_PASS" ]] || die "Admin password cannot be empty"
+
+    sep; line "  TLS:"
+    line "  ${WH}1${NC})  Let's Encrypt (domain)      ${WH}2${NC})  Let's Encrypt (IP)"
+    line "  ${WH}3${NC})  Self-signed                 ${WH}4${NC})  Custom cert path"
+    line "  ${WH}5${NC})  None (HTTP)"
+    local tls_choice
+    tls_choice="$(ask "TLS mode" "5")"
+    case "${tls_choice:-5}" in
+        1) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "")"; [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
+        2) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
+        3) TLS_MODE="self" ;;
+        4) TLS_MODE="custom"; TLS_KEY="$(ask "Key file" "")"; TLS_CERT="$(ask "Cert file" "")" ;;
+        *) TLS_MODE="none" ;;
+    esac
+}
+
+# ── Main ───────────────────────────────────────────────────────────────
 main() {
     parse_args "$@"
-    clear
-
+    command clear >/dev/null 2>&1 || true
     line ""
     line "  ${B}OVManager${NC} — OpenVPN Panel Installer ${GY}v${VERSION}${NC}"
-    sep
-    line ""
+    sep; line ""
 
     case "$ACTION" in
-        uninstall)
-            do_uninstall; exit 0 ;;
-        update)
-            do_update; exit 0 ;;
+        uninstall) do_uninstall; exit 0 ;;
+        update)    [[ "$YES" -eq 1 ]] || confirm "Update OVManager now?" || exit 0; do_update; exit 0 ;;
     esac
 
     if [[ -d "$INSTALL_DIR" ]]; then
         warn "OVManager is already installed"
-        line ""
-        cd "$INSTALL_DIR" 2>/dev/null
-        git fetch origin main --quiet 2>/dev/null
-        local LOCAL=$(git rev-parse HEAD 2>/dev/null)
-        local REMOTE=$(git rev-parse origin/main 2>/dev/null)
-        local HAS_UPDATE=0
-        [[ "$LOCAL" != "$REMOTE" ]] && HAS_UPDATE=1
-
-        if [[ -t 0 ]]; then
-            if [[ $HAS_UPDATE -eq 1 ]]; then
-                line "  ${GR}1${NC})  Update to latest version"
-            fi
-            line "  ${RD}2${NC})  Reinstall (remove and install fresh)"
+        if is_tty; then
+            line ""
+            line "  ${GR}1${NC})  Update to latest version"
+            line "  ${YL}2${NC})  Uninstall"
             line "  ${GY}3${NC})  Quit"
             line ""
-            printf "  Select [${GR}1${NC}] : "
-            read -r choice
-            if [[ $HAS_UPDATE -eq 1 ]]; then
-                case "${choice:-1}" in
-                    1|"") do_update; exit 0 ;;
-                    2)    do_uninstall; do_install ;;
-                    *)    line ""; exit 0 ;;
-                esac
-            else
-                case "${choice:-2}" in
-                    2)    do_uninstall; do_install ;;
-                    *)    line ""; exit 0 ;;
-                esac
-            fi
+            local choice; choice="$(ask "Select" "1")"
+            case "${choice:-1}" in
+                1) do_update ;;
+                2) do_uninstall ;;
+                *) exit 0 ;;
+            esac
         else
-            [[ $HAS_UPDATE -eq 1 ]] && { info "New version available, updating..."; do_update; exit 0; }
-            info "Already up to date."
-            exit 0
+            info "Already installed — run with 'update' to refresh it."
         fi
+        exit 0
     fi
 
-    if [[ -z "$PORT" && -z "$ADMIN_USER" ]]; then
+    detect_os
+    if [[ "$YES" -eq 0 && ( -z "$PORT" || -z "$ADMIN_USER" ) ]]; then
         interactive_setup
     else
         : "${PORT:=$DEFAULT_PORT}"
         : "${PATHPREFIX:=$DEFAULT_PATH}"
         : "${ADMIN_USER:=$DEFAULT_USER}"
-        [[ -n "$ADMIN_PASS" ]] || die "--admin-pass is required for noninteractive installation."
-        field "Port"       "$PORT"
-        field "URL path"   "/${PATHPREFIX}/"
-        field "Admin user" "$ADMIN_USER"
-        field "Install dir" "$INSTALL_DIR"
-        field "Data dir"    "$DATA_DIR"
-        field "Install mode" "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
-        sep
+        : "${TLS_MODE:=none}"
     fi
+    validate_input
+
+    field "OS"        "$OS_NAME"
+    field "Mode"      "$([ $DOCKER_FLAG -eq 1 ] && echo Docker || echo Native)"
+    field "Port"      "$PORT"
+    if [[ -n "$PATHPREFIX" ]]; then field "URL path" "/${PATHPREFIX}/"; fi
+    field "Admin"     "$ADMIN_USER"
+    field "TLS"       "$TLS_MODE"
+    field "Install"   "$INSTALL_DIR"
+    field "Data"      "$DATA_DIR"
+    if [[ "$TLS_MODE" == "none" ]]; then
+        warn "TLS is DISABLED — the panel (and admin password) will travel in plaintext."
+        warn "For internet exposure use --tls-le/--tls-ip/--tls-self; for LAN-only use a private network."
+    fi
+    sep
+    confirm "Proceed with installation?" || die "Cancelled."
 
     check_root
     check_deps
+    ensure_uv
+    [[ "$DOCKER_FLAG" -eq 1 ]] || ensure_node
     do_install
 }
+
+check_root() { if [[ "$EUID" -ne 0 ]]; then die "Must run as root."; fi; }
 
 main "$@"

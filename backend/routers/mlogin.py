@@ -10,17 +10,17 @@ import fcntl
 import hmac
 import os
 import time
+from collections.abc import Iterable
 from contextlib import contextmanager
-from typing import Iterable
 
 import requests
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.db.engine import get_db
 from backend.data_paths import DATA_DIR as DATA_ROOT
+from backend.db.engine import get_db
 from backend.db.models import Node, User
 from backend.logger import logger
 from backend.schema.output import ResponseModel
@@ -172,14 +172,12 @@ async def global_mlogin_status(
     1. OVNode hook: authenticates with X-Node-Name + key headers.
     2. Panel UI (owner only): authenticates with Bearer JWT in Authorization header.
     """
-    from fastapi import Request as _Request
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         # Panel-user path: validate JWT and require owner role
-        from backend.auth.auth import get_current_user, oauth2_scheme
-        from backend.db.engine import get_db as _get_db
         try:
             from jose import jwt as _jwt
+
             from backend.config import config as _cfg
             token = auth_header[7:]
             payload = _jwt.decode(token, _cfg.JWT_SECRET_KEY, algorithms=["HS256"])
@@ -188,7 +186,7 @@ async def global_mlogin_status(
         except Exception as exc:
             if isinstance(exc, HTTPException):
                 raise
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(status_code=401, detail="Invalid token") from None
     else:
         # OVNode hook path: authenticate by node name + API key
         _authorize_node(db, x_node_name, key)

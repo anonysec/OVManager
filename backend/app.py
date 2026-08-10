@@ -1,35 +1,58 @@
+import mimetypes
 import os
-
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from backend.operations.daily_checks import enforce_user_limits, check_user_used_traffic
-from backend.operations.metrics import collect_metrics
-from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
-from backend.db.engine import SessionLocal
-from backend.db.exceptions import NotFoundError, ConflictError
 from backend.config import config
+from backend.db.engine import SessionLocal
+from backend.db.exceptions import ConflictError, NotFoundError
+from backend.logger import logger
+from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
+from backend.operations.daily_checks import check_user_used_traffic, enforce_user_limits
+from backend.operations.metrics import collect_metrics
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
-from backend.version import __version__
 from backend.tls_config import TLSConfig
-from backend.urlpath import URLPathMiddleware, get_urlpath as _get_urlpath
-from backend.logger import logger
+from backend.urlpath import URLPathMiddleware
+from backend.urlpath import get_urlpath as _get_urlpath
+from backend.version import __version__
 
 _scheduler = None
 _bot_process = None
 
 
 # ── Security Headers Middleware ───────────────────────────────────
+# CSP: strict-by-default. The SPA loads only same-origin scripts/styles;
+# images may come from data: URIs (QR codes, inline flag SVGs). The panel and
+# the subscription page load Google Fonts (Manrope/Space Grotesk) and the
+# subscription page uses a jsdelivr-hosted Arad font, so those two origins are
+# explicitly allowed for fonts + the Google Fonts stylesheet. Inline styles
+# are needed for React style props. No inline <script> is used anywhere (the
+# subscription page's script was extracted to /sub/static/subscription.js) —
+# `'unsafe-inline'` for script-src is intentionally NOT granted.
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "img-src 'self' data:; "
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -44,6 +67,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Content-Security-Policy"] = CSP_POLICY
         return response
 
 
@@ -80,6 +104,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
 def _run_migrations():
     from sqlalchemy import text as _text
+
     from backend.db.engine import Base
 
     db = SessionLocal()
@@ -132,8 +157,8 @@ async def lifespan(app: FastAPI):
     """Manage application startup and shutdown via the modern lifespan API."""
     # ── Startup ──────────────────────────────────────────────────────
     _run_migrations()
-    from backend.operations.audit import ensure_audit_table
     from backend.db.engine import SessionLocal as _SL
+    from backend.operations.audit import ensure_audit_table
     _db = _SL()
     try:
         ensure_audit_table(_db)
@@ -207,8 +232,6 @@ async def health_check():
 frontend_build_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 assets_path = os.path.join(frontend_build_path, "assets")
 
-# Fix MIME types for starlette 0.48.0
-import mimetypes
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("application/wasm", ".wasm")
@@ -338,34 +361,27 @@ api.include_router(subscription_router)
 
 
 # ── SPA catch-all (serve React index.html for unknown paths) ──────
-# Inject URLPATH into the HTML so the frontend knows its base path
-# when served from a sub-path (e.g. /dashboard/). This replaces the
-# broken window.__OV_URLPATH__ approach which relied on a template
-# that doesn't exist for static files.
-def _inject_urlpath(html: str, urlpath: str) -> str:
-    if not urlpath:
-        return html
-    marker = "<div id=\"root\"></div>"
-    injection = f'<script>window.__OV_URLPATH__="{urlpath}";</script>'
-    return html.replace(marker, marker + injection)
-
-
+# The frontend is fully prefix-agnostic: it reads its base path from a
+# <base href> tag, so we inject the CURRENT urlpath here on every request
+# (a runtime prefix change is reflected on the next page load). The response
+# is never cached — otherwise a browser/proxy could keep serving a stale
+# <base href> and break API calls.
 async def _serve_react() -> FileResponse | JSONResponse:
     from fastapi.responses import HTMLResponse
     index_path = os.path.join(frontend_build_path, "index.html")
     if not os.path.isfile(index_path):
         return JSONResponse({"detail": "Frontend not built"}, status_code=404)
+    with open(index_path, encoding="utf-8") as f:
+        html = f.read()
     urlpath = _get_urlpath()
-    if urlpath:
-        # Inject URLPATH into the HTML so the frontend knows its base path
-        with open(index_path, "r", encoding="utf-8") as f:
-            html = f.read()
-        marker = '<div id="root"></div>'
-        injection = f'<script>window.__OV_URLPATH__="{urlpath}";</script>'
-        html = html.replace(marker, marker + injection)
-        return HTMLResponse(content=html)
-    return FileResponse(
-        index_path,
+    # <base href="/dashboard/"> under a prefix, <base href="/"> at root.
+    # It must be the first element in <head> so all relative URLs resolve
+    # against it (script/asset tags are absolute and unaffected).
+    base_href = f"/{urlpath}/" if urlpath else "/"
+    if "<base " not in html:
+        html = html.replace("<head>", f"<head>\n    <base href=\"{base_href}\" />", 1)
+    return HTMLResponse(
+        content=html,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
 

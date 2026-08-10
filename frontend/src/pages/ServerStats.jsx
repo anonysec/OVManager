@@ -8,6 +8,10 @@ import apiClient from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiCheckCircle, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { getPanelBase } from '../utils/panelUrl';
+import { useCountUp } from '../hooks/useCountUp';
+import { usePullRefresh } from '../hooks/usePullRefresh';
+import { FiPlus, FiDownloadCloud, FiLink } from 'react-icons/fi';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
 
 const formatBytes = (bytes) => {
@@ -109,13 +113,22 @@ const Skeleton = ({ lines = 3 }) => (
   <PanelSkeleton lines={lines} label="Loading" />
 );
 
-const StatCell = ({ label, value, tip, tone, spark }) => (
-  <div className="ops-stat-cell has-tip" data-tip={tip || ''} role="group" aria-label={label}>
-    <span>{label}</span>
-    <strong className={tone === 'danger' ? 'tone-danger' : tone === 'warn' ? 'tone-warn' : tone === 'ok' ? 'tone-ok' : ''}>{value}</strong>
-    {spark && spark.length > 1 && <MiniLine values={spark} />}
-  </div>
-);
+const StatCell = ({ label, value, tip, tone, spark, animate, format }) => {
+  const raw = animate && format ? animate : null;
+  const anim = useCountUp(raw || 0);
+  const display = animate
+    ? format
+      ? format(anim)
+      : Math.round(anim).toLocaleString()
+    : value;
+  return (
+    <div className="ops-stat-cell has-tip" data-tip={tip || ''} role="group" aria-label={label}>
+      <span>{label}</span>
+      <strong className={`${tone === 'danger' ? 'tone-danger' : tone === 'warn' ? 'tone-warn' : tone === 'ok' ? 'tone-ok' : ''} count-up-num`}>{display}</strong>
+      {spark && spark.length > 1 && <MiniLine values={spark} />}
+    </div>
+  );
+};
 
 const MiniLine = ({ values = [] }) => {
   if (!values.length) return <div className="mini-line empty" />;
@@ -130,9 +143,11 @@ const MiniLine = ({ values = [] }) => {
 
 const WorldMap = ({ nodes, nodeStatus }) => {
   const { t } = useTranslation();
-  // Equirectangular, full world framed inside the viewBox (no top/bottom clipping)
-  const projection = geoEquirectangular().scale(106).translate([334, 167]);
-  const pathGen = geoPath(projection);
+  // Equirectangular, full world framed inside the viewBox (no top/bottom clipping).
+  // Memoized: it only depends on constants, so markers re-project only when
+  // nodes/nodeStatus actually change — not on every hover/tooltip re-render.
+  const projection = useMemo(() => geoEquirectangular().scale(106).translate([334, 167]), []);
+  const pathGen = useMemo(() => geoPath(projection), [projection]);
   const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
   const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
   const [hoverCountry, setHoverCountry] = useState(null);
@@ -140,7 +155,6 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   const [tooltip, setTooltip] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const viewportRef = useRef(null);
-  const dragRef = useRef(null);
   const clamp = (z) => Math.max(1, Math.min(4, z));
 
   const markers = useMemo(() => nodes
@@ -163,41 +177,53 @@ const WorldMap = ({ nodes, nodeStatus }) => {
     return { countries: countries.size, online, total: markers.length, avgLatency: avg };
   }, [markers]);
 
-  // Drag-to-pan: the viewport is scrollable when zoomed in.
+  // Drag-to-pan: the viewport is scrollable when zoomed in. Dragging state is
+  // a useState (not a ref) so the cursor style updates on the same render.
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef(null);
   const onPointerDown = (e) => {
-    dragRef.current = { x: e.clientX, y: e.clientY, sl: viewportRef.current?.scrollLeft || 0, st: viewportRef.current?.scrollTop || 0 };
+    dragStartRef.current = { x: e.clientX, y: e.clientY, sl: viewportRef.current?.scrollLeft || 0, st: viewportRef.current?.scrollTop || 0 };
+    setDragging(true);
   };
   const onPointerMove = (e) => {
     const vp = viewportRef.current;
-    if (!vp || !dragRef.current) return;
-    if (Math.abs(e.clientX - dragRef.current.x) + Math.abs(e.clientY - dragRef.current.y) < 3) return;
-    vp.scrollLeft = dragRef.current.sl - (e.clientX - dragRef.current.x);
-    vp.scrollTop = dragRef.current.st - (e.clientY - dragRef.current.y);
+    const start = dragStartRef.current;
+    if (!vp || !start) return;
+    if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 3) return;
+    vp.scrollLeft = start.sl - (e.clientX - start.x);
+    vp.scrollTop = start.st - (e.clientY - start.y);
     e.preventDefault();
   };
-  const stopDrag = () => { dragRef.current = null; };
+  const stopDrag = () => { dragStartRef.current = null; setDragging(false); };
 
-  // Wheel zoom around the cursor (Ctrl+scroll or plain scroll on the map).
-  const onWheel = (e) => {
-    e.preventDefault();
+  // Wheel zoom around the cursor. React attaches `wheel` as a passive listener
+  // at the root (so preventDefault() is ignored), therefore we bind a native
+  // listener with { passive: false } to stop the page from scrolling while the
+  // map zooms.
+  useEffect(() => {
     const vp = viewportRef.current;
     if (!vp) return;
-    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const next = clamp(zoom * factor);
-    if (next === zoom) return;
-    // Keep the point under the cursor fixed while scaling the canvas.
-    const rect = vp.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const ratio = next / zoom;
-    const newScrollLeft = (vp.scrollLeft + px) * ratio - px;
-    const newScrollTop = (vp.scrollTop + py) * ratio - py;
-    setZoom(next);
-    requestAnimationFrame(() => {
-      vp.scrollLeft = newScrollLeft;
-      vp.scrollTop = newScrollTop;
-    });
-  };
+    const onWheel = (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const next = clamp(zoom * factor);
+      if (next === zoom) return;
+      // Keep the point under the cursor fixed while scaling the canvas.
+      const rect = vp.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const ratio = next / zoom;
+      const newScrollLeft = (vp.scrollLeft + px) * ratio - px;
+      const newScrollTop = (vp.scrollTop + py) * ratio - py;
+      setZoom(next);
+      requestAnimationFrame(() => {
+        vp.scrollLeft = newScrollLeft;
+        vp.scrollTop = newScrollTop;
+      });
+    };
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    return () => vp.removeEventListener('wheel', onWheel);
+  }, [zoom]);
 
   const handleNodeHover = (mk, e) => {
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -211,8 +237,7 @@ const WorldMap = ({ nodes, nodeStatus }) => {
   };
 
   const navToNode = (id) => {
-    const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : '';
-    window.location.assign(`${base}/nodes?node=${id}`);
+    window.location.assign(`${getPanelBase()}/nodes?node=${id}`);
   };
 
   return (
@@ -255,12 +280,11 @@ const WorldMap = ({ nodes, nodeStatus }) => {
         <div
           className="map-zoom-viewport"
           ref={viewportRef}
-          style={{ overflow: zoom > 1 ? 'auto' : 'hidden', cursor: dragRef.current ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
+          style={{ overflow: zoom > 1 ? 'auto' : 'hidden', cursor: dragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={stopDrag}
           onPointerLeave={stopDrag}
-          onWheel={onWheel}
         >
           <div className="map-zoom-canvas" style={{ width: `${100 * zoom}%`, minWidth: '100%' }}>
             <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
@@ -334,7 +358,7 @@ const WorldMap = ({ nodes, nodeStatus }) => {
               <span>{t('th_cpu', 'CPU')}<b>{Number.isFinite(Number(activeNode.st?.node_info?.cpu_usage)) ? `${Number(activeNode.st?.node_info?.cpu_usage).toFixed(0)}%` : '—'}</b></span>
               <span>{t('avgLatency', 'Latency')}<b>{Number.isFinite(Number(activeNode.st?.latency_ms)) ? `${Math.round(Number(activeNode.st?.latency_ms))}ms` : '—'}</b></span>
             </div>
-            <div className="atlas-tooltip-hint">{t('mapClickManage', 'Click to manage node')}</div>
+            <div className="atlas-tooltip-hint">{t('clickToManageNode', 'Click to manage node')}</div>
           </div>
         )}
       </div>
@@ -356,7 +380,7 @@ const SecurityScoreRing = ({ score }) => {
   );
 };
 
-const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
+const deriveNotifications = ({ users, nodes, nodeStatus, security, t }) => {
   const out = [];
   (nodes || []).forEach((n) => {
     if (!n.status) return; // DB-inactive nodes aren't "down"
@@ -365,24 +389,98 @@ const deriveNotifications = ({ users, nodes, nodeStatus, security }) => {
       ? st.reachable
       : st.session_diagnostics !== undefined && st.node_info !== undefined;
     if (!reachable) {
-      out.push({ id: `node-${n.id}`, level: 'danger', title: `Node ${n.name} unreachable`, detail: 'No API response from OVNode', action: null });
+      out.push({ id: `node-${n.id}`, level: 'danger', title: t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: n.name }), detail: t('notifNodeUnreachableDetail', 'No API response from OVNode'), action: null });
     }
   });
   (users || []).forEach((u) => {
     if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
-      out.push({ id: `full-${u.uuid}`, level: 'warning', title: `User ${u.name} at max logins`, detail: `${u.active_connections}/${u.max_logins} sessions`, action: null });
+      out.push({ id: `full-${u.uuid}`, level: 'warning', title: t('notifUserAtMax', 'User {{name}} at max logins', { name: u.name }), detail: t('notifUserAtMaxDetail', '{{active}}/{{max}} sessions', { active: u.active_connections, max: u.max_logins }), action: null });
     }
   });
   const sec = security || {};
-  if (Number(sec.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: `${sec.auth_errors} auth errors (8h)`, detail: 'Failed authentications across nodes', action: null });
-  if (Number(sec.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: `${sec.rejects} connection rejects (8h)`, detail: 'OVNode connection rejects', action: null });
-  if (Number(sec.stale_markers || 0) > 0) out.push({ id: 'stale', level: 'warning', title: `${sec.stale_markers} stale session markers`, detail: 'Review stale sessions in Security settings', action: null });
+  if (Number(sec.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: sec.auth_errors }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null });
+  if (Number(sec.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: sec.rejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null });
+  if (Number(sec.stale_markers || 0) > 0) out.push({ id: 'stale', level: 'warning', title: t('notifStale', '{{count}} stale session markers', { count: sec.stale_markers }), detail: t('notifStaleDetail', 'Review stale sessions in Security settings'), action: null });
   // Respect the "Alerts & Dashboard" preferences from Settings.
   const prefs = readPrefs();
   return out.filter((n) => {
     const pref = alertPrefKey(n.id);
     return !pref || prefs[pref] !== false;
   });
+};
+
+
+/* TrafficChart — SVG area chart of total traffic over time.
+   Period toggle: 24h / 7d. (Deliberately no TCP/UDP split — the metrics
+   snapshot stores aggregate traffic.) */
+const TrafficChart = () => {
+  const { t } = useTranslation();
+  const [period, setPeriod] = useState('24h');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const hours = period === '7d' ? 168 : 24;
+    apiClient.get(`/metrics/history?hours=${hours}`)
+      .then((r) => { if (!cancelled) setData(r.data?.data?.traffic || []); })
+      .catch(() => { if (!cancelled) setData([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [period]);
+
+  const points = useMemo(() => {
+    const series = data.map((p) => Number(p.total_used || 0));
+    if (!series.length) return [];
+    const max = Math.max(...series, 1);
+    return series.map((v, i) => ({
+      x: (i / (series.length - 1 || 1)) * 100,
+      y: 100 - (v / max) * 88 - 6,
+      v,
+    }));
+  }, [data]);
+
+  const peak = useMemo(() => Math.max(0, ...data.map((p) => Number(p.total_used || 0))), [data]);
+  const last = Number(data.at(-1)?.total_used || 0);
+
+  return (
+    <section className="ops-panel traffic-chart-card">
+      <header>
+        <h3>{t('trafficChartTitle', 'Traffic')}</h3>
+        <div className="chart-toggles" role="group" aria-label={t('trafficChartPeriod', 'Period')}>
+          <button type="button" className={period === '24h' ? 'active' : ''} onClick={() => setPeriod('24h')}>24h</button>
+          <button type="button" className={period === '7d' ? 'active' : ''} onClick={() => setPeriod('7d')}>7d</button>
+        </div>
+      </header>
+      <div className="ops-panel-body">
+        {loading && data.length === 0 ? (
+          <div className="chart-empty">{t('loading', 'Loading…')}</div>
+        ) : points.length > 1 ? (
+          <>
+            <svg viewBox="0 0 100 110" preserveAspectRatio="none" role="img" aria-label={t('trafficChartTitle', 'Traffic')}>
+              <defs>
+                <linearGradient id="trafficAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="var(--cyan)" stopOpacity=".32" />
+                  <stop offset="1" stopColor="var(--cyan)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[22, 44, 66, 88].map((y) => <line key={y} className="chart-grid" x1="0" y1={y} x2="100" y2={y} />)}
+              <path className="chart-area" d={`M0,110 L${points.map((p) => `${p.x},${p.y}`).join(' L')} L100,110 Z`} />
+              <path className="chart-line" d={`M${points.map((p) => `${p.x},${p.y}`).join(' L')}`} vectorEffect="non-scaling-stroke" />
+            </svg>
+            <div className="chart-summary">
+              <div><b>{formatBytes(last)}</b><span>{t('trafficNow', 'Current')}</span></div>
+              <div><b>{formatBytes(peak)}</b><span>{t('trafficPeak', 'Peak')}</span></div>
+              <div><b>{period === '7d' ? '7' : '24'}h</b><span>{t('trafficWindow', 'Window')}</span></div>
+            </div>
+          </>
+        ) : (
+          <div className="chart-empty">{t('noMetrics', 'No metrics yet.')}</div>
+        )}
+      </div>
+    </section>
+  );
 };
 
 const ServerStats = () => {
@@ -447,14 +545,16 @@ const ServerStats = () => {
   useEffect(() => {
     loadData();
     let id = null;
-    const start = () => {
+    const start = (immediate = false) => {
       if (id) clearInterval(id);
+      if (immediate) loadData();
       const sec = readPrefs().refreshSec;
       id = setInterval(() => { if (document.visibilityState === 'visible') loadData(); }, sec * 1000);
     };
     start();
-    window.addEventListener('ovmanager-prefs-changed', start);
-    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', start); };
+    const onPrefs = () => start(true);
+    window.addEventListener('ovmanager-prefs-changed', onPrefs);
+    return () => { if (id) clearInterval(id); window.removeEventListener('ovmanager-prefs-changed', onPrefs); };
   }, [loadData]);
 
   const onlineNodes = (nodes || []).filter((n) => {
@@ -478,7 +578,7 @@ const ServerStats = () => {
   const stale = Number(sec.stale_markers || 0);
   const penalty = offlineNodes * 8 + fullUsers.length * 3 + Math.min(authErrors, 50) * 0.6 + Math.min(rejects, 50) * 0.4 + Math.min(stale, 50) * 0.4;
   const securityScore = Math.max(0, Math.min(100, Math.round(100 - penalty)));
-  const notifications = deriveNotifications({ users, nodes, nodeStatus, security });
+  const notifications = deriveNotifications({ users, nodes, nodeStatus, security, t });
   const activeAlerts = notifications.length;
   const previewUsers = (users || [])
     .filter((u) => Number(u.active_connections || 0) > 0)
@@ -487,8 +587,27 @@ const ServerStats = () => {
 
   const hasData = stats && users && nodes;
 
+  // Pull-to-refresh (touch) + condensed mobile KPI
+  const dashRef = useRef(null);
+  const pull = usePullRefresh(() => { window.dispatchEvent(new Event('ovmanager:loading')); return loadData(); });
+  const mobileKpi = [
+    { label: t('activeConnections'), value: activeConnections.toLocaleString() },
+    { label: t('onlineNodes'), value: `${onlineNodes}/${nodes?.length || 0}` },
+    { label: t('totalTraffic'), value: formatBytes(totalUsed) },
+    { label: t('avgLatency'), value: avgLatency ? `${avgLatency.toFixed(0)}ms` : '-' },
+  ];
+
   return (
-    <div className="ops-dashboard compact">
+    <div
+      className="ops-dashboard compact"
+      ref={dashRef}
+      onTouchStart={pull.onTouchStart}
+      onTouchMove={pull.onTouchMove}
+      onTouchEnd={pull.onTouchEnd}
+    >
+      <div className={`pull-refresh-indicator${pull.refreshing ? ' refreshing' : pull.pull > 0 ? ' pulling' : ''}`}>
+        {pull.refreshing ? <span className="spinner" /> : <span>⬇ {t('pullToRefresh', 'Pull to refresh')}</span>}
+      </div>
       <div className="dashboard-heading">
         <div className="dashboard-heading-copy">
           <div className="dashboard-eyebrow">
@@ -503,11 +622,23 @@ const ServerStats = () => {
           <p>{t('dashboardIntro', 'Keep an eye on nodes, users, traffic, and security from one place.')}</p>
         </div>
         <div className="dashboard-heading-actions">
-          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={loadData} disabled={loading}>
+          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={() => { window.dispatchEvent(new Event('ovmanager:loading')); loadData(); }} disabled={loading}>
             <FiRefreshCw className={loading ? 'is-spinning' : ''} aria-hidden="true" />
             <span>{t('refresh', 'Refresh')}</span>
           </button>
         </div>
+        <div className="dashboard-quick-actions">
+          <button type="button" className="btn btn-sm" onClick={() => navigate('/users?add=1')}><FiPlus size={12} /> {t('addUser', 'Add user')}</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes?add=1')}><FiPlus size={12} /> {t('addNode', 'Add node')}</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes')}><FiDownloadCloud size={12} /> {t('downloadAll', 'Download all')}</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/users')}><FiLink size={12} /> {t('subscriptions', 'Subscriptions')}</button>
+        </div>
+      </div>
+
+      <div className="dashboard-kpi-compact">
+        {mobileKpi.map((k) => (
+          <div key={k.label} className="kpi-box"><span>{k.label}</span><b>{k.value}</b></div>
+        ))}
       </div>
 
       {error && !hasData ? (
@@ -525,8 +656,8 @@ const ServerStats = () => {
             <Panel title={t('networkStatus')} tone="orange" icon={FiActivity} tip={t('networkStatus')}>
               {loading ? <Skeleton /> : (stats && users && nodes ? (
                 <div className="network-card-grid">
-                  <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} tip={t('activeConnections')} spark={trafficHistory} />
-                  <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
+                  <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} animate={activeConnections} tip={t('activeConnections')} spark={trafficHistory} />
+                  <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} animate={totalUsed} format={formatBytes} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
                   <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
                   <StatCell label={t('avgLatency')} value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip={t('avgLatency')} />
                 </div>
@@ -595,6 +726,8 @@ const ServerStats = () => {
             </Panel>
           </div>
 
+          <TrafficChart />
+
           <div className="ops-lower-grid">
             <Panel title={t('onlineUsers')} tone="orange" className="users-panel" icon={FiUsers} tip={t('onlineUsers')}>
               {loading ? <Skeleton /> : (users ? (
@@ -621,7 +754,7 @@ const ServerStats = () => {
                                 className="mini-btn"
                                 title={`${t('manage')} ${u.name}`}
                                 aria-label={`${t('manage')} ${u.name}`}
-                                onClick={() => { const base = import.meta.env.VITE_URLPATH ? `/${import.meta.env.VITE_URLPATH}` : ''; window.location.assign(`${base}/users?user=${u.uuid}`); }}
+                                onClick={() => { window.location.assign(`${getPanelBase()}/users?user=${u.uuid}`); }}
                               >{t('manage')}</button>
                             </td>
                           </tr>

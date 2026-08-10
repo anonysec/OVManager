@@ -12,10 +12,10 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.logger import logger
-from backend.node.requests import NodeRequests
 from backend.db import crud
 from backend.db.models import Node
+from backend.logger import logger
+from backend.node.requests import NodeRequests
 
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:

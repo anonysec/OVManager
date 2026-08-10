@@ -1,8 +1,7 @@
 import asyncio
 import re
 from collections import Counter
-from datetime import datetime
-from datetime import UTC
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends

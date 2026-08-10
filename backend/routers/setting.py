@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from backend.db.engine import get_db
-from backend.db import crud
 from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
-from backend.operations.server_info import get_server_info
-from backend.schema.output import Settings, ServerInfo, ResponseModel
 from backend.config import config
+from backend.db import crud
+from backend.db.engine import get_db
+from backend.operations.server_info import get_server_info
+from backend.schema.output import ResponseModel, ServerInfo, Settings
+from backend.urlpath import get_urlpath as _get_urlpath
+from backend.urlpath import set_urlpath as _set_urlpath
 from backend.version import __version__
-from backend.urlpath import set_urlpath as _set_urlpath, get_urlpath as _get_urlpath
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 

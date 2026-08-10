@@ -103,7 +103,9 @@ async def _node_snapshot(node) -> dict[str, Any]:
 
 async def collect_metrics() -> None:
     """Collect a compact operational snapshot for graphs and trend widgets."""
-    from datetime import datetime, UTC as UTC_DT
+    from datetime import UTC as UTC_DT
+    from datetime import datetime
+
     from backend.node.task import get_active_connection_counts
 
     db = SessionLocal()
@@ -182,7 +184,7 @@ async def collect_metrics() -> None:
         cutoff = now - 30 * 24 * 3600
         _SNAPSHOT_TABLES = ("node_health_snapshots", "traffic_snapshots", "security_snapshots")
         for table in _SNAPSHOT_TABLES:
-            db.execute(text("DELETE FROM {} WHERE ts < :cutoff".format(table)), {"cutoff": cutoff})
+            db.execute(text(f"DELETE FROM {table} WHERE ts < :cutoff"), {"cutoff": cutoff})
         db.commit()
         logger.info("metrics: snapshot collected nodes=%s active_connections=%s", len(clean_rows), active_connections)
     except Exception as e:
@@ -209,15 +211,24 @@ def history(db: Session, hours: int = 24) -> dict[str, Any]:
     """), {"cutoff": cutoff}).fetchall()
     return {
         "traffic": [
-            {"ts": r[0], "total_used": r[1], "active_connections": r[2], "online_users": r[3], "active_users": r[4], "total_users": r[5]}
+            {
+                "ts": r[0], "total_used": r[1], "active_connections": r[2],
+                "online_users": r[3], "active_users": r[4], "total_users": r[5],
+            }
             for r in traffic
         ],
         "security": [
-            {"ts": r[0], "auth_errors": r[1], "rejects": r[2], "stale_markers": r[3], "offline_nodes": r[4], "full_users": r[5], "inactive_users": r[6]}
+            {
+                "ts": r[0], "auth_errors": r[1], "rejects": r[2], "stale_markers": r[3],
+                "offline_nodes": r[4], "full_users": r[5], "inactive_users": r[6],
+            }
             for r in security
         ],
         "nodes": [
-            {"ts": r[0], "node_id": r[1], "node_name": r[2], "cpu": r[3], "memory": r[4], "live_count": r[5], "latency_ms": r[6], "reachable": bool(r[7])}
+            {
+                "ts": r[0], "node_id": r[1], "node_name": r[2], "cpu": r[3],
+                "memory": r[4], "live_count": r[5], "latency_ms": r[6], "reachable": bool(r[7]),
+            }
             for r in node_rows
         ],
     }

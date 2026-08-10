@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict
 from datetime import date
-from typing import Any, Optional
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from backend.version import __version__
 
@@ -8,19 +9,19 @@ from backend.version import __version__
 class ResponseModel(BaseModel):
     success: bool
     msg: str
-    data: Optional[Any] = None
+    data: Any | None = None
 
 
 class Users(BaseModel):
     name: str
     is_active: bool
-    total: Optional[int] = None
-    used: Optional[int] = None
+    total: int | None = None
+    used: int | None = None
     max_logins: int = 1
     expiry_date: date
     owner: str
     uuid: str
-    last_online: Optional[str] = None
+    last_online: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -42,20 +43,20 @@ class Settings(BaseModel):
     subscription_path: str
     timezone: str = "UTC"
     panel_version: str = __version__
-    bot_token: Optional[str] = None  # write-only; never populated in responses
+    bot_token: str | None = None  # write-only; never populated in responses
     bot_configured: bool = False
     bot_enabled: bool = False
     default_days: int = 30
     default_traffic_gb: int = 100
     default_max_users: int = 1
-    owner_telegram_id: Optional[int] = None
+    owner_telegram_id: int | None = None
     urlpath: str = ""
 
 
 class Admins(BaseModel):
     username: str
     users_count: int = 0
-    telegram_id: Optional[int] = None
-    username_prefix: Optional[str] = None
+    telegram_id: int | None = None
+    username_prefix: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

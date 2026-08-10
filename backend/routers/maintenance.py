@@ -1,20 +1,26 @@
-from datetime import datetime, UTC
-from pathlib import Path
-from shutil import copy2
+import logging
 import os
 import sqlite3
-import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from shutil import copy2
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy import text as _text
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
 from backend.auth.authz import require_owner
-from backend.db.engine import engine, get_db
 from backend.data_paths import DATA_DIR
-from backend.node.task import clean_global_mlogin_registry, clean_stale_sessions_all_nodes, login_diagnostics, login_health_summary, sync_all_user_limits
-from sqlalchemy import text as _text
+from backend.db.engine import engine, get_db
+from backend.node.task import (
+    clean_global_mlogin_registry,
+    clean_stale_sessions_all_nodes,
+    login_diagnostics,
+    login_health_summary,
+    sync_all_user_limits,
+)
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
@@ -83,7 +89,11 @@ async def download_backup(user: dict = Depends(require_owner)):
     if not BACKUP_DIR.exists():
         raise HTTPException(status_code=404, detail="No backups found")
 
-    backups = sorted((p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted(
+        (p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if not backups:
         raise HTTPException(status_code=404, detail="No backups found")
 
@@ -102,7 +112,11 @@ async def list_backups(user: dict = Depends(require_owner)):
     if not BACKUP_DIR.exists():
         return ResponseModel(success=True, msg="No backups", data=[])
 
-    backups = sorted((p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted(
+        (p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     files = []
     for b in backups:
         files.append({
@@ -238,7 +252,10 @@ async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict
 @router.post("/sync-limits", response_model=ResponseModel)
 async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await sync_all_user_limits(db)
-    log_event(db, "maintenance.sync_limits", actor=user.get("username"), detail=f"{data.get('success')}/{data.get('total')} synced")
+    log_event(
+        db, "maintenance.sync_limits", actor=user.get("username"),
+        detail=f"{data.get('success')}/{data.get('total')} synced",
+    )
     return ResponseModel(success=True, msg="Login limits synced", data=data)
 
 
@@ -252,11 +269,16 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
 @router.post("/clean-global-registry", response_model=ResponseModel)
 async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await clean_global_mlogin_registry(db)
-    log_event(db, "maintenance.clean_global_registry", actor=user.get("username"), detail=f"removed={len(data.get('removed') or [])}")
+    log_event(
+        db, "maintenance.clean_global_registry", actor=user.get("username"),
+        detail=f"removed={len(data.get('removed') or [])}",
+    )
     return ResponseModel(success=True, msg="Global login registry cleaned", data=data)
 
 
 @router.get("/login-diagnostics/{username}", response_model=ResponseModel)
-async def user_login_diagnostics(username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+async def user_login_diagnostics(
+    username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)
+):
     data = await login_diagnostics(username, db, hours=hours)
     return ResponseModel(success=True, msg="Login diagnostics", data=data)

@@ -6,18 +6,14 @@ login health status, and per-user login diagnostics.
 
 import asyncio
 import datetime
-import re
-import time
-from typing import Iterable
 
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.logger import logger
-from backend.node.requests import NodeRequests
 from backend.db import crud
-from backend.db.models import Node, User
+from backend.db.models import User
+from backend.node.requests import NodeRequests
 
 
 async def get_active_connection_counts(db: Session) -> dict[str, int]:
@@ -246,7 +242,7 @@ async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
                 "pool_ip": r[6], "created_at": r[7], "updated_at": r[8],
                 "created_at_utc": datetime.datetime.utcfromtimestamp(float(r[7] or 0)).isoformat() if r[7] else None,
             })
-    except Exception as e:
+    except Exception:
         registry = []
 
     used = user.used or 0

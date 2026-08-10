@@ -1,14 +1,16 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from backend.auth.hash import hash_password
-from backend.db.exceptions import NotFoundError, ConflictError
-from backend.logger import logger
-from backend.schema._input import AdminCreate, CreateUser, UpdateUser, NodeCreate
-from .models import User, Admin, Node, Settings
 from cryptography.fernet import Fernet
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from backend.auth.hash import hash_password
+from backend.db.exceptions import ConflictError, NotFoundError
+from backend.logger import logger
+from backend.schema._input import AdminCreate, CreateUser, NodeCreate, UpdateUser
+
+from .models import Admin, Node, Settings, User
 
 try:
     from backend.config import config as panel_config
@@ -143,7 +145,7 @@ def create_user(db: Session, request: CreateUser, owner: str):
         db.refresh(new_user)
     except IntegrityError:
         db.rollback()
-        raise ConflictError("User", "name", username)
+        raise ConflictError("User", "name", username) from None
     logger.info("user created successfully: %s", request.name)
     return new_user
 
@@ -152,7 +154,7 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     user = db.query(User).filter(User.uuid == uuid).first()
     if not user:
         raise NotFoundError("User", uuid)
-    
+
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
     not_expired = (
@@ -206,7 +208,7 @@ def reset_user_usage(db: Session, uuid: str) -> bool:
 def get_expired_users(db: Session):
     return (
         db.query(User)
-        .filter(User.expiry_date < datetime.now(UTC).date(), User.is_active == True)
+        .filter(User.expiry_date < datetime.now(UTC).date(), User.is_active)
         .all()
     )
 
@@ -215,7 +217,7 @@ def get_users_exceeded_traffic(db: Session):
     # Exclude users with NULL total (unlimited traffic)
     return (
         db.query(User)
-        .filter(User.total.isnot(None), User.used > User.total, User.is_active == True)
+        .filter(User.total.isnot(None), User.used > User.total, User.is_active)
         .all()
     )
 
@@ -294,7 +296,7 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
 def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dict = None):
     node = db.query(Node).filter(Node.id == node_id).first()
     if not node:
-        raise NotFoundError("Node", str(node_id))
+        raise NotFoundError("Node", str(node_id)) from None
 
     node.name = request.name
     node.address = request.address
@@ -351,3 +353,58 @@ def update_setting_timezone(db: Session, timezone: str):
     settings.timezone = timezone
     db.commit()
     return settings
+
+
+def restore_user(db: Session, snapshot: dict):
+    """Re-insert a deleted user with its original UUID (undo delete)."""
+    from uuid import uuid4
+
+    expiry = snapshot.get("expiry_date")
+    if isinstance(expiry, str) and expiry:
+        from datetime import date as _date
+        try:
+            expiry = _date.fromisoformat(expiry[:10])
+        except ValueError:
+            expiry = None
+
+    new_user = User(
+        name=snapshot["name"],
+        uuid=snapshot.get("uuid") or str(uuid4()),
+        total=snapshot.get("total"),
+        used=snapshot.get("used"),
+        max_logins=int(snapshot.get("max_logins") or 1),
+        expiry_date=expiry,
+        is_active=bool(snapshot.get("is_active", True)),
+        owner=snapshot.get("owner") or "",
+    )
+    db.add(new_user)
+    try:
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise ConflictError("User", "name", snapshot["name"]) from None
+    return new_user
+
+
+def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: int = 0) -> dict:
+    """Extend expiry (+days) and/or add traffic quota (+add_bytes) for users.
+
+    Returns a summary of updated / not-found counts.
+    """
+    from datetime import timedelta
+    updated = 0
+    not_found = 0
+    for uuid in uuids:
+        user = db.query(User).filter(User.uuid == uuid).first()
+        if not user:
+            not_found += 1
+            continue
+        if days:
+            base = user.expiry_date
+            user.expiry_date = (base + timedelta(days=days)) if base else base
+        if add_bytes:
+            user.total = (user.total or 0) + add_bytes
+        updated += 1
+    db.commit()
+    return {"updated": updated, "not_found": not_found, "total": len(uuids)}

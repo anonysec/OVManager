@@ -277,7 +277,7 @@ html.theme-transition *::after {
 
 .input-group {
   margin-bottom: 20px;
-  text-align: left;
+  text-align: start;
 }
 
 .input-group label {
@@ -690,7 +690,7 @@ html.theme-transition *::after {
 .icon-btn-badge {
   /* Badge now shows inside the button itself when there are alerts */
   position: static;
-  margin-left: 4px;
+  margin-inline-start: 4px;
   background: transparent;
   color: #fff;
   font-size: 0.625rem;
@@ -1068,7 +1068,7 @@ html.theme-transition *::after {
 .ops-table th,
 .ops-table td {
   padding: 14px 16px;
-  text-align: left;
+  text-align: start;
   border: none;
 }
 
@@ -1122,7 +1122,7 @@ html.theme-transition *::after {
 .toast {
   background: var(--background-secondary);
   border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
-  border-left: 5px solid var(--accent-color);
+  border-inline-start: 5px solid var(--accent-color);
   padding: 16px 20px;
   border-radius: 8px;
   box-shadow: var(--shadow);
@@ -1152,7 +1152,7 @@ html.theme-transition *::after {
 .toast.toast-error {
   background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
-  border-left: 5px solid var(--danger-color);
+  border-inline-start: 5px solid var(--danger-color);
 }
 .toast.toast-error strong {
   color: var(--danger-color);
@@ -1161,7 +1161,7 @@ html.theme-transition *::after {
 .toast.toast-warning {
   background: color-mix(in srgb, var(--accent-color) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
-  border-left: 5px solid var(--accent-color);
+  border-inline-start: 5px solid var(--accent-color);
 }
 .toast.toast-warning strong {
   color: var(--accent-color);
@@ -1170,7 +1170,7 @@ html.theme-transition *::after {
 .toast.toast-success {
   background: color-mix(in srgb, var(--success-color, #2fd276) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--success-color, #2fd276) 50%, transparent);
-  border-left: 5px solid var(--success-color, #2fd276);
+  border-inline-start: 5px solid var(--success-color, #2fd276);
 }
 .toast.toast-success strong {
   color: var(--success-color, #2fd276);
@@ -1207,11 +1207,11 @@ html.theme-transition *::after {
   }
 
   .ops-overview-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ops-lower-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .network-card-grid,
@@ -1600,7 +1600,7 @@ html.theme-transition *::after {
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  text-align: left;
+  text-align: start;
   transition: background 100ms ease;
 }
 
@@ -1924,9 +1924,9 @@ html.theme-transition *::after {
 .sidebar-nav-link.active {
   background: rgba(255, 122, 30, 0.16);
   color: var(--accent-color, var(--orange));
-  border-left: 3px solid var(--accent-color, var(--orange));
-  margin-left: -3px;
-  padding-left: 15px;
+  border-inline-start: 3px solid var(--accent-color, var(--orange));
+  margin-inline-start: -3px;
+  padding-inline-start: 15px;
 }
 
 .sidebar-nav-link.active .sidebar-nav-icon {
@@ -1942,13 +1942,13 @@ html.theme-transition *::after {
 
 .sidebar-nav-label {
   flex: 1;
-  text-align: left;
+  text-align: start;
   margin-right: 4px;
 }
 
 .sidebar-nav-badge {
-  margin-left: auto;
-  margin-right: 4px;
+  margin-inline-start: auto;
+  margin-inline-end: 4px;
   background: var(--success-color, #0e9f85);
   color: #fff;
   font-size: 10px;

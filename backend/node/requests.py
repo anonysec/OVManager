@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 import requests as _req
 from fastapi.responses import Response
+
 from backend.logger import logger
 
 TIMEOUT = 10
@@ -96,7 +97,9 @@ class NodeRequests:
         return self._request("delete", f"/sync/user/{uid}") is not None
 
     def set_user_limit(self, uid: str, max_logins: int) -> bool:
-        return self._request("put", "/sync/user/limit", json={"id": uid, "max_logins": max_logins}, timeout=LONG_TIMEOUT) is not None
+        return self._request(
+            "put", "/sync/user/limit", json={"id": uid, "max_logins": max_logins}, timeout=LONG_TIMEOUT
+        ) is not None
 
     def disconnect_user(self, uid: str) -> dict:
         r = self._request("post", f"/sync/user/{uid}/disconnect")
@@ -106,7 +109,11 @@ class NodeRequests:
 
     def download_ovpn_client(self, uid: str) -> Response | None:
         try:
-            r = _req.get(self._url(f"/sync/download/ovpn/{uid}"), headers={**self.headers, "Accept": "application/x-openvpn-profile"}, timeout=120)
+            r = _req.get(
+                self._url(f"/sync/download/ovpn/{uid}"),
+                headers={**self.headers, "Accept": "application/x-openvpn-profile"},
+                timeout=120,
+            )
             body = r.content
             if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
                 return Response(content=body, media_type="application/x-openvpn-profile",

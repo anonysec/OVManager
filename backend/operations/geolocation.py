@@ -1,10 +1,10 @@
 """IP-based geolocation using ip-api.com (free, no key needed)."""
 from __future__ import annotations
 
-import socket
-import logging
 import ipaddress
-from typing import Optional
+import logging
+import socket
+import time as _time
 from urllib.parse import urlsplit
 
 import httpx
@@ -18,13 +18,12 @@ _GEO_CACHE_MAX = 10_000
 _GEO_CACHE_HITS = 0
 _GEO_CACHE_MISSES = 0
 
-import time as _time
 
 # Timeout for geolocation requests
 _TIMEOUT = 5.0
 
 
-def _extract_host(address: str) -> Optional[str]:
+def _extract_host(address: str) -> str | None:
     """Extract a hostname/IP from hostnames, URLs, host:port, and IPv6 input."""
     raw = str(address or '').strip()
     if not raw:
@@ -42,7 +41,7 @@ def _extract_host(address: str) -> Optional[str]:
     return host.strip('[]') if host else None
 
 
-def resolve_ip(address: str) -> Optional[str]:
+def resolve_ip(address: str) -> str | None:
     """Resolve a hostname to an IP address."""
     try:
         ipaddress.ip_address(address)
@@ -55,7 +54,7 @@ def resolve_ip(address: str) -> Optional[str]:
         return None
 
 
-def geolocate(address: str) -> Optional[dict]:
+def geolocate(address: str) -> dict | None:
     """Look up country code + coordinates for an address (hostname or IP).
 
     Returns dict with keys: country_code, latitude, longitude

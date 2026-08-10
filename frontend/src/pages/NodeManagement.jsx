@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus } from 'react-icons/fi';
+import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus, FiDownload, FiGlobe } from 'react-icons/fi';
+import NodeDrawer from '../components/NodeDrawer';
 import apiClient from '../services/api';
 import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
@@ -23,6 +24,9 @@ const NodeManagement = () => {
   const openConfirm = (title, message, onConfirm) => setConfirm({ open: true, title, message, onConfirm });
   const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
   const [loadError, setLoadError] = useState(false);
+  const [drawerNode, setDrawerNode] = useState(null);
+  const [grouped, setGrouped] = useState(() => localStorage.getItem('ovmanager-ui-node-grouped') === '1');
+  const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') === 'compact' ? 'compact' : 'comfortable');
   const { t } = useTranslation();
   const { addToast } = useToast();
 
@@ -47,6 +51,14 @@ const NodeManagement = () => {
   useEffect(() => {
     fetchNodes();
   }, [fetchNodes]);
+
+  useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setIsAddModalOpen(true);
+      searchParams.delete('add');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Deep-link: ?node=<id> opens that node's edit modal
   useEffect(() => {
@@ -168,6 +180,37 @@ const NodeManagement = () => {
     fetchNodes();
   };
 
+  const handleExportCsv = () => {
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const head = ['id', 'name', 'address', 'port', 'protocol', 'ovpn_port', 'status', 'country', 'cpu', 'memory'];
+    const rows = nodes.map((n) => {
+      const info = nodeInfo[n.id] || {};
+      return [n.id, n.name, n.address, n.port, n.protocol, n.ovpn_port, n.status ? 'active' : 'inactive', n.country_code || '', info.cpu_usage ?? '', info.memory_usage ?? ''];
+    });
+    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `ovmanager-nodes-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const handleToggleNode = async (node) => {
+    try {
+      await apiClient.put(`/nodes/${node.id}`, {
+        name: node.name, address: node.address, tunnel_address: node.tunnel_address || '',
+        protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port, port: node.port,
+        status: !node.status, set_new_setting: false, use_tls: node.use_tls || false,
+      });
+      addToast(node.status ? 'Node disabled.' : 'Node enabled.', 'success');
+      fetchNodes();
+    } catch (e) {
+      addToast(e.response?.data?.msg || e.response?.data?.detail || 'Failed to toggle node.', 'error');
+    }
+  };
+
+  const applyDensity = (d) => { setDensity(d); localStorage.setItem('ovmanager-ui-density', d); };
+
   const handleOpenEditModal = (node) => {
     setSelectedNode(node);
     setIsEditModalOpen(true);
@@ -184,10 +227,22 @@ const NodeManagement = () => {
     <div id="nodes-view" className="view">
       <div className="view-header">
         <h2>{t('nodes')}</h2>
-        <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn">
-          <FiPlus aria-hidden="true" />
-          <span>{t('addNewNode')}</span>
-        </button>
+        <div className="view-header-actions">
+          <div className="density-toggle" role="group" aria-label={t('density', 'Density')}>
+            <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')}>{t('densityComfort', 'Comfort')}</button>
+            <button type="button" className={density === 'compact' ? 'active' : ''} onClick={() => applyDensity('compact')}>{t('densityCompact', 'Compact')}</button>
+          </div>
+          <button type="button" className={`btn btn-secondary btn-sm${grouped ? ' btn-active' : ''}`} onClick={() => { setGrouped(!grouped); localStorage.setItem('ovmanager-ui-node-grouped', grouped ? '0' : '1'); }} title={t('groupByCountry', 'Group by country')}>
+            <FiGlobe aria-hidden="true" /> {t('groupByCountry', 'Group')}
+          </button>
+          <button type="button" onClick={handleExportCsv} className="btn btn-secondary btn-sm export-btn" aria-label={t('exportCsv', 'Export CSV')}>
+            <FiDownload aria-hidden="true" /> {t('exportCsv', 'CSV')}
+          </button>
+          <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn">
+            <FiPlus aria-hidden="true" />
+            <span>{t('addNewNode')}</span>
+          </button>
+        </div>
       </div>
 
       <div className="user-stats-row">
@@ -258,6 +313,9 @@ const NodeManagement = () => {
           onCheckStatus={handleCheckStatus}
           onEdit={handleOpenEditModal}
           onDownloadAll={handleDownloadAllConfigs}
+          onView={setDrawerNode}
+          grouped={grouped}
+          density={density}
         />
       )}
 
@@ -277,6 +335,14 @@ const NodeManagement = () => {
           onNodeUpdated={handleNodeUpdated}
         />
       )}
+      <NodeDrawer
+        node={drawerNode}
+        onClose={() => setDrawerNode(null)}
+        onEdit={(n) => { setDrawerNode(null); handleOpenEditModal(n); }}
+        onDelete={(id, name) => { setDrawerNode(null); handleDelete(id, name); }}
+        onToggleStatus={handleToggleNode}
+        onCheckStatus={handleCheckStatus}
+      />
       <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("deleteButton","Delete")} cancelLabel={t("cancelButton","Cancel")} />
 
     </div>

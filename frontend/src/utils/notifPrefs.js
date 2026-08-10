@@ -1,47 +1,61 @@
 /**
- * Notification preferences utilities.
- * Stores per-node alert toggles and global dashboard refresh interval in localStorage.
+ * User preference helpers for dashboard alerts and polling.
+ *
+ * All prefs are front-end only (localStorage) — nothing sensitive here.
+ * Toggled from Settings → "Alerts & Dashboard". Every change dispatches
+ * `ovmanager-prefs-changed` so live components (topbar notifications,
+ * dashboard polling) pick it up without a reload.
  */
 
-const PREFIX = 'ovm_notif_';
-const GLOBAL_KEY = 'ovm_global';
+const KEYS = {
+  nodeDown: 'ovmanager-pref-alert-node',
+  maxLogins: 'ovmanager-pref-alert-maxlogin',
+  authErrors: 'ovmanager-pref-alert-auth',
+  rejects: 'ovmanager-pref-alert-reject',
+  stale: 'ovmanager-pref-alert-stale',
+  refreshSec: 'ovmanager-pref-refresh',
+};
 
-/** Read all global preferences */
-export function readPrefs() {
+const DEFAULTS = {
+  nodeDown: true,
+  maxLogins: true,
+  authErrors: true,
+  rejects: true,
+  stale: true,
+  refreshSec: 30,
+};
+
+export const REFRESH_OPTIONS = [15, 30, 60, 300];
+
+export const readPrefs = () => {
+  const out = { ...DEFAULTS };
   try {
-    const raw = localStorage.getItem(GLOBAL_KEY);
-    return raw ? JSON.parse(raw) : { alertTypes: [], refreshSec: 30 };
-  } catch {
-    return { alertTypes: [], refreshSec: 30 };
-  }
-}
+    for (const [key, storageKey] of Object.entries(KEYS)) {
+      const raw = localStorage.getItem(storageKey);
+      if (raw === null) continue;
+      if (key === 'refreshSec') {
+        out[key] = REFRESH_OPTIONS.includes(Number(raw)) ? Number(raw) : DEFAULTS.refreshSec;
+      } else {
+        out[key] = raw === 'true';
+      }
+    }
+  } catch { /* storage unavailable — use defaults */ }
+  return out;
+};
 
-/** Write a single global preference */
-export function writePref(key, value) {
-  const prefs = readPrefs();
-  prefs[key] = value;
-  localStorage.setItem(GLOBAL_KEY, JSON.stringify(prefs));
-}
-
-/** Get the localStorage key for a node's alert preference */
-export function alertPrefKey(nodeId) {
-  return `${PREFIX}${nodeId}`;
-}
-
-/** Read alert types for a specific node */
-export function readAlertTypes(nodeId) {
+export const writePref = (key, value) => {
   try {
-    const raw = localStorage.getItem(alertPrefKey(nodeId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
+    localStorage.setItem(KEYS[key], String(value));
+    window.dispatchEvent(new Event('ovmanager-prefs-changed'));
+  } catch { /* noop */ }
+};
 
-/** Write alert types for a specific node */
-export function writeAlertTypes(nodeId, types) {
-  localStorage.setItem(alertPrefKey(nodeId), JSON.stringify(types));
-}
-
-/** Dashboard refresh interval options (seconds) */
-export const REFRESH_OPTIONS = [15, 30, 60, 120, 300];
+/** Alert-type → preference key map used to filter notification lists. */
+export const alertPrefKey = (id) => {
+  if (String(id).startsWith('node-')) return 'nodeDown';
+  if (String(id).startsWith('full-')) return 'maxLogins';
+  if (id === 'auth') return 'authErrors';
+  if (id === 'rej') return 'rejects';
+  if (id === 'stale') return 'stale';
+  return null;
+};

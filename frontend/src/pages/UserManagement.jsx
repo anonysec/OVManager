@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { FiDownload, FiClock, FiZap, FiTrash2 } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { getPanelOrigin } from '../utils/panelUrl';
 import { useToast } from '../context/ToastContext';
 import UserTable from '../components/UserTable';
 import AddUserModal from '../components/AddUserModal';
@@ -39,6 +41,8 @@ const UserManagement = () => {
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
   const [_bulkBusy, setBulkBusy] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [undo, setUndo] = useState(null); // { user, ts } for undo-delete toast
+  const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') === 'compact' ? 'compact' : 'comfortable');
 
   // ── ConfirmModal state ────────────────────────────────────────────────
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null, danger: true });
@@ -100,6 +104,19 @@ const UserManagement = () => {
     return { total: users.length, active: activeUsersCount, inactive: users.length - activeUsersCount, online: onlineUsersCount };
   }, [users]);
 
+  // ── Filter chip counts ────────────────────────────────────────────────
+  const filterCounts = useMemo(() => {
+    const c = (fn) => users.filter(fn).length;
+    return {
+      all: users.length,
+      online: c((u) => u.online || Number(u.active_connections || 0) > 0),
+      expiring: c((u) => { const d = daysUntil(u.expiry_date); return d >= 0 && d <= 7; }),
+      quota: c((u) => Number(u.total) > 0 && (Number(u.used || 0) / Number(u.total)) >= 0.85),
+      disabled: c((u) => !u.is_active),
+      unlimited: c((u) => u.total === null || u.total === 0),
+    };
+  }, [users]);
+
   // ── Filter + sort ─────────────────────────────────────────────────────
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -108,6 +125,9 @@ const UserManagement = () => {
       if (view === 'online') return user.online || Number(user.active_connections || 0) > 0;
       if (view === 'inactive') return !user.is_active;
       if (view === 'expiring') return daysUntil(user.expiry_date) >= 0 && daysUntil(user.expiry_date) <= 7;
+      if (view === 'quota') return Number(user.total) > 0 && (Number(user.used || 0) / Number(user.total)) >= 0.85;
+      if (view === 'disabled') return !user.is_active;
+      if (view === 'unlimited') return user.total === null || user.total === 0;
       return true;
     });
     const { key, dir } = sort;
@@ -153,6 +173,7 @@ const UserManagement = () => {
           await apiClient.delete(`/users/${user.uuid}`);
           addToast(t('userDeleted', { name: user.name }, `User "${user.name}" deleted.`), 'success');
           setSelected((s) => s.filter((x) => x !== user.uuid));
+          setUndo({ user, ts: Date.now() });
           fetchUsers();
         } catch {
           addToast(t('userDeleteError', { name: user.name }, `Failed to delete "${user.name}".`), 'error');
@@ -185,6 +206,82 @@ const UserManagement = () => {
       }
     );
   };
+
+  // ── Undo delete ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!undo) return;
+    const id = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(id);
+  }, [undo]);
+
+  const handleUndoRestore = async () => {
+    if (!undo) return;
+    const u = undo.user;
+    setUndo(null);
+    try {
+      await apiClient.post(`/users/${u.uuid}/restore`);
+      addToast(t('userRestored', { name: u.name }, `User "${u.name}" restored.`), 'success');
+    } catch {
+      addToast(t('undoFailed', 'Undo failed — user could not be restored.'), 'error');
+    }
+    fetchUsers();
+  };
+
+  // ── Bulk extend / add traffic ─────────────────────────────────────────
+  const handleBulkAdjust = async (action, days = 0, gb = 0) => {
+    if (!selected.length) return;
+    setBulkBusy(true);
+    try {
+      const res = await apiClient.post('/users/bulk', {
+        action,
+        uuids: selected,
+        days,
+        bytes: gb * 1024 * 1024 * 1024,
+      });
+      if (res.data?.success) {
+        addToast(res.data.msg || `${selected.length} user(s) updated`, 'success');
+        setSelected([]);
+        fetchUsers();
+      } else {
+        addToast(res.data?.msg || 'Bulk update failed', 'error');
+      }
+    } catch (e) {
+      addToast(e.response?.data?.detail || e.response?.data?.msg || 'Bulk update failed', 'error');
+    } finally { setBulkBusy(false); }
+  };
+
+  const handleExtendSingle = async (user) => {
+    try {
+      const res = await apiClient.post('/users/bulk', { action: 'extend', uuids: [user.uuid], days: 30, bytes: 0 });
+      addToast(res.data?.success ? t('extendedDays', 'Extended {{name}} by 30 days', { name: user.name }) : (res.data?.msg || 'Failed'), res.data?.success ? 'success' : 'error');
+      fetchUsers();
+    } catch { addToast(t('error', 'Error'), 'error'); }
+  };
+
+  const handleDisconnectUserQuick = async (user) => {
+    try {
+      await apiClient.post(`/users/${user.uuid}/disconnect`);
+      addToast(t('disconnected', 'Disconnect requested'), 'success');
+    } catch { addToast(t('error', 'Error'), 'error'); }
+  };
+
+  // ── CSV export ────────────────────────────────────────────────────────
+  const handleExportCsv = () => {
+    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const head = ['name', 'status', 'used_bytes', 'total_bytes', 'max_logins', 'expiry_date', 'last_online', 'owner'];
+    const rows = filteredUsers.map((u) => [
+      u.name, u.is_active ? 'active' : 'inactive', u.used || 0, u.total ?? '', u.max_logins ?? '', u.expiry_date || '', u.last_online || '', u.owner || '',
+    ]);
+    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `ovmanager-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  // ── Density ───────────────────────────────────────────────────────────
+  const applyDensity = (d) => { setDensity(d); localStorage.setItem('ovmanager-ui-density', d); window.dispatchEvent(new Event('ovmanager-ui-prefs')); };
 
   const handleToggleStatus = (user) => {
     const newStatus = !user.is_active;
@@ -298,8 +395,7 @@ const UserManagement = () => {
 
   const getSubscriptionLink = (user) => {
     if (!user?.uuid) return '';
-    const urlpath = (import.meta.env.VITE_URLPATH || '').replace(/^\/+|\/+$/g, '');
-    const base = urlpath ? `${window.location.origin}/${urlpath}` : window.location.origin;
+    const base = getPanelOrigin();
     let prefix = subscriptionSettings?.subscription_url_prefix?.trim();
     let path = (subscriptionSettings?.subscription_path || '').trim();
     if (!prefix) prefix = `${base}/sub/`;
@@ -314,6 +410,10 @@ const UserManagement = () => {
       <div className="view-header">
         <h2>{t('users')}</h2>
         <div className="view-header-actions">
+          <button type="button" onClick={handleExportCsv} className="btn btn-secondary export-btn" aria-label={t('exportCsv', 'Export CSV')} title={t('exportCsv', 'Export CSV')}>
+            <FiDownload aria-hidden="true" />
+            <span>{t('exportCsv', 'CSV')}</span>
+          </button>
           <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn" aria-label={t('addNewUser')}>
             <FiPlus aria-hidden="true" />
             <span>{t('addNewUser')}</span>
@@ -345,12 +445,9 @@ const UserManagement = () => {
           <FiSearch className="search-icon" aria-hidden="true" />
           <input type="search" placeholder={t('searchByUsername')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label="Search users by username" />
         </label>
-        <div className="seg-toggle" role="tablist" aria-label="User view">
-          {['all', 'online', 'inactive', 'expiring'].map((v) => (
-            <button key={v} type="button" role="tab" aria-selected={view === v} className={`seg-tab${view === v ? ' active' : ''}`} onClick={() => setView(v)}>
-              {t(`tab${v.charAt(0).toUpperCase() + v.slice(1)}`, v)}
-            </button>
-          ))}
+        <div className="density-toggle" role="group" aria-label={t('density', 'Density')}>
+          <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')}>{t('densityComfort', 'Comfort')}</button>
+          <button type="button" className={density === 'compact' ? 'active' : ''} onClick={() => applyDensity('compact')}>{t('densityCompact', 'Compact')}</button>
         </div>
         <div className="results-meta" aria-live="polite">
           <strong>{filteredUsers.length}</strong> {t('results', 'results')}
@@ -359,6 +456,36 @@ const UserManagement = () => {
           )}
         </div>
       </div>
+
+      <div className="user-filter-chips" role="group" aria-label={t('userFilters', 'User filters')}>
+        {[
+          { id: 'all', label: t('filterAll', 'All') },
+          { id: 'online', label: t('filterOnline', 'Online') },
+          { id: 'expiring', label: t('filterExpiring', 'Expiring soon') },
+          { id: 'quota', label: t('filterQuota', 'Near quota') },
+          { id: 'disabled', label: t('filterDisabled', 'Disabled') },
+          { id: 'unlimited', label: t('filterUnlimited', 'Unlimited') },
+        ].map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            className={`filter-chip${view === f.id ? ' active' : ''}`}
+            onClick={() => setView(f.id)}
+          >
+            {f.label} <span className="count">{filterCounts[f.id] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+
+      {selected.length > 0 && (
+        <div className="bulk-toolbar">
+          <b>{t('selectedCount', '{{count}} selected', { count: selected.length })}</b>
+          <span className="sp" />
+          <button type="button" className="btn btn-sm" onClick={() => handleBulkAdjust('extend', 30, 0)}><FiClock size={12} /> +30 {t('daysUnit', 'days')}</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => handleBulkAdjust('add-traffic', 0, 10)}><FiZap size={12} /> +10 GB</button>
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => handleBulkDelete(selected)}><FiTrash2 size={12} /> {t('delete', 'Delete')}</button>
+        </div>
+      )}
 
       {loadError ? (
         <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={fetchUsers} retryLabel={t('retry')} />
@@ -381,6 +508,12 @@ const UserManagement = () => {
           onEdit={handleEdit}
           onToggleStatus={handleToggleStatus}
           onResetUsage={handleResetUsage}
+          onExtend={handleExtendSingle}
+          onDisconnect={handleDisconnectUserQuick}
+          onCopyLink={async (u) => { await copyText(getSubscriptionLink(u)); addToast(t('linkCopied', 'Subscription link copied'), 'success'); }}
+          onShowQR={handleUserClick}
+          subscriptionLink={(u) => getSubscriptionLink(u)}
+          density={density}
         />
       )}
 
@@ -409,6 +542,15 @@ const UserManagement = () => {
       )}
       {isSessionsModalOpen && (
         <UserSessionsModal isOpen={isSessionsModalOpen} user={selectedUser} data={sessionDiagnostics} loading={sessionLoading} error={sessionError} onClose={() => setIsSessionsModalOpen(false)} onRefresh={() => fetchSessionDiagnostics(selectedUser)} onDisconnect={handleDisconnectUser} />
+      )}
+
+      {undo && (
+        <div className="undo-toast" role="status">
+          <span className="dot" aria-hidden="true" />
+          {t('userDeletedUndo', 'User {{name}} deleted', { name: undo.user.name })}
+          <button type="button" onClick={handleUndoRestore}>{t('undo', 'Undo')}</button>
+          <span className="tick">{Math.max(0, Math.ceil((6000 - (Date.now() - undo.ts)) / 1000))}s</span>
+        </div>
       )}
     </div>
   );

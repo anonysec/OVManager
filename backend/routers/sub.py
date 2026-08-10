@@ -1,21 +1,37 @@
 import asyncio
+import os
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from backend.config import config
-from backend.db.engine import get_db
 from backend.db import crud
-from backend.node.task import download_ovpn_client_from_node
+from backend.db.engine import get_db
 from backend.node.requests import NodeRequests
-
+from backend.node.task import download_ovpn_client_from_node
 
 templates = Jinja2Templates(directory="frontend/templates")
 router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
+
+
+@router.get("/static/subscription.js", include_in_schema=False)
+async def subscription_static_js():
+    """Serve the subscription page's script as an external file.
+
+    The page used an inline <script>; keeping strict CSP (script-src 'self',
+    no 'unsafe-inline') requires external scripts. The file is fully static
+    (no template interpolation), so it is safe to cache.
+    """
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "templates", "subscription.js")
+    return FileResponse(
+        path,
+        media_type="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 def _days_left(expiry_date) -> object:
@@ -102,17 +118,31 @@ async def get_subscription(
 ):
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
-        return sub_error_page(404, "Not Found", "This subscription link is invalid or the user no longer exists.")
+        return sub_error_page(
+            404, "Not Found",
+            "This subscription link is invalid or the user no longer exists.",
+        )
     used = user.used or 0
     # Evaluate expiry BEFORE active state: when a user's subscription expires
     # the daily cron flips is_active to False, so we must surface "Expired"
     # distinctly from a manually disabled account ("Account Disabled").
     if user.expiry_date and user.expiry_date < date.today():
-        return sub_error_page(403, "Expired", "This subscription has expired. Contact your administrator to extend it.")
+        return sub_error_page(
+            403, "Expired",
+            "This subscription has expired. Contact your administrator to extend it.",
+        )
     if not bool(user.is_active):
-        return sub_error_page(403, "Account Disabled", "This user account is currently disabled. Contact your administrator to reactivate it.")
+        return sub_error_page(
+            403,
+            "Account Disabled",
+            "This user account is currently disabled. Contact your administrator to reactivate it.",
+        )
     if user.total is not None and used >= user.total:
-        return sub_error_page(403, "Traffic Limit Reached", "This user has used all allocated traffic. Contact your administrator to increase the limit.")
+        return sub_error_page(
+            403,
+            "Traffic Limit Reached",
+            "This user has used all allocated traffic. Contact your administrator to increase the limit.",
+        )
     nodes = crud.get_active_nodes(db)
     ovpn_download_links = {}
 
@@ -130,7 +160,7 @@ async def get_subscription(
             return False
 
     results = await asyncio.gather(*[is_up(n) for n in nodes]) if nodes else []
-    for node, up in zip(nodes, results):
+    for node, up in zip(nodes, results, strict=False):
         if not up:
             continue
         ovpn_download_links[node.name] = str(
@@ -138,9 +168,9 @@ async def get_subscription(
         )
 
     return templates.TemplateResponse(
+        request,
         "subscription.html",
         {
-            "request": request,
             "name": user.name,
             "expiry_date": _fmt_date(user.expiry_date),
             "days_left": _days_left(user.expiry_date),
@@ -169,9 +199,15 @@ async def download_ovpn(
     if user.expiry_date and user.expiry_date < date.today():
         return sub_error_page(403, "Expired", "This subscription has expired. Contact your administrator to extend it.")
     if not bool(user.is_active):
-        return sub_error_page(403, "Account Disabled", "This user account is currently disabled. Contact your administrator to reactivate it.")
+        return sub_error_page(
+            403, "Account Disabled",
+            "This user account is currently disabled. Contact your administrator to reactivate it.",
+        )
     if user.total is not None and used >= user.total:
-        return sub_error_page(403, "Traffic Limit Reached", "This user has used all allocated traffic. Contact your administrator to increase the limit.")
+        return sub_error_page(
+            403, "Traffic Limit Reached",
+            "This user has used all allocated traffic. Contact your administrator to increase the limit.",
+        )
     node_obj = crud.get_node_by_name(db, node_name)
     if not node_obj:
         return sub_error_page(404, "Not Found", "The requested node was not found.")

@@ -1,27 +1,60 @@
-from datetime import datetime
-from datetime import UTC
+
+import time as _time
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.operations.audit import log_event
-from backend.schema.output import ResponseModel, Users
-from backend.schema._input import CreateUser, UpdateUser, StatusToggle, NodeCreate
-from backend.db.engine import get_db
-from backend.db import crud
-from backend.db.models import User
 from backend.auth.auth import get_current_user
+from backend.db import crud
+from backend.db.engine import get_db
+from backend.db.models import User
 from backend.node.task import (
-    delete_user_on_all_nodes,
     change_user_status_on_all_nodes,
-    set_user_limit_on_all_nodes,
+    delete_user_on_all_nodes,
+    disconnect_user_on_all_nodes,
     get_active_connection_counts,
     get_user_session_diagnostics,
-    disconnect_user_on_all_nodes,
+    set_user_limit_on_all_nodes,
 )
+from backend.operations.audit import log_event
+from backend.schema._input import CreateUser, StatusToggle, UpdateUser
+from backend.schema.output import ResponseModel, Users
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+# ── Undo-delete buffer ────────────────────────────────────────────
+# Snapshot recently deleted users in-memory (bounded + TTL) so the UI can
+# offer "Undo" for a few seconds after a delete. Restoring re-inserts the
+# row with its original UUID; node-side certs regenerate on next download.
+
+_DELETED_TTL = 120  # seconds
+_DELETED_MAX = 50
+_deleted_users: dict[str, tuple[float, dict]] = {}
+
+
+def _snapshot_user(u: User) -> dict:
+    return {
+        "name": u.name,
+        "uuid": u.uuid,
+        "total": u.total,
+        "used": u.used,
+        "max_logins": u.max_logins,
+        "expiry_date": u.expiry_date.isoformat() if u.expiry_date else None,
+        "is_active": u.is_active,
+        "owner": u.owner,
+    }
+
+
+def _remember_deleted(u: User) -> None:
+    now = _time.monotonic()
+    _deleted_users[u.uuid] = (now, _snapshot_user(u))
+    # Evict expired + overflow
+    for k in [k for k, (ts, _) in _deleted_users.items() if now - ts > _DELETED_TTL]:
+        _deleted_users.pop(k, None)
+    while len(_deleted_users) > _DELETED_MAX:
+        _deleted_users.pop(next(iter(_deleted_users)), None)
 
 
 def _require_user_access(db_user: User, current_user: dict) -> None:
@@ -202,7 +235,11 @@ async def change_user_status(
     db.commit()
     synced = await change_user_status_on_all_nodes(db_user.id, db_user.name, request.status, db)
     if not synced:
-        return ResponseModel(success=False, msg="User status saved locally but node synchronization failed", data={"synced": False})
+        return ResponseModel(
+            success=False,
+            msg="User status saved locally but node synchronization failed",
+            data={"synced": False},
+        )
     log_event(db, "user.status", actor=user.get("username"), target=request.name, detail=f"status={request.status}")
     return ResponseModel(success=True, msg="Changed user status successfully")
 
@@ -248,7 +285,58 @@ async def delete_user(
 
     if await delete_user_on_all_nodes(db_user.name, db_user.id, db):
         name = db_user.name
+        _remember_deleted(db_user)  # enable Undo
         crud.delete_user(db, name)
         log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")
         return ResponseModel(success=True, msg="User deleted successfully")
     return ResponseModel(success=False, msg="Failed to delete user on all nodes")
+
+
+@router.post("/{uuid}/restore", response_model=ResponseModel)
+async def restore_user(
+    uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    """Undo a recent delete: re-insert the user with its original UUID."""
+    entry = _deleted_users.get(uuid)
+    if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
+        return ResponseModel(success=False, msg="Undo window expired — user can no longer be restored", data=None)
+    snap = entry[1]
+    if crud.get_user_by_uuid(db, uuid) is not None:
+        _deleted_users.pop(uuid, None)
+        return ResponseModel(success=False, msg="User already exists", data=None)
+    try:
+        restored = crud.restore_user(db, snap)
+    except Exception as exc:
+        return ResponseModel(success=False, msg=f"Restore failed: {exc}", data=None)
+    _deleted_users.pop(uuid, None)
+    # Re-push the login limit to nodes (best-effort; certs regenerate on download).
+    await set_user_limit_on_all_nodes(restored.name, restored.max_logins, db, restored.id)
+    log_event(db, "user.restore", actor=user.get("username"), target=restored.name, detail="User restored (undo)")
+    return ResponseModel(
+        success=True,
+        msg="User restored successfully",
+        data=Users.model_validate(restored).model_dump(),
+    )
+
+
+class _BulkAdjust(BaseModel):
+    action: Literal["extend", "add-traffic"]
+    uuids: list[str] = Field(min_length=1)
+    days: int = 0
+    bytes: int = 0
+
+
+@router.post("/bulk", response_model=ResponseModel)
+async def bulk_adjust_users(
+    payload: _BulkAdjust,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Bulk-extend expiry or add traffic quota to selected users."""
+    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes)
+    action = "extend" if payload.action == "extend" else "add-traffic"
+    log_event(
+        db, f"bulk.{action}", actor=user.get("username"),
+        target=f"{result['updated']} users", detail=str(payload.days or payload.bytes),
+    )
+    return ResponseModel(success=result["updated"] > 0, msg=f"{result['updated']} user(s) updated", data=result)
