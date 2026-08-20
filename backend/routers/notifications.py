@@ -1,0 +1,24 @@
+# Copyright (c) 2025 anonysec. All rights reserved.
+# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from backend.auth.auth import get_current_user
+from backend.db import crud
+from backend.db.engine import get_db
+from backend.schema.output import ResponseModel
+
+router = APIRouter(prefix="/notifications", tags=["Notifications"])
+
+@router.get("/", response_model=ResponseModel)
+async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    nodes = crud.get_all_nodes(db)
+    items = []
+    for n in nodes:
+        if not n.status:
+            items.append({"level": "danger", "type": "node_offline", "title": f"Node {n.name} is offline", "target": n.name})
+    # Do not notify for inactive users; that is expected administrative state.
+    # Full/max-login and stale-login issues are surfaced in Max-login Health.
+    return ResponseModel(success=True, msg="Notifications", data=items[:100])

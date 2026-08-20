@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[codz]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Database
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Ruff
+.ruff_cache/
+
+# uv
+.python-version
+
+# Node (frontend build artifacts)
+frontend/node_modules/
+frontend/dist/
+
+# Docker
+.docker/
+
+# Logs
+*.log
+
+# Pre-commit
+.pre-commit-cache/

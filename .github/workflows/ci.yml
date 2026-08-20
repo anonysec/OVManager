@@ -1,0 +1,48 @@
+# Copyright (c) 2025 anonysec. All rights reserved.
+# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint -- --max-warnings 10
+      - run: npm test
+      - run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      ADMIN_USERNAME: test_admin
+      ADMIN_PASSWORD: test_password_12345678!
+      JWT_SECRET_KEY: test-secret-key-for-ci-env-only-change-me-in-production
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Sync deps + dev group
+        run: |
+          uv sync
+          uv pip install --python .venv/bin/python3 pytest pytest-asyncio httpx
+      - name: Run backend tests
+        run: .venv/bin/python -m pytest -q

@@ -1,0 +1,611 @@
+// Copyright (c) 2025 anonysec. All rights reserved.
+// Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+
+/* ═══════════════════════════════════════════
+   Settings — single-page, categorised layout
+═══════════════════════════════════════════ */
+
+.sp-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding-bottom: 48px;
+  animation: fadeUp .25s ease both;
+}
+
+/* ── Simple / Advanced mode bar ───────────────── */
+.sp-modebar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  background: var(--surface-1, var(--panel));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 12px;
+}
+
+.sp-mode-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2, rgba(255,255,255,.05));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+}
+
+.sp-mode-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted, var(--muted));
+  font: 700 12px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+
+.sp-mode-toggle button:hover {
+  color: var(--text-primary, var(--text));
+}
+
+.sp-mode-toggle button.active {
+  background: var(--accent-color-transparent, rgba(252,122,30,.14));
+  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border, var(--line)));
+  color: var(--accent-color, var(--orange));
+}
+
+.sp-mode-hint {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-muted, var(--muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── Jump navigation bar ─────────────────── */
+.sp-jumpnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 28px;
+  padding: 10px 14px;
+  background: var(--surface-1, var(--panel));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 12px;
+}
+
+.sp-jumpnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary, var(--muted));
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+
+.sp-jumpnav-link:hover {
+  background: var(--accent-color-transparent, rgba(252,122,30,.12));
+  color: var(--accent-color, var(--orange));
+}
+
+/* ── Section spacing ─────────────────────── */
+.sp-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.sp-section {
+  scroll-margin-top: 72px; /* account for sticky topbar */
+}
+
+/* ── Section header ──────────────────────── */
+.sp-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border, var(--line));
+}
+
+.sp-section-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-color-transparent, rgba(252,122,30,.12));
+  color: var(--accent-color, var(--orange));
+}
+
+.sp-section-icon svg { width: 17px; height: 17px; }
+
+.sp-section-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary, var(--text));
+  line-height: 1.2;
+}
+
+.sp-section-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted, var(--muted));
+}
+
+/* ── Cards grid ──────────────────────────── */
+.sp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 12px;
+}
+
+.sp-card {
+  background: var(--surface-1, var(--panel));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.sp-card:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border, var(--line)));
+  box-shadow: 0 4px 18px rgba(0,0,0,.18);
+}
+
+.sp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, var(--line));
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, var(--text));
+}
+
+.sp-card-head svg { color: var(--accent-color, var(--orange)); }
+
+.sp-card-body {
+  padding: 16px;
+}
+
+/* ── Fields ──────────────────────────────── */
+.sp-field {
+  margin-bottom: 14px;
+}
+
+.sp-field:last-child { margin-bottom: 0; }
+
+.sp-field--h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-field--h .sp-label { margin-bottom: 0; }
+
+.sp-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.sp-label-xs {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.sp-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 8px;
+  background: var(--bg, #0e1116);
+  color: var(--text-primary, var(--text));
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.sp-input:focus {
+  outline: none;
+  border-color: var(--accent-color, var(--orange));
+  box-shadow: 0 0 0 3px rgba(252,122,30,.15);
+}
+
+.sp-input::placeholder { color: var(--text-muted, var(--muted)); opacity: .6; }
+.sp-input[disabled]    { opacity: .45; cursor: not-allowed; }
+
+.sp-hint {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--text-muted, var(--muted));
+  line-height: 1.5;
+}
+
+.sp-error {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--danger-color, var(--red));
+}
+
+/* ── Code & URL display ──────────────────── */
+.sp-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 8px;
+  background: var(--bg, #0e1116);
+  margin-bottom: 10px;
+}
+
+.sp-code {
+  flex: 1;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-color, var(--orange));
+  word-break: break-all;
+}
+
+.sp-code--muted { color: var(--text-secondary, var(--muted)); }
+
+.sp-icon-btn {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, var(--muted));
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.sp-icon-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  background: var(--accent-color-transparent, rgba(252,122,30,.1));
+}
+
+.sp-url-preview {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2, rgba(255,255,255,.03));
+  border-radius: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.sp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--accent-color, var(--orange));
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.sp-link:hover { text-decoration: underline; }
+
+/* ── Inline edit area ────────────────────── */
+.sp-inline-edit {
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Button group ────────────────────────── */
+.sp-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-row-btns {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Two-column field layout ─────────────── */
+.sp-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Stats grid ──────────────────────────── */
+.sp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.sp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  background: var(--bg, #0e1116);
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+  text-align: center;
+}
+
+.sp-stat span { font-size: 10px; font-weight: 700; color: var(--text-muted, var(--muted)); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.sp-stat strong { font-size: 22px; font-weight: 800; color: var(--text-primary, var(--text)); line-height: 1; }
+.sp-stat--danger strong { color: var(--danger-color, var(--red)); }
+.sp-stat--warn   strong { color: var(--accent-color, var(--orange)); }
+.sp-stat--ok     strong { color: var(--success-color, var(--green)); }
+
+/* ── Hours toggle ────────────────────────── */
+.sp-hours-toggle {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.sp-hour-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, var(--muted));
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.sp-hour-btn.active {
+  border-color: var(--accent-color);
+  background: var(--accent-color-transparent, rgba(252,122,30,.12));
+  color: var(--accent-color);
+}
+
+/* ── Node per-row ────────────────────────── */
+.sp-node-list { display: flex; flex-direction: column; gap: 4px; }
+.sp-node-row  { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; background: var(--surface-2, rgba(255,255,255,.03)); }
+.sp-node-name { flex: 1; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+
+/* ── Badges ──────────────────────────────── */
+.sp-badge {
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--surface-2, rgba(255,255,255,.06));
+  color: var(--text-secondary, var(--muted));
+}
+
+.sp-badge--danger,
+.sp-badge.danger { background: rgba(255,83,104,.12); color: var(--danger-color, var(--red)); }
+.sp-badge--warn   { background: rgba(252,122,30,.12); color: var(--accent-color, var(--orange)); }
+.sp-badge--ok     { background: rgba(47,210,118,.12); color: var(--success-color, var(--green)); }
+.sp-badge--muted  { background: rgba(154,161,173,.10); color: var(--text-muted, var(--muted)); }
+
+/* ── Backup list ─────────────────────────── */
+.sp-backup-list   { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+.sp-backup-row    { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; background: var(--surface-2, rgba(255,255,255,.03)); }
+.sp-backup-name   { flex: 1; font-size: 11px; color: var(--text-secondary); font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-backup-size   { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+/* ── File input ──────────────────────────── */
+.sp-file-input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed var(--border, var(--line));
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.sp-file-input::file-selector-button {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-color);
+  color: #000;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+/* ── Toggle switch ───────────────────────── */
+.sp-toggle { display: inline-flex; align-items: center; cursor: pointer; gap: 0; }
+.sp-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sp-toggle-track {
+  width: 40px; height: 22px;
+  border-radius: 11px;
+  background: var(--border, var(--line));
+  position: relative;
+  transition: background .2s;
+  flex-shrink: 0;
+}
+.sp-toggle input:checked ~ .sp-toggle-track { background: var(--accent-color); }
+.sp-toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(18px); }
+.sp-toggle input:disabled ~ .sp-toggle-track { opacity: .45; cursor: not-allowed; }
+
+/* ── Feed (activity) ─────────────────────── */
+.sp-feed { display: flex; flex-direction: column; gap: 1px; }
+.sp-feed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border, var(--line));
+  flex-wrap: wrap;
+}
+.sp-feed-row:last-child { border-bottom: none; }
+.sp-feed-body { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.sp-feed-actor { font-size: 12px; font-weight: 700; color: var(--accent-color); }
+.sp-feed-target { font-size: 12px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.sp-feed-time { font-size: 10px; color: var(--text-muted, var(--muted)); white-space: nowrap; margin-left: auto; }
+.sp-muted { font-size: 10px; color: var(--text-muted); }
+
+/* ── Light mode overrides ────────────────── */
+html[data-theme="light"] .sp-card        { background: #fff; }
+html[data-theme="light"] .sp-input       { background: #f7f9fc; }
+html[data-theme="light"] .sp-url-row     { background: #f7f9fc; }
+html[data-theme="light"] .sp-url-preview { background: #f0f3f8; }
+html[data-theme="light"] .sp-stat        { background: #f0f3f8; }
+html[data-theme="light"] .sp-node-row    { background: #f0f3f8; }
+html[data-theme="light"] .sp-backup-row  { background: #f0f3f8; }
+html[data-theme="light"] .sp-jumpnav     { background: #fff; }
+
+/* ── Responsive ──────────────────────────── */
+@media (max-width: 640px) {
+  .sp-cards         { grid-template-columns: 1fr; }
+  .sp-stats-grid    { grid-template-columns: repeat(2, 1fr); }
+  .sp-two-col       { grid-template-columns: 1fr; }
+  .sp-jumpnav-link span { display: none; }
+  .sp-jumpnav-link  { padding: 6px; }
+}
+
+/* ── Appearance: theme pills + language ─────── */
+.sp-theme-pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sp-theme-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+  background: var(--surface-2, rgba(255,255,255,.05));
+  color: var(--text-secondary, var(--muted));
+  font: 700 12px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.sp-theme-pill:hover {
+  color: var(--text-primary, var(--text));
+  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border, var(--line)));
+}
+
+.sp-theme-pill.active {
+  background: var(--accent-color-transparent, rgba(252,122,30,.14));
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border, var(--line)));
+  color: var(--accent-color, var(--orange));
+}
+
+.sp-lang-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-lang-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 9px;
+  background: var(--surface-2, rgba(255,255,255,.05));
+  color: var(--text-secondary, var(--muted));
+  font: 700 12px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.sp-lang-btn:hover {
+  color: var(--text-primary, var(--text));
+}
+
+.sp-lang-btn.active {
+  background: var(--accent-color-transparent, rgba(252,122,30,.14));
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--border, var(--line)));
+  color: var(--accent-color, var(--orange));
+}
+
+/* ── Alerts & Dashboard ────────────────────── */
+.sp-alert-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sp-alert-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+  background: var(--surface-2, rgba(255,255,255,.035));
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .15s ease;
+}
+
+.sp-alert-row:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border, var(--line)));
+}
+
+.sp-alert-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-primary, var(--text));
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sp-alert-label svg {
+  flex: 0 0 auto;
+  color: var(--text-muted, var(--muted));
+}
+
+.sp-alert-row .sp-toggle {
+  flex: 0 0 auto;
+}
