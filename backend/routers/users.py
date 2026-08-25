@@ -305,6 +305,11 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
         return ResponseModel(success=False, msg="Undo window expired — user can no longer be restored", data=None)
     snap = entry[1]
+    # The undo buffer is process-global, keyed by UUID. Enforce the same
+    # ownership rule as every other user operation: an admin must not
+    # resurrect a user that belonged to someone else.
+    if user.get("type") != "owner" and snap.get("owner") != user.get("username"):
+        return ResponseModel(success=False, msg="You do not have permission to restore this user", data=None)
     if crud.get_user_by_uuid(db, uuid) is not None:
         _deleted_users.pop(uuid, None)
         return ResponseModel(success=False, msg="User already exists", data=None)
@@ -326,7 +331,7 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
 
 class _BulkAdjust(BaseModel):
     action: Literal["extend", "add-traffic"]
-    uuids: list[str] = Field(min_length=1)
+    uuids: list[str] = Field(min_length=1, max_length=500)
     days: int = 0
     bytes: int = 0
 
@@ -337,8 +342,13 @@ async def bulk_adjust_users(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Bulk-extend expiry or add traffic quota to selected users."""
-    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes)
+    """Bulk-extend expiry or add traffic quota to selected users.
+
+    Admins may only touch their own users — the owner filter in the CRUD
+    layer silently skips any UUID outside the caller's tenancy.
+    """
+    owner = None if user["type"] == "owner" else user["username"]
+    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes, owner=owner)
     action = "extend" if payload.action == "extend" else "add-traffic"
     log_event(
         db,
