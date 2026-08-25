@@ -20,7 +20,8 @@ def ensure_audit_table(db: Session) -> None:
     this check after the first successful call.
     """
     global _table_ready
-    db.execute(text("""
+    db.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts REAL NOT NULL,
@@ -29,7 +30,8 @@ def ensure_audit_table(db: Session) -> None:
             target TEXT,
             detail TEXT
         )
-    """))
+    """)
+    )
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)"))
     db.commit()
     _table_ready = True
@@ -39,6 +41,7 @@ def log_event(db, action, actor=None, target=None, detail=None):
     global _table_ready
     if db is None:
         from backend.db.engine import SessionLocal
+
         db = SessionLocal()
         created = True
     else:

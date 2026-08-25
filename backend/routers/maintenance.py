@@ -122,11 +122,13 @@ async def list_backups(user: dict = Depends(require_owner)):
     )
     files = []
     for b in backups:
-        files.append({
-            "name": b.name,
-            "size": b.stat().st_size,
-            "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=datetime.UTC).isoformat(),
-        })
+        files.append(
+            {
+                "name": b.name,
+                "size": b.stat().st_size,
+                "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=datetime.UTC).isoformat(),
+            }
+        )
     return ResponseModel(success=True, msg="Backups listed", data=files)
 
 
@@ -256,7 +258,9 @@ async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict
 async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await sync_all_user_limits(db)
     log_event(
-        db, "maintenance.sync_limits", actor=user.get("username"),
+        db,
+        "maintenance.sync_limits",
+        actor=user.get("username"),
         detail=f"{data.get('success')}/{data.get('total')} synced",
     )
     return ResponseModel(success=True, msg="Login limits synced", data=data)
@@ -273,7 +277,9 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
 async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await clean_global_mlogin_registry(db)
     log_event(
-        db, "maintenance.clean_global_registry", actor=user.get("username"),
+        db,
+        "maintenance.clean_global_registry",
+        actor=user.get("username"),
         detail=f"removed={len(data.get('removed') or [])}",
     )
     return ResponseModel(success=True, msg="Global login registry cleaned", data=data)

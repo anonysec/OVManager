@@ -3,17 +3,23 @@
 
 import logging
 from datetime import date, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+
 from bot.handlers.common import (
-    api, _get_plans, _set_state, _pop_state, _periodic_cleanup,
-    _check_rate_limit, _hub_kb, _hub, _auth, _safe_handler,
-    _parse_args, _is_owner, HELP_TEXT,
+    HELP_TEXT,
+    _get_plans,
+    _hub_kb,
+    _is_owner,
+    _periodic_cleanup,
+    _set_state,
+    api,
 )
-from bot.handlers.users import _build_users_page, _show_user, _is_expired
-from bot.handlers.status import _handle_status
+from bot.handlers.new_user import _do_plan_create, _plan_kb
 from bot.handlers.renew_edit import _execute_renew
-from bot.handlers.new_user import _plan_kb, _do_plan_create, _handle_new
+from bot.handlers.status import _handle_status
+from bot.handlers.users import _build_users_page, _show_user
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +67,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ─── User detail ───
         elif data.startswith("user_"):
-            key = data[len("user_"):]
+            key = data[len("user_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, key)
             if u:
@@ -97,7 +103,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ─── Edit interactive ───
         elif data.startswith("edit_"):
-            uuid = data[len("edit_"):]
+            uuid = data[len("edit_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             if not u:
@@ -106,16 +112,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = u.get("name", uuid)
             await query.edit_message_text(
                 f"✏️ Edit {name}\nChoose what to change:",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📅 Extend +30d", callback_data=f"ed_days_{uuid}_30"),
-                     InlineKeyboardButton("📅 Extend +90d", callback_data=f"ed_days_{uuid}_90")],
-                    [InlineKeyboardButton("📊 Traffic 200GB", callback_data=f"ed_traf_{uuid}_200"),
-                     InlineKeyboardButton("📊 Traffic 1TB", callback_data=f"ed_traf_{uuid}_1024")],
-                    [InlineKeyboardButton("📊 Traffic ♾️", callback_data=f"ed_traf_{uuid}_0")],
-                    [InlineKeyboardButton("👥 Logins 1", callback_data=f"ed_log_{uuid}_1"),
-                     InlineKeyboardButton("👥 Logins ♾️", callback_data=f"ed_log_{uuid}_0")],
-                    [InlineKeyboardButton("⬅️ Back", callback_data=f"user_{uuid}")],
-                ]),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("📅 Extend +30d", callback_data=f"ed_days_{uuid}_30"),
+                            InlineKeyboardButton("📅 Extend +90d", callback_data=f"ed_days_{uuid}_90"),
+                        ],
+                        [
+                            InlineKeyboardButton("📊 Traffic 200GB", callback_data=f"ed_traf_{uuid}_200"),
+                            InlineKeyboardButton("📊 Traffic 1TB", callback_data=f"ed_traf_{uuid}_1024"),
+                        ],
+                        [InlineKeyboardButton("📊 Traffic ♾️", callback_data=f"ed_traf_{uuid}_0")],
+                        [
+                            InlineKeyboardButton("👥 Logins 1", callback_data=f"ed_log_{uuid}_1"),
+                            InlineKeyboardButton("👥 Logins ♾️", callback_data=f"ed_log_{uuid}_0"),
+                        ],
+                        [InlineKeyboardButton("⬅️ Back", callback_data=f"user_{uuid}")],
+                    ]
+                ),
             )
 
         # ─── Edit actions ───
@@ -133,9 +147,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             exp = date(2099, 12, 31) if days == 0 else date.today() + timedelta(days=days)
             r = await api.update_user(name, {"expiry_date": exp})
             s = "♾️" if days == 0 else f"+{days}d"
-            await query.edit_message_text(
-                f"✅ {name} expiry → {s}" if r.get("success") else f"❌ {r.get('msg')}"
-            )
+            await query.edit_message_text(f"✅ {name} expiry → {s}" if r.get("success") else f"❌ {r.get('msg')}")
         elif data.startswith("ed_traf_"):
             # ed_traf_<uuid>_<gb>
             try:
@@ -150,9 +162,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total = gb * 1073741824 if gb > 0 else None
             r = await api.update_user(name, {"total": total})
             s = "♾️" if gb == 0 else f"{gb}GB"
-            await query.edit_message_text(
-                f"✅ {name} traffic → {s}" if r.get("success") else f"❌ {r.get('msg')}"
-            )
+            await query.edit_message_text(f"✅ {name} traffic → {s}" if r.get("success") else f"❌ {r.get('msg')}")
         elif data.startswith("ed_log_"):
             # ed_log_<uuid>_<n>
             try:
@@ -166,19 +176,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = u.get("name", uuid) if u else uuid
             r = await api.update_user(name, {"max_logins": n})
             s = "♾️" if n == 0 else str(n)
-            await query.edit_message_text(
-                f"✅ {name} max logins → {s}" if r.get("success") else f"❌ {r.get('msg')}"
-            )
+            await query.edit_message_text(f"✅ {name} max logins → {s}" if r.get("success") else f"❌ {r.get('msg')}")
 
         # ─── Renew ───
         elif data.startswith("renew_"):
-            rest = data[len("renew_"):]
+            rest = data[len("renew_") :]
             # Try to find a plan suffix
             plan = None
             matched_uuid = rest
             for p in list(_get_plans().keys()) + ["custom"]:
                 if rest.endswith(f"_{p}"):
-                    matched_uuid = rest[:-(len(p) + 1)]
+                    matched_uuid = rest[: -(len(p) + 1)]
                     plan = p
                     break
             users = await api.get_users()
@@ -198,19 +206,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Plain uuid — show plan picker
                 await query.edit_message_text(
                     f"🔄 Renew {name}\nSelect plan:",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🥉 Bronze  30d / 200GB / 1u", callback_data=f"renew_{uuid}_bronze")],
-                        [InlineKeyboardButton("🥈 Silver  30d / 200GB / 2u", callback_data=f"renew_{uuid}_silver")],
-                        [InlineKeyboardButton("🥇 Gold  Unlimited", callback_data=f"renew_{uuid}_gold")],
-                        [InlineKeyboardButton("✏️ Custom", callback_data=f"renew_{uuid}_custom")],
-                        [InlineKeyboardButton("⬅️ Back", callback_data=f"user_{uuid}")],
-                    ]),
+                    reply_markup=InlineKeyboardMarkup(
+                        [
+                            [InlineKeyboardButton("🥉 Bronze  30d / 200GB / 1u", callback_data=f"renew_{uuid}_bronze")],
+                            [InlineKeyboardButton("🥈 Silver  30d / 200GB / 2u", callback_data=f"renew_{uuid}_silver")],
+                            [InlineKeyboardButton("🥇 Gold  Unlimited", callback_data=f"renew_{uuid}_gold")],
+                            [InlineKeyboardButton("✏️ Custom", callback_data=f"renew_{uuid}_custom")],
+                            [InlineKeyboardButton("⬅️ Back", callback_data=f"user_{uuid}")],
+                        ]
+                    ),
                 )
                 return
             if plan == "custom":
                 await query.edit_message_text(
-                    f"✏️ Custom renew for {name}\n\n"
-                    f"Use: <code>/r {name} &lt;days&gt; &lt;traffic&gt; &lt;users&gt;</code>",
+                    f"✏️ Custom renew for {name}\n\nUse: <code>/r {name} &lt;days&gt; &lt;traffic&gt; &lt;users&gt;</code>",
                     parse_mode="HTML",
                 )
                 return
@@ -219,7 +228,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ─── Sub URL ───
         elif data.startswith("sub_"):
-            uuid = data[len("sub_"):]
+            uuid = data[len("sub_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             name = u.get("name", uuid) if u else uuid
@@ -230,13 +239,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML",
                 )
             else:
-                await query.edit_message_text(
-                    "❌ Sub URL not available. Configure subscription settings in panel."
-                )
+                await query.edit_message_text("❌ Sub URL not available. Configure subscription settings in panel.")
 
         # ─── Toggle ───
         elif data.startswith("tog_"):
-            uuid = data[len("tog_"):]
+            uuid = data[len("tog_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             name = u.get("name", uuid) if u else uuid
@@ -259,12 +266,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(nodes) > 1:
                 kb.append([InlineKeyboardButton("📦 All", callback_data=f"dlall_{uuid}")])
             kb.append([InlineKeyboardButton("⬅️ Back", callback_data=f"user_{uuid}")])
-            await query.edit_message_text(
-                f"Download config for {name}:", reply_markup=InlineKeyboardMarkup(kb)
-            )
+            await query.edit_message_text(f"Download config for {name}:", reply_markup=InlineKeyboardMarkup(kb))
 
         elif data.startswith("dlall_"):
-            uuid = data[len("dlall_"):]
+            uuid = data[len("dlall_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             name = u.get("name", uuid) if u else uuid
@@ -304,9 +309,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             name = u.get("name", uuid) if u else uuid
-            await query.edit_message_text(
-                f"⏳ Downloading {matched_node} config for {name}..."
-            )
+            await query.edit_message_text(f"⏳ Downloading {matched_node} config for {name}...")
             content = await api.download_config(name, matched_node)
             if content:
                 fn = f"{name}-{matched_node}.ovpn"
@@ -319,7 +322,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ─── Delete ───
         elif data.startswith("del_"):
-            uuid = data[len("del_"):]
+            uuid = data[len("del_") :]
             users = await api.get_users()
             u = _lookup_user_by_uuid_or_name(users, uuid)
             name = u.get("name", uuid) if u else uuid
@@ -329,7 +332,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await query.edit_message_text(f"❌ {result.get('msg', 'Delete failed')}")
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error in handle_callback")
         await query.edit_message_text("⚠️ Error, check logs.")
     finally:

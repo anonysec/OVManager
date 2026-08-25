@@ -15,58 +15,39 @@ Modules:
     callbacks   - All inline callback query handlers
 """
 
-from bot.handlers.common import (
-    # State management
-    USER_STATES,
-    _cleanup_states,
-    _set_state,
-    _pop_state,
-    # Plans
-    _get_plans,
-    _DEFAULT_PLANS,
-    # Rate limiting
-    _check_rate_limit,
-    _periodic_cleanup,
-    # Utilities
-    _parse_args,
-    _fmt_bytes,
-    _days_remaining,
-    _auth,
-    _is_owner,
-    # UI components
-    _hub_kb,
-    _hub,
-    # Decorator
-    _safe_handler,
-    # Constants
-    HELP_TEXT,
-    USERS_PER_PAGE,
-    # API instance
-    api,
-)
-
-from bot.handlers.new_user import (
-    _plan_kb,
-    _do_plan_create,
-    _handle_new,
-)
-
-from bot.handlers.status import _handle_status
-from bot.handlers.users import _build_users_page, _show_user, _is_expired, _handle_users
-from bot.handlers.renew_edit import _handle_renew, _execute_renew, _handle_edit
-from bot.handlers.callbacks import handle_callback
-
 from telegram import Update
 from telegram.ext import ContextTypes
+
+from bot.handlers.callbacks import handle_callback as handle_callback
+from bot.handlers.common import (
+    # Constants
+    HELP_TEXT,
+    # State management
+    _auth,
+    # Rate limiting
+    _check_rate_limit,
+    # Plans
+    _hub,
+    # Utilities
+    _parse_args,
+    _periodic_cleanup,
+    _pop_state,
+)
+from bot.handlers.common import (
+    # API instance
+    api as api,
+)
+from bot.handlers.new_user import _do_plan_create, _handle_new
+from bot.handlers.renew_edit import _handle_edit, _handle_renew
+from bot.handlers.status import _handle_status
+from bot.handlers.users import _handle_users
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         text = update.message.text.strip()
         if not await _auth(update):
-            await update.message.reply_text(
-                "⛔ Access Denied\nContact your panel admin to link your Telegram ID."
-            )
+            await update.message.reply_text("⛔ Access Denied\nContact your panel admin to link your Telegram ID.")
             return
         uid = update.effective_user.id
         if not _check_rate_limit(uid):
@@ -96,8 +77,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await _handle_edit(update, args)
         elif mode == "help":
             await update.message.reply_text(HELP_TEXT, parse_mode="HTML")
-    except Exception as e:
+    except Exception:
         import logging
+
         logging.getLogger(__name__).exception("Error in handle_message")
         await update.message.reply_text("⚠️ Internal error, check logs.")
     finally:

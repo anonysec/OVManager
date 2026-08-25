@@ -39,10 +39,7 @@ def _purge_stale_attempts() -> None:
     if now - _last_cleanup < _CLEANUP_INTERVAL:
         return
     _last_cleanup = now
-    stale_keys = [
-        ip for ip, times in _login_attempts.items()
-        if not times or now - times[-1] > _LOCKOUT_SECONDS
-    ]
+    stale_keys = [ip for ip, times in _login_attempts.items() if not times or now - times[-1] > _LOCKOUT_SECONDS]
     for k in stale_keys:
         _login_attempts.pop(k, None)
 
@@ -108,9 +105,7 @@ def authenticate_user(db: Session, username: str, password: str):
     if username == owner_username:
         # Constant-time comparison — even if lengths differ, hmac.compare_digest
         # handles that safely by padding the shorter string.
-        if hmac.compare_digest(
-            password.encode(), owner_password.encode()
-        ):
+        if hmac.compare_digest(password.encode(), owner_password.encode()):
             return {"username": username, "type": "owner"}
         # Avoid leaking whether the *username* was correct: still check DB
         # (main admin won't be in DB, so this returns None, but the timing
@@ -242,9 +237,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM]
-        )
+        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         user_type: str = payload.get("role")
         if payload.get("type") != "access" or username is None or user_type not in ("admin", "owner"):

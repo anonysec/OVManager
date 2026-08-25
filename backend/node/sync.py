@@ -38,8 +38,13 @@ async def sync_all_user_limits(db: Session) -> dict:
         req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
         cn = str(user.id)
         ok = req.set_user_limit(str(user.id), int(user.max_logins or 0))
-        return {"node": node.name, "user": user.name, "common_name": cn,
-                "max_logins": int(user.max_logins or 0), "success": bool(ok)}
+        return {
+            "node": node.name,
+            "user": user.name,
+            "common_name": cn,
+            "max_logins": int(user.max_logins or 0),
+            "success": bool(ok),
+        }
 
     async def bounded_work(node, user):
         async with _semaphore:
@@ -52,8 +57,7 @@ async def sync_all_user_limits(db: Session) -> dict:
             results.append({"success": False, "error": str(item)})
         else:
             results.append(item)
-    return {"total": len(results), "success": sum(1 for r in results if r.get("success")),
-            "results": results}
+    return {"total": len(results), "success": sum(1 for r in results if r.get("success")), "results": results}
 
 
 async def clean_stale_sessions_all_nodes(db: Session) -> dict:
@@ -107,21 +111,21 @@ async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> 
             continue
         reachable_nodes.add(node_data.name)
         for sess in data.get("live_sessions") or []:
-            live_keys.add((
-                node_data.name,
-                str(sess.get("common_name") or ""),
-                str(sess.get("trusted_ip") or ""),
-                str(sess.get("trusted_port") or ""),
-            ))
+            live_keys.add(
+                (
+                    node_data.name,
+                    str(sess.get("common_name") or ""),
+                    str(sess.get("trusted_ip") or ""),
+                    str(sess.get("trusted_port") or ""),
+                )
+            )
 
     try:
-        rows = db.execute(text(
-            "SELECT id, username, common_name, node_name, trusted_ip, trusted_port, created_at "
-            "FROM global_mlogin_sessions"
-        )).fetchall()
+        rows = db.execute(
+            text("SELECT id, username, common_name, node_name, trusted_ip, trusted_port, created_at FROM global_mlogin_sessions")
+        ).fetchall()
     except Exception:
-        return {"reachable_nodes": sorted(reachable_nodes), "removed": [], "kept": [],
-                "message": "registry table missing"}
+        return {"reachable_nodes": sorted(reachable_nodes), "removed": [], "kept": [], "message": "registry table missing"}
 
     now = time.time()
     removed = []
@@ -137,8 +141,20 @@ async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> 
             continue
         if key not in live_keys:
             db.execute(text("DELETE FROM global_mlogin_sessions WHERE id = :id"), {"id": row[0]})
-            removed.append({"id": row[0], "username": row[1], "common_name": row[2],
-                            "node": row[3], "trusted_ip": row[4], "trusted_port": row[5]})
+            removed.append(
+                {
+                    "id": row[0],
+                    "username": row[1],
+                    "common_name": row[2],
+                    "node": row[3],
+                    "trusted_ip": row[4],
+                    "trusted_port": row[5],
+                }
+            )
     db.commit()
-    return {"reachable_nodes": sorted(reachable_nodes), "removed": removed,
-            "kept_count": kept_count, "live_count": len(live_keys)}
+    return {
+        "reachable_nodes": sorted(reachable_nodes),
+        "removed": removed,
+        "kept_count": kept_count,
+        "live_count": len(live_keys),
+    }

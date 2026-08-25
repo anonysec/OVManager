@@ -100,9 +100,9 @@ class NodeRequests:
         return self._request("delete", f"/sync/user/{uid}") is not None
 
     def set_user_limit(self, uid: str, max_logins: int) -> bool:
-        return self._request(
-            "put", "/sync/user/limit", json={"id": uid, "max_logins": max_logins}, timeout=LONG_TIMEOUT
-        ) is not None
+        return (
+            self._request("put", "/sync/user/limit", json={"id": uid, "max_logins": max_logins}, timeout=LONG_TIMEOUT) is not None
+        )
 
     def disconnect_user(self, uid: str) -> dict:
         r = self._request("post", f"/sync/user/{uid}/disconnect")
@@ -119,8 +119,11 @@ class NodeRequests:
             )
             body = r.content
             if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
-                return Response(content=body, media_type="application/x-openvpn-profile",
-                                headers={"Content-Disposition": f'attachment; filename="{uid}.ovpn"'})
+                return Response(
+                    content=body,
+                    media_type="application/x-openvpn-profile",
+                    headers={"Content-Disposition": f'attachment; filename="{uid}.ovpn"'},
+                )
             logger.error("Node %s OVPN %s: invalid response", self.address, uid)
         except Exception as e:
             logger.error("Node %s OVPN %s: %s", self.address, uid, e)

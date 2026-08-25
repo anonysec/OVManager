@@ -44,6 +44,7 @@ def require_ownership(user: dict = Depends(get_current_user), db: Session = Depe
             # owner_check(uuid) raises 403 if the current user doesn't own this user
             pass
     """
+
     def check(uuid: str, user_name: str = None) -> bool:
         if user.get("type") == "owner":
             return True
@@ -66,4 +67,5 @@ def require_ownership(user: dict = Depends(get_current_user), db: Session = Depe
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This action requires admin privileges",
         )
+
     return check

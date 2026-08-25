@@ -100,9 +100,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
 
     ok = await run_in_threadpool(nr.check_node)
     if not ok:
-        logger.warning(
-            "Node %s updated in DB but unreachable for live sync", request.address
-        )
+        logger.warning("Node %s updated in DB but unreachable for live sync", request.address)
         return True, "Node updated. Live node is unreachable — changes will apply on next reconnect."
 
     configured = await run_in_threadpool(
@@ -130,20 +128,22 @@ async def list_nodes_handler(db: Session) -> list:
     nodes = crud.get_all_nodes(db)
     result = []
     for n in nodes:
-        result.append({
-            "id": n.id,
-            "name": n.name,
-            "address": n.address,
-            "tunnel_address": n.tunnel_address,
-            "protocol": n.protocol,
-            "ovpn_port": n.ovpn_port,
-            "port": n.port,
-            "status": n.status,
-            "use_tls": n.use_tls,
-            "country_code": n.country_code,
-            "latitude": n.latitude,
-            "longitude": n.longitude,
-        })
+        result.append(
+            {
+                "id": n.id,
+                "name": n.name,
+                "address": n.address,
+                "tunnel_address": n.tunnel_address,
+                "protocol": n.protocol,
+                "ovpn_port": n.ovpn_port,
+                "port": n.port,
+                "status": n.status,
+                "use_tls": n.use_tls,
+                "country_code": n.country_code,
+                "latitude": n.latitude,
+                "longitude": n.longitude,
+            }
+        )
     return result
 
 
@@ -197,9 +197,7 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     return results
 
 
-async def change_user_status_on_all_nodes(
-    user_id: int, name: str, status: bool, db: Session, max_logins: int = None
-) -> bool:
+async def change_user_status_on_all_nodes(user_id: int, name: str, status: bool, db: Session, max_logins: int = None) -> bool:
     """Toggle user status on every active node. Uses numeric user ID."""
     nodes = crud.get_active_nodes(db)
     uid = str(user_id)
@@ -253,9 +251,12 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
 
     users = crud.get_all_users(db)
     nr = NodeRequests(
-        address=node.address, port=node.port, api_key=node.key,
+        address=node.address,
+        port=node.port,
+        api_key=node.key,
         tunnel_address=node.tunnel_address or "",
-        protocol=node.protocol, ovpn_port=node.ovpn_port,
+        protocol=node.protocol,
+        ovpn_port=node.ovpn_port,
         use_tls=node.use_tls,
     )
 

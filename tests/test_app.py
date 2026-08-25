@@ -7,9 +7,11 @@ Routes are registered at /api/... (no prefix). The URLPathMiddleware handles
 any dynamic prefix at the ASGI level. These tests use TestClient which
 exercises the app directly, so they test the unprefixed routes.
 """
+
 from fastapi.testclient import TestClient
 
 from backend.app import api
+from backend.config import config
 
 
 def test_app_imports():
@@ -37,8 +39,8 @@ def test_refresh_token_cannot_access_api():
 
     client = TestClient(api)
     # Use 'owner' role since that checks against config.ADMIN_USERNAME, not DB
-    access = create_access_token({"sub": "admin", "role": "owner"})
-    refresh = create_refresh_token({"sub": "admin", "role": "owner"})
+    access = create_access_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
+    refresh = create_refresh_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
     assert client.get("/api/server/info", headers={"Authorization": f"Bearer {access}"}).status_code == 200
     assert client.get("/api/server/info", headers={"Authorization": f"Bearer {refresh}"}).status_code == 401
 
