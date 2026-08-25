@@ -15,9 +15,15 @@ _RUN_DATE = dt.date.today
 
 
 def _token(username: str, role: str) -> dict:
-    from backend.auth.auth import create_access_token
+    from backend.auth.sessions import create_session
+    from backend.db.engine import SessionLocal
 
-    return {"Authorization": f"Bearer {create_access_token({'sub': username, 'role': role})}"}
+    db = SessionLocal()
+    try:
+        raw = create_session(db, username, role)
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {raw}"}
 
 
 def _owner_headers() -> dict:
@@ -194,19 +200,15 @@ def test_activity_feed_scopes_admin_to_own_events():
 
 
 def test_mlogin_status_rejects_revoked_owner_token():
-    from backend.auth import auth as auth_mod
-    from backend.auth.auth import create_access_token, revoke_token
+    from backend.auth.sessions import create_session, revoke_token
+    from backend.db.engine import SessionLocal
 
-    token = create_access_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
-    revoke_token(token)
-    client = TestClient(api)
+    db = SessionLocal()
     try:
-        resp = client.get("/api/mlogin/status/someone", headers={"Authorization": f"Bearer {token}"})
-        assert resp.status_code == 401
+        raw = create_session(db, config.ADMIN_USERNAME, "owner")
+        revoke_token(db, raw)
     finally:
-        # JWTs minted in the same second are byte-identical — drop the entry
-        # so no other test's freshly minted owner token can collide with this
-        # revocation.
-        import hashlib as _hl
-
-        auth_mod._revoked_tokens.pop(_hl.sha256(token.encode()).hexdigest()[:32], None)
+        db.close()
+    client = TestClient(api)
+    resp = client.get("/api/mlogin/status/someone", headers={"Authorization": f"Bearer {raw}"})
+    assert resp.status_code == 401

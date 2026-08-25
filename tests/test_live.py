@@ -13,10 +13,15 @@ from backend.operations import live
 
 
 def _owner_headers() -> dict:
-    from backend.auth.auth import create_access_token
+    from backend.auth.sessions import create_session
+    from backend.db.engine import SessionLocal
 
-    token = create_access_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
-    return {"Authorization": f"Bearer {token}"}
+    db = SessionLocal()
+    try:
+        raw = create_session(db, config.ADMIN_USERNAME, "owner")
+    finally:
+        db.close()
+    return {"Authorization": f"Bearer {raw}"}
 
 
 # ── LiveBus ────────────────────────────────────────────────────────────────
@@ -80,9 +85,14 @@ async def test_live_stream_sends_ready_event():
     then the first body chunk must be the SSE "ready" frame. An
     http.disconnect after the first chunk terminates the stream cleanly.
     """
-    from backend.auth.auth import create_access_token
+    from backend.auth.sessions import create_session
+    from backend.db.engine import SessionLocal
 
-    token = create_access_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
+    db = SessionLocal()
+    try:
+        token = create_session(db, config.ADMIN_USERNAME, "owner")
+    finally:
+        db.close()
     headers = [(b"authorization", f"Bearer {token}".encode())]
     scope = {
         "type": "http",

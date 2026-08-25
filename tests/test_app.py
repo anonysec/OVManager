@@ -33,16 +33,48 @@ def test_api_users_requires_auth():
     assert response.status_code in (401, 403)
 
 
-def test_refresh_token_cannot_access_api():
-    """Refresh tokens are not valid API bearer tokens."""
-    from backend.auth.auth import create_access_token, create_refresh_token
+def test_revoked_session_cannot_access_api(make_session_token):
+    """A logout/deleted session dies immediately (DB-backed revocation)."""
+    from backend.auth.sessions import revoke_token
+    from backend.db.engine import SessionLocal
 
+    raw = make_session_token(config.ADMIN_USERNAME, "owner")
     client = TestClient(api)
-    # Use 'owner' role since that checks against config.ADMIN_USERNAME, not DB
-    access = create_access_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
-    refresh = create_refresh_token({"sub": config.ADMIN_USERNAME, "role": "owner"})
-    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {access}"}).status_code == 200
-    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {refresh}"}).status_code == 401
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert revoke_token(db, raw)
+    finally:
+        db.close()
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 401
+
+
+def test_unknown_bearer_token_rejected():
+    client = TestClient(api)
+    resp = client.get("/api/server/info", headers={"Authorization": "Bearer not-a-real-session-token"})
+    assert resp.status_code == 401
+
+
+def test_expired_session_rejected(make_session_token):
+    """Absolute-cap expiry is enforced (and cleans up the row)."""
+    from backend.auth.sessions import create_session
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        raw = create_session(db, config.ADMIN_USERNAME, "owner", max_seconds=0)
+    finally:
+        db.close()
+    client = TestClient(api)
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 401
+
+
+def test_refresh_endpoint_retired():
+    """The JWT-era refresh endpoint is gone: 401 drives forced re-login."""
+    client = TestClient(api)
+    resp = client.post("/api/refresh", headers={"Authorization": "Bearer whatever"})
+    assert resp.status_code == 401
 
 
 def test_urlpath_middleware_blocks_non_matching():
