@@ -37,6 +37,15 @@ def get_all_users(db: Session):
     return users
 
 
+def get_user_id_name_pairs(db: Session) -> list[tuple[str, str]]:
+    """Return ``[(str(id), name), ...]`` without materialising User objects.
+
+    Used by the live collector, which only needs the id→username mapping to
+    translate a node's ``common_name`` and runs every few seconds.
+    """
+    return [(str(uid), name) for uid, name in db.query(User.id, User.name).all()]
+
+
 def get_users_by_admin(db: Session, admin_username: str):
     users = db.query(User).filter(User.owner == admin_username).all()
     return users

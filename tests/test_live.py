@@ -168,3 +168,106 @@ def test_users_list_uses_live_connection_cache(monkeypatch):
     assert match, "seeded user missing from list"
     assert match[0]["active_connections"] == 3
     assert match[0]["online"] is True
+
+
+# ── Idle-aware collector ─────────────────────────────────────────────────────
+
+
+class _FakeNode:
+    name = "n1"
+    address = "127.0.0.1"
+    port = 1
+    key = "k"
+    use_tls = False
+
+
+def _reset_snapshot():
+    """The snapshot is a module-level singleton; each test starts from cold."""
+    live.snapshot._connections = {}
+    live.snapshot._nodes = {}
+    live.snapshot._last_poll_ts = 0.0
+
+
+def _install_fake_probes(monkeypatch, calls: list):
+    """Stub the DB reads and the node probe, counting how often it fires."""
+    from backend.db import crud
+    from backend.node import requests as node_requests
+
+    monkeypatch.setattr(crud, "get_active_nodes", lambda db: [_FakeNode()])
+    monkeypatch.setattr(crud, "get_user_id_name_pairs", lambda db: [("1", "u1")])
+
+    class _FakeRequests:
+        def __init__(self, **kwargs):
+            pass
+
+        def get_sessions(self, hours=None):
+            calls.append(1)
+            return {"live_sessions": [{"common_name": "1"}]}
+
+    monkeypatch.setattr(node_requests, "NodeRequests", _FakeRequests)
+
+
+async def test_collector_skips_node_probe_when_idle(monkeypatch):
+    """No SSE client + a fresh snapshot must not trigger a node fan-out."""
+    calls: list = []
+    _reset_snapshot()
+    _install_fake_probes(monkeypatch, calls)
+
+    # First run warms the cache.
+    await live.collect_live_snapshot()
+    assert len(calls) == 1
+
+    # Immediately afterwards, with nobody connected, it must back off.
+    await live.collect_live_snapshot()
+    assert len(calls) == 1, "collector probed nodes while idle"
+
+
+async def test_collector_polls_when_a_subscriber_is_connected(monkeypatch):
+    calls: list = []
+    _reset_snapshot()
+    _install_fake_probes(monkeypatch, calls)
+
+    await live.collect_live_snapshot()
+    assert len(calls) == 1
+
+    q = live.bus.subscribe()
+    try:
+        await live.collect_live_snapshot()
+        assert len(calls) == 2, "collector must poll while a client is watching"
+    finally:
+        live.bus.unsubscribe(q)
+
+
+async def test_collector_re_polls_after_the_idle_window(monkeypatch):
+    """The snapshot feeds the public /sub/ page too, so it cannot go stale."""
+    calls: list = []
+    _reset_snapshot()
+    _install_fake_probes(monkeypatch, calls)
+
+    await live.collect_live_snapshot()
+    assert len(calls) == 1
+
+    # Pretend the last poll happened longer ago than the idle window.
+    live.snapshot._last_poll_ts = 0.0
+    await live.collect_live_snapshot()
+    assert len(calls) == 2
+
+
+async def test_collector_maps_node_common_name_to_username(monkeypatch):
+    """The lean id->name query must still resolve a node's common_name."""
+    _reset_snapshot()
+    _install_fake_probes(monkeypatch, [])
+
+    await live.collect_live_snapshot()
+    assert live.get_connection_counts() == {"u1": 1}
+    assert live.get_node_online() == {"n1": True}
+
+
+async def test_has_subscribers_tracks_connect_and_disconnect():
+    assert not live.bus.has_subscribers()
+    q = live.bus.subscribe()
+    try:
+        assert live.bus.has_subscribers()
+    finally:
+        live.bus.unsubscribe(q)
+    assert not live.bus.has_subscribers()
