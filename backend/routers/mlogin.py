@@ -183,27 +183,14 @@ async def global_mlogin_status(
     """
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        # Panel-user path: validate JWT and require owner role
-        try:
-            from jose import jwt as _jwt
+        # Panel-user path: validate session token and require owner role.
+        from backend.auth.auth import verify_session_token
 
-            from backend.auth.auth import is_token_revoked
-            from backend.config import config as _cfg
-
-            token = auth_header[7:]
-            payload = _jwt.decode(token, _cfg.JWT_SECRET_KEY, algorithms=["HS256"])
-            if payload.get("type") != "access" or payload.get("role") != "owner":
-                raise HTTPException(status_code=403, detail="Owner privileges required")
-            # Match get_current_user semantics: revoked tokens die here too,
-            # and the owner identity must still match the current config.
-            if is_token_revoked(token):
-                raise HTTPException(status_code=401, detail="Token has been revoked")
-            if payload.get("sub") != _cfg.ADMIN_USERNAME:
-                raise HTTPException(status_code=401, detail="Invalid token payload")
-        except Exception as exc:
-            if isinstance(exc, HTTPException):
-                raise
-            raise HTTPException(status_code=401, detail="Invalid token") from None
+        user = verify_session_token(auth_header[7:], db)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        if user.get("type") != "owner":
+            raise HTTPException(status_code=403, detail="Owner privileges required")
     else:
         # OVNode hook path: authenticate by node name + API key
         _authorize_node(db, x_node_name, key)

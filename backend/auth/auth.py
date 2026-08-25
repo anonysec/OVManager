@@ -1,26 +1,34 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
+"""Panel authentication: login rate-limiting + opaque session tokens.
+
+Auth model: ``/login`` exchanges credentials for a random opaque bearer token
+backed by the ``sessions`` table (see backend/auth/sessions.py). There is no
+JWT anywhere — token verification is one indexed DB lookup, revocation is a
+row delete that survives restarts, and expiry is sliding-idle + absolute cap.
+
+The HTTP contract is unchanged: clients still send
+``Authorization: Bearer <token>`` and /login still returns an
+``access_token`` field, so the frontend needed no changes.
+"""
+
 import hashlib
 import hmac
 import logging
 import time
-from collections import OrderedDict
-from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from backend.auth.hash import verify_password
+from backend.auth.sessions import create_session, purge_expired, revoke_token, verify_session
 from backend.config import config
 from backend.db import crud
-from backend.db.engine import get_db
+from backend.db.engine import SessionLocal, get_db
 
 logger = logging.getLogger("auth")
-
-ALGORITHM = "HS256"
 
 # ── Rate limiter ──────────────────────────────────────────────────
 # In-memory with cleanup; acceptable for a single-process panel.
@@ -42,33 +50,6 @@ def _purge_stale_attempts() -> None:
     stale_keys = [ip for ip, times in _login_attempts.items() if not times or now - times[-1] > _LOCKOUT_SECONDS]
     for k in stale_keys:
         _login_attempts.pop(k, None)
-
-
-# ── Token revocation (bounded FIFO — never un-revokes old tokens) ─
-_revoked_tokens: OrderedDict[str, None] = OrderedDict()
-_MAX_REVOKED = 10_000  # cap to prevent memory leak on very long uptimes
-
-
-def revoke_token(token: str) -> None:
-    """Add token hash to revocation blacklist (bounded FIFO).
-
-    When the cap is reached, the oldest entry is evicted. This is safe because
-    JWTs have their own expiry — by the time the oldest revoked token falls
-    off, its JWT has already expired naturally.
-    """
-    h = hashlib.sha256(token.encode()).hexdigest()[:32]
-    # Move to end if already present (refresh position)
-    _revoked_tokens.pop(h, None)
-    _revoked_tokens[h] = None
-    # Evict oldest if over capacity
-    while len(_revoked_tokens) > _MAX_REVOKED:
-        _revoked_tokens.popitem(last=False)
-
-
-def is_token_revoked(token: str) -> bool:
-    """Check against the revocation set."""
-    h = hashlib.sha256(token.encode()).hexdigest()[:32]
-    return h in _revoked_tokens
 
 
 # ── Router ───────────────────────────────────────────────────────
@@ -125,26 +106,6 @@ def _role_is_current(db: Session, username: str, role: str) -> bool:
     return role == "admin" and crud.get_admin_by_username(db, username=username) is not None
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    role = to_encode.pop("role", to_encode.pop("type", None))
-    expire = datetime.now(tz=UTC) + (expires_delta or timedelta(seconds=config.JWT_ACCESS_TOKEN_EXPIRES))
-    to_encode["role"] = role
-    to_encode["type"] = "access"
-    to_encode["exp"] = expire
-    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
-
-
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    role = to_encode.pop("role", to_encode.pop("type", None))
-    expire = datetime.now(tz=UTC) + (expires_delta or timedelta(seconds=config.JWT_REFRESH_TOKEN_EXPIRES))
-    to_encode["role"] = role
-    to_encode["type"] = "refresh"
-    to_encode["exp"] = expire
-    return jwt.encode(to_encode, config.JWT_SECRET_KEY, algorithm=ALGORITHM)
-
-
 @router.post("/login")
 async def login(
     request: Request,
@@ -178,24 +139,29 @@ async def login(
         )
 
     _login_attempts.pop(ip_h, None)
-    access_token = create_access_token(data={"sub": admin["username"], "role": admin["type"]})
-    refresh_token = create_refresh_token(data={"sub": admin["username"], "role": admin["type"]})
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+    purge_expired(db)  # opportunistic cleanup of dead sessions
+    raw_token = create_session(
+        db,
+        admin["username"],
+        admin["type"],
+        user_agent=request.headers.get("user-agent"),
+        ip=ip,
+    )
+    # Contract: frontend stores access_token and uses it as a Bearer token.
+    # refresh_token is null — sessions slide on activity instead of rotating.
+    return {"access_token": raw_token, "refresh_token": None, "token_type": "bearer"}
 
 
 @router.post("/logout")
 async def logout(request: Request):
-    """Revoke the presented access and refresh tokens when possible."""
-    tokens = []
+    """Revoke the presented session token (row delete — survives restarts)."""
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        tokens.append(auth_header[7:])
-    refresh = request.headers.get("X-Refresh-Token")
-    if refresh:
-        tokens.append(refresh)
-    for token in tokens:
-        if token:
-            revoke_token(token)
+        db = SessionLocal()
+        try:
+            revoke_token(db, auth_header[7:])
+        finally:
+            db.close()
     return {"detail": "Logged out"}
 
 
@@ -204,30 +170,20 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 @router.post("/refresh")
-async def refresh_token(request: Request, db: Session = Depends(get_db)):
-    """Exchange a valid refresh token for a new access token."""
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing refresh token")
-    token = auth_header[7:]
-    try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        if is_token_revoked(token):
-            raise HTTPException(status_code=401, detail="Token has been revoked")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token") from None
-    username = payload.get("sub")
-    user_role = payload.get("role")
-    if not username or user_role not in ("admin", "owner") or not _role_is_current(db, username, user_role):
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    # Rotate: revoke the consumed refresh token and issue a fresh one.
-    # This bounds the exposure window of a leaked refresh token to a single use.
-    revoke_token(token)
-    new_access = create_access_token(data={"sub": username, "role": user_role})
-    new_refresh = create_refresh_token(data={"sub": username, "role": user_role})
-    return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
+async def refresh_token():
+    """Retired endpoint (JWT era). Sessions slide on activity; when a session
+    expires the client must log in again. Returning 401 drives the frontend's
+    existing forced-logout path."""
+    raise HTTPException(status_code=401, detail="Session expired — please log in again")
+
+
+def verify_session_token(raw: str, db: Session) -> dict | None:
+    """Shared Bearer-token verifier (also used by node-facing routers that
+    accept panel credentials). Returns the frontend-shaped identity dict."""
+    session = verify_session(db, raw)
+    if session is None:
+        return None
+    return {"username": session.username, "type": session.role}
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -236,16 +192,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        user_type: str = payload.get("role")
-        if payload.get("type") != "access" or username is None or user_type not in ("admin", "owner"):
-            raise credentials_exception
-        if not _role_is_current(db, username, user_type):
-            raise credentials_exception
-        if is_token_revoked(token):
-            raise HTTPException(status_code=401, detail="Token has been revoked")
-    except JWTError:
-        raise credentials_exception from None
-    return {"username": username or "", "type": user_type or ""}
+    user = verify_session_token(token, db)
+    if user is None or user["type"] not in ("admin", "owner"):
+        raise credentials_exception
+    if not _role_is_current(db, user["username"], user["type"]):
+        raise credentials_exception
+    return user

@@ -93,6 +93,11 @@ async def delete_admin(
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
+    # Kill the admin's live sessions immediately — deleting the row alone
+    # would leave their bearer tokens valid until idle expiry.
+    from backend.auth.sessions import revoke_user_sessions
+
+    revoke_user_sessions(db, username)
     crud.delete_admin(db, existing_admin)
     return ResponseModel(
         success=True,

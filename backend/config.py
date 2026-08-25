@@ -4,30 +4,8 @@
 import os
 
 from cryptography.fernet import Fernet
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
-
-
-def _validate_jwt_secret(v: str) -> str:
-    """Enforce minimum entropy on JWT secret at startup."""
-    # Must be at least 32 chars (256 bits for HS256) and not a placeholder
-    if len(v) < 32:
-        raise ValueError("JWT_SECRET_KEY must be at least 32 characters (256 bits for HS256)")
-    # Reject common placeholders
-    placeholders = {
-        "changeme",
-        "secret",
-        "changeme123",
-        "supersecret",
-        "dev",
-        "test",
-        "your-secret",
-    }
-    if v.lower().strip() in placeholders:
-        raise ValueError("JWT_SECRET_KEY cannot be a default/placeholder value")
-    # Reject low-entropy secrets (e.g. all same char, or dictionary word)
-    if len(set(v)) < 8:
-        raise ValueError("JWT_SECRET_KEY has low character diversity; use a cryptographically random secret")
-    return v
 
 
 def _validate_fernet_key(v: str) -> str:
@@ -49,9 +27,19 @@ class Setting(BaseSettings):
     DOC: bool = False
     SSL_KEYFILE: str | None = None
     SSL_CERTFILE: str | None = None
-    JWT_SECRET_KEY: str
-    JWT_ACCESS_TOKEN_EXPIRES: int = 1800  # 30 min (short-lived access tokens)
-    JWT_REFRESH_TOKEN_EXPIRES: int = 604800  # 7 days
+    # ── Auth: opaque DB-backed sessions (no JWT) ─────────────────────
+    # DEPRECATED: panel no longer uses JWT. Kept as an ignored optional field
+    # so existing .env files don't fail validation; safe to delete from .env.
+    JWT_SECRET_KEY: str | None = None
+    # Idle timeout (sliding): session dies after this much inactivity.
+    # Absolute cap: a session can never outlive this, no matter the activity.
+    # Legacy JWT_* env names are still honoured for a smooth upgrade path.
+    SESSION_IDLE_SECONDS: int = Field(
+        default=1800, validation_alias=AliasChoices("SESSION_IDLE_SECONDS", "JWT_ACCESS_TOKEN_EXPIRES")
+    )
+    SESSION_MAX_SECONDS: int = Field(
+        default=604800, validation_alias=AliasChoices("SESSION_MAX_SECONDS", "JWT_REFRESH_TOKEN_EXPIRES")
+    )
     SUBSCRIPTION_URL_PREFIX: str | None = None
     SUBSCRIPTION_PATH: str = "sub"
     TRUSTED_PROXY: bool = False  # Set true behind nginx/caddy to trust X-Forwarded-For
@@ -65,8 +53,6 @@ class Setting(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Validate JWT secret immediately on instantiation
-        _validate_jwt_secret(self.JWT_SECRET_KEY)
         if self.BOT_ENCRYPT_KEY:
             _validate_fernet_key(self.BOT_ENCRYPT_KEY)
 

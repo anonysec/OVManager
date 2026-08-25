@@ -27,7 +27,13 @@ export const AuthProvider = ({ children }) => {
     if (!role) throw new Error('Invalid access token role');
 
     localStorage.setItem('authToken', newToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    // Refresh tokens are a JWT-era artifact — the backend now issues opaque
+    // sessions without one. Only persist if a server actually sends it.
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    } else {
+      localStorage.removeItem('refreshToken');
+    }
     localStorage.setItem('userRole', role);
     setToken(newToken);
     setUserRole(role);
