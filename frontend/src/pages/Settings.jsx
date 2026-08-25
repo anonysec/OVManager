@@ -326,6 +326,7 @@ const GeneralSection = () => {
   const [urlPath, setUrlPath] = useState('');
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [confirmSaved, setConfirmSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -376,6 +377,13 @@ const GeneralSection = () => {
 
   const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
 
+  // Anti-lockout: while editing, show where the panel WILL live and require
+  // an explicit acknowledgment that the operator saved the new URL. A typo
+  // here otherwise means mystery until --reset-urlpath saves the day.
+  const editValueClean = editValue.trim().replace(/^\/+|\/+$/g, '');
+  const pathChanged = editValueClean !== urlPath;
+  const newPanelUrl = editValueClean ? `${window.location.origin}/${editValueClean}/` : `${window.location.origin}/`;
+
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
 
   return (
@@ -385,7 +393,7 @@ const GeneralSection = () => {
         <div className="sp-url-row">
           <code className="sp-code">{urlPath ? `/${urlPath}/` : '/'}</code>
           {!editing && (
-            <button className="sp-icon-btn" onClick={() => { setEditValue(urlPath); setEditing(true); setError(''); }} aria-label={t('change', 'Change')}>
+            <button className="sp-icon-btn" onClick={() => { setEditValue(urlPath); setEditing(true); setError(''); setConfirmSaved(false); }} aria-label={t('change', 'Change')}>
               <FiEdit2 size={14} />
             </button>
           )}
@@ -396,12 +404,30 @@ const GeneralSection = () => {
               type="text" value={editValue} autoFocus
               placeholder={t('enterPath', 'e.g. dashboard')}
               onChange={e => setEditValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') saveUrlPath(); if (e.key === 'Escape') setEditing(false); }}
+              onKeyDown={e => { if (e.key === 'Enter' && (!pathChanged || confirmSaved)) saveUrlPath(); if (e.key === 'Escape') setEditing(false); }}
               className="sp-input"
             />
             {error && <p className="sp-error">{error}</p>}
+            {pathChanged && (
+              <div className="sp-urlpath-confirm">
+                <div className="sp-url-preview">
+                  <span className="sp-label-xs">{t('urlpathNewUrl', 'Panel will move to')}</span>
+                  <code className="sp-code">{newPanelUrl}</code>
+                  <button
+                    type="button" className="sp-icon-btn" aria-label={t('copy', 'Copy')}
+                    onClick={() => { navigator.clipboard?.writeText(newPanelUrl).catch(() => {}); addToast(t('copied', 'Copied.'), 'success'); }}
+                  >
+                    <FiExternalLink size={12} />
+                  </button>
+                </div>
+                <label className="sp-check">
+                  <input type="checkbox" checked={confirmSaved} onChange={e => setConfirmSaved(e.target.checked)} />
+                  <span>{t('urlpathConfirmSaved', 'I saved the new URL — the old one stops working immediately.')}</span>
+                </label>
+              </div>
+            )}
             <div className="sp-row-btns">
-              <LoadingButton className="btn btn-sm" isLoading={saving} onClick={saveUrlPath}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
+              <LoadingButton className="btn btn-sm" isLoading={saving} onClick={saveUrlPath} disabled={pathChanged && !confirmSaved}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
               <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
             </div>
           </div>
