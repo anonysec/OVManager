@@ -77,6 +77,7 @@ def _fmt_date(value) -> str:
 # {"detail": "..."} body (which is what clients/users see otherwise).
 def sub_error_page(status_code: int, title: str, message: str) -> HTMLResponse:
     from html import escape as _esc
+
     safe_title = _esc(title)
     safe_message = _esc(message)
     html = f"""<!DOCTYPE html>
@@ -122,7 +123,8 @@ async def get_subscription(
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
         return sub_error_page(
-            404, "Not Found",
+            404,
+            "Not Found",
             "This subscription link is invalid or the user no longer exists.",
         )
     used = user.used or 0
@@ -131,7 +133,8 @@ async def get_subscription(
     # distinctly from a manually disabled account ("Account Disabled").
     if user.expiry_date and user.expiry_date < date.today():
         return sub_error_page(
-            403, "Expired",
+            403,
+            "Expired",
             "This subscription has expired. Contact your administrator to extend it.",
         )
     if not bool(user.is_active):
@@ -155,9 +158,7 @@ async def get_subscription(
     async def is_up(node):
         try:
             return await run_in_threadpool(
-                NodeRequests(
-                    address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls
-                ).check_node
+                NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls).check_node
             )
         except Exception:
             return False
@@ -166,9 +167,7 @@ async def get_subscription(
     for node, up in zip(nodes, results, strict=False):
         if not up:
             continue
-        ovpn_download_links[node.name] = str(
-            request.url_for("download_ovpn", uuid=uuid, node_name=node.name)
-        )
+        ovpn_download_links[node.name] = str(request.url_for("download_ovpn", uuid=uuid, node_name=node.name))
 
     return templates.TemplateResponse(
         request,
@@ -203,12 +202,14 @@ async def download_ovpn(
         return sub_error_page(403, "Expired", "This subscription has expired. Contact your administrator to extend it.")
     if not bool(user.is_active):
         return sub_error_page(
-            403, "Account Disabled",
+            403,
+            "Account Disabled",
             "This user account is currently disabled. Contact your administrator to reactivate it.",
         )
     if user.total is not None and used >= user.total:
         return sub_error_page(
-            403, "Traffic Limit Reached",
+            403,
+            "Traffic Limit Reached",
             "This user has used all allocated traffic. Contact your administrator to increase the limit.",
         )
     node_obj = crud.get_node_by_name(db, node_name)

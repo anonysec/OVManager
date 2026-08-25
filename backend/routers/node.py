@@ -97,6 +97,7 @@ async def download_ovpn_client(
     if user["type"] != "owner" and db_user.owner != user["username"]:
         raise HTTPException(status_code=403, detail="Not your user")
     from datetime import datetime
+
     today_utc = datetime.now(UTC).date()
     if not db_user.is_active or (db_user.expiry_date and db_user.expiry_date < today_utc):
         raise HTTPException(status_code=403, detail="User account is not active")

@@ -29,10 +29,10 @@ async def enforce_user_limits():
 
         # Push status to all nodes concurrently (gather all at once)
         if users_to_disable:
-            await asyncio.gather(*[
-                change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db)
-                for u in users_to_disable
-            ], return_exceptions=True)
+            await asyncio.gather(
+                *[change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db) for u in users_to_disable],
+                return_exceptions=True,
+            )
 
     except Exception as e:
         db.rollback()
@@ -43,6 +43,7 @@ async def enforce_user_limits():
 
 
 # ── Traffic delta computation ────────────────────────────────────
+
 
 def _compute_session_delta(
     sessions: dict | None,
@@ -107,6 +108,7 @@ def _load_node_usage(user) -> dict:
 
 # ── Main traffic collection loop ─────────────────────────────────
 
+
 async def _collect_node_traffic(node, all_users: dict, db) -> None:
     """Collect traffic data from a single node and update user records."""
     usage = await get_users_used_traffic(node, db=db)
@@ -139,7 +141,10 @@ async def _collect_node_traffic(node, all_users: dict, db) -> None:
 
         logger.info(
             "[%s] node=%s total=%d delta=%d",
-            username, node.name, int(total_bytes), delta,
+            username,
+            node.name,
+            int(total_bytes),
+            delta,
         )
 
     db.commit()
@@ -171,7 +176,9 @@ async def check_user_used_traffic():
                 db.rollback()
                 logger.error(
                     "Error while processing node %s -> %s",
-                    node.address, e, exc_info=True,
+                    node.address,
+                    e,
+                    exc_info=True,
                 )
 
     except Exception as e:

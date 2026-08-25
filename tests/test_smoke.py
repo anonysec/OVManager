@@ -6,6 +6,7 @@
 Routes are at /api/... (no prefix). These tests verify the public surface
 and the auth gate on settings mutations.
 """
+
 from fastapi.testclient import TestClient
 
 from backend.app import api
@@ -40,4 +41,5 @@ def test_urlpath_update_requires_main_admin():
 
 def test_version_reported():
     from backend.version import __version__
+
     assert __version__

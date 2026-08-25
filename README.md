@@ -1,6 +1,6 @@
 # OVManager
 
-Free, open-source OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
+OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
 ## Install
 
@@ -43,4 +43,4 @@ uv run main.py
 
 ## License
 
-MIT
+Proprietary. See [LICENSE](LICENSE).

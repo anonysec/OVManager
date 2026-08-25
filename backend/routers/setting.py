@@ -34,9 +34,7 @@ async def get_settings(
     sub_prefix_source = db_prefix if db_prefix else config.SUBSCRIPTION_URL_PREFIX
     public_base = (config.PUBLIC_URL or str(request.base_url)).rstrip("/")
     subscription_prefix = (
-        sub_prefix_source.rstrip("/") + "/"
-        if sub_prefix_source
-        else public_base + (f"/{urlpath}/" if urlpath else "/")
+        sub_prefix_source.rstrip("/") + "/" if sub_prefix_source else public_base + (f"/{urlpath}/" if urlpath else "/")
     )
 
     # Subscription path: DB-persisted > env config
@@ -95,6 +93,7 @@ async def update_timezone(
     tz = (payload.timezone or "UTC").strip() or "UTC"
     # Validate IANA timezone name
     from zoneinfo import available_timezones
+
     if tz != "UTC" and tz not in available_timezones():
         return ResponseModel(success=False, msg=f"Invalid timezone: {tz}", data=None)
     crud.update_setting_timezone(db, tz)
@@ -176,7 +175,7 @@ async def update_urlpath(
     value = (payload.urlpath or "").strip("/")
 
     # Validate: only allow safe characters (alphanumeric, dash, underscore)
-    if value and not re.match(r'^[A-Za-z0-9_-]+$', value):
+    if value and not re.match(r"^[A-Za-z0-9_-]+$", value):
         return ResponseModel(
             success=False,
             msg="URL path must contain only letters, numbers, dashes, and underscores",

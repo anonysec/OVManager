@@ -78,12 +78,7 @@ async def get_next_username(
 
     # Fetch only names that start with the prefix and end with digits.
     # Limit to 100_000 to bound memory; in practice admins have far fewer users.
-    existing = (
-        db.query(User.name)
-        .filter(User.name.like(f"{prefix}%"))
-        .limit(100_000)
-        .all()
-    )
+    existing = db.query(User.name).filter(User.name.like(f"{prefix}%")).limit(100_000).all()
     taken = {n[0] for n in existing}
 
     i = 1
@@ -116,9 +111,7 @@ async def get_all_users(
         item["online"] = item["active_connections"] > 0
         # last_online is updated by the background metrics job, not here.
         # GET endpoints must not modify data.
-        item["last_online"] = (
-            db_user.last_online.isoformat() if db_user.last_online else None
-        )
+        item["last_online"] = db_user.last_online.isoformat() if db_user.last_online else None
         return item
 
     if user["type"] == "owner":
@@ -174,9 +167,7 @@ async def create_user(
     normalized_name = request.name.replace(" ", "_")
     check_user = crud.get_user_by_name(db, normalized_name)
     if check_user is not None:
-        return ResponseModel(
-            success=False, msg="User with this name already exists", data=None
-        )
+        return ResponseModel(success=False, msg="User with this name already exists", data=None)
 
     # Use the actual username as the owner so users created by the panel owner
     # are associated with a real identity, not the generic sentinel "owner".
@@ -278,9 +269,7 @@ async def disconnect_user_sessions(
 
 
 @router.delete("/{uuid}", response_model=ResponseModel)
-async def delete_user(
-    uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)
-):
+async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     db_user = crud.get_user_by_uuid(db, uuid)
     if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
@@ -296,9 +285,7 @@ async def delete_user(
 
 
 @router.post("/{uuid}/restore", response_model=ResponseModel)
-async def restore_user(
-    uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)
-):
+async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     """Undo a recent delete: re-insert the user with its original UUID."""
     entry = _deleted_users.get(uuid)
     if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
@@ -339,7 +326,10 @@ async def bulk_adjust_users(
     result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes)
     action = "extend" if payload.action == "extend" else "add-traffic"
     log_event(
-        db, f"bulk.{action}", actor=user.get("username"),
-        target=f"{result['updated']} users", detail=str(payload.days or payload.bytes),
+        db,
+        f"bulk.{action}",
+        actor=user.get("username"),
+        target=f"{result['updated']} users",
+        detail=str(payload.days or payload.bytes),
     )
     return ResponseModel(success=result["updated"] > 0, msg=f"{result['updated']} user(s) updated", data=result)

@@ -80,15 +80,17 @@ async def get_user_session_diagnostics(user_id: int, db: Session, hours: int = 8
             continue
         live = [s for s in (data.get("live_sessions") or []) if s.get("common_name") == cn]
         stale = [s for s in (data.get("stale_markers") or []) if s.get("common_name") == cn]
-        node_rows.append({
-            "node": node_data.name,
-            "reachable": True,
-            "live_sessions": live,
-            "stale_markers": stale,
-            "live_count": len(live),
-            "stale_marker_count": len(stale),
-            "auth_errors": int(data.get("auth_errors") or 0),
-        })
+        node_rows.append(
+            {
+                "node": node_data.name,
+                "reachable": True,
+                "live_sessions": live,
+                "stale_markers": stale,
+                "live_count": len(live),
+                "stale_marker_count": len(stale),
+                "auth_errors": int(data.get("auth_errors") or 0),
+            }
+        )
         total_live += len(live)
         total_stale += len(stale)
         total_auth += int(data.get("auth_errors") or 0)
@@ -171,13 +173,15 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
             if isinstance(count, int):
                 auth_counts[cn] = auth_counts.get(cn, 0) + count
 
-        node_rows.append({
-            "node": node_data.name,
-            "live_count": int(data.get("live_count") or 0),
-            "stale_marker_count": int(data.get("stale_marker_count") or 0),
-            "auth_errors": int(data.get("auth_errors") or 0),
-            "reachable": True,
-        })
+        node_rows.append(
+            {
+                "node": node_data.name,
+                "live_count": int(data.get("live_count") or 0),
+                "stale_marker_count": int(data.get("stale_marker_count") or 0),
+                "auth_errors": int(data.get("auth_errors") or 0),
+                "reachable": True,
+            }
+        )
 
     rows = []
     for u in users:
@@ -198,21 +202,28 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
         stale_count = int(stale_counts.get(u.name, 0))
         if active <= 0 and stale_count <= 0:
             continue
-        rows.append({
-            "name": u.name, "user_id": u.id,
-            "active_connections": active, "max_logins": max_logins,
-            "mode": mode, "full": full, "is_active": bool(u.is_active),
-            "stale_markers": stale_count,
-            "auth_events": int(auth_counts.get(u.name, 0)),
-            "status": status,
-        })
+        rows.append(
+            {
+                "name": u.name,
+                "user_id": u.id,
+                "active_connections": active,
+                "max_logins": max_logins,
+                "mode": mode,
+                "full": full,
+                "is_active": bool(u.is_active),
+                "stale_markers": stale_count,
+                "auth_events": int(auth_counts.get(u.name, 0)),
+                "status": status,
+            }
+        )
 
     rows.sort(key=lambda r: (r["status"] != "stale", -r["active_connections"], r["name"].lower()))
     return {
         "users": rows,
         "nodes": node_rows,
         "totals": {
-            "shown": len(rows), "users": len(users),
+            "shown": len(rows),
+            "users": len(users),
             "online": sum(1 for r in rows if r["active_connections"] > 0),
             "full": sum(1 for r in rows if r["full"]),
             "stale": sum(r["stale_markers"] for r in rows),
@@ -233,18 +244,29 @@ async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
 
     registry = []
     try:
-        rows = db.execute(text(
-            "SELECT username, common_name, node_name, session_key, trusted_ip, trusted_port, "
-            "pool_ip, created_at, updated_at "
-            "FROM global_mlogin_sessions WHERE username = :username ORDER BY updated_at DESC"
-        ), {"username": name}).fetchall()
+        rows = db.execute(
+            text(
+                "SELECT username, common_name, node_name, session_key, trusted_ip, trusted_port, "
+                "pool_ip, created_at, updated_at "
+                "FROM global_mlogin_sessions WHERE username = :username ORDER BY updated_at DESC"
+            ),
+            {"username": name},
+        ).fetchall()
         for r in rows:
-            registry.append({
-                "username": r[0], "common_name": r[1], "node_name": r[2],
-                "session_key": r[3], "trusted_ip": r[4], "trusted_port": r[5],
-                "pool_ip": r[6], "created_at": r[7], "updated_at": r[8],
-                "created_at_utc": datetime.datetime.utcfromtimestamp(float(r[7] or 0)).isoformat() if r[7] else None,
-            })
+            registry.append(
+                {
+                    "username": r[0],
+                    "common_name": r[1],
+                    "node_name": r[2],
+                    "session_key": r[3],
+                    "trusted_ip": r[4],
+                    "trusted_port": r[5],
+                    "pool_ip": r[6],
+                    "created_at": r[7],
+                    "updated_at": r[8],
+                    "created_at_utc": datetime.datetime.utcfromtimestamp(float(r[7] or 0)).isoformat() if r[7] else None,
+                }
+            )
     except Exception:
         registry = []
 
@@ -271,7 +293,9 @@ async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
         recommendation = "User is below max-login limit. If connection fails, check node logs/config."
 
     return {
-        "username": name, "found": True, "policy": policy,
+        "username": name,
+        "found": True,
+        "policy": policy,
         "max_logins": max_logins,
         "mode": "unlimited" if max_logins == 0 else ("takeover" if max_logins == 1 else "strict"),
         "active_connections": active,
