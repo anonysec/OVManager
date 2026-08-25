@@ -19,6 +19,7 @@ from backend.node.task import (
     list_nodes_handler,
     update_node_handler,
 )
+from backend.operations import live
 from backend.schema._input import NodeCreate
 from backend.schema.output import ResponseModel
 
@@ -33,6 +34,8 @@ async def add_node(
 ):
 
     new_node = await add_node_handler(request, db)
+    if new_node:
+        live.publish("nodes", {"op": "add"})
     return ResponseModel(
         success=new_node,
         msg="Node added successfully" if new_node else "Failed to add node",
@@ -48,6 +51,8 @@ async def update_node(
 ):
 
     success, msg = await update_node_handler(node_id, request, db)
+    if success:
+        live.publish("nodes", {"op": "update"})
     return ResponseModel(success=success, msg=msg)
 
 
@@ -132,6 +137,8 @@ async def delete_node(
 ):
 
     result = await delete_node_handler(node_id, db)
+    if result:
+        live.publish("nodes", {"op": "delete"})
     return ResponseModel(
         success=result,
         msg="Node deleted successfully" if result else "Failed to delete node",

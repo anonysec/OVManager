@@ -61,11 +61,27 @@ def log_event(db, action, actor=None, target=None, detail=None):
             db.close()
 
 
-def recent_events(db, limit=100):
+def recent_events(db, limit=100, actor: str | None = None):
+    """Return recent audit events, newest first.
+
+    When ``actor`` is given, only events performed by that actor are returned
+    — non-owner admins must not see other tenants' activity (targets can
+    contain other admins' usernames).
+    """
     if not _table_ready:
         ensure_audit_table(db)
-    rows = db.execute(
-        text("SELECT id, ts, actor, action, target, detail FROM audit_logs ORDER BY ts DESC LIMIT :limit"),
-        {"limit": max(1, min(int(limit or 100), 500))},
-    ).fetchall()
+    limit = max(1, min(int(limit or 100), 500))
+    if actor is None:
+        rows = db.execute(
+            text("SELECT id, ts, actor, action, target, detail FROM audit_logs ORDER BY ts DESC LIMIT :limit"),
+            {"limit": limit},
+        ).fetchall()
+    else:
+        rows = db.execute(
+            text(
+                "SELECT id, ts, actor, action, target, detail FROM audit_logs WHERE actor = :actor "
+                "ORDER BY ts DESC LIMIT :limit"
+            ),
+            {"actor": actor, "limit": limit},
+        ).fetchall()
     return [{"id": r[0], "ts": r[1], "actor": r[2], "action": r[3], "target": r[4], "detail": r[5]} for r in rows]

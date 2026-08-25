@@ -8,6 +8,7 @@ from backend.db import crud
 from backend.db.engine import get_db
 from backend.logger import logger
 from backend.node.task import change_user_status_on_all_nodes, get_users_used_traffic
+from backend.operations import live
 
 
 async def enforce_user_limits():
@@ -33,6 +34,8 @@ async def enforce_user_limits():
                 *[change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db) for u in users_to_disable],
                 return_exceptions=True,
             )
+            # Let live subscribers (admin dashboards) see the flips immediately.
+            live.publish("users", {"op": "enforce", "disabled": len(users_to_disable)})
 
     except Exception as e:
         db.rollback()
@@ -109,16 +112,20 @@ def _load_node_usage(user) -> dict:
 # ── Main traffic collection loop ─────────────────────────────────
 
 
-async def _collect_node_traffic(node, all_users: dict, db) -> None:
-    """Collect traffic data from a single node and update user records."""
+async def _collect_node_traffic(node, all_users: dict, db) -> bool:
+    """Collect traffic data from a single node and update user records.
+
+    Returns True when new usage counters were committed (so callers can emit
+    a "usage" live event), False when the node had nothing new to offer.
+    """
     usage = await get_users_used_traffic(node, db=db)
     if not usage:
-        return
+        return False
 
     per_user_total = usage.get("users", {}) or {}
     per_user_sessions = usage.get("sessions", {}) or {}
     if not per_user_total:
-        return
+        return False
 
     for client_name, total_bytes in per_user_total.items():
         username = _extract_username(client_name, node.name)
@@ -149,6 +156,7 @@ async def _collect_node_traffic(node, all_users: dict, db) -> None:
 
     db.commit()
     logger.info("Traffic data committed for node %s", node.address)
+    return True
 
 
 async def check_user_used_traffic():
@@ -169,9 +177,10 @@ async def check_user_used_traffic():
 
         all_users = {u.name: u for u in crud.get_all_users(db)}
 
+        any_updated = False
         for node in nodes:
             try:
-                await _collect_node_traffic(node, all_users, db)
+                any_updated = (await _collect_node_traffic(node, all_users, db)) or any_updated
             except Exception as e:
                 db.rollback()
                 logger.error(
@@ -180,6 +189,10 @@ async def check_user_used_traffic():
                     e,
                     exc_info=True,
                 )
+
+        # Usage numbers changed → nudge live dashboards to refetch.
+        if any_updated:
+            live.publish("usage", {"op": "sync"})
 
     except Exception as e:
         db.rollback()

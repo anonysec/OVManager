@@ -21,6 +21,7 @@ from backend.node.task import (
     get_user_session_diagnostics,
     set_user_limit_on_all_nodes,
 )
+from backend.operations import live as live_ops
 from backend.operations.audit import log_event
 from backend.schema._input import CreateUser, StatusToggle, UpdateUser
 from backend.schema.output import ResponseModel, Users
@@ -103,7 +104,14 @@ async def get_all_users(
     page = max(1, min(page, 10_000))
     page_size = max(1, min(page_size, 500))
 
-    active_counts = await get_active_connection_counts(db)
+    # Connection counts come from the live collector's in-memory cache, so a
+    # page load never fans out to every node (a dead node used to stall this
+    # endpoint for up to 30s). Only on cold start — before the collector's
+    # first poll completes — do we fall back to querying nodes directly.
+    if live_ops.last_poll_ts() > 0:
+        active_counts = live_ops.get_connection_counts()
+    else:
+        active_counts = await get_active_connection_counts(db)
 
     def serialize(db_user):
         item = Users.model_validate(db_user).model_dump()
@@ -153,6 +161,7 @@ async def reset_user_usage(uuid: str, db: Session = Depends(get_db), user: dict 
     reset = crud.reset_user_usage(db, uuid)
     if not reset:
         raise HTTPException(status_code=404, detail="User not found")
+    live_ops.publish("users", {"op": "reset-usage"})
     return ResponseModel(success=True, msg="User usage reset successfully", data=None)
 
 
@@ -178,6 +187,7 @@ async def create_user(
     # generation script is slow and can make the Add User popup look stuck.
     # The node-side client/config is created lazily when Download is clicked.
     log_event(db, "user.create", actor=user.get("username"), target=new_user.name, detail="User created")
+    live_ops.publish("users", {"op": "create"})
     return ResponseModel(
         success=True,
         msg="User created successfully. VPN config will be generated on first download.",
@@ -211,6 +221,7 @@ async def update_user(
     # enforce_user_limits runs as a daily background job in app.py;
     # calling it per user update is O(n²) — each call queries all expired/exceeded users.
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
+    live_ops.publish("users", {"op": "update"})
     return ResponseModel(success=True, msg="User updated successfully")
 
 
@@ -235,6 +246,7 @@ async def change_user_status(
             data={"synced": False},
         )
     log_event(db, "user.status", actor=user.get("username"), target=request.name, detail=f"status={request.status}")
+    live_ops.publish("users", {"op": "status"})
     return ResponseModel(success=True, msg="Changed user status successfully")
 
 
@@ -265,6 +277,7 @@ async def disconnect_user_sessions(
     _require_user_access(db_user, user)
     data = await disconnect_user_on_all_nodes(db_user.name, db_user.id, db)
     log_event(db, "user.disconnect", actor=user.get("username"), target=db_user.name, detail="Disconnect requested")
+    live_ops.publish("users", {"op": "disconnect"})
     return ResponseModel(success=True, msg="Disconnect command processed", data=data)
 
 
@@ -280,6 +293,7 @@ async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Dep
         _remember_deleted(db_user)  # enable Undo
         crud.delete_user(db, name)
         log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")
+        live_ops.publish("users", {"op": "delete"})
         return ResponseModel(success=True, msg="User deleted successfully")
     return ResponseModel(success=False, msg="Failed to delete user on all nodes")
 
@@ -291,6 +305,11 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
         return ResponseModel(success=False, msg="Undo window expired — user can no longer be restored", data=None)
     snap = entry[1]
+    # The undo buffer is process-global, keyed by UUID. Enforce the same
+    # ownership rule as every other user operation: an admin must not
+    # resurrect a user that belonged to someone else.
+    if user.get("type") != "owner" and snap.get("owner") != user.get("username"):
+        return ResponseModel(success=False, msg="You do not have permission to restore this user", data=None)
     if crud.get_user_by_uuid(db, uuid) is not None:
         _deleted_users.pop(uuid, None)
         return ResponseModel(success=False, msg="User already exists", data=None)
@@ -302,6 +321,7 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     # Re-push the login limit to nodes (best-effort; certs regenerate on download).
     await set_user_limit_on_all_nodes(restored.name, restored.max_logins, db, restored.id)
     log_event(db, "user.restore", actor=user.get("username"), target=restored.name, detail="User restored (undo)")
+    live_ops.publish("users", {"op": "restore"})
     return ResponseModel(
         success=True,
         msg="User restored successfully",
@@ -311,7 +331,7 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
 
 class _BulkAdjust(BaseModel):
     action: Literal["extend", "add-traffic"]
-    uuids: list[str] = Field(min_length=1)
+    uuids: list[str] = Field(min_length=1, max_length=500)
     days: int = 0
     bytes: int = 0
 
@@ -322,8 +342,13 @@ async def bulk_adjust_users(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Bulk-extend expiry or add traffic quota to selected users."""
-    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes)
+    """Bulk-extend expiry or add traffic quota to selected users.
+
+    Admins may only touch their own users — the owner filter in the CRUD
+    layer silently skips any UUID outside the caller's tenancy.
+    """
+    owner = None if user["type"] == "owner" else user["username"]
+    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes, owner=owner)
     action = "extend" if payload.action == "extend" else "add-traffic"
     log_event(
         db,
@@ -332,4 +357,6 @@ async def bulk_adjust_users(
         target=f"{result['updated']} users",
         detail=str(payload.days or payload.bytes),
     )
+    if result["updated"] > 0:
+        live_ops.publish("users", {"op": f"bulk.{action}"})
     return ResponseModel(success=result["updated"] > 0, msg=f"{result['updated']} user(s) updated", data=result)

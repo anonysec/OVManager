@@ -16,6 +16,7 @@ from backend.db import crud
 from backend.db.engine import get_db
 from backend.node.requests import NodeRequests
 from backend.node.task import download_ovpn_client_from_node
+from backend.operations import live as live_ops
 
 templates = Jinja2Templates(directory="frontend/templates")
 router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
@@ -152,10 +153,11 @@ async def get_subscription(
     nodes = crud.get_active_nodes(db)
     ovpn_download_links = {}
 
-    # check_node() is blocking (requests); run all nodes concurrently in a
-    # threadpool so one slow/unreachable node can't block the event loop or
-    # stall the whole subscription page.
-    async def is_up(node):
+    # Node health comes from the live collector's in-memory snapshot — this is
+    # a PUBLIC, unauthenticated endpoint, so per-view node checks would let any
+    # visitor amplify traffic against every node. Only before the collector's
+    # first poll (cold start) fall back to checking nodes directly.
+    async def live_check(node) -> bool:
         try:
             return await run_in_threadpool(
                 NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls).check_node
@@ -163,11 +165,17 @@ async def get_subscription(
         except Exception:
             return False
 
-    results = await asyncio.gather(*[is_up(n) for n in nodes]) if nodes else []
-    for node, up in zip(nodes, results, strict=False):
-        if not up:
-            continue
-        ovpn_download_links[node.name] = str(request.url_for("download_ovpn", uuid=uuid, node_name=node.name))
+    up_nodes: set[str] = set()
+    if live_ops.last_poll_ts() > 0:
+        online = live_ops.get_node_online()
+        up_nodes = {n.name for n in nodes if online.get(n.name)}
+    elif nodes:
+        results = await asyncio.gather(*[live_check(n) for n in nodes])
+        up_nodes = {n.name for n, up in zip(nodes, results, strict=False) if up}
+
+    for node in nodes:
+        if node.name in up_nodes:
+            ovpn_download_links[node.name] = str(request.url_for("download_ovpn", uuid=uuid, node_name=node.name))
 
     return templates.TemplateResponse(
         request,
