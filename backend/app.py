@@ -90,7 +90,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             # /api/login and /<urlpath>/api/login
             _up = _get_urlpath()
             if _up and path.startswith(f"/{_up}/"):
-                path = path[len(f"/{_up}"):]
+                path = path[len(f"/{_up}") :]
             if auth and auth.startswith("Bearer "):
                 return await call_next(request)
             if path.startswith("/api/sub/") or path in ("/api/login", "/api/logout", "/api/refresh"):
@@ -125,9 +125,7 @@ def _run_migrations():
         for table, column, coltype in _ALLOWED_COLUMNS:
             if table not in _ALLOWED_TABLES:
                 continue
-            existing = {
-                r[1] for r in db.execute(_text(f"PRAGMA table_info({table})")).fetchall()
-            }
+            existing = {r[1] for r in db.execute(_text(f"PRAGMA table_info({table})")).fetchall()}
             if column not in existing:
                 db.execute(_text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
         # Seed initial URLPATH from config if Settings row exists and urlpath is empty.
@@ -135,10 +133,7 @@ def _run_migrations():
         # the row first so the URLPATH from .env gets seeded.
         try:
             initial_urlpath = (config.URLPATH or "").strip("/")
-            db.execute(_text(
-                "INSERT OR IGNORE INTO settings (port, protocol, urlpath) "
-                "VALUES (1194, 'tcp', '')"
-            ))
+            db.execute(_text("INSERT OR IGNORE INTO settings (port, protocol, urlpath) VALUES (1194, 'tcp', '')"))
             db.execute(
                 _text("UPDATE settings SET urlpath = :v WHERE (urlpath IS NULL OR urlpath = '')"),
                 {"v": initial_urlpath},
@@ -155,6 +150,7 @@ tls_config = TLSConfig.get_ssl_config()
 ssl_keyfile = tls_config.get("key_file") or None
 ssl_certfile = tls_config.get("cert_file") or None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application startup and shutdown via the modern lifespan API."""
@@ -162,6 +158,7 @@ async def lifespan(app: FastAPI):
     _run_migrations()
     from backend.db.engine import SessionLocal as _SL
     from backend.operations.audit import ensure_audit_table
+
     _db = _SL()
     try:
         ensure_audit_table(_db)
@@ -196,16 +193,19 @@ api = FastAPI(
     lifespan=lifespan,
 )
 
+
 # ── Exception handlers (domain → HTTP) ────────────────────────────
 @api.exception_handler(NotFoundError)
 async def not_found_handler(request, exc: NotFoundError):
     from fastapi.responses import JSONResponse
+
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @api.exception_handler(ConflictError)
 async def conflict_handler(request, exc: ConflictError):
     from fastapi.responses import JSONResponse
+
     return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
@@ -371,6 +371,7 @@ api.include_router(subscription_router)
 # <base href> and break API calls.
 async def _serve_react() -> FileResponse | JSONResponse:
     from fastapi.responses import HTMLResponse
+
     index_path = os.path.join(frontend_build_path, "index.html")
     if not os.path.isfile(index_path):
         return JSONResponse({"detail": "Frontend not built"}, status_code=404)
@@ -382,7 +383,7 @@ async def _serve_react() -> FileResponse | JSONResponse:
     # against it (script/asset tags are absolute and unaffected).
     base_href = f"/{urlpath}/" if urlpath else "/"
     if "<base " not in html:
-        html = html.replace("<head>", f"<head>\n    <base href=\"{base_href}\" />", 1)
+        html = html.replace("<head>", f'<head>\n    <base href="{base_href}" />', 1)
     return HTMLResponse(
         content=html,
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -400,6 +401,7 @@ async def spa_catchall(path: str):
     # Don't catch API, doc, health, asset, or subscription paths
     if path.startswith(("api/", "doc", "openapi.json", "health", "assets/", "sub/")):
         from fastapi.responses import JSONResponse
+
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     return await _serve_react()
 

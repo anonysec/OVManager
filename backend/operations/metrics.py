@@ -18,7 +18,8 @@ from backend.node.requests import NodeRequests
 
 
 def ensure_metrics_tables(db: Session) -> None:
-    db.execute(text("""
+    db.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS node_health_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts REAL NOT NULL,
@@ -30,10 +31,12 @@ def ensure_metrics_tables(db: Session) -> None:
             latency_ms REAL,
             reachable INTEGER NOT NULL DEFAULT 0
         )
-    """))
+    """)
+    )
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)"))
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_node_health_node_ts ON node_health_snapshots(node_id, ts)"))
-    db.execute(text("""
+    db.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS traffic_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts REAL NOT NULL,
@@ -43,9 +46,11 @@ def ensure_metrics_tables(db: Session) -> None:
             active_users INTEGER NOT NULL,
             total_users INTEGER NOT NULL
         )
-    """))
+    """)
+    )
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_traffic_snapshots_ts ON traffic_snapshots(ts)"))
-    db.execute(text("""
+    db.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS security_snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts REAL NOT NULL,
@@ -56,7 +61,8 @@ def ensure_metrics_tables(db: Session) -> None:
             full_users INTEGER NOT NULL,
             inactive_users INTEGER NOT NULL
         )
-    """))
+    """)
+    )
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_security_snapshots_ts ON security_snapshots(ts)"))
     db.commit()
 
@@ -147,41 +153,50 @@ async def collect_metrics() -> None:
             db.rollback()
 
         for row in clean_rows:
-            db.execute(text("""
+            db.execute(
+                text("""
                 INSERT INTO node_health_snapshots
                     (ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable)
                 VALUES
                     (:ts, :node_id, :node_name, :cpu, :memory, :live_count, :latency_ms, :reachable)
-            """), {"ts": now, **row})
+            """),
+                {"ts": now, **row},
+            )
 
-        db.execute(text("""
+        db.execute(
+            text("""
             INSERT INTO traffic_snapshots
                 (ts, total_used, active_connections, online_users, active_users, total_users)
             VALUES
                 (:ts, :total_used, :active_connections, :online_users, :active_users, :total_users)
-        """), {
-            "ts": now,
-            "total_used": total_used,
-            "active_connections": active_connections,
-            "online_users": online_users,
-            "active_users": active_users,
-            "total_users": len(users),
-        })
+        """),
+            {
+                "ts": now,
+                "total_used": total_used,
+                "active_connections": active_connections,
+                "online_users": online_users,
+                "active_users": active_users,
+                "total_users": len(users),
+            },
+        )
 
-        db.execute(text("""
+        db.execute(
+            text("""
             INSERT INTO security_snapshots
                 (ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users)
             VALUES
                 (:ts, :auth_errors, :rejects, :stale_markers, :offline_nodes, :full_users, :inactive_users)
-        """), {
-            "ts": now,
-            "auth_errors": auth_errors,
-            "rejects": rejects,
-            "stale_markers": stale_markers,
-            "offline_nodes": offline_nodes,
-            "full_users": full_users,
-            "inactive_users": inactive_users,
-        })
+        """),
+            {
+                "ts": now,
+                "auth_errors": auth_errors,
+                "rejects": rejects,
+                "stale_markers": stale_markers,
+                "offline_nodes": offline_nodes,
+                "full_users": full_users,
+                "inactive_users": inactive_users,
+            },
+        )
 
         # Keep roughly 30 days at 5-minute interval.
         cutoff = now - 30 * 24 * 3600
@@ -200,37 +215,61 @@ async def collect_metrics() -> None:
 def history(db: Session, hours: int = 24) -> dict[str, Any]:
     ensure_metrics_tables(db)
     cutoff = time.time() - max(1, min(int(hours or 24), 24 * 30)) * 3600
-    traffic = db.execute(text("""
+    traffic = db.execute(
+        text("""
         SELECT ts, total_used, active_connections, online_users, active_users, total_users
         FROM traffic_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
-    """), {"cutoff": cutoff}).fetchall()
-    security = db.execute(text("""
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
+    security = db.execute(
+        text("""
         SELECT ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users
         FROM security_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
-    """), {"cutoff": cutoff}).fetchall()
-    node_rows = db.execute(text("""
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
+    node_rows = db.execute(
+        text("""
         SELECT ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable
         FROM node_health_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
-    """), {"cutoff": cutoff}).fetchall()
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
     return {
         "traffic": [
             {
-                "ts": r[0], "total_used": r[1], "active_connections": r[2],
-                "online_users": r[3], "active_users": r[4], "total_users": r[5],
+                "ts": r[0],
+                "total_used": r[1],
+                "active_connections": r[2],
+                "online_users": r[3],
+                "active_users": r[4],
+                "total_users": r[5],
             }
             for r in traffic
         ],
         "security": [
             {
-                "ts": r[0], "auth_errors": r[1], "rejects": r[2], "stale_markers": r[3],
-                "offline_nodes": r[4], "full_users": r[5], "inactive_users": r[6],
+                "ts": r[0],
+                "auth_errors": r[1],
+                "rejects": r[2],
+                "stale_markers": r[3],
+                "offline_nodes": r[4],
+                "full_users": r[5],
+                "inactive_users": r[6],
             }
             for r in security
         ],
         "nodes": [
             {
-                "ts": r[0], "node_id": r[1], "node_name": r[2], "cpu": r[3],
-                "memory": r[4], "live_count": r[5], "latency_ms": r[6], "reachable": bool(r[7]),
+                "ts": r[0],
+                "node_id": r[1],
+                "node_name": r[2],
+                "cpu": r[3],
+                "memory": r[4],
+                "live_count": r[5],
+                "latency_ms": r[6],
+                "reachable": bool(r[7]),
             }
             for r in node_rows
         ],

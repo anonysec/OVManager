@@ -1,10 +1,10 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from bot.handlers.common import api, _get_plans, _set_state, _is_owner, _safe_handler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+
 from bot.config import config
-from bot.handlers.common import _fmt_bytes, _days_remaining
+from bot.handlers.common import _safe_handler, api
 
 
 def _plan_kb(action="plan"):
@@ -28,9 +28,11 @@ async def _do_plan_create(ctx, name: str, days: int, traffic: int, max_users: in
             f"Status:    🟢 Active"
         )
         kb = [
-            [InlineKeyboardButton("➕ Another", callback_data="hub_new"),
-             InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
-             InlineKeyboardButton("🏠 Main", callback_data="hub_main")],
+            [
+                InlineKeyboardButton("➕ Another", callback_data="hub_new"),
+                InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
+                InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
+            ],
         ]
         if hasattr(ctx, "edit_message_text"):
             await ctx.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb))
@@ -87,7 +89,8 @@ async def _handle_new(update: Update, args: list):
         else:
             max_users = config.default_max_users
         await _do_plan_create(update, name, days, traffic, max_users)
-    except Exception as e:
+    except Exception:
         import logging
+
         logging.getLogger(__name__).exception("Error in _handle_new")
         await update.message.reply_text("⚠️ Failed to create user, check logs.")

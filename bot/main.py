@@ -1,12 +1,14 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
+import asyncio
 import logging
 import signal
-import asyncio
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from bot.handlers import handle_message, handle_callback, handle_start
+
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+
 from bot.config import config
+from bot.handlers import handle_callback, handle_message, handle_start
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger(__name__)

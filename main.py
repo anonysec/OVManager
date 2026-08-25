@@ -5,17 +5,19 @@
 """
 Start OVManager panel.
 """
-import sys
+
 import os
+import sys
 from pathlib import Path
+
+import uvicorn
+
+from backend.config import config
 
 # Use script's directory for native installs, /app for Docker
 APP_DIR = "/app" if Path("/app").is_dir() else str(Path(__file__).resolve().parent)
 os.chdir(APP_DIR)
 sys.path.insert(0, APP_DIR)
-
-from backend.config import config
-import uvicorn
 
 
 def main():

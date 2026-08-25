@@ -16,16 +16,11 @@ router = APIRouter(prefix="/admin", tags=["Admins"])
 
 
 @router.get("/", response_model=ResponseModel)
-async def get_all_admins(
-    db: Session = Depends(get_db), user: dict = Depends(require_owner)
-):
+async def get_all_admins(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     from backend.db.models import User as _User
+
     # Single GROUP BY query instead of O(n×m) Python loop
-    counts = dict(
-        db.query(_User.owner, func.count(_User.id))
-        .group_by(_User.owner)
-        .all()
-    )
+    counts = dict(db.query(_User.owner, func.count(_User.id)).group_by(_User.owner).all())
     result = crud.get_all_admins(db)
     admin_list = []
     for admin in result:
@@ -48,9 +43,7 @@ async def create_admin(
 ):
     existing_admin = crud.get_admin_by_username(db, username=admin.username)
     if existing_admin:
-        return ResponseModel(
-            success=False, msg="Admin with this username already exists", data=None
-        )
+        return ResponseModel(success=False, msg="Admin with this username already exists", data=None)
 
     new_admin = crud.create_admin(db, admin)
     return ResponseModel(

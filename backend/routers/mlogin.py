@@ -49,11 +49,13 @@ def _global_lock():
 
 
 def _ensure_table(db: Session) -> None:
-    db.execute(text("""CREATE TABLE IF NOT EXISTS global_mlogin_sessions (
+    db.execute(
+        text("""CREATE TABLE IF NOT EXISTS global_mlogin_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL,
         common_name TEXT NOT NULL, node_name TEXT NOT NULL,
         session_key TEXT NOT NULL UNIQUE, trusted_ip TEXT, trusted_port TEXT,
-        pool_ip TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL)"""))
+        pool_ip TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL)""")
+    )
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_gml_user ON global_mlogin_sessions(username)"))
     db.execute(text("CREATE INDEX IF NOT EXISTS idx_gml_node ON global_mlogin_sessions(node_name)"))
     db.commit()
@@ -100,6 +102,7 @@ def _fetch_node_usage(node) -> dict | None:
 async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[str]]:
     """Query all active nodes for live sessions of this user (async, non-blocking)."""
     import asyncio
+
     live: set[tuple] = set()
     reachable: set[str] = set()
     nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
@@ -135,26 +138,29 @@ async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[st
 
 
 def _registry_sessions(username: str, db: Session) -> set[tuple]:
-    rows = db.execute(text(
-        "SELECT node_name, common_name, trusted_ip, trusted_port "
-        "FROM global_mlogin_sessions WHERE username = :u"
-    ), {"u": username}).fetchall()
+    rows = db.execute(
+        text("SELECT node_name, common_name, trusted_ip, trusted_port FROM global_mlogin_sessions WHERE username = :u"),
+        {"u": username},
+    ).fetchall()
     return {(str(r[0] or ""), str(r[1] or ""), str(r[2] or ""), str(r[3] or "")) for r in rows}
 
 
 def _cleanup(db: Session, live: set[tuple], reachable: set[str], now: float) -> None:
-    db.execute(text("DELETE FROM global_mlogin_sessions WHERE updated_at < :c"),
-               {"c": now - _SESSION_TTL})
+    db.execute(text("DELETE FROM global_mlogin_sessions WHERE updated_at < :c"), {"c": now - _SESSION_TTL})
     if not reachable:
         return
     ph = ", ".join(f":rn{i}" for i in range(len(reachable)))
     params = {f"rn{i}": n for i, n in enumerate(reachable)}
-    db.execute(text(f"DELETE FROM global_mlogin_sessions WHERE node_name IN ({ph}) "
-                    f"AND created_at < :g"), {**params, "g": now - _STATUS_GRACE})
-    rows = db.execute(text(
-        f"SELECT id, node_name, common_name, trusted_ip, trusted_port "
-        f"FROM global_mlogin_sessions WHERE node_name IN ({ph})"
-    ), params).fetchall()
+    db.execute(
+        text(f"DELETE FROM global_mlogin_sessions WHERE node_name IN ({ph}) AND created_at < :g"),
+        {**params, "g": now - _STATUS_GRACE},
+    )
+    rows = db.execute(
+        text(
+            f"SELECT id, node_name, common_name, trusted_ip, trusted_port FROM global_mlogin_sessions WHERE node_name IN ({ph})"
+        ),
+        params,
+    ).fetchall()
     for r in rows:
         key = (str(r[1] or ""), str(r[2] or ""), str(r[3] or ""), str(r[4] or ""))
         if key not in live:
@@ -182,6 +188,7 @@ async def global_mlogin_status(
             from jose import jwt as _jwt
 
             from backend.config import config as _cfg
+
             token = auth_header[7:]
             payload = _jwt.decode(token, _cfg.JWT_SECRET_KEY, algorithms=["HS256"])
             if payload.get("type") != "access" or payload.get("role") != "owner":
@@ -201,6 +208,8 @@ async def global_mlogin_status(
         registry = _registry_sessions(username, db)
         db.commit()
     sessions = sorted(set(live) | set(registry))
-    return ResponseModel(success=True, msg="global multi-login status",
-                         data={"username": username, "global_active": len(sessions),
-                               "sessions": sessions})
+    return ResponseModel(
+        success=True,
+        msg="global multi-login status",
+        data={"username": username, "global_active": len(sessions), "sessions": sessions},
+    )

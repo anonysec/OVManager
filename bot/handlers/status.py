@@ -1,8 +1,9 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from bot.handlers.common import api, _safe_handler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+
+from bot.handlers.common import _safe_handler, api
 
 
 @_safe_handler
@@ -27,12 +28,15 @@ async def _handle_status(update: Update):
             lines.append(f"── {n.get('name', '?')} ──")
             lines.append(f"  {st}  {n.get('address', '?')}")
         kb = [
-            [InlineKeyboardButton("🔄 Refresh", callback_data="hub_status"),
-             InlineKeyboardButton("👥 Users", callback_data="users_page_0"),
-             InlineKeyboardButton("🏠 Main", callback_data="hub_main")],
+            [
+                InlineKeyboardButton("🔄 Refresh", callback_data="hub_status"),
+                InlineKeyboardButton("👥 Users", callback_data="users_page_0"),
+                InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
+            ],
         ]
         await update.message.reply_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(kb))
-    except Exception as e:
+    except Exception:
         import logging
+
         logging.getLogger(__name__).exception("Error in _handle_status")
         await update.message.reply_text("⚠️ Failed to load status, check logs.")

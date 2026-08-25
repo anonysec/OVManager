@@ -17,16 +17,18 @@ from .models import Admin, Node, Settings, User
 
 try:
     from backend.config import config as panel_config
+
     _fernet = Fernet(panel_config.BOT_ENCRYPT_KEY.encode()) if panel_config.BOT_ENCRYPT_KEY else None
 except Exception:
     _fernet = None
 
 if _fernet is None:
     import logging
+
     logging.getLogger(__name__).warning(
         "BOT_ENCRYPT_KEY not set — bot tokens stored in plaintext at rest. "
         "Set BOT_ENCRYPT_KEY in .env for encryption: "
-        "python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        'python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
 
@@ -160,11 +162,7 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
 
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
-    not_expired = (
-        request.expiry_date >= datetime.now(UTC).date()
-        if request.expiry_date
-        else True
-    )
+    not_expired = request.expiry_date >= datetime.now(UTC).date() if request.expiry_date else True
     has_traffic = request.total is None or request.total > used
     # Manual status (from the edit modal checkbox) wins, but expiry/traffic
     # violations still force-disable: an expired or out-of-traffic account
@@ -195,6 +193,7 @@ def change_user_status(db: Session, uuid: str, status: bool) -> bool:
         logger.error("Error changing status for user %s on db: %s", user.name, e)
         return False
 
+
 def reset_user_usage(db: Session, uuid: str) -> bool:
     user = db.query(User).filter(User.uuid == uuid).first()
     if not user:
@@ -208,21 +207,14 @@ def reset_user_usage(db: Session, uuid: str) -> bool:
     db.commit()
     return True
 
+
 def get_expired_users(db: Session):
-    return (
-        db.query(User)
-        .filter(User.expiry_date < datetime.now(UTC).date(), User.is_active)
-        .all()
-    )
+    return db.query(User).filter(User.expiry_date < datetime.now(UTC).date(), User.is_active).all()
 
 
 def get_users_exceeded_traffic(db: Session):
     # Exclude users with NULL total (unlimited traffic)
-    return (
-        db.query(User)
-        .filter(User.total.isnot(None), User.used > User.total, User.is_active)
-        .all()
-    )
+    return db.query(User).filter(User.total.isnot(None), User.used > User.total, User.is_active).all()
 
 
 def delete_user(db: Session, name: str):
@@ -365,6 +357,7 @@ def restore_user(db: Session, snapshot: dict):
     expiry = snapshot.get("expiry_date")
     if isinstance(expiry, str) and expiry:
         from datetime import date as _date
+
         try:
             expiry = _date.fromisoformat(expiry[:10])
         except ValueError:
@@ -396,6 +389,7 @@ def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: i
     Returns a summary of updated / not-found counts.
     """
     from datetime import timedelta
+
     updated = 0
     not_found = 0
     for uuid in uuids:

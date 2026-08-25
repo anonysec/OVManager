@@ -55,8 +55,8 @@ class BotConfig:
     def load_from_db(self):
         """Fetch bot config from local database when running in same process."""
         try:
-            from backend.db.engine import SessionLocal
             from backend.db import models
+            from backend.db.engine import SessionLocal
 
             db = SessionLocal()
             try:
@@ -67,6 +67,7 @@ class BotConfig:
                         # Decrypt before use, but stay backwards-compatible if the DB
                         # still holds a plaintext token (from a pre-encryption migration).
                         from backend.db.crud import _fernet
+
                         if _fernet:
                             try:
                                 self.token = _fernet.decrypt(s.bot_token.encode()).decode()
@@ -91,6 +92,7 @@ class BotConfig:
             return self.api_url
         try:
             from backend.config import config as panel_config
+
             port = getattr(panel_config, "PORT", 2095)
             host = getattr(panel_config, "HOST", "127.0.0.1")
             self.api_url = f"http://{host}:{port}"

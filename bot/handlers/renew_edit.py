@@ -3,9 +3,10 @@
 
 import logging
 from datetime import date, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from bot.handlers.common import api, _fmt_bytes, _days_remaining, _safe_handler
-from bot.config import config
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+
+from bot.handlers.common import _safe_handler, api
 
 
 @_safe_handler
@@ -13,9 +14,7 @@ async def _handle_renew(update: Update, args: list):
     try:
         if not args:
             await update.message.reply_text(
-                "Usage: /r <name> [days] [traffic] [users]\n"
-                "  /r user1          → pick plan\n"
-                "  /r user1 30 200 2 → full renew"
+                "Usage: /r <name> [days] [traffic] [users]\n  /r user1          → pick plan\n  /r user1 30 200 2 → full renew"
             )
             return
         name = args[0]
@@ -29,12 +28,14 @@ async def _handle_renew(update: Update, args: list):
                     break
             await update.message.reply_text(
                 f"🔄 Renew {name}\nSelect plan:",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🥉 Bronze  30d / 200GB / 1u", callback_data=f"renew_{uuid}_bronze")],
-                    [InlineKeyboardButton("🥈 Silver  30d / 200GB / 2u", callback_data=f"renew_{uuid}_silver")],
-                    [InlineKeyboardButton("🥇 Gold  Unlimited", callback_data=f"renew_{uuid}_gold")],
-                    [InlineKeyboardButton("✏️ Custom", callback_data=f"renew_{uuid}_custom")],
-                ]),
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("🥉 Bronze  30d / 200GB / 1u", callback_data=f"renew_{uuid}_bronze")],
+                        [InlineKeyboardButton("🥈 Silver  30d / 200GB / 2u", callback_data=f"renew_{uuid}_silver")],
+                        [InlineKeyboardButton("🥇 Gold  Unlimited", callback_data=f"renew_{uuid}_gold")],
+                        [InlineKeyboardButton("✏️ Custom", callback_data=f"renew_{uuid}_custom")],
+                    ]
+                ),
             )
             return
         # Days validation
@@ -69,12 +70,16 @@ async def _handle_renew(update: Update, args: list):
             t_s = "♾️" if traffic == 0 else f"{traffic}GB"
             m_s = "♾️" if max_users == 0 else str(max_users)
             msg = f"✅ {name} renewed — {d_s} / {t_s} / {m_s}\nExpires: {result['expiry_date']}"
-            kb = [[InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
-                   InlineKeyboardButton("🏠 Main", callback_data="hub_main")]]
+            kb = [
+                [
+                    InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
+                    InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
+                ]
+            ]
             await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb))
         else:
             await update.message.reply_text(f"❌ {result.get('msg', 'Failed')}")
-    except Exception as e:
+    except Exception:
         logger = logging.getLogger(__name__)
         logger.exception("Error in _handle_renew")
         await update.message.reply_text("⚠️ Failed to renew user.")
@@ -89,8 +94,12 @@ async def _execute_renew(query, uuid: str, name: str, days: int, traffic: int, m
         msg = f"✅ {name} renewed — {d_s} / {t_s} / {m_s}\nExpires: {result['expiry_date']}"
     else:
         msg = f"❌ {result.get('msg', 'Failed')}"
-    kb = [[InlineKeyboardButton("👤 Details", callback_data=f"user_{uuid}"),
-           InlineKeyboardButton("🏠 Main", callback_data="hub_main")]]
+    kb = [
+        [
+            InlineKeyboardButton("👤 Details", callback_data=f"user_{uuid}"),
+            InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
+        ]
+    ]
     await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb))
 
 
@@ -99,8 +108,7 @@ async def _handle_edit(update: Update, args: list):
     try:
         if len(args) < 1:
             await update.message.reply_text(
-                "Usage: /e <name> [days] [traffic] [users]\n"
-                "Example: /e user1 60 500 3\n0 = no change"
+                "Usage: /e <name> [days] [traffic] [users]\nExample: /e user1 60 500 3\n0 = no change"
             )
             return
         name = args[0]
@@ -128,12 +136,16 @@ async def _handle_edit(update: Update, args: list):
             if "max_logins" in data:
                 parts.append(f"logins → {data['max_logins']}")
             msg = f"✅ {name} edited — {', '.join(parts)}"
-            kb = [[InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
-                   InlineKeyboardButton("🏠 Main", callback_data="hub_main")]]
+            kb = [
+                [
+                    InlineKeyboardButton("👤 Details", callback_data=f"user_{name}"),
+                    InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
+                ]
+            ]
             await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb))
         else:
             await update.message.reply_text(f"❌ {result.get('msg', 'Failed')}")
-    except Exception as e:
+    except Exception:
         logger = logging.getLogger(__name__)
         logger.exception("Error in _handle_edit")
         await update.message.reply_text("⚠️ Failed to edit user.")

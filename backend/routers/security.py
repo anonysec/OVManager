@@ -106,23 +106,29 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
             clean_errors.extend([{**_parse_log_line(v, k, panel_tz), "node": node_name} for k, v in le.items()])
         elif le:
             clean_errors.append({**_parse_log_line(le, panel_tz=panel_tz), "node": node_name})
-        per_node.append({
-            "node": node_name,
-            "auth_errors": int(data.get("auth_errors") or 0),
-            "rejects": int(data.get("rejects") or 0),
-            "stale_markers": int(data.get("stale_marker_count") or 0),
-            "live": int(data.get("live_count") or 0),
-        })
+        per_node.append(
+            {
+                "node": node_name,
+                "auth_errors": int(data.get("auth_errors") or 0),
+                "rejects": int(data.get("rejects") or 0),
+                "stale_markers": int(data.get("stale_marker_count") or 0),
+                "live": int(data.get("live_count") or 0),
+            }
+        )
 
     clean_errors.sort(key=lambda e: float(e.get("ts") or 0), reverse=True)
     top = Counter(e["common_name"] for e in clean_errors if e.get("common_name"))
-    return ResponseModel(success=True, msg="Security summary", data={
-        "hours": hours,
-        "timezone": tz_name,
-        "auth_errors": auth_errors,
-        "rejects": rejects,
-        "stale_markers": stale,
-        "per_node": per_node,
-        "last_errors": clean_errors[:50],
-        "top_common_names": top.most_common(20),
-    })
+    return ResponseModel(
+        success=True,
+        msg="Security summary",
+        data={
+            "hours": hours,
+            "timezone": tz_name,
+            "auth_errors": auth_errors,
+            "rejects": rejects,
+            "stale_markers": stale,
+            "per_node": per_node,
+            "last_errors": clean_errors[:50],
+            "top_common_names": top.most_common(20),
+        },
+    )

@@ -1,14 +1,15 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-import re
-import time
 import logging
-from datetime import date, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import time
+from datetime import date
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-from bot.ovmanager import OVManager
+
 from bot.config import config
+from bot.ovmanager import OVManager
 
 logger = logging.getLogger(__name__)
 api = OVManager()
@@ -97,6 +98,7 @@ def _check_rate_limit(user_id: int) -> bool:
 
 def _safe_handler(func):
     """Decorator for error-handling in bot handlers."""
+
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             return await func(update, context)
@@ -104,6 +106,7 @@ def _safe_handler(func):
             logger.exception("Handler error: %s", e)
             if update.effective_chat:
                 await update.message.reply_text("❌ An error occurred. Contact admin.")
+
     return wrapper
 
 
@@ -216,10 +219,11 @@ def _is_owner(uid: int) -> bool:
 
 def _hub_kb():
     return [
-        [InlineKeyboardButton("➕ New", callback_data="hub_new"),
-         InlineKeyboardButton("🖥️ Status", callback_data="hub_status")],
-        [InlineKeyboardButton("👥 Users", callback_data="users_page_0"),
-         InlineKeyboardButton("❓ Help", callback_data="hub_help")],
+        [InlineKeyboardButton("➕ New", callback_data="hub_new"), InlineKeyboardButton("🖥️ Status", callback_data="hub_status")],
+        [
+            InlineKeyboardButton("👥 Users", callback_data="users_page_0"),
+            InlineKeyboardButton("❓ Help", callback_data="hub_help"),
+        ],
     ]
 
 

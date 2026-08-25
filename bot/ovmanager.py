@@ -10,8 +10,10 @@ consistently whether the user acts through the web UI or the bot.
 The API base URL is computed from the bot config (PANEL_URL + dynamic URLPATH).
 """
 
-import httpx
 import logging
+
+import httpx
+
 from bot.config import config
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,7 @@ class OVManager:
         raw = config.resolve_api_url().rstrip("/")
         try:
             from backend.urlpath import get_urlpath
+
             urlpath = get_urlpath()
             if urlpath:
                 self.base = f"{raw}/{urlpath}/api"
@@ -67,6 +70,7 @@ class OVManager:
 
     async def create_user(self, name: str, days: int = 30, traffic_gb: int = 100, max_users: int = 1) -> dict:
         from datetime import date, timedelta
+
         exp = date(2099, 12, 31) if days == 0 else date.today() + timedelta(days=days)
         total_bytes = traffic_gb * 1073741824 if traffic_gb > 0 else None
 
@@ -93,26 +97,35 @@ class OVManager:
         uuid = user.get("uuid")
         if not uuid:
             return {"success": False, "msg": "User not found"}
-        return await self._request("PUT", f"/users/{uuid}", json={
-            "name": username,
-            **data,
-        })
+        return await self._request(
+            "PUT",
+            f"/users/{uuid}",
+            json={
+                "name": username,
+                **data,
+            },
+        )
 
     async def renew_user(self, name: str, days: int, traffic_gb: int, max_users: int) -> dict:
         from datetime import date, timedelta
+
         user = await self.get_user(name)
         uuid = user.get("uuid")
         if not uuid:
             return {"success": False, "msg": "User not found"}
         exp = date(2099, 12, 31) if days == 0 else date.today() + timedelta(days=days)
         total_bytes = traffic_gb * 1073741824 if traffic_gb > 0 else None
-        return await self._request("PUT", f"/users/{uuid}", json={
-            "name": name,
-            "expiry_date": str(exp),
-            "total": total_bytes,
-            "max_logins": max_users if max_users > 0 else 0,
-            "status": True,
-        })
+        return await self._request(
+            "PUT",
+            f"/users/{uuid}",
+            json={
+                "name": name,
+                "expiry_date": str(exp),
+                "total": total_bytes,
+                "max_logins": max_users if max_users > 0 else 0,
+                "status": True,
+            },
+        )
 
     async def toggle_user_status(self, name: str) -> dict:
         user = await self.get_user(name)
@@ -120,10 +133,14 @@ class OVManager:
         if not uuid:
             return {"success": False, "msg": "User not found"}
         new_status = not user.get("is_active", True)
-        result = await self._request("PUT", f"/users/{uuid}/status", json={
-            "name": name,
-            "status": new_status,
-        })
+        result = await self._request(
+            "PUT",
+            f"/users/{uuid}/status",
+            json={
+                "name": name,
+                "status": new_status,
+            },
+        )
         return {"success": result.get("success", False), "is_active": new_status}
 
     async def delete_user(self, username: str) -> dict:

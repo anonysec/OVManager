@@ -2,6 +2,7 @@
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
 """Centralized persistent-data paths for native and container deployments."""
+
 from pathlib import Path
 
 from backend.config import config

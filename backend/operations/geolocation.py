@@ -2,6 +2,7 @@
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
 """IP-based geolocation using ip-api.com (free, no key needed)."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -28,7 +29,7 @@ _TIMEOUT = 5.0
 
 def _extract_host(address: str) -> str | None:
     """Extract a hostname/IP from hostnames, URLs, host:port, and IPv6 input."""
-    raw = str(address or '').strip()
+    raw = str(address or "").strip()
     if not raw:
         return None
     try:
@@ -36,12 +37,12 @@ def _extract_host(address: str) -> str | None:
     except ValueError:
         pass
 
-    candidate = raw if '://' in raw else f'//{raw}'
+    candidate = raw if "://" in raw else f"//{raw}"
     try:
         host = urlsplit(candidate).hostname
     except ValueError:
         host = None
-    return host.strip('[]') if host else None
+    return host.strip("[]") if host else None
 
 
 def resolve_ip(address: str) -> str | None:

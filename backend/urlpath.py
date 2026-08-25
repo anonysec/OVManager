@@ -37,6 +37,7 @@ def _load_from_db() -> str:
     db = SessionLocal()
     try:
         from backend.db import crud
+
         s = crud.get_settings(db)
         return (getattr(s, "urlpath", "") or "").strip("/")
     except Exception as exc:
@@ -70,6 +71,7 @@ def get_urlpath() -> str:
                 return _cache_value
             try:
                 from backend.config import config
+
                 _cache_value = (config.URLPATH or "").strip("/")
             except Exception:
                 _cache_value = ""
@@ -90,6 +92,7 @@ def set_urlpath(value: str) -> str:
         db = SessionLocal()
         try:
             from backend.db import crud
+
             s = crud.get_settings(db)
             s.urlpath = value
             db.commit()
@@ -174,7 +177,7 @@ class URLPathMiddleware:
         if path.startswith(prefix + "/"):
             # Strip prefix: /mysecret/api/users → /api/users
             scope = dict(scope)
-            scope["path"] = path[len(prefix):]
+            scope["path"] = path[len(prefix) :]
             await self.app(scope, receive, send)
             return
 
@@ -185,15 +188,19 @@ class URLPathMiddleware:
     @staticmethod
     async def _send_empty(send):
         """Send a minimal empty response that reveals nothing."""
-        await send({
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [
-                [b"content-type", b"text/plain"],
-                [b"content-length", b"0"],
-            ],
-        })
-        await send({
-            "type": "http.response.body",
-            "body": b"",
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    [b"content-type", b"text/plain"],
+                    [b"content-length", b"0"],
+                ],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"",
+            }
+        )
