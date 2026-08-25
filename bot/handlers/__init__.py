@@ -1,18 +1,12 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-"""Bot handler modules for OVManager Telegram bot.
+"""Telegram bot handler modules for OVManager.
 
-This package re-exports the public API from the original monolithic handlers.py
-for backward compatibility with bot/main.py.
-
-Modules:
-    common      - Shared utilities, constants, decorators, state management
-    new_user    - New user creation handlers
-    status      - Server status handler
-    users       - User listing, detail view, search handlers
-    renew_edit  - User renew and edit handlers
-    callbacks   - All inline callback query handlers
+The package exposes the handlers used by bot/main.py:
+    handle_message   - free-text commands (/new, /users, /renew, ...)
+    handle_callback  - inline keyboard callback queries
+    handle_start     - /start command
 """
 
 from telegram import Update

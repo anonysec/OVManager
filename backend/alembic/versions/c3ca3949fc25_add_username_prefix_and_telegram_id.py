@@ -3,8 +3,8 @@
 
 """add username_prefix, telegram_id, bot_config to settings
 
-Revision ID: c7d8e9f0a1b2
-Revises: b2c3d4e5f6a7
+Revision ID: c3ca3949fc25
+Revises: 5507b37a36d0
 Create Date: 2026-07-22 23:30:00.000000
 
 """
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "c7d8e9f0a1b2"
-down_revision: str | None = "b2c3d4e5f6a7"
+revision: str = "c3ca3949fc25"
+down_revision: str | None = "5507b37a36d0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
