@@ -14,4 +14,7 @@ router = APIRouter(prefix="/activity", tags=["Activity"])
 
 @router.get("/", response_model=ResponseModel)
 async def get_activity(limit: int = 100, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    return ResponseModel(success=True, msg="Activity retrieved", data=recent_events(db, limit=limit))
+    # Owner sees everything; admins only their own actions (events name-drop
+    # targets that may belong to other tenants).
+    actor = None if user.get("type") == "owner" else user.get("username")
+    return ResponseModel(success=True, msg="Activity retrieved", data=recent_events(db, limit=limit, actor=actor))

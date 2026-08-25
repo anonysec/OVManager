@@ -383,20 +383,27 @@ def restore_user(db: Session, snapshot: dict):
     return new_user
 
 
-def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: int = 0) -> dict:
+def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: int = 0, owner: str | None = None) -> dict:
     """Extend expiry (+days) and/or add traffic quota (+add_bytes) for users.
+
+    When ``owner`` is given (non-owner admins), only users belonging to that
+    admin are touched — a bulk request must never cross tenant boundaries.
+    Unauthorized UUIDs are counted as not_found without revealing that they
+    exist.
 
     Returns a summary of updated / not-found counts.
     """
     from datetime import timedelta
 
+    query = db.query(User).filter(User.uuid.in_(uuids))
+    if owner is not None:
+        query = query.filter(User.owner == owner)
+    matched = query.all()
+    matched_uuids = set()
+
     updated = 0
-    not_found = 0
-    for uuid in uuids:
-        user = db.query(User).filter(User.uuid == uuid).first()
-        if not user:
-            not_found += 1
-            continue
+    for user in matched:
+        matched_uuids.add(user.uuid)
         if days:
             base = user.expiry_date
             user.expiry_date = (base + timedelta(days=days)) if base else base
@@ -404,4 +411,5 @@ def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: i
             user.total = (user.total or 0) + add_bytes
         updated += 1
     db.commit()
+    not_found = len(uuids) - len(matched_uuids)
     return {"updated": updated, "not_found": not_found, "total": len(uuids)}

@@ -190,6 +190,19 @@ async def update_urlpath(
             data=None,
         )
 
+    # Reserved prefixes would shadow real routes and (worst case) lock the
+    # operator out: e.g. urlpath="api" swallows every API call, "sub" steals
+    # public subscription links, "assets" breaks the SPA bundle. The set is
+    # derived from the live route table, so it can't drift as routes change.
+    from backend.urlpath import reserved_prefixes
+
+    if value and value.lower() in reserved_prefixes():
+        return ResponseModel(
+            success=False,
+            msg=f"'{value}' is reserved and cannot be used as the panel URL path",
+            data=None,
+        )
+
     try:
         new_value = _set_urlpath(value)
     except RuntimeError as exc:
@@ -197,7 +210,7 @@ async def update_urlpath(
 
     return ResponseModel(
         success=True,
-        msg="URL path updated. Takes effect within 5 seconds." if new_value else "URL path cleared — panel now served at root.",
+        msg="URL path updated — panel moved to the new path immediately." if new_value else "URL path cleared — panel now served at root.",
         data={
             "urlpath": new_value,
             "panel_url": f"/{new_value}" if new_value else "/",

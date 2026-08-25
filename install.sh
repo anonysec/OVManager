@@ -22,7 +22,10 @@ BRANCH="main"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
-DEFAULT_PATH=""
+# Panel URL path: random per install so the panel is actually hidden from
+# internet scanners (a shared static default would defeat the feature).
+# Users can override with --path, or pick their own interactively.
+DEFAULT_PATH="$(openssl rand -hex 4 2>/dev/null || head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 VERSION="1.7"
@@ -134,7 +137,7 @@ show_help() {
 
   Flags:
     --port PORT         Panel port (default: 2095)
-    --path URLPATH      URL path prefix, e.g. mypanel (default: root)
+    --path URLPATH      URL path prefix, e.g. mypanel (default: random; "--path root" serves at /)
     --admin-user USER   Admin username (default: admin)
     --admin-pass PASS   Admin password (required)
     --public-url URL    Canonical public URL for subscription links
@@ -155,7 +158,7 @@ parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --port)        [[ $# -ge 2 ]] || die "--port needs a value"; PORT="$2"; shift 2 ;;
-            --path)        [[ $# -ge 2 ]] || die "--path needs a value"; PATHPREFIX="${2#/}"; PATHPREFIX="${PATHPREFIX%/}"; shift 2 ;;
+            --path)        [[ $# -ge 2 ]] || die "--path needs a value"; PATHPREFIX="${2#/}"; PATHPREFIX="${PATHPREFIX%/}"; [[ "$PATHPREFIX" == "root" ]] && PATHPREFIX=""; shift 2 ;;
             --admin-user)  [[ $# -ge 2 ]] || die "--admin-user needs a value"; ADMIN_USER="$2"; shift 2 ;;
             --admin-pass)  [[ $# -ge 2 ]] || die "--admin-pass needs a value"; ADMIN_PASS="$2"; shift 2 ;;
             --public-url)  [[ $# -ge 2 ]] || die "--public-url needs a value"; PUBLIC_URL="$2"; shift 2 ;;
@@ -647,7 +650,8 @@ do_uninstall() {
 # ── Interactive setup ──────────────────────────────────────────────────
 interactive_setup() {
     PORT="$(ask "Port" "$DEFAULT_PORT")"
-    PATHPREFIX="$(ask "URL path (empty=root)" "$DEFAULT_PATH")"
+    PATHPREFIX="$(ask "URL path (enter = random, 'root' = /)" "$DEFAULT_PATH")"
+    [[ "$PATHPREFIX" == "root" ]] && PATHPREFIX=""
     ADMIN_USER="$(ask "Admin user" "$DEFAULT_USER")"
     ADMIN_PASS="$(ask "Admin pass" "" "h")"
     [[ -n "$ADMIN_PASS" ]] || die "Admin password cannot be empty"

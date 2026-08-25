@@ -30,6 +30,7 @@ _lock = threading.Lock()
 _cache_value: str = ""
 _cache_ts: float = 0.0
 _CACHE_TTL: float = 5.0  # seconds
+_reserved_cache: frozenset | None = None
 
 
 def _load_from_db() -> str:
@@ -121,6 +122,72 @@ def invalidate_cache() -> None:
     global _cache_ts
     with _lock:
         _cache_ts = 0.0
+
+
+def reserved_prefixes() -> set[str]:
+    """First path segments the panel itself owns — never usable as URLPATH.
+
+    Derived from the live route table (so it can never drift from reality as
+    routers are added/removed), plus the middleware-level exemptions that
+    must stay reachable no matter what the routes look like. Cached after the
+    first computation; route tables don't change at runtime.
+    """
+    global _reserved_cache
+    with _lock:
+        if _reserved_cache is not None:
+            return set(_reserved_cache)
+
+    # Static base: middleware exemptions (URLPathMiddleware._ALWAYS_ALLOWED_
+    # PREFIXES) plus conditional routes that only exist with DOC=true
+    # (/doc, /openapi.json) — reserving them keeps a later DOC enable safe.
+    reserved = {"api", "assets", "health", "static", "doc", "openapi.json"}
+    try:
+        from backend.config import config
+
+        reserved.add((config.SUBSCRIPTION_PATH or "sub").strip("/").lower())
+    except Exception:
+        pass
+    try:
+        # Local import: backend.app imports this module for the middleware.
+        from backend.app import api
+
+        for route in api.routes:
+            seg = (getattr(route, "path", "") or "").strip("/").split("/", 1)[0].lower()
+            if seg and not seg.startswith("{"):  # skip the SPA catch-all
+                reserved.add(seg)
+    except Exception as exc:
+        logger.error("Could not derive reserved URL paths from routes: %s", exc)
+
+    with _lock:
+        _reserved_cache = frozenset(reserved)
+    return set(reserved)
+
+
+def reset_urlpath() -> bool:
+    """Emergency recovery: clear the panel prefix directly in the DB.
+
+    Used by ``main.py --reset-urlpath`` when an operator locks themselves out
+    (forgot the path). The settings row is auto-created if missing (default
+    is "" anyway), so failure means the database itself is unreachable.
+    """
+    global _cache_value, _cache_ts
+    try:
+        db = SessionLocal()
+        try:
+            from backend.db import crud
+
+            settings = crud.get_settings(db)
+            settings.urlpath = ""
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.error("Could not reset URLPATH: %s", exc)
+        return False
+    with _lock:
+        _cache_value = ""
+        _cache_ts = time.monotonic()
+    return True
 
 
 class URLPathMiddleware:

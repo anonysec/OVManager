@@ -42,6 +42,22 @@ class Admin(Base):
     username_prefix: Mapped[str] = mapped_column(nullable=True)
 
 
+class AuthSession(Base):
+    """Opaque login session. Only the SHA-256 of the raw token is stored."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    token_hash: Mapped[str] = mapped_column(unique=True, index=True)
+    username: Mapped[str] = mapped_column(index=True)
+    role: Mapped[str] = mapped_column()  # "owner" | "admin"
+    created_at: Mapped[float] = mapped_column()  # unix ts
+    expires_at: Mapped[float] = mapped_column()  # absolute cap: created + SESSION_MAX_SECONDS
+    last_seen_at: Mapped[float] = mapped_column()  # idle timeout reference (sliding)
+    user_agent: Mapped[str] = mapped_column(nullable=True)
+    ip: Mapped[str] = mapped_column(nullable=True)
+
+
 class Node(Base):
     __tablename__ = "nodes"
 
