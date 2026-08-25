@@ -210,7 +210,9 @@ async def update_urlpath(
 
     return ResponseModel(
         success=True,
-        msg="URL path updated — panel moved to the new path immediately." if new_value else "URL path cleared — panel now served at root.",
+        msg="URL path updated — panel moved to the new path immediately."
+        if new_value
+        else "URL path cleared — panel now served at root.",
         data={
             "urlpath": new_value,
             "panel_url": f"/{new_value}" if new_value else "/",

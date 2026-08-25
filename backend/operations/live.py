@@ -29,6 +29,12 @@ from backend.logger import logger
 # far gentler than the old per-page-load fan-out.
 POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_POLL_SECONDS", "10"))
 
+# How often to poll when nobody has the live stream open. The snapshot also
+# feeds the public subscription page (/sub/...), which has no SSE channel of
+# its own, so it must never go permanently stale — but there is no reason to
+# hit every node every 10 seconds for an audience of nobody.
+IDLE_POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_IDLE_POLL_SECONDS", "300"))
+
 
 @dataclass
 class LiveEvent:
@@ -63,6 +69,11 @@ class LiveBus:
     def unsubscribe(self, q: asyncio.Queue) -> None:
         with self._lock:
             self._subscribers.discard(q)
+
+    def has_subscribers(self) -> bool:
+        """True when at least one SSE client is connected."""
+        with self._lock:
+            return bool(self._subscribers)
 
     def publish(self, topic: str, data: dict | None = None) -> None:
         with self._lock:
@@ -163,10 +174,21 @@ async def collect_live_snapshot() -> None:
     from backend.db.engine import SessionLocal
     from backend.node.requests import NodeRequests
 
+    # Nothing is watching and the snapshot is still fresh enough for the
+    # non-SSE consumers: skip the fan-out entirely. With no browser open this
+    # turns a node probe every 10s into one every IDLE_POLL_SECONDS.
+    if not bus.has_subscribers():
+        last = snapshot.last_poll_ts
+        if last > 0 and (time.monotonic() - last) < IDLE_POLL_SECONDS:
+            return
+
     db = SessionLocal()
     try:
         nodes = crud.get_active_nodes(db)
-        users = crud.get_all_users(db)
+        # Only (id, name) is needed to map a node's common_name back to a
+        # username; loading full ORM objects here every 10s for a panel with
+        # thousands of users was a needless allocation.
+        id_to_name = dict(crud.get_user_id_name_pairs(db))
     except Exception as exc:
         logger.error("live collector: DB read failed: %s", exc)
         db.close()
@@ -179,8 +201,6 @@ async def collect_live_snapshot() -> None:
         if nodes_changed:
             publish("nodes", {"op": "snapshot"})
         return
-
-    id_to_name = {str(u.id): u.name for u in users}
 
     def probe(node) -> tuple[object, dict]:
         # The sessions summary is a superset of the health check: a node that

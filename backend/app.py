@@ -13,13 +13,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 
 from backend.config import config
 from backend.db.engine import SessionLocal
 from backend.db.exceptions import ConflictError, NotFoundError
+from backend.db.migrations import migrate
 from backend.logger import logger
 from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.operations.daily_checks import check_user_used_traffic, enforce_user_limits
@@ -59,22 +57,66 @@ CSP_POLICY = (
 )
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # HSTS is meaningful only on HTTPS. Trust forwarded proto only when
+# Header names the middleware owns: any value set further down the stack is
+# replaced rather than duplicated.
+_OVERRIDDEN_HEADERS = frozenset(
+    {
+        b"x-content-type-options",
+        b"x-frame-options",
+        b"referrer-policy",
+        b"permissions-policy",
+        b"content-security-policy",
+        b"strict-transport-security",
+    }
+)
+
+
+class SecurityHeadersMiddleware:
+    """Add hardening headers to every response.
+
+    Written as a plain ASGI middleware instead of Starlette's
+    ``BaseHTTPMiddleware``: that helper runs each request through a task group
+    that copies the response body through a queue, which costs a task and a
+    buffer per request and adds latency to streaming responses — notably the
+    SSE live stream. Rewriting headers on the ``http.response.start`` message
+    does the same job with no per-request allocation.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # HSTS is meaningful only on HTTPS. Trust the forwarded proto only when
         # the deployment explicitly trusts its reverse proxy.
-        forwarded_proto = request.headers.get("X-Forwarded-Proto", "").lower()
-        is_https = request.url.scheme == "https" or (config.TRUSTED_PROXY and forwarded_proto == "https")
+        is_https = scope.get("scheme") == "https"
+        if not is_https and config.TRUSTED_PROXY:
+            for key, value in scope.get("headers") or ():
+                if key == b"x-forwarded-proto":
+                    is_https = value.lower() == b"https"
+                    break
+
+        extra: list[list[bytes]] = [
+            [b"x-content-type-options", b"nosniff"],
+            [b"x-frame-options", b"DENY"],
+            [b"referrer-policy", b"strict-origin-when-cross-origin"],
+            [b"permissions-policy", b"geolocation=(), microphone=(), camera=()"],
+            [b"content-security-policy", CSP_POLICY.encode("latin-1")],
+        ]
         if is_https:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-        # Other hardening headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        response.headers["Content-Security-Policy"] = CSP_POLICY
-        return response
+            extra.append([b"strict-transport-security", b"max-age=31536000; includeSubDomains; preload"])
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                message = dict(message)
+                kept = [h for h in (message.get("headers") or ()) if h[0].lower() not in _OVERRIDDEN_HEADERS]
+                message["headers"] = kept + extra
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 # ── Simple CSRF Protection ────────────────────────────────────────
@@ -82,70 +124,77 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # Since this panel uses Bearer tokens in Authorization header, CSRF risk is low,
 # but we add a middleware that requires a custom header for non-GET requests
 # to defend against accidental cross-origin form submissions.
-class CSRFProtectionMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
-            # Skip for API endpoints that use Bearer token auth (they have Authorization header)
-            auth = request.headers.get("Authorization")
-            # Allow public endpoints (login, subscription) and API key auth
-            path = request.url.path
-            # Strip URLPATH prefix so CSRF check works for both
-            # /api/login and /<urlpath>/api/login
-            _up = _get_urlpath()
-            if _up and path.startswith(f"/{_up}/"):
-                path = path[len(f"/{_up}") :]
-            if auth and auth.startswith("Bearer "):
-                return await call_next(request)
-            if path.startswith("/api/sub/") or path in ("/api/login", "/api/logout", "/api/refresh"):
-                return await call_next(request)
-            # Require custom header for browser-based form submissions
-            if not request.headers.get("X-Requested-With"):
-                return Response(
-                    content="CSRF check failed: missing X-Requested-With header",
-                    status_code=403,
-                    headers={"X-Content-Type-Options": "nosniff"},
-                )
-        return await call_next(request)
+class CSRFProtectionMiddleware:
+    """Reject state-changing requests that look like a cross-origin form post.
+
+    Plain ASGI for the same reason as :class:`SecurityHeadersMiddleware`: the
+    check only inspects the request, so wrapping the response buys nothing.
+    """
+
+    _MUTATING_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+    _EXEMPT_PATHS = frozenset({"/api/login", "/api/logout", "/api/refresh"})
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") not in self._MUTATING_METHODS:
+            await self.app(scope, receive, send)
+            return
+
+        auth = b""
+        requested_with = False
+        for key, value in scope.get("headers") or ():
+            if key == b"authorization":
+                auth = value
+            elif key == b"x-requested-with":
+                requested_with = True
+
+        # Bearer-token callers (the SPA, nodes, the bot) are not browser forms.
+        if auth.startswith(b"Bearer "):
+            await self.app(scope, receive, send)
+            return
+
+        # Public endpoints: login and the user-facing subscription routes.
+        path = scope.get("path", "")
+        _up = _get_urlpath()
+        if _up and path.startswith(f"/{_up}/"):
+            path = path[len(f"/{_up}") :]
+        if path.startswith("/api/sub/") or path in self._EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+            return
+
+        if not requested_with:
+            await _send_csrf_failure(send)
+            return
+
+        await self.app(scope, receive, send)
+
+
+async def _send_csrf_failure(send) -> None:
+    body = b"CSRF check failed: missing X-Requested-With header"
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 403,
+            "headers": [
+                [b"content-type", b"text/plain; charset=utf-8"],
+                [b"content-length", str(len(body)).encode("ascii")],
+                [b"x-content-type-options", b"nosniff"],
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
 
 
 def _run_migrations():
-    from sqlalchemy import text as _text
+    """Bring the database up to the current schema version.
 
-    from backend.db.engine import Base
-
-    db = SessionLocal()
-    try:
-        Base.metadata.create_all(bind=db.get_bind())
-        _ALLOWED_TABLES = {"users", "settings", "nodes", "admins"}
-        _ALLOWED_COLUMNS = {
-            ("users", "last_online", "DATETIME"),
-            ("settings", "timezone", "VARCHAR NOT NULL DEFAULT 'UTC'"),
-            ("settings", "subscription_url_prefix", "VARCHAR"),
-            ("settings", "subscription_path", "VARCHAR NOT NULL DEFAULT 'sub'"),
-            ("settings", "urlpath", "VARCHAR NOT NULL DEFAULT ''"),
-            ("nodes", "use_tls", "BOOLEAN DEFAULT 0"),
-        }
-        for table, column, coltype in _ALLOWED_COLUMNS:
-            if table not in _ALLOWED_TABLES:
-                continue
-            existing = {r[1] for r in db.execute(_text(f"PRAGMA table_info({table})")).fetchall()}
-            if column not in existing:
-                db.execute(_text(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"))
-        # Seed initial URLPATH from config if Settings row exists and urlpath is empty.
-        # On a fresh DB, the settings table is empty — use INSERT OR IGNORE to create
-        # the row first so the URLPATH from .env gets seeded.
-        try:
-            initial_urlpath = (config.URLPATH or "").strip("/")
-            db.execute(_text("INSERT OR IGNORE INTO settings (port, protocol, urlpath) VALUES (1194, 'tcp', '')"))
-            db.execute(
-                _text("UPDATE settings SET urlpath = :v WHERE (urlpath IS NULL OR urlpath = '')"),
-                {"v": initial_urlpath},
-            )
-        except Exception:
-            pass
-        db.commit()
-    finally:
-        db.close()
+    All migration logic lives in :mod:`backend.db.migrations`; this is only the
+    startup hook. It raises on failure so a half-migrated database stops the
+    panel instead of serving requests against a broken schema.
+    """
+    migrate()
 
 
 # ── TLS Configuration ─────────────────────────────────────────────
@@ -383,14 +432,40 @@ api.include_router(subscription_router)
 # (a runtime prefix change is reflected on the next page load). The response
 # is never cached — otherwise a browser/proxy could keep serving a stale
 # <base href> and break API calls.
+#
+# The file *contents* are cached, though: this catch-all serves every route in
+# the SPA, so re-reading and decoding index.html from disk on each navigation
+# was pure overhead. A single os.stat() per request replaces the read, and the
+# cache is invalidated by mtime+size so a redeploy is picked up immediately.
+_index_cache: tuple[int, int, str] | None = None
+
+
+def _read_index_html() -> str | None:
+    """Return the built index.html, or None when the frontend is not built."""
+    global _index_cache
+    index_path = os.path.join(frontend_build_path, "index.html")
+    try:
+        stat = os.stat(index_path)
+    except OSError:
+        return None
+    key = (stat.st_mtime_ns, stat.st_size)
+    if _index_cache is not None and (_index_cache[0], _index_cache[1]) == key:
+        return _index_cache[2]
+    try:
+        with open(index_path, encoding="utf-8") as f:
+            html = f.read()
+    except OSError:
+        return None
+    _index_cache = (key[0], key[1], html)
+    return html
+
+
 async def _serve_react() -> FileResponse | JSONResponse:
     from fastapi.responses import HTMLResponse
 
-    index_path = os.path.join(frontend_build_path, "index.html")
-    if not os.path.isfile(index_path):
+    html = _read_index_html()
+    if html is None:
         return JSONResponse({"detail": "Frontend not built"}, status_code=404)
-    with open(index_path, encoding="utf-8") as f:
-        html = f.read()
     urlpath = _get_urlpath()
     # <base href="/dashboard/"> under a prefix, <base href="/"> at root.
     # It must be the first element in <head> so all relative URLs resolve

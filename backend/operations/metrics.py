@@ -16,55 +16,25 @@ from backend.db.engine import SessionLocal
 from backend.logger import logger
 from backend.node.requests import NodeRequests
 
+# Set once the metrics tables are confirmed present, so the periodic collector
+# and every graph query stop re-running CREATE TABLE IF NOT EXISTS.
+_tables_ready: bool = False
+
 
 def ensure_metrics_tables(db: Session) -> None:
-    db.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS node_health_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL NOT NULL,
-            node_id INTEGER,
-            node_name TEXT,
-            cpu REAL,
-            memory REAL,
-            live_count INTEGER,
-            latency_ms REAL,
-            reachable INTEGER NOT NULL DEFAULT 0
-        )
-    """)
-    )
-    db.execute(text("CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)"))
-    db.execute(text("CREATE INDEX IF NOT EXISTS idx_node_health_node_ts ON node_health_snapshots(node_id, ts)"))
-    db.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS traffic_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL NOT NULL,
-            total_used REAL NOT NULL,
-            active_connections INTEGER NOT NULL,
-            online_users INTEGER NOT NULL,
-            active_users INTEGER NOT NULL,
-            total_users INTEGER NOT NULL
-        )
-    """)
-    )
-    db.execute(text("CREATE INDEX IF NOT EXISTS idx_traffic_snapshots_ts ON traffic_snapshots(ts)"))
-    db.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS security_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL NOT NULL,
-            auth_errors INTEGER NOT NULL,
-            rejects INTEGER NOT NULL,
-            stale_markers INTEGER NOT NULL,
-            offline_nodes INTEGER NOT NULL,
-            full_users INTEGER NOT NULL,
-            inactive_users INTEGER NOT NULL
-        )
-    """)
-    )
-    db.execute(text("CREATE INDEX IF NOT EXISTS idx_security_snapshots_ts ON security_snapshots(ts)"))
-    db.commit()
+    """Create the metrics tables and indexes if they are not present yet.
+
+    The DDL lives in :mod:`backend.db.migrations`; this wrapper only adds the
+    once-per-process guard. Without it the 5-minute collector and each graph
+    request re-issued seven CREATE statements against the same SQLite file.
+    """
+    global _tables_ready
+    if _tables_ready:
+        return
+    from backend.db.migrations import ensure_extra_tables
+
+    ensure_extra_tables(db)
+    _tables_ready = True
 
 
 async def _node_snapshot(node) -> dict[str, Any]:

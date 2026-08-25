@@ -16,24 +16,14 @@ _table_ready: bool = False
 def ensure_audit_table(db: Session) -> None:
     """Create the audit_logs table and index if not already present.
 
-    Called once at startup (via app.py's startup_event). log_event() skips
-    this check after the first successful call.
+    Called once at startup (via app.py's lifespan). log_event() skips this
+    check after the first successful call. The DDL itself lives in
+    :mod:`backend.db.migrations` so schema creation has one owner.
     """
     global _table_ready
-    db.execute(
-        text("""
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts REAL NOT NULL,
-            actor TEXT,
-            action TEXT NOT NULL,
-            target TEXT,
-            detail TEXT
-        )
-    """)
-    )
-    db.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)"))
-    db.commit()
+    from backend.db.migrations import ensure_extra_tables
+
+    ensure_extra_tables(db)
     _table_ready = True
 
 
@@ -79,8 +69,7 @@ def recent_events(db, limit=100, actor: str | None = None):
     else:
         rows = db.execute(
             text(
-                "SELECT id, ts, actor, action, target, detail FROM audit_logs WHERE actor = :actor "
-                "ORDER BY ts DESC LIMIT :limit"
+                "SELECT id, ts, actor, action, target, detail FROM audit_logs WHERE actor = :actor ORDER BY ts DESC LIMIT :limit"
             ),
             {"actor": actor, "limit": limit},
         ).fetchall()

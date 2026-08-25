@@ -63,6 +63,49 @@ Forgot the path? Recover with shell access:
 cd /opt/ovmanager && uv run main.py --reset-urlpath   # panel goes back to /
 ```
 
+## Schema migrations
+
+The database is migrated automatically on every start. The current version is
+recorded in a `schema_version` table, so numbered steps run once and in order:
+
+```bash
+uv run python -m backend.db.migrations --check    # CI drift gate
+uv run python -m backend.db.migrations --migrate  # apply to the live database
+```
+
+Databases created by an earlier release are **adopted**: their current shape is
+inspected, missing columns are added, and the database is then stamped at the
+current version. No dump/restore is needed. `backend/db/models.py` is the single
+source of truth for the schema; add a step to `STEPS` in
+`backend/db/migrations.py` and bump `SCHEMA_VERSION` for each change.
+
+## Performance notes
+
+The panel is deliberately a single process with no external broker. Uvicorn
+runs with `workers=1`, state is in-process, and SQLite is the only datastore —
+so there is nothing to coordinate between processes and no extra service to
+run, secure, or keep alive.
+
+**Redis was evaluated and not added.** It is the right answer when several
+application processes must share cache or pub/sub state. Here there is exactly
+one process, so a Redis hop would only add latency, a second thing to run and
+back up, and roughly 10–30 MB of resident memory — the opposite of the goal.
+Introducing it only becomes worthwhile if OVManager moves to multiple workers,
+which would also require replacing SQLite with a networked database first.
+
+What is done instead:
+
+- One background collector polls the nodes and caches the result; request
+  handlers read that cache instead of fanning out to every node per request.
+- The collector backs off to `OVMANAGER_LIVE_IDLE_POLL_SECONDS` (default 300s)
+  when no browser has the live stream open, instead of probing every node every
+  10 seconds for an audience of nobody.
+- Security-header and CSRF handling are plain ASGI middlewares, so requests do
+  not pay for Starlette's `BaseHTTPMiddleware` task-and-queue wrapper — which
+  also keeps the SSE stream unbuffered.
+- The built `index.html` is cached in memory and invalidated by mtime, so
+  serving an SPA route is one `stat()` rather than a file read per navigation.
+
 ## License
 
 Proprietary. See [LICENSE](LICENSE).
