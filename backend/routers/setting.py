@@ -84,19 +84,6 @@ class URLPathUpdate(BaseModel):
     urlpath: str = Field(default="", description="Panel URL path prefix. Empty = root. Alphanumeric, dashes, underscores only.")
 
 
-def _reserved_urlpaths() -> set[str]:
-    """First path segments that must stay reachable — can never be the panel prefix."""
-    return {
-        "api",
-        "assets",
-        "health",
-        "doc",
-        "openapi.json",
-        "static",
-        config.SUBSCRIPTION_PATH.strip("/").lower(),
-    }
-
-
 @router.put("/settings/timezone", response_model=ResponseModel)
 async def update_timezone(
     payload: TimezoneUpdate,
@@ -205,8 +192,11 @@ async def update_urlpath(
 
     # Reserved prefixes would shadow real routes and (worst case) lock the
     # operator out: e.g. urlpath="api" swallows every API call, "sub" steals
-    # public subscription links, "assets" breaks the SPA bundle.
-    if value and value.lower() in _reserved_urlpaths():
+    # public subscription links, "assets" breaks the SPA bundle. The set is
+    # derived from the live route table, so it can't drift as routes change.
+    from backend.urlpath import reserved_prefixes
+
+    if value and value.lower() in reserved_prefixes():
         return ResponseModel(
             success=False,
             msg=f"'{value}' is reserved and cannot be used as the panel URL path",
@@ -220,7 +210,7 @@ async def update_urlpath(
 
     return ResponseModel(
         success=True,
-        msg="URL path updated. Takes effect within 5 seconds." if new_value else "URL path cleared — panel now served at root.",
+        msg="URL path updated — panel moved to the new path immediately." if new_value else "URL path cleared — panel now served at root.",
         data={
             "urlpath": new_value,
             "panel_url": f"/{new_value}" if new_value else "/",

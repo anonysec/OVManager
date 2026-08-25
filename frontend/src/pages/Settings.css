@@ -609,3 +609,26 @@ html[data-theme="light"] .sp-jumpnav     { background: #fff; }
 .sp-alert-row .sp-toggle {
   flex: 0 0 auto;
 }
+
+/* ── URL path change confirmation (anti-lockout) ───────────────────── */
+.sp-urlpath-confirm .sp-url-preview {
+  align-items: center;
+  border: 1px solid var(--accent-color-transparent, rgba(252,122,30,.35));
+}
+
+.sp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: .85rem;
+  color: var(--text-2, #cbd5e1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sp-check input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--accent-color, #f97316);
+  cursor: pointer;
+}
