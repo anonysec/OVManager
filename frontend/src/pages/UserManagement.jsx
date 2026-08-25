@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiDownload, FiClock, FiZap, FiTrash2 } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { getPanelOrigin } from '../utils/panelUrl';
 import { useToast } from '../context/ToastContext';
+import { useLive } from '../context/LiveContext';
 import UserTable from '../components/UserTable';
 import AddUserModal from '../components/AddUserModal';
 import EditUserModal from '../components/EditUserModal';
@@ -81,8 +82,21 @@ const UserManagement = () => {
     }
   };
 
+  // ── Live updates ──────────────────────────────────────────────────────
+  // Any server-side user change (add/edit/delete by ANY admin, usage sync,
+  // expiry enforcement, connection counts) bumps refreshTick via SSE → the
+  // table refreshes itself without polling or manual reloads.
+  const { refreshTick } = useLive();
+  const fetchUsersRef = useRef(fetchUsers);
   useEffect(() => {
-    fetchUsers();
+    fetchUsersRef.current = fetchUsers;
+  });
+  // Runs on mount (initial load) and on every live event thereafter.
+  useEffect(() => {
+    fetchUsersRef.current();
+  }, [refreshTick]);
+
+  useEffect(() => {
     fetchSubscriptionSettings();
   }, []);
 

@@ -4,9 +4,11 @@
 import mimetypes
 import os
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -21,6 +23,7 @@ from backend.db.exceptions import ConflictError, NotFoundError
 from backend.logger import logger
 from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.operations.daily_checks import check_user_used_traffic, enforce_user_limits
+from backend.operations.live import POLL_SECONDS, collect_live_snapshot
 from backend.operations.metrics import collect_metrics
 from backend.routers import all_routers
 from backend.routers.sub import router as subscription_router
@@ -301,6 +304,17 @@ def start_scheduler():
         id="auto_clean_stale",
         replace_existing=True,
         misfire_grace_time=60,
+    )
+    # Live collector: single poller for all nodes. Request handlers and SSE
+    # subscribers use its in-memory snapshot instead of fanning out to nodes.
+    # First run is immediate so the cache is warm before the first page load.
+    scheduler.add_job(
+        collect_live_snapshot,
+        IntervalTrigger(seconds=POLL_SECONDS),
+        id="live_snapshot",
+        replace_existing=True,
+        next_run_time=datetime.now(tz=UTC),
+        misfire_grace_time=30,
     )
     scheduler.add_job(
         _watchdog_bot,

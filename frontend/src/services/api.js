@@ -6,7 +6,8 @@ import axios from 'axios';
 // API base comes from the <base href> the backend injects, so it always
 // matches the prefix the panel is served under (e.g. "/dashboard/api").
 const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
-const apiBase = basePath ? `/${basePath}/api` : '/api';
+// Exported for non-axios consumers (the SSE live stream uses it directly).
+export const apiBase = basePath ? `/${basePath}/api` : '/api';
 
 export const urlPath = basePath ? `/${basePath}` : '';
 
