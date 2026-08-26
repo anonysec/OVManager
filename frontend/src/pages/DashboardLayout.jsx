@@ -14,6 +14,7 @@ import CommandPalette from '../components/CommandPalette';
 import MobileNav from '../components/MobileNav';
 import RouteProgress from '../components/RouteProgress';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { settle } from '../hooks/useAsyncData';
 
 const DashboardLayout = () => {
   const { userRole } = useAuth();
@@ -76,16 +77,21 @@ const DashboardLayout = () => {
   // Per-node reachability checks belong in ServerStats, not in the topbar.
   const loadNotifications = useCallback(async () => {
     try {
-      const [usersRes, nodesRes, secRes] = await Promise.all([
-        apiClient.get('/users/'),
-        apiClient.get('/nodes/'),
-        apiClient.get('/security/summary?hours=8'),
-      ]);
-      const usersRaw = usersRes.data?.data;
+      // allSettled: the bell must still surface node alerts when the security
+      // endpoint is down (and vice versa). With Promise.all a single failing
+      // request silently emptied the entire notification list — the worst
+      // possible failure mode for an alerting surface.
+      const res = await settle({
+        users: apiClient.get('/users/'),
+        nodes: apiClient.get('/nodes/'),
+        security: apiClient.get('/security/summary?hours=8'),
+      });
+
+      const usersRaw = res.users.ok ? res.users.data.data?.data : null;
       const users = Array.isArray(usersRaw) ? usersRaw : (usersRaw?.users || []);
-      const nodesRaw = nodesRes.data?.data;
+      const nodesRaw = res.nodes.ok ? res.nodes.data.data?.data : null;
       const nodes = Array.isArray(nodesRaw) ? nodesRaw : (nodesRaw?.nodes || []);
-      const security = secRes.data?.data || {};
+      const security = res.security.ok ? (res.security.data.data?.data || {}) : {};
       const out = [];
       // Surface nodes that are marked inactive in the DB
       nodes.forEach((n) => {

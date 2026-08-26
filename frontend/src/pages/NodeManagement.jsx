@@ -138,12 +138,12 @@ const NodeManagement = () => {
         try {
           const response = await apiClient.delete(`/nodes/${nodeId}`);
           if (response.data.success) {
-            addToast(response.data.msg || 'Node deleted successfully.', 'success');
+            addToast(response.data.msg || t('nodeDeletedSuccess', 'Node deleted successfully.'), 'success');
           } else {
-            addToast(response.data.msg || 'Unable to delete node.', 'error');
+            addToast(response.data.msg || t('unableToDeleteNode', 'Unable to delete node.'), 'error');
           }
         } catch (error) {
-          addToast(error.response?.data?.detail || error.response?.data?.msg || 'Error deleting node.', 'error');
+          addToast(error.response?.data?.detail || error.response?.data?.msg || t('errorDeletingNode', 'An error occurred while deleting the node.'), 'error');
         } finally {
           fetchNodes();
         }
@@ -184,7 +184,7 @@ const NodeManagement = () => {
 
   const handleNodeCreated = () => {
     setIsAddModalOpen(false);
-    addToast('Node created successfully.', 'success');
+    addToast(t('nodeCreatedSuccess', 'Node created successfully.'), 'success');
     fetchNodes();
   };
 
@@ -210,10 +210,10 @@ const NodeManagement = () => {
         protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port, port: node.port,
         status: !node.status, set_new_setting: false, use_tls: node.use_tls || false,
       });
-      addToast(node.status ? 'Node disabled.' : 'Node enabled.', 'success');
+      addToast(node.status ? t('nodeDisabledToast', 'Node disabled.') : t('nodeEnabledToast', 'Node enabled.'), 'success');
       fetchNodes();
     } catch (e) {
-      addToast(e.response?.data?.msg || e.response?.data?.detail || 'Failed to toggle node.', 'error');
+      addToast(e.response?.data?.msg || e.response?.data?.detail || t('failedToggleNode', 'Failed to toggle node.'), 'error');
     }
   };
 
@@ -222,7 +222,7 @@ const NodeManagement = () => {
   const handleNodeUpdated = (msg) => {
     setIsEditModalOpen(false);
     setSelectedNode(null);
-    addToast(msg || 'Node updated successfully.', 'success');
+    addToast(msg || t('nodeUpdatedSuccess', 'Node updated successfully.'), 'success');
     fetchNodes();
   };
 

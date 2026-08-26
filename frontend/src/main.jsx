@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import './tokens.css'
 import './index.css'
 import './styles.css'
 import { BrowserRouter } from 'react-router-dom';
@@ -22,6 +23,31 @@ try { applyUiStyle(); } catch { /* noop */ }
 const raw = getUrlPath();
 const base = raw ? `/${raw}` : '';
 
+/**
+ * Remove the static app-shell skeleton from index.html.
+ *
+ * Called from the root render callback, so it only runs once React has
+ * actually committed real content — swapping any earlier would show a blank
+ * frame. Fades out to avoid a hard cut between shell and app.
+ */
+function dismissBootSkeleton() {
+  const shell = document.getElementById('app-skeleton');
+  if (!shell) return;
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (reduceMotion) {
+    shell.remove();
+    return;
+  }
+
+  shell.style.transition = 'opacity .18s ease';
+  shell.style.opacity = '0';
+  // Match the transition; `once` so the node is only removed a single time.
+  shell.addEventListener('transitionend', () => shell.remove(), { once: true });
+  // Belt and braces: if the transition never fires (tab backgrounded), clean up.
+  setTimeout(() => shell.remove(), 400);
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter basename={base}>
@@ -29,7 +55,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <ToastProvider>
             <ErrorBoundary>
-              <App />
+              <App onReady={dismissBootSkeleton} />
             </ErrorBoundary>
           </ToastProvider>
         </AuthProvider>

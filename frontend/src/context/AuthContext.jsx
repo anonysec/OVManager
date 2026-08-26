@@ -21,10 +21,15 @@ export const AuthProvider = ({ children }) => {
     const newToken = response.data.access_token;
     const refreshToken = response.data.refresh_token;
 
-    // Decode token to get user role
-    const payload = JSON.parse(atob(newToken.split('.')[1]));
-    const role = payload.role || (payload.type === 'admin' || payload.type === 'owner' ? payload.type : null);
-    if (!role) throw new Error('Invalid access token role');
+    // The backend issues an OPAQUE session token (random bytes), not a JWT,
+    // so there is nothing in it to decode — identity comes from the response
+    // body. Older builds decoded it, and because a non-JWT makes atob/JSON.parse
+    // throw, LoginPage's catch reported every successful login as
+    // "Incorrect username or password".
+    const role = response.data.role || null;
+    // Prefer the server's canonical spelling; fall back to what was typed.
+    const resolvedName = response.data.username || username || '';
+    if (!role) throw new Error('Login response did not include a role');
 
     localStorage.setItem('authToken', newToken);
     // Refresh tokens are a JWT-era artifact — the backend now issues opaque
@@ -35,6 +40,9 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('refreshToken');
     }
     localStorage.setItem('userRole', role);
+    // Persisted for the sidebar profile block, which previously read the JWT
+    // "sub" claim — impossible with an opaque token.
+    if (resolvedName) localStorage.setItem('username', resolvedName);
     setToken(newToken);
     setUserRole(role);
   };
@@ -50,6 +58,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('userRole');
+    localStorage.removeItem('username');
     setToken(null);
     setUserRole(null);
   }, []);
@@ -75,40 +84,13 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Proactively log out when the JWT has expired. This covers the "left the tab
-  // idle, came back, UI shows but nothing works" case: instead of waiting for a
-  // request to 401, we check the token's exp on load and when the tab regains
-  // focus, and bounce to login immediately if it's stale.
-  useEffect(() => {
-    const isTokenExpired = (jwt) => {
-      try {
-        const payload = JSON.parse(atob(jwt.split('.')[1]));
-        if (!payload?.exp) return false;
-        // exp is in seconds; compare with a small clock-skew allowance.
-        return payload.exp * 1000 <= Date.now();
-      } catch {
-        return true; // malformed token -> treat as expired
-      }
-    };
-
-    const checkExpiry = () => {
-      const stored = localStorage.getItem('authToken');
-      if (stored && isTokenExpired(stored)) {
-        logout();
-      }
-    };
-
-    checkExpiry();
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') checkExpiry();
-    };
-    window.addEventListener('focus', checkExpiry);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      window.removeEventListener('focus', checkExpiry);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [logout]);
+  // Session expiry is authoritative on the server. The token is opaque, so the
+  // client cannot inspect an exp claim — the previous implementation tried to,
+  // and its catch treated any non-JWT as expired, which logged every user out
+  // on load and immediately after login.
+  //
+  // Staleness is detected by the API layer instead: a 401 dispatches
+  // AUTH_EXPIRED_EVENT, handled by the effect above.
 
   const isAuthenticated = !!token;
 

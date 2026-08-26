@@ -59,7 +59,7 @@ const AdminManagement = () => {
 
     const handleAdminCreated = () => {
         setIsAddModalOpen(false);
-        addToast('Admin created successfully.', 'success');
+        addToast(t('adminCreatedSuccess', 'Admin created successfully.'), 'success');
         fetchAdmins();
     };
 
@@ -71,7 +71,7 @@ const AdminManagement = () => {
     const handleAdminUpdated = () => {
         setIsEditModalOpen(false);
         setSelectedAdmin(null);
-        addToast('Admin updated successfully.', 'success');
+        addToast(t('adminUpdatedSuccess', 'Admin updated successfully.'), 'success');
         fetchAdmins();
     };
 

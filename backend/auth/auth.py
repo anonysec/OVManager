@@ -149,7 +149,17 @@ async def login(
     )
     # Contract: frontend stores access_token and uses it as a Bearer token.
     # refresh_token is null — sessions slide on activity instead of rotating.
-    return {"access_token": raw_token, "refresh_token": None, "token_type": "bearer"}
+    #
+    # username/role are returned explicitly because the token is an opaque
+    # random string, not a JWT: there is nothing in it for the client to
+    # decode. Callers must read identity from here, never from the token.
+    return {
+        "access_token": raw_token,
+        "refresh_token": None,
+        "token_type": "bearer",
+        "username": admin["username"],
+        "role": admin["type"],
+    }
 
 
 @router.post("/logout")

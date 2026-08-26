@@ -1,101 +1,31 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { geoEquirectangular, geoPath } from 'd3-geo';
-import { feature, mesh } from 'topojson-client';
-import worldAtlas from 'world-atlas/countries-110m.json';
 import apiClient from '../services/api';
 import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiCheckCircle, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { nodeMeta } from '../utils/geo.js';
+import FlagIcon from '../utils/geo.jsx';
 import { getPanelBase } from '../utils/panelUrl';
 import { useCountUp } from '../hooks/useCountUp';
 import { usePullRefresh } from '../hooks/usePullRefresh';
+import { settle } from '../hooks/useAsyncData';
 import { FiPlus, FiDownloadCloud, FiLink } from 'react-icons/fi';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
+import SectionBoundary from '../components/ui/SectionBoundary';
+import { SkeletonStats, SkeletonPanel } from '../components/ui/Skeleton';
+
+// The atlas carries d3-geo + topojson + a 105 kB TopoJSON file. Loading it
+// lazily keeps them out of the dashboard's critical path — the KPI cards and
+// tables above it render immediately and the map streams in underneath.
+const WorldMap = lazy(() => import('../components/dashboard/WorldMap'));
 
 const formatBytes = (bytes) => {
   if (!Number(bytes)) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / 1024 ** i).toFixed(1)} ${u[i]}`
-};
-
-const CODES = {
-  DE: { name: 'Germany', coords: [10.4, 51.1] },
-  TR: { name: 'Turkey', coords: [35.2, 39.1] },
-  FI: { name: 'Finland', coords: [25.7, 61.9] },
-  FR: { name: 'France', coords: [2.2, 46.6] },
-  NL: { name: 'Netherlands', coords: [5.3, 52.1] },
-  USA: { name: 'USA', coords: [-98.5, 39.8] },
-  AE: { name: 'UAE', coords: [54, 24] },
-  RU: { name: 'Russia', coords: [90, 61.5] },
-  GB: { name: 'UK', coords: [-1.5, 52.5] },
-  CA: { name: 'Canada', coords: [-106, 56] },
-  SG: { name: 'Singapore', coords: [103.8, 1.35] },
-  JP: { name: 'Japan', coords: [138, 36] },
-};
-
-const FLAG_SVGS = {
-  DE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ffce00"/><rect width="640" height="160" fill="#000"/><rect y="320" width="640" height="160" fill="#d00"/></svg>',
-  TR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#e30a0a"/><circle cx="220" cy="240" r="70" fill="#fff"/><circle cx="220" cy="240" r="30" fill="#e30a0a"/></svg>',
-  FI: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><rect x="213" width="54" height="480" fill="#003897"/><rect y="213" width="640" height="54" fill="#003897"/></svg>',
-  FR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="213" height="480" fill="#002395"/><rect x="213" width="214" height="480" fill="#fff"/><rect x="427" width="213" height="480" fill="#ef4135"/></svg>',
-  NL: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="160" fill="#ae1c28"/><rect y="160" width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#21468b"/></svg>',
-  USA: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#b22234"/><rect width="640" height="80" fill="#fff"/><rect width="640" height="80" y="400" fill="#fff"/><rect width="640" height="80" y="80" fill="#fff"/><rect width="640" height="80" y="320" fill="#fff"/><g fill="#fff"><rect x="0" y="0" width="80" height="80"/><rect x="160" y="0" width="80" height="80"/><rect x="320" y="0" width="80" height="80"/><rect x="480" y="0" width="80" height="80"/><rect x="80" y="80" width="80" height="80"/><rect x="240" y="80" width="80" height="80"/><rect x="400" y="80" width="80" height="80"/><rect x="0" y="160" width="80" height="80"/><rect x="160" y="160" width="80" height="80"/><rect x="320" y="160" width="80" height="80"/><rect x="480" y="160" width="80" height="80"/><rect x="80" y="240" width="80" height="80"/><rect x="240" y="240" width="80" height="80"/><rect x="400" y="240" width="80" height="80"/><rect x="0" y="320" width="80" height="80"/><rect x="160" y="320" width="80" height="80"/><rect x="320" y="320" width="80" height="80"/><rect x="480" y="320" width="80" height="80"/></g></svg>',
-  AE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#00732f"/><rect y="160" width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#000"/><rect width="160" height="480" fill="#ce1126"/></svg>',
-  RU: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="160" fill="#fff"/><rect y="160" width="640" height="160" fill="#0039a6"/><rect y="320" width="640" height="160" fill="#d52b1e"/></svg>',
-  GB: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#012169"/><path d="M0 0L640 480M640 0L0 480" stroke="#fff" stroke-width="40"/><path d="M320 0v480M0 240h640" stroke="#fff" stroke-width="20"/><path d="M0 0l240 240M0 240l240 0M400 0l240 240M400 240l240 0" stroke="#c8102e" stroke-width="20"/></svg>',
-  CA: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ff0000"/><rect width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#fff"/><rect x="240" y="160" width="160" height="160" fill="#ff0000"/><circle cx="320" cy="240" r="40" fill="#fff"/></svg>',
-  SG: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ed2939"/><rect width="640" height="160" fill="#fff"/><rect y="320" width="640" height="160" fill="#fff"/><circle cx="320" cy="240" r="40" fill="#000"/><circle cx="320" cy="240" r="20" fill="#fff"/></svg>',
-  JP: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><circle cx="320" cy="240" r="80" fill="#bc002d"/></svg>',
-};
-
-const FlagIcon = ({ code }) => (
-  <span className="flag-icon" dangerouslySetInnerHTML={{ __html: FLAG_SVGS[code] || FLAG_SVGS.DE }} />
-);
-
-const COUNTRY_ALIASES = {
-  FL: 'FI',
-  UK: 'GB',
-  US: 'USA',
-  UNITEDSTATES: 'USA',
-  UAE: 'AE',
-  UNITEDARABEMIRATES: 'AE',
-};
-
-const normalizeCountryCode = (node) => {
-  const sources = [node.country_code, node.country, node.location, node.name]
-    .filter(Boolean)
-    .map((value) => String(value).trim().toUpperCase());
-
-  for (const source of sources) {
-    const compact = source.replace(/[^A-Z]/g, '');
-    const alias = COUNTRY_ALIASES[compact] || compact;
-    if (CODES[alias]) return alias;
-    const match = Object.entries(CODES).find(([, entry]) => compact === entry.name.replace(/[^A-Z]/g, '').toUpperCase() || compact.includes(entry.name.replace(/[^A-Z]/g, '').toUpperCase()));
-    if (match) return match[0];
-    const codeMatch = source.match(/\b[A-Z]{2,3}\b/);
-    if (codeMatch && CODES[COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0]]) return COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0];
-  }
-  return null;
-};
-
-const nodeMeta = (node) => {
-  const latitude = Number(node.latitude);
-  const longitude = Number(node.longitude);
-  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
-    && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
-    && !(latitude === 0 && longitude === 0);
-  const code = normalizeCountryCode(node);
-  const entry = code ? CODES[code] : null;
-
-  return {
-    name: entry?.name || (node.country_code ? String(node.country_code).toUpperCase() : 'Location unavailable'),
-    flagCode: code,
-    coords: hasCoordinates ? [longitude, latitude] : (entry?.coords || null),
-    approximate: !hasCoordinates && Boolean(entry?.coords),
-  };
 };
 
 const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', children }) => (
@@ -107,6 +37,40 @@ const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', childr
     <div className="ops-panel-body">{children}</div>
   </section>
 );
+
+/**
+ * Resolves one panel's body to exactly one of: skeleton / inline error / empty
+ * / content — in that order.
+ *
+ * Centralising this is what makes per-section error handling practical: each
+ * panel passes its own slice of the error map and gets a scoped retry, so a
+ * dead endpoint costs one card instead of the page. Keeping stale content
+ * visible on a *refresh* failure (rather than replacing it with an error) is
+ * deliberate — old numbers plus a warning beat no numbers at all.
+ */
+const PanelState = ({ loading, error, isEmpty, onRetry, skeleton, children, t }) => {
+  if (loading) return skeleton ?? <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
+
+  if (error) {
+    return (
+      <div className="panel-inline-error" role="alert">
+        <FiAlertTriangle aria-hidden="true" />
+        <div>
+          <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
+          <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
+        </div>
+        {onRetry && (
+          <button type="button" className="btn btn-sm btn-secondary" onClick={onRetry}>
+            <FiRefreshCw size={12} aria-hidden="true" /> {t('retry', 'Retry')}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (isEmpty) return <EmptyState title={t('noData')} description={t('noDataDesc')} />;
+  return children;
+};
 
 const Skeleton = ({ lines = 3 }) => (
   <PanelSkeleton lines={lines} label="Loading" />
@@ -140,230 +104,6 @@ const MiniLine = ({ values = [] }) => {
   );
 };
 
-const WorldMap = ({ nodes, nodeStatus }) => {
-  const { t } = useTranslation();
-  // Equirectangular, full world framed inside the viewBox (no top/bottom clipping).
-  // Memoized: it only depends on constants, so markers re-project only when
-  // nodes/nodeStatus actually change — not on every hover/tooltip re-render.
-  const projection = useMemo(() => geoEquirectangular().scale(106).translate([334, 167]), []);
-  const pathGen = useMemo(() => geoPath(projection), [projection]);
-  const land = useMemo(() => feature(worldAtlas, worldAtlas.objects.countries), []);
-  const borders = useMemo(() => mesh(worldAtlas, worldAtlas.objects.countries, (a, b) => a !== b), []);
-  const [hoverCountry, setHoverCountry] = useState(null);
-  const [activeNode, setActiveNode] = useState(null);
-  const [tooltip, setTooltip] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const viewportRef = useRef(null);
-  const clamp = (z) => Math.max(1, Math.min(4, z));
-
-  const markers = useMemo(() => nodes
-    .map((node) => {
-      const m = nodeMeta(node);
-      const projected = m.coords ? projection(m.coords) : null;
-      if (!projected) return null;
-      const st = nodeStatus[node.id] || {};
-      const online = node.status && (st.reachable === true || (st.reachable === undefined && st.session_diagnostics?.live_count != null && st.node_info !== undefined));
-      return { node, meta: m, x: projected[0], y: projected[1], st, online };
-    })
-    .filter(Boolean), [nodes, nodeStatus, projection]);
-
-  // Atlas summary strip
-  const atlasStats = useMemo(() => {
-    const countries = new Set(markers.map((mk) => mk.meta.flagCode).filter(Boolean));
-    const online = markers.filter((mk) => mk.online).length;
-    const latencies = markers.map((mk) => Number(mk.st?.latency_ms)).filter(Number.isFinite);
-    const avg = latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
-    return { countries: countries.size, online, total: markers.length, avgLatency: avg };
-  }, [markers]);
-
-  // Drag-to-pan: the viewport is scrollable when zoomed in. Dragging state is
-  // a useState (not a ref) so the cursor style updates on the same render.
-  const [dragging, setDragging] = useState(false);
-  const dragStartRef = useRef(null);
-  const onPointerDown = (e) => {
-    dragStartRef.current = { x: e.clientX, y: e.clientY, sl: viewportRef.current?.scrollLeft || 0, st: viewportRef.current?.scrollTop || 0 };
-    setDragging(true);
-  };
-  const onPointerMove = (e) => {
-    const vp = viewportRef.current;
-    const start = dragStartRef.current;
-    if (!vp || !start) return;
-    if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 3) return;
-    vp.scrollLeft = start.sl - (e.clientX - start.x);
-    vp.scrollTop = start.st - (e.clientY - start.y);
-    e.preventDefault();
-  };
-  const stopDrag = () => { dragStartRef.current = null; setDragging(false); };
-
-  // Wheel zoom around the cursor. React attaches `wheel` as a passive listener
-  // at the root (so preventDefault() is ignored), therefore we bind a native
-  // listener with { passive: false } to stop the page from scrolling while the
-  // map zooms.
-  useEffect(() => {
-    const vp = viewportRef.current;
-    if (!vp) return;
-    const onWheel = (e) => {
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const next = clamp(zoom * factor);
-      if (next === zoom) return;
-      // Keep the point under the cursor fixed while scaling the canvas.
-      const rect = vp.getBoundingClientRect();
-      const px = e.clientX - rect.left;
-      const py = e.clientY - rect.top;
-      const ratio = next / zoom;
-      const newScrollLeft = (vp.scrollLeft + px) * ratio - px;
-      const newScrollTop = (vp.scrollTop + py) * ratio - py;
-      setZoom(next);
-      requestAnimationFrame(() => {
-        vp.scrollLeft = newScrollLeft;
-        vp.scrollTop = newScrollTop;
-      });
-    };
-    vp.addEventListener('wheel', onWheel, { passive: false });
-    return () => vp.removeEventListener('wheel', onWheel);
-  }, [zoom]);
-
-  const handleNodeHover = (mk, e) => {
-    const rect = viewportRef.current?.getBoundingClientRect();
-    setActiveNode(mk);
-    // Position relative to the map wrap (which shares the viewport's origin),
-    // so the tooltip follows the cursor on screen regardless of pan/zoom.
-    setTooltip({
-      x: (e.clientX - (rect?.left || 0)) + 14,
-      y: (e.clientY - (rect?.top || 0)) - 8,
-    });
-  };
-
-  const navToNode = (id) => {
-    window.location.assign(`${getPanelBase()}/nodes?node=${id}`);
-  };
-
-  return (
-    <div className="atlas-wrap">
-      {/* Summary strip */}
-      <div className="atlas-stats">
-        <span className="atlas-stat">
-          <i className="atlas-dot atlas-dot--online" aria-hidden="true" />
-          <strong>{atlasStats.online}</strong>
-          <em>{t('statusOnline', 'Online')}</em>
-        </span>
-        <span className="atlas-stat">
-          <i className="atlas-dot atlas-dot--offline" aria-hidden="true" />
-          <strong>{atlasStats.total - atlasStats.online}</strong>
-          <em>{t('statusOffline', 'Offline')}</em>
-        </span>
-        <span className="atlas-stat">
-          <FiGlobe aria-hidden="true" />
-          <strong>{atlasStats.countries}</strong>
-          <em>{t('mapCountries', 'Countries')}</em>
-        </span>
-        <span className="atlas-stat">
-          <FiActivity aria-hidden="true" />
-          <strong>{atlasStats.avgLatency ? `${Math.round(atlasStats.avgLatency)}ms` : '—'}</strong>
-          <em>{t('avgLatency', 'Avg latency')}</em>
-        </span>
-      </div>
-
-      <div className="map-zoom-wrap">
-        <div className="map-zoom-controls" role="group" aria-label="Map zoom controls">
-          <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z + 0.25))} aria-label="Zoom in">+
-          </button>
-          <span className="map-zoom-level" aria-live="polite">{zoom.toFixed(2)}×</span>
-          <button type="button" className="map-zoom-btn" onClick={() => setZoom((z) => clamp(z - 0.25))} aria-label="Zoom out">−
-          </button>
-          {zoom !== 1 && <button type="button" className="map-zoom-btn map-zoom-reset" onClick={() => setZoom(1)} aria-label="Reset zoom">⤢
-          </button>}
-        </div>
-
-        <div
-          className="map-zoom-viewport"
-          ref={viewportRef}
-          style={{ overflow: zoom > 1 ? 'auto' : 'hidden', cursor: dragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={stopDrag}
-          onPointerLeave={stopDrag}
-        >
-          <div className="map-zoom-canvas" style={{ width: `${100 * zoom}%`, minWidth: '100%' }}>
-            <svg className="world-map-real" viewBox="0 0 668 334" preserveAspectRatio="xMidYMid meet"
-              style={{ width: '100%', height: 'auto' }}
-              role="img" aria-label="World map of node locations"
-              onMouseLeave={() => { setHoverCountry(null); setActiveNode(null); }}>
-              <defs>
-                <radialGradient id="sphereGrad" cx="50%" cy="38%" r="65%">
-                  <stop offset="0%" stopColor="#13314a" />
-                  <stop offset="60%" stopColor="#0c2236" />
-                  <stop offset="100%" stopColor="#081320" />
-                </radialGradient>
-              </defs>
-              <path className="sphere" d={pathGen({ type: 'Sphere' }) || ''} />
-              {land.features.map((feat) => (
-                <path
-                  key={feat.id || feat.properties.name}
-                  className="country"
-                  d={pathGen(feat) || ''}
-                  onMouseOver={() => setHoverCountry(feat.properties.name)}
-                  tabIndex={-1}
-                  aria-label={feat.properties.name}
-                >
-                  <title>{feat.properties.name}</title>
-                </path>
-              ))}
-              <path className="country-borders" d={pathGen(borders) || ''} />
-              {hoverCountry && (() => {
-                const c = pathGen.centroid(land.features.find((f) => f.properties.name === hoverCountry)) || [300, 150];
-                return <text x={c[0]} y={c[1]} className="country-label">{hoverCountry}</text>;
-              })()}
-              {markers.map((mk) => (
-                <g
-                  key={mk.node.id}
-                  className={`map-marker${mk.online ? '' : ' map-marker--offline'}${activeNode?.node.id === mk.node.id ? ' map-marker--active' : ''}`}
-                  transform={`translate(${mk.x},${mk.y})`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${mk.node.name} — ${mk.online ? 'online' : 'offline'}`}
-                  onMouseMove={(e) => handleNodeHover(mk, e)}
-                  onMouseLeave={() => setActiveNode(null)}
-                  onClick={() => navToNode(mk.node.id)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navToNode(mk.node.id); } }}
-                >
-                  {mk.online && <circle className="pulse" r={6} aria-hidden="true" />}
-                  <circle r={mk.online ? 5 : 3.5} className={mk.online ? 'node-online' : 'node-offline'} aria-hidden="true" />
-                  <text x={7} y={4} className="node-country-label">{mk.node.name}{mk.meta.approximate ? ' · approx.' : ''}</text>
-                </g>
-              ))}
-            </svg>
-          </div>
-        </div>
-
-        {/* Hover tooltip */}
-        {activeNode && (
-          <div
-            className="atlas-tooltip"
-            style={{ left: tooltip.x, top: tooltip.y }}
-            role="tooltip"
-          >
-            <div className="atlas-tooltip-title">
-              <span className={`atlas-tooltip-dot ${activeNode.online ? 'online' : 'offline'}`} aria-hidden="true" />
-              <strong>{activeNode.node.name}</strong>
-            </div>
-            <div className="atlas-tooltip-row">
-              <span>{activeNode.meta.flagCode ? `${activeNode.meta.flagCode} · ` : ''}{activeNode.meta.name}</span>
-              <b>{activeNode.online ? t('statusOnline', 'Online') : t('statusOffline', 'Offline')}</b>
-            </div>
-            <div className="atlas-tooltip-grid">
-              <span>{t('th_conns', 'Conns')}<b>{Number(activeNode.st?.session_diagnostics?.live_count || 0)}</b></span>
-              <span>{t('th_cpu', 'CPU')}<b>{Number.isFinite(Number(activeNode.st?.node_info?.cpu_usage)) ? `${Number(activeNode.st?.node_info?.cpu_usage).toFixed(0)}%` : '—'}</b></span>
-              <span>{t('avgLatency', 'Latency')}<b>{Number.isFinite(Number(activeNode.st?.latency_ms)) ? `${Math.round(Number(activeNode.st?.latency_ms))}ms` : '—'}</b></span>
-            </div>
-            <div className="atlas-tooltip-hint">{t('clickToManageNode', 'Click to manage node')}</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 const SecurityScoreRing = ({ score }) => {
   const r = 34; const c = 2 * Math.PI * r;
@@ -492,42 +232,72 @@ const ServerStats = () => {
   const [security, setSecurity] = useState(null);
   const [trafficHistory, setTrafficHistory] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Per-source error map. Previously a single `error` flag driven by one
+  // Promise.all rejection blanked the entire dashboard whenever ANY of the
+  // five endpoints failed — a flaky /security/summary would hide healthy
+  // node and user data. Each key now fails on its own.
+  const [errors, setErrors] = useState({});
+
+  /**
+   * @param background  true for polls/SSE refreshes: keeps current data on
+   *                    screen and skips the skeleton so the dashboard never
+   *                    flashes empty while the user is reading it.
+   */
+  const loadData = useCallback(async (background = false) => {
+    if (background) setRefreshing(true);
+    // Functional update: only show the skeleton when there is nothing on
+    // screen yet, without needing to read state during render.
+    else setLoading(true);
+
+    // allSettled, not all: one rejection must not discard four good responses.
+    const res = await settle({
+      stats: apiClient.get('/server/info'),
+      users: apiClient.get('/users/'),
+      nodes: apiClient.get('/nodes/'),
+      metrics: apiClient.get('/metrics/history?hours=24'),
+      security: apiClient.get('/security/summary?hours=8'),
+    });
+
+    const nextErrors = {};
+
+    if (res.stats.ok) setStats(res.stats.data.data?.data || res.stats.data.data || null);
+    else nextErrors.stats = res.stats.error;
+
+    if (res.users.ok) {
+      const d = res.users.data.data?.data;
+      setUsers(Array.isArray(d) ? d : d?.users || []);
+    } else nextErrors.users = res.users.error;
+
     let nodesData = [];
-    try {
-      const [statsRes, usersRes, nodesRes, metricsRes, secRes] = await Promise.all([
-        apiClient.get('/server/info'),
-        apiClient.get('/users/'),
-        apiClient.get('/nodes/'),
-        apiClient.get("/metrics/history?hours=24"),
-        apiClient.get('/security/summary?hours=8'),
-      ]);
-      setStats(statsRes.data?.data || null);
-      const usersData = usersRes.data?.data;
-      setUsers(Array.isArray(usersData) ? usersData : usersData?.users || []);
-      const nodesDataRaw = nodesRes.data?.data;
-      nodesData = Array.isArray(nodesDataRaw) ? nodesDataRaw : nodesDataRaw?.nodes || [];
+    if (res.nodes.ok) {
+      const d = res.nodes.data.data?.data;
+      nodesData = Array.isArray(d) ? d : d?.nodes || [];
       setNodes(nodesData);
-      const secData = secRes.data?.data;
-      setSecurity(secData || {});
-      const lastTraffic = (metricsRes.data?.data?.traffic || []).at(-1);
-      const point = Number(lastTraffic?.active_connections ?? 0);
-      setTrafficHistory((h) => [...h.slice(-19), point]);
-      setLastUpdated(new Date());
-    } catch (e) {
-      console.error('Dashboard load failed:', e);
-      setError(e);
+    } else {
+      nextErrors.nodes = res.nodes.error;
     }
 
-    // node status: per-node, non-blocking, short timeout
+    if (res.security.ok) setSecurity(res.security.data.data?.data || {});
+    else nextErrors.security = res.security.error;
+
+    if (res.metrics.ok) {
+      const lastTraffic = (res.metrics.data.data?.data?.traffic || []).at(-1);
+      setTrafficHistory((h) => [...h.slice(-19), Number(lastTraffic?.active_connections ?? 0)]);
+    } else nextErrors.metrics = res.metrics.error;
+
+    setErrors(nextErrors);
+    setLastUpdated(new Date());
+    // Release the skeleton as soon as the core payload is in — the per-node
+    // probes below can take seconds and shouldn't hold up first paint.
+    setLoading(false);
+
+    // Per-node status: already fault-isolated per node, and intentionally
+    // awaited after the main render so slow/unreachable nodes never delay it.
     try {
-      const ns = nodesData;
-      const results = await Promise.all(ns.map(async (n) => {
+      const results = await Promise.all(nodesData.map(async (n) => {
         if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0 }];
         try {
           const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
@@ -536,19 +306,23 @@ const ServerStats = () => {
       }));
       setNodeStatus(Object.fromEntries(results));
     } catch { /* keep previous */ }
-    setLoading(false);
+
+    setRefreshing(false);
   }, []);
 
   // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
   // immediately when the preference changes.
   useEffect(() => {
-    loadData();
+    // First load shows skeletons; every subsequent tick is a *background*
+    // refresh that leaves the current numbers on screen. This is what stops
+    // the dashboard blinking back to skeletons every 30 seconds.
+    loadData(false);
     let id = null;
     const start = (immediate = false) => {
       if (id) clearInterval(id);
-      if (immediate) loadData();
+      if (immediate) loadData(true);
       const sec = readPrefs().refreshSec;
-      id = setInterval(() => { if (document.visibilityState === 'visible') loadData(); }, sec * 1000);
+      id = setInterval(() => { if (document.visibilityState === 'visible') loadData(true); }, sec * 1000);
     };
     start();
     const onPrefs = () => start(true);
@@ -584,11 +358,14 @@ const ServerStats = () => {
     .sort((a, b) => Number(b.active_connections || 0) - Number(a.active_connections || 0))
     .slice(0, 6);
 
-  const hasData = stats && users && nodes;
+  // Only fall back to the whole-page error state when literally nothing
+  // resolved. Any partial success renders the page with per-panel errors.
+  const allFailed = !loading
+    && Boolean(errors.stats && errors.users && errors.nodes && errors.security && errors.metrics);
 
   // Pull-to-refresh (touch) + condensed mobile KPI
   const dashRef = useRef(null);
-  const pull = usePullRefresh(() => { window.dispatchEvent(new Event('ovmanager:loading')); return loadData(); });
+  const pull = usePullRefresh(() => { window.dispatchEvent(new Event('ovmanager:loading')); return loadData(true); });
   const mobileKpi = [
     { label: t('activeConnections'), value: activeConnections.toLocaleString() },
     { label: t('onlineNodes'), value: `${onlineNodes}/${nodes?.length || 0}` },
@@ -621,8 +398,8 @@ const ServerStats = () => {
           <p>{t('dashboardIntro', 'Keep an eye on nodes, users, traffic, and security from one place.')}</p>
         </div>
         <div className="dashboard-heading-actions">
-          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={() => { window.dispatchEvent(new Event('ovmanager:loading')); loadData(); }} disabled={loading}>
-            <FiRefreshCw className={loading ? 'is-spinning' : ''} aria-hidden="true" />
+          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={() => { window.dispatchEvent(new Event('ovmanager:loading')); loadData(true); }} disabled={loading || refreshing}>
+            <FiRefreshCw className={loading || refreshing ? 'is-spinning' : ''} aria-hidden="true" />
             <span>{t('refresh', 'Refresh')}</span>
           </button>
         </div>
@@ -640,12 +417,12 @@ const ServerStats = () => {
         ))}
       </div>
 
-      {error && !hasData ? (
+      {allFailed ? (
         <div className="ops-error-wrap">
           <ErrorState
             title={t('loadFailedTitle')}
             message={t('loadFailedMessage')}
-            onRetry={loadData}
+            onRetry={() => loadData()}
             retryLabel={t('retry')}
           />
         </div>
@@ -653,33 +430,56 @@ const ServerStats = () => {
         <>
           <div className="ops-overview-grid">
             <Panel title={t('networkStatus')} tone="orange" icon={FiActivity} tip={t('networkStatus')}>
-              {loading ? <Skeleton /> : (stats && users && nodes ? (
+              <PanelState
+                t={t}
+                loading={loading}
+                error={errors.stats && errors.users && errors.nodes}
+                isEmpty={!stats && !users && !nodes}
+                onRetry={() => loadData()}
+                skeleton={<SkeletonStats count={4} label={t('loading', 'Loading…')} />}
+              >
                 <div className="network-card-grid">
                   <StatCell label={t('activeConnections')} value={activeConnections.toLocaleString()} animate={activeConnections} tip={t('activeConnections')} spark={trafficHistory} />
                   <StatCell label={t('totalTraffic')} value={formatBytes(totalUsed)} animate={totalUsed} format={formatBytes} tip={t('totalTraffic')} spark={trafficHistory.map((v) => v * 8)} />
-                  <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
+                  <StatCell label={t('onlineNodes')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('onlineNodes')} tone={offlineNodes ? 'warn' : 'ok'} />
                   <StatCell label={t('avgLatency')} value={avgLatency ? `${avgLatency.toFixed(0)}ms` : '-'} tip={t('avgLatency')} />
                 </div>
-              ) : (
-                <EmptyState title={t('noData')} description={t('noDataDesc')} />
-              ))}
+              </PanelState>
             </Panel>
 
             <Panel title={t('serverHealth')} tone="cyan" icon={FiServer} tip={t('serverHealth')}>
-              {loading ? <Skeleton /> : (stats ? (
-                <div className="health-grid">
-                  <StatCell label={t('panelCPU')} value={`${stats.cpu.toFixed(0)}%`} tip={t('panelCPU')} tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
-                  <StatCell label={t('panelMemory')} value={`${stats.memory_percent.toFixed(0)}%`} tip={t('panelMemory')} tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
-                  <StatCell label={t('disk')} value={`${stats.disk_percent.toFixed(0)}%`} tip={t('disk')} tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
-                  <StatCell label={t('nodesOnline')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('nodesOnline')} tone={offlineNodes ? 'warn' : 'ok'} />
-                </div>
-              ) : (
-                <EmptyState title={t('noData')} description={t('noDataDesc')} />
-              ))}
+              <PanelState
+                t={t}
+                loading={loading}
+                error={errors.stats}
+                isEmpty={!stats}
+                onRetry={() => loadData()}
+                skeleton={<SkeletonStats count={4} label={t('loading', 'Loading…')} />}
+              >
+                {stats && (
+                  <div className="health-grid">
+                    <StatCell label={t('panelCPU')} value={`${stats.cpu.toFixed(0)}%`} tip={t('panelCPU')} tone={stats.cpu > 85 ? 'danger' : stats.cpu > 70 ? 'warn' : 'ok'} />
+                    <StatCell label={t('panelMemory')} value={`${stats.memory_percent.toFixed(0)}%`} tip={t('panelMemory')} tone={stats.memory_percent > 85 ? 'danger' : stats.memory_percent > 70 ? 'warn' : 'ok'} />
+                    <StatCell label={t('disk')} value={`${stats.disk_percent.toFixed(0)}%`} tip={t('disk')} tone={stats.disk_percent > 85 ? 'danger' : 'ok'} />
+                    <StatCell label={t('nodesOnline')} value={`${onlineNodes}/${nodes?.length || 0}`} tip={t('nodesOnline')} tone={offlineNodes ? 'warn' : 'ok'} />
+                  </div>
+                )}
+              </PanelState>
             </Panel>
 
             <Panel title={t('securityOverview')} tone="orange" className="security-panel" icon={FiShield} tip={t('securityOverview')}>
-              {loading ? <Skeleton lines={4} /> : (security ? (
+              {loading ? <Skeleton lines={4} /> : errors.security ? (
+                <div className="panel-inline-error" role="alert">
+                  <FiAlertTriangle aria-hidden="true" />
+                  <div>
+                    <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
+                    <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => loadData()}>
+                    <FiRefreshCw size={12} aria-hidden="true" /> {t('retry', 'Retry')}
+                  </button>
+                </div>
+              ) : (security ? (
                 <div className="security-overview-content">
                   <div className="security-posture">
                     <div className="security-score-block">
@@ -729,7 +529,18 @@ const ServerStats = () => {
 
           <div className="ops-lower-grid">
             <Panel title={t('onlineUsers')} tone="orange" className="users-panel" icon={FiUsers} tip={t('onlineUsers')}>
-              {loading ? <Skeleton /> : (users ? (
+              {loading ? <Skeleton /> : errors.users ? (
+                <div className="panel-inline-error" role="alert">
+                  <FiAlertTriangle aria-hidden="true" />
+                  <div>
+                    <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
+                    <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => loadData()}>
+                    <FiRefreshCw size={12} aria-hidden="true" /> {t('retry', 'Retry')}
+                  </button>
+                </div>
+              ) : (users ? (
                 <>
                   {previewUsers.length > 0 ? (
                     <table className="ops-table">
@@ -775,11 +586,29 @@ const ServerStats = () => {
             </Panel>
 
             <Panel title={t('nodeMap')} tone="cyan" className="nodes-map-panel" icon={FiGlobe} tip={t('nodeMapTip')}>
-              {loading ? <Skeleton /> : (nodes ? (
+              {loading ? <Skeleton /> : errors.nodes ? (
+                <div className="panel-inline-error" role="alert">
+                  <FiAlertTriangle aria-hidden="true" />
+                  <div>
+                    <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
+                    <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => loadData()}>
+                    <FiRefreshCw size={12} aria-hidden="true" /> {t('retry', 'Retry')}
+                  </button>
+                </div>
+              ) : (nodes ? (
                 <>
                   {nodes.length > 0 ? (
                     <>
-                      <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
+                      {/* The atlas is a separate chunk and its own failure
+                          domain: if d3/topojson fail to load, the node table
+                          below still renders. */}
+                      <SectionBoundary name="world-map" compact title={t('mapUnavailable', 'Map unavailable')}>
+                        <Suspense fallback={<SkeletonPanel lines={6} height={300} label={t('loadingMap', 'Loading map…')} />}>
+                          <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
+                        </Suspense>
+                      </SectionBoundary>
                       <table className="ops-table compact">
                         <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
                         <tbody>

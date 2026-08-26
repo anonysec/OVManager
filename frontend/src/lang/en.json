@@ -599,5 +599,22 @@
   "styleCard": "Panel style",
   "styleNormal": "Normal",
   "styleMinimal": "Minimal",
-  "styleDesc": "Normal uses rich cards and soft shadows; Minimal is flat with hairline borders. Saved per browser."
+  "styleDesc": "Normal uses rich cards and soft shadows; Minimal is flat with hairline borders. Saved per browser.",
+  "sectionErrorTitle": "This section could not be displayed",
+  "sectionErrorDesc": "The rest of the page is still usable.",
+  "panelLoadFailed": "Could not load this panel",
+  "panelLoadFailedHint": "Other sections are unaffected.",
+  "loadingMap": "Loading map…",
+  "mapUnavailable": "Map unavailable",
+  "noMatchesTitle": "No matching users",
+  "noMatchesBody": "Try a different search term or clear the active filter.",
+  "clearFilters": "Clear filters",
+  "nodeCreatedSuccess": "Node created successfully.",
+  "nodeUpdatedSuccess": "Node updated successfully.",
+  "nodeDeletedSuccess": "Node deleted successfully.",
+  "unableToDeleteNode": "Unable to delete node.",
+  "errorDeletingNode": "An error occurred while deleting the node.",
+  "nodeDisabledToast": "Node disabled.",
+  "nodeEnabledToast": "Node enabled.",
+  "failedToggleNode": "Failed to toggle node."
 }
