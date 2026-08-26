@@ -98,7 +98,6 @@ const nodeMeta = (node) => {
   };
 };
 
-/* eslint-disable-next-line no-unused-vars */
 const Panel = ({ title, tone = 'orange', icon: Icon, tip, className = '', children }) => (
   <section className={`ops-panel ${tone === 'cyan' ? 'cyan' : ''} ${className}`} data-tone={tone || 'orange'}>
     <header>

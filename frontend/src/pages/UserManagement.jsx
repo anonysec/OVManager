@@ -100,6 +100,14 @@ const UserManagement = () => {
     fetchSubscriptionSettings();
   }, []);
 
+  // Declared above the deep-link effect that calls it: a `const` referenced
+  // before its declaration only works because effects run after the body, and
+  // it stops updating correctly if the value ever changes.
+  const handleEdit = (user) => {
+    setSelectedUser(user);
+    setIsEditModalOpen(true);
+  };
+
   useEffect(() => {
     const userId = searchParams.get('user');
     if (!userId) return;
@@ -222,11 +230,23 @@ const UserManagement = () => {
   };
 
   // ── Undo delete ────────────────────────────────────────────────────────
+  // The countdown is driven by a clock held in state. Reading Date.now()
+  // during render is impure and, with no timer, the number never moved — the
+  // toast sat on its initial value until it disappeared.
+  const [undoNow, setUndoNow] = useState(0);
   useEffect(() => {
     if (!undo) return;
-    const id = setTimeout(() => setUndo(null), 6000);
-    return () => clearTimeout(id);
+    const tick = () => setUndoNow(Date.now());
+    const immediate = setTimeout(tick, 0);
+    const interval = setInterval(tick, 1000);
+    const hide = setTimeout(() => setUndo(null), 6000);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+      clearTimeout(hide);
+    };
   }, [undo]);
+  const undoSecondsLeft = undo ? Math.min(6, Math.max(0, Math.ceil((6000 - (undoNow - undo.ts)) / 1000))) : 0;
 
   const handleUndoRestore = async () => {
     if (!undo) return;
@@ -404,7 +424,6 @@ const UserManagement = () => {
   const handleOpenDownloadModal = (user) => { setSelectedUser(user); setIsDownloadModalOpen(true); };
   const handleUserAdded = () => { setIsAddModalOpen(false); addToast('User created successfully.', 'success'); fetchUsers(); };
   const handleUserClick = (user) => { setSelectedUser(user); setIsDetailModalOpen(true); };
-  const handleEdit = (user) => { setSelectedUser(user); setIsEditModalOpen(true); };
   const handleUserUpdated = () => { setIsEditModalOpen(false); setSelectedUser(null); addToast('User updated successfully.', 'success'); fetchUsers(); };
 
   const getSubscriptionLink = (user) => {
@@ -563,7 +582,7 @@ const UserManagement = () => {
           <span className="dot" aria-hidden="true" />
           {t('userDeletedUndo', 'User {{name}} deleted', { name: undo.user.name })}
           <button type="button" onClick={handleUndoRestore}>{t('undo', 'Undo')}</button>
-          <span className="tick">{Math.max(0, Math.ceil((6000 - (Date.now() - undo.ts)) / 1000))}s</span>
+          <span className="tick">{undoSecondsLeft}s</span>
         </div>
       )}
     </div>

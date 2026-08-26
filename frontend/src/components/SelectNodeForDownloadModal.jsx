@@ -90,7 +90,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
           throw new Error(errorData.detail || errorData.msg || 'Server returned JSON instead of an OVPN profile.');
         } catch (jsonError) {
           if (jsonError.message) throw jsonError;
-          throw new Error('Server returned JSON instead of an OVPN profile.');
+          throw new Error('Server returned JSON instead of an OVPN profile.', { cause: jsonError });
         }
       }
       if (contentType.includes('text/html') || startsWithHtml || !looksLikeOpenVpnConfig(text)) {

@@ -17,7 +17,7 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), status: 'idle' };
 };
 
-const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRef, onCopyLink, onShowQR, onExtend, onDisconnect }) => {
+const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatus, onClose, anchorRefs, onCopyLink, onShowQR, onExtend, onDisconnect }) => {
   const { t } = useTranslation();
   const ref = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0, ready: false });
@@ -29,7 +29,7 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
   // then again after layout settles so fonts/wrapping are taken into account.
   useEffect(() => {
     const place = () => {
-      const a = anchorRef?.current;
+      const a = anchorRefs?.current?.[user.uuid];
       const menu = ref.current;
       if (!a || !menu) return;
       const r = a.getBoundingClientRect();
@@ -59,10 +59,10 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [anchorRef, onClose]);
+  }, [anchorRefs, user.uuid, onClose]);
 
   useEffect(() => {
-    const trigger = anchorRef?.current;
+    const trigger = anchorRefs?.current?.[user.uuid];
     const onDoc = (e) => {
       if (ref.current && !ref.current.contains(e.target) && trigger && !trigger.contains(e.target)) {
         onClose();
@@ -80,7 +80,7 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       // Return focus to the trigger button on close
       trigger?.focus?.();
     };
-  }, [onClose, anchorRef]);
+  }, [onClose, anchorRefs, user.uuid]);
 
   return createPortal(
     <div
@@ -265,7 +265,7 @@ const UserTable = ({
                       {open && (
                         <RowMenu
                           user={user}
-                          anchorRef={{ current: anchorRefs.current[user.uuid] }}
+                          anchorRefs={anchorRefs}
                           onEdit={onEdit}
                           onDelete={onDelete}
                           onSessions={onSessions}
