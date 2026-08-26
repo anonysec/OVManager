@@ -86,6 +86,21 @@
   --sidebar-collapsed-width: 72px;
   --content-max: 1480px;
 
+  /* ── Breakpoints (documentation only) ─────────────────────────────────────
+     CSS cannot use custom properties inside @media, so these are written out
+     literally at each call site. Recorded here so the scale stays coherent.
+
+       <  768px   phone   bottom tab bar, off-canvas sidebar, no rail offset
+       <  900px   tablet  off-canvas sidebar + hamburger, full-width topbar
+       >= 900px   desktop persistent sidebar rail
+
+     Phone rules are authored as `max-width: 767.98px`, NOT 760px or 768px.
+     They must meet the JS test in DashboardLayout (`innerWidth < 768`) with
+     no gap and no overlap: 760 left 761-767 in a dead zone where JS applied
+     mobile state but the bottom nav was hidden, while a plain 768 would
+     double-fire at exactly 768 where JS already says desktop.
+     If you change the JS value, change these together. */
+
   /* ── Overlays, focus, shadows ───────────────────────────────────────── */
   --overlay: rgba(5, 7, 11, 0.72);
   --focus-ring: var(--accent);

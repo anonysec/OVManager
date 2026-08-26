@@ -397,7 +397,7 @@
   text-overflow: ellipsis;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .ops-topbar-minimal {
     padding: 6px 12px;
     gap: 8px;
@@ -1007,7 +1007,7 @@
 }
 
 /* --- Tooltip (single implementation; see styles-premium.css .has-tip) --- */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .ops-topbar {
     flex-direction: column;
     gap: 12px;
@@ -1689,7 +1689,7 @@
 }
 
 /* Mobile: show hamburger, hide sidebar by default */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .sidebar-hamburger {
     display: flex;
   }
@@ -1835,7 +1835,7 @@
 }
 
 /* Mobile: show hamburger, hide sidebar by default */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .sidebar-mobile-trigger {
     display: flex;
   }
@@ -1955,7 +1955,7 @@
 }
 
 /* On mobile the bottom-nav is 66px; add extra clearance */
-@media (max-width: 760px) {
+@media (max-width: 767.98px) {
   .bottom-safe-bar {
     height: calc(66px + env(safe-area-inset-bottom, 0px));
     min-height: 16px;
@@ -1971,7 +1971,7 @@
 }
 
 /* Sidebar starts below the topbar on mobile too */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .ops-sidebar {
     top: var(--topbar-h);
     /* on mobile: overlay starts below topbar */
