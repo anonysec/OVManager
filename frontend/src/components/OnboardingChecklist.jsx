@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiCheck, FiX, FiServer, FiUserPlus, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiHelpCircle } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import './OnboardingChecklist.css';
 
@@ -75,15 +76,20 @@ const OnboardingChecklist = () => {
 
   const load = useCallback(async () => {
     try {
-      const [nodesRes, usersRes] = await Promise.all([
-        apiClient.get('/nodes/'),
-        apiClient.get('/users/'),
-      ]);
-      const nodesData = nodesRes.data?.data;
-      const usersData = usersRes.data?.data;
+      // Independent counts: a failing /users/ shouldn't reset the node step
+      // back to "not done" and re-open a checklist the user already finished.
+      const res = await settle({
+        nodes: apiClient.get('/nodes/'),
+        users: apiClient.get('/users/'),
+      });
+      const nodesData = res.nodes.ok ? res.nodes.data.data?.data : null;
+      const usersData = res.users.ok ? res.users.data.data?.data : null;
       const nodeList = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
       const userList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
-      setState({ nodes: nodeList.length, users: userList.length });
+      setState((prev) => ({
+        nodes: res.nodes.ok ? nodeList.length : prev.nodes,
+        users: res.users.ok ? userList.length : prev.users,
+      }));
     } catch { /* keep last known state */ }
   }, []);
 

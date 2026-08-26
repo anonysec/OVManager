@@ -15,14 +15,10 @@ const Sidebar = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Decode the JWT subject for the profile block (moved from the topbar).
-  const username = useMemo(() => {
-    try {
-      const token = localStorage.getItem('authToken');
-      if (!token) return '';
-      return JSON.parse(atob(token.split('.')[1] || '')).sub || '';
-    } catch { return ''; }
-  }, []);
+  // Username for the profile block. The session token is opaque (random
+  // bytes), so it has no "sub" claim to decode — AuthContext stores the name
+  // from the login response instead.
+  const username = useMemo(() => localStorage.getItem('username') || '', []);
 
   useEffect(() => {
     localStorage.setItem('ovmanager-sidebar-collapsed', String(collapsed));
