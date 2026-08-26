@@ -21,7 +21,13 @@ class UpdateUser(BaseModel):
     used: int | None = None
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: int | None = Field(default=None, ge=0, le=1000)
-    expiry_date: date | None
+    # `date | None` with no default is REQUIRED in Pydantic v2 (Optional does
+    # not imply a default). That made every partial update a 422 — the
+    # Telegram bot's "set traffic"/"set logins" buttons send neither field.
+    # Defaulting to None makes it genuinely optional; crud.update_user
+    # distinguishes omitted from explicitly-null via model_fields_set and
+    # rejects the latter, since the column is NOT NULL.
+    expiry_date: date | None = None
     status: bool | None = None
 
 
