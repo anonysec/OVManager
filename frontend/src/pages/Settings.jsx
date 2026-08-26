@@ -753,9 +753,12 @@ const AppearanceSection = () => {
 
   const changeLanguage = (id) => {
     i18n.changeLanguage(id);
-    document.documentElement.dir = id === 'fa' ? 'rtl' : 'ltr';
     localStorage.setItem('ovmanager-lang', id);
     setLang(id);
+    // No document.documentElement.dir write here: DashboardLayout owns that in
+    // an effect keyed on i18n.language, and it sets html[lang] and body[dir]
+    // too, which this duplicate did not. Mutating the DOM from a function
+    // created during render is what the rule objects to.
   };
 
   const ACCENTS = [

@@ -12,7 +12,7 @@ The API base URL is computed from the bot config (PANEL_URL + dynamic URLPATH).
 
 import logging
 
-import httpx
+import httpx2
 
 from bot.config import config
 
@@ -44,7 +44,7 @@ class OVManager:
         """Make an authenticated HTTP request to the panel API."""
         url = f"{self.base}{path}"
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT, verify=True) as client:
+            async with httpx2.AsyncClient(timeout=TIMEOUT, verify=True) as client:
                 resp = await client.request(method, url, **kwargs)
                 if resp.status_code == 200:
                     return resp.json()
@@ -188,7 +188,7 @@ class OVManager:
             if not node:
                 return None
             url = f"{self.base}/nodes/ovpn/{uuid}/{node['id']}"
-            async with httpx.AsyncClient(timeout=TIMEOUT, verify=True) as client:
+            async with httpx2.AsyncClient(timeout=TIMEOUT, verify=True) as client:
                 resp = await client.get(url)
                 if resp.status_code == 200:
                     text = resp.text

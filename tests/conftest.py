@@ -8,19 +8,10 @@ import pytest
 
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_schema():
-    """Create all tables (users/admins/settings/nodes/sessions + audit) once per session."""
-    from backend.app import _run_migrations
+    """Bring the schema to HEAD (users/admins/settings/nodes/sessions + audit) once per session."""
+    from backend.db.migrations import migrate
 
-    _run_migrations()
-
-    from backend.db.engine import SessionLocal
-    from backend.operations.audit import ensure_audit_table
-
-    db = SessionLocal()
-    try:
-        ensure_audit_table(db)
-    finally:
-        db.close()
+    migrate()
 
 
 @pytest.fixture(scope="session")
