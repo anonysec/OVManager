@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus, FiDownload, FiGlobe } from 'react-icons/fi';
 import NodeDrawer from '../components/NodeDrawer';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
 import NodeTable from '../components/NodeTable';
@@ -38,7 +39,7 @@ const NodeManagement = () => {
     try {
       const response = await apiClient.get('/nodes/');
       if (response.data.success) {
-        setNodes(response.data.data || []);
+        setNodes(asList(response.data, 'nodes'));
       }
     } catch (error) {
       console.error('Error fetching nodes:', error);

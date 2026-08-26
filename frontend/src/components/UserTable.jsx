@@ -89,16 +89,16 @@ const RowMenu = ({ user, onEdit, onDelete, onSessions, onDownload, onToggleStatu
       role="menu"
       style={{ position: 'fixed', top: pos.top, left: pos.left, visibility: pos.ready ? 'visible' : 'hidden' }}
     >
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Edit ${user.name}`} onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Copy subscription link for ${user.name}`} onClick={async () => { await onCopyLink?.(user); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiLink /> {copied ? <><FiCheck /> {t('copied')}</> : t('copyLink', 'Copy subscription link')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Show QR for ${user.name}`} onClick={() => { onShowQR?.(user); onClose(); }}><FiActivity /> {t('showQR', 'Show QR')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Extend ${user.name}`} onClick={() => { onExtend?.(user); onClose(); }}><FiClock /> {t('extend30d', 'Extend +30 days')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Disconnect ${user.name}`} onClick={() => { onDisconnect?.(user); onClose(); }}><FiPower /> {t('disconnect', 'Disconnect')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`View sessions for ${user.name}`} onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Copy user ID for ${user.name}`} onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
-      <button type="button" className="row-menu-item" role="menuitem" aria-label={`Download config for ${user.name}`} onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
-      <button type="button" className={`row-menu-item ${user.is_active ? '' : 'danger'}`} role="menuitem" aria-label={user.is_active ? `Disable ${user.name}` : `Enable ${user.name}`} onClick={() => { onToggleStatus?.(user); onClose(); }}>{user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}</button>
-      <button type="button" className="row-menu-item danger" role="menuitem" aria-label={`Delete ${user.name}`} onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('rowEditAria', 'Edit {{name}}', { name: user.name })} onClick={() => { onEdit(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('copyLinkAria', 'Copy subscription link for {{name}}', { name: user.name })} onClick={async () => { await onCopyLink?.(user); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiLink /> {copied ? <><FiCheck /> {t('copied')}</> : t('copyLink', 'Copy subscription link')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('showQRAria', 'Show QR for {{name}}', { name: user.name })} onClick={() => { onShowQR?.(user); onClose(); }}><FiActivity /> {t('showQR', 'Show QR')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('extendAria', 'Extend {{name}}', { name: user.name })} onClick={() => { onExtend?.(user); onClose(); }}><FiClock /> {t('extend30d', 'Extend +30 days')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('disconnectAria', 'Disconnect {{name}}', { name: user.name })} onClick={() => { onDisconnect?.(user); onClose(); }}><FiPower /> {t('disconnect', 'Disconnect')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('sessionsAria', 'View sessions for {{name}}', { name: user.name })} onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('copyIdAria', 'Copy user ID for {{name}}', { name: user.name })} onClick={async () => { await copyText(user.uuid || ''); setCopied(true); setTimeout(() => setCopied(false), 1400); }}><FiCopy /> {copied ? t('copied') : t('copyId')}</button>
+      <button type="button" className="row-menu-item" role="menuitem" aria-label={t('downloadAria', 'Download config for {{name}}', { name: user.name })} onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
+      <button type="button" className={`row-menu-item ${user.is_active ? '' : 'danger'}`} role="menuitem" aria-label={user.is_active ? t('disableAria', 'Disable {{name}}', { name: user.name }) : t('enableAria', 'Enable {{name}}', { name: user.name })} onClick={() => { onToggleStatus?.(user); onClose(); }}>{user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}</button>
+      <button type="button" className="row-menu-item danger" role="menuitem" aria-label={t('deleteAria', 'Delete {{name}}', { name: user.name })} onClick={() => { onDelete(user); onClose(); }}><FiTrash2 /> {t('rowDelete')}</button>
     </div>,
     document.body
   );
@@ -108,11 +108,11 @@ const UserTableSkeleton = () => {
   return (
     <div className="table-skeleton">
       <div className="skeleton-header">
-        {[...Array(9)].map((_, i) => <div key={i} className="sk-line sk-header" style={{ width: i === 8 ? '20%' : '40%' }} />)}
+        {[...Array(8)].map((_, i) => <div key={i} className="sk-line sk-header" style={{ width: i === 7 ? '20%' : '40%' }} />)}
       </div>
       {[...Array(5)].map((_, i) => (
         <div key={i} className="skeleton-row">
-          {[...Array(9)].map((_, j) => <div key={j} className="sk-line" style={{ width: j === 8 ? '20%' : j === 0 ? '60%' : '30%' }} />)}
+          {[...Array(8)].map((_, j) => <div key={j} className="sk-line" style={{ width: j === 7 ? '20%' : j === 0 ? '60%' : '30%' }} />)}
         </div>
       ))}
     </div>
@@ -160,6 +160,8 @@ const SortableTh = ({ sortKey, label, sort, onSort }) => {
   );
 };
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 const UserTable = ({
   users = [],
   isLoading = false,
@@ -169,9 +171,6 @@ const UserTable = ({
   onSessions,
   onDownload,
   onToggleStatus,
-  selected = [],
-  onSelect,
-  onSelectAll,
   sort,
   onSort,
   onCopyLink,
@@ -179,28 +178,41 @@ const UserTable = ({
   onExtend,
   onDisconnect,
   density = 'comfortable',
+  resetKey = '',
 }) => {
   const { t } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 25;
-  const allSelected = users.length > 0 && selected.length === users.length;
-  const someSelected = selected.length > 0 && !allSelected;
-  const headerCheckRef = useRef(null);
-  useEffect(() => {
-    if (headerCheckRef.current) headerCheckRef.current.indeterminate = someSelected;
-  }, [someSelected]);
+  const [pageSize, setPageSize] = useState(() => {
+    const stored = Number(localStorage.getItem('ovmanager-ui-page-size'));
+    return PAGE_SIZE_OPTIONS.includes(stored) ? stored : 25;
+  });
   const [menuFor, setMenuFor] = useState(null);
   const anchorRefs = useRef({});
 
-  const totalPages = Math.ceil(users.length / PAGE_SIZE) || 1;
+  const totalPages = Math.ceil(users.length / pageSize) || 1;
   const paginatedUsers = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return users.slice(start, start + PAGE_SIZE);
-  }, [users, currentPage]);
+    const start = (currentPage - 1) * pageSize;
+    return users.slice(start, start + pageSize);
+  }, [users, currentPage, pageSize]);
 
+  // Reset to page 1 when the operator changes the filter/search, not on
+  // every SSE refresh — that used to yank people back from page 6 every 30s.
   useEffect(() => {
     setCurrentPage(1);
-  }, [users]);
+  }, [resetKey]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const applyPageSize = (n) => {
+    setPageSize(n);
+    localStorage.setItem('ovmanager-ui-page-size', String(n));
+    setCurrentPage(1);
+  };
+
+  const rangeFrom = users.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeTo = Math.min(currentPage * pageSize, users.length);
 
   if (isLoading) {
     return <UserTableSkeleton />;
@@ -216,15 +228,6 @@ const UserTable = ({
         <table className="list-table user-list-table">
           <thead>
             <tr>
-              <th className="col-check">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={headerCheckRef}
-                  onChange={(e) => onSelectAll(e.target.checked)}
-                  aria-label="Select all users"
-                />
-              </th>
               <SortableTh sortKey='name' label={t('th_username')} sort={sort} onSort={onSort} />
               <th>{t('th_status')}</th>
               <SortableTh sortKey='expiry_date' label={t('th_expiryDate')} sort={sort} onSort={onSort} />
@@ -237,15 +240,11 @@ const UserTable = ({
           </thead>
           <tbody>
             {paginatedUsers.map((user) => {
-              const isSel = selected.includes(user.uuid);
               const d = daysUntil(user.expiry_date);
               const st = statusOf(user, t);
               const open = menuFor === user.uuid;
               return (
-                <tr key={user.uuid} className={isSel ? 'selected' : ''}>
-                  <td className="col-check">
-                    <input type="checkbox" checked={isSel} onChange={() => onSelect(user.uuid)} aria-label={`Select ${user.name}`} />
-                  </td>
+                <tr key={user.uuid}>
                   <td data-label="Username">
                     <div className="user-cell user-cell-clickable" onClick={(e) => { e.stopPropagation(); onUserClick?.(user); }}>
                       <span className="avatar-sm">{user.name.slice(0, 1).toUpperCase()}</span>
@@ -275,13 +274,13 @@ const UserTable = ({
                   <td data-label="Owner">{user.owner || '—'}</td>
                   <td data-label="Actions" className="actions-cell">
                     <div className="row-actions">
-                    <button className="icon-btn" onClick={() => onEdit(user)} title="Edit" aria-label={`Edit ${user.name}`}><FiEdit2 /></button>
-                    <button className="icon-btn danger" onClick={() => onDelete(user)} title="Delete" aria-label={`Delete ${user.name}`}><FiTrash2 /></button>
+                    <button className="icon-btn" onClick={() => onEdit(user)} title={t('edit')} aria-label={t('rowEditAria', 'Edit {{name}}', { name: user.name })}><FiEdit2 /></button>
+                    <button className="icon-btn danger" onClick={() => onDelete(user)} title={t('delete')} aria-label={t('deleteAria', 'Delete {{name}}', { name: user.name })}><FiTrash2 /></button>
                     <div className="row-menu-wrap">
                       <button
                         className="icon-btn"
-                        title="More"
-                        aria-label={`More actions for ${user.name}`}
+                        title={t('moreActions', 'More')}
+                        aria-label={t('moreActionsAria', 'More actions for {{name}}', { name: user.name })}
                         ref={(el) => { anchorRefs.current[user.uuid] = el; }}
                         onClick={() => setMenuFor(open ? null : user.uuid)}
                         aria-haspopup="menu"
@@ -312,8 +311,20 @@ const UserTable = ({
           </tbody>
         </table>
       </div>
-      {totalPages > 1 && (
-        <div className="pagination-controls">
+      <div className="pagination-controls">
+        <span className="pagination-range">
+          {t('showingRange', 'Showing {{from}}–{{to}} of {{total}}', { from: rangeFrom, to: rangeTo, total: users.length })}
+        </span>
+        <label className="page-size">
+          <span>{t('rowsPerPage', 'Rows per page')}</span>
+          <select
+            value={pageSize}
+            onChange={(e) => applyPageSize(Number(e.target.value))}
+            aria-label={t('rowsPerPage', 'Rows per page')}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
           <button
             className="btn btn-sm btn-secondary"
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -334,7 +345,6 @@ const UserTable = ({
             {t('next', 'Next')} <FiChevronRight size={14} />
           </button>
         </div>
-      )}
     </>
   );
 };

@@ -1,8 +1,9 @@
-import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LiveProvider } from '../context/LiveContext';
@@ -11,6 +12,7 @@ import Sidebar from '../components/Sidebar';
 import Logo from '../components/Logo';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import CommandPalette from '../components/CommandPalette';
+import ShortcutsHelp from '../components/ShortcutsHelp';
 import MobileNav from '../components/MobileNav';
 import RouteProgress from '../components/RouteProgress';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
@@ -20,10 +22,13 @@ const DashboardLayout = () => {
   const { userRole } = useAuth();
   const { theme, cycleTheme } = useTheme();
   const { i18n, t } = useTranslation();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const langRef = useRef(null);
+  const gPending = useRef(false);
   const location = useLocation();
 
   const getPageTitle = (pathname) => {
@@ -71,6 +76,61 @@ const DashboardLayout = () => {
     window.dispatchEvent(new CustomEvent('ovmanager:open-palette'));
   };
 
+  useEffect(() => {
+    const isTypingTarget = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) {
+        if (e.key !== 'g') gPending.current = false;
+        return;
+      }
+      if (isTypingTarget(e.target)) {
+        gPending.current = false;
+        return;
+      }
+      const key = e.key;
+      if (key === '?' || (key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        setHelpOpen(true);
+        gPending.current = false;
+        return;
+      }
+      if (key === '/') {
+        e.preventDefault();
+        const field = document.querySelector('.search-input, .search-field input, input[type="search"]');
+        if (field) field.focus();
+        else openCommandPalette();
+        gPending.current = false;
+        return;
+      }
+      if (key === 'Escape') {
+        setHelpOpen(false);
+        gPending.current = false;
+        return;
+      }
+      const lower = key.toLowerCase();
+      if (gPending.current) {
+        gPending.current = false;
+        const routes = { d: '/', u: '/users', n: '/nodes', s: '/settings' };
+        if (userRole === 'owner') routes.a = '/admins';
+        if (routes[lower]) {
+          e.preventDefault();
+          navigate(routes[lower]);
+        }
+        return;
+      }
+      if (lower === 'g') {
+        e.preventDefault();
+        gPending.current = true;
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigate, userRole]);
+
   // Notification bell: lightweight poll — avoids duplicating the heavy per-node
   // status calls that ServerStats already makes on the same 30-second cycle.
   // We only use the fast /nodes/ list (DB-side status flag) + /security/summary.
@@ -87,10 +147,8 @@ const DashboardLayout = () => {
         security: apiClient.get('/security/summary?hours=8'),
       });
 
-      const usersRaw = res.users.ok ? res.users.data.data?.data : null;
-      const users = Array.isArray(usersRaw) ? usersRaw : (usersRaw?.users || []);
-      const nodesRaw = res.nodes.ok ? res.nodes.data.data?.data : null;
-      const nodes = Array.isArray(nodesRaw) ? nodesRaw : (nodesRaw?.nodes || []);
+      const users = asList(res.users.ok ? res.users.data : null, 'users');
+      const nodes = asList(res.nodes.ok ? res.nodes.data : null, 'nodes');
       const security = res.security.ok ? (res.security.data.data?.data || {}) : {};
       const out = [];
       // Surface nodes that are marked inactive in the DB
@@ -284,6 +342,7 @@ const DashboardLayout = () => {
 
           <MobileNav />
           <CommandPalette userRole={userRole} />
+          <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} isOwner={userRole === 'owner'} />
           {/* Bottom safe-area spacer — keeps content above mobile keyboard / browser chrome */}
           <div className="bottom-safe-bar" aria-hidden="true" />
         </div>
