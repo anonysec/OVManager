@@ -2279,7 +2279,9 @@ input[type="checkbox"]:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--accent-color);
+  /* Text, not a fill: --accent is a swatch colour and only reaches 3.09:1 on
+     the light showcase panel. --accent-text is the read-safe tone. */
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .1em;
@@ -2368,7 +2370,8 @@ input[type="checkbox"]:focus-visible,
 }
 
 .login-status-copy .status-kicker {
-  color: var(--success-color);
+  /* --success is the dot/fill green (3.18:1 here); --success-text reads. */
+  color: var(--success-text);
   font-size: 10px;
   letter-spacing: .08em;
 }
@@ -2439,7 +2442,7 @@ input[type="checkbox"]:focus-visible,
 .login-box-kicker {
   display: block;
   margin-bottom: 8px;
-  color: var(--accent-color);
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .1em;
