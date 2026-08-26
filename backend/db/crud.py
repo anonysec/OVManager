@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.auth.hash import hash_password
-from backend.db.exceptions import ConflictError, NotFoundError
+from backend.db.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.logger import logger
 from backend.schema._input import AdminCreate, CreateUser, NodeCreate, UpdateUser
 
@@ -169,19 +169,42 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     if not user:
         raise NotFoundError("User", uuid)
 
+    # Only touch what the caller actually sent. `model_fields_set` separates
+    # "omitted" from "explicitly null" — the distinction matters because
+    # total=None legitimately means unlimited, so we cannot use None alone as
+    # the "not supplied" sentinel.
+    #
+    # This used to assign expiry_date and total unconditionally, so any partial
+    # update silently cleared the fields it did not mention. The Telegram bot
+    # sends exactly such payloads (bot/handlers/callbacks.py): the "extend
+    # expiry" button posts only {"expiry_date": ...}, which wiped `total` and
+    # converted a quota-limited account to unlimited traffic — returning 200.
+    # Sending {"expiry_date": null} likewise hit a NOT NULL constraint and 500ed.
+    sent = request.model_fields_set
+
+    if "expiry_date" in sent:
+        if request.expiry_date is None:
+            # The column is NOT NULL; reject explicitly rather than 500 in the
+            # driver. UpdateUser types this Optional only so the field can be
+            # omitted from a partial update.
+            raise ValidationError("expiry_date", "expiry_date cannot be null")
+        user.expiry_date = request.expiry_date
+    if "total" in sent:
+        user.total = request.total
+    if "max_logins" in sent and request.max_logins is not None:
+        user.max_logins = request.max_logins
+
+    # Evaluate the activation guards against the POST-UPDATE row, not the
+    # request: with partial updates the request may not carry these fields.
     used = user.used or 0
     # total=None means unlimited traffic, so it is never "exceeded".
-    not_expired = request.expiry_date >= datetime.now(UTC).date() if request.expiry_date else True
-    has_traffic = request.total is None or request.total > used
+    not_expired = user.expiry_date >= datetime.now(UTC).date() if user.expiry_date else True
+    has_traffic = user.total is None or user.total > used
     # Manual status (from the edit modal checkbox) wins, but expiry/traffic
     # violations still force-disable: an expired or out-of-traffic account
     # must never be active even if the admin flipped the switch on.
     requested_status = user.is_active if request.status is None else bool(request.status)
     user.is_active = requested_status and not_expired and has_traffic
-    user.expiry_date = request.expiry_date
-    user.total = request.total
-    if request.max_logins is not None:
-        user.max_logins = request.max_logins
 
     db.commit()
     db.refresh(user)
