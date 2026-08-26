@@ -83,46 +83,74 @@ def _expiry_of(uuid: str) -> dt.date:
         db.close()
 
 
-# ── Bulk operations respect tenancy ────────────────────────────────────────
+# ── Single-user extend respects tenancy ────────────────────────────────────
 
 
-def test_bulk_admin_cannot_touch_other_tenants_users():
+def test_extend_admin_cannot_touch_other_tenants_users():
     _ensure_schema()
-    _ensure_admin("ac_admin_bulk")
-    admin_uuid = _ensure_user("ac_bulk_own_user", "ac_admin_bulk")
-    other_uuid = _ensure_user("ac_bulk_foreign_user", config.ADMIN_USERNAME)
+    _ensure_admin("ac_admin_extend")
+    admin_uuid = _ensure_user("ac_extend_own_user", "ac_admin_extend")
+    other_uuid = _ensure_user("ac_extend_foreign_user", config.ADMIN_USERNAME)
 
     before_admin, before_other = _expiry_of(admin_uuid), _expiry_of(other_uuid)
 
     client = TestClient(api)
+    # Own user: allowed.
     resp = client.post(
-        "/api/users/bulk",
-        json={"action": "extend", "uuids": [admin_uuid, other_uuid], "days": 10},
-        headers=_token("ac_admin_bulk", "admin"),
+        f"/api/users/{admin_uuid}/extend",
+        json={"days": 10},
+        headers=_token("ac_admin_extend", "admin"),
     )
     assert resp.status_code == 200
-    data = resp.json()["data"]
-    # Own user updated; the other tenant's user silently skipped (no existence leak).
-    assert data["updated"] == 1
-    assert data["not_found"] == 1
+    assert resp.json()["success"] is True
     assert _expiry_of(admin_uuid) == before_admin + dt.timedelta(days=10)
+
+    # Other tenant: 404 (no existence leak).
+    resp = client.post(
+        f"/api/users/{other_uuid}/extend",
+        json={"days": 10},
+        headers=_token("ac_admin_extend", "admin"),
+    )
+    assert resp.status_code == 404
     assert _expiry_of(other_uuid) == before_other  # untouched
 
 
-def test_bulk_owner_can_touch_everyone():
+def test_extend_owner_can_touch_everyone():
     _ensure_schema()
-    other_uuid = _ensure_user("ac_bulk_owner_scope", config.ADMIN_USERNAME)
+    other_uuid = _ensure_user("ac_extend_owner_scope", config.ADMIN_USERNAME)
     before = _expiry_of(other_uuid)
 
     client = TestClient(api)
     resp = client.post(
-        "/api/users/bulk",
-        json={"action": "extend", "uuids": [other_uuid], "days": 5},
+        f"/api/users/{other_uuid}/extend",
+        json={"days": 5},
         headers=_owner_headers(),
     )
     assert resp.status_code == 200
-    assert resp.json()["data"]["updated"] == 1
+    assert resp.json()["success"] is True
     assert _expiry_of(other_uuid) == before + dt.timedelta(days=5)
+
+
+def test_extend_rejects_empty_payload():
+    _ensure_schema()
+    uuid = _ensure_user("ac_extend_empty", config.ADMIN_USERNAME)
+    client = TestClient(api)
+    resp = client.post(f"/api/users/{uuid}/extend", json={"days": 0, "bytes": 0}, headers=_owner_headers())
+    assert resp.status_code == 422
+
+
+def test_list_users_returns_full_set_by_default():
+    """The panel filters client-side, so GET /users/ must not silently cap at 100."""
+    _ensure_schema()
+    for i in range(3):
+        _ensure_user(f"ac_list_user_{i}", config.ADMIN_USERNAME)
+    client = TestClient(api)
+    resp = client.get("/api/users/", headers=_owner_headers())
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert isinstance(data["users"], list)
+    assert data["total"] == len(data["users"])
+    assert data["total"] >= 3
 
 
 # ── Restore (undo delete) respects tenancy ─────────────────────────────────

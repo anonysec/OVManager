@@ -67,9 +67,12 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
             id="new-user-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            required minLength="3" maxLength="10"
+            required minLength="3" maxLength="64"
             autoFocus
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'new-user-error new-user-name-hint' : 'new-user-name-hint'}
           />
+          <small id="new-user-name-hint" className="input-hint">{t('usernameHint', '3–64 characters.')}</small>
         </div>
         <div className="input-group">
           <label htmlFor="new-user-expiry">{t('modal_expiryDate')}</label>
@@ -132,7 +135,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
             {t('createUserButton')}
           </LoadingButton>
         </div>
-        {error && <p className="error-message">{error}</p>}
+        {error && <p id="new-user-error" className="error-message" role="alert">{error}</p>}
       </form>
     </Modal>
   );

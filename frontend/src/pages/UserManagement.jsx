@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiDownload, FiClock, FiZap, FiTrash2 } from 'react-icons/fi';
+import { FiDownload } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 import { getPanelOrigin } from '../utils/panelUrl';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
@@ -37,11 +38,7 @@ const UserManagement = () => {
   const { t } = useTranslation();
   const { addToast } = useToast();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [view, setView] = useState('all');
-  const [selected, setSelected] = useState([]);
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
-  const [_bulkBusy, setBulkBusy] = useState(false);
   const [loadError, setLoadError] = useState(false);
   // First-load vs background refresh. The table used to receive a hardcoded
   // isLoading={false}, so its skeleton could never render and the list simply
@@ -51,11 +48,21 @@ const UserManagement = () => {
   const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') === 'compact' ? 'compact' : 'comfortable');
 
   // ── ConfirmModal state ────────────────────────────────────────────────
-  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null, danger: true });
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null, danger: true, confirmLabel: null });
 
-  const openConfirm = (title, message, onConfirm, danger = true) =>
-    setConfirm({ open: true, title, message, onConfirm, danger });
+  const openConfirm = (title, message, onConfirm, danger = true, confirmLabel = null) =>
+    setConfirm({ open: true, title, message, onConfirm, danger, confirmLabel });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
+
+  const searchTerm = searchParams.get('q') || '';
+  const view = searchParams.get('view') || 'all';
+  const patchParams = useCallback((mutate) => {
+    const next = new URLSearchParams(searchParams);
+    mutate(next);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const setSearchTerm = (value) => patchParams((p) => { if (value) p.set('q', value); else p.delete('q'); });
+  const setView = (value) => patchParams((p) => { if (value && value !== 'all') p.set('view', value); else p.delete('view'); });
 
   // ── Data fetching ─────────────────────────────────────────────────────
   const fetchUsers = async ({ background = false } = {}) => {
@@ -65,8 +72,7 @@ const UserManagement = () => {
     if (!background) setIsLoading((prev) => (users.length === 0 ? true : prev));
     try {
       const response = await apiClient.get('/users/');
-      const raw = response.data?.data;
-      const list = Array.isArray(raw) ? raw : (raw?.users || []);
+      const list = asList(response.data, 'users');
       if (response.data.success) {
         setUsers(list.slice().reverse());
       } else {
@@ -121,15 +127,21 @@ const UserManagement = () => {
   };
 
   useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setIsAddModalOpen(true);
+      patchParams((p) => p.delete('add'));
+    }
+  }, [searchParams, patchParams]);
+
+  useEffect(() => {
     const userId = searchParams.get('user');
     if (!userId) return;
     const u = users.find((x) => x.uuid === userId);
     if (u) {
       handleEdit(u);
-      searchParams.delete('user');
-      setSearchParams(searchParams, { replace: true });
+      patchParams((p) => p.delete('user'));
     }
-  }, [users, searchParams, setSearchParams]);
+  }, [users, searchParams, patchParams]);
 
   // ── Derived stats ─────────────────────────────────────────────────────
   const userStats = useMemo(() => {
@@ -199,12 +211,6 @@ const UserManagement = () => {
   const handleSort = (key) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
 
-  const handleSelect = (uuid) =>
-    setSelected((s) => (s.includes(uuid) ? s.filter((x) => x !== uuid) : [...s, uuid]));
-
-  const handleSelectAll = (checked) =>
-    setSelected(checked ? filteredUsers.map((u) => u.uuid) : []);
-
   // ── Actions (all use ConfirmModal, no window.confirm) ─────────────────
   const handleDelete = (user) => {
     openConfirm(
@@ -214,38 +220,10 @@ const UserManagement = () => {
         try {
           await apiClient.delete(`/users/${user.uuid}`);
           addToast(t('userDeleted', { name: user.name }, `User "${user.name}" deleted.`), 'success');
-          setSelected((s) => s.filter((x) => x !== user.uuid));
           setUndo({ user, ts: Date.now() });
           fetchUsers();
         } catch {
-          // t(key, defaultValue, options) — the default and options were
-          // swapped, so {{name}} never interpolated.
           addToast(t('userDeleteError', `Failed to delete "${user.name}".`, { name: user.name }), 'error');
-        }
-      }
-    );
-  };
-
-  const handleBulkDelete = (uuids) => {
-    openConfirm(
-      t('deleteSelected', 'Delete Selected'),
-      t('confirmBulkDelete', { count: uuids.length }, `Delete ${uuids.length} selected users?`),
-      async () => {
-        setBulkBusy(true);
-        try {
-          const results = await Promise.allSettled(uuids.map((uuid) => apiClient.delete(`/users/${uuid}`)));
-          const failed = results.filter((r) => r.status === 'rejected' || r.value?.data?.success === false);
-          const succeeded = uuids.length - failed.length;
-          setSelected([]);
-          fetchUsers();
-          if (failed.length > 0) {
-            addToast(t('bulkDeletePartial', { succeeded, failed: failed.length, total: uuids.length },
-              `Deleted ${succeeded} of ${uuids.length} users. ${failed.length} failed (check node connectivity).`), 'warning');
-          } else {
-            addToast(t('bulkDeleteSuccess', { count: succeeded }, `Deleted ${succeeded} users.`), 'success');
-          }
-        } finally {
-          setBulkBusy(false);
         }
       }
     );
@@ -283,35 +261,20 @@ const UserManagement = () => {
     fetchUsers();
   };
 
-  // ── Bulk extend / add traffic ─────────────────────────────────────────
-  const handleBulkAdjust = async (action, days = 0, gb = 0) => {
-    if (!selected.length) return;
-    setBulkBusy(true);
-    try {
-      const res = await apiClient.post('/users/bulk', {
-        action,
-        uuids: selected,
-        days,
-        bytes: gb * 1024 * 1024 * 1024,
-      });
-      if (res.data?.success) {
-        addToast(res.data.msg || `${selected.length} user(s) updated`, 'success');
-        setSelected([]);
-        fetchUsers();
-      } else {
-        addToast(res.data?.msg || 'Bulk update failed', 'error');
-      }
-    } catch (e) {
-      addToast(e.response?.data?.detail || e.response?.data?.msg || 'Bulk update failed', 'error');
-    } finally { setBulkBusy(false); }
-  };
-
-  const handleExtendSingle = async (user) => {
-    try {
-      const res = await apiClient.post('/users/bulk', { action: 'extend', uuids: [user.uuid], days: 30, bytes: 0 });
-      addToast(res.data?.success ? t('extendedDays', 'Extended {{name}} by 30 days', { name: user.name }) : (res.data?.msg || 'Failed'), res.data?.success ? 'success' : 'error');
-      fetchUsers();
-    } catch { addToast(t('error', 'Error'), 'error'); }
+  const handleExtendSingle = (user) => {
+    openConfirm(
+      t('extend30d', 'Extend +30 days'),
+      t('confirmExtend30', 'Extend {{name}} by 30 days?', { name: user.name }),
+      async () => {
+        try {
+          const res = await apiClient.post(`/users/${user.uuid}/extend`, { days: 30 });
+          addToast(res.data?.success ? t('extendedDays', 'Extended {{name}} by 30 days', { name: user.name }) : (res.data?.msg || t('error', 'Error')), res.data?.success ? 'success' : 'error');
+          fetchUsers();
+        } catch { addToast(t('error', 'Error'), 'error'); }
+      },
+      false,
+      t('extend30d', 'Extend +30 days'),
+    );
   };
 
   const handleDisconnectUserQuick = async (user) => {
@@ -368,18 +331,18 @@ const UserManagement = () => {
   const handleResetUsage = (user) => {
     openConfirm(
       t('resetUsageButton', 'Reset Usage'),
-      `Reset all usage data for "${user.name}"? This cannot be undone.`,
+      t('confirmResetUsage', 'Reset all usage data for "{{name}}"? This cannot be undone.', { name: user.name }),
       async () => {
         try {
           const response = await apiClient.post(`/users/${user.uuid}/reset-usage`);
           if (response.data.success) {
-            addToast(`Usage for ${user.name} has been reset.`, 'success');
+            addToast(t('usageResetSuccess', 'Usage for {{name}} has been reset.', { name: user.name }), 'success');
             fetchUsers();
           } else {
-            addToast(`Failed to reset usage for ${user.name}.`, 'error');
+            addToast(t('resetUsageError', 'Failed to reset usage for {{name}}.', { name: user.name }), 'error');
           }
         } catch {
-          addToast('Error resetting usage.', 'error');
+          addToast(t('resetUsageError', 'Failed to reset usage for {{name}}.', { name: user.name }), 'error');
         }
       }
     );
@@ -444,9 +407,9 @@ const UserManagement = () => {
 
   // ── CRUD helpers ──────────────────────────────────────────────────────
   const handleOpenDownloadModal = (user) => { setSelectedUser(user); setIsDownloadModalOpen(true); };
-  const handleUserAdded = () => { setIsAddModalOpen(false); addToast('User created successfully.', 'success'); fetchUsers(); };
+  const handleUserAdded = () => { setIsAddModalOpen(false); addToast(t('userCreatedSuccess', 'User created successfully.'), 'success'); fetchUsers(); };
   const handleUserClick = (user) => { setSelectedUser(user); setIsDetailModalOpen(true); };
-  const handleUserUpdated = () => { setIsEditModalOpen(false); setSelectedUser(null); addToast('User updated successfully.', 'success'); fetchUsers(); };
+  const handleUserUpdated = () => { setIsEditModalOpen(false); setSelectedUser(null); addToast(t('userUpdatedSuccess', 'User updated successfully.'), 'success'); fetchUsers(); };
 
   const getSubscriptionLink = (user) => {
     if (!user?.uuid) return '';
@@ -498,7 +461,7 @@ const UserManagement = () => {
       <div className="search-with-filters">
         <label className="search-field" style={{ flex: 1, maxWidth: 380 }}>
           <FiSearch className="search-icon" aria-hidden="true" />
-          <input type="search" placeholder={t('searchByUsername')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label="Search users by username" />
+          <input type="search" placeholder={t('searchByUsername')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label={t('searchByUsername')} />
         </label>
         <div className="density-toggle" role="group" aria-label={t('density', 'Density')}>
           <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')}>{t('densityComfort', 'Comfort')}</button>
@@ -536,21 +499,11 @@ const UserManagement = () => {
         ))}
       </div>
 
-      {selected.length > 0 && (
-        <div className="bulk-toolbar">
-          <b>{t('selectedCount', '{{count}} selected', { count: selected.length })}</b>
-          <span className="sp" />
-          <button type="button" className="btn btn-sm" onClick={() => handleBulkAdjust('extend', 30, 0)}><FiClock size={12} /> +30 {t('daysUnit', 'days')}</button>
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => handleBulkAdjust('add-traffic', 0, 10)}><FiZap size={12} /> +10 GB</button>
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => handleBulkDelete(selected)}><FiTrash2 size={12} /> {t('delete', 'Delete')}</button>
-        </div>
-      )}
-
       {/* Order matters: loading is checked before empty, otherwise the very
           first render (users still []) short-circuits to the empty state and
           the skeleton never appears. */}
       {isLoading && users.length === 0 ? (
-        <SkeletonTable rows={8} cols={9} label={t('loading', 'Loading…')} />
+        <SkeletonTable rows={8} cols={8} label={t('loading', 'Loading…')} />
       ) : loadError ? (
         <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={() => fetchUsers()} retryLabel={t('retry')} />
       ) : users.length === 0 ? (
@@ -568,13 +521,10 @@ const UserManagement = () => {
         <UserTable
           users={filteredUsers}
           isLoading={isLoading}
+          resetKey={`${deferredSearch}|${view}`}
           onUserClick={handleUserClick}
           onDelete={handleDelete}
           onSessions={handleShowSessions}
-          onBulkDelete={handleBulkDelete}
-          selected={selected}
-          onSelect={handleSelect}
-          onSelectAll={handleSelectAll}
           sort={sort}
           onSort={handleSort}
           onDownload={handleOpenDownloadModal}
@@ -598,7 +548,7 @@ const UserManagement = () => {
         title={confirm.title}
         message={confirm.message}
         danger={confirm.danger}
-        confirmLabel={confirm.danger !== false ? t('deleteButton', 'Delete') : t('save', 'Confirm')}
+        confirmLabel={confirm.confirmLabel || (confirm.danger !== false ? t('deleteButton', 'Delete') : t('save', 'Confirm'))}
         cancelLabel={t('cancelButton', 'Cancel')}
       />
       {isDetailModalOpen && (

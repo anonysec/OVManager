@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiSearch, FiServer, FiUsers, FiSettings, FiUserCheck, FiFileText, FiArrowUp, FiCommand } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 
 const PAGES = (t, isAdmin) => [
   { label: t('navDashboard', 'Dashboard'), path: '/', icon: FiServer, group: t('navGroupPages', 'Pages') },
@@ -52,12 +53,8 @@ const CommandPalette = ({ userRole }) => {
         apiClient.get('/users/'),
         apiClient.get('/nodes/'),
       ]);
-      const usersData = u.data?.data;
-      const nodesData = n.data?.data;
-      const userList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
-      const nodeList = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
-      setUsers(userList.slice(0, 50));
-      setNodes(nodeList.slice(0, 50));
+      setUsers(asList(u.data, 'users').slice(0, 50));
+      setNodes(asList(n.data, 'nodes').slice(0, 50));
     } catch { /* palette stays usable with pages only */ }
   }, []);
 

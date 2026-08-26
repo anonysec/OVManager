@@ -3,9 +3,8 @@
 
 
 import time as _time
-from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -95,14 +94,16 @@ async def get_next_username(
 
 @router.get("/", response_model=ResponseModel)
 async def get_all_users(
-    page: int = 1,
-    page_size: int = 100,
+    page: int | None = Query(default=None, ge=1, le=10_000),
+    page_size: int | None = Query(default=None, ge=1, le=500),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    # Clamp pagination params
-    page = max(1, min(page, 10_000))
-    page_size = max(1, min(page_size, 500))
+    # The panel filters, sorts and paginates client-side, so the default is
+    # the full set. Passing page/page_size opts into a slice for API consumers.
+    paginate = page is not None or page_size is not None
+    page = page or 1
+    page_size = page_size or 100
 
     # Connection counts come from the live collector's in-memory cache, so a
     # page load never fans out to every node (a dead node used to stall this
@@ -124,31 +125,26 @@ async def get_all_users(
 
     if user["type"] == "owner":
         all_users = crud.get_all_users(db)
-        total = len(all_users)
-        start = (page - 1) * page_size
-        end = start + page_size
-        users_list = [serialize(u) for u in all_users[start:end]]
-        return ResponseModel(
-            success=True,
-            msg="Users retrieved successfully",
-            data={"users": users_list, "total": total, "page": page, "page_size": page_size},
-        )
-
     elif user["type"] == "admin":
-        admin_users = crud.get_users_by_admin(db, admin_username=user["username"])
-        total = len(admin_users)
-        start = (page - 1) * page_size
-        end = start + page_size
-        users_list = [serialize(u) for u in admin_users[start:end]]
-        return ResponseModel(
-            success=True,
-            msg="Users retrieved successfully",
-            data={"users": users_list, "total": total, "page": page, "page_size": page_size},
-        )
+        all_users = crud.get_users_by_admin(db, admin_username=user["username"])
+    else:
+        return ResponseModel(success=False, msg="Unauthorized access")
 
+    total = len(all_users)
+    page_users = all_users
+    if paginate:
+        start = (page - 1) * page_size
+        page_users = all_users[start : start + page_size]
+    users_list = [serialize(u) for u in page_users]
     return ResponseModel(
-        success=False,
-        msg="Unauthorized access",
+        success=True,
+        msg="Users retrieved successfully",
+        data={
+            "users": users_list,
+            "total": total,
+            "page": page if paginate else 1,
+            "page_size": page_size if paginate else total,
+        },
     )
 
 
@@ -329,34 +325,35 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     )
 
 
-class _BulkAdjust(BaseModel):
-    action: Literal["extend", "add-traffic"]
-    uuids: list[str] = Field(min_length=1, max_length=500)
-    days: int = 0
-    bytes: int = 0
+class _UserAdjust(BaseModel):
+    days: int = Field(default=0, ge=0, le=3650)
+    bytes: int = Field(default=0, ge=0)
 
 
-@router.post("/bulk", response_model=ResponseModel)
-async def bulk_adjust_users(
-    payload: _BulkAdjust,
+@router.post("/{uuid}/extend", response_model=ResponseModel)
+async def extend_user(
+    uuid: str,
+    payload: _UserAdjust,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Bulk-extend expiry or add traffic quota to selected users.
+    """Extend one user's expiry and/or add traffic quota.
 
-    Admins may only touch their own users — the owner filter in the CRUD
-    layer silently skips any UUID outside the caller's tenancy.
+    Admins may only touch their own users — a foreign UUID is a 404 so
+    tenancy is not leaked. Both days and bytes of 0 is a 422.
     """
+    if payload.days == 0 and payload.bytes == 0:
+        raise HTTPException(status_code=422, detail="days or bytes must be greater than 0")
     owner = None if user["type"] == "owner" else user["username"]
-    result = crud.bulk_adjust_users(db, payload.uuids, days=payload.days, add_bytes=payload.bytes, owner=owner)
-    action = "extend" if payload.action == "extend" else "add-traffic"
+    updated = crud.adjust_user(db, uuid, days=payload.days, add_bytes=payload.bytes, owner=owner)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="User not found")
     log_event(
         db,
-        f"bulk.{action}",
+        "user.extend",
         actor=user.get("username"),
-        target=f"{result['updated']} users",
-        detail=str(payload.days or payload.bytes),
+        target=updated.name,
+        detail=f"days={payload.days} bytes={payload.bytes}",
     )
-    if result["updated"] > 0:
-        live_ops.publish("users", {"op": f"bulk.{action}"})
-    return ResponseModel(success=result["updated"] > 0, msg=f"{result['updated']} user(s) updated", data=result)
+    live_ops.publish("users", {"op": "extend"})
+    return ResponseModel(success=True, msg="User updated", data=Users.model_validate(updated))

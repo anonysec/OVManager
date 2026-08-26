@@ -1544,7 +1544,7 @@
 }
 
 .ops-sidebar--collapsed {
-  width: 72px;
+  width: var(--sidebar-collapsed-width, 72px);
 }
 
 .ops-sidebar--collapsed .sidebar-brand {

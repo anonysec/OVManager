@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } fro
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 import { FiShield, FiActivity, FiServer, FiUsers, FiGlobe, FiAlertTriangle, FiCheckCircle, FiRefreshCw, FiArrowRight } from 'react-icons/fi';
 import { fmtRelative } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
@@ -267,14 +268,12 @@ const ServerStats = () => {
     else nextErrors.stats = res.stats.error;
 
     if (res.users.ok) {
-      const d = res.users.data.data?.data;
-      setUsers(Array.isArray(d) ? d : d?.users || []);
+      setUsers(asList(res.users.data, 'users'));
     } else nextErrors.users = res.users.error;
 
     let nodesData = [];
     if (res.nodes.ok) {
-      const d = res.nodes.data.data?.data;
-      nodesData = Array.isArray(d) ? d : d?.nodes || [];
+      nodesData = asList(res.nodes.data, 'nodes');
       setNodes(nodesData);
     } else {
       nextErrors.nodes = res.nodes.error;
