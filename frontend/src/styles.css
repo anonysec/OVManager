@@ -259,7 +259,7 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 /* list view override for users/nodes/admins */
 .list-table-container { padding: 0 !important; overflow-x: auto !important; }
 .list-table, .user-list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
-.list-table thead th, .user-list-table thead th { position: sticky; top: var(--topbar-h); background: var(--panel); color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.list-table thead th, .user-list-table thead th { position: sticky; top: 0; background: var(--panel); color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .list-table thead th:first-child, .user-list-table thead th:first-child { border-top-left-radius: 10px; }
 .list-table thead th:last-child, .user-list-table thead th:last-child { border-top-right-radius: 10px; }
 .list-table th { padding: 12px 14px; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
@@ -282,7 +282,8 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
    Prefixing with .list-table keeps the intended compact metrics applied. */
 .list-table.user-list-table, .list-table.node-list-table, .list-table.audit-table { border-collapse: collapse !important; border-spacing: 0 !important; min-width: 720px; font-variant-numeric: tabular-nums; }
 .list-table.user-list-table thead th, .list-table.node-list-table thead th, .list-table.audit-table thead th {
-  position: sticky; top: var(--topbar-h); z-index: 5;
+  /* Offset 0: the scroll container is .list-table-container, not the page. */
+  position: sticky; top: 0; z-index: 5;
   background: var(--panel-2);
   color: var(--muted);
   font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
@@ -696,9 +697,11 @@ html[data-theme="light"] .segmented { background: rgba(0,0,0,.04); }
 .ops-stat-cell { padding-bottom: 8px; min-height: 0; margin-bottom: 8px; }
 .ops-stat-cell span { font-size: 12px; }
 .ops-stat-cell strong { font-size: 22px; }
-.ops-stat-cell strong.tone-danger { color: #ff7a8a; }
-.ops-stat-cell strong.tone-warn { color: #ffb454; }
-.ops-stat-cell strong.tone-ok { color: #2ff0d4; }
+/* Hardcoded dark-mode hues here stayed put in light mode and failed AA badly
+   (#2ff0d4 on the light panel = 1.37:1). Use the theme's text tones. */
+.ops-stat-cell strong.tone-danger { color: var(--danger-text); }
+.ops-stat-cell strong.tone-warn { color: var(--warning-text); }
+.ops-stat-cell strong.tone-ok { color: var(--success-text); }
 .security-facts .ops-stat-cell { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
 
 .network-card-grid, .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
@@ -1550,25 +1553,28 @@ html[data-theme="light"] .btn-secondary:hover {
 .status-badge svg {
   flex-shrink: 0;
 }
+/* Tinted background + the matching read-safe text tone. These were hardcoded
+   dark-mode hues that stayed put in light mode, where they measured 1.44:1
+   (online), 1.76:1 (warning) and 2.5:1 (offline/danger) against white. */
 .status-badge.status-online {
-  background: rgba(47,240,212,.16);
-  color: #2ff0d4;
+  background: var(--success-soft);
+  color: var(--success-text);
 }
 .status-badge.status-idle {
-  background: rgba(255,255,255,.07);
+  background: var(--surface-3, rgba(255,255,255,.07));
   color: var(--text-secondary);
 }
 .status-badge.status-offline {
-  background: rgba(255,83,104,.16);
-  color: #ff7a8a;
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 .status-badge.status-warning {
-  background: rgba(255,180,84,.16);
-  color: #ffb454;
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 .status-badge.status-danger {
-  background: rgba(255,83,104,.16);
-  color: #ff7a8a;
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 
 /* ===== Resource chips hover ===== */
@@ -2170,6 +2176,17 @@ input[type="checkbox"]:focus-visible,
 
 /* Tables: keep the dense operator view, but give it a clear frame and scroll cue. */
 .list-table-container {
+  /* `overflow-x: auto` forces the computed overflow-y off `visible`, so this
+     box is unavoidably a vertical scrollport (and `overflow-y: clip` is
+     downgraded to `hidden` when the other axis is `auto`, so it can't opt
+     out). Sticky thead therefore resolves against THIS box, not the page —
+     with `top: var(--topbar-h)` the header sat 64px below its own row,
+     leaving an empty band, and never stuck because the box never scrolled.
+     Give it a real height budget so it genuinely scrolls and the sticky
+     header does its job; the offset is then 0, not the topbar height. */
+  max-height: calc(100vh - var(--topbar-h) - 220px);
+  min-height: 320px;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 13px;
   background: var(--surface-1);

@@ -218,7 +218,9 @@ const UserManagement = () => {
           setUndo({ user, ts: Date.now() });
           fetchUsers();
         } catch {
-          addToast(t('userDeleteError', { name: user.name }, `Failed to delete "${user.name}".`), 'error');
+          // t(key, defaultValue, options) — the default and options were
+          // swapped, so {{name}} never interpolated.
+          addToast(t('userDeleteError', `Failed to delete "${user.name}".`, { name: user.name }), 'error');
         }
       }
     );

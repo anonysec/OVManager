@@ -29,7 +29,8 @@
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.argv[2] || 'http://127.0.0.1:5173';
+const BASE = process.argv[2] || 'http://127.0.0.1:2095';
+let pageErrors = 0;
 const EXEC = process.env.CHROMIUM || '/tmp/chromium';
 const SHOTS = 'screenshots';
 mkdirSync(SHOTS, { recursive: true });
@@ -89,8 +90,17 @@ const EFFECTIVE_BG = `(el) => {
   return getComputedStyle(document.body).backgroundColor;
 }`;
 
-async function auditPage(page, label) {
+async function auditPage(page, label, { expectAuthed = false } = {}) {
   console.log(`\n── ${label} ─────────────────────────────`);
+
+  if (expectAuthed) {
+    // A logged-out shell has almost no text and trivially "passes" every
+    // check below. Treat a bounce to /login as a hard failure.
+    const onLogin = /\/login(\?|$)/.test(page.url())
+      || (await page.locator('#login-container').count()) > 0;
+    log(!onLogin, `session held (not bounced to /login)`);
+    if (onLogin) return;
+  }
 
   // 1. every visible text node must clear AA against what is really behind it
   const bad = await page.evaluate(`(() => {
@@ -152,6 +162,86 @@ async function auditPage(page, label) {
   unresolved.forEach((u) => console.log('         ', u));
 }
 
+/* ── authentication ──────────────────────────────────────────────────────
+   Log in through the real API so the token in localStorage is one the
+   backend actually issued, then let the SPA boot as an authenticated user. */
+const CREDS = {
+  username: process.env.OV_USER || 'admin',
+  password: process.env.OV_PASS || 'LocalDevOnly!2026',
+};
+
+async function login() {
+  const res = await fetch(`${BASE}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+    body: new URLSearchParams(CREDS),
+  });
+  if (!res.ok) throw new Error(`login failed: ${res.status} ${await res.text()}`);
+  const j = await res.json();
+  if (!j.access_token) throw new Error('login returned no access_token');
+  if (!j.role) throw new Error('login returned no role — the panel cannot authenticate');
+  return j;
+}
+
+const { access_token: TOKEN, role: ROLE, username: USERNAME } = await login();
+console.log(`authenticated as ${USERNAME} (${ROLE})`);
+
+const ROUTES = [
+  ['/', 'dashboard'],
+  ['/users', 'users'],
+  ['/nodes', 'nodes'],
+  ['/settings', 'settings'],
+  ['/audit', 'audit'],
+  ['/admins', 'admins'],
+];
+
+async function newAuthedPage(browser, { theme = 'dark', rtl = false, width = 1440, height = 1000 } = {}) {
+  const ctx = await browser.newContext({ viewport: { width, height } });
+  const page = await ctx.newPage();
+  // Seed the same keys a real login writes. userRole/username matter: the
+  // sidebar and owner-only routes read them, and an authToken alone renders
+  // a logged-out shell that would make every audit below vacuously pass.
+  await page.addInitScript(`(() => {
+    localStorage.setItem('authToken', ${JSON.stringify(TOKEN)});
+    localStorage.setItem('userRole', ${JSON.stringify(ROLE)});
+    localStorage.setItem('username', ${JSON.stringify(USERNAME)});
+    localStorage.setItem('ovmanager-theme', ${JSON.stringify(theme)});
+    ${rtl ? "localStorage.setItem('ovmanager-lang','fa');" : ''}
+  })()`);
+  page.on('pageerror', (e) => { console.log(`         [pageerror] ${e.message}`); pageErrors++; });
+  return { ctx, page };
+}
+
+
+/* ═══════════ authenticated routes ═══════════ */
+for (const theme of ['dark', 'light']) {
+  for (const [route, name] of ROUTES) {
+    const { ctx, page } = await newAuthedPage(browser, { theme });
+    await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(`document.documentElement.setAttribute('data-theme', ${JSON.stringify(theme)})`);
+    // let skeletons resolve into real content
+    await page.waitForTimeout(1800);
+    await auditPage(page, `${name} · ${theme}`, { expectAuthed: true });
+    await page.screenshot({ path: `${SHOTS}/${name}-${theme}.png`, fullPage: true });
+    await ctx.close();
+  }
+}
+
+/* ═══════════ authenticated RTL ═══════════ */
+for (const [route, name] of [['/', 'dashboard'], ['/users', 'users']]) {
+  const { ctx, page } = await newAuthedPage(browser, { theme: 'dark', rtl: true });
+  await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(`(() => {
+    document.documentElement.setAttribute('dir','rtl');
+    document.documentElement.setAttribute('lang','fa');
+    document.body.setAttribute('dir','rtl');
+  })()`);
+  await page.waitForTimeout(1800);
+  await auditPage(page, `${name} · RTL`, { expectAuthed: true });
+  await page.screenshot({ path: `${SHOTS}/${name}-rtl.png`, fullPage: true });
+  await ctx.close();
+}
+
 /* ═══════════ login page, both themes ═══════════ */
 for (const theme of ['dark', 'light']) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -201,6 +291,32 @@ console.log('\n── responsive sweep ─────────────�
   }
   await ctx.close();
 }
+
+/* ═══════════ authenticated responsive sweep ═══════════ */
+console.log('\n── authenticated responsive sweep (users table) ──');
+{
+  const { ctx, page } = await newAuthedPage(browser, { theme: 'dark' });
+  await page.goto(`${BASE}/users`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1800);
+  for (const w of [375, 700, 759, 767, 768, 900, 1280, 1440]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.waitForTimeout(200);
+    const r = await page.evaluate(`(() => {
+      const de = document.documentElement;
+      const nav = document.querySelector('.mobile-nav');
+      const navShown = nav ? getComputedStyle(nav).display !== 'none' : false;
+      return { over: de.scrollWidth > de.clientWidth + 1, sw: de.scrollWidth, cw: de.clientWidth, navShown };
+    })()`);
+    // Below 768 the bottom tab bar must be present; at/above it must not be.
+    const wantNav = w < 768;
+    log(!r.over, `${String(w).padStart(4)}px no overflow (${r.sw}/${r.cw})`);
+    log(r.navShown === wantNav, `${String(w).padStart(4)}px bottom nav ${r.navShown ? 'shown' : 'hidden'} (expected ${wantNav ? 'shown' : 'hidden'})`);
+  }
+  await ctx.close();
+}
+
+console.log(`\nuncaught page errors: ${pageErrors}`);
+failures += pageErrors;
 
 await browser.close();
 console.log(failures === 0 ? '\nAll browser checks passed.' : `\n${failures} browser check(s) failed.`);

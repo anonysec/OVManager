@@ -322,7 +322,9 @@ const UserTable = ({
             <FiChevronLeft size={14} /> {t('prev', 'Previous')}
           </button>
           <span className="pagination-info">
-            {t('pageOf', 'Page {{current}} of {{total}}', { current: currentPage, total: totalPages })}
+            {/* Interpolation key must match the catalogue: all four locales
+                use {{page}}, so passing `current` left "{{page}}" on screen. */}
+            {t('pageOf', 'Page {{page}} of {{total}}', { page: currentPage, total: totalPages })}
           </span>
           <button
             className="btn btn-sm btn-secondary"

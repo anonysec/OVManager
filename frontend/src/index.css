@@ -35,9 +35,11 @@
 .skip-link {
   position: absolute;
   top: -40px;
-  left: 6px;
-  background: var(--accent-color);
-  color: #000;
+  inset-inline-start: 6px;
+  /* A filled chip: use the accent FILL plus its designed contrast colour,
+     not the legacy alias (which now resolves to the darker text tone). */
+  background: var(--accent);
+  color: var(--accent-contrast);
   padding: 8px 16px;
   border-radius: 4px;
   font-weight: 600;

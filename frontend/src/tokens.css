@@ -119,9 +119,19 @@
   /* ── Legacy aliases ─────────────────────────────────────────────────────
      Kept so existing selectors keep resolving. Values below intentionally
      match what the old cascade actually produced, so this refactor is a
-     no-op visually in dark mode. Prefer the semantic names above. */
-  --orange: var(--accent);
-  --accent-color: var(--accent);
+     no-op visually in dark mode. Prefer the semantic names above.
+
+     IMPORTANT: the hue aliases below resolve to the *-text tones, not the
+     fills. ~205 rules use them as `color:` on small label text (status
+     pills, expiry chips, filter chips, stat numbers, sidebar labels), and
+     browser testing showed the fills failing AA badly in light mode
+     (e.g. #e86a0c on white = 3.23:1, #ffb454 on white = 1.76:1).
+
+     In dark mode fill and text are the same value, so this changes nothing
+     there. For an actual fill — a dot, bar, or pill background — use the
+     semantic --accent / --success / --danger / --warning directly. */
+  --orange: var(--accent-text);
+  --accent-color: var(--accent-text);
   --accent-color-hover: var(--accent-hover);
   --accent-color-transparent: var(--accent-soft);
   --sidebar-active-bg: rgba(255, 106, 26, 0.16);
@@ -134,12 +144,13 @@
   --panel-2: var(--surface-2);
   --line: var(--border);
 
-  --green: var(--success);
-  --red: var(--danger);
-  --cyan: var(--info);
-  --success-color: var(--success);
-  --danger-color: var(--danger);
-  --info-color: var(--info);
+  --green: var(--success-text);
+  --red: var(--danger-text);
+  --cyan: var(--info-text);
+  --success-color: var(--success-text);
+  --danger-color: var(--danger-text);
+  --info-color: var(--info-text);
+  --warning-color: var(--warning-text);
 
   --background-primary: var(--surface-1);
   --background-secondary: var(--surface-2);
