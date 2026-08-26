@@ -29,7 +29,11 @@ dependencies = [
     "apscheduler",
     "colorama",
     "python-telegram-bot>=21.0",
-    "httpx>=0.27.0",
+    # httpx2, not httpx: it is the maintained successor, and starlette.testclient
+    # (reached via fastapi.testclient) imports it first — with only httpx present
+    # it emits a StarletteDeprecationWarning, which fails the test run because
+    # pytest is configured with filterwarnings = ["error"].
+    "httpx2",
     "werkzeug>=3.1.8",
 ]
 
@@ -40,11 +44,6 @@ include = ["backend*", "bot*"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio",
-    # starlette.testclient (via fastapi.testclient) imports httpx2 first and only
-    # falls back to httpx behind a StarletteDeprecationWarning. Installing httpx2
-    # is what keeps the test run warning-free. httpx itself stays a runtime
-    # dependency (backend/operations/geolocation.py, bot/ovmanager.py).
-    "httpx2",
     "ruff>=0.11.0",
     # Vulnerability scanner: a CI/dev tool, not something that should be
     # importable from a production install.

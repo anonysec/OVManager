@@ -11,7 +11,7 @@ import socket
 import time as _time
 from urllib.parse import urlsplit
 
-import httpx
+import httpx2
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def geolocate(address: str) -> dict | None:
         return None
 
     try:
-        resp = httpx.get(
+        resp = httpx2.get(
             f"https://ip-api.com/json/{ip}",
             timeout=_TIMEOUT,
             params={"fields": "status,countryCode,lat,lon"},
