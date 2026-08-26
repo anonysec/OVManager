@@ -14,6 +14,7 @@ import UserDetailModal from '../components/UserDetailModal';
 import ConfirmModal from '../components/ConfirmModal';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
+import { SkeletonTable } from '../components/ui/Skeleton';
 import { FiSearch, FiPlus } from 'react-icons/fi';
 import { BsPersonFill, BsPersonCheckFill, BsPersonXFill, BsPersonPlusFill } from 'react-icons/bs';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +43,10 @@ const UserManagement = () => {
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
   const [_bulkBusy, setBulkBusy] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  // First-load vs background refresh. The table used to receive a hardcoded
+  // isLoading={false}, so its skeleton could never render and the list simply
+  // popped in. Tracking this properly also lets SSE refreshes stay silent.
+  const [isLoading, setIsLoading] = useState(true);
   const [undo, setUndo] = useState(null); // { user, ts } for undo-delete toast
   const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') === 'compact' ? 'compact' : 'comfortable');
 
@@ -53,8 +58,11 @@ const UserManagement = () => {
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
 
   // ── Data fetching ─────────────────────────────────────────────────────
-  const fetchUsers = async () => {
+  const fetchUsers = async ({ background = false } = {}) => {
     setLoadError(false);
+    // Only show the skeleton when there is nothing on screen. A background
+    // refresh keeps the current rows so the table never flashes mid-read.
+    if (!background) setIsLoading((prev) => (users.length === 0 ? true : prev));
     try {
       const response = await apiClient.get('/users/');
       const raw = response.data?.data;
@@ -68,6 +76,8 @@ const UserManagement = () => {
       console.error('Error fetching users:', error);
       setUsers([]);
       setLoadError(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -93,7 +103,9 @@ const UserManagement = () => {
   });
   // Runs on mount (initial load) and on every live event thereafter.
   useEffect(() => {
-    fetchUsersRef.current();
+    // refreshTick starts at 0 on mount: that first run is the real initial
+    // load, every later tick is a background SSE refresh.
+    fetchUsersRef.current({ background: refreshTick > 0 });
   }, [refreshTick]);
 
   useEffect(() => {
@@ -520,14 +532,28 @@ const UserManagement = () => {
         </div>
       )}
 
-      {loadError ? (
-        <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={fetchUsers} retryLabel={t('retry')} />
+      {/* Order matters: loading is checked before empty, otherwise the very
+          first render (users still []) short-circuits to the empty state and
+          the skeleton never appears. */}
+      {isLoading && users.length === 0 ? (
+        <SkeletonTable rows={8} cols={9} label={t('loading', 'Loading…')} />
+      ) : loadError ? (
+        <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={() => fetchUsers()} retryLabel={t('retry')} />
       ) : users.length === 0 ? (
         <EmptyState title={t('noUsersTitle')} description={t('noUsersBody')} actionLabel={t('addNewUser')} onAction={() => setIsAddModalOpen(true)} />
+      ) : filteredUsers.length === 0 ? (
+        /* Filtered to nothing is a different situation from having no users:
+           offering "add your first user" here would be wrong and confusing. */
+        <EmptyState
+          title={t('noMatchesTitle', 'No matching users')}
+          description={t('noMatchesBody', 'Try a different search term or clear the active filter.')}
+          actionLabel={t('clearFilters', 'Clear filters')}
+          onAction={() => { setSearchTerm(''); setView('all'); }}
+        />
       ) : (
         <UserTable
           users={filteredUsers}
-          isLoading={false}
+          isLoading={isLoading}
           onUserClick={handleUserClick}
           onDelete={handleDelete}
           onSessions={handleShowSessions}

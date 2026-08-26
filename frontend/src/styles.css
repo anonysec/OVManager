@@ -4997,3 +4997,138 @@ html[data-ui-style="minimal"] .confirm-modal { border-radius: 6px; box-shadow: n
 
 /* ── Settings pills: 2-up variant for the Panel style picker ──── */
 .sp-theme-pills.sp-pills-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ═══════════════════════════════════════════════════════════
+   Loading & failure states
+   Skeletons, per-section error cards and the route-level page
+   loader. Kept together so the "what does a pending/broken
+   section look like" answer lives in one place.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Skeleton primitives (components/ui/Skeleton.jsx) ───────── */
+.sk-block {
+  display: block;
+  background: var(--surface-2, #1f232c);
+  position: relative;
+  overflow: hidden;
+}
+
+.sk-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .06), transparent);
+  animation: sk-shine 1.4s ease-in-out infinite;
+}
+
+html[data-theme="light"] .sk-block { background: #e7ecf4; }
+html[data-theme="light"] .sk-block::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .85), transparent);
+}
+
+/* The shimmer must travel with the reading direction, otherwise it reads as
+   "rewinding" in Persian. */
+html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
+
+@keyframes sk-shine { 100% { transform: translateX(100%); } }
+@keyframes sk-shine-rtl { 100% { transform: translateX(-200%); } }
+
+.sk-text { display: flex; flex-direction: column; gap: 9px; }
+.sk-panel { padding: 4px 0; }
+
+.sk-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+.sk-stat { display: flex; flex-direction: column; gap: 10px; min-height: 72px; }
+
+.sk-table { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.sk-table-head,
+.sk-table-row {
+  display: grid;
+  grid-template-columns: repeat(var(--sk-cols, 9), minmax(0, 1fr));
+  gap: 14px;
+  align-items: center;
+}
+.sk-table-head { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.sk-table-row { padding: 5px 0; }
+
+/* ── Per-section error card (components/ui/SectionBoundary) ── */
+.section-error {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  /* Warm tint rather than full danger red: the section failed, the page did
+     not. Reserve red for destructive/critical. */
+  border-inline-start: 3px solid var(--orange);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.section-error--compact { padding: 14px 16px; }
+
+.section-error-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255, 122, 30, .14);
+  color: var(--orange);
+  font-size: 19px;
+}
+
+.section-error-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.section-error-copy strong { font-size: 14px; color: var(--text); }
+.section-error-copy span { font-size: 12.5px; color: var(--muted); }
+
+/* ── Inline panel error (dashboard panels) ─────────────────── */
+.panel-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 4px;
+  color: var(--muted);
+}
+
+.panel-inline-error > svg {
+  flex: 0 0 auto;
+  font-size: 20px;
+  color: var(--orange);
+}
+
+.panel-inline-error > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.panel-inline-error strong { font-size: 13.5px; color: var(--text); font-weight: 700; }
+.panel-inline-error span { font-size: 12px; color: var(--muted); }
+
+/* ── Route-level page loader (App.jsx) ─────────────────────── */
+.page-loader { display: flex; flex-direction: column; gap: 20px; }
+
+.page-loader-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.page-loader .sk-panel {
+  padding: 18px;
+  min-height: 128px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+@media (max-width: 760px) {
+  .sk-stats { grid-template-columns: 1fr; }
+  .section-error { flex-wrap: wrap; }
+  .section-error-copy { flex-basis: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-block::after { animation: none; }
+}

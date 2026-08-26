@@ -1,7 +1,9 @@
 /* Copyright (c) 2025 anonysec. All rights reserved.
  * Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited. */
 
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+/* Fonts are loaded from index.html via preconnect + a non-blocking stylesheet.
+   A CSS @import here would be render-blocking (html -> css -> font css -> font)
+   and would duplicate that request — do not re-add it. */
 
 /* --- 🎨 COLOR TOKENS: Black & Orange, semantic + elevation scale ---
    Dark is the default (:root). Light overrides via html[data-theme="light"].

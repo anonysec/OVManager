@@ -22,6 +22,7 @@ import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { useTheme } from '../context/ThemeContext';
 import { readPrefs, writePref, REFRESH_OPTIONS } from '../utils/notifPrefs';
+import { settle } from '../hooks/useAsyncData';
 import { getUiPref, setUiPref, getUiStyle, setUiStyle } from '../utils/uiPrefs';
 import LoadingButton from '../components/LoadingButton';
 import PanelSkeleton from '../components/ui/PanelSkeleton';
@@ -482,12 +483,13 @@ const SystemSection = () => {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [infoRes, metricsRes] = await Promise.all([
-        apiClient.get('/server/info'),
-        apiClient.get('/metrics/history?hours=24'),
-      ]);
-      setSysInfo(infoRes.data?.data || null);
-      const traffic = metricsRes.data?.data?.traffic || [];
+      // Independent: missing traffic history should not blank out server info.
+      const res = await settle({
+        info: apiClient.get('/server/info'),
+        metrics: apiClient.get('/metrics/history?hours=24'),
+      });
+      if (res.info.ok) setSysInfo(res.info.data.data?.data || null);
+      const traffic = res.metrics.ok ? (res.metrics.data.data?.data?.traffic || []) : [];
       if (traffic.length) {
         setTrafficTotal(traffic.reduce((s, h) => s + Number(h.total_used || 0), 0));
         setActiveConns(traffic[traffic.length - 1]?.active_connections || 0);

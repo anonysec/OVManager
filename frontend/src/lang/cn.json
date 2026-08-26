@@ -599,5 +599,14 @@
   "styleCard": "面板风格",
   "styleNormal": "常规",
   "styleMinimal": "极简",
-  "styleDesc": "常规使用丰富的卡片和柔和阴影；极简为扁平风格搭配细线边框。保存在浏览器中。"
+  "styleDesc": "常规使用丰富的卡片和柔和阴影；极简为扁平风格搭配细线边框。保存在浏览器中。",
+  "sectionErrorTitle": "此部分无法显示",
+  "sectionErrorDesc": "页面的其余部分仍可使用。",
+  "panelLoadFailed": "无法加载此面板",
+  "panelLoadFailedHint": "其他部分不受影响。",
+  "loadingMap": "正在加载地图…",
+  "mapUnavailable": "地图不可用",
+  "noMatchesTitle": "没有匹配的用户",
+  "noMatchesBody": "请尝试其他搜索词或清除当前筛选条件。",
+  "clearFilters": "清除筛选"
 }

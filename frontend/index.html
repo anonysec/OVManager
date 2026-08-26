@@ -6,9 +6,175 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="OVManager — OpenVPN fleet management panel." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#eef1f6" media="(prefers-color-scheme: light)" />
     <title>OVManager</title>
+
+    <!--
+      Fonts are loaded here (not via an @import inside index.css) because a CSS
+      @import is render-blocking and serialises: html -> css -> font css -> font.
+      preconnect warms the TLS handshake and the print/onload swap makes the
+      stylesheet non-blocking, so first paint no longer waits on Google Fonts.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+      />
+    </noscript>
+
+    <!--
+      Boot script. Runs before the bundle so the very first paint already has
+      the right theme + direction: no white flash for dark-mode users and no
+      LTR->RTL jump for Persian. Mirrors ThemeContext / i18n defaults exactly.
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('ovmanager-theme') || 'system';
+          if (['light', 'dark', 'system'].indexOf(t) === -1) t = 'system';
+          var resolved =
+            t === 'system'
+              ? window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+              : t;
+          document.documentElement.dataset.theme = resolved;
+
+          var lng = localStorage.getItem('ovmanager-lang') || 'en';
+          document.documentElement.lang = lng;
+          document.documentElement.dir = lng.indexOf('fa') === 0 ? 'rtl' : 'ltr';
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
+
+    <!--
+      Critical inline CSS for the app-shell skeleton only. Kept deliberately
+      tiny and self-contained (no custom properties from the bundle) so it can
+      paint before index.css has downloaded.
+    -->
+    <style>
+      html[data-theme='dark'] { --boot-bg: #0e1116; --boot-panel: #181b22; --boot-line: #2f343f; --boot-shine: rgba(255,255,255,.05); }
+      html[data-theme='light'] { --boot-bg: #eef1f6; --boot-panel: #ffffff; --boot-line: #d7dde7; --boot-shine: rgba(0,0,0,.05); }
+      html, body { margin: 0; padding: 0; background: var(--boot-bg, #0e1116); }
+
+      #app-skeleton {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        background: var(--boot-bg, #0e1116);
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      #app-skeleton[hidden] { display: none; }
+
+      .bsk-side {
+        width: 220px;
+        flex: 0 0 220px;
+        border-right: 1px solid var(--boot-line);
+        padding: 18px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      html[dir='rtl'] .bsk-side { border-right: 0; border-left: 1px solid var(--boot-line); }
+      .bsk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .bsk-top {
+        height: 64px;
+        border-bottom: 1px solid var(--boot-line);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+      }
+      .bsk-body { flex: 1; padding: 24px clamp(16px, 3vw, 42px); }
+      .bsk-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .bsk {
+        border-radius: 10px;
+        background: var(--boot-panel);
+        position: relative;
+        overflow: hidden;
+      }
+      .bsk::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, var(--boot-shine), transparent);
+        animation: bsk-shine 1.4s ease-in-out infinite;
+      }
+      html[dir='rtl'] .bsk::after { animation-name: bsk-shine-rtl; }
+      @keyframes bsk-shine { 100% { transform: translateX(100%); } }
+      @keyframes bsk-shine-rtl { 100% { transform: translateX(-200%); } }
+
+      .bsk-logo { width: 34px; height: 34px; border-radius: 9px; }
+      .bsk-word { width: 132px; height: 15px; border-radius: 5px; }
+      .bsk-nav { height: 38px; border-radius: 9px; }
+      .bsk-card { height: 128px; }
+      .bsk-wide { height: 300px; }
+      .bsk-grow { flex: 1; }
+
+      @media (max-width: 900px) {
+        .bsk-side { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bsk::after { animation: none; }
+      }
+    </style>
   </head>
   <body>
+    <!--
+      Static app shell. Paints on the first frame — long before React has
+      hydrated — so the user sees the panel's real layout instead of a blank
+      page. main.jsx removes it once the app has actually rendered.
+      aria-hidden + role=presentation: it is pure visual scaffolding, screen
+      readers should wait for the real content.
+    -->
+    <div id="app-skeleton" role="presentation" aria-hidden="true">
+      <div class="bsk-side">
+        <div class="bsk bsk-nav" style="margin-bottom: 14px"></div>
+        <div class="bsk bsk-nav"></div>
+        <div class="bsk bsk-nav"></div>
+        <div class="bsk bsk-nav"></div>
+        <div class="bsk bsk-nav"></div>
+        <div class="bsk-grow"></div>
+        <div class="bsk bsk-nav"></div>
+      </div>
+      <div class="bsk-main">
+        <div class="bsk-top">
+          <div class="bsk bsk-logo"></div>
+          <div class="bsk bsk-word"></div>
+        </div>
+        <div class="bsk-body">
+          <div class="bsk bsk-word" style="width: 260px; height: 26px; margin-bottom: 22px"></div>
+          <div class="bsk-grid">
+            <div class="bsk bsk-card"></div>
+            <div class="bsk bsk-card"></div>
+            <div class="bsk bsk-card"></div>
+          </div>
+          <div class="bsk bsk-wide"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

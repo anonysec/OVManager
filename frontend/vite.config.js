@@ -23,5 +23,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
     exclude: ['node_modules', 'dist'],
+    // Component tests need a DOM; pure-logic tests are unaffected by it.
+    environment: 'jsdom',
   },
 })
