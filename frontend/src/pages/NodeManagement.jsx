@@ -60,6 +60,14 @@ const NodeManagement = () => {
     }
   }, [searchParams, setSearchParams]);
 
+  // Declared above the deep-link effect that calls it: a `const` referenced
+  // before its declaration only works because effects run after the body, and
+  // it stops updating correctly if the value ever changes.
+  const handleOpenEditModal = (node) => {
+    setSelectedNode(node);
+    setIsEditModalOpen(true);
+  };
+
   // Deep-link: ?node=<id> opens that node's edit modal
   useEffect(() => {
     const nodeId = searchParams.get('node');
@@ -210,11 +218,6 @@ const NodeManagement = () => {
   };
 
   const applyDensity = (d) => { setDensity(d); localStorage.setItem('ovmanager-ui-density', d); };
-
-  const handleOpenEditModal = (node) => {
-    setSelectedNode(node);
-    setIsEditModalOpen(true);
-  };
 
   const handleNodeUpdated = (msg) => {
     setIsEditModalOpen(false);

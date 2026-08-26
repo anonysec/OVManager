@@ -40,7 +40,11 @@ include = ["backend*", "bot*"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio",
-    "httpx",
+    # starlette.testclient (via fastapi.testclient) imports httpx2 first and only
+    # falls back to httpx behind a StarletteDeprecationWarning. Installing httpx2
+    # is what keeps the test run warning-free. httpx itself stays a runtime
+    # dependency (backend/operations/geolocation.py, bot/ovmanager.py).
+    "httpx2",
     "ruff>=0.11.0",
     # Vulnerability scanner: a CI/dev tool, not something that should be
     # importable from a production install.
@@ -51,6 +55,10 @@ dev = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+# A warning is a defect that has not broken anything yet: fail the run instead
+# of letting it scroll past. pytest hides DeprecationWarning from library code
+# by default, so without this the suite could pass while emitting them.
+filterwarnings = ["error"]
 
 [tool.ruff]
 line-length = 130
