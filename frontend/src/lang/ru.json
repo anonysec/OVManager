@@ -608,5 +608,13 @@
   "mapUnavailable": "Карта недоступна",
   "noMatchesTitle": "Совпадений не найдено",
   "noMatchesBody": "Измените поисковый запрос или сбросьте фильтр.",
-  "clearFilters": "Сбросить фильтры"
+  "clearFilters": "Сбросить фильтры",
+  "nodeCreatedSuccess": "Узел создан.",
+  "nodeUpdatedSuccess": "Узел обновлён.",
+  "nodeDeletedSuccess": "Узел удалён.",
+  "unableToDeleteNode": "Не удалось удалить узел.",
+  "errorDeletingNode": "Ошибка при удалении узла.",
+  "nodeDisabledToast": "Узел отключён.",
+  "nodeEnabledToast": "Узел включён.",
+  "failedToggleNode": "Не удалось изменить состояние узла."
 }

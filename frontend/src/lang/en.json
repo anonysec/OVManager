@@ -608,5 +608,13 @@
   "mapUnavailable": "Map unavailable",
   "noMatchesTitle": "No matching users",
   "noMatchesBody": "Try a different search term or clear the active filter.",
-  "clearFilters": "Clear filters"
+  "clearFilters": "Clear filters",
+  "nodeCreatedSuccess": "Node created successfully.",
+  "nodeUpdatedSuccess": "Node updated successfully.",
+  "nodeDeletedSuccess": "Node deleted successfully.",
+  "unableToDeleteNode": "Unable to delete node.",
+  "errorDeletingNode": "An error occurred while deleting the node.",
+  "nodeDisabledToast": "Node disabled.",
+  "nodeEnabledToast": "Node enabled.",
+  "failedToggleNode": "Failed to toggle node."
 }

@@ -25,5 +25,6 @@ export default defineConfig({
     exclude: ['node_modules', 'dist'],
     // Component tests need a DOM; pure-logic tests are unaffected by it.
     environment: 'jsdom',
+    setupFiles: ['./src/test-setup.js'],
   },
 })

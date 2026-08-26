@@ -162,8 +162,33 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
 .btn-danger:hover { filter: brightness(1.08); }
 
 /* ---- sortable table headers ---- */
-.list-table th.sortable { cursor: pointer; user-select: none; }
-.list-table th.sortable:hover { color: var(--orange); }
+.list-table th.sortable { user-select: none; padding: 0; }
+
+/* The sortable header is a real <button> so it is keyboard reachable and
+   announces aria-sort. It inherits the cell's typography and fills the cell
+   so the whole header area stays clickable, as it was when the <th> itself
+   carried the handler. */
+.list-table th.sortable .th-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.list-table th.sortable .th-sort-btn:hover { color: var(--accent); }
+.list-table th.sortable .th-sort-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
 .list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-inline-start: 4px; color: var(--orange); }
 .list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
 .list-table tr.selected { background: rgba(255,122,30,.08); }
@@ -2106,10 +2131,21 @@ input[type="checkbox"]:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* The count is recomputed at deferred priority while typing. Fade it so the
+   number is visibly provisional instead of silently one keystroke behind. */
+.results-meta.is-stale {
+  opacity: .55;
+  transition: opacity .12s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-meta.is-stale { transition: none; }
 }
 
 .results-meta strong {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiDownload, FiClock, FiZap, FiTrash2 } from 'react-icons/fi';
 import apiClient from '../services/api';
@@ -152,8 +152,16 @@ const UserManagement = () => {
   }, [users]);
 
   // ── Filter + sort ─────────────────────────────────────────────────────
+  // The filter+sort below walks every user on each keystroke. Deferring the
+  // term lets React paint the typed character immediately and recompute the
+  // list at lower priority, interrupting that work if another key arrives.
+  // Preferred over a debounce: no arbitrary delay, no stale timer to clear,
+  // and the list still settles on the final value.
+  const deferredSearch = useDeferredValue(searchTerm);
+  const isSearchPending = deferredSearch !== searchTerm;
+
   const filteredUsers = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = deferredSearch.trim().toLowerCase();
     let list = users.filter((user) => {
       if (!String(user.name || '').toLowerCase().includes(term)) return false;
       if (view === 'online') return user.online || Number(user.active_connections || 0) > 0;
@@ -186,7 +194,7 @@ const UserManagement = () => {
       return 0;
     });
     return list;
-  }, [users, searchTerm, view, sort]);
+  }, [users, deferredSearch, view, sort]);
 
   const handleSort = (key) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
@@ -494,7 +502,11 @@ const UserManagement = () => {
           <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')}>{t('densityComfort', 'Comfort')}</button>
           <button type="button" className={density === 'compact' ? 'active' : ''} onClick={() => applyDensity('compact')}>{t('densityCompact', 'Compact')}</button>
         </div>
-        <div className="results-meta" aria-live="polite">
+        <div
+          className={`results-meta${isSearchPending ? ' is-stale' : ''}`}
+          aria-live="polite"
+          aria-busy={isSearchPending}
+        >
           <strong>{filteredUsers.length}</strong> {t('results', 'results')}
           {(searchTerm || view !== 'all') && (
             <button type="button" className="toolbar-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>{t('clear', 'Clear')}</button>

@@ -135,6 +135,31 @@ const UsageMeter = ({ used, total }) => {
   );
 };
 
+/**
+ * Sortable column header.
+ *
+ * Was a bare `<th onClick>`: not reachable by keyboard, and screen readers got
+ * no indication a column was sorted or in which direction. The inner <button>
+ * restores tab/Enter/Space for free, and aria-sort exposes the current state.
+ */
+const SortableTh = ({ sortKey, label, sort, onSort }) => {
+  const active = sort.key === sortKey;
+  const dir = active ? sort.dir : null;
+  return (
+    <th
+      className={active ? 'sortable active' : 'sortable'}
+      aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className="th-sort-btn" onClick={() => onSort(sortKey)}>
+        {label}
+        {active && (dir === 'asc'
+          ? <FiChevronUp className="sort-ic" aria-hidden="true" />
+          : <FiChevronDown className="sort-ic" aria-hidden="true" />)}
+      </button>
+    </th>
+  );
+};
+
 const UserTable = ({
   users = [],
   isLoading = false,
@@ -200,13 +225,13 @@ const UserTable = ({
                   aria-label="Select all users"
                 />
               </th>
-              <th className={sort.key === 'name' ? 'sortable active' : 'sortable'} onClick={() => onSort('name')}>{t('th_username')}{sort.key === 'name' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <SortableTh sortKey='name' label={t('th_username')} sort={sort} onSort={onSort} />
               <th>{t('th_status')}</th>
-              <th className={sort.key === 'expiry_date' ? 'sortable active' : 'sortable'} onClick={() => onSort('expiry_date')}>{t('th_expiryDate')}{sort.key === 'expiry_date' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'total' ? 'sortable active' : 'sortable'} onClick={() => onSort('total')}>{t('th_totalTraffic')}{sort.key === 'total' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'max_logins' ? 'sortable active' : 'sortable'} onClick={() => onSort('max_logins')}>{t('th_maxLogins')}{sort.key === 'max_logins' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'last_online' ? 'sortable active' : 'sortable'} onClick={() => onSort('last_online')}>{t('th_lastOnline')}{sort.key === 'last_online' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
-              <th className={sort.key === 'owner' ? 'sortable active' : 'sortable'} onClick={() => onSort('owner')}>{t('th_owner')}{sort.key === 'owner' && (sort.dir === 'asc' ? <FiChevronUp className="sort-ic" /> : <FiChevronDown className="sort-ic" />)}</th>
+              <SortableTh sortKey='expiry_date' label={t('th_expiryDate')} sort={sort} onSort={onSort} />
+              <SortableTh sortKey='total' label={t('th_totalTraffic')} sort={sort} onSort={onSort} />
+              <SortableTh sortKey='max_logins' label={t('th_maxLogins')} sort={sort} onSort={onSort} />
+              <SortableTh sortKey='last_online' label={t('th_lastOnline')} sort={sort} onSort={onSort} />
+              <SortableTh sortKey='owner' label={t('th_owner')} sort={sort} onSort={onSort} />
               <th>{t('th_actions')}</th>
             </tr>
           </thead>
