@@ -2,43 +2,7 @@
  * Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited. */
 
 /* OVManager Concept #1 implementation */
-:root {
-  --bg: #0e1116;
-  --panel: #181b22;
-  --panel-2: #1f232c;
-  --text: #f7f8fa;
-  --muted: #9aa1ad;
-  --line: #2f343f;
-  --orange: #ff6a1a;
-  --cyan: #19d3e9;
-  --green: #2fd276;
-  --red: #ff5368;
-  --accent-color: var(--orange);
-  --accent-color-hover: #ff7e2e;
-  --background-primary: var(--panel);
-  --background-secondary: var(--panel-2);
-  --text-primary: var(--text);
-  --text-secondary: var(--muted);
-  --border-color: var(--line);
-  --danger-color: var(--red);
-  --success-color: var(--green);
-  --info-color: var(--cyan);
-  --font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: 'Space Grotesk', 'Manrope', ui-sans-serif, system-ui, sans-serif;
-}
 
-html[data-theme="light"] {
-  --bg: #eef1f6;
-  --panel: #ffffff;
-  --panel-2: #f3f6fb;
-  --text: #11161f;
-  --muted: #5b6473;
-  --line: #d7dde7;
-  --orange: #e86a0c;
-  --cyan: #0891b2;
-  --green: #0e9f85;
-  --red: #dc2626;
-}
 
 * { box-sizing: border-box; }
 body {
@@ -55,34 +19,25 @@ body {
 @keyframes botFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 @keyframes lineDraw { from { stroke-dashoffset: 480; } to { stroke-dashoffset: 0; } }
 
-.ops-shell { height: 100vh; max-width: 1760px; margin: 0 auto; padding: 16px 26px; display: grid; grid-template-rows: auto 1fr; gap: 14px; }
-.ops-topbar { height: 60px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 22px 50px rgba(0,0,0,.28); padding: 0 16px; position: sticky; top: 0; z-index: 100; }
+
+
 html[data-theme="light"] .ops-topbar { background: var(--panel); }
-.ops-brand { display: flex; align-items: center; gap: 12px; position: relative; }
-.ops-logo-svg { flex: 0 0 auto; filter: drop-shadow(0 4px 10px rgba(255,122,30,.3)); }
+
+
 /* Brand wordmark: reset the legacy gradient text-clip from index.css so it
    reads correctly in BOTH themes (was invisible/half-clipped in light mode). */
-.ops-brand strong {
-  font-size: 22px;
-  letter-spacing: -.04em;
-  color: var(--text);
-  background: none;
-  -webkit-background-clip: initial;
-  background-clip: initial;
-  -webkit-text-fill-color: var(--text);
-}
-.ops-brand strong .brand-accent,
-.brand-accent { color: var(--orange); -webkit-text-fill-color: var(--orange); }
-.ops-brand img { display: none; }
-.ops-nav-link { height: 48px; display: inline-flex; align-items: center; padding: 0 18px; border-radius: 9px; color: var(--muted); text-decoration: none; font-size: 15px; font-weight: 600; transition: color .15s ease, background .15s ease; }
-.ops-nav-link:hover { color: var(--text); background: rgba(255,255,255,.06); }
-.ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); box-shadow: none; }
-.ops-nav-link.active::after { content: ''; position: absolute; height: 3px; left: 14px; right: 14px; bottom: 2px; background: var(--orange); border-radius: 3px; }
+
+
+
+
+
+
+
 .ops-userbar { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
 .ops-userbar button:not(.lang-option):not(.profile-trigger):not(.topbar-search-trigger) { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--muted); border: 0; cursor: pointer; font-size: 20px; border-radius: 9px; transition: color .15s ease, background .15s ease; }
 .ops-userbar button:not(.lang-option):hover { color: var(--orange); background: rgba(255,255,255,.06); }
-.ops-bell { position: relative; }
-.ops-main { overflow: auto; }
+
+
 .ops-dashboard { animation: fadeUp .35s ease both; }
 .ops-dashboard h2 { margin: 0 0 16px; font-size: 27px; letter-spacing: -.03em; }
 .ops-overview-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; margin-bottom: 22px; }
@@ -116,28 +71,27 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 
 .users-panel, .nodes-map-panel { min-height: 26rem; }
 .ops-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ops-table th { color: var(--text-secondary); text-transform: uppercase; font-size: 12px; font-weight: 700; text-align: start; padding: 12px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 64px; background: var(--surface-2); z-index: 2; }
+.ops-table th { color: var(--text-secondary); text-transform: uppercase; font-size: 12px; font-weight: 700; text-align: start; padding: 12px 10px; border-bottom: 1px solid var(--line); position: sticky; top: var(--topbar-h); background: var(--surface-2); z-index: 2; }
 .ops-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); color: var(--text); }
 .ops-table tr:hover td { background: rgba(255,255,255,.035); }
 .avatar-mini { display: inline-grid; place-items: center; width: 31px; height: 31px; border-radius: 50%; margin-inline-end: 9px; background: #3a414e; color: #fff; font-weight: 800; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #69707b; margin-inline-end: 7px; }
 .dot.online { background: #2fd276; box-shadow: 0 0 12px rgba(47,210,118,.6); }
-.world-map { height: 190px; position: relative; margin-bottom: 12px; border-bottom: 1px solid var(--line); background:
-  radial-gradient(ellipse at 24% 44%, rgba(55,95,128,.50) 0 13%, transparent 14%),
-  radial-gradient(ellipse at 52% 38%, rgba(55,95,128,.50) 0 18%, transparent 19%),
-  radial-gradient(ellipse at 76% 52%, rgba(55,95,128,.50) 0 13%, transparent 14%),
-  radial-gradient(ellipse at 48% 72%, rgba(55,95,128,.36) 0 10%, transparent 11%);
-  opacity: .95;
-}
-.map-dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 16px var(--cyan); }
-.d0 { left: 22%; top: 54%; } .d1 { left: 51%; top: 39%; } .d2 { left: 56%; top: 42%; } .d3 { left: 75%; top: 55%; } .d4 { left: 84%; top: 48%; } .d5 { left: 61%; top: 32%; } .d6 { left: 31%; top: 45%; } .d7 { left: 69%; top: 38%; }
+
+
+
 .compact th, .compact td { padding: 9px 10px; }
 
 /* Non-dashboard pages keep a clean ops style */
 .view { animation: fadeUp .3s ease both; }
 .view-header { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 14px; }
 .view-header h2 { margin: 0; font-size: 22px; }
-.btn, .card-actions-row button, .action-btn, .icon-btn, .actions-dropdown-trigger { background: var(--orange); color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+/* Geometry only — .btn's colour/size base lives in index.css. Setting a
+   colour here previously re-broke the accent contrast index.css had right. */
+.card-actions-row button, .action-btn, .actions-dropdown-trigger {
+  background: var(--accent); color: var(--accent-contrast);
+  border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer;
+}
 .btn:hover, .card-actions-row button:hover { filter: brightness(1.08); }
 .input-group input, .input-group select, .search-input { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 18px; }
@@ -175,7 +129,6 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 .settings-code { display:block; padding:12px; background:#111; color:var(--cyan); border-radius:8px; word-break:break-all; }
 
 /* ---- LIGHT MODE (proper palette swap) ---- */
-html[data-theme="light"] { --bg: #eef1f6; --text: #1b2230; --panel: #ffffff; --surface-1: #ffffff; --surface-2: #f4f6f9; --surface-3: #f8fafd; --line: #d7dde7; --muted: #5b6473; --orange: #e86a0c; --accent-color: #e86a0c; --accent-color-hover: #ff7e2e; }
 html[data-theme="light"] body { background: #eef1f6; color: #1b2230; }
 html[data-theme="light"] .ops-shell { background: #eef1f6; }
 html[data-theme="light"] .ops-topbar { background: #ffffff; border-color: #dfe3ea; box-shadow: 0 10px 30px rgba(20,30,50,.08); }
@@ -224,11 +177,14 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .user-cell { display: flex; align-items: center; }
 .uname { font-weight: 600; }
 .status-pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-.status-pill.online, .status-pill.ok { background: rgba(47,240,212,.16); color: #2ff0d4; }
-.status-pill.idle { background: rgba(255,255,255,.07); color: var(--muted); }
-.status-pill.info, .status-pill.warn { background: rgba(255,180,84,.16); color: #ffb454; }
-.status-pill.offline, .status-pill.danger { background: rgba(255,83,104,.16); color: #ff7a8a; }
-.status-pill.muted { background: rgba(255,255,255,.08); color: var(--muted); }
+/* Status pills use the -soft fill + -text foreground pair so they stay
+   legible in both themes. The old hardcoded values scored 1.44:1 on white,
+   which made online/offline/expired indistinguishable in light mode. */
+.status-pill.online, .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
+.status-pill.idle { background: var(--surface-3); color: var(--text-secondary); }
+.status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
+.status-pill.offline, .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
+.status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
 .login-badge { font-variant-numeric: tabular-nums; font-weight: 600; }
 .expiry-soon { color: #ffb454; font-weight: 700; }
 .audit-detail { color: var(--muted); font-size: 12px; max-width: 320px; }
@@ -284,7 +240,7 @@ html[data-theme="light"] .country-label { fill: #1b2230; stroke: #fff; }
 .user-board, .node-board, .admin-cards-container { display: block !important; }
 .list-table-container { padding: 0 !important; overflow-x: auto !important; }
 .list-table, .user-list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
-.list-table thead th, .user-list-table thead th { position: sticky; top: 64px; background: var(--panel); color: #c6cad2; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.list-table thead th, .user-list-table thead th { position: sticky; top: var(--topbar-h); background: var(--panel); color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .list-table thead th:first-child, .user-list-table thead th:first-child { border-top-left-radius: 10px; }
 .list-table thead th:last-child, .user-list-table thead th:last-child { border-top-right-radius: 10px; }
 .list-table th { padding: 12px 14px; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
@@ -307,7 +263,7 @@ html[data-theme="light"] .country-label { fill: #1b2230; stroke: #fff; }
    Prefixing with .list-table keeps the intended compact metrics applied. */
 .list-table.user-list-table, .list-table.node-list-table, .list-table.audit-table { border-collapse: collapse !important; border-spacing: 0 !important; min-width: 720px; font-variant-numeric: tabular-nums; }
 .list-table.user-list-table thead th, .list-table.node-list-table thead th, .list-table.audit-table thead th {
-  position: sticky; top: 64px; z-index: 5;
+  position: sticky; top: var(--topbar-h); z-index: 5;
   background: var(--panel-2);
   color: var(--muted);
   font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
@@ -370,8 +326,8 @@ html[data-theme="light"] .user-stat { background: linear-gradient(135deg, #fffff
 .has-tip:hover::after { z-index: 9999 !important; white-space: normal; }
 .notification-wrap { position: relative; }
 .ops-bell { position: relative; width: 38px; height: 38px; display: grid; place-items: center; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); cursor: pointer; transition: all .14s ease; }
-.ops-bell:hover { color: var(--text); border-color: var(--orange); background: rgba(255,122,30,.08); }
-.ops-bell.has-alerts { color: var(--orange); border-color: rgba(255,122,30,.5); }
+
+
 .ops-bell svg { width: 18px; height: 18px; }
 .ops-bell span {
   position: absolute;
@@ -424,7 +380,7 @@ html[data-theme="light"] .user-stat { background: linear-gradient(135deg, #fffff
    "3-dot row menu (portaled to body...")") — this block intentionally left
    without duplicate width/padding rules to avoid cascade conflicts that
    previously made the menu render wider/taller than JS positioning expected. */
-.status-pill.expired { background: rgba(255,180,84,.16); color: #ffb454; }
+.status-pill.expired { background: var(--warning-soft); color: var(--warning-text); }
 .toast-stack {
   position: fixed;
   right: 20px;
@@ -644,7 +600,7 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 .set-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
 .set-table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .set-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.set-table th { text-align: start; padding: 10px 12px; background: rgba(255,255,255,.04); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 11px; position: sticky; top: 64px; }
+.set-table th { text-align: start; padding: 10px 12px; background: rgba(255,255,255,.04); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-size: 11px; position: sticky; top: var(--topbar-h); }
 .set-table td { padding: 9px 12px; border-top: 1px solid var(--line); }
 .set-empty { color: var(--muted); text-align: center; padding: 18px; }
 .set-list { display: grid; gap: 8px; }
@@ -854,14 +810,13 @@ html[data-theme="light"] .notification-item { border-color: #e3e8ef; }
 html[data-theme="light"] .row-menu { background: #ffffff; box-shadow: 0 18px 40px rgba(20,30,50,.18); }
 html[data-theme="light"] .row-menu-item { color: #11161f; }
 html[data-theme="light"] .row-menu-item:hover { background: rgba(255,122,30,.1); color: var(--orange); }
-html[data-theme="light"] .status-pill.idle { background: rgba(120,130,145,.16); color: #5b6473; }
 html[data-theme="light"] .security-errors li { background: #f7f9fc; }
 html[data-theme="light"] .resource-chips span { background: #f1f4f9; }
 html[data-theme="light"] .world-map-real { background: radial-gradient(120% 120% at 50% 30%, #eaf1f8 0%, #e0e9f2 60%, #dbe4ee 100%); }
 html[data-theme="light"] .world-map-real .country { fill: #cdd9e6; stroke: rgba(80,120,160,.35); }
 html[data-theme="light"] .world-map-real .sphere { fill: url(#sphereGrad); stroke: rgba(80,120,160,.3); }
 html[data-theme="light"] .ops-notice-strip { background: rgba(255,122,30,.10); border-color: rgba(255,122,30,.3); }
-html[data-theme="light"] .btn, html[data-theme="light"] .card-actions-row button, html[data-theme="light"] .action-btn { color: #fff !important; }
+/* --accent-contrast already resolves per theme; no override needed. */
 html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
 html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
 html[data-theme="light"] .user-stat { box-shadow: 0 12px 24px rgba(20,30,50,.10); }
@@ -1356,18 +1311,9 @@ html[dir="rtl"] .lang-check { margin-left: 0; margin-right: auto; }
   font-size: 12px;
   font-weight: 700;
 }
-.status-pill.ok {
-  background: rgba(47, 210, 118, 0.15);
-  color: var(--green);
-}
-.status-pill.danger {
-  background: rgba(255, 83, 104, 0.15);
-  color: var(--red);
-}
-.status-pill.warn {
-  background: rgba(255, 106, 26, 0.15);
-  color: var(--orange);
-}
+.status-pill.ok { background: var(--success-soft); color: var(--success-text); }
+.status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
+.status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -1684,7 +1630,7 @@ input[type="checkbox"]:focus-visible,
 .ops-main-content {
   /* Top padding clears the fixed 64px topbar so page content (headings,
      toolbars, table headers) never slides underneath it while scrolling. */
-  padding: calc(64px + 24px) clamp(16px, 3vw, 42px) 48px;
+  padding: calc(var(--topbar-h) + 24px) clamp(16px, 3vw, 42px) 48px;
   background: var(--bg);
 }
 
@@ -1695,7 +1641,7 @@ input[type="checkbox"]:focus-visible,
 }
 
 .ops-topbar-minimal {
-  min-height: 64px;
+  min-height: var(--topbar-h);
   /* Inline padding kept small so the brand sits close to the corner of the
      topbar (the sidebar edge), not floating far away on wide screens. */
   padding: 10px clamp(14px, 1.6vw, 22px);
@@ -2696,7 +2642,7 @@ input[type="checkbox"]:focus-visible,
   }
 
   .login-showcase-copy {
-    margin-top: 64px;
+    margin-top: var(--topbar-h);
     margin-bottom: 24px;
   }
 
@@ -3029,12 +2975,12 @@ body {
 .ops-main-container {
   min-width: 0;
   min-height: 100vh;
-  margin-left: 220px;
-  transition: margin-left .2s ease;
+  margin-inline-start: var(--sidebar-width);
+  transition: margin-inline-start .2s ease;
 }
 
 .ops-main-container--collapsed {
-  margin-left: 72px;
+  margin-inline-start: var(--sidebar-collapsed-width);
 }
 
 .ops-main-container--mobile {
@@ -3044,14 +2990,14 @@ body {
 .ops-main-content,
 .ops-main-content--collapsed,
 .ops-main-content--mobile {
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - var(--topbar-h));
   margin-left: 0 !important;
   overflow: visible !important;
 }
 
 /* The product identity is always present in the top bar, including mobile. */
 .ops-topbar-minimal {
-  min-height: 64px;
+  min-height: var(--topbar-h);
   gap: 18px;
 }
 
@@ -4162,33 +4108,35 @@ html[data-theme="light"] .atlas-tooltip {
   height: 22px;
 }
 
-/* Main column offset mirrors the sidebar width and scales smoothly. */
+/* Main column offset mirrors the sidebar width and scales smoothly.
+   Driven by the same tokens the <aside> uses, so the rail and the content
+   edge can no longer drift apart (they were 72px vs 60px). */
 .ops-main-container {
-  margin-left: 220px;
-  transition: margin-left .2s ease;
+  margin-inline-start: var(--sidebar-width);
+  transition: margin-inline-start .2s ease;
 }
 
 .ops-main-container--collapsed {
-  margin-left: 60px;
+  margin-inline-start: var(--sidebar-collapsed-width);
 }
 
 .ops-main-container--mobile {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 /* Topbar starts to the right of the sidebar and slides with it. */
 .ops-topbar-minimal {
-  left: 220px;
-  right: 0;
-  transition: left .2s ease, right .2s ease;
+  inset-inline-start: var(--sidebar-width);
+  inset-inline-end: 0;
+  transition: inset-inline-start .2s ease;
 }
 
 .ops-main-container--collapsed .ops-topbar-minimal {
-  left: 60px;
+  inset-inline-start: var(--sidebar-collapsed-width);
 }
 
 .ops-main-container--mobile .ops-topbar-minimal {
-  left: 0;
+  inset-inline-start: 0;
 }
 
 /* ── Sidebar profile (moved from the topbar) ─────────────────── */
@@ -4357,32 +4305,10 @@ html[dir="rtl"] .ops-sidebar--mobile.ops-sidebar--open {
   transform: translateX(0);
 }
 
-html[dir="rtl"] .ops-main-container {
-  margin-left: 0;
-  margin-right: 220px;
-  transition: margin-right .2s ease;
-}
-
-html[dir="rtl"] .ops-main-container--collapsed {
-  margin-right: 60px;
-}
-
-html[dir="rtl"] .ops-main-container--mobile {
-  margin-right: 0;
-}
-
-html[dir="rtl"] .ops-topbar-minimal {
-  left: 0;
-  right: 220px;
-}
-
-html[dir="rtl"] .ops-main-container--collapsed .ops-topbar-minimal {
-  right: 60px;
-}
-
-html[dir="rtl"] .ops-main-container--mobile .ops-topbar-minimal {
-  right: 0;
-}
+/* No RTL overrides needed for the main column or topbar: they use logical
+   properties (margin-inline-start / inset-inline-start), which flip
+   automatically with dir. The physical-property versions that used to live
+   here also carried the stale 60px rail width. */
 
 /* RTL: collapse toggle + active indicator flip to the inner edge. */
 html[dir="rtl"] .sidebar-toggle {

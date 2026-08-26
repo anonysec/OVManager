@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "verify": "npm run build && npm run check:tokens && npx eslint src/ && npx vitest run"
   },
   "dependencies": {
     "axios": "^1.19.0",

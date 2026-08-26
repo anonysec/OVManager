@@ -9,151 +9,12 @@
    Dark is the default (:root). Light overrides via html[data-theme="light"].
    styles.css aliases several of these to its own --bg/--panel set — keep
    both in sync when touching surfaces. */
-:root {
-  /* Typography */
-  --font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Space Grotesk', 'Manrope', ui-sans-serif, system-ui, sans-serif;
-
-  /* Native form controls / scrollbars follow the active theme */
-  color-scheme: dark;
-
-  /* Base surfaces (elevation scale: bg < elevated < surface-1 < surface-2 < surface-3) */
-  --bg: #0d0f14;
-  --bg-elevated: #131722;
-  --surface-1: #181d29;
-  --surface-2: #1f2534;
-  --surface-3: #2a3144;
-
-  /* Borders */
-  --border: #2b3344;
-  --border-strong: #3d465c;
-
-  /* Text */
-  --text-primary: #e8ebf1;
-  --text-secondary: #9aa4b5;
-  --text-muted: #6d7689;
-
-  /* Orange Accent */
-  --accent-color: #fc7a1e;
-  --accent-color-hover: #ff8f3d;
-  --accent-color-transparent: rgba(252, 122, 30, 0.12);
-  --sidebar-active-bg: rgba(252, 122, 30, 0.16);
-
-  /* Status colors */
-  --danger-color: #e5484d;
-  --success-color: #01c3a8;
-  --info-color: #38a1ff;
-
-  /* Overlays & focus */
-  --overlay: rgba(5, 7, 11, 0.72);
-  --focus-ring: var(--accent-color);
-
-  /* Shadows */
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);
-
-  /* Smooth transitions */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
-  --transition-slow: 0.4s ease;
-
-  /* --- Legacy aliases (keep existing consumers working) --- */
-  --background-primary: var(--surface-1);
-  --background-secondary: var(--surface-2);
-  --background-card-hover: var(--surface-3);
-  --card-base-bg: var(--surface-1);
-  --body-bg: var(--bg);
-  --surface-color: var(--surface-2);
-  --surface-hover: var(--surface-3);
-  --border-color: var(--border);
-  --border-color-hover: var(--border-strong);
-  
-  /* Settings.css aliases */
-  --panel: var(--background-secondary);
-  --line: var(--border);
-  --muted: var(--text-muted);
-  --bg: var(--bg);
-}
 
 /* --- Light theme: equally polished set --- */
-html[data-theme="light"] {
-  color-scheme: light;
-
-  --bg: #eef1f6;
-  --bg-elevated: #ffffff;
-  --surface-1: #ffffff;
-  --surface-2: #f3f6fb;
-  --surface-3: #e7ecf4;
-
-  --border: #d7dde7;
-  --border-strong: #b9c2cf;
-
-  --text-primary: #1b2230;
-  --text-secondary: #5b6675;
-  --text-muted: #8a93a3;
-
-  --accent-color: #e86a0c;
-  --accent-color-hover: #d15f08;
-  --accent-color-transparent: rgba(232, 106, 12, 0.12);
-  --sidebar-active-bg: rgba(232, 106, 12, 0.14);
-
-  --danger-color: #c0392b;
-  --success-color: #0e9f85;
-  --info-color: #2563eb;
-  --overlay: rgba(120, 140, 170, 0.35);
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
-}
 
 /* --- Ultra-dark theme (3x-ui pattern) --- */
-html[data-theme="ultra"] {
-  color-scheme: dark;
 
-  --bg: #000000;
-  --bg-elevated: #0a0b0e;
-  --surface-1: #0c0d12;
-  --surface-2: #111318;
-  --surface-3: #15171d;
 
-  --border: #1f222a;
-  --border-strong: #2c303a;
-
-  --text-primary: #e8eaed;
-  --text-secondary: #9aa0ad;
-  --text-muted: #6b7280;
-
-  --accent-color: #ff7a1a;
-  --accent-color-hover: #ff9147;
-  --accent-color-transparent: rgba(255, 122, 26, 0.15);
-  --sidebar-active-bg: rgba(255, 122, 26, 0.18);
-
-  --danger-color: #ff4d4f;
-  --success-color: #34d399;
-
-  --overlay: rgba(20, 28, 45, 0.45);
-  --focus-ring: var(--accent-color);
-
-  --shadow: 0 4px 14px rgba(30, 40, 60, 0.10);
-  --shadow-sm: 0 2px 6px rgba(30, 40, 60, 0.08);
-  --shadow-lg: 0 16px 44px rgba(30, 40, 60, 0.16);
-}
-
-/* --- Smooth theme switching: applied briefly by ThemeContext while the
-   theme flips, then removed. Targets colors only so layout/animation
-   transitions defined per-component keep working afterwards. --- */
-html.theme-transition *,
-html.theme-transition *::before,
-html.theme-transition *::after {
-  transition:
-    background-color var(--transition-normal),
-    color var(--transition-normal),
-    border-color var(--transition-normal),
-    box-shadow var(--transition-normal),
-    fill var(--transition-normal),
-    stroke var(--transition-normal) !important;
-}
 
 /* Selection follows the accent */
 ::selection {
@@ -342,8 +203,10 @@ html.theme-transition *::after {
   font-size: 15px;
   font-weight: 700;
   font-family: var(--font-family);
-  background-color: var(--accent-color);
-  color: #000000;
+  background-color: var(--accent);
+  /* Token, not a literal: black on the dark orange (7.9:1), white on the
+     darker light-theme orange. Both clear AA. */
+  color: var(--accent-contrast);
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
@@ -444,19 +307,10 @@ html.theme-transition *::after {
 }
 
 /* --- Main Layout --- */
-#main-container {
-  display: flex;
-  padding: 20px;
-  gap: 20px;
-  height: 100vh;
-}
+
 
 /* --- Dashboard Shell --- */
-.ops-shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
+
 
 /* --- Layout with Sidebar --- */
 .ops-layout {
@@ -476,26 +330,13 @@ html.theme-transition *::after {
   min-height: 100vh;
 }
 
+/* Layout for .ops-main-content lives in styles.css (single owner).
+   The margin/padding block that used to be here was dead code: the sidebar
+   offset is applied to .ops-main-container, and styles.css reset this
+   element's margin with !important. */
 .ops-main-content {
   flex: 1;
-  margin-left: 220px; /* expanded sidebar width */
-  padding: 24px;
-  padding-top: calc(52px + 24px); /* topbar height + original padding */
-  overflow-y: auto;
   background: var(--body-bg);
-  transition: margin-left 0.2s ease;
-}
-
-.ops-main-content--rail {
-  margin-left: 72px; /* rail mode */
-}
-
-.ops-main-content--collapsed {
-  margin-left: 72px;
-}
-
-.ops-main-content--mobile {
-  margin-left: 0; /* sidebar is an overlay on mobile */
 }
 
 /* Topbar — fixed across the full viewport width, above sidebar */
@@ -570,18 +411,7 @@ html.theme-transition *::after {
 }
 
 /* --- Topbar --- */
-.ops-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 24px;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border-color);
-}
+
 
 .ops-brand {
   display: flex;
@@ -944,12 +774,7 @@ html.theme-transition *::after {
 }
 
 /* --- Main Content --- */
-.ops-main {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  background: var(--body-bg);
-}
+
 
 /* --- Dashboard Grid --- */
 .ops-dashboard {
@@ -1677,7 +1502,7 @@ html.theme-transition *::after {
 /* Sidebar with variable width based on icon size (36px vs 32px) */
 .ops-sidebar {
   position: fixed;
-  top: 52px;
+  top: var(--topbar-h);
   left: 0;
   bottom: 0;
   width: var(--sidebar-width, 220px);
@@ -2142,17 +1967,17 @@ html.theme-transition *::after {
 ═══════════════════════════════════════════ */
 .ops-topbar-minimal {
   /* height anchor for sidebar top offset and content padding-top */
-  height: 52px;
+  height: var(--topbar-h);
 }
 
 /* Sidebar starts below the topbar on mobile too */
 @media (max-width: 768px) {
   .ops-sidebar {
-    top: 52px;
+    top: var(--topbar-h);
     /* on mobile: overlay starts below topbar */
   }
   .ops-sidebar--mobile {
-    top: 52px;
+    top: var(--topbar-h);
   }
   .sidebar-hamburger {
     top: 10px;
@@ -2162,7 +1987,7 @@ html.theme-transition *::after {
   .ops-main-content,
   .ops-main-content--collapsed,
   .ops-main-content--mobile {
-    /* topbar is 52px fixed; content starts below it on mobile */
+    /* topbar height comes from --topbar-h; content starts below it on mobile */
     margin-left: 0;
   }
 }
