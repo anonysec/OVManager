@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.config import config
 from backend.db.engine import SessionLocal
-from backend.db.exceptions import ConflictError, NotFoundError
+from backend.db.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.db.migrations import migrate
 from backend.logger import logger
 from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
@@ -259,6 +259,14 @@ async def conflict_handler(request, exc: ConflictError):
     from fastapi.responses import JSONResponse
 
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@api.exception_handler(ValidationError)
+async def validation_handler(request, exc: ValidationError):
+    from fastapi.responses import JSONResponse
+
+    # 422 to match FastAPI's own request-validation status.
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 # ── CORS ──────────────────────────────────────────────────────────

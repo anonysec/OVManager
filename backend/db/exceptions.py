@@ -28,3 +28,17 @@ class ConflictError(Exception):
         if field and value:
             detail += f" ({field}={value})"
         super().__init__(detail)
+
+
+class ValidationError(Exception):
+    """Raised when a field value is structurally valid but not acceptable.
+
+    Used for constraints the Pydantic schema cannot express — e.g. a field
+    typed Optional so it may be *omitted* from a partial update, but which
+    must not be explicitly null when present.
+    """
+
+    def __init__(self, field: str, message: str = ""):
+        self.field = field
+        self.message = message or f"invalid value for {field}"
+        super().__init__(self.message)
