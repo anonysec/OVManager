@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import SectionBoundary from './components/ui/SectionBoundary';
@@ -46,8 +47,10 @@ document.head.appendChild(link);
  * the same space as the real content — removes the layout shift that made
  * navigation feel janky.
  */
-const PageLoader = () => (
-  <div className="page-loader" role="status" aria-live="polite" aria-label="Loading">
+const PageLoader = () => {
+  const { t } = useTranslation();
+  return (
+  <div className="page-loader" role="status" aria-live="polite" aria-label={t('loading', 'Loading')}>
     <SkeletonBlock width={230} height={26} radius={8} />
     <div className="page-loader-grid">
       <SkeletonPanel lines={4} />
@@ -56,7 +59,8 @@ const PageLoader = () => (
     </div>
     <SkeletonPanel lines={8} height={280} />
   </div>
-);
+  );
+};
 
 /**
  * Warm the chunks the user is most likely to need next, once the current page

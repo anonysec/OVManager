@@ -134,7 +134,7 @@ const DefaultsSection = () => {
     <div className="sp-cards">
       <Card title={t('newUserDefaults', 'New User Defaults')} icon={FiUserPlus}>
         <p className="sp-hint" style={{ marginBottom: 14 }}>
-          {t('defaultsDesc', 'Applied when the Telegram bot creates a new user without explicit values.')}
+          {t('defaultsDesc', 'Used as the Standard plan when an operator creates a user from the Telegram bot.')}
         </p>
         <div className="sp-two-col">
           <Field label={t('defaultDays', 'Default expiry (days)')}>
@@ -229,12 +229,12 @@ const BotSection = () => {
           </div>
         )}
 
-        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'Obtain from @BotFather. Write-only — leave blank to keep the existing token.')}>
+        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'From @BotFather. Operators use the menu and typed search — /start is the only command. Leave blank to keep the current token.')}>
           <input className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
             placeholder="123456789:ABC…" disabled={encryptKeyMissing} />
         </Field>
 
-        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint="Your personal Telegram user ID — receives alerts.">
+        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint={t('ownerTelegramIdHint', 'Your numeric Telegram user ID. After saving, open the bot and tap Start.')}>
           <input className="sp-input" type="number" value={ownerId} onChange={e => setOwnerId(e.target.value)} placeholder="123456789" />
         </Field>
 

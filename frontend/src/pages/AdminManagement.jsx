@@ -78,7 +78,7 @@ const AdminManagement = () => {
     const handleDelete = (admin) => {
         openConfirm(
             t('deleteAdminConfirm', 'Delete Admin'),
-            `Delete admin "${admin.username}"? Their users will remain but become unassigned.`,
+            t('confirmDeleteAdmin', 'Delete admin "{{name}}"? Their users will remain but become unassigned.', { name: admin.username }),
             async () => {
                 try {
                     const response = await apiClient.delete(`/admin/${admin.username}`);

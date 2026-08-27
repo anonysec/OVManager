@@ -1,42 +1,74 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from __future__ import annotations
 
-from bot.handlers.common import _safe_handler, api
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from bot.api import Panel
+from bot.formatters import esc, fmt_uptime, is_expired
+from bot.i18n import lang_of, t
+from bot.identity import Actor
+from bot.keyboards import nodes_actions, status_actions
+from bot.ui import edit_or_reply
 
 
-@_safe_handler
-async def _handle_status(update: Update):
-    try:
-        info = await api.get_status()
-        nodes = await api.get_nodes()
-        users = await api.get_users()
-        active = sum(1 for u in users if u.get("is_active"))
-        suspended = sum(1 for u in users if not u.get("is_active"))
-        lines = ["🖥️ Server Status", ""]
-        lines.append("Panel:     🟢 Online")
-        if info:
-            uptime = info.get("uptime", 0)
-            d = uptime // 86400
-            lines.append(f"Uptime:    {d}d")
-        lines.append(f"Nodes:     {len(nodes)}")
-        lines.append(f"Users:     🟢 {active}  🔴 {suspended}")
+async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
+    lang = lang_of(update, context)
+    panel = Panel(actor.token)
+    info = await panel.get_info()
+    settings = await panel.get_settings()
+    users = await panel.get_users()
+    nodes = await panel.get_nodes()
+
+    active = sum(1 for u in users if u.get("is_active") and not is_expired(u))
+    online = sum(1 for u in users if u.get("online") or int(u.get("active_connections") or 0) > 0)
+    expired = sum(1 for u in users if is_expired(u))
+    disabled = sum(1 for u in users if not u.get("is_active") and not is_expired(u))
+    up_nodes = sum(1 for n in nodes if n.get("status"))
+
+    lines = [
+        f"<b>{t(lang, 'panel')}</b>",
+        t(lang, "version_uptime", version=esc(settings.get("panel_version") or "—"), uptime=esc(fmt_uptime(info.get("uptime") or 0))),
+        t(lang, "cpu_ram_disk", cpu=esc(_pct(info.get("cpu"))), ram=esc(_pct(info.get("memory_percent"))), disk=esc(_pct(info.get("disk_percent")))),
+        "",
+        f"<b>{t(lang, 'btn_users')}</b>",
+        t(lang, "users_stats", total=len(users), active=active, online=online),
+        t(lang, "users_extra", disabled=disabled, expired=expired),
+        "",
+        f"<b>{t(lang, 'btn_nodes')}</b>",
+        t(lang, "nodes_stats", up=up_nodes, total=len(nodes)) if nodes else t(lang, "nodes_none"),
+    ]
+    for node in nodes[:8]:
+        mark = t(lang, "node_up") if node.get("status") else t(lang, "node_down")
+        addr = node.get("address") or "—"
+        port = node.get("ovpn_port") or node.get("port") or ""
+        where = f"{addr}:{port}" if port else addr
+        lines.append(f"· {esc(node.get('name'))}  {mark}  {esc(where)}")
+    await edit_or_reply(update, "\n".join(lines), reply_markup=status_actions(lang=lang))
+
+
+async def show_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
+    lang = lang_of(update, context)
+    nodes = await Panel(actor.token).get_nodes()
+    if not nodes:
+        await edit_or_reply(update, t(lang, "nodes_none_yet"), reply_markup=nodes_actions(lang=lang))
+        return
+    lines = [t(lang, "nodes_header", count=len(nodes)), ""]
+    for node in nodes:
+        mark = t(lang, "status_online") if node.get("status") else t(lang, "status_offline")
+        proto = (node.get("protocol") or "tcp").upper()
+        addr = node.get("address") or "—"
+        port = node.get("ovpn_port") or ""
+        lines.append(t(lang, "node_line", name=esc(node.get("name")), mark=mark))
+        lines.append(f"{esc(addr)}:{esc(port)}  {esc(proto)}")
         lines.append("")
-        for n in nodes:
-            st = "🟢" if n.get("status") else "🔴"
-            lines.append(f"── {n.get('name', '?')} ──")
-            lines.append(f"  {st}  {n.get('address', '?')}")
-        kb = [
-            [
-                InlineKeyboardButton("🔄 Refresh", callback_data="hub_status"),
-                InlineKeyboardButton("👥 Users", callback_data="users_page_0"),
-                InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
-            ],
-        ]
-        await update.message.reply_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(kb))
-    except Exception:
-        import logging
+    await edit_or_reply(update, "\n".join(lines).rstrip(), reply_markup=nodes_actions(lang=lang))
 
-        logging.getLogger(__name__).exception("Error in _handle_status")
-        await update.message.reply_text("⚠️ Failed to load status, check logs.")
+
+def _pct(value) -> str:
+    try:
+        return f"{float(value):.0f}%"
+    except (TypeError, ValueError):
+        return "—"

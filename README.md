@@ -4,30 +4,43 @@ OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode
 
 ## Install
 
+The installer has two modes — **native** (systemd + uv on the host) and **Docker**
+(image built from source). Humans get a wizard; scripts and AI pass flags and
+never wait on a prompt.
+
+**Human** (keeps the terminal as stdin so the wizard can ask):
+
 ```bash
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
 ```
 
-With options:
+**AI / CI / scripts** (`-y` skips every prompt; `--json` prints the result on stdout):
 
 ```bash
-bash <(curl -sSL URL) -- --port 2095 --path dash --admin-user admin --admin-pass mypassword
+# Native
+curl -sSL https://anonysec.github.io/OVManager/install.sh \
+  | sudo bash -s -- -y --mode native --admin-pass 'choose-a-long-password'
+
+# Docker
+curl -sSL https://anonysec.github.io/OVManager/install.sh \
+  | sudo bash -s -- -y --mode docker --admin-pass 'choose-a-long-password' --json
 ```
+
+Useful flags: `--port 2095` `--path dash` (or `--path root` for `/`) `--tls-self`
+`--tls-le example.com` `--dry-run`. Same values can be set with `OVM_MODE`,
+`OVM_PORT`, `OVM_PATH`, `OVM_ADMIN_USER`, `OVM_ADMIN_PASS`, `OVM_TLS`.
+`CI=true` implies `--yes`. Run the script with `--help` for the full list.
+
+If `--admin-pass` is omitted under `-y`, a password is generated and printed
+(and included in `--json`).
 
 ## Update / Uninstall
 
 ```bash
-# Update
-bash <(curl -sSL URL) update
-
-# Uninstall
-bash <(curl -sSL URL) uninstall
-```
-
-## Docker
-
-```bash
-bash <(curl -sSL URL) --docker
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) update
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall
+# also drop data:
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall --purge
 ```
 
 ## Manual Install
