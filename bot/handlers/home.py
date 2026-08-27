@@ -8,9 +8,9 @@ from telegram.ext import ContextTypes
 
 from bot.formatters import esc
 from bot.handlers.access import require_actor
-from bot.i18n import LANG_NAMES, lang_of, set_lang, t
+from bot.i18n import LANG_NAMES, LANG_PROMPT, has_lang, lang_of, set_lang, t
 from bot.identity import Actor
-from bot.keyboards import home_actions, language_picker, main_menu
+from bot.keyboards import home_actions, language_menu, language_picker, main_menu
 from bot.ui import answer, edit_or_reply
 
 
@@ -42,13 +42,27 @@ async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
         await message.reply_text(t(lang, "home_prompt"), reply_markup=markup)
 
 
-async def show_languages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    lang = lang_of(update, context)
-    await edit_or_reply(update, t(lang, "lang_title"), reply_markup=language_picker(lang=lang))
+async def show_languages(update: Update, context: ContextTypes.DEFAULT_TYPE, *, first: bool = False) -> None:
+    chosen = has_lang(update, context)
+    lang = lang_of(update, context) if chosen else None
+    text = LANG_PROMPT if first or not chosen else t(lang or "en", "lang_title")
+    picker = language_picker(lang=lang, with_back=chosen)
+    query = update.callback_query
+    if query:
+        await edit_or_reply(update, text, reply_markup=picker)
+        return
+    message = update.effective_message
+    if not message:
+        return
+    if first or not chosen:
+        await message.reply_text(text, parse_mode="HTML", reply_markup=language_menu())
+        await message.reply_text("English  ·  فارسی  ·  Русский  ·  中文", reply_markup=picker)
+        return
+    await edit_or_reply(update, text, reply_markup=picker)
 
 
 async def apply_language(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
-    lang = set_lang(context, code)
+    lang = set_lang(context, code, update)
     context.user_data.pop("flow", None)
     await answer(update)
     actor = await require_actor(update, context)
@@ -64,4 +78,7 @@ async def apply_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cod
 
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not has_lang(update, context):
+        await show_languages(update, context, first=True)
+        return
     await show_home(update, context)

@@ -14,19 +14,33 @@ from bot.handlers.create import handle_create_callback, handle_create_text, star
 from bot.handlers.home import apply_language, show_home, show_languages
 from bot.handlers.status import show_nodes, show_status
 from bot.handlers.users import prompt_search, search_users, show_user, show_users
-from bot.i18n import lang_of, menu_action, t
+from bot.i18n import has_lang, lang_of, menu_action, t
 from bot.ui import answer, edit_or_reply
 
 log = logging.getLogger(__name__)
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    actor = await require_actor(update, context)
-    if actor is None or not update.effective_message:
+    if not update.effective_message:
         return
     text = (update.effective_message.text or "").strip()
-    flow = context.user_data.get("flow") if isinstance(context.user_data.get("flow"), dict) else None
     action = menu_action(text)
+
+    if action and action.startswith("lang:"):
+        await apply_language(update, context, action.split(":", 1)[1])
+        return
+    if action == "language":
+        context.user_data.pop("flow", None)
+        await show_languages(update, context)
+        return
+    if not has_lang(update, context):
+        await show_languages(update, context, first=True)
+        return
+
+    actor = await require_actor(update, context)
+    if actor is None:
+        return
+    flow = context.user_data.get("flow") if isinstance(context.user_data.get("flow"), dict) else None
 
     if action == "cancel":
         context.user_data.pop("flow", None)
@@ -47,10 +61,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop("flow", None)
         await show_nodes(update, context, actor)
         return
-    if action == "language":
-        context.user_data.pop("flow", None)
-        await show_languages(update, context)
-        return
 
     if flow and flow.get("kind") == "create":
         await handle_create_text(update, context, actor, text)
@@ -68,10 +78,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     query = update.callback_query
     if query is None:
         return
-    actor = await require_actor(update, context)
-    if actor is None:
-        return
-    lang = lang_of(update, context)
     data = query.data or ""
     try:
         if data == "lang":
@@ -81,6 +87,14 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if data.startswith("lang:"):
             await apply_language(update, context, data.split(":", 1)[1])
             return
+        if not has_lang(update, context):
+            await answer(update)
+            await show_languages(update, context, first=True)
+            return
+        actor = await require_actor(update, context)
+        if actor is None:
+            return
+        lang = lang_of(update, context)
         if await handle_create_callback(update, context, actor, data):
             return
         if data in {"home", "cancel"}:
@@ -123,7 +137,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         log.exception("Callback failed: %s", data)
         await answer(update)
-        await edit_or_reply(update, t(lang, "error"))
+        await edit_or_reply(update, t(lang_of(update, context), "error"))
 
 
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
