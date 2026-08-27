@@ -9,15 +9,10 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.i18n import lang_of, t
 from bot.identity import Actor, resolve
 
 log = logging.getLogger(__name__)
-
-_DENIED = (
-    "This Telegram account is not linked to OVManager.\n\n"
-    "Ask the panel owner to add your Telegram ID under Settings → Bot "
-    "(owner) or Admin management (operators)."
-)
 
 _RATE_LIMIT = 24
 _RATE_WINDOW = 60.0
@@ -26,7 +21,7 @@ _hits: dict[int, list[float]] = {}
 
 def _rate_ok(uid: int) -> bool:
     now = time.monotonic()
-    bucket = [t for t in _hits.get(uid, []) if now - t < _RATE_WINDOW]
+    bucket = [t_hit for t_hit in _hits.get(uid, []) if now - t_hit < _RATE_WINDOW]
     if len(bucket) >= _RATE_LIMIT:
         _hits[uid] = bucket
         return False
@@ -49,13 +44,14 @@ async def actor_of(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Actor 
 
 
 async def require_actor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Actor | None:
+    lang = lang_of(update, context)
     user = update.effective_user
     if user and not _rate_ok(user.id):
-        await _reply(update, "You're going a bit fast. Wait a moment and try again.")
+        await _reply(update, t(lang, "rate_limited"))
         return None
     actor = await actor_of(update, context)
     if actor is None:
-        await _reply(update, _DENIED)
+        await _reply(update, t(lang, "denied"))
         return None
     return actor
 
