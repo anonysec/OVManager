@@ -113,7 +113,7 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdated }) => {
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           <LoadingButton isLoading={isLoading} type="submit" className="btn">{t('updateUserButton', 'Update User')}</LoadingButton>
         </div>
-        {error && <p className="error-message">{error}</p>}
+        {error && <p id="edit-user-error" className="error-message" role="alert">{error}</p>}
       </form>
     </Modal>
   );

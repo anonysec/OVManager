@@ -175,10 +175,9 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     # the "not supplied" sentinel.
     #
     # This used to assign expiry_date and total unconditionally, so any partial
-    # update silently cleared the fields it did not mention. The Telegram bot
-    # sends exactly such payloads (bot/handlers/callbacks.py): the "extend
-    # expiry" button posts only {"expiry_date": ...}, which wiped `total` and
-    # converted a quota-limited account to unlimited traffic — returning 200.
+    # update silently cleared the fields it did not mention. A client that
+    # posts only {"expiry_date": ...} used to wipe `total` and convert a
+    # quota-limited account to unlimited traffic — returning 200.
     # Sending {"expiry_date": null} likewise hit a NOT NULL constraint and 500ed.
     sent = request.model_fields_set
 
@@ -415,33 +414,26 @@ def restore_user(db: Session, snapshot: dict):
     return new_user
 
 
-def bulk_adjust_users(db: Session, uuids: list[str], days: int = 0, add_bytes: int = 0, owner: str | None = None) -> dict:
-    """Extend expiry (+days) and/or add traffic quota (+add_bytes) for users.
+def adjust_user(db: Session, uuid: str, days: int = 0, add_bytes: int = 0, owner: str | None = None) -> User | None:
+    """Extend expiry (+days) and/or add traffic quota (+add_bytes) for one user.
 
-    When ``owner`` is given (non-owner admins), only users belonging to that
-    admin are touched — a bulk request must never cross tenant boundaries.
-    Unauthorized UUIDs are counted as not_found without revealing that they
-    exist.
-
-    Returns a summary of updated / not-found counts.
+    When ``owner`` is given (non-owner admins), the user must belong to that
+    admin — a request must never cross tenant boundaries. Unauthorized UUIDs
+    return None without revealing that they exist.
     """
     from datetime import timedelta
 
-    query = db.query(User).filter(User.uuid.in_(uuids))
+    query = db.query(User).filter(User.uuid == uuid)
     if owner is not None:
         query = query.filter(User.owner == owner)
-    matched = query.all()
-    matched_uuids = set()
-
-    updated = 0
-    for user in matched:
-        matched_uuids.add(user.uuid)
-        if days:
-            base = user.expiry_date
-            user.expiry_date = (base + timedelta(days=days)) if base else base
-        if add_bytes:
-            user.total = (user.total or 0) + add_bytes
-        updated += 1
+    user = query.first()
+    if user is None:
+        return None
+    if days:
+        base = user.expiry_date
+        user.expiry_date = (base + timedelta(days=days)) if base else base
+    if add_bytes:
+        user.total = (user.total or 0) + add_bytes
     db.commit()
-    not_found = len(uuids) - len(matched_uuids)
-    return {"updated": updated, "not_found": not_found, "total": len(uuids)}
+    db.refresh(user)
+    return user

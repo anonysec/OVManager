@@ -155,9 +155,6 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
 .empty-state p { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.5; }
 .table-skeleton { padding: 40px; text-align: center; color: var(--muted); }
 
-/* ---- bulk action bar ---- */
-.bulk-bar { display: flex; align-items: center; gap: 12px; background: rgba(255,122,30,.10); border: 1px solid rgba(255,122,30,.35); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
-.bulk-count { font-weight: 700; color: var(--orange); font-size: 13px; }
 .btn-danger { background: var(--red); color: #fff; border: 1px solid var(--red); }
 .btn-danger:hover { filter: brightness(1.08); }
 
@@ -843,7 +840,6 @@ html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f
 html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
 html[data-theme="light"] .user-stat { box-shadow: 0 12px 24px rgba(20,30,50,.10); }
 html[data-theme="light"] .empty-state { color: #5b6473; }
-html[data-theme="light"] .bulk-bar { background: var(--surface-1); border-color: var(--orange); }
 html[data-theme="light"] .login-badge { background: #eef3f9; color: #2a3140; }
 html[data-theme="light"] .ops-panel header span.has-tip, html[data-theme="light"] .panel-tip { background: rgba(30,40,60,.14); }
 html[data-theme="light"] .panel-tip::after { color: #5b6473; }
@@ -4139,12 +4135,7 @@ html[data-theme="light"] .atlas-tooltip {
   scrollbar-width: thin;
 }
 
-/* Collapsed rail: tight to the icons (60px instead of 72px). */
-.ops-sidebar--collapsed {
-  width: 60px;
-  min-width: 60px;
-  max-width: 60px;
-}
+/* Collapsed rail width is owned by --sidebar-collapsed-width (72px). */
 
 .ops-sidebar--collapsed .sidebar-toggle {
   right: 2px;
@@ -4811,21 +4802,90 @@ html[dir="rtl"] .notification-popover {
   }
 }
 
-/* ── Bulk toolbar (users) ──────────────────────────────── */
-.bulk-toolbar {
+/* ── Pagination footer ─────────────────────────────────── */
+.pagination-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  margin: 4px 0 10px;
-  background: color-mix(in srgb, var(--accent-color) 8%, var(--surface-1));
-  border: 1px solid color-mix(in srgb, var(--accent-color) 32%, var(--border));
-  border-radius: 10px;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text-muted);
   font-size: 12px;
 }
-.bulk-toolbar .sp { flex: 1; }
-.bulk-toolbar b { font-size: 12px; }
+.pagination-range { font-variant-numeric: tabular-nums; }
+.pagination-info { font-variant-numeric: tabular-nums; }
+.page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: auto;
+}
+.page-size select {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+/* ── Toast dismiss ─────────────────────────────────────── */
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.toast-dismiss {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-dismiss:hover { color: var(--text-primary); background: var(--surface-2); }
+
+/* ── Keyboard shortcuts sheet ──────────────────────────── */
+.shortcuts-sheet {
+  width: min(440px, calc(100vw - 32px));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+}
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.shortcuts-head h2 { margin: 0; font-size: 18px; }
+.shortcuts-hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.shortcuts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.shortcuts-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.shortcuts-keys { display: inline-flex; gap: 4px; }
+.shortcuts-keys kbd {
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
 
 /* ── Cert expiry chip (node rows) ──────────────────────── */
 .cert-chip {

@@ -4,10 +4,9 @@
 """Regression tests for partial PUT /api/users/{uuid} updates.
 
 `crud.update_user` used to assign `expiry_date` and `total` unconditionally,
-so any payload that omitted them silently cleared those columns. The Telegram
-bot sends exactly such payloads (bot/handlers/callbacks.py): the "extend
-expiry" button posts only {"expiry_date": ...}, which wiped `total` and turned
-a quota-limited account into an unlimited one — while returning HTTP 200.
+so any payload that omitted them silently cleared those columns. A client that
+posts only {"expiry_date": ...} used to wipe `total` and turn a quota-limited
+account into an unlimited one — while returning HTTP 200.
 
 Separately, `UpdateUser.expiry_date` was typed `date | None` with no default.
 In Pydantic v2 that is REQUIRED, not optional, so partial updates 422ed; and
@@ -110,7 +109,7 @@ def _read(client: TestClient, uuid: str) -> dict:
 
 
 def test_expiry_only_update_preserves_total():
-    """The bot's 'extend expiry' button must not wipe the traffic quota."""
+    """A partial expiry update must not wipe the traffic quota."""
     uuid = _make_user("pu_expiry_only")
     with TestClient(api) as client:
         r = client.put(
@@ -126,7 +125,7 @@ def test_expiry_only_update_preserves_total():
 
 
 def test_total_only_update_preserves_expiry():
-    """The bot's 'set traffic' button must not clear the expiry date."""
+    """A traffic-only update must not clear the expiry date."""
     uuid = _make_user("pu_total_only")
     with TestClient(api) as client:
         r = client.put(

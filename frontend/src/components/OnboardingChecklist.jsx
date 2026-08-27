@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiCheck, FiX, FiServer, FiUserPlus, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiHelpCircle } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { asList } from '../utils/apiData';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import './OnboardingChecklist.css';
@@ -82,10 +83,8 @@ const OnboardingChecklist = () => {
         nodes: apiClient.get('/nodes/'),
         users: apiClient.get('/users/'),
       });
-      const nodesData = res.nodes.ok ? res.nodes.data.data?.data : null;
-      const usersData = res.users.ok ? res.users.data.data?.data : null;
-      const nodeList = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
-      const userList = Array.isArray(usersData) ? usersData : (usersData?.users || []);
+      const nodeList = asList(res.nodes.ok ? res.nodes.data : null, 'nodes');
+      const userList = asList(res.users.ok ? res.users.data : null, 'users');
       setState((prev) => ({
         nodes: res.nodes.ok ? nodeList.length : prev.nodes,
         users: res.users.ok ? userList.length : prev.users,
