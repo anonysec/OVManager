@@ -14,14 +14,24 @@
 const baseHref = () => {
   const el = typeof document !== 'undefined' ? document.querySelector('base') : null;
   const href = el?.getAttribute('href');
-  if (!href) return '/';
-  // Keep only the path portion (strip any protocol/host if a full URL is used).
-  try {
-    const url = new URL(href, window.location.origin);
-    return url.pathname;
-  } catch {
-    return href.startsWith('/') ? href : `/${href}`;
+  if (href) {
+    // Keep only the path portion (strip any protocol/host if a full URL is used).
+    try {
+      const url = new URL(href, window.location.origin);
+      return url.pathname;
+    } catch {
+      return href.startsWith('/') ? href : `/${href}`;
+    }
   }
+  // Fallback when hosted on GitHub Pages (*.github.io) without an explicit <base> tag:
+  // use the first pathname segment (the repository name) as the subpath.
+  if (typeof window !== 'undefined' && window.location.hostname?.endsWith('.github.io')) {
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    if (segments.length > 0) {
+      return `/${segments[0]}/`;
+    }
+  }
+  return '/';
 };
 
 /** Current URLPATH prefix, e.g. "dashboard" or "" (panel at root). */

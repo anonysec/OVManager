@@ -26,4 +26,5 @@ npm run build      # production build -> dist/
   backend injects a `<base href>` tag into the served `index.html` at
   runtime, so the build itself is prefix-agnostic (`base: './'`).
 - The production build is served by the backend from `dist/`; it is also
-  published to GitHub Pages as a static showcase.
+  published to GitHub Pages as a static showcase along with the `install.sh`
+  installer script.

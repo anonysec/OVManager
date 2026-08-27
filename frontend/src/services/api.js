@@ -2,10 +2,11 @@
 // Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
 import axios from 'axios';
+import { getUrlPath } from '../utils/panelUrl';
 
 // API base comes from the <base href> the backend injects, so it always
 // matches the prefix the panel is served under (e.g. "/dashboard/api").
-const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
+const basePath = getUrlPath();
 // Exported for non-axios consumers (the SSE live stream uses it directly).
 export const apiBase = basePath ? `/${basePath}/api` : '/api';
 

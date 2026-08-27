@@ -41,6 +41,17 @@
     <script>
       (function () {
         try {
+          if (window.location.hostname && window.location.hostname.endsWith('.github.io')) {
+            var seg = window.location.pathname.split('/').filter(Boolean)[0];
+            if (seg && !document.querySelector('base')) {
+              var baseEl = document.createElement('base');
+              baseEl.href = '/' + seg + '/';
+              document.head.prepend(baseEl);
+            }
+          }
+        } catch (e) {}
+
+        try {
           var t = localStorage.getItem('ovmanager-theme') || 'system';
           if (['light', 'dark', 'system'].indexOf(t) === -1) t = 'system';
           var resolved =
