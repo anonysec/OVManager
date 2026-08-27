@@ -37,18 +37,28 @@ def home_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     )
 
 
-def language_picker(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+def language_menu() -> ReplyKeyboardMarkup:
+    names = list(LANG_NAMES.values())
+    return ReplyKeyboardMarkup(
+        [[names[0], names[1]], [names[2], names[3]]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def language_picker(*, lang: str | None = None, with_back: bool = True) -> InlineKeyboardMarkup:
     rows: list[list[tuple[str, str]]] = []
     pair: list[tuple[str, str]] = []
     for code in LOCALES:
-        mark = "✓ " if code == lang else ""
+        mark = "✓ " if lang == code else ""
         pair.append((f"{mark}{LANG_NAMES[code]}", f"lang:{code}"))
         if len(pair) == 2:
             rows.append(pair)
             pair = []
     if pair:
         rows.append(pair)
-    rows.append([(t(lang, "act_back"), "home")])
+    if with_back and lang:
+        rows.append([(t(lang, "act_back"), "home")])
     return inline(rows)
 
 
