@@ -11,10 +11,10 @@ from telegram.ext import ContextTypes
 from bot.handlers.access import require_actor
 from bot.handlers.actions import dispatch_action
 from bot.handlers.create import handle_create_callback, handle_create_text, start_create
-from bot.handlers.home import show_home
+from bot.handlers.home import apply_language, show_home, show_languages
 from bot.handlers.status import show_nodes, show_status
 from bot.handlers.users import prompt_search, search_users, show_user, show_users
-from bot.keyboards import BTN_CANCEL, BTN_NEW, BTN_NODES, BTN_STATUS, BTN_USERS
+from bot.i18n import lang_of, menu_action, t
 from bot.ui import answer, edit_or_reply
 
 log = logging.getLogger(__name__)
@@ -26,26 +26,30 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     text = (update.effective_message.text or "").strip()
     flow = context.user_data.get("flow") if isinstance(context.user_data.get("flow"), dict) else None
+    action = menu_action(text)
 
-    if text == BTN_CANCEL:
+    if action == "cancel":
         context.user_data.pop("flow", None)
         await show_home(update, context, actor)
         return
-
-    if text == BTN_USERS:
+    if action == "users":
         context.user_data.pop("flow", None)
         await show_users(update, context, actor)
         return
-    if text == BTN_NEW:
+    if action == "new":
         await start_create(update, context, actor)
         return
-    if text == BTN_STATUS:
+    if action == "status":
         context.user_data.pop("flow", None)
         await show_status(update, context, actor)
         return
-    if text == BTN_NODES:
+    if action == "nodes":
         context.user_data.pop("flow", None)
         await show_nodes(update, context, actor)
+        return
+    if action == "language":
+        context.user_data.pop("flow", None)
+        await show_languages(update, context)
         return
 
     if flow and flow.get("kind") == "create":
@@ -67,8 +71,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     actor = await require_actor(update, context)
     if actor is None:
         return
+    lang = lang_of(update, context)
     data = query.data or ""
     try:
+        if data == "lang":
+            await answer(update)
+            await show_languages(update, context)
+            return
+        if data.startswith("lang:"):
+            await apply_language(update, context, data.split(":", 1)[1])
+            return
         if await handle_create_callback(update, context, actor, data):
             return
         if data in {"home", "cancel"}:
@@ -107,17 +119,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if await dispatch_action(update, context, actor, data):
             return
         await answer(update)
-        await edit_or_reply(update, "That action is no longer available.")
+        await edit_or_reply(update, t(lang, "unknown_action"))
     except Exception:
         log.exception("Callback failed: %s", data)
         await answer(update)
-        await edit_or_reply(update, "Something went wrong. Try again from the menu.")
+        await edit_or_reply(update, t(lang, "error"))
 
 
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     log.exception("Unhandled bot error", exc_info=context.error)
     if isinstance(update, Update) and update.effective_message:
         try:
-            await update.effective_message.reply_text("Something went wrong. Try again from the menu.")
+            await update.effective_message.reply_text(t(lang_of(update, context), "error"))
         except Exception:
             pass
