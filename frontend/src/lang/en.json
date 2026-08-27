@@ -355,7 +355,7 @@
   "noDataDesc": "Nothing to show yet.",
   "noUsersOnlineDesc": "Users will appear here when they connect.",
   "noNodesDesc": "Add a node to see its live status on the map and table.",
-  "botDesc": "Configure the Telegram bot for user management and notifications.",
+  "botDesc": "From @BotFather. Operators use the menu and typed search — /start is the only command. Leave blank to keep the current token.",
   "botEnabled": "Enable Bot",
   "botEncryptKeyMissing": "Encryption key not configured",
   "botEncryptKeyMissingDesc": "BOT_ENCRYPT_KEY is not set in your .env file. Bot tokens cannot be saved without it.",
@@ -386,7 +386,7 @@
   "settingsDisplay": "Display",
   "settingsDisplayDesc": "Timezone used for all date and time displays",
   "newUserDefaults": "New User Defaults",
-  "defaultsDesc": "Applied when the Telegram bot creates a new user without explicit values.",
+  "defaultsDesc": "Used as the Standard plan when an operator creates a user from the Telegram bot.",
   "defaultDays": "Default expiry (days)",
   "defaultTrafficGb": "Default traffic (GB)",
   "defaultDevices": "Default devices per user",
@@ -632,5 +632,6 @@
   "shortcutSearch": "Focus search",
   "shortcutPalette": "Open command palette",
   "shortcutHelp": "Show this cheatsheet",
-  "dismissToast": "Dismiss"
+  "dismissToast": "Dismiss",
+  "ownerTelegramIdHint": "Your numeric Telegram user ID. After saving, open the bot and tap Start."
 }

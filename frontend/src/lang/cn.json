@@ -632,5 +632,6 @@
   "shortcutSearch": "聚焦搜索",
   "shortcutPalette": "打开命令面板",
   "shortcutHelp": "显示此快捷键表",
-  "dismissToast": "关闭"
+  "dismissToast": "关闭",
+  "ownerTelegramIdHint": "你的数字 Telegram 用户 ID。保存后打开机器人并点 Start。"
 }

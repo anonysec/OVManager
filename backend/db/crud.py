@@ -175,10 +175,9 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
     # the "not supplied" sentinel.
     #
     # This used to assign expiry_date and total unconditionally, so any partial
-    # update silently cleared the fields it did not mention. The Telegram bot
-    # sends exactly such payloads (bot/handlers/callbacks.py): the "extend
-    # expiry" button posts only {"expiry_date": ...}, which wiped `total` and
-    # converted a quota-limited account to unlimited traffic — returning 200.
+    # update silently cleared the fields it did not mention. A client that
+    # posts only {"expiry_date": ...} used to wipe `total` and convert a
+    # quota-limited account to unlimited traffic — returning 200.
     # Sending {"expiry_date": null} likewise hit a NOT NULL constraint and 500ed.
     sent = request.model_fields_set
 

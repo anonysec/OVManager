@@ -632,5 +632,6 @@
   "shortcutSearch": "Фокус на поиск",
   "shortcutPalette": "Открыть палитру команд",
   "shortcutHelp": "Показать эту шпаргалку",
-  "dismissToast": "Закрыть"
+  "dismissToast": "Закрыть",
+  "ownerTelegramIdHint": "Ваш числовой Telegram ID. После сохранения откройте бота и нажмите Start."
 }
