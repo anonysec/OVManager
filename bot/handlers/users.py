@@ -1,139 +1,105 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-from datetime import date
+from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
 
-from bot.handlers.common import _days_remaining, _fmt_bytes, _safe_handler, api
+from bot.api import Panel
+from bot.formatters import esc, expiry_label, status_label, user_card
+from bot.identity import Actor
+from bot.keyboards import back_to_user, user_actions, users_nav
+from bot.ui import edit_or_reply
 
-USERS_PER_PAGE = 10
-
-
-def _is_expired(u):
-    exp = u.get("expiry_date")
-    if not exp:
-        return False
-    try:
-        d = date.fromisoformat(exp) if isinstance(exp, str) else exp
-        return d < date.today()
-    except (ValueError, TypeError):
-        return False
+PAGE_SIZE = 8
 
 
-def _build_users_page(users, page):
-    total = len(users)
-    start = page * USERS_PER_PAGE
-    end = min(start + USERS_PER_PAGE, total)
-    page_users = users[start:end]
-    total_pages = max(1, (total + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-    lines = [f"👥 Users ({total}) — pg {page + 1}/{total_pages}", ""]
-    for i, u in enumerate(page_users, start + 1):
-        name = u.get("name", "?")
-        expired = _is_expired(u)
-        icon = "🟢" if (u.get("is_active") and not expired) else ("❌" if expired else "🔴")
-        dr = _days_remaining(u.get("expiry_date"))[1]
-        lines.append(f"{i}. {icon} {name} — {dr}")
-    user_row = [InlineKeyboardButton(u.get("name", "?"), callback_data=f"user_{u['uuid'] or u['name']}") for u in page_users]
-    nav = []
-    row = []
-    for b in user_row:
-        row.append(b)
-        if len(row) == 2:
-            nav.append(row)
-            row = []
-    if row:
-        nav.append(row)
-    page_btns = []
-    if page > 0:
-        page_btns.append(InlineKeyboardButton("◀️ Prev", callback_data=f"users_page_{page - 1}"))
-    if end < total:
-        page_btns.append(InlineKeyboardButton("Next ▶️", callback_data=f"users_page_{page + 1}"))
-    if page_btns:
-        nav.append(page_btns)
-    nav.append(
-        [
-            InlineKeyboardButton("➕ New", callback_data="hub_new"),
-            InlineKeyboardButton("🔍 Search", callback_data="hub_search"),
-            InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
-        ]
+def _sort_users(users: list[dict]) -> list[dict]:
+    def key(user: dict):
+        status = status_label(user)
+        rank = {"Online": 0, "Active": 1, "Disabled": 2, "Expired": 3}.get(status, 4)
+        return (rank, (user.get("name") or "").lower())
+
+    return sorted(users, key=key)
+
+
+def _page(users: list[dict], page: int) -> tuple[list[dict], int, int]:
+    total = max(1, (len(users) + PAGE_SIZE - 1) // PAGE_SIZE) if users else 1
+    page = max(0, min(page, total - 1))
+    start = page * PAGE_SIZE
+    return users[start : start + PAGE_SIZE], page, total
+
+
+def _list_markup(slice_: list[dict], page: int, total_pages: int, total: int) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    pair: list[InlineKeyboardButton] = []
+    for user in slice_:
+        label = user.get("name") or "?"
+        pair.append(InlineKeyboardButton(label, callback_data=f"u:{user['uuid']}"))
+        if len(pair) == 2:
+            rows.append(pair)
+            pair = []
+    if pair:
+        rows.append(pair)
+    extra = users_nav(page, total_pages, has_users=total > 0)
+    rows.extend(extra.inline_keyboard)
+    return InlineKeyboardMarkup(rows)
+
+
+def _list_text(users: list[dict], slice_: list[dict], page: int, total_pages: int) -> str:
+    if not users:
+        return "No users yet.\nTap <b>New user</b> to create the first one."
+    lines = [f"<b>Users</b>  ·  {len(users)} total  ·  page {page + 1}/{total_pages}", ""]
+    for user in slice_:
+        lines.append(f"· {esc(user.get('name'))}  —  {esc(status_label(user))}, {esc(expiry_label(user.get('expiry_date')))}")
+    lines.append("")
+    lines.append("Tap a name, or type one to search.")
+    return "\n".join(lines)
+
+
+async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, page: int = 0) -> None:
+    users = _sort_users(await Panel(actor.token).get_users())
+    slice_, page, total_pages = _page(users, page)
+    await edit_or_reply(
+        update,
+        _list_text(users, slice_, page, total_pages),
+        reply_markup=_list_markup(slice_, page, total_pages, len(users)),
     )
-    return "\n".join(lines), nav
 
 
-@_safe_handler
-async def _handle_users(update: Update, args: list):
-    try:
-        users = await api.get_users()
-        if args:
-            name = args[0]
-            for u in users:
-                if u.get("name") == name:
-                    return await _show_user(update, u)
-            name_lower = name.lower()
-            for u in users:
-                if u.get("name", "").lower().startswith(name_lower):
-                    return await _show_user(update, u)
-            await update.message.reply_text(f"❌ User '{name}' not found")
-            return
-        if not users:
-            await update.message.reply_text("No users yet.")
-            return
-        text, kb = _build_users_page(users, 0)
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
-    except Exception:
-        import logging
-
-        logging.getLogger(__name__).exception("Error in _handle_users")
-        await update.message.reply_text("⚠️ Failed to load users, check logs.")
+async def show_user(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> None:
+    panel = Panel(actor.token)
+    user = await panel.get_user(uuid=uuid)
+    if not user:
+        await edit_or_reply(update, "That user is no longer available.", reply_markup=users_nav(0, 1, has_users=False))
+        return
+    sub = await panel.get_sub_url(user["uuid"])
+    await edit_or_reply(update, user_card(user, sub_url=sub), reply_markup=user_actions(user))
 
 
-@_safe_handler
-async def _show_user(update: Update, u: dict):
-    try:
-        name = u.get("name", "?")
-        uuid = u.get("uuid", name)
-        expired = _is_expired(u)
-        if expired:
-            status_icon = "❌ Expired"
-        elif u.get("is_active"):
-            status_icon = "🟢 Active"
-        else:
-            status_icon = "🔴 Disabled"
-        total = u.get("total")
-        used = u.get("used") or 0
-        total_s = _fmt_bytes(total) if total else "♾️ Unlimited"
-        used_s = _fmt_bytes(used)
-        pct = f" ({used / total * 100:.0f}%)" if total and total > 0 else ""
-        max_l = u.get("max_logins", 1)
-        max_s = "♾️" if max_l == 0 else str(max_l)
-        dr = _days_remaining(u.get("expiry_date"))[1]
-        # Get sub URL
-        sub_url = await api.get_sub_url(name)
-        msg = f"👤 <b>{name}</b>\n\nStatus:  {status_icon}\nUsage:   {used_s} / {total_s}{pct}\nExpiry:  {dr}\nLogins:  {max_s}"
-        if sub_url:
-            msg += f'\n<a href="{sub_url}">🔗 Sub</a>'
-        kb = [
-            [
-                InlineKeyboardButton("📋 Config", callback_data=f"cfg_{uuid}"),
-                InlineKeyboardButton("🔄 Renew", callback_data=f"renew_{uuid}"),
-            ],
-            [
-                InlineKeyboardButton("✏️ Edit", callback_data=f"edit_{uuid}"),
-                InlineKeyboardButton("🔄 Toggle", callback_data=f"tog_{uuid}"),
-            ],
-            [
-                InlineKeyboardButton("🔗 Copy Sub URL", callback_data=f"sub_{uuid}"),
-                InlineKeyboardButton("🗑️ Delete", callback_data=f"del_{uuid}"),
-            ],
-            [
-                InlineKeyboardButton("⬅️ Back", callback_data="users_page_0"),
-                InlineKeyboardButton("🏠 Main", callback_data="hub_main"),
-            ],
-        ]
-        await update.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(kb))
-    except Exception:
-        import logging
+async def search_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, query: str) -> None:
+    panel = Panel(actor.token)
+    matches = await panel.search_users(query)
+    if not matches:
+        await edit_or_reply(
+            update,
+            f"No user matching <b>{esc(query)}</b>.\nType another name, or open the Users list.",
+            reply_markup=users_nav(0, 1, has_users=True),
+        )
+        return
+    if len(matches) == 1:
+        await show_user(update, context, actor, matches[0]["uuid"])
+        return
+    lines = [f"<b>{len(matches)} matches</b> for {esc(query)}", ""]
+    buttons: list[list[InlineKeyboardButton]] = []
+    for user in matches[:16]:
+        lines.append(f"· {esc(user.get('name'))}  —  {esc(status_label(user))}")
+        buttons.append([InlineKeyboardButton(user.get("name") or "?", callback_data=f"u:{user['uuid']}")])
+    buttons.append([InlineKeyboardButton("User list", callback_data="users:0")])
+    await edit_or_reply(update, "\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
 
-        logging.getLogger(__name__).exception("Error in _show_user")
-        await update.message.reply_text("⚠️ Failed to show user details.")
+
+async def prompt_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data["flow"] = {"kind": "search"}
+    await edit_or_reply(update, "Type the username — or the first few letters.")
