@@ -94,7 +94,27 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 .btn:hover, .card-actions-row button:hover { filter: brightness(1.08); }
 .input-group input, .input-group select, .search-input { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 8px; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 18px; }
-.metric-card, .stat-card, .user-card, .node-card, .admin-card, .settings-panel, .empty-state { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 12px 24px rgba(0,0,0,.18); }
+.metric-card, .stat-card, .user-card, .node-card, .admin-card, .settings-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 12px 24px rgba(0,0,0,.18); }
+/* Subtle lift on hover for the entity cards (user/node/admin). Skipped for
+   .metric-card and .stat-card: those are read-only and the lift would
+   suggest a clickable target that does not exist. */
+.user-card, .node-card, .admin-card {
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.user-card:hover, .node-card:hover, .admin-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+html[data-theme="light"] .user-card:hover,
+html[data-theme="light"] .node-card:hover,
+html[data-theme="light"] .admin-card:hover {
+  box-shadow: 0 12px 28px rgba(20, 30, 50, 0.10);
+}
+@media (prefers-reduced-motion: reduce) {
+  .user-card, .node-card, .admin-card { transition: none; }
+  .user-card:hover, .node-card:hover, .admin-card:hover { transform: none; }
+}
 .metric-icon, .icon-background { color: var(--orange); font-size: 24px; }
 .metric-copy span, .stat-card-content span { color: var(--muted); }
 .metric-copy strong, .stat-card-content h3 { font-size: 28px; margin: 4px 0 0; display: block; }
@@ -186,6 +206,27 @@ html[data-theme="light"] .node-tile { background: #f4f6f9; }
   outline-offset: -2px;
   border-radius: 4px;
 }
+/* Sort affordance.
+   - idle: faint dual-chevron (FiChevronsUp) so every sortable column is
+     visibly sortable, but the cue is quiet enough not to compete with data.
+   - active asc/desc: single chevron in accent, full opacity, indicating the
+     current sort direction. The 9px box keeps it inside the 12px text-x. */
+.sort-indicator {
+  display: inline-grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  margin-inline-start: 4px;
+  border-radius: 3px;
+  transition: color .12s ease, background-color .12s ease, opacity .12s ease;
+}
+.sort-indicator > svg { width: 11px; height: 11px; }
+.sort-indicator.is-idle { color: var(--text-muted); opacity: .7; }
+.list-table th.sortable .th-sort-btn:hover .sort-indicator.is-idle { opacity: .9; color: var(--accent); }
+.sort-indicator.is-asc,
+.sort-indicator.is-desc { color: var(--orange); opacity: 1; }
+.sort-indicator.is-asc { background: var(--orange-soft, rgba(255,122,30,.16)); }
+/* Legacy .sort-ic class kept for any out-of-tree table that still uses it. */
 .list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-inline-start: 4px; color: var(--orange); }
 .list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
 .list-table tr.selected { background: rgba(255,122,30,.08); }
@@ -194,15 +235,25 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .user-cell { display: flex; align-items: center; }
 .uname { font-weight: 600; }
 .status-pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-/* Status pills use the -soft fill + -text foreground pair so they stay
-   legible in both themes. The old hardcoded values scored 1.44:1 on white,
-   which made online/offline/expired indistinguishable in light mode. */
+/* Status pills.
+   - online/ok     : success-soft + success-text (green) — currently connected
+   - idle          : info-soft    + info-text    (cyan)  — enabled, no live session
+   - info/warn     : warning-soft + warning-text (amber) — needs attention
+   - offline/danger: danger-soft  + danger-text  (red)   — disabled / faulted
+   - muted         : surface-3    + text-secondary (gray) — neutral / not yet seen
+   The previous idle mapping used --surface-3 + --text-secondary, which scored
+   4.45:1 in light mode (right at the AA floor). The new info-soft + info-text
+   pair clears 4.5:1 in both themes and reads as "ready, not in alarm" instead
+   of a generic gray that could be confused with "muted" / "unknown". */
 .status-pill.online, .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
-.status-pill.idle { background: var(--surface-3); color: var(--text-secondary); }
+.status-pill.idle { background: var(--info-soft); color: var(--info-text); }
 .status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
 .status-pill.offline, .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
 .status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
 .login-badge { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* "Never" / "—" / null. Muted text reading as "no data" rather than a literal
+   value. Used for last_online and owner when absent. */
+.value-muted { color: var(--text-muted); font-style: italic; opacity: .85; }
 .expiry-soon { color: #ffb454; font-weight: 700; }
 .audit-detail { color: var(--muted); font-size: 12px; max-width: 320px; }
 
@@ -306,10 +357,12 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 .list-table.user-list-table tbody tr.selected td { background: rgba(255,122,30,.12); }
 .list-table.user-list-table .col-check, .list-table.node-list-table .col-check { width: 42px; text-align: center; padding: 0; }
 .list-table.user-list-table .col-check input, .list-table.node-list-table .col-check input { width: 15px; height: 15px; cursor: pointer; }
-.list-table.user-list-table td.traffic-cell { font-weight: 600; color: var(--text); }
-.list-table.user-list-table .traffic-used { font-weight: 600; }
-.list-table.user-list-table .traffic-limit { color: var(--muted); font-weight: 400; font-size: 11px; margin-inline-start: 4px; }
-.list-table.user-list-table .user-cell { display: flex; align-items: center; gap: 9px; }
+.list-table.user-list-table td.traffic-cell { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); }
+.list-table.user-list-table td[data-label="Max Logins"] { text-align: end; }
+.list-table.user-list-table td[data-label="Expiry Date"] { text-align: end; }
+.list-table.user-list-table td[data-label="Last Online"] { text-align: end; }
+.list-table.user-list-table .traffic-used { font-weight: 600; font-variant-numeric: tabular-nums; }
+.list-table.user-list-table .traffic-limit { color: var(--muted); font-weight: 400; font-size: 11px; margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
 .list-table.user-list-table .avatar-sm { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: rgba(255,122,30,.16); color: var(--orange); font-weight: 800; font-size: 12px; }
 .list-table.user-list-table .actions-cell { text-align: start; }
 .identity-cell small { display:block; color: var(--muted); margin-top: 2px; font-size: 11px; }
@@ -318,10 +371,16 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 .row-actions button { min-width: 31px; height: 31px; padding: 7px !important; display: grid; place-items: center; border: 1px solid var(--line) !important; background: transparent !important; color: var(--muted) !important; border-radius: 8px !important; cursor: pointer; transition: all .12s ease; box-shadow: none !important; }
 .row-actions button:hover { background: rgba(255,255,255,.08) !important; border-color: var(--orange) !important; color: var(--orange) !important; }
 .row-actions button.danger:hover { color: var(--red) !important; border-color: var(--red) !important; }
-/* user table icon buttons: subtle ghost, no forced orange */
+/* Action icon buttons (edit, delete, more).
+   Resting state: muted on line. Hover lifts to brand colour for the neutral
+   ones, danger for delete. The .danger variant uses a soft danger fill at
+   rest so the destructive action is visually distinct from edit, not just
+   a colour change on hover. */
 .icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 8px !important; padding: 7px !important; cursor: pointer; transition: all .12s ease; }
 .icon-btn:hover { background: rgba(255,255,255,.08) !important; color: var(--orange) !important; border-color: var(--orange) !important; }
-.icon-btn.danger:hover { color: var(--red) !important; border-color: var(--red) !important; }
+.icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
+.icon-btn.danger:hover { color: #fff !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
+.icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
 html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 html[data-theme="light"] .row-actions button { background: rgba(0,0,0,0) !important; }
 .latency-note { color: var(--muted); margin-inline-start: 6px; font-size: 11px; }
@@ -838,6 +897,10 @@ html[data-theme="light"] .ops-notice-strip { background: rgba(255,122,30,.10); b
 /* --accent-contrast already resolves per theme; no override needed. */
 html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
 html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
+/* Light theme danger icon-btn: keep the soft-danger fill + foreground so the
+   destructive action is still visually distinct from edit in light mode. */
+html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
+html[data-theme="light"] .icon-btn.danger:hover { color: #fff !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
 html[data-theme="light"] .user-stat { box-shadow: 0 12px 24px rgba(20,30,50,.10); }
 html[data-theme="light"] .empty-state { color: #5b6473; }
 html[data-theme="light"] .login-badge { background: #eef3f9; color: #2a3140; }
@@ -1324,6 +1387,7 @@ html[dir="rtl"] .lang-check { margin-left: 0; margin-right: auto; }
   font-weight: 700;
 }
 .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
+.status-pill.idle { background: var(--info-soft); color: var(--info-text); }
 .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
 .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
 .modal-form {
@@ -1405,7 +1469,10 @@ html[data-theme="light"] .ops-panel:hover {
   box-shadow: 0 16px 36px rgba(20,30,50,.12);
 }
 
-/* ===== ErrorState styles ===== */
+/* ===== ErrorState styles =====
+   Mirrors EmptyState geometry on purpose — both placeholders should read as
+   the same family. The badge uses the danger soft + danger-text pair so the
+   hue signals failure without sacrificing AA contrast in light mode. */
 .error-state {
   display: flex;
   flex-direction: column;
@@ -1416,28 +1483,41 @@ html[data-theme="light"] .ops-panel:hover {
   gap: 14px;
   color: var(--text);
 }
-.error-state-icon {
-  display: inline-flex;
-  color: var(--danger-color);
-  opacity: 0.9;
+.error-state-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger-text) 28%, transparent);
+}
+.error-state-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 440px;
 }
 .error-state h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 .error-state p {
   margin: 0;
   max-width: 420px;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
 }
 .error-state-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 6px;
+  gap: 10px;
+  margin-top: 4px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -1482,36 +1562,61 @@ html[data-theme="light"] .btn-secondary:hover {
   animation: fadeUp 0.3s ease both;
 }
 
-/* ===== EmptyState (shared) polish ===== */
+/* ===== EmptyState (shared) polish =====
+   Badge geometry mirrors the inline alert + error state so the three placeholders
+   (skeleton / error / empty) read as one family. The badge is a soft accent disc
+   with the icon at the brand colour; the headline stays in primary text so the
+   message carries the meaning, not the icon. */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 42px 24px;
-  gap: 12px;
+  padding: 48px 24px;
+  gap: 14px;
   color: var(--text-secondary);
 }
-.empty-state-icon {
-  display: inline-flex;
-  color: var(--text-secondary);
-  opacity: 0.6;
+.empty-state-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+.empty-state-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
 }
 .empty-state h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
 }
 .empty-state p {
   margin: 0;
   max-width: 360px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .empty-state-action {
-  margin-top: 8px;
+  margin-top: 4px;
+}
+
+/* Legacy class kept so older call-sites that still pass a bare icon keep
+   rendering. New code should use .empty-state-badge above. */
+.empty-state-icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 /* ===== PanelSkeleton (shared) ===== */
@@ -1556,9 +1661,15 @@ html[data-theme="light"] .btn-secondary:hover {
   background: var(--success-soft);
   color: var(--success-text);
 }
+/* "Idle" is the steady state for an enabled user with no live session.
+   Was surface-3 + text-secondary: 4.45:1 in light mode (right at the AA
+   floor) and indistinguishable from the muted / unknown state. info-soft +
+   info-text clears 4.5:1 in both themes and reads as "ready, not in alarm".
+   Bump to 16% + thin accent border so the pill reads as a chip, not text. */
 .status-badge.status-idle {
-  background: var(--surface-3, rgba(255,255,255,.07));
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--info-soft) 70%, var(--surface-1));
+  color: var(--info-text);
+  border: 1px solid color-mix(in srgb, var(--info-text) 30%, transparent);
 }
 .status-badge.status-offline {
   background: var(--danger-soft);
@@ -2271,9 +2382,23 @@ input[type="checkbox"]:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 10px;
+  margin-inline-start: -10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: var(--text-primary);
   font: 800 21px/1 var(--font-display);
   letter-spacing: -.04em;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.login-showcase-brand:hover {
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+}
+.login-showcase-brand:active {
+  transform: scale(0.98);
 }
 
 .login-showcase-brand > span span {
@@ -2562,12 +2687,16 @@ input[type="checkbox"]:focus-visible,
 }
 
 .button-spinner {
-  width: 15px;
-  height: 15px;
-  border: 2px solid rgba(255,255,255,.4);
-  border-top-color: #fff;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
   border-radius: 50%;
-  animation: spin .7s linear infinite;
+  opacity: 0.85;
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .button-spinner { animation-duration: 1.4s; }
 }
 
 .login-shell .error-message {
@@ -4509,19 +4638,34 @@ html[dir="rtl"] .notification-popover {
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
+  color: var(--info-text);
 }
 .usage-meter svg { transform: rotate(-90deg); }
+/* Background ring uses currentColor at 18% so it always pairs with the
+   meter accent colour, instead of a hardcoded dark grey that washed out in
+   light mode. The "Unlimited" variant flips the inner <b> off and uses just
+   the empty ring + infinity glyph. */
+.usage-meter svg circle:first-child { stroke: currentColor; stroke-opacity: .18; }
+/* "Unlimited" badge. The glyph was 8px which collapsed the loop into a
+   stroke that reads as "I"; bumping to 11px with tabular-nums + a centered
+   inset grid keeps the infinity legible at table row height. */
 .usage-meter b {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 8px;
+  font-size: 11px;
+  line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  color: var(--info-text);
 }
-.traffic-cell { display: flex; align-items: center; gap: 8px; min-width: 130px; }
+/* Traffic cell — flex row, the unused progress ring (the <span class="usage-meter">)
+   is a 30x30 chip that visually anchors the column, then the used / limit pair
+   follows with a little breathing room. */
+.traffic-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .traffic-cell .traffic-used { font-variant-numeric: tabular-nums; }
+.traffic-cell .traffic-limit { color: var(--muted); font-variant-numeric: tabular-nums; }
 .traffic-cell .usage-bar { flex: 1 1 60px; min-width: 44px; }
 
 /* ── Row quick-actions (user ⋯) ─────────────────────────── */
@@ -4607,13 +4751,24 @@ html[dir="rtl"] .notification-popover {
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
-  transition: background .12s ease, border-color .12s ease, color .12s ease;
+  transition: background .12s ease, border-color .12s ease, color .12s ease, box-shadow .12s ease;
 }
 .filter-chip:hover { border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border)); color: var(--text-primary); }
 .filter-chip.active {
-  background: color-mix(in srgb, var(--accent-color) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border));
+  /* Filled accent-soft (was 14% transparent — too faint to read as "selected"
+     when several chips are stacked, especially the "All 3" vs "Unlimited 3"
+     pair the user has to disambiguate at a glance). The accent-soft token
+     gives a clearly filled pill that the eye can lock onto, plus an
+     accent border + accent text + a soft shadow to lift it from the row. */
+  background: var(--accent-soft);
+  border-color: var(--accent-color);
   color: var(--accent-color);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+.filter-chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring-shadow);
 }
 .filter-chip .count { color: var(--muted); font-size: 10px; }
 .filter-chip.active .count { color: var(--accent-color); }

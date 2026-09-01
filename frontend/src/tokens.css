@@ -103,7 +103,14 @@
 
   /* ── Overlays, focus, shadows ───────────────────────────────────────── */
   --overlay: rgba(5, 7, 11, 0.72);
+  /* Focus ring tokens. The single source of truth for keyboard focus across
+     every interactive element. The shadow value is the colored halo (a 3px
+     ring on top of the existing 1px border); the offset is -2px so the ring
+     sits just inside the control rather than straddling the border. */
   --focus-ring: var(--accent);
+  --focus-ring-soft: var(--accent-soft);
+  --focus-ring-shadow: 0 0 0 3px var(--accent-soft);
+  --focus-ring-offset: 2px;
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);

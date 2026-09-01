@@ -31,14 +31,27 @@ const LoginPage = () => {
     }
   };
 
+  // Click the brand wordmark to focus the first empty field. Tiny nicety, but
+  // it is also the right behaviour for a logo — it is a "go to login" cue.
+  const focusFirstEmpty = () => {
+    const id = username ? 'password' : 'username';
+    const el = document.getElementById(id);
+    if (el) el.focus();
+  };
+
   return (
     <div id="login-container">
       <div className="login-shell">
         <section className="login-showcase" aria-label="OVManager overview">
-          <div className="login-showcase-brand">
+          <button
+            type="button"
+            className="login-showcase-brand"
+            onClick={focusFirstEmpty}
+            aria-label={t('focusLogin', 'Focus the sign-in form')}
+          >
             <Logo size={38} />
             <span>OV<span>Manager</span></span>
-          </div>
+          </button>
           <div className="login-showcase-copy">
             <span className="login-showcase-kicker"><FiActivity aria-hidden="true" /> {t("fleetControl", "OVNode Fleet Control")}</span>
             <h1>{t("loginHeroTitle", "One calm view of your VPN fleet.")}</h1>
