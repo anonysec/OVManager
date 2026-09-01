@@ -22,6 +22,27 @@
   color: var(--accent-color);
 }
 
+/* Global keyboard focus ring.
+   :focus-visible (not :focus) so mouse clicks stay clean while Tab/Shift+Tab
+   still produce a clear, themed halo. Components can override with their own
+   :focus-visible rule for tight control surfaces (sort headers, list rows). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+  border-color: var(--focus-ring);
+  border-radius: inherit;
+}
+@supports not selector(:focus-visible) {
+  :where(a, button, input, select, textarea, [tabindex]):focus {
+    outline: none;
+    box-shadow: var(--focus-ring-shadow);
+    border-color: var(--focus-ring);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
 /* --- Login Page --- */
 #login-container {
   display: flex;
@@ -306,6 +327,24 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Standalone spinner used inside buttons. Centered inline-block so the
+   preceding label keeps its width and does not jump. Uses currentColor as
+   the arc so it works on both accent and accent-contrast backgrounds. */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.6s; }
 }
 
 /* --- Main Layout --- */

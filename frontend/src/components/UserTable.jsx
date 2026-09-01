@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import StatusBadge from '../components/ui/StatusBadge';
 import EmptyState from '../components/ui/EmptyState';
-import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronLeft, FiChevronRight, FiLink, FiClock, FiPower, FiCheck } from 'react-icons/fi';
+import { FiEdit2, FiTrash2, FiMoreVertical, FiChevronUp, FiChevronDown, FiCopy, FiActivity, FiDownload, FiUserX, FiUserCheck, FiChevronsUp, FiChevronLeft, FiChevronRight, FiLink, FiClock, FiPower, FiCheck } from 'react-icons/fi';
 import { daysUntil, formatDate } from '../utils/time';
 import { formatTraffic } from '../utils/format';
 import { copyText } from '../utils/clipboard';
@@ -151,10 +151,10 @@ const SortableTh = ({ sortKey, label, sort, onSort }) => {
       aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button type="button" className="th-sort-btn" onClick={() => onSort(sortKey)}>
-        {label}
-        {active && (dir === 'asc'
-          ? <FiChevronUp className="sort-ic" aria-hidden="true" />
-          : <FiChevronDown className="sort-ic" aria-hidden="true" />)}
+        <span className="th-label">{label}</span>
+        <span className={`sort-indicator ${active ? `is-${dir}` : 'is-idle'}`} aria-hidden="true">
+          {active ? (dir === 'asc' ? <FiChevronUp /> : <FiChevronDown />) : <FiChevronsUp />}
+        </span>
       </button>
     </th>
   );
@@ -262,16 +262,31 @@ const UserTable = ({
                   </td>
                   <td data-label="Total Traffic" className="traffic-cell">
                     {Number(user.total) > 0 ? (
-                      <UsageMeter used={Number(user.used) || 0} total={Number(user.total)} />
+                      <>
+                        <UsageMeter used={Number(user.used) || 0} total={Number(user.total)} />
+                        <span className="traffic-used">{formatTraffic(user.used)}</span>
+                        <span className="traffic-limit">/ {formatTraffic(user.total)}</span>
+                      </>
                     ) : (
-                      <span className="usage-meter"><svg width="30" height="30"><circle cx="15" cy="15" r="11" fill="none" stroke="#2a3039" strokeWidth="3"/><circle cx="15" cy="15" r="11" fill="none" stroke="var(--cyan)" strokeWidth="3" strokeDasharray="69.1" strokeDashoffset="0" strokeLinecap="round"/></svg><b>∞</b></span>
+                      // Unlimited. The previous layout stacked a 30x30 ring + "—" + "∞" on
+                      // the same row, which read as three competing facts. We now show a
+                      // single ringless chip + the formatted used value + a soft "Unlimited"
+                      // label — matches the filter chip copy so the column is self-explanatory.
+                      <>
+                        <span className="usage-meter usage-meter--unlimited" aria-hidden="true">
+                          <svg width="30" height="30">
+                            <circle cx="15" cy="15" r="11" fill="none" stroke="currentColor" strokeOpacity=".18" strokeWidth="3" />
+                          </svg>
+                          <b>∞</b>
+                        </span>
+                        <span className="traffic-used">{formatTraffic(user.used)}</span>
+                        <span className="traffic-limit">{t('unlimited', 'Unlimited')}</span>
+                      </>
                     )}
-                    <span className="traffic-used">{formatTraffic(user.used)}</span>
-                    <span className="traffic-limit">/ {Number(user.total) > 0 ? formatTraffic(user.total) : '∞'}</span>
                   </td>
                   <td data-label="Max Logins"><span className="login-badge">{user.active_connections ?? 0}/{user.max_logins ?? 0}</span></td>
-                  <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : t('never')}</td>
-                  <td data-label="Owner">{user.owner || '—'}</td>
+                  <td data-label="Last Online">{user.last_online ? formatDate(user.last_online) : <span className="value-muted">{t('never')}</span>}</td>
+                  <td data-label="Owner">{user.owner || <span className="value-muted">—</span>}</td>
                   <td data-label="Actions" className="actions-cell">
                     <div className="row-actions">
                     <button className="icon-btn" onClick={() => onEdit(user)} title={t('edit')} aria-label={t('rowEditAria', 'Edit {{name}}', { name: user.name })}><FiEdit2 /></button>
