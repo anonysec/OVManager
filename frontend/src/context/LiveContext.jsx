@@ -42,8 +42,32 @@ export const LiveProvider = ({ children }) => {
   // 8s polling — consumers never know the difference.
   const [refreshTick, setRefreshTick] = useState(0);
   const [streamConnected, setStreamConnected] = useState(false);
-  const tick = useCallback(() => setRefreshTick((n) => n + 1), []);
   const abortRef = useRef(null);
+
+  // Simple event bus for targeted invalidation (users.changed, nodes.changed, etc.)
+  const listenersRef = useRef(new Map());
+  const subscribe = useCallback((event, cb) => {
+    if (!listenersRef.current.has(event)) listenersRef.current.set(event, new Set());
+    listenersRef.current.get(event).add(cb);
+    return () => {
+      const set = listenersRef.current.get(event);
+      if (set) set.delete(cb);
+    };
+  }, []);
+  const unsubscribe = useCallback((event, cb) => {
+    const set = listenersRef.current.get(event);
+    if (set) set.delete(cb);
+  }, []);
+  const publish = useCallback((event) => {
+    const set = listenersRef.current.get(event);
+    if (set) set.forEach(cb => cb());
+  }, []);
+
+  // Override tick to also publish generic 'tick' event
+  const tickWithPublish = useCallback(() => {
+    setRefreshTick((n) => n + 1);
+    publish('tick');
+  }, [publish]);
 
   // ── SSE transport ───────────────────────────────────────────────────
   // The backend pushes lightweight invalidation events (users/usage/nodes);
@@ -54,10 +78,10 @@ export const LiveProvider = ({ children }) => {
 
     const connect = async () => {
       if (stopped) return;
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('access_token');
       if (!token) {
-        // Logged out (provider still mounted e.g. during redirect): stay
-        // quiet and retry shortly — a fresh login will have set a token.
+        // token gone (logged out) — be quiet and retry shortly — a fresh login
+        // will have set a token.
         retryTimer = setTimeout(connect, RETRY_WHEN_LOGGED_OUT_MS);
         return;
       }
@@ -72,7 +96,7 @@ export const LiveProvider = ({ children }) => {
         if (!stopped) setStreamConnected(true);
         // Blocks until the stream ends or the server disappears.
         await readEventStream(resp.body, () => {
-          if (!stopped) tick();
+          if (!stopped) tickWithPublish();
         });
       } catch {
         // Network failure, aborted (logout/unmount), or 401 — retry below.
@@ -88,28 +112,28 @@ export const LiveProvider = ({ children }) => {
       clearTimeout(retryTimer);
       abortRef.current?.abort(); // closes the in-flight stream read
     };
-  }, [tick]);
+  }, [tickWithPublish]);
 
   // ── Polling fallback ──────────────────────────────────────────────────
   // Only active while the SSE stream is unavailable (proxy buffering, older
   // browser, backend without the live router). Zero double-polling otherwise.
   useEffect(() => {
     if (streamConnected) return undefined;
-    const id = setInterval(tick, POLL_INTERVAL);
+    const id = setInterval(tickWithPublish, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [streamConnected, tick]);
+  }, [streamConnected, tickWithPublish]);
 
   // Refresh when the user switches back to the tab (immediate, cheap).
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') tick();
+      if (document.visibilityState === 'visible') tickWithPublish();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [tick]);
+  }, [tickWithPublish]);
 
   return (
-    <LiveContext.Provider value={{ refreshTick, tick, streamConnected }}>
+    <LiveContext.Provider value={{ refreshTick, tick: tickWithPublish, streamConnected, subscribe, unsubscribe }}>
       {children}
     </LiveContext.Provider>
   );

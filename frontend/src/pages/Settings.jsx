@@ -1,21 +1,16 @@
 /**
- * Settings — single scrollable page with a Simple / Advanced mode toggle.
+ * Settings — single friendly page. Every section is always visible (no
+ * Simple/Advanced split): defaults → bot → display → appearance → alerts →
+ * general → system → security → backup → activity. The page was a "user
+ * friendly" wish-list item (2026-09): fewer clicks to reach any control, the
+ * most-touched settings sit at the top.
  *
- * Simple mode surfaces the settings an operator touches every day:
- *   - New user defaults (days / traffic / devices)
- *   - Telegram bot (token, enable, owner ID)
- *   - Display timezone
- *   - Appearance (theme + language)
- *   - Alerts & Dashboard (which alerts to show, refresh cadence)
- *
- * Advanced mode adds power-user controls:
- *   - Panel URL path & subscription prefix
- *   - System info + on-demand maintenance jobs
- *   - Security summary, backup/restore, activity feed
- *
- * The chosen mode is persisted so the page opens the way you left it.
+ * The page also responds to deep links: arriving at `/settings#defaults`
+ * scrolls the matching <section> into view. Previously the hash was ignored
+ * and the page reset to the top.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
@@ -39,8 +34,6 @@ import { formatBytes } from '../utils/format';
 import { formatUptime, fmtDateTime } from '../utils/time';
 import './Settings.css';
 import '../components/SettingsStyles.css';
-
-const MODE_KEY = 'ovmanager-settings-mode';
 
 /* ─────────────────────────────────────────────
    Section header with anchor
@@ -853,6 +846,29 @@ const AppearanceSection = () => {
         <p className="sp-hint">{t('styleDesc', 'Normal uses rich cards and soft shadows; Minimal is flat with hairline borders. Saved per browser.')}</p>
       </Card>
 
+      <Card title={t('sidebarCornerCard', 'Sidebar position')} icon={FiLayout}>
+        <div className="sp-theme-pills sp-pills-5" role="group" aria-label={t('sidebarCornerCard', 'Sidebar position')}>
+          {[
+            { id: 'inline-start', label: t('sidebarEdge', 'Edge') },
+            { id: 'top-left',     label: t('sidebarTopLeft',     'Top L') },
+            { id: 'top-right',    label: t('sidebarTopRight',    'Top R') },
+            { id: 'bottom-left',  label: t('sidebarBottomLeft',  'Bot L') },
+            { id: 'bottom-right', label: t('sidebarBottomRight', 'Bot R') },
+          ].map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`sp-theme-pill${(localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start') === c.id ? ' active' : ''}`}
+              onClick={() => { localStorage.setItem('ovmanager-sidebar-corner', c.id); window.location.reload(); }}
+              aria-pressed={(localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start') === c.id}
+            >
+              <span>{c.label}</span>
+            </button>
+          ))}
+        </div>
+        <p className="sp-hint">{t('sidebarCornerDesc', 'Where the sidebar anchors. "Edge" is the default full-height rail; the four corners dock to the top or bottom. Saved per browser.')}</p>
+      </Card>
+
       <Card title={t('languageCard', 'Language')} icon={FiGlobe}>
         <div className="sp-lang-row" role="group" aria-label={t('languageCard', 'Language')}>
           {LANGS.map((item) => (
@@ -941,39 +957,28 @@ const SECTIONS = [
 
 const Settings = () => {
   const { t } = useTranslation();
-  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) === 'advanced' ? 'advanced' : 'simple');
+  const location = useLocation();
 
+  // All sections always visible — no Simple/Advanced split
+  const visible = useMemo(() => SECTIONS, []);
+
+  // Deep-link scroll: when URL has #section-id, scroll that section into view
   useEffect(() => {
-    localStorage.setItem(MODE_KEY, mode);
-  }, [mode]);
-
-  const visible = SECTIONS.filter(s => mode === 'advanced' || s.simple);
+    const hash = location.hash.replace(/^#/, '');
+    if (!hash) return;
+    const el = document.getElementById(hash);
+    if (el) {
+      // Allow the page to paint first, then smooth-scroll
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    }
+  }, [location.hash]);
 
   return (
     <div className="sp-page">
-      {/* Mode toggle: Simple = daily options, Advanced = everything */}
-      <div className="sp-modebar" role="group" aria-label={t('settingsMode', 'Settings mode')}>
-        <div className="sp-mode-toggle">
-          <button type="button" className={mode === 'simple' ? 'active' : ''} onClick={() => setMode('simple')}>
-            <FiSliders size={14} aria-hidden="true" />
-            <span>{t('settingsSimple', 'Simple')}</span>
-          </button>
-          <button type="button" className={mode === 'advanced' ? 'active' : ''} onClick={() => setMode('advanced')}>
-            <FiServer size={14} aria-hidden="true" />
-            <span>{t('settingsAdvanced', 'Advanced')}</span>
-          </button>
-        </div>
-        <p className="sp-mode-hint">
-          {mode === 'simple'
-            ? t('settingsSimpleHint', 'Daily settings: defaults for new users, the Telegram bot, and display timezone.')
-            : t('settingsAdvancedHint', 'Everything, including panel URL path, subscriptions, security, backup and maintenance.')}
-        </p>
-      </div>
-
       {/* Sticky jump-nav */}
       <nav className="sp-jumpnav" aria-label="Jump to section">
         {visible.map(s => (
-          <a key={s.id} href={`#${s.id}`} className="sp-jumpnav-link">
+          <a key={s.id} href={`/dashboard/settings#${s.id}`} className="sp-jumpnav-link">
             <s.icon size={14} aria-hidden="true" />
             <span>{t(s.labelKey, s.label)}</span>
           </a>
@@ -985,7 +990,7 @@ const Settings = () => {
         {visible.map((sec) => {
           const Component = sec.Component;
           return (
-            <section key={sec.id} className="sp-section">
+            <section key={sec.id} className="sp-section" id={sec.id}>
               <SectionHeader
                 id={sec.id}
                 icon={sec.icon}

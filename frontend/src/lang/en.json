@@ -633,5 +633,8 @@
   "shortcutPalette": "Open command palette",
   "shortcutHelp": "Show this cheatsheet",
   "dismissToast": "Dismiss",
-  "ownerTelegramIdHint": "Your numeric Telegram user ID. After saving, open the bot and tap Start."
+  "ownerTelegramIdHint": "Your numeric Telegram user ID. After saving, open the bot and tap Start.",
+  "listRemoved": "Table removed — UI will be redesigned. Current count: {{count}} items.",
+  "shortcutLogout": "Sign out",
+  "adminShort": "Admin"
 }

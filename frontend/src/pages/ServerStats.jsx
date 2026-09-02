@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
@@ -10,17 +10,10 @@ import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
 import { getPanelBase } from '../utils/panelUrl';
 import { useCountUp } from '../hooks/useCountUp';
-import { usePullRefresh } from '../hooks/usePullRefresh';
 import { settle } from '../hooks/useAsyncData';
 import { FiPlus, FiDownloadCloud, FiLink } from 'react-icons/fi';
 import { ErrorState, EmptyState, PanelSkeleton, StatusBadge } from '../components/ui';
-import SectionBoundary from '../components/ui/SectionBoundary';
-import { SkeletonStats, SkeletonPanel } from '../components/ui/Skeleton';
-
-// The atlas carries d3-geo + topojson + a 105 kB TopoJSON file. Loading it
-// lazily keeps them out of the dashboard's critical path — the KPI cards and
-// tables above it render immediately and the map streams in underneath.
-const WorldMap = lazy(() => import('../components/dashboard/WorldMap'));
+import { SkeletonStats } from '../components/ui/Skeleton';
 
 const formatBytes = (bytes) => {
   if (!Number(bytes)) return '0 B';
@@ -234,7 +227,6 @@ const ServerStats = () => {
   const [trafficHistory, setTrafficHistory] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Per-source error map. Previously a single `error` flag driven by one
   // Promise.all rejection blanked the entire dashboard whenever ANY of the
@@ -248,10 +240,9 @@ const ServerStats = () => {
    *                    flashes empty while the user is reading it.
    */
   const loadData = useCallback(async (background = false) => {
-    if (background) setRefreshing(true);
     // Functional update: only show the skeleton when there is nothing on
     // screen yet, without needing to read state during render.
-    else setLoading(true);
+    if (!background) setLoading(true);
 
     // allSettled, not all: one rejection must not discard four good responses.
     const res = await settle({
@@ -305,8 +296,6 @@ const ServerStats = () => {
       }));
       setNodeStatus(Object.fromEntries(results));
     } catch { /* keep previous */ }
-
-    setRefreshing(false);
   }, []);
 
   // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
@@ -362,9 +351,7 @@ const ServerStats = () => {
   const allFailed = !loading
     && Boolean(errors.stats && errors.users && errors.nodes && errors.security && errors.metrics);
 
-  // Pull-to-refresh (touch) + condensed mobile KPI
-  const dashRef = useRef(null);
-  const pull = usePullRefresh(() => { window.dispatchEvent(new Event('ovmanager:loading')); return loadData(true); });
+  // (Pull-to-refresh removed 2026-09 — dashboard is live via SSE.)
   const mobileKpi = [
     { label: t('activeConnections'), value: activeConnections.toLocaleString() },
     { label: t('onlineNodes'), value: `${onlineNodes}/${nodes?.length || 0}` },
@@ -375,14 +362,7 @@ const ServerStats = () => {
   return (
     <div
       className="ops-dashboard compact"
-      ref={dashRef}
-      onTouchStart={pull.onTouchStart}
-      onTouchMove={pull.onTouchMove}
-      onTouchEnd={pull.onTouchEnd}
     >
-      <div className={`pull-refresh-indicator${pull.refreshing ? ' refreshing' : pull.pull > 0 ? ' pulling' : ''}`}>
-        {pull.refreshing ? <span className="spinner" /> : <span>⬇ {t('pullToRefresh', 'Pull to refresh')}</span>}
-      </div>
       <div className="dashboard-heading">
         <div className="dashboard-heading-copy">
           <div className="dashboard-eyebrow">
@@ -396,12 +376,10 @@ const ServerStats = () => {
           <h1>{t('operationalOverview')}</h1>
           <p>{t('dashboardIntro', 'Keep an eye on nodes, users, traffic, and security from one place.')}</p>
         </div>
-        <div className="dashboard-heading-actions">
-          <button type="button" className="btn btn-secondary dashboard-refresh" onClick={() => { window.dispatchEvent(new Event('ovmanager:loading')); loadData(true); }} disabled={loading || refreshing}>
-            <FiRefreshCw className={loading || refreshing ? 'is-spinning' : ''} aria-hidden="true" />
-            <span>{t('refresh', 'Refresh')}</span>
-          </button>
-        </div>
+        {/* The dashboard updates live over SSE. No manual refresh button and
+            no pull-to-refresh — those were removed 2026-09: the data is
+            already passive, the controls implied a delay that no longer
+            exists. */}
         <div className="dashboard-quick-actions">
           <button type="button" className="btn btn-sm" onClick={() => navigate('/users?add=1')}><FiPlus size={12} /> {t('addUser', 'Add user')}</button>
           <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes?add=1')}><FiPlus size={12} /> {t('addNode', 'Add node')}</button>
@@ -599,17 +577,8 @@ const ServerStats = () => {
               ) : (nodes ? (
                 <>
                   {nodes.length > 0 ? (
-                    <>
-                      {/* The atlas is a separate chunk and its own failure
-                          domain: if d3/topojson fail to load, the node table
-                          below still renders. */}
-                      <SectionBoundary name="world-map" compact title={t('mapUnavailable', 'Map unavailable')}>
-                        <Suspense fallback={<SkeletonPanel lines={6} height={300} label={t('loadingMap', 'Loading map…')} />}>
-                          <WorldMap nodes={nodes} nodeStatus={nodeStatus} />
-                        </Suspense>
-                      </SectionBoundary>
-                      <table className="ops-table compact">
-                        <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
+                    <table className="ops-table compact">
+                      <thead><tr><th>{t('th_id')}</th><th>{t('th_location')}</th><th>{t('th_status')}</th><th>{t('th_cpu')}</th><th>{t('th_conns')}</th></tr></thead>
                         <tbody>
                           {nodes.slice(0, 8).map((node) => {
                             const meta = nodeMeta(node);
@@ -638,11 +607,10 @@ const ServerStats = () => {
                           })}
                         </tbody>
                       </table>
-                    </>
                   ) : (
-                  <EmptyState 
-                    title={t('noNodes')} 
-                    description={t('noNodesDesc')} 
+                  <EmptyState
+                    title={t('noNodes')}
+                    description={t('noNodesDesc')}
                     icon={FiGlobe}
                     actionLabel={t('addNode', 'Add Node')}
                     onAction={() => navigate('/nodes')}

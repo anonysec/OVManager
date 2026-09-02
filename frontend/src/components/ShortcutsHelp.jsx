@@ -10,6 +10,7 @@ const ROWS = (t, isOwner) => [
   { keys: ['/'], label: t('shortcutSearch', 'Focus search') },
   { keys: ['⌘', 'K'], label: t('shortcutPalette', 'Open command palette') },
   { keys: ['?'], label: t('shortcutHelp', 'Show this cheatsheet') },
+  { keys: ['⇧', 'Q'], label: t('shortcutLogout', 'Sign out') },
 ];
 
 const ShortcutsHelp = ({ open, onClose, isOwner }) => {

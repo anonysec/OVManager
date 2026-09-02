@@ -6,7 +6,6 @@ import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import AddNodeModal from '../components/AddNodeModal';
 import EditNodeModal from '../components/EditNodeModal';
-import NodeTable from '../components/NodeTable';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +13,8 @@ import { useToast } from '../context/ToastContext';
 import ConfirmModal from '../components/ConfirmModal';
 
 const NodeManagement = () => {
+  const { t } = useTranslation();
+  const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [nodes, setNodes] = useState([]);
   const [nodeInfo, setNodeInfo] = useState({});
@@ -27,10 +28,6 @@ const NodeManagement = () => {
   const [loadError, setLoadError] = useState(false);
   const [drawerNode, setDrawerNode] = useState(null);
   const [grouped, setGrouped] = useState(() => localStorage.getItem('ovmanager-ui-node-grouped') === '1');
-  const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') === 'compact' ? 'compact' : 'comfortable');
-  const { t } = useTranslation();
-  const { addToast } = useToast();
-
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchNodes = useCallback(async () => {
@@ -49,9 +46,7 @@ const NodeManagement = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchNodes();
-  }, [fetchNodes]);
+  useEffect(() => { fetchNodes(); }, [fetchNodes]);
 
   useEffect(() => {
     if (searchParams.get('add') === '1') {
@@ -61,15 +56,46 @@ const NodeManagement = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  // Declared above the deep-link effect that calls it: a `const` referenced
-  // before its declaration only works because effects run after the body, and
-  // it stops updating correctly if the value ever changes.
+  // Live: poll node status while page is open (no list to render into, but
+  // a future table will want it).
+  useEffect(() => {
+    if (!nodes || nodes.length === 0) return undefined;
+    const fetchAllNodeStatus = async () => {
+      const info = { ...nodeInfo };
+      await Promise.all(nodes.map(async (node) => {
+        try {
+          const res = await apiClient.get(`/nodes/${node.id}/status/`);
+          if (res.data.success && res.data.node_info) {
+            info[node.id] = res.data.node_info;
+          }
+        } catch { /* keep previous */ }
+      }));
+      setNodeInfo(info);
+    };
+    fetchAllNodeStatus();
+    const intervalId = setInterval(fetchAllNodeStatus, 30000);
+    return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
+
+  // ── Derived stats ─────────────────────────────────────────────────────
+  const nodeStats = useMemo(() => ({
+    total: nodes.length,
+    active: nodes.filter(n => n.status).length,
+    inactive: nodes.filter(n => !n.status).length,
+  }), [nodes]);
+
+  const filteredNodes = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return nodes.filter(n => !term || n.name.toLowerCase().includes(term));
+  }, [nodes, searchTerm]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────
   const handleOpenEditModal = (node) => {
     setSelectedNode(node);
     setIsEditModalOpen(true);
   };
 
-  // Deep-link: ?node=<id> opens that node's edit modal
   useEffect(() => {
     const nodeId = searchParams.get('node');
     if (!nodeId) return;
@@ -81,73 +107,16 @@ const NodeManagement = () => {
     }
   }, [nodes, searchParams, setSearchParams]);
 
-
-  useEffect(() => {
-    let intervalId;
-    const fetchAllNodeStatus = async () => {
-      if (!nodes || nodes.length === 0) return;
-      const info = {};
-      await Promise.all(nodes.map(async (node) => {
-        try {
-          const res = await apiClient.get(`/nodes/${node.id}/status/`);
-          if (res.data.success && res.data.data && res.data.data.node_info && res.data.data.reachable !== false) {
-            info[node.id] = res.data.data.node_info;
-          }
-        } catch { /* ignore */ }
-      }));
-      setNodeInfo(info);
-    };
-    fetchAllNodeStatus();
-    // Poll node status less aggressively and only when the tab is visible.
-    const tick = () => {
-      if (document.visibilityState === 'visible') fetchAllNodeStatus();
-    };
-    intervalId = setInterval(tick, 60000);
-    document.addEventListener('visibilitychange', tick);
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', tick);
-    };
-  }, [nodes]);
-
-  const nodeStats = useMemo(() => {
-    const activeCount = nodes.filter((node) => node.status).length;
-    return {
-      total: nodes.length,
-      active: activeCount,
-      inactive: nodes.length - activeCount,
-    };
-  }, [nodes]);
-
-
-  const filteredNodes = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    return nodes.filter(node =>
-      String(node.name || '').toLowerCase().includes(term)
-    );
-  }, [nodes, searchTerm]);
-
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-  };
-
-  const handleDelete = (nodeId, nodeName) => {
+  const handleDelete = (node) => {
     openConfirm(
-      t('deleteButton', 'Delete Node'),
-      `${t('deleteNodeConfirm', 'Delete node')} "${nodeName}"?`,
+      t('deleteNode'),
+      t('confirmDeleteNode', 'Delete {{name}}? This cannot be undone.', { name: node.name }),
       async () => {
         try {
-          const response = await apiClient.delete(`/nodes/${nodeId}`);
-          if (response.data.success) {
-            addToast(response.data.msg || t('nodeDeletedSuccess', 'Node deleted successfully.'), 'success');
-          } else {
-            addToast(response.data.msg || t('unableToDeleteNode', 'Unable to delete node.'), 'error');
-          }
-        } catch (error) {
-          addToast(error.response?.data?.detail || error.response?.data?.msg || t('errorDeletingNode', 'An error occurred while deleting the node.'), 'error');
-        } finally {
+          const res = await apiClient.delete(`/nodes/${node.id}/`);
+          addToast(res.data?.success ? t('deleted') : (res.data?.msg || t('error')), res.data?.success ? 'success' : 'error');
           fetchNodes();
-        }
+        } catch { addToast(t('error'), 'error'); }
       }
     );
   };
@@ -155,75 +124,52 @@ const NodeManagement = () => {
   const handleCheckStatus = async (nodeId) => {
     try {
       const response = await apiClient.get(`/nodes/${nodeId}/status/`);
-      console.warn(response.data.msg || 'Status check complete.');
+      addToast(response.data.msg || t('statusCheckDone', 'Status check complete.'), 'success');
       fetchNodes();
-    } catch {
-      console.warn('Failed to check node status.');
+    } catch (e) {
+      addToast(e.response?.data?.detail || t('statusCheckFailed', 'Failed to check node status.'), 'error');
     }
   };
 
   const handleDownloadAllConfigs = async (node) => {
-    // User already clicked 'Download all' — no extra confirmation needed for downloads
     try {
-      const response = await apiClient.get(`/nodes/ovpn-all/${node.id}`, {
-        responseType: 'blob',
-        timeout: 300000,
-      });
+      const response = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob', timeout: 300000 });
       const blob = new Blob([response.data], { type: 'application/zip' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `ovpn-configs-${node.name}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      link.href = url; link.download = `ovpn-configs-${node.name}.zip`;
+      document.body.appendChild(link); link.click(); link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.warn(error.response?.data?.detail || 'Failed to download configs.');
+    } catch (e) {
+      addToast(e.response?.data?.detail || t('exportFailed'), 'error');
     }
   };
 
   const handleNodeCreated = () => {
     setIsAddModalOpen(false);
-    addToast(t('nodeCreatedSuccess', 'Node created successfully.'), 'success');
+    addToast(t('nodeCreatedSuccess'), 'success');
     fetchNodes();
   };
 
   const handleExportCsv = () => {
-    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const head = ['id', 'name', 'address', 'port', 'protocol', 'ovpn_port', 'status', 'country', 'cpu', 'memory'];
-    const rows = nodes.map((n) => {
-      const info = nodeInfo[n.id] || {};
-      return [n.id, n.name, n.address, n.port, n.protocol, n.ovpn_port, n.status ? 'active' : 'inactive', n.country_code || '', info.cpu_usage ?? '', info.memory_usage ?? ''];
-    });
-    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+      const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const head = ['id', 'name', 'address', 'port', 'protocol', 'ovpn_port', 'status', 'country'];
+    const rows = nodes.map(n => [n.id, n.name, n.address, n.port, n.protocol, n.ovpn_port, n.status ? 'active' : 'inactive', n.country_code || '']);
+    const csv = [head, ...rows].map(r => r.map(esc).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `ovmanager-nodes-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    addToast(t('exported'), 'success');
   };
 
-  const handleToggleNode = async (node) => {
-    try {
-      await apiClient.put(`/nodes/${node.id}`, {
-        name: node.name, address: node.address, tunnel_address: node.tunnel_address || '',
-        protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port, port: node.port,
-        status: !node.status, set_new_setting: false, use_tls: node.use_tls || false,
-      });
-      addToast(node.status ? t('nodeDisabledToast', 'Node disabled.') : t('nodeEnabledToast', 'Node enabled.'), 'success');
-      fetchNodes();
-    } catch (e) {
-      addToast(e.response?.data?.msg || e.response?.data?.detail || t('failedToggleNode', 'Failed to toggle node.'), 'error');
-    }
-  };
-
-  const applyDensity = (d) => { setDensity(d); localStorage.setItem('ovmanager-ui-density', d); };
+  const handleSearchChange = (e) => setSearchTerm(e.target.value);
 
   const handleNodeUpdated = (msg) => {
     setIsEditModalOpen(false);
     setSelectedNode(null);
-    addToast(msg || t('nodeUpdatedSuccess', 'Node updated successfully.'), 'success');
+    addToast(msg || t('nodeUpdatedSuccess'), 'success');
     fetchNodes();
   };
 
@@ -232,14 +178,10 @@ const NodeManagement = () => {
       <div className="view-header">
         <h2>{t('nodes')}</h2>
         <div className="view-header-actions">
-          <div className="density-toggle" role="group" aria-label={t('density', 'Density')}>
-            <button type="button" className={density === 'comfortable' ? 'active' : ''} onClick={() => applyDensity('comfortable')}>{t('densityComfort', 'Comfort')}</button>
-            <button type="button" className={density === 'compact' ? 'active' : ''} onClick={() => applyDensity('compact')}>{t('densityCompact', 'Compact')}</button>
-          </div>
-          <button type="button" className={`btn btn-secondary btn-sm${grouped ? ' btn-active' : ''}`} onClick={() => { setGrouped(!grouped); localStorage.setItem('ovmanager-ui-node-grouped', grouped ? '0' : '1'); }} title={t('groupByCountry', 'Group by country')}>
+          <button type="button" className={`btn btn-secondary btn-sm${grouped ? ' btn-active' : ''}`} onClick={() => { setGrouped(!grouped); localStorage.setItem('ovmanager-ui-node-grouped', grouped ? '0' : '1'); }} title={t('groupByCountry')}>
             <FiGlobe aria-hidden="true" /> {t('groupByCountry', 'Group')}
           </button>
-          <button type="button" onClick={handleExportCsv} className="btn btn-secondary btn-sm export-btn" aria-label={t('exportCsv', 'Export CSV')}>
+          <button type="button" onClick={handleExportCsv} className="btn btn-secondary btn-sm" aria-label={t('exportCsv')}>
             <FiDownload aria-hidden="true" /> {t('exportCsv', 'CSV')}
           </button>
           <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn">
@@ -274,16 +216,17 @@ const NodeManagement = () => {
       </div>
 
       <div className="search-pagination-controls">
-        <div className="search-container">
-          <FiSearch className="search-icon" />
+        <label className="search-field" style={{ flex: 1, maxWidth: 280 }}>
+          <FiSearch className="search-icon" aria-hidden="true" />
           <input
-            type="text"
-            placeholder={t('searchNodePlaceholder')}
+            type="search"
+            placeholder={t('searchNodePlaceholder', 'Search by name…')}
             value={searchTerm}
             onChange={handleSearchChange}
             className="search-input"
+            aria-label={t('searchNodePlaceholder', 'Search by name…')}
           />
-        </div>
+        </label>
         <div className="results-meta" aria-live="polite">
           <strong>{filteredNodes.length}</strong> {t('results', 'results')}
           {searchTerm && (
@@ -295,60 +238,39 @@ const NodeManagement = () => {
       </div>
 
       {loadError ? (
-        <ErrorState
-          title={t('loadError', 'Could not load nodes')}
-          message={t('loadErrorDetail', 'We had trouble reaching the server.')}
-          onRetry={fetchNodes}
-          retryLabel={t('retry', 'Retry')}
-        />
+        <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={fetchNodes} retryLabel={t('retry')} />
       ) : !isLoading && nodes.length === 0 ? (
-        <EmptyState
-          title={t('noNodes', 'No nodes configured')}
-          description={t('noNodesBody', 'Add your first OVNode to get started.')}
-          actionLabel={t('addNewNode', 'Add Node')}
-          onAction={() => setIsAddModalOpen(true)}
-        />
+        <EmptyState title={t('noNodes')} description={t('noNodesBody')} actionLabel={t('addNewNode')} onAction={() => setIsAddModalOpen(true)} />
       ) : (
-        <NodeTable
-          nodes={filteredNodes}
-          isLoading={isLoading}
-          nodeInfo={nodeInfo}
-          onDelete={handleDelete}
-          onCheckStatus={handleCheckStatus}
-          onEdit={handleOpenEditModal}
-          onDownloadAll={handleDownloadAllConfigs}
-          onView={setDrawerNode}
-          grouped={grouped}
-          density={density}
-        />
+        <div className="placeholder-list">
+          <p className="placeholder-notice">{t('listRemoved', 'Table removed — UI will be redesigned. Current nodes: {count}', { count: filteredNodes.length })}</p>
+        </div>
       )}
 
       {isAddModalOpen && (
-        <AddNodeModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-          onNodeCreated={handleNodeCreated}
+        <AddNodeModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onNodeCreated={handleNodeCreated} />
+      )}
+      {isEditModalOpen && selectedNode && (
+        <EditNodeModal isOpen={isEditModalOpen} node={selectedNode} onClose={() => { setIsEditModalOpen(false); setSelectedNode(null); }} onNodeUpdated={handleNodeUpdated} />
+      )}
+      {drawerNode && (
+        <NodeDrawer
+          node={drawerNode}
+          onClose={() => setDrawerNode(null)}
+          onEdit={(n) => { setDrawerNode(null); handleOpenEditModal(n); }}
+          onDelete={(n) => { setDrawerNode(null); handleDelete(n); }}
+          onCheckStatus={handleCheckStatus}
+          onDownloadAll={handleDownloadAllConfigs}
         />
       )}
 
-      {isEditModalOpen && (
-        <EditNodeModal
-          isOpen={isEditModalOpen}
-          node={selectedNode}
-          onClose={() => setIsEditModalOpen(false)}
-          onNodeUpdated={handleNodeUpdated}
-        />
-      )}
-      <NodeDrawer
-        node={drawerNode}
-        onClose={() => setDrawerNode(null)}
-        onEdit={(n) => { setDrawerNode(null); handleOpenEditModal(n); }}
-        onDelete={(id, name) => { setDrawerNode(null); handleDelete(id, name); }}
-        onToggleStatus={handleToggleNode}
-        onCheckStatus={handleCheckStatus}
+      <ConfirmModal
+        open={confirm.open}
+        onClose={closeConfirm}
+        onConfirm={confirm.onConfirm}
+        title={confirm.title}
+        message={confirm.message}
       />
-      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("deleteButton","Delete")} cancelLabel={t("cancelButton","Cancel")} />
-
     </div>
   );
 };
