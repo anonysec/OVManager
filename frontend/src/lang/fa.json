@@ -633,5 +633,8 @@
   "shortcutPalette": "باز کردن فرمان سریع",
   "shortcutHelp": "نمایش این برگه راهنما",
   "dismissToast": "بستن",
-  "ownerTelegramIdHint": "شناسه عددی تلگرام شما. پس از ذخیره، ربات را باز کنید و Start را بزنید."
+  "ownerTelegramIdHint": "شناسه عددی تلگرام شما. پس از ذخیره، ربات را باز کنید و Start را بزنید.",
+  "listRemoved": "Table removed — UI will be redesigned. Current count: {{count}} items.",
+  "shortcutLogout": "خروج",
+  "adminShort": "ادمین"
 }

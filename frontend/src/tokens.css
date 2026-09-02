@@ -29,6 +29,12 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* The logo's dark inner detail. The accent square behind it switches with
+     the theme via --accent; the ink should stay readable on every accent
+     shade, so we keep it dark in both themes (the logo-ink is on a coloured
+     fill, not the page background). */
+  --logo-ink: #15110a;
+  /* All other tokens follow below in the original block. */
   color-scheme: dark;
 
   /* ── Typography ─────────────────────────────────────────────────────── */

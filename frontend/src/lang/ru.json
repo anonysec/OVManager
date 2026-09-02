@@ -633,5 +633,8 @@
   "shortcutPalette": "Открыть палитру команд",
   "shortcutHelp": "Показать эту шпаргалку",
   "dismissToast": "Закрыть",
-  "ownerTelegramIdHint": "Ваш числовой Telegram ID. После сохранения откройте бота и нажмите Start."
+  "ownerTelegramIdHint": "Ваш числовой Telegram ID. После сохранения откройте бота и нажмите Start.",
+  "listRemoved": "Table removed — UI will be redesigned. Current count: {{count}} items.",
+  "shortcutLogout": "Выйти",
+  "adminShort": "Админ"
 }

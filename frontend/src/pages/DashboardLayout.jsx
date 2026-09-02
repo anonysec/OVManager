@@ -19,7 +19,7 @@ import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { settle } from '../hooks/useAsyncData';
 
 const DashboardLayout = () => {
-  const { userRole } = useAuth();
+  const { userRole, logout } = useAuth();
   const { theme, cycleTheme } = useTheme();
   const { i18n, t } = useTranslation();
   const navigate = useNavigate();
@@ -92,6 +92,13 @@ const DashboardLayout = () => {
         return;
       }
       const key = e.key;
+      // Shift+Q — logout, matches the shortcut hint in the profile menu.
+      if (e.shiftKey && (key === 'Q' || key === 'q')) {
+        e.preventDefault();
+        logout();
+        gPending.current = false;
+        return;
+      }
       if (key === '?' || (key === '/' && e.shiftKey)) {
         e.preventDefault();
         setHelpOpen(true);
@@ -129,7 +136,7 @@ const DashboardLayout = () => {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navigate, userRole]);
+  }, [navigate, userRole, logout]);
 
   // Notification bell: lightweight poll — avoids duplicating the heavy per-node
   // status calls that ServerStats already makes on the same 30-second cycle.

@@ -633,5 +633,8 @@
   "shortcutPalette": "打开命令面板",
   "shortcutHelp": "显示此快捷键表",
   "dismissToast": "关闭",
-  "ownerTelegramIdHint": "你的数字 Telegram 用户 ID。保存后打开机器人并点 Start。"
+  "ownerTelegramIdHint": "你的数字 Telegram 用户 ID。保存后打开机器人并点 Start。",
+  "listRemoved": "Table removed — UI will be redesigned. Current count: {{count}} items.",
+  "shortcutLogout": "退出登录",
+  "adminShort": "管理员"
 }

@@ -51,7 +51,22 @@ html[data-theme="light"] .ops-panel:hover { box-shadow: 0 16px 36px rgba(20,30,5
 .ops-panel header span { letter-spacing: 3px; font-weight: 900; }
 .ops-panel-body { padding: 18px; }
 
-.network-card-grid, .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; }
+/* Wider grid for network status (4 cells). Active and Traffic sit on the top
+   row, Online Nodes and Avg Latency on the bottom. Increased vertical gap
+   between rows (24px) so the user can scan the two halves without crowding,
+   per the 2026-09 wish-list "space between traffic and online users". */
+.network-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+  padding: 4px 0;
+}
+.network-card-grid > :nth-child(1) { grid-row: 1; grid-column: 1; } /* Active  */
+.network-card-grid > :nth-child(2) { grid-row: 1; grid-column: 2; } /* Traffic */
+.network-card-grid > :nth-child(3) { grid-row: 2; grid-column: 1; } /* Online  */
+.network-card-grid > :nth-child(4) { grid-row: 2; grid-column: 2; } /* Avg     */
+.network-card-grid > :nth-child(3),
+.network-card-grid > :nth-child(4) { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .ops-stat-cell { border-bottom: 1px solid var(--line); padding-bottom: 14px; min-height: 72px; }
 .ops-stat-cell span, .traffic-graph span, .health-bars span { display: block; color: var(--text-secondary); font-size: 16px; }
 .ops-stat-cell strong { display: block; margin-top: 3px; font-size: 35px; line-height: 1; letter-spacing: -.05em; }
@@ -264,33 +279,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 /* sparkline in stat cell */
 .ops-stat-cell .mini-line { position: absolute; right: 12px; bottom: 8px; width: 64px; height: 26px; opacity: .55; }
 .ops-stat-cell { position: relative; }
-.world-map-real { width: 100%; height: auto; min-width: 0; max-width: none; background: radial-gradient(120% 120% at 50% 30%, #0f2030 0%, #0a1420 60%, #070d16 100%); border-radius: 0; margin-bottom: 10px; display: block; }
-.map-zoom-wrap { position: relative; }
-.map-zoom-viewport { height: 300px; overflow: auto; display: flex; align-items: center; justify-content: center; border-radius: 0; }
-.map-zoom-controls { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; flex-direction: column; gap: 8px; background: rgba(15,20,30,.55); padding: 6px; border-radius: 10px; border: 1px solid var(--line); backdrop-filter: blur(6px); }
-.map-zoom-btn { width: 2.25rem; height: 2.25rem; border-radius: 8px; border: 1px solid var(--line); background: rgba(40,50,65,.9); color: var(--text); font-size: 1.125rem; font-weight: 800; line-height: 1; cursor: pointer; display: grid; place-items: center; transition: background .12s ease, border-color .12s ease, transform .1s ease; }
-.map-zoom-btn:hover { background: var(--orange); border-color: var(--orange); color: #111; transform: scale(1.05); }
-.map-zoom-btn:active { transform: scale(0.95); }
-.map-zoom-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.map-zoom-reset { font-size: 14px; }
-.world-map-real svg { width: 100%; height: auto; display: block; }
-.world-map-real .sphere { fill: url(#sphereGrad); stroke: rgba(120,180,220,.18); stroke-width: 1; }
-.world-map-real .country { fill: #2c4a66; stroke: rgba(140,200,235,.22); stroke-width: .5; transition: fill .12s ease; cursor: pointer; }
-.world-map-real .country:hover { fill: var(--orange); }
-.world-map-real .country-borders { fill: none; stroke: rgba(150,210,240,.5); stroke-width: .5; pointer-events: none; }
-.map-marker .node-online { fill: #34f5d6; stroke: #04201c; stroke-width: 1.5; filter: drop-shadow(0 0 7px #2ff0d4) drop-shadow(0 0 3px #2ff0d4); }
-.map-marker .node-offline { fill: #ff7a8a; stroke: #1a0608; stroke-width: 1.5; }
-.map-marker .pulse { fill: none; stroke: #2ff0d4; stroke-width: 2; opacity: .55; animation: mapPulse 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-.map-marker .node-country-label { fill: #eaf6ff; font-size: 14px; font-weight: 800; paint-order: stroke; stroke: #06121b; stroke-width: 3.5px; pointer-events: none; }
-.country-label { fill: #fff; font-size: 15px; font-weight: 800; paint-order: stroke; stroke: #06121b; stroke-width: 4px; pointer-events: none; }
-@keyframes mapPulse { 0%,100% { transform: scale(.6); opacity:.2; } 50% { transform: scale(1.4); opacity:.7; } }
-html[data-theme="light"] .world-map-real { background: #dde8f2; }
-html[data-theme="light"] .world-map-real .sphere { fill: #e3edf6; }
-html[data-theme="light"] .world-map-real .country { fill: #93b0cc; stroke: rgba(20,45,70,.4); }
-html[data-theme="light"] .world-map-real .country-borders { stroke: rgba(20,45,70,.5); }
-html[data-theme="light"] .map-marker .node-country-label { fill: #0a1622; stroke: var(--surface-1); }
-html[data-theme="light"] .world-map-real .map-zoom-btn { background: rgba(255,255,255,.82); }
-html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var(--surface-1); }
 
 /* Flag icon styles */
 .flag-icon {
@@ -307,11 +295,11 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 /* list view override for users/nodes/admins */
 .list-table-container { padding: 0 !important; overflow-x: auto !important; }
 .list-table, .user-list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
-.list-table thead th, .user-list-table thead th { position: sticky; top: 0; background: var(--panel); color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.list-table thead th, .user-list-table thead th { position: sticky; top: 0; background: var(--panel); color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 9px 12px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); font-weight: 600; }
 .list-table thead th:first-child, .user-list-table thead th:first-child { border-top-left-radius: 10px; }
 .list-table thead th:last-child, .user-list-table thead th:last-child { border-top-right-radius: 10px; }
-.list-table th { padding: 12px 14px; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
-.list-table td { padding: 12px 14px; font-size: 13px; white-space: nowrap; }
+.list-table th { padding: 9px 12px; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
+.list-table td { padding: 9px 12px; font-size: 13px; white-space: nowrap; }
 .list-table tbody tr:hover td { background: rgba(255,255,255,.04); }
 .list-table td[data-label="Total Traffic"], .list-table td[data-label="Expiry Date"], .list-table td[data-label="Last Online"] { font-variant-numeric: tabular-nums; }
 .identity-cell { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
@@ -343,14 +331,18 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 .list-table.user-list-table thead th:first-child, .list-table.node-list-table thead th:first-child, .list-table.audit-table thead th:first-child { border-top-left-radius: 0; }
 .list-table.user-list-table thead th:last-child, .list-table.node-list-table thead th:last-child, .list-table.audit-table thead th:last-child { border-top-right-radius: 0; }
 .list-table.user-list-table td, .list-table.node-list-table td, .list-table.audit-table td {
-  padding: 8px 12px;
-  font-size: 13px; line-height: 1.35;
+  padding: 6px 10px;
+  font-size: 13px; line-height: 1.3;
   border: 1px solid var(--line);
   white-space: nowrap;
-  height: 40px;
+  height: 36px;
   vertical-align: middle;
-  text-align: start;
+  text-align: center;
 }
+.list-table.user-list-table td[data-label="Username"],
+.list-table.user-list-table td[data-label="Name"],
+.list-table.node-list-table td.node-name-cell,
+.list-table.audit-table td.audit-target { text-align: start; }
 .list-table.user-list-table tbody tr, .list-table.node-list-table tbody tr, .list-table.audit-table tbody tr { background: var(--panel); }
 .list-table.user-list-table tbody tr:nth-child(even), .list-table.node-list-table tbody tr:nth-child(even), .list-table.audit-table tbody tr:nth-child(even) { background: rgba(255,255,255,.022); }
 .list-table.user-list-table tbody tr:hover td, .list-table.node-list-table tbody tr:hover td, .list-table.audit-table tbody tr:hover td { background: rgba(255,122,30,.07); }
@@ -358,17 +350,60 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
 .list-table.user-list-table .col-check, .list-table.node-list-table .col-check { width: 42px; text-align: center; padding: 0; }
 .list-table.user-list-table .col-check input, .list-table.node-list-table .col-check input { width: 15px; height: 15px; cursor: pointer; }
 .list-table.user-list-table td.traffic-cell { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); }
-.list-table.user-list-table td[data-label="Max Logins"] { text-align: end; }
-.list-table.user-list-table td[data-label="Expiry Date"] { text-align: end; }
-.list-table.user-list-table td[data-label="Last Online"] { text-align: end; }
+/* Item 4 (2026-09): every column text centered on list tables. */
+.list-table.user-list-table td.traffic-cell { display: flex; justify-content: center; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); text-align: center; }
+.list-table.user-list-table td[data-label="Max Logins"] { text-align: center; }
+.list-table.user-list-table td[data-label="Expiry Date"] { text-align: center; }
+.list-table.user-list-table td[data-label="Last Online"] { text-align: center; }
+.list-table.user-list-table td[data-label="Username"] { text-align: start; }    /* keep left */
+.list-table.user-list-table td[data-label="Owner"] { text-align: start; }      /* keep left */
 .list-table.user-list-table .traffic-used { font-weight: 600; font-variant-numeric: tabular-nums; }
 .list-table.user-list-table .traffic-limit { color: var(--muted); font-weight: 400; font-size: 11px; margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
 .list-table.user-list-table .avatar-sm { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: rgba(255,122,30,.16); color: var(--orange); font-weight: 800; font-size: 12px; }
 .list-table.user-list-table .actions-cell { text-align: start; }
+
+/* icon-btn overrides for list-tables — tighter, smaller hit area */
+.list-table.user-list-table .icon-btn,
+.list-table.node-list-table .icon-btn,
+.list-table.audit-table .icon-btn {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 6px !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--line) !important;
+  cursor: pointer;
+  transition: all .12s ease;
+  display: inline-grid;
+  place-items: center;
+}
+.list-table.user-list-table .icon-btn:hover,
+.list-table.node-list-table .icon-btn:hover,
+.list-table.audit-table .icon-btn:hover {
+  background: rgba(255,255,255,.08) !important;
+  border-color: var(--orange) !important;
+  color: var(--orange) !important;
+}
+.list-table.user-list-table .icon-btn.danger,
+.list-table.node-list-table .icon-btn.danger,
+.list-table.audit-table .icon-btn.danger {
+  color: var(--danger-text) !important;
+  border-color: var(--danger-soft) !important;
+  background: var(--danger-soft) !important;
+}
+.list-table.user-list-table .icon-btn.danger:hover,
+.list-table.node-list-table .icon-btn.danger:hover,
+.list-table.audit-table .icon-btn.danger:hover {
+  color: #fff !important;
+  background: var(--danger-text) !important;
+  border-color: var(--danger-text) !important;
+}
+
 .identity-cell small { display:block; color: var(--muted); margin-top: 2px; font-size: 11px; }
 .login-count { color: var(--orange); font-size: 16px; }
-.row-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
-.row-actions button { min-width: 31px; height: 31px; padding: 7px !important; display: grid; place-items: center; border: 1px solid var(--line) !important; background: transparent !important; color: var(--muted) !important; border-radius: 8px !important; cursor: pointer; transition: all .12s ease; box-shadow: none !important; }
+.row-actions { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.row-actions button { min-width: 28px; height: 28px; padding: 6px !important; display: grid; place-items: center; border: 1px solid var(--line) !important; background: transparent !important; color: var(--muted) !important; border-radius: 7px !important; cursor: pointer; transition: all .12s ease; box-shadow: none !important; }
 .row-actions button:hover { background: rgba(255,255,255,.08) !important; border-color: var(--orange) !important; color: var(--orange) !important; }
 .row-actions button.danger:hover { color: var(--red) !important; border-color: var(--red) !important; }
 /* Action icon buttons (edit, delete, more).
@@ -376,7 +411,7 @@ html[data-theme="light"] .country-label { fill: var(--text-primary); stroke: var
    ones, danger for delete. The .danger variant uses a soft danger fill at
    rest so the destructive action is visually distinct from edit, not just
    a colour change on hover. */
-.icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 8px !important; padding: 7px !important; cursor: pointer; transition: all .12s ease; }
+.icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 7px !important; padding: 6px !important; cursor: pointer; transition: all .12s ease; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; }
 .icon-btn:hover { background: rgba(255,255,255,.08) !important; color: var(--orange) !important; border-color: var(--orange) !important; }
 .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
 .icon-btn.danger:hover { color: #fff !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
@@ -617,10 +652,39 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 .seg-toggle button { border: 0; background: transparent; color: var(--muted); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
 .seg-toggle button.active { background: var(--orange); color: #111; }
 
-.search-field { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; max-width: 380px; transition: border-color .15s ease, box-shadow .15s ease; }
-.search-field:focus-within { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(252,122,30,.15); }
-.search-field .search-icon { color: var(--muted); font-size: 16px; flex: 0 0 auto; }
-.search-field input { background: transparent !important; border: 0 !important; color: var(--text) !important; padding: 12px 0; width: 100%; outline: none; font-size: 14px; }
+/* Search field — single border, compact. The previous "2 borders" came from
+   the outer border + a focus ring box-shadow that read as a 2nd outline. We
+   keep just one border, drop the focus ring shadow, and shrink. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  max-width: 260px;
+  height: 32px;
+  transition: border-color .12s ease;
+  box-shadow: none !important;
+}
+.search-field:focus-within { border-color: var(--accent); box-shadow: none !important; outline: none; }
+.search-field .search-icon { color: var(--muted); font-size: 14px; flex: 0 0 auto; }
+.search-field input {
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  color: var(--text) !important;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  font-size: 13px;
+  line-height: 1;
+  height: 100%;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
 .search-field input::placeholder { color: var(--muted); }
 .search-field input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
@@ -890,9 +954,6 @@ html[data-theme="light"] .row-menu-item { color: #11161f; }
 html[data-theme="light"] .row-menu-item:hover { background: rgba(255,122,30,.1); color: var(--orange); }
 html[data-theme="light"] .security-errors li { background: #f7f9fc; }
 html[data-theme="light"] .resource-chips span { background: #f1f4f9; }
-html[data-theme="light"] .world-map-real { background: radial-gradient(120% 120% at 50% 30%, #eaf1f8 0%, #e0e9f2 60%, #dbe4ee 100%); }
-html[data-theme="light"] .world-map-real .country { fill: #cdd9e6; stroke: rgba(80,120,160,.35); }
-html[data-theme="light"] .world-map-real .sphere { fill: url(#sphereGrad); stroke: rgba(80,120,160,.3); }
 html[data-theme="light"] .ops-notice-strip { background: rgba(255,122,30,.10); border-color: rgba(255,122,30,.3); }
 /* --accent-contrast already resolves per theme; no override needed. */
 html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
@@ -915,8 +976,6 @@ html[data-theme="light"] .ops-table tbody tr:hover { background: rgba(255,122,30
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border-color: var(--bg); }
 html[data-theme="light"] .ops-panel, html[data-theme="light"] .user-stat, html[data-theme="light"] .ops-stat-cell { border: 1px solid var(--bg); box-shadow: 0 18px 34px rgba(20,30,50,.08); }
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg); }
-html[data-theme="light"] .map-zoom-btn { background: rgba(255,255,255,.9); color: var(--text-primary); border-color: var(--border); }
-html[data-theme="light"] .map-zoom-btn:hover { background: var(--orange); color: var(--surface-1); border-color: var(--orange); }
 /* ---- Light mode: topbar + brand visibility ---- */
 html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
 html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !important; }
@@ -1640,6 +1699,31 @@ html[data-theme="light"] .btn-secondary:hover {
   100% { background-position: -200% 0; }
 }
 
+/* ===== Placeholder list notice (shared) =====
+   Used when a list/table is removed but data is available.
+   Mirrors empty-state / skeleton geometry. */
+.placeholder-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 14px;
+  color: var(--text-secondary);
+}
+.placeholder-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
 /* ===== StatusBadge (shared) ===== */
 .status-badge {
   display: inline-flex;
@@ -1730,10 +1814,6 @@ input[type="checkbox"]:focus-visible,
   outline-offset: 2px;
 }
 
-/* ===== Map marker focus ring ===== */
-.map-marker {
-  transition: opacity 0.15s ease;
-}
 @media (prefers-reduced-motion: reduce) {
   .ops-panel,
   .status-badge,
@@ -2165,9 +2245,9 @@ input[type="checkbox"]:focus-visible,
 
 .search-with-filters .search-field,
 .search-pagination-controls .search-container {
-  min-width: min(100%, 260px);
-  flex: 1 1 260px;
-  max-width: 430px !important;
+  min-width: min(100%, 200px);
+  flex: 0 1 240px;
+  max-width: 280px !important;
 }
 
 .search-field,
@@ -2186,24 +2266,33 @@ input[type="checkbox"]:focus-visible,
   pointer-events: none;
 }
 
+/* Compact single-border search input. The .search-field wrapper has the
+   border, the inner <input class="search-input"> has none. We keep the inner
+   rule below minimal — no border, no focus ring, no fixed height — so the
+   wrapper's height/padding/border do all the work. */
 .search-field .search-input,
 .search-container .search-input {
   width: 100%;
-  height: 40px;
-  padding: 0 13px 0 38px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg);
+  height: 100%;
+  padding: 0 0 0 26px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   color: var(--text-primary);
   font: inherit;
+  font-size: 13px;
   outline: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  box-shadow: none !important;
+  transition: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .search-field .search-input:focus,
 .search-container .search-input:focus {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px var(--accent-color-transparent);
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none;
 }
 
 .seg-toggle {
@@ -3309,32 +3398,6 @@ html[dir="rtl"] .profile-dropdown {
 }
 
 /* Reliable atlas zoom: the canvas grows, so the viewport has real scrollable
-   dimensions instead of a flex child that silently shrinks back to 100%. */
-.map-zoom-viewport {
-  display: block;
-  position: relative;
-  width: 100%;
-  height: 300px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--border-strong) transparent;
-}
-
-.map-zoom-canvas {
-  position: relative;
-  min-height: 100%;
-  flex: none;
-}
-
-.map-zoom-canvas .world-map-real {
-  display: block;
-  width: 100% !important;
-  min-width: 100%;
-  max-width: none;
-  height: auto;
-}
-
-.map-zoom-level {
   display: grid;
   min-width: 42px;
   min-height: 25px;
@@ -3932,200 +3995,6 @@ html[data-theme="light"] .mobile-nav {
   margin-top: 4px;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   ATLAS — dashboard world map overhaul
-   Summary strip + interactive map (drag pan, wheel/button zoom,
-   hover tooltip, click-to-manage) + legend.
-═══════════════════════════════════════════════════════════ */
-.atlas-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* ── Summary strip ─────────────────────────────── */
-.atlas-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.atlas-stat {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-1);
-}
-
-.atlas-stat svg {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  color: var(--text-muted);
-}
-
-.atlas-stat strong {
-  font-size: 16px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.atlas-stat em {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.atlas-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.atlas-dot--online {
-  background: var(--success-color);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--success-color) 60%, transparent);
-}
-
-.atlas-dot--offline {
-  background: var(--danger-color);
-}
-
-/* ── Map chrome ────────────────────────────────── */
-.map-zoom-wrap {
-  position: relative;
-}
-
-.map-zoom-viewport {
-  touch-action: none; /* drag-to-pan handled in JS */
-}
-
-.map-marker {
-  cursor: pointer;
-}
-
-.map-marker--offline {
-  opacity: .82;
-}
-
-.map-marker--active .node-online,
-.map-marker--active .node-offline {
-  stroke-width: 2.5;
-}
-
-/* ── Hover tooltip ─────────────────────────────── */
-.atlas-tooltip {
-  position: absolute;
-  z-index: 30;
-  min-width: 178px;
-  max-width: 240px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  background: var(--bg-elevated);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
-  pointer-events: none;
-  animation: fadeUp .12s ease both;
-}
-
-.atlas-tooltip-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 5px;
-}
-
-.atlas-tooltip-title strong {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.atlas-tooltip-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.atlas-tooltip-dot.online {
-  background: var(--success-color);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--success-color) 60%, transparent);
-}
-
-.atlas-tooltip-dot.offline {
-  background: var(--danger-color);
-}
-
-.atlas-tooltip-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--text-muted);
-  font-size: 10px;
-}
-
-.atlas-tooltip-row b {
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
-.atlas-tooltip-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.atlas-tooltip-grid span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-
-.atlas-tooltip-grid b {
-  color: var(--text-primary);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.atlas-tooltip-hint {
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 600;
-}
-
-/* ── Light theme adjustments ───────────────────── */
-html[data-theme="light"] .atlas-tooltip {
-  background: var(--surface-1);
-  box-shadow: 0 16px 40px rgba(20, 30, 50, .16);
-}
-
-@media (max-width: 560px) {
-  .atlas-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 
 /* ── EditNodeModal: "apply settings on node" checkbox row ── */
 .modal-check-row {
@@ -4248,13 +4117,34 @@ html[data-theme="light"] .atlas-tooltip {
    tighter collapsed rail, RTL, profile in sidebar footer.
 ═══════════════════════════════════════════════════════════ */
 
-/* Sidebar spans the full viewport height — no longer tucked under
-   the topbar. Nav scrolls internally when items overflow. */
-.ops-sidebar {
+/* Corner anchoring. "inline-start" is the default (left in LTR, right in RTL),
+   spanning full height. Corners (top-left/right, bottom-left/right) shrink
+   the sidebar to 60vh max and anchor to that corner. */
+.ops-sidebar[data-corner="inline-start"] {
+  left: 0;
+  right: auto;
+  bottom: 0;
   top: 0;
   height: 100vh;
-  overflow: visible; /* let the profile dropdown extend beyond the rail */
+  max-height: none;
 }
+html[dir="rtl"] .ops-sidebar[data-corner="inline-start"] {
+  left: auto;
+  right: 0;
+}
+
+.ops-sidebar[data-corner="top-left"]    { top: 0;    bottom: auto; height: auto; max-height: 60vh; border-bottom: 1px solid var(--border); }
+.ops-sidebar[data-corner="top-right"]   { top: 0;    bottom: auto; right: 0; left: auto; height: auto; max-height: 60vh; border-bottom: 1px solid var(--border); }
+.ops-sidebar[data-corner="bottom-left"] { top: auto; bottom: 0;    height: auto; max-height: 60vh; border-top: 1px solid var(--border); }
+.ops-sidebar[data-corner="bottom-right"]{ top: auto; bottom: 0;    right: 0; left: auto; height: auto; max-height: 60vh; border-top: 1px solid var(--border); }
+
+/* RTL corner mirrors LTR — corners stay physical so users get the same
+   visual placement regardless of writing direction. */
+html[dir="rtl"] .ops-sidebar                     { left: auto; right: 0; }
+html[dir="rtl"] .ops-sidebar[data-corner="top-right"]    { right: 0; left: auto; }
+html[dir="rtl"] .ops-sidebar[data-corner="top-left"]     { right: auto; left: 0; }
+html[dir="rtl"] .ops-sidebar[data-corner="bottom-right"] { right: 0; left: auto; }
+html[dir="rtl"] .ops-sidebar[data-corner="bottom-left"]  { right: auto; left: 0; }
 
 .ops-sidebar .sidebar-nav {
   flex: 1 1 auto;
@@ -4303,153 +4193,167 @@ html[data-theme="light"] .atlas-tooltip {
   inset-inline-start: 0;
 }
 
-/* ── Sidebar profile (moved from the topbar) ─────────────────── */
-.sidebar-profile {
-  position: relative;
-  flex-shrink: 0;
+/* ── Sidebar profile (inline, redesigned) ────────────────────────── */
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
 }
 
-.sidebar-profile-trigger {
+.sidebar-profile {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 12px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-primary);
-  text-align: start;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
+  position: relative;
 }
 
-.sidebar-profile-trigger:hover,
-.sidebar-profile-trigger.active {
-  background: var(--surface-2);
-  border-color: var(--border);
-}
-
-.sidebar-profile-trigger .avatar-xs {
+/* Avatar with status pulse ring */
+.sidebar-profile-avatar {
+  position: relative;
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 56%, #fff));
+  width: 36px;
+  height: 36px;
+}
+
+.sidebar-profile-avatar .avatar-md {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 60%, #fff));
   color: #1b1209;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.sidebar-profile-copy {
-  display: flex;
+/* Pulse indicator: green for Owner, blue for Admin/Operator */
+.sidebar-profile-pulse {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+.sidebar-profile-pulse.is-owner {
+  background: #22c55e; /* green */
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+.sidebar-profile-pulse.is-operator {
+  background: #3b82f6; /* blue */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Info block (expanded only) */
+.sidebar-profile-info {
   flex: 1 1 auto;
-  flex-direction: column;
   min-width: 0;
-  gap: 2px;
+  overflow: hidden;
 }
 
-.sidebar-profile-copy strong {
-  overflow: hidden;
+.sidebar-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sidebar-profile-name {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
-  font-size: 12px;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.sidebar-profile-copy small {
-  overflow: hidden;
-  color: var(--text-muted);
+.sidebar-profile-role-pill {
   font-size: 10px;
   font-weight: 700;
-  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+/* Stats row — pill chips */
+.sidebar-profile-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
-.sidebar-profile-chevron {
+.stat-chip-icon {
+  width: 12px;
+  height: 12px;
   flex: 0 0 auto;
-  color: var(--text-muted);
-  transition: transform .15s ease;
-}
-
-.sidebar-profile-trigger.active .sidebar-profile-chevron {
-  transform: rotate(180deg);
-}
-
-/* Collapsed: avatar only */
-.ops-sidebar--collapsed .sidebar-profile-trigger {
-  justify-content: center;
-  padding: 10px 4px;
-}
-
-.ops-sidebar--collapsed .sidebar-profile-copy,
-.ops-sidebar--collapsed .sidebar-profile-chevron {
-  display: none;
-}
-
-/* Profile popover — opens upward, anchored to the footer.
-   Collapsed rail: anchored outside the rail to the right. */
-.sidebar-profile-dropdown {
-  position: absolute;
-  right: 12px;
-  bottom: calc(100% + 8px);
-  z-index: 120;
-  min-width: 200px;
-  padding: 6px;
-  display: none;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .38);
-}
-
-.sidebar-profile-dropdown.open {
-  display: block;
-  animation: fadeUp .14s ease both;
-}
-
-.sidebar-profile-dropdown a,
-.sidebar-profile-dropdown button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background .15s ease, color .15s ease;
-}
-
-.sidebar-profile-dropdown a:hover,
-.sidebar-profile-dropdown button:hover {
-  background: var(--surface-2);
   color: var(--accent-color);
 }
 
-.sidebar-profile-dropdown button.danger {
+.stat-chip-value {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.stat-chip-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 10px;
+}
+
+/* Logout button — attached to the right, tiny */
+.sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-logout-btn:hover {
+  background: color-mix(in srgb, var(--danger-color) 14%, transparent);
   color: var(--danger-color);
 }
 
-.sidebar-profile-dropdown button.danger:hover {
-  background: color-mix(in srgb, var(--danger-color) 12%, transparent);
+.sidebar-logout-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
-.sidebar-profile-dropdown svg {
-  flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
+/* Collapsed state: avatar only, logout hidden */
+.ops-sidebar--collapsed .sidebar-profile-info {
+  display: none;
 }
 
-/* Logout button: only rendered when expanded; styled like nav items. */
-.sidebar-logout {
-  justify-content: center;
-}
-
-.ops-sidebar--collapsed .sidebar-logout {
+.ops-sidebar--collapsed .sidebar-logout-btn {
   display: none;
 }
 
@@ -4555,8 +4459,6 @@ html[dir="rtl"] .ops-sidebar--collapsed .sidebar-profile-dropdown {
 html[dir="rtl"] .node-address,
 html[dir="rtl"] .ops-stat-cell strong,
 html[dir="rtl"] .security-metric strong,
-html[dir="rtl"] .atlas-tooltip-grid b,
-html[dir="rtl"] .atlas-stat strong,
 html[dir="rtl"] .sp-code,
 html[dir="rtl"] .udetail-link,
 html[dir="rtl"] .sp-feed-time,
@@ -4660,13 +4562,78 @@ html[dir="rtl"] .notification-popover {
   font-variant-numeric: tabular-nums;
   color: var(--info-text);
 }
-/* Traffic cell — flex row, the unused progress ring (the <span class="usage-meter">)
-   is a 30x30 chip that visually anchors the column, then the used / limit pair
-   follows with a little breathing room. */
-.traffic-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
-.traffic-cell .traffic-used { font-variant-numeric: tabular-nums; }
-.traffic-cell .traffic-limit { color: var(--muted); font-variant-numeric: tabular-nums; }
-.traffic-cell .usage-bar { flex: 1 1 60px; min-width: 44px; }
+/* Traffic cell — centered column. The cell holds a "stack": a horizontal
+   progress bar with a small % badge to the right, then used/limit labels
+   under it. Two rows tall, so the cell sets line-height to 1.2 and lets the
+   stack define its own height. The bar is the visual anchor; the numbers
+   underneath are the fact the operator scans for. */
+.traffic-cell {
+  min-width: 170px;
+  padding: 4px 10px;
+  vertical-align: middle;
+}
+.traffic-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+.traffic-labels {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+}
+.traffic-labels .traffic-used { color: var(--text); font-weight: 600; }
+.traffic-labels .traffic-divider { color: var(--muted); opacity: .6; }
+.traffic-labels .traffic-limit { color: var(--muted); }
+.traffic-labels .traffic-unlimited-tag {
+  background: var(--accent-soft, rgba(255,122,30,.12));
+  color: var(--accent-text, var(--orange));
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* Horizontal bar — replaces the old ring. Track is the same line as the
+   table divider so it reads as part of the grid, the fill is the only
+   colour. % badge sits at the right edge. */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.usage-bar-track {
+  flex: 1 1 auto;
+  height: 6px;
+  background: rgba(255,255,255,.06);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 0;
+}
+.usage-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width .25s ease;
+}
+.usage-bar-pct {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: end;
+  letter-spacing: -0.02em;
+}
 
 /* ── Row quick-actions (user ⋯) ─────────────────────────── */
 .row-quick-menu {
