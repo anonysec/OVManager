@@ -19,8 +19,11 @@ try:
     from backend.config import config as panel_config
 
     _fernet = Fernet(panel_config.BOT_ENCRYPT_KEY.encode()) if panel_config.BOT_ENCRYPT_KEY else None
+    _node_key_raw = panel_config.NODE_ENCRYPT_KEY or panel_config.BOT_ENCRYPT_KEY
+    _node_fernet = Fernet(_node_key_raw.encode()) if _node_key_raw else None
 except Exception:
     _fernet = None
+    _node_fernet = None
 
 if _fernet is None:
     import logging
@@ -30,6 +33,38 @@ if _fernet is None:
         "Set BOT_ENCRYPT_KEY in .env for encryption: "
         'python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
+
+if _node_fernet is None:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "NODE_ENCRYPT_KEY (or BOT_ENCRYPT_KEY fallback) not set — node API keys stored in plaintext. "
+        "Set NODE_ENCRYPT_KEY in .env for encryption."
+    )
+
+
+def encrypt_node_key(plain: str) -> str:
+    """Encrypt a node API key for storage. Prefix marks ciphertext."""
+    if _node_fernet is None:
+        return plain
+    return "enc:" + _node_fernet.encrypt(plain.encode()).decode()
+
+
+def decrypt_node_key(stored: str | None) -> str:
+    """Decrypt a stored node key; legacy plaintext passes through."""
+    if not stored:
+        return ""
+    if stored.startswith("enc:") and _node_fernet is not None:
+        try:
+            return _node_fernet.decrypt(stored[4:].encode()).decode()
+        except Exception:
+            return stored
+    return stored
+
+
+def node_api_key(node) -> str:
+    """Plaintext API key for a Node row (decrypts when encrypted)."""
+    return decrypt_node_key(getattr(node, "key", ""))
 
 
 def get_all_users(db: Session):
@@ -305,7 +340,7 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
         ovpn_port=request.ovpn_port,
         protocol=request.protocol,
         port=request.port,
-        key=request.key,
+        key=encrypt_node_key(request.key),
         status=request.status,
         use_tls=request.use_tls,
         country_code=geolocation.get("country_code") if geolocation else None,
@@ -339,7 +374,7 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
 
     # Only overwrite API key if a non-empty value is provided
     if request.key and request.key.strip():
-        node.key = request.key
+        node.key = encrypt_node_key(request.key.strip())
 
     db.commit()
     db.refresh(node)

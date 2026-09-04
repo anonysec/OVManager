@@ -11,8 +11,13 @@ export const apiBase = basePath ? `/${basePath}/api` : '/api';
 
 export const urlPath = basePath ? `/${basePath}` : '';
 
-const apiClient = axios.create({ baseURL: apiBase });
-let refreshPromise = null;
+const apiClient = axios.create({
+  baseURL: apiBase,
+  // Send the httpOnly ovm_session cookie alongside the Bearer header
+  // (backend accepts both; cookie is XSS-proof, Bearer keeps bot/old compat).
+  withCredentials: true,
+  headers: { 'X-Requested-With': 'XMLHttpRequest' },
+});
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 export const API_ERROR_EVENT = 'api:error';
 
@@ -31,44 +36,11 @@ apiClient.interceptors.response.use(
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
     const isLoginRequest = requestUrl.includes('/login');
-    const isRefreshRequest = requestUrl.includes('/refresh');
 
-    if (status === 401 && !isLoginRequest && !isRefreshRequest) {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          if (!refreshPromise) {
-            refreshPromise = axios.post(
-              `${apiBase}/refresh`,
-              {},
-              { headers: { Authorization: `Bearer ${refreshToken}` } }
-            ).then((res) => {
-              const newToken = res.data.access_token;
-              localStorage.setItem('authToken', newToken);
-              // Store the rotated refresh token returned by the server.
-              // The backend revokes the old one on each use, so we must
-              // persist the new one or the next refresh call will fail.
-              if (res.data.refresh_token) {
-                localStorage.setItem('refreshToken', res.data.refresh_token);
-              }
-              return newToken;
-            }).finally(() => {
-              refreshPromise = null;
-            });
-          }
-          const newToken = await refreshPromise;
-          // Retry original request with the one shared refreshed token.
-          error.config.headers.Authorization = `Bearer ${newToken}`;
-          return apiClient(error.config);
-        } catch {
-          // Refresh failed — force logout
-        }
-      }
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('userRole');
-      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
-    } else if (status === 401 && isRefreshRequest) {
+    // Backend sessions are opaque with sliding + absolute expiry. There is no
+    // refresh flow (POST /refresh always 401 by design). Any 401 means the
+    // session is gone — clear storage and drive forced re-login.
+    if (status === 401 && !isLoginRequest) {
       localStorage.removeItem('authToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('userRole');

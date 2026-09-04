@@ -10,7 +10,7 @@ from bot.api import Panel
 from bot.formatters import esc, fmt_uptime, is_expired
 from bot.i18n import lang_of, t
 from bot.identity import Actor
-from bot.keyboards import nodes_actions, status_actions
+from bot.keyboards import node_detail, nodes_actions, nodes_list, status_actions
 from bot.ui import edit_or_reply
 
 
@@ -21,6 +21,9 @@ async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
     settings = await panel.get_settings()
     users = await panel.get_users()
     nodes = await panel.get_nodes()
+    if panel.last_status == 0 and not users and not nodes and not info and not settings:
+        await edit_or_reply(update, t(lang, "panel_unreachable"))
+        return
 
     active = sum(1 for u in users if u.get("is_active") and not is_expired(u))
     online = sum(1 for u in users if u.get("online") or int(u.get("active_connections") or 0) > 0)
@@ -30,8 +33,19 @@ async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
 
     lines = [
         f"<b>{t(lang, 'panel')}</b>",
-        t(lang, "version_uptime", version=esc(settings.get("panel_version") or "—"), uptime=esc(fmt_uptime(info.get("uptime") or 0))),
-        t(lang, "cpu_ram_disk", cpu=esc(_pct(info.get("cpu"))), ram=esc(_pct(info.get("memory_percent"))), disk=esc(_pct(info.get("disk_percent")))),
+        t(
+            lang,
+            "version_uptime",
+            version=esc(settings.get("panel_version") or "—"),
+            uptime=esc(fmt_uptime(info.get("uptime") or 0)),
+        ),
+        t(
+            lang,
+            "cpu_ram_disk",
+            cpu=esc(_pct(info.get("cpu"))),
+            ram=esc(_pct(info.get("memory_percent"))),
+            disk=esc(_pct(info.get("disk_percent"))),
+        ),
         "",
         f"<b>{t(lang, 'btn_users')}</b>",
         t(lang, "users_stats", total=len(users), active=active, online=online),
@@ -51,9 +65,13 @@ async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
 
 async def show_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
     lang = lang_of(update, context)
-    nodes = await Panel(actor.token).get_nodes()
+    panel = Panel(actor.token)
+    nodes = await panel.get_nodes()
     if not nodes:
-        await edit_or_reply(update, t(lang, "nodes_none_yet"), reply_markup=nodes_actions(lang=lang))
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "nodes_none_yet"), reply_markup=nodes_actions(lang=lang))
         return
     lines = [t(lang, "nodes_header", count=len(nodes)), ""]
     for node in nodes:
@@ -64,7 +82,41 @@ async def show_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: 
         lines.append(t(lang, "node_line", name=esc(node.get("name")), mark=mark))
         lines.append(f"{esc(addr)}:{esc(port)}  {esc(proto)}")
         lines.append("")
-    await edit_or_reply(update, "\n".join(lines).rstrip(), reply_markup=nodes_actions(lang=lang))
+    await edit_or_reply(update, "\n".join(lines).rstrip(), reply_markup=nodes_list(nodes, lang=lang))
+
+
+async def show_node_detail(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, node_id: int) -> None:
+    lang = lang_of(update, context)
+    panel = Panel(actor.token)
+    nodes = await panel.get_nodes()
+    node = next((n for n in nodes if int(n.get("id") or 0) == node_id), None)
+    result = await panel.node_status(node_id)
+    if not result.get("success"):
+        if panel.last_status == 0 or result.get("status") == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "node_gone"), reply_markup=nodes_actions(lang=lang))
+        return
+    data = result.get("data") or {}
+    info = data.get("node_info") or data
+    sessions = data.get("session_diagnostics") or {}
+    name = (node or {}).get("name") or f"#{node_id}"
+    live = sessions.get("live_count", info.get("live_count", "—"))
+    lines = [
+        f"<b>{esc(name)}</b>",
+        t(
+            lang,
+            "node_detail_status",
+            status=esc(
+                t(lang, "status_online") if info.get("openvpn_running", (node or {}).get("status")) else t(lang, "status_offline")
+            ),
+        ),
+        t(lang, "node_detail_cpu", cpu=esc(_pct(info.get("cpu_usage")))),
+        t(lang, "node_detail_mem", mem=esc(_pct(info.get("memory_usage")))),
+        t(lang, "node_detail_live", live=esc(live)),
+        t(lang, "node_detail_version", version=esc(info.get("version") or data.get("version") or "—")),
+    ]
+    await edit_or_reply(update, "\n".join(lines), reply_markup=node_detail(node_id, lang=lang))
 
 
 def _pct(value) -> str:

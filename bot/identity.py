@@ -14,7 +14,7 @@ from bot.config import config
 log = logging.getLogger(__name__)
 
 _CACHE_TTL = 45.0
-_identity_cache: dict[int, tuple[float, "Actor | None"]] = {}
+_identity_cache: dict[int, tuple[float, Actor | None]] = {}
 _token_cache: dict[tuple[str, str], tuple[float, str]] = {}
 _TOKEN_TTL = 25 * 60
 
@@ -32,6 +32,22 @@ def invalidate(telegram_id: int | None = None) -> None:
         _identity_cache.clear()
         return
     _identity_cache.pop(telegram_id, None)
+
+
+def invalidate_token(token: str | None) -> None:
+    """Drop every cached identity/session matching a revoked token.
+
+    Called when the panel answers 401: the next require_actor() re-resolves
+    and mints a fresh session instead of replaying the dead token.
+    """
+    if not token:
+        return
+    for tg_id, (_, actor) in list(_identity_cache.items()):
+        if actor is not None and actor.token == token:
+            _identity_cache.pop(tg_id, None)
+    for key, (_, cached) in list(_token_cache.items()):
+        if cached == token:
+            _token_cache.pop(key, None)
 
 
 async def resolve(telegram_id: int) -> Actor | None:

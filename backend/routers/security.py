@@ -84,7 +84,7 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
     tz_name = str(panel_tz)
 
     async def node_diag(node):
-        req = NodeRequests(node.address, node.port, node.key, use_tls=node.use_tls)
+        req = NodeRequests(node.address, node.port, crud.node_api_key(node), use_tls=node.use_tls)
         data = await run_in_threadpool(req.get_sessions, None, hours)
         return node.name, data or {}
 

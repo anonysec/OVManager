@@ -19,7 +19,7 @@ services:
       - HOST=0.0.0.0
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:2095}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:2095/health', timeout=3); print('ok')"]
+      test: ["CMD", "python", "-c", "import os,urllib.request; p=os.getenv('PORT','2095'); urllib.request.urlopen(f'http://localhost:{p}/health', timeout=3); print('ok')"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -1,0 +1,642 @@
+/* Dashboard — single owner for all dashboard visuals.
+   App-matched language: sp-card geometry, semantic tokens, logical props.
+   Replaces the legacy ops-panel look; dead ops rules are stripped from
+   styles.css once this file covers their markup. */
+
+.dash-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding-bottom: 32px;
+}
+
+/* ── Heading ─────────────────────────────────────────────────────────── */
+.dash-page .dashboard-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dash-page .dashboard-heading-copy h1 {
+  margin: 4px 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.dash-page .dashboard-heading-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.dash-page .dashboard-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.dash-page .live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+
+.dash-page .dashboard-updated {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dash-page .dashboard-quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── KPI hero ────────────────────────────────────────────────────────── */
+.dash-hero {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dash-kpi {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  padding-inline-end: 34px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+button.dash-kpi:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+button.dash-kpi:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dash-kpi::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--dash-accent, var(--accent));
+}
+
+.dash-kpi--loading {
+  min-height: 76px;
+}
+
+.dash-kpi--loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--surface-3), transparent);
+  background-size: 200% 100%;
+  animation: dash-shimmer 1.4s infinite;
+}
+
+@keyframes dash-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.dash-kpi-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 18px;
+}
+
+.dash-kpi--warn .dash-kpi-ico {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.dash-kpi--ok .dash-kpi-ico {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.dash-kpi-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.dash-kpi-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.dash-kpi-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.dash-kpi--warn .dash-kpi-value { color: var(--warning-text); }
+.dash-kpi--ok .dash-kpi-value { color: var(--success-text); }
+
+.dash-kpi-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dash-kpi-go {
+  position: absolute;
+  inset-inline-end: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+button.dash-kpi:hover .dash-kpi-go,
+button.dash-kpi:focus-visible .dash-kpi-go {
+  opacity: 1;
+  transform: translateY(-50%) translateX(2px);
+}
+
+[dir="rtl"] button.dash-kpi:hover .dash-kpi-go,
+[dir="rtl"] button.dash-kpi:focus-visible .dash-kpi-go {
+  transform: translateY(-50%) translateX(-2px);
+}
+
+.dash-kpi .mini-line {
+  position: absolute;
+  inset-inline-end: 10px;
+  bottom: 8px;
+  width: 72px;
+  height: 26px;
+  opacity: 0.7;
+  margin: 0;
+}
+
+.dash-kpi:hover .mini-line,
+.dash-kpi:focus-visible .mini-line {
+  opacity: 0.25;
+}
+
+
+/* Resource meters. */
+.meter-stat .meter-bar {
+  display: block;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.meter-stat .meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width var(--transition-normal);
+}
+
+.meter-stat .meter-fill.is-warn { background: var(--warning); }
+.meter-stat .meter-fill.is-danger { background: var(--danger); }
+
+.dt-avatar--xs {
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────── */
+.dash-card .sp-card-head h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.dash-card-action {
+  margin-inline-start: auto;
+  display: inline-flex;
+}
+
+.dash-grid-duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dash-grid-duo > * {
+  min-width: 0;
+}
+
+.dash-grid-previews .activity-panel {
+  grid-column: 1 / -1;
+}
+
+/* Users panel tabs + reason badges. */
+.dt-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.dt-tab {
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dt-tab .count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.dt-tab:hover {
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.dt-tab.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.dt-tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dt-reasons {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Alert strip ─────────────────────────────────────────────────────── */
+.dash-alerts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  font-size: 0.85rem;
+}
+
+.dash-alerts.has-alerts {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.dash-alerts.is-clear {
+  border-color: var(--success);
+}
+
+.dash-alerts .ops-alert-mini-icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  flex: none;
+}
+
+.dash-alerts.has-alerts .ops-alert-mini-icon { color: var(--warning-text); }
+.dash-alerts.is-clear .ops-alert-mini-icon { color: var(--success-text); }
+
+.dash-alerts .ops-alert-mini-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.dash-alerts .ops-alert-mini-items {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ops-alert-mini-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.ops-alert-mini-item:hover {
+  border-color: var(--accent-border);
+  background: var(--surface-3);
+}
+
+.ops-alert-mini-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ops-alert-mini-item .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  flex: none;
+}
+
+.ops-alert-mini-item.danger .dot { background: var(--danger); }
+
+button.ops-alert-mini-more {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+button.ops-alert-mini-more:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+button.ops-alert-mini-more:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dash-alerts .ops-alert-mini-action {
+  flex: none;
+}
+
+/* ── Traffic chart ───────────────────────────────────────────────────── */
+.dash-chart-controls {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.traffic-chart-card .chart-toggles {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.traffic-chart-card .chart-toggles button {
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.traffic-chart-card .chart-toggles button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.traffic-chart-card .chart-toggles button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.traffic-chart-card .chart-toggles button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.chart-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chart-wrap {
+  position: relative;
+}
+
+.chart-wrap svg {
+  display: block;
+  width: 100%;
+  height: 180px;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-area {
+  fill: url(#trafficAreaGrad);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--info);
+  stroke-width: 2;
+}
+
+.chart-hover-line {
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.chart-hover-dot {
+  fill: var(--info);
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.chart-tooltip strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.chart-tooltip span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.chart-axis {
+  position: absolute;
+  inset-inline-end: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-axis-max { top: 0; }
+.chart-axis-min { bottom: 0; }
+
+.chart-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-summary > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-summary b {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.chart-summary span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.chart-data {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  font-size: 0.82rem;
+}
+
+.chart-data summary {
+  cursor: pointer;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.chart-empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* score ring track/number */
+
+
+/* mini sparkline */
+.mini-line {
+  width: 100%;
+  height: 54px;
+}
+
+.mini-line.empty {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .dash-hero {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dash-grid-duo {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .dash-page {
+    gap: 12px;
+  }
+  .dash-page .dashboard-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .dash-kpi-value {
+    font-size: 1.25rem;
+  }
+  .chart-wrap svg {
+    height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-kpi--loading::after {
+    animation: none;
+  }
+}

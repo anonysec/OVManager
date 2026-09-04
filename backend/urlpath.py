@@ -227,7 +227,15 @@ class URLPathMiddleware:
         path = scope.get("path", "")
         # Static assets and public subscription links intentionally remain
         # reachable without the panel prefix. API/docs must not bypass it.
-        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", "/sub/", "/health")
+        # SUBSCRIPTION_PATH is restart-required (routers/sub.py binds it at
+        # import), so read it live to avoid drift when customized.
+        try:
+            from backend.config import config as _panel_config
+
+            _sub_prefix = f"/{_panel_config.SUBSCRIPTION_PATH.strip('/')}/"
+        except Exception:
+            _sub_prefix = "/sub/"
+        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", _sub_prefix, "/health")
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
             return

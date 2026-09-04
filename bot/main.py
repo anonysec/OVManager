@@ -17,7 +17,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Mess
 
 from bot.api import close_client
 from bot.config import config
-from bot.handlers import handle_start, on_callback, on_error, on_text
+from bot.handlers import handle_start, on_callback, on_error, on_text, on_unknown_command
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("bot")
@@ -49,6 +49,9 @@ async def build_app() -> Application | None:
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("help", handle_start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    # Unknown /commands would otherwise vanish silently (the TEXT filter
+    # above skips commands) — point back at the menu instead.
+    app.add_handler(MessageHandler(filters.COMMAND, on_unknown_command))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)
     return app

@@ -5,7 +5,6 @@
   "btn_nodes": "نودها",
   "btn_cancel": "انصراف",
   "btn_language": "زبان",
-
   "home_browse": "فهرست کاربران",
   "home_create": "ساخت کاربر",
   "home_status": "وضعیت پنل",
@@ -15,12 +14,10 @@
   "welcome": "<b>OVManager</b>\n{role} · {username}\n\nاز منوی پایین استفاده کنید، یا یک نام کاربری تایپ کنید.\nساخت کاربر یک گفت‌وگوی کوتاه است — نیازی به دستور اسلش نیست.",
   "role_owner": "مالک",
   "role_operator": "اپراتور",
-
   "denied": "این حساب تلگرام به OVManager وصل نیست.\n\nاز مالک پنل بخواهید شناسه تلگرام شما را در تنظیمات ← ربات (مالک) یا مدیریت ادمین‌ها (اپراتورها) اضافه کند.",
   "rate_limited": "کمی سریع پیش می‌روید. کمی صبر کنید و دوباره تلاش کنید.",
   "unknown_action": "این عملیات دیگر در دسترس نیست.",
   "error": "مشکلی پیش آمد. از منو دوباره تلاش کنید.",
-
   "users_empty": "هنوز کاربری نیست.\nبرای ساخت اولین کاربر روی <b>{new}</b> بزنید.",
   "users_header": "<b>کاربران</b>  ·  {count} نفر  ·  صفحه {page}/{pages}",
   "users_hint": "روی یک نام بزنید، یا برای جستجو تایپ کنید.",
@@ -32,7 +29,6 @@
   "user_list": "فهرست کاربران",
   "nav_prev": "قبلی",
   "nav_next": "بعدی",
-
   "act_extend": "تمدید",
   "act_config": "کانفیگ",
   "act_enable": "فعال",
@@ -53,12 +49,10 @@
   "act_suggest": "استفاده از نام پیشنهادی",
   "act_back_user": "بازگشت به کاربر",
   "act_refresh": "بازخوانی",
-
   "plan_standard": "استاندارد",
   "plan_team": "تیمی",
   "plan_unlimited": "نامحدود",
   "plan_custom": "سفارشی",
-
   "unlimited": "نامحدود",
   "no_expiry": "بدون انقضا",
   "expired_ago": "{days} روز پیش منقضی شده",
@@ -85,7 +79,6 @@
   "card_devices": "دستگاه‌ها",
   "card_owner": "مالک",
   "card_sub": "لینک اشتراک",
-
   "create_hint_suggest": "نام پیشنهادی از پیشوند شما: <code>{name}</code>\nهمان را بفرستید، نام دیگری تایپ کنید، یا دکمه زیر را بزنید.",
   "create_hint_type": "یک نام کاربری تایپ کنید (۳ تا ۶۴ حرف، عدد یا زیرخط).",
   "create_title": "<b>کاربر جدید</b>\n\n{hint}",
@@ -106,7 +99,6 @@
   "create_ok": "<b>{name}</b> ساخته شد.",
   "create_ok_list": "<b>{name}</b> ساخته شد. برای دیدن کارت، کاربران را باز کنید.",
   "create_unknown_error": "خطای نامشخص",
-
   "extend_title": "تمدید <b>{name}</b>",
   "updating": "در حال به‌روزرسانی…",
   "updated_days": "به‌روز شد. +{days} روز.",
@@ -134,7 +126,6 @@
   "dl_fail": "نشد کانفیگ ساخته شود. آنلاین بودن نود و فعال بودن کاربر را بررسی کنید.",
   "dl_sent": "<b>{filename}</b> ارسال شد.",
   "node_fallback": "نود {id}",
-
   "panel": "پنل",
   "version_uptime": "نسخه {version}  ·  آپتایم {uptime}",
   "cpu_ram_disk": "پردازنده {cpu}  ·  رم {ram}  ·  دیسک {disk}",
@@ -147,7 +138,30 @@
   "node_up": "آنلاین",
   "node_down": "آفلاین",
   "node_line": "<b>{name}</b>  —  {mark}",
-
   "lang_title": "<b>زبان</b>\n\nهمان زبان‌های پنل. یکی را انتخاب کنید — منو فوراً به‌روز می‌شود.",
-  "lang_set": "زبان به {name} تغییر کرد."
+  "lang_set": "زبان به {name} تغییر کرد.",
+  "session_expired": "نشست منقضی شد — دوباره بزنید تا با نشست تازه ادامه دهید.",
+  "panel_unreachable": "پنل در دسترس نیست. لحظاتی بعد تلاش کنید.",
+  "act_undo": "↩ بازگردانی حذف",
+  "restoring": "در حال بازگردانی…",
+  "restored_ok": "کاربر بازگردانده شد.",
+  "restore_fail": "بازگردانی نشد (ممکن است مهلت آن تمام شده باشد).",
+  "act_edit": "✏ ویرایش محدودیت‌ها",
+  "edit_owner_only": "ویرایش محدودیت‌ها فقط برای مالک است.",
+  "edit_title": "ویرایش <b>{name}</b> — فیلد را انتخاب کنید:",
+  "edit_value_traffic": "سهمیه جدید به گیگابایت (۰ = نامحدود):",
+  "edit_value_expiry": "انقضای جدید به روز از امروز (۱–۳۶۵۰):",
+  "edit_value_devices": "محدودیت جدید دستگاه (۰ = نامحدود، حداکثر ۱۰۰۰):",
+  "edit_confirm": "برای <b>{name}</b> ثبت شود: {value}؟",
+  "edit_ok": "{name} به‌روزرسانی شد.",
+  "act_save": "✓ ذخیره",
+  "edit_field_traffic": "📊 سهمیه",
+  "edit_field_expiry": "📅 انقضا",
+  "edit_field_devices": "📱 دستگاه‌ها",
+  "node_gone": "گره پیدا نشد.",
+  "node_detail_status": "وضعیت: {status}",
+  "node_detail_cpu": "پردازنده: {cpu}",
+  "node_detail_mem": "حافظه: {mem}",
+  "node_detail_live": "نشست‌های فعال: {live}",
+  "node_detail_version": "ایجنت: {version}"
 }

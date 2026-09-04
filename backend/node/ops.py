@@ -27,6 +27,12 @@ from backend.schema._input import NodeCreate
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     """Add a new node: validate connectivity, geolocate, persist to DB."""
     geo = geolocate(request.address)
+    if not request.use_tls:
+        logger.warning(
+            "Node %s added without TLS — API key and traffic cross the network in cleartext. "
+            "Enable TLS on the node and set use_tls=true.",
+            request.address,
+        )
 
     nr = NodeRequests(
         address=request.address,
@@ -75,7 +81,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         return False, "Node not found"
 
     geo = geolocate(request.address)
-    api_key = request.key or existing.key
+    api_key = request.key or crud.decrypt_node_key(existing.key)
 
     # Persist first — this is the source of truth for the panel.
     crud.update_node(db, node_id, request, geo)
@@ -156,7 +162,7 @@ async def get_node_status_handler(node_id: int, db: Session):
     nr = NodeRequests(
         address=node.address,
         port=node.port,
-        api_key=node.key,
+        api_key=crud.node_api_key(node),
         use_tls=node.use_tls,
     )
 
@@ -191,7 +197,7 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     uid = str(user_id) if user_id else None
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
+        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.create_user, name, max_logins, uid))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
@@ -203,7 +209,7 @@ async def change_user_status_on_all_nodes(user_id: int, name: str, status: bool,
     uid = str(user_id)
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
+        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.change_user_status, name, status, max_logins, uid))
     if not tasks:
         return True
@@ -217,7 +223,7 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     uid = str(user_id) if user_id else name
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
+        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.set_user_limit, uid, int(max_logins or 0)))
     if not tasks:
         return True
@@ -234,7 +240,7 @@ async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session
     nr = NodeRequests(
         address=node.address,
         port=node.port,
-        api_key=node.key,
+        api_key=crud.node_api_key(node),
         tunnel_address=node.tunnel_address or "",
         protocol=node.protocol,
         ovpn_port=node.ovpn_port,
@@ -253,7 +259,7 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     nr = NodeRequests(
         address=node.address,
         port=node.port,
-        api_key=node.key,
+        api_key=crud.node_api_key(node),
         tunnel_address=node.tunnel_address or "",
         protocol=node.protocol,
         ovpn_port=node.ovpn_port,
@@ -284,7 +290,7 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> bool
         return True
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=n.key, use_tls=n.use_tls)
+        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     # Every active node must acknowledge the deletion. A partial success must

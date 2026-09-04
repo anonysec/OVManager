@@ -93,7 +93,7 @@ class BotConfig:
     def resolve_api_url(self) -> str:
         if self.api_url:
             return self.api_url.rstrip("/")
-        host, port = "127.0.0.1", 9000
+        host, port = "127.0.0.1", 2095
         try:
             from backend.config import config as panel
 

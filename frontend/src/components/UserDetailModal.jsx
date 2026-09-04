@@ -15,7 +15,7 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), cls: 'idle' };
 };
 
-const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, onToggleStatus }) => {
+const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, onToggleStatus, onDelete, onExtend, onResetUsage }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
@@ -100,13 +100,22 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
         </div>
 
         <div className="udetail-actions">
-          <button type="button" className="btn btn-sm" onClick={() => { onEdit?.(user); onClose(); }}><FiEdit2 /> {t('rowEdit')}</button>
-          <button type="button" className="btn btn-sm" onClick={() => { onSessions?.(user); onClose(); }}><FiActivity /> {t('rowSessions')}</button>
-          <button type="button" className="btn btn-sm btn-success" onClick={() => { onDownload?.(user); onClose(); }}><FiDownload /> {t('downloadConfig')}</button>
+          <button type="button" className="btn btn-sm" onClick={() => { onEdit?.(user); }}><FiEdit2 /> {t('rowEdit')}</button>
+          <button type="button" className="btn btn-sm" onClick={() => { onSessions?.(user); }}><FiActivity /> {t('rowSessions')}</button>
+          <button type="button" className="btn btn-sm btn-success" onClick={() => { onDownload?.(user); }}><FiDownload /> {t('downloadConfig')}</button>
+          {onExtend && (
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => { onExtend?.(user); }}><FiClock /> {t('extend', 'Extend')}</button>
+          )}
           {onToggleStatus && (
             <button type="button" className={`btn btn-sm ${user.is_active ? 'btn-secondary' : 'btn-success'}`} onClick={() => onToggleStatus(user)}>
               {user.is_active ? <FiUserX /> : <FiUserCheck />} {user.is_active ? t('disableUser') : t('enableUser')}
             </button>
+          )}
+          {onResetUsage && (
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => { onResetUsage?.(user); }}>{t('resetUsageButton', 'Reset usage')}</button>
+          )}
+          {onDelete && (
+            <button type="button" className="btn btn-sm btn-danger" onClick={() => { onDelete?.(user); }}>{t('rowDelete', 'Delete')}</button>
           )}
         </div>
       </div>

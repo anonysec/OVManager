@@ -37,11 +37,16 @@ const DashboardLayout = () => {
       '/users': t('navUsers', 'Users'),
       '/nodes': t('navNodes', 'Nodes'),
       '/admins': t('navAdmins', 'Admins'),
+      '/audit': t('navAudit', 'Audit Log'),
+      '/maintenance': t('navMaintenance', 'Maintenance'),
       '/settings': t('navSettings', 'Settings'),
     };
     if (map[pathname]) return map[pathname];
     if (pathname.startsWith('/users')) return t('navUsers', 'Users');
     if (pathname.startsWith('/nodes')) return t('navNodes', 'Nodes');
+    if (pathname.startsWith('/admins')) return t('navAdmins', 'Admins');
+    if (pathname.startsWith('/audit')) return t('navAudit', 'Audit Log');
+    if (pathname.startsWith('/maintenance')) return t('navMaintenance', 'Maintenance');
     if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
     return t('navDashboard', 'Dashboard');
   };
@@ -152,15 +157,29 @@ const DashboardLayout = () => {
         users: apiClient.get('/users/'),
         nodes: apiClient.get('/nodes/'),
         security: apiClient.get('/security/summary?hours=8'),
+        serverNotifs: apiClient.get('/notifications/'),
       });
 
       const users = asList(res.users.ok ? res.users.data : null, 'users');
       const nodes = asList(res.nodes.ok ? res.nodes.data : null, 'nodes');
       const security = res.security.ok ? (res.security.data.data?.data || {}) : {};
+      const serverItems = res.serverNotifs?.ok
+        ? (res.serverNotifs.data.data?.data ?? res.serverNotifs.data.data ?? [])
+        : [];
       const out = [];
-      // Surface nodes that are marked inactive in the DB
+      // Server-authoritative offline nodes first (single source; client DB check
+      // below only adds context detail, deduped by node name).
+      const serverOffline = new Set();
+      (Array.isArray(serverItems) ? serverItems : []).forEach((s) => {
+        if (s?.type === 'node_offline' && s?.target) {
+          serverOffline.add(String(s.target));
+          out.push({ id: `srv-node-${s.target}`, level: s.level || 'danger', title: s.title || t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: s.target }), detail: t('notifNodeUnreachableDetail', 'No API response from OVNode'), action: null, action_path: null });
+        }
+      });
+      // Surface nodes that are marked inactive in the DB (skip ones the
+      // server already reported so the bell doesn't double-count).
       nodes.forEach((n) => {
-        if (!n.status) {
+        if (!n.status && !serverOffline.has(String(n.name))) {
           out.push({ id: `node-${n.id}`, level: 'warning', title: t('notifNodeDisabled', 'Node {{name}} is disabled', { name: n.name }), detail: t('notifNodeDisabledDetail', 'Marked offline in panel database'), action: null, action_path: null });
         }
       });
@@ -209,8 +228,10 @@ const DashboardLayout = () => {
       : t('systemMode', 'System default');
 
   // Sync sidebar state across this layout and the Sidebar component so the
-  // main-content margin matches the rendered sidebar width (220px / 72px collapsed)
-  // and reacts to collapse toggles + viewport resizes without prop-drilling.
+  // main-CONTAINER margin matches the rendered sidebar width (220px / 72px
+  // collapsed) and reacts to collapse toggles + viewport resizes without
+  // prop-drilling. Mobile is a single breakpoint: innerWidth < 768, matching
+  // the 767.98px CSS rules — there is no separate tablet mode.
   const getIsMobile = useCallback(() => (typeof window !== 'undefined' && window.innerWidth < 768), []);
   const computeCollapsed = useCallback(() => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile()), [getIsMobile]);
   const [collapsed, setCollapsed] = useState(computeCollapsed);
@@ -350,8 +371,6 @@ const DashboardLayout = () => {
           <MobileNav />
           <CommandPalette userRole={userRole} />
           <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} isOwner={userRole === 'owner'} />
-          {/* Bottom safe-area spacer — keeps content above mobile keyboard / browser chrome */}
-          <div className="bottom-safe-bar" aria-hidden="true" />
         </div>
       </ToastProvider>
     </LiveProvider>

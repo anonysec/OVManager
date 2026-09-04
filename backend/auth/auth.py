@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from backend.auth.hash import verify_password
+from backend.auth.hash import hash_password, needs_rehash, verify_password
 from backend.auth.sessions import create_session, purge_expired, revoke_token, verify_session
 from backend.config import config
 from backend.db import crud
@@ -31,13 +31,124 @@ from backend.db.engine import SessionLocal, get_db
 logger = logging.getLogger("auth")
 
 # ── Rate limiter ──────────────────────────────────────────────────
-# In-memory with cleanup; acceptable for a single-process panel.
-# Persistent storage adds complexity with diminishing returns.
+# DB-backed with in-memory write-through cache. Survives restarts (unlike
+# the old pure-dict limiter) and keys by (IP, username) so one user's
+# failures behind a shared NAT/proxy don't lock out everyone else.
+# A coarser per-IP bucket still caps credential-stuffing across usernames.
 _login_attempts: dict[str, list[float]] = {}
-_MAX_ATTEMPTS = 5
+_MAX_ATTEMPTS = 5  # per (IP, username) per window
+_MAX_PER_IP = 20  # per IP across usernames per window
 _LOCKOUT_SECONDS = 300  # 5 minutes
 _CLEANUP_INTERVAL = 600  # purge stale entries every 10 min
 _last_cleanup: float = 0.0
+
+
+def _ensure_rate_table(db) -> None:
+    try:
+        from sqlalchemy import text as _text
+
+        db.execute(
+            _text(
+                "CREATE TABLE IF NOT EXISTS login_attempts ("
+                "key_hash TEXT PRIMARY KEY, attempts TEXT NOT NULL DEFAULT '[]', "
+                "updated REAL NOT NULL DEFAULT 0)"
+            )
+        )
+    except Exception:
+        pass
+
+
+def _db_load(key_hash: str) -> list[float]:
+    try:
+        import json
+
+        from sqlalchemy import text
+
+        from backend.db.engine import SessionLocal as _SL
+
+        _db = _SL()
+        try:
+            _ensure_rate_table(_db)
+            row = _db.execute(
+                text("SELECT attempts FROM login_attempts WHERE key_hash = :k"),
+                {"k": key_hash},
+            ).fetchone()
+            if not row or not row[0]:
+                return []
+            vals = json.loads(row[0])
+            now = time.time()
+            return [float(t) for t in vals if now - float(t) < _LOCKOUT_SECONDS]
+        finally:
+            _db.close()
+    except Exception:
+        return []
+
+
+def _db_save(key_hash: str, times: list[float]) -> None:
+    try:
+        import json
+
+        from sqlalchemy import text
+
+        from backend.db.engine import SessionLocal as _SL
+
+        _db = _SL()
+        try:
+            _ensure_rate_table(_db)
+            _db.execute(
+                text(
+                    "INSERT INTO login_attempts (key_hash, attempts, updated) VALUES (:k, :a, :u) "
+                    "ON CONFLICT(key_hash) DO UPDATE SET attempts = :a, updated = :u"
+                ),
+                {"k": key_hash, "a": json.dumps(times), "u": time.time()},
+            )
+            _db.commit()
+        finally:
+            _db.close()
+    except Exception:
+        pass
+
+
+def _db_clear(key_hash: str) -> None:
+    try:
+        from sqlalchemy import text
+
+        from backend.db.engine import SessionLocal as _SL
+
+        _db = _SL()
+        try:
+            _db.execute(text("DELETE FROM login_attempts WHERE key_hash = :k"), {"k": key_hash})
+            _db.commit()
+        finally:
+            _db.close()
+    except Exception:
+        pass
+
+
+def _get_bucket(key_hash: str) -> list[float]:
+    now = time.time()
+    cached = _login_attempts.get(key_hash)
+    if cached is not None:
+        fresh = [t for t in cached if now - t < _LOCKOUT_SECONDS]
+        if len(fresh) != len(cached):
+            _login_attempts[key_hash] = fresh
+        # Refresh from DB in case another process wrote (single-process
+        # normally, but cheap and keeps restarts consistent).
+        db_vals = _db_load(key_hash)
+        if db_vals:
+            merged = sorted(set(fresh) | set(db_vals))
+            merged = [t for t in merged if now - t < _LOCKOUT_SECONDS]
+            _login_attempts[key_hash] = merged
+            return merged
+        return fresh
+    vals = _db_load(key_hash)
+    _login_attempts[key_hash] = vals
+    return vals
+
+
+def _put_bucket(key_hash: str, times: list[float]) -> None:
+    _login_attempts[key_hash] = times
+    _db_save(key_hash, times)
 
 
 def _purge_stale_attempts() -> None:
@@ -50,6 +161,23 @@ def _purge_stale_attempts() -> None:
     stale_keys = [ip for ip, times in _login_attempts.items() if not times or now - times[-1] > _LOCKOUT_SECONDS]
     for k in stale_keys:
         _login_attempts.pop(k, None)
+    # Best-effort DB purge of rows not touched within the window.
+    try:
+        from sqlalchemy import text
+
+        from backend.db.engine import SessionLocal as _SL
+
+        _db = _SL()
+        try:
+            _db.execute(
+                text("DELETE FROM login_attempts WHERE updated < :c"),
+                {"c": now - _LOCKOUT_SECONDS},
+            )
+            _db.commit()
+        finally:
+            _db.close()
+    except Exception:
+        pass
 
 
 # ── Router ───────────────────────────────────────────────────────
@@ -74,6 +202,11 @@ def _ip_hash(ip: str) -> str:
     return hashlib.sha256(ip.encode()).hexdigest()[:16]
 
 
+def _rate_key(ip: str, username: str) -> str:
+    """Per (IP, username) bucket — isolates users behind shared NAT/proxy."""
+    return hashlib.sha256(f"{ip}\0{(username or '').lower()}".encode()).hexdigest()[:16]
+
+
 def authenticate_user(db: Session, username: str, password: str):
     """Authenticate against main admin or DB-stored admins.
 
@@ -95,6 +228,14 @@ def authenticate_user(db: Session, username: str, password: str):
     admin = crud.it_is_admin(db, username=username)
     if admin:
         if verify_password(password, admin.password):
+            # Opportunistic upgrade: legacy $2a$/low-cost hashes get
+            # re-hashed to the current policy on next successful login.
+            try:
+                if needs_rehash(admin.password):
+                    admin.password = hash_password(password)
+                    db.commit()
+            except Exception:
+                db.rollback()
             return {"username": admin.username, "type": "admin"}
 
     return None
@@ -115,14 +256,14 @@ async def login(
     _purge_stale_attempts()
 
     ip = _client_ip(request)
-    ip_h = _ip_hash(ip)
     now = time.time()
+    user_key = _rate_key(ip, form_data.username)
+    ip_key = _ip_hash(ip)
 
-    attempts = _login_attempts.get(ip_h, [])
-    attempts = [t for t in attempts if now - t < _LOCKOUT_SECONDS]
-    _login_attempts[ip_h] = attempts
+    attempts = _get_bucket(user_key)
+    ip_attempts = _get_bucket(ip_key)
 
-    if len(attempts) >= _MAX_ATTEMPTS:
+    if len(attempts) >= _MAX_ATTEMPTS or len(ip_attempts) >= _MAX_PER_IP:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please try again later.",
@@ -132,13 +273,17 @@ async def login(
     admin = authenticate_user(db, form_data.username, form_data.password)
     if not admin:
         attempts.append(now)
+        _put_bucket(user_key, attempts)
+        ip_attempts.append(now)
+        _put_bucket(ip_key, ip_attempts)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="The username or password is incorrect",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    _login_attempts.pop(ip_h, None)
+    _login_attempts.pop(user_key, None)
+    _db_clear(user_key)
     purge_expired(db)  # opportunistic cleanup of dead sessions
     raw_token = create_session(
         db,
@@ -153,30 +298,60 @@ async def login(
     # username/role are returned explicitly because the token is an opaque
     # random string, not a JWT: there is nothing in it for the client to
     # decode. Callers must read identity from here, never from the token.
-    return {
-        "access_token": raw_token,
-        "refresh_token": None,
-        "token_type": "bearer",
-        "username": admin["username"],
-        "role": admin["type"],
-    }
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    secure = request.url.scheme == "https"
+    if config.TRUSTED_PROXY and request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() == "https":
+        secure = True
+    resp = _JSONResponse(
+        {
+            "access_token": raw_token,
+            "refresh_token": None,
+            "token_type": "bearer",
+            "username": admin["username"],
+            "role": admin["type"],
+        }
+    )
+    # httpOnly cookie alongside the Bearer body (backward compat): browsers
+    # automatically send it, JS/XSS cannot read it. Max-Age mirrors the
+    # absolute session cap; sliding expiry is still enforced server-side.
+    resp.set_cookie(
+        key="ovm_session",
+        value=raw_token,
+        max_age=config.SESSION_MAX_SECONDS,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+    )
+    return resp
 
 
 @router.post("/logout")
 async def logout(request: Request):
     """Revoke the presented session token (row delete — survives restarts)."""
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    raw = None
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
+        raw = auth_header[7:]
+    if not raw:
+        raw = request.cookies.get("ovm_session")
+    if raw:
         db = SessionLocal()
         try:
-            revoke_token(db, auth_header[7:])
+            revoke_token(db, raw)
         finally:
             db.close()
-    return {"detail": "Logged out"}
+    resp = _JSONResponse({"detail": "Logged out"})
+    resp.delete_cookie(key="ovm_session", path="/")
+    return resp
 
 
-# OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+# OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix.
+# auto_error=False so get_current_user can fall back to the httpOnly cookie.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 
 @router.post("/refresh")
@@ -196,13 +371,18 @@ def verify_session_token(raw: str, db: Session) -> dict | None:
     return {"username": session.username, "type": session.role}
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    user = verify_session_token(token, db)
+    raw = token or request.cookies.get("ovm_session")
+    user = verify_session_token(raw, db) if raw else None
     if user is None or user["type"] not in ("admin", "owner"):
         raise credentials_exception
     if not _role_is_current(db, user["username"], user["type"]):

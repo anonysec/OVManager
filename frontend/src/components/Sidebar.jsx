@@ -1,39 +1,85 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight,
-  FiMenu, FiList, FiBarChart2,
+  FiMenu, FiList, FiBarChart2, FiDatabase,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 
+const readCollapsed = () => {
+  try { return localStorage.getItem('ovmanager-sidebar-collapsed') === 'true'; }
+  catch { return false; }
+};
+
+const readCorner = () => {
+  try { return localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start'; }
+  catch { return 'inline-start'; }
+};
+
 const Sidebar = () => {
   const { userRole, logout } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
   const { subscribe, unsubscribe } = useLive();
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('ovmanager-sidebar-collapsed') === 'true');
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [corner, setCorner] = useState(readCorner);
   const [stats, setStats] = useState({ totalUsers: 0, totalUsage: 0 });
+  const hamburgerRef = useRef(null);
+  const drawerRef = useRef(null);
 
   // Username for the profile block. The session token is opaque (random
   // bytes), so it has no "sub" claim to decode — AuthContext stores the name
   // from the login response instead.
-  const username = useMemo(() => localStorage.getItem('username') || '', []);
+  const username = useMemo(() => {
+    try { return localStorage.getItem('username') || ''; }
+    catch { return ''; }
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('ovmanager-sidebar-collapsed', String(collapsed));
+    try { localStorage.setItem('ovmanager-sidebar-collapsed', String(collapsed)); } catch { /* private mode */ }
     window.dispatchEvent(new Event('sidebar-pin-change'));
   }, [collapsed]);
+
+  // Sidebar position can change live from Settings (no reload) or another tab.
+  useEffect(() => {
+    const applyCorner = (e) => {
+      if (e?.detail?.corner) setCorner(e.detail.corner);
+      else setCorner(readCorner());
+    };
+    window.addEventListener('sidebar-corner-change', applyCorner);
+    window.addEventListener('storage', applyCorner);
+    return () => {
+      window.removeEventListener('sidebar-corner-change', applyCorner);
+      window.removeEventListener('storage', applyCorner);
+    };
+  }, []);
 
   useEffect(() => {
     const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Mobile drawer: Escape closes, focus moves in on open and returns to the
+  // hamburger on close.
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    drawerRef.current?.querySelector('a, button')?.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const trigger = hamburgerRef.current;
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      trigger?.focus();
+    };
+  }, [mobileOpen]);
 
   // Fetch admin/user stats for the profile block
   const fetchStats = useCallback(async () => {
@@ -77,6 +123,8 @@ const Sidebar = () => {
   if (userRole === 'owner') {
     navItems.push(
       { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupManage', 'Manage') },
+      { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiBarChart2, group: t('navGroupSystem', 'System') },
+      { to: '/maintenance', label: t('navMaintenance', 'Maintenance'), icon: FiDatabase, group: t('navGroupSystem', 'System') },
     );
   }
 
@@ -84,10 +132,13 @@ const Sidebar = () => {
     { to: '/settings', label: t('navSettings', 'Settings'), icon: FiSettings, group: t('navGroupSystem', 'System') }
   );
 
+  // Labels stay mounted in both modes — the collapsed rail fades/collapses
+  // them via CSS instead of unmounting, so the width tween looks smooth and
+  // focus is never destroyed mid-toggle.
   const renderNavItem = (item, index) => (
     <li key={item.to} className="sidebar-nav-item">
-      {!collapsed && (index === 0 || navItems[index - 1].group !== item.group) && (
-        <span className="sidebar-section-label">{item.group}</span>
+      {(index === 0 || navItems[index - 1].group !== item.group) && (
+        <span className="sidebar-section-label" aria-hidden={collapsed}>{item.group}</span>
       )}
       <NavLink
         to={item.to}
@@ -95,9 +146,10 @@ const Sidebar = () => {
         className={isActiveClass(item)}
         onClick={() => mobileOpen && setMobileOpen(false)}
         title={collapsed ? item.label : undefined}
+        aria-label={item.label}
       >
-        <item.icon className="sidebar-nav-icon" />
-        {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
+        <item.icon className="sidebar-nav-icon" aria-hidden="true" />
+        <span className="sidebar-nav-label" aria-hidden={collapsed}>{item.label}</span>
       </NavLink>
     </li>
   );
@@ -114,22 +166,27 @@ const Sidebar = () => {
     <>
       {/* Mobile hamburger trigger */}
       <button
+        ref={hamburgerRef}
         className="sidebar-hamburger"
         onClick={() => setMobileOpen(true)}
         aria-label={t('openNavigation', 'Open navigation')}
+        aria-expanded={mobileOpen}
+        aria-controls="ops-sidebar"
       >
-        <FiMenu />
+        <FiMenu aria-hidden="true" />
       </button>
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} />
+        <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
       )}
 
       {/* Sidebar */}
       <aside
+        ref={drawerRef}
+        id="ops-sidebar"
         className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''} ${mobileOpen ? 'ops-sidebar--mobile ops-sidebar--open' : ''}`}
-        data-corner={(() => { try { return localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start'; } catch { return 'inline-start'; } })()}
+        data-corner={corner}
         aria-label={t('mainNavigation', 'Main navigation')}
       >
         {/* Collapse toggle */}
@@ -137,56 +194,54 @@ const Sidebar = () => {
           className="sidebar-toggle"
           onClick={toggleCollapse}
           aria-label={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
+          aria-expanded={!collapsed}
+          aria-controls="ops-sidebar"
           title={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
         >
-          {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
+          {collapsed ? <FiChevronRight aria-hidden="true" /> : <FiChevronLeft aria-hidden="true" />}
         </button>
 
         {/* Navigation — flat list, no submenus */}
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label={t('sidebarSections', 'Sections')}>
           <ul className="sidebar-nav-list">
             {navItems.map(renderNavItem)}
           </ul>
         </nav>
 
-        {/* Footer: profile with inline logout */}
+        {/* Footer: profile with inline logout (icon-only in rail) */}
         <div className="sidebar-footer">
           <div className="sidebar-profile">
-            <div className="sidebar-profile-avatar">
-              <span className="avatar-md">{username.slice(0, 1).toUpperCase() || '?'}</span>
+            <div className="sidebar-profile-avatar" title={collapsed ? username : undefined}>
+              <span className="avatar-md" aria-hidden="true">{username.slice(0, 1).toUpperCase() || '?'}</span>
               <span className={`sidebar-profile-pulse ${isOwner ? 'is-owner' : 'is-operator'}`} aria-hidden="true" />
             </div>
-            {!collapsed && (
-              <div className="sidebar-profile-info">
-                <div className="sidebar-profile-name-row">
-                  <strong className="sidebar-profile-name">{username}</strong>
-                  <span className="sidebar-profile-role-pill">
-                    {isOwner ? t('owner', 'Owner') : t('adminShort', 'Admin')}
-                  </span>
-                </div>
-                <div className="sidebar-profile-stats">
-                  <span className="stat-chip" title={t('totalUsers', 'Total users')}>
-                    <FiUsers className="stat-chip-icon" aria-hidden="true" />
-                    <span className="stat-chip-value">{stats.totalUsers}</span>
-                  </span>
-                  <span className="stat-chip" title={t('totalUsage', 'Total usage')}>
-                    <FiBarChart2 className="stat-chip-icon" aria-hidden="true" />
-                    <span className="stat-chip-value">{formatUsage(stats.totalUsage)}</span>
-                  </span>
-                </div>
+            <div className="sidebar-profile-info" aria-hidden={collapsed}>
+              <div className="sidebar-profile-name-row">
+                <strong className="sidebar-profile-name">{username}</strong>
+                <span className="sidebar-profile-role-pill">
+                  {isOwner ? t('owner', 'Owner') : t('adminShort', 'Admin')}
+                </span>
               </div>
-            )}
-            {!collapsed && (
-              <button
-                type="button"
-                className="sidebar-logout-btn"
-                onClick={logout}
-                aria-label={t('logout', 'Logout')}
-                title={t('logout', 'Logout')}
-              >
-                <FiLogOut aria-hidden="true" />
-              </button>
-            )}
+              <div className="sidebar-profile-stats">
+                <span className="stat-chip" title={t('totalUsers', 'Total users')}>
+                  <FiUsers className="stat-chip-icon" aria-hidden="true" />
+                  <span className="stat-chip-value">{stats.totalUsers}</span>
+                </span>
+                <span className="stat-chip" title={t('totalUsage', 'Total usage')}>
+                  <FiBarChart2 className="stat-chip-icon" aria-hidden="true" />
+                  <span className="stat-chip-value">{formatUsage(stats.totalUsage)}</span>
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="sidebar-logout-btn"
+              onClick={logout}
+              aria-label={t('logout', 'Logout')}
+              title={t('logout', 'Logout')}
+            >
+              <FiLogOut aria-hidden="true" />
+            </button>
           </div>
         </div>
       </aside>

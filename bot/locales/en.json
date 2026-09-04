@@ -5,7 +5,6 @@
   "btn_nodes": "Nodes",
   "btn_cancel": "Cancel",
   "btn_language": "Language",
-
   "home_browse": "Browse users",
   "home_create": "Create user",
   "home_status": "Panel status",
@@ -15,12 +14,10 @@
   "welcome": "<b>OVManager</b>\n{role} · {username}\n\nUse the menu below, or type a username to find someone.\nCreating a user is a short conversation — no slash commands needed.",
   "role_owner": "Owner",
   "role_operator": "Operator",
-
   "denied": "This Telegram account is not linked to OVManager.\n\nAsk the panel owner to add your Telegram ID under Settings → Bot (owner) or Admin management (operators).",
   "rate_limited": "You're going a bit fast. Wait a moment and try again.",
   "unknown_action": "That action is no longer available.",
   "error": "Something went wrong. Try again from the menu.",
-
   "users_empty": "No users yet.\nTap <b>{new}</b> to create the first one.",
   "users_header": "<b>Users</b>  ·  {count} total  ·  page {page}/{pages}",
   "users_hint": "Tap a name, or type one to search.",
@@ -32,7 +29,6 @@
   "user_list": "User list",
   "nav_prev": "Previous",
   "nav_next": "Next",
-
   "act_extend": "Extend",
   "act_config": "Config",
   "act_enable": "Enable",
@@ -53,12 +49,10 @@
   "act_suggest": "Use suggested name",
   "act_back_user": "Back to user",
   "act_refresh": "Refresh",
-
   "plan_standard": "Standard",
   "plan_team": "Team",
   "plan_unlimited": "Unlimited",
   "plan_custom": "Custom",
-
   "unlimited": "Unlimited",
   "no_expiry": "No expiry",
   "expired_ago": "Expired {days}d ago",
@@ -85,7 +79,6 @@
   "card_devices": "Devices",
   "card_owner": "Owner",
   "card_sub": "Subscription link",
-
   "create_hint_suggest": "Suggested name from your prefix: <code>{name}</code>\nSend that, type another name, or tap the button below.",
   "create_hint_type": "Type a username (3–64 letters, numbers or underscores).",
   "create_title": "<b>New user</b>\n\n{hint}",
@@ -106,7 +99,6 @@
   "create_ok": "Created <b>{name}</b>.",
   "create_ok_list": "Created <b>{name}</b>. Open Users to see the card.",
   "create_unknown_error": "Unknown error",
-
   "extend_title": "Extend <b>{name}</b>",
   "updating": "Updating…",
   "updated_days": "Updated. +{days} days.",
@@ -134,7 +126,6 @@
   "dl_fail": "Could not generate the config. Check that the node is online and the user is active.",
   "dl_sent": "Sent <b>{filename}</b>.",
   "node_fallback": "Node {id}",
-
   "panel": "Panel",
   "version_uptime": "Version {version}  ·  up {uptime}",
   "cpu_ram_disk": "CPU {cpu}  ·  RAM {ram}  ·  Disk {disk}",
@@ -147,7 +138,30 @@
   "node_up": "up",
   "node_down": "down",
   "node_line": "<b>{name}</b>  —  {mark}",
-
   "lang_title": "<b>Language</b>\n\nSame languages as the panel. Pick one — the menu updates immediately.",
-  "lang_set": "Language set to {name}."
+  "lang_set": "Language set to {name}.",
+  "session_expired": "Session expired — tap again to continue with a fresh session.",
+  "panel_unreachable": "Panel is unreachable. Try again in a moment.",
+  "act_undo": "↩ Undo delete",
+  "restoring": "Restoring…",
+  "restored_ok": "User restored.",
+  "restore_fail": "Could not restore (the undo window may have expired).",
+  "act_edit": "✏ Edit limits",
+  "edit_owner_only": "Editing limits is owner-only.",
+  "edit_title": "Edit <b>{name}</b> — pick a field:",
+  "edit_value_traffic": "New quota in GB (0 = unlimited):",
+  "edit_value_expiry": "New expiry in days from today (1–3650):",
+  "edit_value_devices": "New device limit (0 = unlimited, max 1000):",
+  "edit_confirm": "Set for <b>{name}</b>: {value}?",
+  "edit_ok": "Updated {name}.",
+  "act_save": "✓ Save",
+  "edit_field_traffic": "📊 Quota",
+  "edit_field_expiry": "📅 Expiry",
+  "edit_field_devices": "📱 Devices",
+  "node_gone": "Node not found.",
+  "node_detail_status": "Status: {status}",
+  "node_detail_cpu": "CPU: {cpu}",
+  "node_detail_mem": "Memory: {mem}",
+  "node_detail_live": "Live sessions: {live}",
+  "node_detail_version": "Agent: {version}"
 }

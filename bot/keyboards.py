@@ -22,9 +22,7 @@ def main_menu(*, in_flow: bool = False, lang: str = DEFAULT_LANG) -> ReplyKeyboa
 
 
 def inline(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton(label, callback_data=data) for label, data in row] for row in rows]
-    )
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=data) for label, data in row] for row in rows])
 
 
 def home_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
@@ -78,17 +76,18 @@ def users_nav(page: int, total_pages: int, *, has_users: bool, lang: str = DEFAU
     return inline(rows)
 
 
-def user_actions(user: dict, *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+def user_actions(user: dict, *, is_owner: bool = False, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     uuid = user["uuid"]
     toggle = t(lang, "act_enable") if not user.get("is_active") else t(lang, "act_disable")
-    return inline(
-        [
-            [(t(lang, "act_extend"), f"ext:{uuid}"), (t(lang, "act_config"), f"cfg:{uuid}")],
-            [(toggle, f"tog:{uuid}"), (t(lang, "act_sub"), f"sub:{uuid}")],
-            [(t(lang, "act_disconnect"), f"dis:{uuid}"), (t(lang, "act_delete"), f"del:{uuid}")],
-            [(t(lang, "act_back_list"), "users:0")],
-        ]
-    )
+    rows = [
+        [(t(lang, "act_extend"), f"ext:{uuid}"), (t(lang, "act_config"), f"cfg:{uuid}")],
+        [(toggle, f"tog:{uuid}"), (t(lang, "act_sub"), f"sub:{uuid}")],
+        [(t(lang, "act_disconnect"), f"dis:{uuid}"), (t(lang, "act_delete"), f"del:{uuid}")],
+    ]
+    if is_owner:
+        rows.append([(t(lang, "act_edit"), f"edt:{uuid}")])
+    rows.append([(t(lang, "act_back_list"), "users:0")])
+    return inline(rows)
 
 
 def extend_actions(uuid: str, *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
@@ -104,6 +103,15 @@ def extend_actions(uuid: str, *, lang: str = DEFAULT_LANG) -> InlineKeyboardMark
 
 def confirm_delete(uuid: str, *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     return inline([[(t(lang, "act_delete_confirm"), f"okd:{uuid}"), (t(lang, "act_keep"), f"u:{uuid}")]])
+
+
+def after_delete(uuid: str, *, name: str = "", lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline(
+        [
+            [(t(lang, "act_undo", name=name), f"undo:{uuid}")],
+            [(t(lang, "act_back_list"), "users:0")],
+        ]
+    )
 
 
 def confirm_create(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
@@ -124,10 +132,7 @@ def plan_picker(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
 
 
 def node_picker(uuid: str, nodes: list[dict], *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
-    rows = [
-        [(n.get("name") or t(lang, "node_fallback", id=n.get("id")), f"dl:{uuid}:{n['id']}")]
-        for n in nodes
-    ]
+    rows = [[(n.get("name") or t(lang, "node_fallback", id=n.get("id")), f"dl:{uuid}:{n['id']}")] for n in nodes]
     rows.append([(t(lang, "act_back"), f"u:{uuid}")])
     return inline(rows)
 
@@ -142,3 +147,26 @@ def status_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
 
 def nodes_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
     return inline([[(t(lang, "act_refresh"), "nodes"), (t(lang, "btn_status"), "status")]])
+
+
+def nodes_list(nodes: list[dict], *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    rows = [[(n.get("name") or t(lang, "node_fallback", id=n.get("id")), f"ns:{n['id']}")] for n in nodes]
+    rows.append([(t(lang, "act_refresh"), "nodes"), (t(lang, "btn_status"), "status")])
+    return inline(rows)
+
+
+def node_detail(node_id: int, *, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline([[(t(lang, "act_back"), "nodes")]])
+
+
+def edit_fields(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline(
+        [
+            [(t(lang, "edit_field_traffic"), "edf:traffic"), (t(lang, "edit_field_expiry"), "edf:expiry")],
+            [(t(lang, "edit_field_devices"), "edf:devices")],
+        ]
+    )
+
+
+def confirm_edit(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline([[(t(lang, "act_save"), "edo"), (t(lang, "btn_cancel"), "edc")]])

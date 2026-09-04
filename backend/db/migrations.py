@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 VERSION_TABLE = "schema_version"
 
@@ -121,6 +121,13 @@ _EXTRA_DDL: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_security_snapshots_ts ON security_snapshots(ts)",
+    """
+    CREATE TABLE IF NOT EXISTS login_attempts (
+        key_hash TEXT PRIMARY KEY,
+        attempts TEXT NOT NULL DEFAULT '[]',
+        updated REAL NOT NULL DEFAULT 0
+    )
+    """,
 )
 
 _lock = threading.Lock()
@@ -311,7 +318,35 @@ def _seed_settings(db: Session) -> None:
 # Numbered steps. Version N means "after this step the database is at N".
 # Existing installations are adopted to HEAD directly (see ``migrate``), so
 # these only ever run for databases stamped at an older version.
-STEPS: tuple[tuple[int, str, object], ...] = ()
+def _encrypt_node_keys(db: Session) -> None:
+    """Encrypt plaintext node API keys at rest (v2).
+
+    Rows already prefixed with ``enc:`` are skipped. When no encryption key
+    is configured the step is a no-op so installs without
+    NODE/BOT_ENCRYPT_KEY keep working on plaintext (with a warning from crud).
+    """
+    try:
+        from backend.db.crud import _node_fernet, encrypt_node_key
+    except Exception:
+        return
+    if _node_fernet is None:
+        logger.info("migrations v2: no node encryption key — leaving keys as-is")
+        return
+    rows = db.execute(text("SELECT id, key FROM nodes")).fetchall()
+    updated = 0
+    for row in rows:
+        node_id, stored = row[0], row[1]
+        if not stored or str(stored).startswith("enc:"):
+            continue
+        enc = encrypt_node_key(str(stored))
+        db.execute(text("UPDATE nodes SET key = :k WHERE id = :i"), {"k": enc, "i": node_id})
+        updated += 1
+    logger.info("migrations v2: encrypted %s node key(s)", updated)
+
+
+STEPS: tuple[tuple[int, str, object], ...] = (
+    (2, "encrypt node API keys at rest", _encrypt_node_keys),
+)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -351,6 +386,14 @@ def migrate(db: Session | None = None) -> int:
                 _seed_settings(session)
                 _stamp(session, SCHEMA_VERSION, f"adopted legacy database (+{len(added)} columns)")
                 session.commit()
+                # Opportunistically encrypt plaintext node keys on adoption
+                # when a key is configured (best-effort, never fails migrate).
+                try:
+                    _encrypt_node_keys(session)
+                    session.commit()
+                except Exception as e:
+                    logger.warning("migrations: node key encryption on adoption failed: %s", e)
+                    session.rollback()
                 logger.info(
                     "migrations: adopted legacy database at version %s (added columns: %s)",
                     SCHEMA_VERSION,

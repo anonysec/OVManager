@@ -1,12 +1,11 @@
 # Copyright (c) 2025 anonysec. All rights reserved.
 # Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
 
-import asyncio
 import os
+import time
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -14,12 +13,37 @@ from sqlalchemy.orm import Session
 from backend.config import config
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.node.requests import NodeRequests
 from backend.node.task import download_ovpn_client_from_node
 from backend.operations import live as live_ops
 
 templates = Jinja2Templates(directory="frontend/templates")
 router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
+
+# Lightweight public-endpoint rate limit: 30 req/min/IP. In-memory is fine
+# for a single-process panel; prevents trivial scraping/amplification.
+_SUB_ATTEMPTS: dict[str, list[float]] = {}
+_SUB_MAX = 30
+_SUB_WINDOW = 60
+
+
+def _sub_client_ip(request: Request) -> str:
+    if config.TRUSTED_PROXY:
+        fwd = request.headers.get("X-Forwarded-For")
+        if fwd:
+            return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _sub_rate_limited(request: Request) -> bool:
+    ip = _sub_client_ip(request)
+    now = time.monotonic()
+    hits = [t for t in _SUB_ATTEMPTS.get(ip, []) if now - t < _SUB_WINDOW]
+    if len(hits) >= _SUB_MAX:
+        _SUB_ATTEMPTS[ip] = hits
+        return True
+    hits.append(now)
+    _SUB_ATTEMPTS[ip] = hits
+    return False
 
 
 @router.get("/static/subscription.js", include_in_schema=False)
@@ -121,6 +145,8 @@ async def get_subscription(
     uuid: str,
     db: Session = Depends(get_db),
 ):
+    if _sub_rate_limited(request):
+        return sub_error_page(429, "Too Many Requests", "Please try again in a minute.")
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
         return sub_error_page(
@@ -155,23 +181,12 @@ async def get_subscription(
 
     # Node health comes from the live collector's in-memory snapshot — this is
     # a PUBLIC, unauthenticated endpoint, so per-view node checks would let any
-    # visitor amplify traffic against every node. Only before the collector's
-    # first poll (cold start) fall back to checking nodes directly.
-    async def live_check(node) -> bool:
-        try:
-            return await run_in_threadpool(
-                NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls).check_node
-            )
-        except Exception:
-            return False
-
+    # visitor amplify traffic against every node. On cold start (no poll yet)
+    # serve with no links rather than fanning out to all nodes.
     up_nodes: set[str] = set()
     if live_ops.last_poll_ts() > 0:
         online = live_ops.get_node_online()
         up_nodes = {n.name for n in nodes if online.get(n.name)}
-    elif nodes:
-        results = await asyncio.gather(*[live_check(n) for n in nodes])
-        up_nodes = {n.name for n, up in zip(nodes, results, strict=False) if up}
 
     for node in nodes:
         if node.name in up_nodes:
@@ -195,10 +210,13 @@ async def get_subscription(
 
 @router.get("/download/{uuid}/{node_name}")
 async def download_ovpn(
+    request: Request,
     uuid: str,
     node_name: str,
     db: Session = Depends(get_db),
 ):
+    if _sub_rate_limited(request):
+        return sub_error_page(429, "Too Many Requests", "Please try again in a minute.")
     user = crud.get_user_by_uuid(db, uuid)
     if not user:
         return sub_error_page(404, "Not Found", "This subscription link is invalid or the user no longer exists.")

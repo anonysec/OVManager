@@ -33,7 +33,7 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     id_to_name = {str(u.id): u.name for u in all_users}
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         return node, req.get_sessions(hours=1)
 
     raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
@@ -63,7 +63,7 @@ async def get_user_session_diagnostics(user_id: int, db: Session, hours: int = 8
     cn = str(user.id)
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         return node, req.get_sessions(hours=hours)
 
     raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
@@ -115,7 +115,7 @@ async def disconnect_user_on_all_nodes(name: str, user_id: int, db: Session) -> 
     cn = str(user_id)
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         return {"node": node.name, "result": req.disconnect_user(cn)}
 
     raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
@@ -144,7 +144,7 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
     node_rows = []
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         return node, req.get_sessions(hours=hours)
 
     raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)

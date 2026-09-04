@@ -11,7 +11,25 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   const [maxLogins, setMaxLogins] = useState('1');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [suggest, setSuggest] = useState('');
+  const [suggestLoading, setSuggestLoading] = useState(false);
   const { t } = useTranslation();
+
+  const fetchSuggest = async () => {
+    setSuggestLoading(true);
+    try {
+      const res = await apiClient.get('/users/next-username');
+      if (res.data?.success && res.data?.data?.username) {
+        setSuggest(res.data.data.username);
+      } else {
+        setSuggest('');
+      }
+    } catch {
+      setSuggest('');
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
 
   const bytesFromGB = (value) => {
     const cleaned = value?.toString().trim();
@@ -21,7 +39,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
     return Math.round(parsed * 1024 * 1024 * 1024);
   };
 
-  const reset = () => { setName(''); setExpiryDate(''); setTotalTraffic(''); setMaxLogins('1'); setError(''); };
+  const reset = () => { setName(''); setExpiryDate(''); setTotalTraffic(''); setMaxLogins('1'); setError(''); setSuggest(''); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -58,20 +76,41 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('modal_createUserTitle')} size="medium">
+    <Modal isOpen={isOpen} onClose={() => { reset(); onClose(); }} title={t('modal_createUserTitle')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
         <div className="input-group">
           <label htmlFor="new-user-name">{t('username')}</label>
-          <input
-            type="text"
-            id="new-user-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required minLength="3" maxLength="64"
-            autoFocus
-            aria-invalid={Boolean(error)}
-            aria-describedby={error ? 'new-user-error new-user-name-hint' : 'new-user-name-hint'}
-          />
+          <div className="shortcut-row">
+            <input
+              type="text"
+              id="new-user-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required minLength="3" maxLength="64"
+              autoFocus
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'new-user-error new-user-name-hint' : 'new-user-name-hint'}
+              className="shortcut-input"
+            />
+            <div className="shortcut-btns">
+              <button
+                type="button"
+                className="shortcut-chip"
+                disabled={suggestLoading}
+                onClick={async () => { if (!suggest) await fetchSuggest(); }}
+                onMouseEnter={() => { if (!suggest && isOpen) fetchSuggest(); }}
+                onFocus={() => { if (!suggest) fetchSuggest(); }}
+                title={t('suggestUsername', 'Suggest next username')}
+              >
+                {suggestLoading ? '…' : t('suggest', 'Suggest')}
+              </button>
+              {suggest && (
+                <button type="button" className="shortcut-chip active" onClick={() => setName(suggest)} title={suggest}>
+                  {suggest}
+                </button>
+              )}
+            </div>
+          </div>
           <small id="new-user-name-hint" className="input-hint">{t('usernameHint', '3–64 characters.')}</small>
         </div>
         <div className="input-group">

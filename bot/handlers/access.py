@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 
 from bot.i18n import lang_of, t
 from bot.identity import Actor, resolve
+from bot.ui import edit_or_reply
 
 log = logging.getLogger(__name__)
 
@@ -71,3 +72,27 @@ async def _reply(update: Update, text: str) -> None:
     message = update.effective_message
     if message:
         await message.reply_text(text)
+
+
+async def ensure_panel_ok(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, result: dict) -> bool:
+    """Central transport/auth guard for panel results.
+
+    Returns True when the caller may proceed (real success OR a meaningful
+    API error the caller should surface). Returns False after handling the
+    two cases callers must never show raw: revoked sessions (401 → drop the
+    cached actor/token, ask for one more tap with a fresh session) and an
+    unreachable panel (status 0 → distinct message, not an empty list).
+    """
+    from bot.identity import invalidate_token
+
+    lang = lang_of(update, context)
+    status = (result or {}).get("status")
+    if status == 401:
+        invalidate_token(actor.token)
+        context.user_data.pop("actor", None)
+        await edit_or_reply(update, t(lang, "session_expired"))
+        return False
+    if status == 0:
+        await edit_or_reply(update, t(lang, "panel_unreachable"))
+        return False
+    return True

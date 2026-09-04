@@ -205,7 +205,7 @@ async def collect_live_snapshot() -> None:
     def probe(node) -> tuple[object, dict]:
         # The sessions summary is a superset of the health check: a node that
         # answers with any payload is up; an unreachable node returns {}.
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         return node, req.get_sessions(hours=1)
 
     results = await asyncio.gather(

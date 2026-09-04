@@ -59,7 +59,11 @@ def _list_text(users: list[dict], slice_: list[dict], page: int, total_pages: in
 
 async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, page: int = 0) -> None:
     lang = lang_of(update, context)
-    users = _sort_users(await Panel(actor.token).get_users())
+    panel = Panel(actor.token)
+    users = _sort_users(await panel.get_users())
+    if not users and panel.last_status == 0:
+        await edit_or_reply(update, t(lang, "panel_unreachable"))
+        return
     slice_, page, total_pages = _page(users, page)
     await edit_or_reply(
         update,
@@ -73,14 +77,21 @@ async def show_user(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
     panel = Panel(actor.token)
     user = await panel.get_user(uuid=uuid)
     if not user:
-        await edit_or_reply(
-            update,
-            t(lang, "user_gone"),
-            reply_markup=users_nav(0, 1, has_users=False, lang=lang),
-        )
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(
+                update,
+                t(lang, "user_gone"),
+                reply_markup=users_nav(0, 1, has_users=False, lang=lang),
+            )
         return
     sub = await panel.get_sub_url(user["uuid"])
-    await edit_or_reply(update, user_card(user, sub_url=sub, lang=lang), reply_markup=user_actions(user, lang=lang))
+    await edit_or_reply(
+        update,
+        user_card(user, sub_url=sub, lang=lang),
+        reply_markup=user_actions(user, is_owner=actor.role == "owner", lang=lang),
+    )
 
 
 async def search_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, query: str) -> None:
@@ -88,11 +99,14 @@ async def search_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor
     panel = Panel(actor.token)
     matches = await panel.search_users(query)
     if not matches:
-        await edit_or_reply(
-            update,
-            t(lang, "search_none", query=esc(query)),
-            reply_markup=users_nav(0, 1, has_users=True, lang=lang),
-        )
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(
+                update,
+                t(lang, "search_none", query=esc(query)),
+                reply_markup=users_nav(0, 1, has_users=True, lang=lang),
+            )
         return
     if len(matches) == 1:
         await show_user(update, context, actor, matches[0]["uuid"])

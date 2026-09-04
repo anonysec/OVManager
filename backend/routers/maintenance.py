@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from shutil import copy2
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import text as _text
 from sqlalchemy.orm import Session
@@ -40,11 +40,14 @@ _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
 
 @router.get("/backup", response_model=ResponseModel)
+@router.post("/backup", response_model=ResponseModel)
 async def backup_database(user: dict = Depends(require_owner)):
     """Create a backup of the panel database.
 
     Exports a SQLite copy + config snapshot. Downloadable as .db file.
     Only owner can access this.
+
+    Supports both GET (legacy panel builds) and POST (REST-correct create).
     """
 
     if not DB_PATH.exists():
@@ -54,11 +57,13 @@ async def backup_database(user: dict = Depends(require_owner)):
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_path = BACKUP_DIR / f"ovmanager_backup_{ts}.db"
-        # SQLite doesn't like being copied while open; use WAL checkpoint
+        # Checkpoint WAL so the backup sees a consistent snapshot, then use
+        # the SQLite online-backup API instead of a raw file copy (safe
+        # while writers are active).
         with engine.connect() as conn:
             conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
             conn.commit()
-        copy2(str(DB_PATH), str(backup_path))
+        _sqlite_backup(str(DB_PATH), str(backup_path))
         # Prune old backups — keep only the most recent _MAX_BACKUPS
         all_backups = sorted(
             BACKUP_DIR.glob("ovmanager_backup_*.db"),
@@ -126,10 +131,24 @@ async def list_backups(user: dict = Depends(require_owner)):
             {
                 "name": b.name,
                 "size": b.stat().st_size,
-                "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=datetime.UTC).isoformat(),
+                "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=UTC).isoformat(),
             }
         )
     return ResponseModel(success=True, msg="Backups listed", data=files)
+
+
+def _sqlite_backup(src: str, dst: str) -> None:
+    """Online backup via the SQLite backup API (consistent under writers)."""
+    src_conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True, timeout=30)
+    try:
+        dst_conn = sqlite3.connect(dst, timeout=30)
+        try:
+            src_conn.backup(dst_conn)
+            dst_conn.commit()
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
 
 
 def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel:
@@ -155,7 +174,8 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
             with engine.connect() as conn:
                 conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
                 conn.commit()
-            copy2(str(DB_PATH), str(pre_restore_backup))
+            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            _sqlite_backup(str(DB_PATH), str(pre_restore_backup))
         except Exception as e:
             logger.warning("Failed to create pre-restore backup: %s", e)
 
@@ -189,9 +209,9 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
 
 @router.post("/backup/restore", response_model=ResponseModel)
 async def restore_backup(
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
     user: dict = Depends(require_owner),
-    restore_from_server: str = None,
+    restore_from_server: str | None = Form(default=None),
 ):
     """Restore the database from a backup file.
 
@@ -217,7 +237,7 @@ async def restore_backup(
             return _atomic_db_restore(src_path, user, f"Restored from server backup: {restore_from_server}")
 
         # Original path: restore from uploaded file
-        if not file.filename or not file.filename.endswith(".db"):
+        if file is None or not file.filename or not file.filename.endswith(".db"):
             return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
 
         # Sanitize filename to prevent path traversal
@@ -225,19 +245,50 @@ async def restore_backup(
         if not safe_name:
             return ResponseModel(success=False, msg="Invalid filename", data=None)
 
-        # Read with size limit to prevent disk fill DoS
-        content = await file.read()
-        if len(content) > MAX_BACKUP_FILE_SIZE:
-            return ResponseModel(success=False, msg=f"File too large (max {MAX_BACKUP_FILE_SIZE} bytes)", data=None)
-
-        tmp_path = BACKUP_DIR / f"restore_{safe_name}"
+        # Stream to disk with an enforced size cap — never buffer the whole
+        # upload in memory (previous code did await file.read() first).
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        tmp_path = BACKUP_DIR / f"restore_{safe_name}.part"
         # Ensure tmp_path stays inside BACKUP_DIR
         try:
-            tmp_path.relative_to(BACKUP_DIR)
+            tmp_path.resolve().relative_to(BACKUP_DIR.resolve())
         except ValueError:
             return ResponseModel(success=False, msg="Invalid backup path", data=None)
 
-        tmp_path.write_bytes(content)
+        total = 0
+        try:
+            with open(tmp_path, "wb") as out:
+                while True:
+                    chunk = await file.read(1024 * 1024)  # 1 MB
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_BACKUP_FILE_SIZE:
+                        out.close()
+                        tmp_path.unlink(missing_ok=True)
+                        return ResponseModel(
+                            success=False,
+                            msg=f"File too large (max {MAX_BACKUP_FILE_SIZE} bytes)",
+                            data=None,
+                        )
+                    out.write(chunk)
+                out.flush()
+                try:
+                    os.fsync(out.fileno())
+                except OSError:
+                    pass
+        except Exception as e:
+            tmp_path.unlink(missing_ok=True)
+            return ResponseModel(success=False, msg=f"Upload failed: {e}", data=None)
+
+        final_tmp = BACKUP_DIR / f"restore_{safe_name}"
+        try:
+            final_tmp.resolve().relative_to(BACKUP_DIR.resolve())
+        except ValueError:
+            tmp_path.unlink(missing_ok=True)
+            return ResponseModel(success=False, msg="Invalid backup path", data=None)
+        os.replace(str(tmp_path), str(final_tmp))
+        tmp_path = final_tmp
 
         result = _atomic_db_restore(tmp_path, user, f"Restored from: {file.filename}")
 

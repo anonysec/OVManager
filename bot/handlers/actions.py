@@ -10,10 +10,11 @@ from telegram.ext import ContextTypes
 
 from bot.api import Panel
 from bot.formatters import esc
+from bot.handlers.access import ensure_panel_ok
 from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
-from bot.keyboards import back_to_user, confirm_delete, extend_actions, node_picker
+from bot.keyboards import after_delete, back_to_user, confirm_delete, extend_actions, node_picker
 from bot.ui import answer, edit_or_reply
 
 GB = 1073741824
@@ -24,8 +25,15 @@ async def dispatch_action(update: Update, context: ContextTypes.DEFAULT_TYPE, ac
         lang = lang_of(update, context)
         await answer(update)
         uuid = data[4:]
-        user = await Panel(actor.token).get_user(uuid=uuid)
-        name = (user or {}).get("name") or t(lang, "this_user")
+        panel = Panel(actor.token)
+        user = await panel.get_user(uuid=uuid)
+        if not user:
+            if panel.last_status == 0:
+                await edit_or_reply(update, t(lang, "panel_unreachable"))
+            else:
+                await edit_or_reply(update, t(lang, "user_not_found"))
+            return True
+        name = user.get("name") or t(lang, "this_user")
         await edit_or_reply(update, t(lang, "extend_title", name=esc(name)), reply_markup=extend_actions(uuid, lang=lang))
         return True
     if data.startswith("e30:"):
@@ -46,6 +54,8 @@ async def dispatch_action(update: Update, context: ContextTypes.DEFAULT_TYPE, ac
         return await _ask_delete(update, context, actor, data[4:])
     if data.startswith("okd:"):
         return await _delete(update, context, actor, data[4:])
+    if data.startswith("undo:"):
+        return await _undo_delete(update, context, actor, data[5:])
     if data.startswith("sub:"):
         return await _sub(update, context, actor, data[4:])
     if data.startswith("cfg:"):
@@ -60,7 +70,17 @@ async def _extend(
 ) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "updating"))
-    result = await Panel(actor.token).extend_user(uuid, days=days, bytes_=bytes_)
+    panel = Panel(actor.token)
+    user = await panel.get_user(uuid=uuid)
+    if not user:
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
+        return True
+    result = await panel.extend_user(uuid, days=days, bytes_=bytes_)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
     if result.get("success"):
         msg = t(lang, "updated_days", days=days) if days else t(lang, "updated_gb", gb=bytes_ // GB)
         await edit_or_reply(update, msg, reply_markup=back_to_user(uuid, lang=lang))
@@ -76,7 +96,17 @@ async def _extend(
 async def _reset(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "resetting"))
-    result = await Panel(actor.token).reset_usage(uuid)
+    panel = Panel(actor.token)
+    user = await panel.get_user(uuid=uuid)
+    if not user:
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
+        return True
+    result = await panel.reset_usage(uuid)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
     msg = t(lang, "reset_ok") if result.get("success") else (result.get("msg") or t(lang, "reset_fail"))
     await edit_or_reply(update, esc(msg), reply_markup=back_to_user(uuid, lang=lang))
     return True
@@ -88,10 +118,15 @@ async def _toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     panel = Panel(actor.token)
     user = await panel.get_user(uuid=uuid)
     if not user:
-        await edit_or_reply(update, t(lang, "user_not_found"))
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "user_not_found"))
         return True
     new_status = not bool(user.get("is_active"))
     result = await panel.set_status(uuid, user.get("name") or "", new_status)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
     if not result.get("success"):
         await edit_or_reply(
             update,
@@ -106,7 +141,17 @@ async def _toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
 async def _disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "disconnecting"))
-    result = await Panel(actor.token).disconnect(uuid)
+    panel = Panel(actor.token)
+    user = await panel.get_user(uuid=uuid)
+    if not user:
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
+        return True
+    result = await panel.disconnect(uuid)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
     msg = t(lang, "disconnect_ok") if result.get("success") else (result.get("msg") or t(lang, "disconnect_fail"))
     await edit_or_reply(update, esc(msg), reply_markup=back_to_user(uuid, lang=lang))
     return True
@@ -115,8 +160,15 @@ async def _disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
 async def _ask_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update)
-    user = await Panel(actor.token).get_user(uuid=uuid)
-    name = (user or {}).get("name") or t(lang, "this_user")
+    panel = Panel(actor.token)
+    user = await panel.get_user(uuid=uuid)
+    if not user:
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "user_not_found"))
+        return True
+    name = user.get("name") or t(lang, "this_user")
     await edit_or_reply(
         update,
         t(lang, "delete_ask", name=esc(name)),
@@ -132,12 +184,39 @@ async def _delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     user = await panel.get_user(uuid=uuid)
     name = (user or {}).get("name") or t(lang, "this_user")
     result = await panel.delete_user(uuid)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
     if result.get("success"):
-        await edit_or_reply(update, t(lang, "delete_ok", name=esc(name)))
+        await edit_or_reply(
+            update,
+            t(lang, "delete_ok", name=esc(name)),
+            reply_markup=after_delete(uuid, name=esc(name), lang=lang),
+        )
     else:
         await edit_or_reply(
             update,
             esc(result.get("msg") or t(lang, "delete_fail")),
+            reply_markup=back_to_user(uuid, lang=lang),
+        )
+    return True
+
+
+async def _undo_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
+    lang = lang_of(update, context)
+    await answer(update, t(lang, "restoring"))
+    result = await Panel(actor.token).restore_user(uuid)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return True
+    if result.get("success"):
+        await edit_or_reply(
+            update,
+            t(lang, "restored_ok"),
+            reply_markup=back_to_user(uuid, lang=lang),
+        )
+    else:
+        await edit_or_reply(
+            update,
+            esc(result.get("msg") or t(lang, "restore_fail")),
             reply_markup=back_to_user(uuid, lang=lang),
         )
     return True
@@ -148,6 +227,9 @@ async def _sub(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
     await answer(update)
     panel = Panel(actor.token)
     user = await panel.get_user(uuid=uuid)
+    if not user and panel.last_status == 0:
+        await edit_or_reply(update, t(lang, "panel_unreachable"))
+        return True
     url = await panel.get_sub_url(uuid)
     if not url:
         await edit_or_reply(update, t(lang, "sub_missing"), reply_markup=back_to_user(uuid, lang=lang))
@@ -168,7 +250,10 @@ async def _cfg(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
     user = await panel.get_user(uuid=uuid)
     nodes = await panel.get_nodes()
     if not nodes:
-        await edit_or_reply(update, t(lang, "no_nodes"), reply_markup=back_to_user(uuid, lang=lang))
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "no_nodes"), reply_markup=back_to_user(uuid, lang=lang))
         return True
     name = (user or {}).get("name") or t(lang, "this_user")
     await edit_or_reply(
@@ -191,14 +276,25 @@ async def _download(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
     panel = Panel(actor.token)
     user = await panel.get_user(uuid=uuid)
     nodes = await panel.get_nodes()
+    if not user and panel.last_status == 0:
+        await edit_or_reply(update, t(lang, "panel_unreachable"))
+        return True
     node = next((n for n in nodes if int(n.get("id") or 0) == node_id), None)
     body = await panel.download_ovpn(uuid, node_id)
     message = update.effective_message
     if not body:
-        await edit_or_reply(update, t(lang, "dl_fail"), reply_markup=back_to_user(uuid, lang=lang))
+        if panel.last_status == 0:
+            await edit_or_reply(update, t(lang, "panel_unreachable"))
+        else:
+            await edit_or_reply(update, t(lang, "dl_fail"), reply_markup=back_to_user(uuid, lang=lang))
         return True
     filename = f"{(user or {}).get('name') or 'user'}-{(node or {}).get('name') or node_id}.ovpn"
+    filename = "".join(c if (c.isalnum() or c in "-_.") else "_" for c in filename)
     if message:
-        await message.reply_document(document=InputFile(BytesIO(body), filename=filename))
+        try:
+            await message.reply_document(document=InputFile(BytesIO(body), filename=filename))
+        except Exception:
+            await edit_or_reply(update, t(lang, "dl_fail"), reply_markup=back_to_user(uuid, lang=lang))
+            return True
     await edit_or_reply(update, t(lang, "dl_sent", filename=esc(filename)), reply_markup=back_to_user(uuid, lang=lang))
     return True
