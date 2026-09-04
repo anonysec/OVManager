@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Session diagnostics and login health monitoring.
 
@@ -28,9 +28,9 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     nodes = crud.get_active_nodes(db)
     counts: dict[str, int] = {}
 
-    # Build id→username map for fast lookup
-    all_users = crud.get_all_users(db)
-    id_to_name = {str(u.id): u.name for u in all_users}
+    # Build id→username map for fast lookup (lightweight pairs query —
+    # only (id, name) is needed to translate numeric CNs).
+    id_to_name = dict(crud.get_user_id_name_pairs(db))
 
     def work(node):
         req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
@@ -135,8 +135,10 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
     # Build id→username map (CN is numeric ID)
     id_to_name = {str(u.id): u.name for u in users}
 
-    # Collect active connection counts
-    active_counts = await get_active_connection_counts(db)
+    # Active counts are derived from this call's own sessions fan-out below —
+    # no second poll of every node (get_active_connection_counts re-fetched
+    # the same live_sessions; hours only affects journal auth errors).
+    active_counts: dict[str, int] = {}
 
     # Collect per-user stale and auth data
     stale_counts: dict[str, int] = {}
@@ -161,6 +163,7 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
         for sess in data.get("live_sessions") or []:
             cn = sess.get("common_name", "")
             username = id_to_name.get(cn, cn)
+            active_counts[username] = active_counts.get(username, 0) + 1
             stale_counts[username] = stale_counts.get(username, 0)
 
         for marker in data.get("stale_markers") or []:

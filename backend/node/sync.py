@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Background sync operations — traffic collection, limit pushing, cleanup.
 
@@ -28,9 +28,14 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
 
 
 async def sync_all_user_limits(db: Session) -> dict:
-    """Push every user's max_login limit to every node."""
+    """Push every user's max_login limit to every reachable node.
+
+    Offline nodes (status=False) are skipped — pushing to them only burns
+    timeouts every 30 minutes. They re-sync on next successful contact
+    (add/update flows) or via the manual maintenance sync-limits endpoint.
+    """
     users = crud.get_all_users(db)
-    nodes = crud.get_all_nodes(db)
+    nodes = crud.get_active_nodes(db)
     results = []
     _semaphore = asyncio.Semaphore(20)
 

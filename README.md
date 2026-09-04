@@ -2,6 +2,22 @@
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
+## Quickstart (beginners start here)
+
+```bash
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
+```
+
+Answer the wizard (defaults in brackets are fine: Native, port `2095`,
+random URL path, `admin`, blank password = generated, self-signed TLS),
+save the green **Ready** card (panel URL + login), log in — then follow the
+built-in setup checklist (node → user → download `.ovpn`).
+
+Step-by-step with pictures-in-words: [docs/quickstart.md](docs/quickstart.md) ·
+one server: [docs/single-vps.md](docs/single-vps.md) ·
+many servers: [docs/multi-node.md](docs/multi-node.md) ·
+stuck: [docs/troubleshooting.md](docs/troubleshooting.md).
+
 ## Install
 
 The installer has two modes — **native** (systemd + uv on the host) and **Docker**
@@ -43,12 +59,12 @@ bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall --purge
 ```
 
-## Manual Install
+## Manual Install (developers only — beginners: use the installer above)
 
 ```bash
 git clone https://github.com/anonysec/OVManager.git /opt/ovmanager
 cd /opt/ovmanager
-cp .env.example .env  # edit with your settings
+cp .env.example .env  # REQUIRED: set ADMIN_PASSWORD + PUBLIC_URL (see top of file)
 pip install uv && uv sync
 cd frontend && npm ci && npm run build
 uv run main.py
@@ -121,4 +137,4 @@ What is done instead:
 
 ## License
 
-Proprietary. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

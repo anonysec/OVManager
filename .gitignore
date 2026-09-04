@@ -48,3 +48,9 @@ frontend/dist/
 
 # Pre-commit
 .pre-commit-cache/
+
+# Local planning / handoff (never publish)
+PROJECT_PLAN.md
+*_PLAN.md
+.plan/
+.local/

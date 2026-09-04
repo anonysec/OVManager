@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from __future__ import annotations
 
@@ -74,3 +74,17 @@ def recent_events(db, limit=100, actor: str | None = None):
             {"actor": actor, "limit": limit},
         ).fetchall()
     return [{"id": r[0], "ts": r[1], "actor": r[2], "action": r[3], "target": r[4], "detail": r[5]} for r in rows]
+
+
+def prune_audit_logs(db, keep_days: int = 90) -> int:
+    """Delete audit rows older than keep_days. Returns rows removed.
+
+    audit_logs was the only unbounded table (metrics already retain 30d).
+    Called from the 15-minute maintenance sweep in app.py.
+    """
+    if not _table_ready:
+        ensure_audit_table(db)
+    cutoff = time.time() - max(1, int(keep_days or 90)) * 86400
+    result = db.execute(text("DELETE FROM audit_logs WHERE ts < :cutoff"), {"cutoff": cutoff})
+    db.commit()
+    return int(result.rowcount or 0)

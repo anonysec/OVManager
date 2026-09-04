@@ -1,5 +1,5 @@
-// Copyright (c) 2025 anonysec. All rights reserved.
-// Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+// Copyright (c) 2026 anonysec
+// SPDX-License-Identifier: MIT
 
 /**
  * ServerHealth — row of four resource meters (CPU, Memory, Disk, Load)
@@ -22,7 +22,6 @@ const tonify = (pct) => {
 
 export default function ServerHealth({ stats, traffic, error, loading, onRetry, t: tProp, onlineNodes, totalNodes }) {
   const { t } = useTranslation();
-  const sparkTone = (n) => (n > 85 ? 'danger' : n > 70 ? 'warn' : 'ok');
   const cpu = Number(stats?.cpu ?? 0);
   const mem = Number(stats?.memory_percent ?? 0);
   const disk = Number(stats?.disk_percent ?? 0);

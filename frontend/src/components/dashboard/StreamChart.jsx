@@ -1,13 +1,14 @@
-// Copyright (c) 2025 anonysec. All rights reserved.
-// Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+// Copyright (c) 2026 anonysec
+// SPDX-License-Identifier: MIT
 
 /**
- * StreamChart — real-time area chart fed by /metrics/history.
+ * StreamChart — area chart fed by /metrics/history with 30s polling.
  *
- * Streaming model:
+ * Data model:
  *  - Initial load: GET /metrics/history?hours={24|168} populates the series
- *  - Updates: SSE from /metrics/stream appends new points to the series
- *  - If SSE fails / is disabled, polling every 30s provides the same data
+ *  - Updates: 30s polling refresh (single live source is /live/stream
+ *    invalidation bus in LiveContext; per-chart SSE was removed to avoid
+ *    a second DB-polling stream).
  *
  * The chart keeps the latest 240 points (≈ 1h at 15s cadence) to avoid
  * DOM bloat on long sessions. Hover crosshair and tooltip are pure DOM
@@ -18,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
-import useEventSource from '../../hooks/useEventSource';
 import { Panel } from './Panel';
 
 const MAX_POINTS = 240;
@@ -61,21 +61,8 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     return () => { cancelled = true; };
   }, [hours]);
 
-  // Real-time appends via SSE; ignored if unavailable.
-  const { status } = useEventSource('/api/metrics/stream', {
-    enabled: !loading && !loadError,
-    onMessage: (msg) => {
-      if (!msg || typeof msg !== 'object') return;
-      setSeries((prev) => {
-        const next = [...prev, { ts: msg.ts || Math.floor(Date.now() / 1000), total_used: msg.total_used, active_connections: msg.active_connections }];
-        return next.length > MAX_POINTS ? next.slice(-MAX_POINTS) : next;
-      });
-    },
-  });
-
-  // Polling fallback: when SSE is closed or errored, refresh every 30s.
+  // Refresh every 30s so the chart stays current without a second SSE stream.
   useEffect(() => {
-    if (status === 'open') return undefined;
     const id = setInterval(() => {
       apiClient.get(`/metrics/history?hours=${hours}`)
         .then((r) => {
@@ -85,7 +72,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
         .catch(() => { /* keep existing */ });
     }, 30000);
     return () => clearInterval(id);
-  }, [status, hours]);
+  }, [hours]);
 
   const valueAt = useCallback((p) => Number(metric === 'conns' ? p.active_connections || 0 : p.total_used || 0), [metric]);
   const fmt = useCallback((v) => (metric === 'conns' ? Math.round(Number(v || 0)).toLocaleString() : formatBytes(v)), [metric]);
@@ -104,7 +91,6 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
   const lastVal = series.length ? valueAt(series[series.length - 1]) : 0;
   const peak = points.length ? Math.max(...points.map((p) => p.v)) : 0;
   const hovered = hoverIdx != null ? points[hoverIdx] : null;
-  const isLive = status === 'open';
 
   const onMove = (e) => {
     if (!svgRef.current || points.length < 2) return;
@@ -135,8 +121,8 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
             <button type="button" className={period === '7d' ? 'active' : ''} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>7d</button>
           </div>
           <span className="ds-chart-meta" aria-live="polite">
-            <span className={`ds-chart-status ${isLive ? 'ds-chart-status--live' : loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
-            {isLive ? t('chartLive', 'Live') : loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}
+            <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
+            {loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}
           </span>
         </div>
       }

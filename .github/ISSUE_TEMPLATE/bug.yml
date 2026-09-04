@@ -1,0 +1,36 @@
+name: Bug report
+description: Something broken with reproduction steps
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version (panel + node)
+      placeholder: panel 2.0.0 / node 2.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [panel UI, users/traffic, nodes/sync, subscription links, Telegram bot, installer, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: 1. ... 2. ... 3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redact secrets/keys)
+      render: text

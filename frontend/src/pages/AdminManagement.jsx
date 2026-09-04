@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { FiUserCheck, FiSearch, FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import apiClient from '../services/api';
-import AddAdminModal from '../components/AddAdminModal';
-import EditAdminModal from '../components/EditAdminModal';
+import AdminFormModal from '../components/AdminFormModal';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import ConfirmModal from '../components/ConfirmModal';
@@ -326,20 +325,20 @@ const AdminManagement = () => {
         />
       )}
 
-      <AddAdminModal
+      <AdminFormModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onAdminCreated={async () => {
+        onSaved={async () => {
           addToast(t('adminCreated', 'Admin created'), 'success');
           setIsAddModalOpen(false);
           fetchAdmins();
         }}
       />
-      <EditAdminModal
+      <AdminFormModal
         isOpen={isEditModalOpen}
         onClose={() => { setIsEditModalOpen(false); setSelectedAdmin(null); }}
         admin={selectedAdmin}
-        onAdminUpdated={async () => {
+        onSaved={async () => {
           addToast(t('adminUpdated', 'Admin updated'), 'success');
           setIsEditModalOpen(false);
           setSelectedAdmin(null);

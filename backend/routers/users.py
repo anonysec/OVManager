@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 
 import time as _time
@@ -96,14 +96,19 @@ async def get_next_username(
 async def get_all_users(
     page: int | None = Query(default=None, ge=1, le=10_000),
     page_size: int | None = Query(default=None, ge=1, le=500),
+    search: str | None = Query(default=None, max_length=64),
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     # The panel filters, sorts and paginates client-side, so the default is
-    # the full set. Passing page/page_size opts into a slice for API consumers.
+    # the full set. Passing page/page_size/search opts into DB-level
+    # filtering for API consumers (notably the Telegram bot, which used to
+    # pull the whole table on every keystroke).
     paginate = page is not None or page_size is not None
+    server_filter = paginate or bool(search and search.strip())
     page = page or 1
     page_size = page_size or 100
+    needle = search.strip() if search and search.strip() else None
 
     # Connection counts come from the live collector's in-memory cache, so a
     # page load never fans out to every node (a dead node used to stall this
@@ -124,17 +129,22 @@ async def get_all_users(
         return item
 
     if user["type"] == "owner":
-        all_users = crud.get_all_users(db)
+        if server_filter:
+            page_users, total = crud.get_users_page(db, search=needle, page=page, page_size=page_size)
+        else:
+            page_users = crud.get_all_users(db)
+            total = len(page_users)
     elif user["type"] == "admin":
-        all_users = crud.get_users_by_admin(db, admin_username=user["username"])
+        if server_filter:
+            page_users, total = crud.get_users_page(
+                db, owner=user["username"], search=needle, page=page, page_size=page_size
+            )
+        else:
+            page_users = crud.get_users_by_admin(db, admin_username=user["username"])
+            total = len(page_users)
     else:
         return ResponseModel(success=False, msg="Unauthorized access")
 
-    total = len(all_users)
-    page_users = all_users
-    if paginate:
-        start = (page - 1) * page_size
-        page_users = all_users[start : start + page_size]
     users_list = [serialize(u) for u in page_users]
     return ResponseModel(
         success=True,
@@ -142,8 +152,8 @@ async def get_all_users(
         data={
             "users": users_list,
             "total": total,
-            "page": page if paginate else 1,
-            "page_size": page_size if paginate else total,
+            "page": page if server_filter else 1,
+            "page_size": page_size if server_filter else total,
         },
     )
 
@@ -284,14 +294,25 @@ async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Dep
         return ResponseModel(success=False, msg="User not found", data=None)
     _require_user_access(db_user, user)
 
-    if await delete_user_on_all_nodes(db_user.name, db_user.id, db):
-        name = db_user.name
-        _remember_deleted(db_user)  # enable Undo
-        crud.delete_user(db, name)
-        log_event(db, "user.delete", actor=user.get("username"), target=name, detail="User deleted")
-        live_ops.publish("users", {"op": "delete"})
-        return ResponseModel(success=True, msg="User deleted successfully")
-    return ResponseModel(success=False, msg="Failed to delete user on all nodes")
+    # Best-effort: the DB row is the source of truth and always goes away —
+    # one dead node must not wedge the whole delete. Unreachable nodes are
+    # named in the response + audit log so the operator can follow up
+    # (their certs stop working the moment the node is replaced/re-synced).
+    result = await delete_user_on_all_nodes(db_user.name, db_user.id, db)
+    failed = result.get("failed", [])
+    name = db_user.name
+    _remember_deleted(db_user)  # enable Undo
+    crud.delete_user(db, name)
+    detail = "User deleted" if not failed else f"User deleted; unreachable nodes: {', '.join(failed)}"
+    log_event(db, "user.delete", actor=user.get("username"), target=name, detail=detail)
+    live_ops.publish("users", {"op": "delete"})
+    if failed:
+        return ResponseModel(
+            success=True,
+            msg=f"User deleted locally, but unreachable on: {', '.join(failed)}",
+            data={"failed_nodes": failed},
+        )
+    return ResponseModel(success=True, msg="User deleted successfully")
 
 
 @router.post("/{uuid}/restore", response_model=ResponseModel)

@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from datetime import UTC
 
@@ -38,7 +38,46 @@ async def add_node(
         live.publish("nodes", {"op": "add"})
     return ResponseModel(
         success=new_node,
-        msg="Node added successfully" if new_node else "Failed to add node",
+        msg="Node added successfully"
+        if new_node
+        else "Failed to add node — the panel could not reach it. "
+        "Check address, port, API key and the TLS switch, or use Test connection first.",
+    )
+
+
+@router.post("/test", response_model=ResponseModel)
+async def test_node(
+    request: NodeCreate,
+    user: dict = Depends(require_owner),
+):
+    """Check connectivity to a node without saving it.
+
+    Read-only: builds a one-off client from the payload and hits
+    /sync/status. Lets the Add Node form validate before persisting.
+    """
+    from fastapi.concurrency import run_in_threadpool
+
+    from backend.node.requests import NodeRequests
+
+    if not (request.key or "").strip():
+        return ResponseModel(success=False, msg="API key is required.")
+    try:
+        nr = NodeRequests(
+            address=request.address,
+            port=request.port,
+            api_key=request.key,
+            use_tls=request.use_tls,
+        )
+    except ValueError as e:
+        return ResponseModel(success=False, msg=f"Invalid address: {e}")
+    ok = await run_in_threadpool(nr.check_node)
+    if ok:
+        return ResponseModel(success=True, msg="Node is reachable.", data={"reachable": True})
+    return ResponseModel(
+        success=False,
+        msg="Node unreachable — check address (public IP, not 10.x/192.168.x unless shared LAN), "
+        "service port (2083, not the 1194 VPN port), exact API key, and that the TLS switch "
+        "matches the node (on for self-signed/LE, off only for None).",
     )
 
 

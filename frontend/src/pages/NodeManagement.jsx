@@ -5,8 +5,7 @@ import NodeDrawer from '../components/NodeDrawer';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { nodeMeta } from '../utils/geo';
-import AddNodeModal from '../components/AddNodeModal';
-import EditNodeModal from '../components/EditNodeModal';
+import NodeFormModal from '../components/NodeFormModal';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import DataTable from '../components/ui/DataTable';
@@ -495,10 +494,10 @@ const NodeManagement = () => {
       )}
 
       {isAddModalOpen && (
-        <AddNodeModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onNodeCreated={handleNodeCreated} />
+        <NodeFormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSaved={handleNodeCreated} />
       )}
       {isEditModalOpen && selectedNode && (
-        <EditNodeModal isOpen={isEditModalOpen} node={selectedNode} onClose={() => { setIsEditModalOpen(false); setSelectedNode(null); }} onNodeUpdated={handleNodeUpdated} />
+        <NodeFormModal isOpen={isEditModalOpen} node={selectedNode} onClose={() => { setIsEditModalOpen(false); setSelectedNode(null); }} onSaved={handleNodeUpdated} />
       )}
       {drawerNode && (
         <NodeDrawer

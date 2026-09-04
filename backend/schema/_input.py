@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from datetime import date
 
@@ -12,7 +12,9 @@ class CreateUser(BaseModel):
     used: int | None = None
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: int = Field(default=1, ge=0, le=1000)
-    expiry_date: date
+    # Optional: omitted → today + Settings.default_days (crud.create_user).
+    # total=None stays unlimited; only expiry gets a default.
+    expiry_date: date | None = None
 
 
 class UpdateUser(BaseModel):

@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Node CRUD operations — add/update/delete nodes and users.
 
@@ -283,17 +283,22 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     )
 
 
-async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> bool:
-    """Delete a user from every active node. Uses numeric user ID."""
+async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict:
+    """Delete a user from every active node. Uses numeric user ID.
+
+    Returns {"ok", "failed"} where ``failed`` names unreachable nodes.
+    A dead node must not block panel-side deletion (its cert is already
+    unusable once the node is gone; NOT_FOUND counts as success so already
+    cleaned nodes never block either). Callers surface ``failed`` so the
+    operator knows which nodes need attention.
+    """
     nodes = crud.get_active_nodes(db)
     if not nodes:
-        return True
+        return {"ok": True, "failed": []}
     tasks = []
     for n in nodes:
         nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
         tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    # Every active node must acknowledge the deletion. A partial success must
-    # remain visible so the Manager does not remove its source-of-truth row
-    # while a client certificate survives on another node.
-    return bool(results) and all(r is True for r in results)
+    failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
+    return {"ok": not failed, "failed": failed}
