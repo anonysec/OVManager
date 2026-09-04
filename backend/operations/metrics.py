@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from __future__ import annotations
 
@@ -37,7 +37,12 @@ def ensure_metrics_tables(db: Session) -> None:
     _tables_ready = True
 
 
-async def _node_snapshot(node) -> dict[str, Any]:
+async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Probe one node (info + sessions). Returns (snapshot_row, sessions_data).
+
+    The raw sessions payload is returned alongside so callers can derive
+    per-user connection counts without a second fan-out to every node.
+    """
     start = time.perf_counter()
     req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
     try:
@@ -52,7 +57,7 @@ async def _node_snapshot(node) -> dict[str, Any]:
         if isinstance(sessions, Exception) or not isinstance(sessions, dict):
             sessions = {}
         reachable = bool(info)
-        return {
+        row = {
             "node_id": node.id,
             "node_name": node.name,
             "cpu": float(info.get("cpu_usage") or 0),
@@ -64,9 +69,10 @@ async def _node_snapshot(node) -> dict[str, Any]:
             "rejects": int(sessions.get("rejects") or 0),
             "stale_markers": int(sessions.get("stale_marker_count") or 0),
         }
+        return row, sessions
     except Exception as e:
         logger.warning("metrics: node snapshot failed for %s: %s", node.name, e)
-        return {
+        row = {
             "node_id": node.id,
             "node_name": node.name,
             "cpu": 0,
@@ -78,6 +84,7 @@ async def _node_snapshot(node) -> dict[str, Any]:
             "rejects": 0,
             "stale_markers": 0,
         }
+        return row, {}
 
 
 async def collect_metrics() -> None:
@@ -85,16 +92,15 @@ async def collect_metrics() -> None:
     from datetime import UTC as UTC_DT
     from datetime import datetime
 
-    from backend.node.task import get_active_connection_counts
-
     db = SessionLocal()
     now = time.time()
     try:
         ensure_metrics_tables(db)
         nodes = crud.get_all_nodes(db)
         users = crud.get_all_users(db)
-        node_rows = await asyncio.gather(*[_node_snapshot(node) for node in nodes], return_exceptions=True)
-        clean_rows = [r for r in node_rows if isinstance(r, dict)]
+        probed = await asyncio.gather(*[_node_snapshot(node) for node in nodes], return_exceptions=True)
+        clean = [p for p in probed if isinstance(p, tuple)]
+        clean_rows = [row for row, _sessions in clean]
 
         active_connections = sum(int(r.get("live_count") or 0) for r in clean_rows)
         auth_errors = sum(int(r.get("auth_errors") or 0) for r in clean_rows)
@@ -112,8 +118,15 @@ async def collect_metrics() -> None:
         # Update last_online for users with active connections.
         # This was previously done in the GET /users handler (a side effect).
         # Moved here to the background job where writes belong.
+        # Counts are derived from this tick's sessions payloads — no second
+        # fan-out to every node (get_active_connection_counts re-polled them).
         try:
-            active_counts = await get_active_connection_counts(db)
+            id_to_name = dict(crud.get_user_id_name_pairs(db))
+            active_counts: dict[str, int] = {}
+            for _row, sessions in clean:
+                for sess in sessions.get("live_sessions") or []:
+                    username = id_to_name.get(sess.get("common_name", ""), sess.get("common_name", ""))
+                    active_counts[username] = active_counts.get(username, 0) + 1
             for u in users:
                 if int(active_counts.get(u.name, 0) or 0) > 0:
                     u.last_online = datetime.now(UTC_DT)

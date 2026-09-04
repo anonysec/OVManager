@@ -1,6 +1,7 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
+import asyncio
 import mimetypes
 import os
 from contextlib import asynccontextmanager
@@ -322,6 +323,18 @@ async def auto_clean_stale_job():
         db.close()
 
 
+async def auto_prune_audit_job():
+    from backend.operations.audit import prune_audit_logs
+
+    db = SessionLocal()
+    try:
+        removed = await asyncio.to_thread(prune_audit_logs, db)
+        if removed:
+            logger.info("Pruned %s audit log row(s) older than 90 days", removed)
+    finally:
+        db.close()
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -361,6 +374,13 @@ def start_scheduler():
         id="auto_clean_stale",
         replace_existing=True,
         misfire_grace_time=60,
+    )
+    scheduler.add_job(
+        auto_prune_audit_job,
+        CronTrigger(hour="*/6"),
+        id="prune_audit_logs",
+        replace_existing=True,
+        misfire_grace_time=300,
     )
     # Live collector: single poller for all nodes. Request handlers and SSE
     # subscribers use its in-memory snapshot instead of fanning out to nodes.

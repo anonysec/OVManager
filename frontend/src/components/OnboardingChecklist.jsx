@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FiCheck, FiX, FiServer, FiUserPlus, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiHelpCircle } from 'react-icons/fi';
+import { FiCheck, FiX, FiServer, FiUserPlus, FiDownload, FiWifi, FiChevronRight, FiChevronLeft, FiStar, FiShield, FiHelpCircle } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { settle } from '../hooks/useAsyncData';
@@ -29,6 +29,33 @@ const STEPS = [
     desc: 'onboardStepUserDesc',
     actionLabel: 'onboardStepUserAction',
     done: (s) => s.users > 0,
+    feature: 'users'
+  },
+  {
+    key: 'download',
+    icon: FiDownload,
+    path: '/users',
+    illustration: 'download',
+    title: 'onboardStepDownloadTitle',
+    desc: 'onboardStepDownloadDesc',
+    actionLabel: 'onboardStepDownloadAction',
+    markLabel: 'onboardStepDownloadMark',
+    manual: true,
+    flag: 'downloaded',
+    done: (s) => s.downloaded,
+    feature: 'users'
+  },
+  {
+    key: 'connect',
+    icon: FiWifi,
+    path: null,
+    illustration: 'connect',
+    title: 'onboardStepConnectTitle',
+    desc: 'onboardStepConnectDesc',
+    actionLabel: 'onboardStepConnectAction',
+    manual: true,
+    flag: 'connected',
+    done: (s) => s.connected,
     feature: 'users'
   }
 ];
@@ -65,13 +92,43 @@ const ILLUSTRATIONS = {
       <circle cx="60" cy="40" r="6" fill="#fde047" className="status-dot"/>
     </svg>
   ),
+  download: (
+    <svg viewBox="0 0 120 120" className="onboard-illustration" aria-hidden="true">
+      <defs>
+        <linearGradient id="dlGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3"/>
+          <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.1"/>
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="50" fill="url(#dlGrad)" stroke="#22c55e" strokeWidth="2" strokeDasharray="8 4" className="pulse-ring"/>
+      <path d="M60 30 v36 m0 0 l-14 -14 m14 14 l14 -14" stroke="#22c55e" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <path d="M36 78 h48 v12 h-48 z" fill="#06b6d4" opacity="0.8"/>
+    </svg>
+  ),
+  connect: (
+    <svg viewBox="0 0 120 120" className="onboard-illustration" aria-hidden="true">
+      <defs>
+        <linearGradient id="connGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3"/>
+          <stop offset="100%" stopColor="#22c55e" stopOpacity="0.1"/>
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="50" fill="url(#connGrad)" stroke="#f59e0b" strokeWidth="2" strokeDasharray="8 4" className="pulse-ring"/>
+      <path d="M66 28 L42 66 h16 L54 92 L78 54 h-16 z" fill="#22c55e" opacity="0.9"/>
+    </svg>
+  ),
 };
 
 const OnboardingChecklist = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { refreshTick } = useLive();
-  const [state, setState] = useState({ nodes: 0, users: 0 });
+  const [state, setState] = useState(() => ({
+    nodes: 0,
+    users: 0,
+    downloaded: localStorage.getItem('ovmanager-onboard-downloaded') === '1',
+    connected: localStorage.getItem('ovmanager-onboard-connected') === '1',
+  }));
   const [dismissed, setDismissed] = useState(() => localStorage.getItem('ovmanager-onboard-dismissed') === '1');
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -111,6 +168,11 @@ const OnboardingChecklist = () => {
   const dismiss = () => {
     localStorage.setItem('ovmanager-onboard-dismissed', '1');
     setDismissed(true);
+  };
+
+  const markStep = (flag) => {
+    localStorage.setItem(`ovmanager-onboard-${flag}`, '1');
+    setState((prev) => ({ ...prev, [flag]: true }));
   };
 
   const nextStep = () => {
@@ -208,23 +270,34 @@ const OnboardingChecklist = () => {
                         >
                           <FiCheck /> {t('onboardComplete', 'Done')}
                         </button>
-                      ) : index === currentStep ? (
+                      ) : step.manual && !step.path ? (
                         <button
                           type="button"
                           className="step-btn primary"
-                          onClick={() => navigate(step.path)}
+                          onClick={() => markStep(step.flag)}
                         >
-                          {t(step.actionLabel)}
-                          <FiChevronRight />
+                          <FiCheck /> {t(step.actionLabel)}
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          className="step-btn ghost"
-                          onClick={() => { setCurrentStep(index); navigate(step.path); }}
-                        >
-                          {t(step.actionLabel)}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="step-btn primary"
+                            onClick={() => navigate(step.path)}
+                          >
+                            {t(step.actionLabel)}
+                            <FiChevronRight />
+                          </button>
+                          {step.manual && (
+                            <button
+                              type="button"
+                              className="step-btn ghost"
+                              onClick={() => markStep(step.flag)}
+                            >
+                              <FiCheck /> {t(step.markLabel || 'onboardStepMarkDone', 'I did this')}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

@@ -13,8 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
 import { formatBytes } from '../utils/format';
 import { copyText } from '../utils/clipboard';
-import AddUserModal from '../components/AddUserModal';
-import EditUserModal from '../components/EditUserModal';
+import UserFormModal from '../components/UserFormModal';
 import ExtendUserModal from '../components/ExtendUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
@@ -650,20 +649,20 @@ const UserManagement = () => {
         danger={confirm.danger}
         confirmLabel={confirm.confirmLabel}
       />
-      <AddUserModal
+      <UserFormModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onUserAdded={async () => {
+        onSaved={async () => {
           addToast(t('userCreated', 'User created'), 'success');
           setIsAddModalOpen(false);
           fetchUsers();
         }}
       />
-      <EditUserModal
+      <UserFormModal
         isOpen={isEditModalOpen}
         onClose={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
         user={selectedUser}
-        onUserUpdated={async () => {
+        onSaved={async () => {
           addToast(t('userUpdated'), 'success');
           setIsEditModalOpen(false);
           setSelectedUser(null);

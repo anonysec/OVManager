@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from bot.handlers.home import handle_start
 from bot.handlers.router import on_callback, on_error, on_text, on_unknown_command

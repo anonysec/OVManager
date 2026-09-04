@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 #
 # OVManager installer — native (systemd) or Docker.
 #
@@ -45,6 +45,7 @@ PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 PUBLIC_URL="" MODE="" ACTION="install"
 YES=0 PURGE=0 JSON=0 DRY=0 GENERATED_PASS=0 PATH_SET=0
+WANT_NODE=0 NODE_NAME="" NODE_KEY=""
 
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
@@ -128,6 +129,7 @@ USAGE
 COMMANDS
   install               Install (default)
   update                Pull, rebuild, restart (backs up data first)
+  status                Show panel URL, health and version
   uninstall             Remove the app (data kept unless --purge)
 
 MODE
@@ -143,7 +145,9 @@ OPTIONS
   --admin-pass PASS     Admin password (min 8). Generated if omitted
                         under -y / non-interactive
   --public-url URL      Canonical public origin for sub links
-  --tls-none            Plain HTTP                               [default]
+  --with-node [NAME]    Also print a ready OVNode one-liner for this server
+                        (generates an API key; optional NAME, default node-1)
+  --tls-none            Plain HTTP
   --tls-self            Self-signed certificate
   --tls-le DOMAIN       Let's Encrypt for a domain (needs :80)
   --tls-ip              Let's Encrypt short-lived cert for this IP
@@ -164,6 +168,7 @@ ENVIRONMENT  (used when the matching flag is omitted)
   OVM_TLS           none | self | le | le-ip | custom
   OVM_TLS_DOMAIN    domain for --tls-le
   OVM_PUBLIC_URL    public origin
+  OVM_WITH_NODE     1 to print a same-server OVNode one-liner (or a node name)
   CI=true           implies --yes
   NONINTERACTIVE=1  implies --yes
 
@@ -186,6 +191,9 @@ parse_args() {
             --admin-user)  [[ $# -ge 2 ]] || die "--admin-user needs a value"; ADMIN_USER="$2"; shift 2 ;;
             --admin-pass)  [[ $# -ge 2 ]] || die "--admin-pass needs a value"; ADMIN_PASS="$2"; shift 2 ;;
             --public-url)  [[ $# -ge 2 ]] || die "--public-url needs a value"; PUBLIC_URL="$2"; shift 2 ;;
+            --with-node)
+                WANT_NODE=1
+                if [[ $# -ge 2 && "$2" != -* ]]; then NODE_NAME="$2"; shift 2; else shift; fi ;;
             --tls-le)      [[ $# -ge 2 ]] || die "--tls-le needs a domain"; TLS_MODE="le"; TLS_DOMAIN="$2"; shift 2 ;;
             --tls-ip)      TLS_MODE="le-ip"; shift ;;
             --tls-self)    TLS_MODE="self"; shift ;;
@@ -202,6 +210,7 @@ parse_args() {
             --help|-h)     usage ;;
             install)       ACTION="install"; shift ;;
             update)        ACTION="update"; shift ;;
+            status)        ACTION="status"; shift ;;
             uninstall)     ACTION="uninstall"; shift ;;
             *)             die "Unknown option: $1  (see --help)" ;;
         esac
@@ -221,6 +230,10 @@ apply_env() {
     [[ -z "$TLS_MODE" && -n "${OVM_TLS:-}" ]] && TLS_MODE="$OVM_TLS"
     [[ -z "$TLS_DOMAIN" && -n "${OVM_TLS_DOMAIN:-}" ]] && TLS_DOMAIN="$OVM_TLS_DOMAIN"
     [[ -z "$PUBLIC_URL" && -n "${OVM_PUBLIC_URL:-}" ]] && PUBLIC_URL="$OVM_PUBLIC_URL"
+    if [[ -z "$NODE_NAME" && -n "${OVM_WITH_NODE:-}" ]]; then
+        WANT_NODE=1
+        [[ "${OVM_WITH_NODE}" != "1" ]] && NODE_NAME="$OVM_WITH_NODE"
+    fi
     if [[ -n "$MODE" ]]; then
         case "$MODE" in
             native|docker) ;;
@@ -622,6 +635,11 @@ validate_input() {
     if [[ -n "$PATHPREFIX" ]]; then
         [[ "$PATHPREFIX" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "URL path: letters, digits, dash, underscore"
     fi
+    if [[ "$WANT_NODE" -eq 1 ]]; then
+        [[ -n "$NODE_NAME" ]] || NODE_NAME="node-1"
+        [[ "$NODE_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
+        [[ ${#NODE_KEY} -ge 16 ]] || die "Node API key must be at least 16 characters"
+    fi
     case "$TLS_MODE" in
         le)
             [[ -n "$TLS_DOMAIN" ]] || die "--tls-le needs a domain" ;;
@@ -662,13 +680,15 @@ wizard() {
     fi
     if [[ -z "$TLS_MODE" ]]; then
         line ""
-        line "${B}TLS${NC}"
-        line "  ${WH}1${NC}  Let's Encrypt (domain)     ${WH}2${NC}  Let's Encrypt (this IP)"
-        line "  ${WH}3${NC}  Self-signed                ${WH}4${NC}  Custom key + cert"
-        line "  ${WH}5${NC}  None — HTTP only"
+        line "${B}TLS — encrypts your login and the panel${NC}"
+        line "  ${WH}1${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
+        line "  ${WH}2${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
+        line "  ${WH}3${NC}  Self-signed                encrypted; browser shows one warning to click through"
+        line "  ${WH}4${NC}  Custom key + cert          you already have PEM files"
+        line "  ${WH}5${NC}  None — HTTP only           fine on a private network, unsafe on the internet"
         local tls
-        tls="$(ask "TLS" "5")"
-        case "${tls:-5}" in
+        tls="$(ask "TLS" "3")"
+        case "${tls:-3}" in
             1) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
                [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
             2) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
@@ -676,6 +696,20 @@ wizard() {
             4) TLS_MODE="custom"; TLS_KEY="$(ask "Key file" "")"; TLS_CERT="$(ask "Cert file" "")" ;;
             *) TLS_MODE="none" ;;
         esac
+    fi
+    if [[ "$WANT_NODE" -eq 0 ]]; then
+        line ""
+        if confirm "Also run a VPN node on THIS server? (easiest setup)"; then
+            WANT_NODE=1
+        fi
+    fi
+    if [[ "$WANT_NODE" -eq 1 ]]; then
+        [[ -n "$NODE_NAME" ]] || NODE_NAME="$(ask "Node name" "node-1")"
+        [[ "$NODE_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
+        if [[ -z "$NODE_KEY" ]]; then
+            NODE_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+            [[ ${#NODE_KEY} -ge 16 ]] || die "Could not generate a node API key"
+        fi
     fi
 }
 
@@ -687,6 +721,9 @@ print_plan() {
     kv "URL path" "$( [[ -n "$PATHPREFIX" ]] && printf '/%s/' "$PATHPREFIX" || printf '/' )"
     kv "Admin"   "$ADMIN_USER"
     kv "TLS"     "$TLS_MODE"
+    if [[ "$WANT_NODE" -eq 1 ]]; then
+        kv "Node" "same server as '${NODE_NAME}' (one-liner printed at the end)"
+    fi
     kv "Install" "$INSTALL_DIR"
     kv "Data"    "$DATA_DIR"
     if [[ "$TLS_MODE" == "none" ]]; then
@@ -698,10 +735,11 @@ print_plan() {
 emit_json() {
     local ok="$1" url
     url="$(panel_url)"
-    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" <<'PY'
+    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" "$WANT_NODE" "$NODE_NAME" "$NODE_KEY" <<'PY'
 import json, sys
-ok, mode, url, user, password, install, data, tls, port, path, gen = sys.argv[1:]
-print(json.dumps({
+(ok, mode, url, user, password, install, data, tls, port,
+ path, gen, want_node, node_name, node_key) = sys.argv[1:]
+out = {
     "ok": ok == "1",
     "mode": mode,
     "url": url,
@@ -713,7 +751,10 @@ print(json.dumps({
     "tls": tls,
     "install_dir": install,
     "data_dir": data,
-}, ensure_ascii=False, indent=2))
+}
+if want_node == "1":
+    out["node"] = {"name": node_name, "api_key": node_key, "same_server": True}
+print(json.dumps(out, ensure_ascii=False, indent=2))
 PY
 }
 
@@ -743,7 +784,19 @@ success_card() {
     kv "Logs"   "$logs"
     kv "Data"   "$DATA_DIR"
     line ""
-    info "Next: install an OVNode, then Nodes → Add Node in the panel."
+    if [[ "$WANT_NODE" -eq 1 ]]; then
+        info "Step 2 — run this ON THIS SERVER to add your first VPN node:"
+        line ""
+        line "  ${WH}curl -sSL https://anonysec.github.io/OVNode/install.sh \\${NC}"
+        line "    ${WH}| sudo bash -s -- install -y --name '${NODE_NAME}' --tls selfsigned \\${NC}"
+        line "      ${WH}--api-key '${NODE_KEY}'${NC}"
+        line ""
+        info "Then in the panel: Nodes → Add Node (name '${NODE_NAME}', address 127.0.0.1,"
+        info "port 2083, TLS on). Separate server instead? See docs/multi-node.md."
+    else
+        info "Next: install an OVNode, then Nodes → Add Node in the panel."
+        info "Same server is easiest — re-run with --with-node to get a ready command."
+    fi
     line ""
 }
 
@@ -829,8 +882,59 @@ do_update() {
     [[ "$JSON" -eq 1 ]] && emit_json 1
 }
 
+do_status() {
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    # Panel path prefix as written at install time (.env). If it was changed
+    # later in Settings → General, the live value lives in the DB instead.
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        PATHPREFIX="$(awk -F= '/^URLPATH=/{print $2; exit}' "$INSTALL_DIR/.env" | tr -d '\r')"
+    fi
+    local scheme url mode health ver
+    scheme="$(scheme_of)"
+    if [[ -f "$COMPOSE_FILE" ]]; then mode="docker"; else mode="native"; fi
+    url="$(panel_url)"
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 5; then
+        health="ok"
+    else
+        health="unreachable (check logs)"
+    fi
+    ver="$(curl -fskS --max-time 3 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null || echo "?")"
+    hr
+    kv "Installed" "yes ($INSTALL_DIR)"
+    kv "Mode"      "$mode"
+    kv "Open"      "$url"
+    kv "Health"    "$health"
+    kv "Version"   "$ver"
+    kv "Data"      "$DATA_DIR"
+    hr
+    if [[ "$JSON" -eq 1 ]]; then
+        python3 - "$mode" "$url" "$health" "$ver" "$INSTALL_DIR" "$DATA_DIR" "$PORT" <<'PY'
+import json, sys
+mode, url, health, ver, install, data, port = sys.argv[1:]
+print(json.dumps({
+    "ok": health == "ok",
+    "installed": True,
+    "mode": mode,
+    "url": url,
+    "health": health,
+    "version": ver,
+    "install_dir": install,
+    "data_dir": data,
+    "port": int(port),
+}, ensure_ascii=False, indent=2))
+PY
+    fi
+}
+
 do_uninstall() {
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    if [[ "$DRY" -eq 1 ]]; then
+        info "Dry run — nothing changed (would stop the service and remove $INSTALL_DIR)."
+        exit 0
+    fi
     confirm "Remove OVManager and stop the service?" || die "Cancelled."
     systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null || true
     systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
@@ -854,14 +958,18 @@ do_uninstall() {
 
 already_installed_menu() {
     warn "OVManager is already at $INSTALL_DIR"
+    if [[ "$DRY" -eq 1 ]]; then
+        info "Dry run — nothing changed (re-run without --dry-run to update/uninstall)."
+        exit 0
+    fi
     if can_prompt; then
         line ""
         line "  ${GR}1${NC}  Update to latest"
         line "  ${YL}2${NC}  Uninstall"
         line "  ${GY}3${NC}  Quit"
         line ""
-        local choice; choice="$(ask "Select" "1")"
-        case "${choice:-1}" in
+        local choice; choice="$(ask "Select" "3")"
+        case "${choice:-3}" in
             1) ACTION="update"; do_update ;;
             2) ACTION="uninstall"; do_uninstall ;;
             *) exit 0 ;;
@@ -880,12 +988,17 @@ main() {
         command clear >/dev/null 2>&1 || true
     fi
     banner
+    check_root
 
     case "$ACTION" in
-        uninstall) check_root; do_uninstall; exit 0 ;;
+        uninstall) do_uninstall; exit 0 ;;
+        status) detect_os; do_status; exit 0 ;;
         update)
-            check_root
             detect_os
+            if [[ "$DRY" -eq 1 ]]; then
+                info "Dry run — nothing changed (would back up data, pull, rebuild)."
+                exit 0
+            fi
             [[ "$YES" -eq 1 ]] || confirm "Update OVManager now?" || exit 0
             check_deps
             do_update
@@ -910,6 +1023,12 @@ main() {
         : "${ADMIN_USER:=$DEFAULT_USER}"
         : "${TLS_MODE:=none}"
         : "${MODE:=native}"
+        if [[ "$WANT_NODE" -eq 1 ]]; then
+            : "${NODE_NAME:=node-1}"
+            if [[ -z "$NODE_KEY" ]]; then
+                NODE_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+            fi
+        fi
         info "Non-interactive  mode=${MODE}  port=${PORT}  tls=${TLS_MODE}"
     fi
     validate_input
@@ -921,8 +1040,19 @@ main() {
         exit 0
     fi
 
+    # Preflight BEFORE asking to proceed or downloading anything: fail fast
+    # with a fix hint instead of after minutes of setup.
+    if [[ "$MODE" == "native" ]] && ! has_systemd; then
+        die "systemd not found — native install needs it (use --mode docker on WSL/containers)"
+    fi
+    if port_in_use "$PORT"; then
+        die "Port $PORT is already in use — pick another with --port PORT"
+    fi
+    if [[ "$TLS_MODE" == "le" || "$TLS_MODE" == "le-ip" ]] && port_in_use 80; then
+        die "Port 80 is busy — Let's Encrypt standalone needs it (or use --tls-self for now)"
+    fi
+
     confirm "Proceed with ${MODE} install?" || die "Cancelled."
-    check_root
     check_deps
     if [[ "$MODE" == "docker" ]]; then
         ensure_docker

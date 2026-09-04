@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -84,6 +84,32 @@ def get_user_id_name_pairs(db: Session) -> list[tuple[str, str]]:
 def get_users_by_admin(db: Session, admin_username: str):
     users = db.query(User).filter(User.owner == admin_username).all()
     return users
+
+
+def get_users_page(
+    db: Session,
+    *,
+    owner: str | None = None,
+    search: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> tuple[list, int]:
+    """DB-level search + pagination (bot + API consumers).
+
+    The panel UI filters client-side and uses the unpaginated default;
+    server-side search exists so per-keystroke bot lookups don't pull the
+    whole table on every keystroke.
+    """
+    query = db.query(User)
+    if owner is not None:
+        query = query.filter(User.owner == owner)
+    if search:
+        query = query.filter(User.name.ilike(f"%{search}%"))
+    total = query.count()
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or 100), 500))
+    items = query.order_by(User.id).offset((page - 1) * page_size).limit(page_size).all()
+    return items, total
 
 
 def get_admin_by_username(db: Session, username: str):
@@ -177,11 +203,26 @@ def get_user_by_uuid(db: Session, uuid: str):
 
 
 def create_user(db: Session, request: CreateUser, owner: str):
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
     username = request.name.replace(" ", "_")
+
+    # Omitted expiry falls back to the panel defaults (Settings → default_days):
+    # raw API consumers shouldn't have to replicate the UI/bot plan logic.
+    # total=None deliberately stays unlimited (bot sends None for 0 GB).
+    expiry = request.expiry_date
+    if expiry is None:
+        try:
+            settings = get_settings(db)
+            days = int(getattr(settings, "default_days", 30) or 30)
+        except Exception:
+            days = 30
+        expiry = _date.today() + _timedelta(days=days)
 
     new_user = User(
         name=username,
-        expiry_date=request.expiry_date,
+        expiry_date=expiry,
         total=request.total,
         max_logins=request.max_logins,
         owner=owner,
@@ -465,8 +506,12 @@ def adjust_user(db: Session, uuid: str, days: int = 0, add_bytes: int = 0, owner
     if user is None:
         return None
     if days:
-        base = user.expiry_date
-        user.expiry_date = (base + timedelta(days=days)) if base else base
+        from datetime import date as _date
+
+        # A user without expiry is unlimited-time: extending from today.
+        # Previously this silently did nothing when expiry_date was NULL.
+        base = user.expiry_date or _date.today()
+        user.expiry_date = base + timedelta(days=days)
     if add_bytes:
         user.total = (user.total or 0) + add_bytes
     db.commit()

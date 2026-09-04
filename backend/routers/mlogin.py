@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Global multi-login status for OpenVPN sessions.
 
@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from backend.data_paths import DATA_DIR as DATA_ROOT
 from backend.db.engine import get_db
-from backend.db.models import Node, User
+from backend.db.models import Node
 from backend.logger import logger
 from backend.schema.output import ResponseModel
 
@@ -114,8 +114,10 @@ async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[st
     reachable: set[str] = set()
     nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
-    # Build id→name map once for all nodes
-    id_to_name = {str(u.id): u.name for u in db.query(User).all()}
+    # Build id→name map once for all nodes (pairs only — no User objects).
+    from backend.db.crud import get_user_id_name_pairs
+
+    id_to_name = dict(get_user_id_name_pairs(db))
 
     async def check_node(node):
         data = await run_in_threadpool(_fetch_node_usage, node)

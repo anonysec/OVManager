@@ -127,6 +127,7 @@ const LoginPage = () => {
             {error && <p className="error-message" role="alert" aria-live="assertive">{error}</p>}
           </form>
           <p className="login-footnote"><FiShield aria-hidden="true" /> {t("loginFootnote", "Access is limited to authorized administrators.")}</p>
+          <p className="login-footnote login-footnote-help">{t("loginFirstRunHint", "New here? Your panel URL and password are on the installer's green “Ready” card. Lost the URL path? See docs/troubleshooting.md in the repo.")}</p>
         </section>
       </div>
     </div>

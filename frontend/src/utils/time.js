@@ -1,5 +1,5 @@
-// Copyright (c) 2025 anonysec. All rights reserved.
-// Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+// Copyright (c) 2026 anonysec
+// SPDX-License-Identifier: MIT
 
 // Timezone-aware formatting helpers shared across the app.
 // The operator timezone is persisted in the backend Settings (timezone field)

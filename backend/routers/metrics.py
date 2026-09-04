@@ -1,11 +1,7 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
-import asyncio
-import json
-
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
@@ -26,33 +22,3 @@ async def metrics_history(hours: int = 24, db: Session = Depends(get_db), user: 
 async def collect_now(user: dict = Depends(require_owner)):
     await collect_metrics()
     return ResponseModel(success=True, msg="Metrics snapshot collected")
-
-
-async def sse_generator(db: Session):
-    """Yield the latest metrics snapshot every 5 seconds as SSE."""
-    try:
-        while True:
-            data = history(db, hours=1)  # last hour gives fine granularity
-            traffic = data.get("traffic", [])
-            if traffic:
-                latest = traffic[-1]
-                yield f"data: {json.dumps(latest)}\n\n"
-            await asyncio.sleep(5)
-    except asyncio.CancelledError:
-        return
-
-
-@router.get("/stream")
-async def metrics_stream(request: Request, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
-    """Server-Sent Events stream of live metrics.
-    Emits a new data point every 5 seconds.
-    """
-    return StreamingResponse(
-        sse_generator(db),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )

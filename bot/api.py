@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Authenticated HTTP client for the panel API."""
 
@@ -103,14 +103,25 @@ class Panel:
 
     # ── Users ────────────────────────────────────────────────────────
 
-    async def get_users(self) -> list[dict]:
-        result = await self.request("GET", "/users/")
+    async def get_users(self, search: str | None = None) -> list[dict]:
+        path = "/users/"
+        if search and search.strip():
+            from urllib.parse import quote
+
+            path += f"?search={quote(search.strip())}"
+        result = await self.request("GET", path)
         data = result.get("data")
         if isinstance(data, dict):
             return list(data.get("users") or [])
         return list(data) if isinstance(data, list) else []
 
     async def get_user(self, *, uuid: str | None = None, name: str | None = None) -> dict | None:
+        if name and not uuid:
+            # Server-side exact match first (one small query, not the table).
+            for user in await self.get_users(search=name):
+                if (user.get("name") or "").lower() == name.lower():
+                    return user
+            return None
         users = await self.get_users()
         if uuid:
             for user in users:
@@ -127,7 +138,7 @@ class Panel:
         needle = query.strip().lower()
         if not needle:
             return []
-        users = await self.get_users()
+        users = await self.get_users(search=query.strip())
         exact = [u for u in users if (u.get("name") or "").lower() == needle]
         if exact:
             return exact

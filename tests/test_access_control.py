@@ -1,5 +1,5 @@
-# Copyright (c) 2025 anonysec. All rights reserved.
-# Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
 
 """Access-control regression tests: cross-tenant isolation, reserved URL
 paths, audit-feed scoping, and revocation on the mlogin JWT path."""

@@ -1,5 +1,5 @@
-// Copyright (c) 2025 anonysec. All rights reserved.
-// Proprietary and confidential. Unauthorized copying, distribution, or use is prohibited.
+// Copyright (c) 2026 anonysec
+// SPDX-License-Identifier: MIT
 
 // Copy text to clipboard. Works even on non-secure (http) contexts where
 // navigator.clipboard is undefined/unavailable (common for panels served over
