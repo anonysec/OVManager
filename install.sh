@@ -970,8 +970,8 @@ already_installed_menu() {
         line ""
         local choice; choice="$(ask "Select" "3")"
         case "${choice:-3}" in
-            1) ACTION="update"; do_update ;;
-            2) ACTION="uninstall"; do_uninstall ;;
+            1) ACTION="update"; check_root; do_update ;;
+            2) ACTION="uninstall"; check_root; do_uninstall ;;
             *) exit 0 ;;
         esac
     else
@@ -988,17 +988,21 @@ main() {
         command clear >/dev/null 2>&1 || true
     fi
     banner
-    check_root
 
+    # Root is required only for paths that change the system. Dry runs
+    # (plan/validate/print only — every DRY branch exits before mutating
+    # anything) and the already-installed guard (refuse/quit paths) must
+    # work for anyone, including CI sandboxes and non-root operators.
     case "$ACTION" in
-        uninstall) do_uninstall; exit 0 ;;
-        status) detect_os; do_status; exit 0 ;;
+        uninstall) [[ "$DRY" -eq 0 ]] && check_root; do_uninstall; exit 0 ;;
+        status) check_root; detect_os; do_status; exit 0 ;;
         update)
             detect_os
             if [[ "$DRY" -eq 1 ]]; then
                 info "Dry run — nothing changed (would back up data, pull, rebuild)."
                 exit 0
             fi
+            check_root
             [[ "$YES" -eq 1 ]] || confirm "Update OVManager now?" || exit 0
             check_deps
             do_update
@@ -1010,6 +1014,7 @@ main() {
         already_installed_menu
         exit 0
     fi
+    [[ "$DRY" -eq 0 ]] && check_root
 
     detect_os
 
