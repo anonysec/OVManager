@@ -9,8 +9,8 @@
  * scrolls the matching <section> into view. Previously the hash was ignored
  * and the page reset to the top.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
@@ -20,12 +20,13 @@ import { readPrefs, writePref, REFRESH_OPTIONS } from '../utils/notifPrefs';
 import { settle } from '../hooks/useAsyncData';
 import { getUiPref, setUiPref, getUiStyle, setUiStyle } from '../utils/uiPrefs';
 import LoadingButton from '../components/LoadingButton';
+import ConfirmModal from '../components/ConfirmModal';
 import PanelSkeleton from '../components/ui/PanelSkeleton';
 import ErrorState from '../components/ui/ErrorState';
 import EmptyState from '../components/ui/EmptyState';
 import {
   FiSliders, FiServer, FiShield, FiArchive, FiSend, FiActivity,
-  FiLink, FiEdit2, FiCheck, FiX, FiExternalLink,
+  FiLink, FiEdit2, FiCheck, FiX, FiExternalLink, FiCopy,
   FiZap, FiRefreshCw, FiDownload, FiUpload, FiDatabase,
   FiBarChart2, FiUserPlus, FiClock, FiSun, FiMoon, FiMonitor,
   FiBell, FiGlobe, FiAlertTriangle, FiLayout, FiGrid, FiMinus,
@@ -33,16 +34,15 @@ import {
 import { formatBytes } from '../utils/format';
 import { formatUptime, fmtDateTime } from '../utils/time';
 import './Settings.css';
-import '../components/SettingsStyles.css';
 
 /* ─────────────────────────────────────────────
    Section header with anchor
 ───────────────────────────────────────────── */
-const SectionHeader = ({ id, icon: Icon, label, description }) => (
-  <div className="sp-section-header" id={id}>
+const SectionHeader = ({ headingId, icon: Icon, label, description }) => (
+  <div className="sp-section-header">
     <span className="sp-section-icon">{Icon ? <Icon aria-hidden="true" /> : null}</span>
     <div>
-      <h2>{label}</h2>
+      <h2 id={headingId}>{label}</h2>
       {description && <p>{description}</p>}
     </div>
   </div>
@@ -66,20 +66,43 @@ const Card = ({ title, icon: Icon, children, className = '' }) => (
 /* ─────────────────────────────────────────────
    Field helpers
 ───────────────────────────────────────────── */
-const Field = ({ label, hint, children, horizontal }) => (
+const Field = ({ label, hint, children, horizontal, inputId }) => (
   <div className={`sp-field${horizontal ? ' sp-field--h' : ''}`}>
-    <label className="sp-label">{label}</label>
+    <label className="sp-label" htmlFor={inputId}>{label}</label>
     {children}
     {hint && <p className="sp-hint">{hint}</p>}
   </div>
 );
 
-const Stat = ({ label, value, tone }) => (
-  <div className={`sp-stat${tone ? ` sp-stat--${tone}` : ''}`}>
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
-);
+const TONE_SR_KEY = { danger: 'critical', warn: 'warning', ok: 'allSystemsClear', muted: 'noNotif' };
+
+const Stat = ({ label, value, tone }) => {
+  const { t } = useTranslation();
+  return (
+    <div className={`sp-stat${tone ? ` sp-stat--${tone}` : ''}`}>
+      <span>{label}</span>
+      <strong>
+        {value}
+        {tone && <span className="sr-only"> ({t(TONE_SR_KEY[tone] || 'warning', tone)})</span>}
+      </strong>
+    </div>
+  );
+};
+
+/* Focus management for inline editors: move focus into the input on open
+   and return it to the invoking edit button on close. */
+const useInlineEditFocus = (editing, inputRef, triggerRef) => {
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      wasOpen.current = true;
+    } else if (wasOpen.current) {
+      triggerRef.current?.focus();
+      wasOpen.current = false;
+    }
+  }, [editing, inputRef, triggerRef]);
+};
 
 /* ═══════════════════════════════════════════════════════
    DEFAULTS — new user defaults (used by the Telegram bot)
@@ -93,16 +116,18 @@ const DefaultsSection = () => {
   const [devices, setDevices] = useState(1);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const res = await apiClient.get('/server/settings');
       const s = res.data?.data || {};
       setDays(Number(s.default_days) || 30);
       setTrafficGb(Number(s.default_traffic_gb) || 100);
       setDevices(Number(s.default_max_users) || 1);
-    } catch { /* noop */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load, refreshTick]);
@@ -122,25 +147,26 @@ const DefaultsSection = () => {
   };
 
   if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+  if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">
       <Card title={t('newUserDefaults', 'New User Defaults')} icon={FiUserPlus}>
-        <p className="sp-hint" style={{ marginBottom: 14 }}>
+        <p className="sp-hint sp-mb-14">
           {t('defaultsDesc', 'Used as the Standard plan when an operator creates a user from the Telegram bot.')}
         </p>
         <div className="sp-two-col">
-          <Field label={t('defaultDays', 'Default expiry (days)')}>
-            <input className="sp-input" type="number" min={1} max={3650} value={days} onChange={e => setDays(e.target.value)} />
+          <Field label={t('defaultDays', 'Default expiry (days)')} inputId="defaults-days">
+            <input id="defaults-days" className="sp-input" type="number" min={1} max={3650} value={days} onChange={e => setDays(e.target.value)} />
           </Field>
-          <Field label={t('defaultTrafficGb', 'Default traffic (GB)')}>
-            <input className="sp-input" type="number" min={1} value={trafficGb} onChange={e => setTrafficGb(e.target.value)} />
+          <Field label={t('defaultTrafficGb', 'Default traffic (GB)')} inputId="defaults-traffic">
+            <input id="defaults-traffic" className="sp-input" type="number" min={1} value={trafficGb} onChange={e => setTrafficGb(e.target.value)} />
           </Field>
         </div>
-        <Field label={t('defaultDevices', 'Default devices per user')} hint={t('defaultDevicesHint', 'Simultaneous logins allowed for each new user. 0 = unlimited.')}>
-          <input className="sp-input" type="number" min={0} max={1000} value={devices} onChange={e => setDevices(e.target.value)} />
+        <Field label={t('defaultDevices', 'Default devices per user')} hint={t('defaultDevicesHint', 'Simultaneous logins allowed for each new user. 0 = unlimited.')} inputId="defaults-devices">
+          <input id="defaults-devices" className="sp-input" type="number" min={0} max={1000} value={devices} onChange={e => setDevices(e.target.value)} />
         </Field>
-        <div className="sp-btn-group" style={{ marginTop: 18 }}>
+        <div className="sp-btn-group sp-mt-18">
           <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save}>
             <FiCheck size={13} /> {t('save', 'Save defaults')}
           </LoadingButton>
@@ -161,17 +187,19 @@ const BotSection = () => {
   const [ownerId, setOwnerId] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [encryptKeyMissing, setEncryptKeyMissing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const r = await apiClient.get('/server/settings');
       const d = r.data?.data || {};
       setEnabled(d.bot_enabled || false);
       setOwnerId(d.owner_telegram_id || '');
       setEncryptKeyMissing(false);
-    } catch { /* noop */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -211,34 +239,35 @@ const BotSection = () => {
   };
 
   if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+  if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">
       <Card title={t('telegramBot', 'Telegram Bot')} icon={FiSend}>
         {encryptKeyMissing && (
-          <div className="settings-alert settings-alert--error" role="alert" style={{ marginBottom: 16 }}>
+          <div className="settings-alert settings-alert--error sp-mb-16" role="alert">
             <strong>{t('botEncryptKeyMissing', 'BOT_ENCRYPT_KEY not set')}</strong>
             <p>{t('botEncryptKeyMissingDesc', 'Set BOT_ENCRYPT_KEY in your .env before saving a token.')}</p>
           </div>
         )}
 
-        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'From @BotFather. Operators use the menu and typed search — /start is the only command. Leave blank to keep the current token.')}>
-          <input className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
+        <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'From @BotFather. Operators use the menu and typed search — /start is the only command. Leave blank to keep the current token.')} inputId="bot-token">
+          <input id="bot-token" className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
             placeholder="123456789:ABC…" disabled={encryptKeyMissing} />
         </Field>
 
-        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint={t('ownerTelegramIdHint', 'Your numeric Telegram user ID. After saving, open the bot and tap Start.')}>
-          <input className="sp-input" type="number" value={ownerId} onChange={e => setOwnerId(e.target.value)} placeholder="123456789" />
+        <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint={t('ownerTelegramIdHint', 'Your numeric Telegram user ID. After saving, open the bot and tap Start.')} inputId="bot-owner-id">
+          <input id="bot-owner-id" className="sp-input" type="number" value={ownerId} onChange={e => setOwnerId(e.target.value)} placeholder="123456789" />
         </Field>
 
         <Field label={t('botEnabled', 'Enable Bot')} horizontal>
           <label className="sp-toggle">
-            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} disabled={encryptKeyMissing} />
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} disabled={encryptKeyMissing} aria-label={t('botEnabled', 'Enable Bot')} />
             <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
           </label>
         </Field>
 
-        <div className="sp-btn-group" style={{ marginTop: 20 }}>
+        <div className="sp-btn-group sp-mt-20">
           <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save} disabled={encryptKeyMissing}>
             {t('save', 'Save settings')}
           </LoadingButton>
@@ -262,13 +291,18 @@ const DisplaySection = () => {
   const [tzValue, setTzValue] = useState('UTC');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const inputRef = useRef(null);
+  const triggerRef = useRef(null);
+  useInlineEditFocus(editing, inputRef, triggerRef);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const res = await apiClient.get('/server/settings');
       setTimezone(res.data?.data?.timezone || 'UTC');
-    } catch { /* noop */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -283,7 +317,10 @@ const DisplaySection = () => {
     finally { setSaving(false); }
   };
 
+  const cancel = () => setEditing(false);
+
   if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+  if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">
@@ -291,17 +328,18 @@ const DisplaySection = () => {
         <div className="sp-url-row">
           <code className="sp-code">{timezone}</code>
           {!editing && (
-            <button className="sp-icon-btn" onClick={() => { setTzValue(timezone); setEditing(true); }} aria-label={t('change', 'Change')}>
-              <FiEdit2 size={14} />
+            <button ref={triggerRef} className="sp-icon-btn" onClick={() => { setTzValue(timezone); setEditing(true); }} aria-label={t('changeTimezone', 'Change timezone')}>
+              <FiEdit2 size={14} aria-hidden="true" />
             </button>
           )}
         </div>
         {editing && (
           <div className="sp-inline-edit">
-            <input type="text" value={tzValue} autoFocus placeholder="Asia/Tehran" onChange={e => setTzValue(e.target.value)} className="sp-input" />
+            <label className="sr-only" htmlFor="display-tz">{t('displayTimezone', 'Display timezone')}</label>
+            <input id="display-tz" ref={inputRef} type="text" value={tzValue} placeholder="Asia/Tehran" onChange={e => setTzValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel(); }} className="sp-input" />
             <div className="sp-row-btns">
               <LoadingButton className="btn btn-sm" isLoading={saving} onClick={save}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
-              <button className="btn btn-sm btn-secondary" onClick={() => setEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
+              <button className="btn btn-sm btn-secondary" onClick={cancel}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
             </div>
           </div>
         )}
@@ -324,19 +362,27 @@ const GeneralSection = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [subPrefix, setSubPrefix] = useState('');
   const [subPrefixEditing, setSubPrefixEditing] = useState(false);
   const [subPrefixValue, setSubPrefixValue] = useState('');
   const [subPrefixSaving, setSubPrefixSaving] = useState(false);
+  const urlInputRef = useRef(null);
+  const urlTriggerRef = useRef(null);
+  const subInputRef = useRef(null);
+  const subTriggerRef = useRef(null);
+  useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
+  useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const res = await apiClient.get('/server/settings');
       const s = res.data?.data || {};
       setUrlPath(s.urlpath || '');
       setSubPrefix(s.subscription_url_prefix || '');
-    } catch { /* noop */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -379,6 +425,7 @@ const GeneralSection = () => {
   const newPanelUrl = editValueClean ? `${window.location.origin}/${editValueClean}/` : `${window.location.origin}/`;
 
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
+  if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">
@@ -387,21 +434,23 @@ const GeneralSection = () => {
         <div className="sp-url-row">
           <code className="sp-code">{urlPath ? `/${urlPath}/` : '/'}</code>
           {!editing && (
-            <button className="sp-icon-btn" onClick={() => { setEditValue(urlPath); setEditing(true); setError(''); setConfirmSaved(false); }} aria-label={t('change', 'Change')}>
-              <FiEdit2 size={14} />
+            <button ref={urlTriggerRef} className="sp-icon-btn" onClick={() => { setEditValue(urlPath); setEditing(true); setError(''); setConfirmSaved(false); }} aria-label={t('changePanelPath', 'Change panel URL path')}>
+              <FiEdit2 size={14} aria-hidden="true" />
             </button>
           )}
         </div>
         {editing && (
           <div className="sp-inline-edit">
+            <label className="sr-only" htmlFor="general-urlpath">{t('panelUrl', 'Panel URL Path')}</label>
             <input
-              type="text" value={editValue} autoFocus
+              id="general-urlpath" ref={urlInputRef}
+              type="text" value={editValue}
               placeholder={t('enterPath', 'e.g. dashboard')}
               onChange={e => setEditValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && (!pathChanged || confirmSaved)) saveUrlPath(); if (e.key === 'Escape') setEditing(false); }}
               className="sp-input"
             />
-            {error && <p className="sp-error">{error}</p>}
+            {error && <p className="sp-error" role="alert">{error}</p>}
             {pathChanged && (
               <div className="sp-urlpath-confirm">
                 <div className="sp-url-preview">
@@ -411,7 +460,7 @@ const GeneralSection = () => {
                     type="button" className="sp-icon-btn" aria-label={t('copy', 'Copy')}
                     onClick={() => { navigator.clipboard?.writeText(newPanelUrl).catch(() => {}); addToast(t('copied', 'Copied.'), 'success'); }}
                   >
-                    <FiExternalLink size={12} />
+                    <FiCopy size={12} aria-hidden="true" />
                   </button>
                 </div>
                 <label className="sp-check">
@@ -440,14 +489,15 @@ const GeneralSection = () => {
         <div className="sp-url-row">
           <code className="sp-code sp-code--muted">{subPrefix || t('notSet', '(uses panel origin)')}</code>
           {!subPrefixEditing && (
-            <button className="sp-icon-btn" onClick={() => { setSubPrefixValue(subPrefix); setSubPrefixEditing(true); }} aria-label={t('change', 'Change')}>
-              <FiEdit2 size={14} />
+            <button ref={subTriggerRef} className="sp-icon-btn" onClick={() => { setSubPrefixValue(subPrefix); setSubPrefixEditing(true); }} aria-label={t('changeSubPrefix', 'Change subscription URL prefix')}>
+              <FiEdit2 size={14} aria-hidden="true" />
             </button>
           )}
         </div>
         {subPrefixEditing && (
           <div className="sp-inline-edit">
-            <input type="text" value={subPrefixValue} autoFocus placeholder="https://panel.example.com" onChange={e => setSubPrefixValue(e.target.value)} className="sp-input" />
+            <label className="sr-only" htmlFor="general-subprefix">{t('subscriptionLinkCard', 'Subscription URL Prefix')}</label>
+            <input id="general-subprefix" ref={subInputRef} type="text" value={subPrefixValue} placeholder="https://panel.example.com" onChange={e => setSubPrefixValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveSubPrefix(); if (e.key === 'Escape') setSubPrefixEditing(false); }} className="sp-input" />
             <div className="sp-row-btns">
               <LoadingButton className="btn btn-sm" isLoading={subPrefixSaving} onClick={saveSubPrefix}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
               <button className="btn btn-sm btn-secondary" onClick={() => setSubPrefixEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
@@ -472,22 +522,25 @@ const SystemSection = () => {
   const [activeConns, setActiveConns] = useState(0);
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       // Independent: missing traffic history should not blank out server info.
       const res = await settle({
         info: apiClient.get('/server/info'),
         metrics: apiClient.get('/metrics/history?hours=24'),
       });
       if (res.info.ok) setSysInfo(res.info.data.data?.data || null);
+      else setLoadError(true);
       const traffic = res.metrics.ok ? (res.metrics.data.data?.data?.traffic || []) : [];
       if (traffic.length) {
         setTrafficTotal(traffic.reduce((s, h) => s + Number(h.total_used || 0), 0));
         setActiveConns(traffic[traffic.length - 1]?.active_connections || 0);
       }
-    } catch { /* noop */ } finally { setLoading(false); }
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load, refreshTick]);
@@ -501,7 +554,10 @@ const SystemSection = () => {
     finally { setBusy(''); }
   };
 
+  const spin = <span className="button-spinner" aria-hidden="true" />;
+
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
+  if (loadError && !sysInfo) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">
@@ -518,19 +574,19 @@ const SystemSection = () => {
         </Card>
       )}
       <Card title={t('maintenanceCard', 'Maintenance')} icon={FiZap}>
-        <p className="sp-hint" style={{ marginBottom: 12 }}>{t('maintenanceDesc', 'Run background jobs on demand. These also run automatically on a schedule.')}</p>
+        <p className="sp-hint sp-mb-12">{t('maintenanceDesc', 'Run background jobs on demand. These also run automatically on a schedule.')}</p>
         <div className="sp-btn-group">
-          <button className="btn btn-sm" disabled={!!busy} onClick={() => run('/metrics/collect', t('collectNow', 'Metrics'))}>
-            {busy === '/metrics/collect' ? '…' : <><FiZap size={13} /> {t('collectNow', 'Collect metrics')}</>}
+          <button className="btn btn-sm" disabled={!!busy} aria-busy={busy === '/metrics/collect'} onClick={() => run('/metrics/collect', t('collectNow', 'Metrics'))}>
+            {busy === '/metrics/collect' ? spin : <><FiZap size={13} aria-hidden="true" /> {t('collectNow', 'Collect metrics')}</>}
           </button>
-          <button className="btn btn-sm btn-secondary" disabled={!!busy} onClick={() => run('/maintenance/sync-limits', t('syncLimits', 'Limits'))}>
-            {busy === '/maintenance/sync-limits' ? '…' : <><FiRefreshCw size={13} /> {t('syncLimits', 'Sync limits')}</>}
+          <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/sync-limits'} onClick={() => run('/maintenance/sync-limits', t('syncLimits', 'Limits'))}>
+            {busy === '/maintenance/sync-limits' ? spin : <><FiRefreshCw size={13} aria-hidden="true" /> {t('syncLimits', 'Sync limits')}</>}
           </button>
-          <button className="btn btn-sm btn-secondary" disabled={!!busy} onClick={() => run('/maintenance/clean-stale', t('cleanStale', 'Stale'))}>
-            {busy === '/maintenance/clean-stale' ? '…' : <><FiRefreshCw size={13} /> {t('cleanStale', 'Clean stale sessions')}</>}
+          <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/clean-stale'} onClick={() => run('/maintenance/clean-stale', t('cleanStale', 'Stale'))}>
+            {busy === '/maintenance/clean-stale' ? spin : <><FiRefreshCw size={13} aria-hidden="true" /> {t('cleanStale', 'Clean stale sessions')}</>}
           </button>
-          <button className="btn btn-sm btn-secondary" disabled={!!busy} onClick={() => run('/maintenance/clean-global-registry', t('cleanRegistry', 'Registry'))}>
-            {busy === '/maintenance/clean-global-registry' ? '…' : <><FiBarChart2 size={13} /> {t('cleanRegistry', 'Clean registry')}</>}
+          <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/clean-global-registry'} onClick={() => run('/maintenance/clean-global-registry', t('cleanRegistry', 'Registry'))}>
+            {busy === '/maintenance/clean-global-registry' ? spin : <><FiBarChart2 size={13} aria-hidden="true" /> {t('cleanRegistry', 'Clean registry')}</>}
           </button>
         </div>
       </Card>
@@ -559,9 +615,9 @@ const SecuritySection = () => {
   return (
     <div className="sp-cards">
       <Card title={t('securityCard', 'Authentication Summary')} icon={FiShield}>
-        <div className="sp-hours-toggle">
+        <div className="sp-hours-toggle" role="group" aria-label={t('securityWindow', 'Time window')}>
           {[4, 8, 12, 24, 48].map(h => (
-            <button key={h} type="button" className={`sp-hour-btn${hours === h ? ' active' : ''}`} onClick={() => setHours(h)}>{h}h</button>
+            <button key={h} type="button" className={`sp-hour-btn${hours === h ? ' active' : ''}`} aria-pressed={hours === h} onClick={() => setHours(h)}>{h}h</button>
           ))}
         </div>
         {error && <ErrorState title={t('error', 'Error')} message={error} onRetry={load} />}
@@ -574,14 +630,43 @@ const SecuritySection = () => {
           </div>
         )}
         {sec?.per_node?.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <p className="sp-label-xs" style={{ marginBottom: 6 }}>{t('th_node', 'Per Node')}</p>
+          <div className="sp-mt-16">
+            <p className="sp-label-xs sp-mb-6">{t('th_node', 'Per Node')}</p>
             <div className="sp-node-list">
               {sec.per_node.map(n => (
                 <div key={n.node} className="sp-node-row">
                   <span className="sp-node-name">{n.node}</span>
                   <span className={`sp-badge${n.auth_errors > 0 ? ' danger' : ''}`}>{n.auth_errors} err</span>
                   <span className="sp-badge">{n.live} live</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(sec?.timezone || sec?.hours) && (
+          <p className="sp-hint sp-mt-12">
+            {t('securityWindow', 'Window: last {{hours}}h · {{timezone}}', { hours: sec.hours ?? hours, timezone: sec.timezone || 'UTC' })}
+          </p>
+        )}
+        {Array.isArray(sec?.top_common_names) && sec.top_common_names.length > 0 && (
+          <div className="sp-mt-12">
+            <p className="sp-label-xs sp-mb-6">{t('topCommonNames', 'Most affected identities')}</p>
+            <div className="sp-chip-row">
+              {sec.top_common_names.slice(0, 10).map(([cn, count]) => (
+                <span key={cn} className="sp-chip" title={`${count} events`}>{cn} · {count}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {Array.isArray(sec?.last_errors) && sec.last_errors.length > 0 && (
+          <div className="sp-mt-12">
+            <p className="sp-label-xs sp-mb-6">{t('lastErrors', 'Latest auth events')}</p>
+            <div className="sp-node-list">
+              {sec.last_errors.slice(0, 5).map((e, i) => (
+                <div key={`${e.ts}-${e.common_name}-${i}`} className="sp-node-row sp-err-row">
+                  <span className="sp-node-name">{e.common_name || e.username || '—'}</span>
+                  <span className="sp-cell-sub">{[e.node, e.time_local || (e.ts ? new Date(e.ts * 1000).toLocaleString() : '')].filter(Boolean).join(' · ')}</span>
+                  <span className={`sp-badge${e.action === 'reject' ? ' danger' : ''}`}>{e.reason || e.action || 'event'}</span>
                 </div>
               ))}
             </div>
@@ -602,10 +687,17 @@ const BackupSection = () => {
   const [backups, setBackups] = useState([]);
   const [busy, setBusy] = useState('');
   const [restoreFile, setRestoreFile] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
+  const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
 
   const load = useCallback(async () => {
-    try { const r = await apiClient.get('/maintenance/backup/list'); if (Array.isArray(r.data?.data)) setBackups(r.data.data); }
-    catch { /* noop */ }
+    try {
+      setLoadError(false);
+      const r = await apiClient.get('/maintenance/backup/list');
+      if (Array.isArray(r.data?.data)) setBackups(r.data.data);
+    }
+    catch { setLoadError(true); }
   }, []);
 
   useEffect(() => { load(); }, [load, refreshTick]);
@@ -616,7 +708,7 @@ const BackupSection = () => {
       const r = await apiClient.post('/maintenance/backup');
       addToast(r.data?.msg || t('createBackup', 'Backup created'), 'success');
       load();
-    } catch (e) { addToast(e.response?.data?.detail || t('error', 'Failed'), 'error'); }
+    } catch (e) { addToast(e.response?.data?.detail || e.response?.data?.msg || t('error', 'Failed'), 'error'); }
     finally { setBusy(''); }
   };
 
@@ -624,58 +716,86 @@ const BackupSection = () => {
     try {
       const r = await apiClient.get('/maintenance/backup/download', { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement('a'); a.href = url; a.download = 'ovmanager-backup.db';
+      const a = document.createElement('a'); a.href = url; a.download = backups[0]?.name || 'ovmanager-backup.db';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } catch { addToast(t('error', 'Download failed'), 'error'); }
   };
 
-  const restore = async () => {
+  const doRestore = async () => {
     if (!restoreFile) return;
+    if (!restoreFile.name.endsWith('.db')) {
+      addToast(t('backupMustBeDb', 'Backup file must be a .db file.'), 'error');
+      return;
+    }
     setBusy('restore');
     try {
       const fd = new FormData(); fd.append('file', restoreFile);
-      await apiClient.post('/maintenance/backup/restore', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      addToast(t('restoreButton', 'Restored successfully'), 'success');
-      setRestoreFile(null);
-    } catch (e) { addToast(e.response?.data?.detail || t('error', 'Restore failed'), 'error'); }
+      const r = await apiClient.post('/maintenance/backup/restore', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (r.data?.success) {
+        addToast(r.data.msg || t('restored', 'Restored successfully'), 'success');
+        setRestoreFile(null);
+      } else {
+        addToast(r.data?.msg || t('error', 'Restore failed'), 'error');
+      }
+    } catch (e) { addToast(e.response?.data?.detail || e.response?.data?.msg || t('error', 'Restore failed'), 'error'); }
     finally { setBusy(''); }
+  };
+
+  const askRestore = () => {
+    if (!restoreFile) return;
+    setConfirm({
+      open: true,
+      title: t('restoreButton', 'Restore'),
+      message: t('confirmRestoreFile', 'Restore from "{{name}}"? This will overwrite current data.', { name: restoreFile.name }),
+      onConfirm: doRestore,
+    });
   };
 
   return (
     <div className="sp-cards">
       <Card title={t('backupTitle', 'Database Backup')} icon={FiDatabase}>
-        <div className="sp-btn-group" style={{ marginBottom: 16 }}>
-          <button className="btn btn-sm" disabled={!!busy} onClick={create}>
-            {busy === 'create' ? '…' : <><FiUpload size={13} /> {t('createBackup', 'Create backup')}</>}
+        <div className="sp-btn-group sp-mb-16">
+          <button className="btn btn-sm" disabled={!!busy} aria-busy={busy === 'create'} onClick={create}>
+            {busy === 'create' ? <span className="button-spinner" aria-hidden="true" /> : <><FiUpload size={13} aria-hidden="true" /> {t('createBackup', 'Create backup')}</>}
           </button>
           {backups.length > 0 && (
             <button className="btn btn-sm btn-secondary" onClick={download}>
               <FiDownload size={13} /> {t('downloadLatest', 'Download latest')}
             </button>
           )}
+          <Link to="/maintenance" className="btn btn-sm btn-secondary">{t('viewAll', 'View all')}</Link>
         </div>
-        {backups.length > 0 && (
+        {loadError && backups.length === 0 ? (
+          <ErrorState title={t('loadError', 'Could not load data')} message={t('loadErrorDetail', 'Could not reach backup list.')} onRetry={load} retryLabel={t('retry', 'Retry')} />
+        ) : backups.length === 0 ? (
+          <EmptyState title={t('noBackups', 'No backups yet')} description={t('noBackupsBody', 'Create your first backup to protect panel data.')} />
+        ) : (
           <div className="sp-backup-list">
             {backups.slice(0, 8).map(b => (
               <div key={b.name} className="sp-backup-row">
-                <FiDatabase size={13} style={{ color: 'var(--muted)' }} />
+                <FiDatabase size={13} aria-hidden="true" />
                 <span className="sp-backup-name">{b.name}</span>
                 {b.size && <span className="sp-backup-size">{formatBytes(b.size)}</span>}
               </div>
             ))}
+            {backups.length > 8 && (
+              <Link to="/maintenance" className="sp-viewall">{t('showingMore', 'Showing 8 of {{total}} — view all', { total: backups.length })}</Link>
+            )}
           </div>
         )}
       </Card>
 
       <Card title={t('restoreSection', 'Restore from File')} icon={FiArchive}>
-        <p className="sp-hint" style={{ marginBottom: 12 }}>{t('restoreButton', 'Select a .db backup file to restore. This will overwrite current data.')}</p>
+        <p className="sp-hint sp-mb-12">{t('restoreHint', 'Select a .db backup file to restore. This overwrites current data and asks for confirmation.')}</p>
         <div className="sp-field">
-          <input type="file" accept=".db" onChange={e => setRestoreFile(e.target.files?.[0] || null)} className="sp-file-input" />
+          <label className="sr-only" htmlFor="sp-restore-file">{t('selectBackupFile', 'Select backup file')}</label>
+          <input id="sp-restore-file" type="file" accept=".db" onChange={e => setRestoreFile(e.target.files?.[0] || null)} className="sp-file-input" aria-label={t('selectBackupFile', 'Select backup file')} />
         </div>
-        <button className="btn btn-sm" disabled={!restoreFile || !!busy} onClick={restore}>
-          {busy === 'restore' ? '…' : <><FiRefreshCw size={13} /> {t('restoreButton', 'Restore')}</>}
+        <button className="btn btn-sm" disabled={!restoreFile || !!busy} aria-busy={busy === 'restore'} onClick={askRestore}>
+          {busy === 'restore' ? <span className="button-spinner" aria-hidden="true" /> : <><FiRefreshCw size={13} aria-hidden="true" /> {t('restoreButton', 'Restore')}</>}
         </button>
       </Card>
+      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger confirmLabel={t('restoreButton', 'Restore')} cancelLabel={t('cancelButton', 'Cancel')} />
     </div>
   );
 };
@@ -685,6 +805,7 @@ const BackupSection = () => {
 ═══════════════════════════════════════════════════════ */
 const ActivitySection = () => {
   const { t } = useTranslation();
+  const { refreshTick } = useLive();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -694,7 +815,7 @@ const ActivitySection = () => {
     catch { setError(t('failedToLoad', 'Failed to load')); } finally { setLoading(false); }
   }, [t]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshTick]);
 
   const ACTION_TONE = { 'user.delete': 'danger', 'user.create': 'ok', 'node.delete': 'danger', 'node.create': 'ok', 'maintenance.restore': 'warn' };
 
@@ -707,18 +828,21 @@ const ActivitySection = () => {
           <EmptyState title={t('noActivity', 'No activity yet')} description={t('activityWillAppear', 'Actions will appear here.')} />
         )}
         {!loading && !error && events.length > 0 && (
-          <div className="sp-feed">
-            {events.map(e => (
-              <div key={e.id} className="sp-feed-row">
-                <span className={`sp-badge sp-badge--${ACTION_TONE[e.action] || 'muted'}`}>{e.action}</span>
-                <div className="sp-feed-body">
-                  <span className="sp-feed-actor">{e.actor || 'system'}</span>
-                  {e.target && <><span className="sp-muted">→</span><span className="sp-feed-target">{e.target}</span></>}
+          <>
+            <div className="sp-feed">
+              {events.map(e => (
+                <div key={e.id} className="sp-feed-row">
+                  <span className={`sp-badge sp-badge--${ACTION_TONE[e.action] || 'muted'}`}>{e.action}</span>
+                  <div className="sp-feed-body">
+                    <span className="sp-feed-actor">{e.actor || 'system'}</span>
+                    {e.target && <><span className="sp-muted">→</span><span className="sp-feed-target">{e.target}</span></>}
+                  </div>
+                  {e.ts && <time className="sp-feed-time" dateTime={new Date(e.ts * 1000).toISOString()}>{fmtDateTime(new Date(e.ts * 1000).toISOString())}</time>}
                 </div>
-                {e.ts && <span className="sp-feed-time">{fmtDateTime(new Date(e.ts * 1000).toISOString())}</span>}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <Link to="/audit" className="sp-viewall">{t('viewAllActivity', 'View full audit log')}</Link>
+          </>
         )}
       </Card>
     </div>
@@ -777,6 +901,17 @@ const AppearanceSection = () => {
     setUiStyleState(style);
   };
 
+  const [corner, setCorner] = useState(() => {
+    try { return localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start'; }
+    catch { return 'inline-start'; }
+  });
+  const chooseCorner = (id) => {
+    try { localStorage.setItem('ovmanager-sidebar-corner', id); } catch { /* private mode */ }
+    setCorner(id);
+    // Applied live by the sidebar — no reload, no lost form state.
+    window.dispatchEvent(new CustomEvent('sidebar-corner-change', { detail: { corner: id } }));
+  };
+
   return (
     <div className="sp-cards">
       <Card title={t('accentCard', 'Accent color')} icon={FiSun}>
@@ -788,6 +923,7 @@ const AppearanceSection = () => {
             onClick={() => chooseAccent('')}
             title={t('accentDefault', 'Default')}
             aria-label={t('accentDefault', 'Default')}
+            aria-pressed={accent === ''}
           />
           {ACCENTS.map((a) => (
             <button
@@ -798,6 +934,7 @@ const AppearanceSection = () => {
               onClick={() => chooseAccent(a.hex)}
               title={a.name}
               aria-label={a.name}
+              aria-pressed={accent === a.hex}
             />
           ))}
         </div>
@@ -858,9 +995,9 @@ const AppearanceSection = () => {
             <button
               key={c.id}
               type="button"
-              className={`sp-theme-pill${(localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start') === c.id ? ' active' : ''}`}
-              onClick={() => { localStorage.setItem('ovmanager-sidebar-corner', c.id); window.location.reload(); }}
-              aria-pressed={(localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start') === c.id}
+              className={`sp-theme-pill${corner === c.id ? ' active' : ''}`}
+              onClick={() => chooseCorner(c.id)}
+              aria-pressed={corner === c.id}
             >
               <span>{c.label}</span>
             </button>
@@ -912,7 +1049,7 @@ const AlertsSection = () => {
   return (
     <div className="sp-cards">
       <Card title={t('alertsCard', 'Alert Types')} icon={FiBell}>
-        <p className="sp-hint" style={{ marginBottom: 12 }}>{t('alertsDesc', 'Choose which alerts appear in the topbar bell and the dashboard strip.')}</p>
+        <p className="sp-hint sp-mb-12">{t('alertsDesc', 'Choose which alerts appear in the topbar bell and the dashboard strip.')}</p>
         <div className="sp-alert-list">
           {ALERTS.map((item) => (
             <label key={item.key} className="sp-alert-row">
@@ -927,8 +1064,8 @@ const AlertsSection = () => {
       </Card>
 
       <Card title={t('refreshCard', 'Refresh Interval')} icon={FiRefreshCw}>
-        <Field label={t('refreshInterval', 'Dashboard refresh (seconds)')} hint={t('refreshDesc', 'How often the dashboard and notification bell poll for fresh data.')}>
-          <select className="sp-input" value={prefs.refreshSec} onChange={(e) => toggle('refreshSec', Number(e.target.value))}>
+        <Field label={t('refreshInterval', 'Dashboard refresh (seconds)')} hint={t('refreshDesc', 'How often the dashboard and notification bell poll for fresh data.')} inputId="alerts-refresh">
+          <select id="alerts-refresh" className="sp-select" value={prefs.refreshSec} onChange={(e) => toggle('refreshSec', Number(e.target.value))}>
             {REFRESH_OPTIONS.map((sec) => (
               <option key={sec} value={sec}>{sec} {t('secondsUnit', 's')}</option>
             ))}
@@ -961,27 +1098,38 @@ const Settings = () => {
 
   // All sections always visible — no Simple/Advanced split
   const visible = useMemo(() => SECTIONS, []);
+  const activeHash = location.hash.replace(/^#/, '');
 
-  // Deep-link scroll: when URL has #section-id, scroll that section into view
+  // Deep-link scroll: when URL has #section-id, scroll that section into
+  // view and move focus there so keyboard users land in the right place.
   useEffect(() => {
     const hash = location.hash.replace(/^#/, '');
     if (!hash) return;
-    const el = document.getElementById(hash);
-    if (el) {
-      // Allow the page to paint first, then smooth-scroll
-      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
-    }
+    const el = document.getElementById(`sp-section-${hash}`);
+    if (!el) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // Allow the page to paint first, then scroll.
+    const id = setTimeout(() => {
+      el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      el.focus({ preventScroll: true });
+    }, 0);
+    return () => clearTimeout(id);
   }, [location.hash]);
 
   return (
     <div className="sp-page">
-      {/* Sticky jump-nav */}
-      <nav className="sp-jumpnav" aria-label="Jump to section">
+      <nav className="sp-jumpnav" aria-label={t('settingsNavigation', 'Settings sections')}>
         {visible.map(s => (
-          <a key={s.id} href={`/dashboard/settings#${s.id}`} className="sp-jumpnav-link">
+          <Link
+            key={s.id}
+            to={`#${s.id}`}
+            replace
+            className="sp-jumpnav-link"
+            aria-current={activeHash === s.id ? 'true' : undefined}
+          >
             <s.icon size={14} aria-hidden="true" />
             <span>{t(s.labelKey, s.label)}</span>
-          </a>
+          </Link>
         ))}
       </nav>
 
@@ -990,9 +1138,9 @@ const Settings = () => {
         {visible.map((sec) => {
           const Component = sec.Component;
           return (
-            <section key={sec.id} className="sp-section" id={sec.id}>
+            <section key={sec.id} className="sp-section" id={`sp-section-${sec.id}`} tabIndex={-1} aria-labelledby={`sp-heading-${sec.id}`}>
               <SectionHeader
-                id={sec.id}
+                headingId={`sp-heading-${sec.id}`}
                 icon={sec.icon}
                 label={t(sec.labelKey, sec.label)}
                 description={t(sec.descKey, sec.desc)}

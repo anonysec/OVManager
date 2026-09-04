@@ -97,7 +97,10 @@ class NodeRequests:
         return self._request("put", "/sync/user", json=data, timeout=LONG_TIMEOUT) is not None
 
     def delete_user(self, uid: str) -> bool:
-        return self._request("delete", f"/sync/user/{uid}") is not None
+        # Revoke + CRL regen fork easyrsa twice (up to 120s each on slow
+        # disks) — the 10s default timed out while the node later succeeded,
+        # leaving the DB row present but the cert revoked.
+        return self._request("delete", f"/sync/user/{uid}", timeout=120) is not None
 
     def set_user_limit(self, uid: str, max_logins: int) -> bool:
         return (
@@ -105,7 +108,8 @@ class NodeRequests:
         )
 
     def disconnect_user(self, uid: str) -> dict:
-        r = self._request("post", f"/sync/user/{uid}/disconnect")
+        # First call runs two full diagnostics (journal + mgmt probes).
+        r = self._request("post", f"/sync/user/{uid}/disconnect", timeout=LONG_TIMEOUT)
         return (r or {}).get("data", {})
 
     # ── OVPN download ────────────────────────────────────────────

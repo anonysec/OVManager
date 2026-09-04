@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiActivity, FiEye, FiEyeOff, FiLock, FiServer, FiShield } from 'react-icons/fi';
-import logoSrc from '../assets/ovmanager-character.webp';
 import Logo from '../components/Logo';
 
 const LoginPage = () => {
@@ -59,7 +58,7 @@ const LoginPage = () => {
           </div>
           <div className="login-showcase-status">
             <div className="login-status-orbit" aria-hidden="true">
-              <img src={logoSrc} alt="" />
+              <span className="login-status-orbit--vector"><Logo size={56} /></span>
               <span className="orbit-dot orbit-dot-one" />
               <span className="orbit-dot orbit-dot-two" />
             </div>

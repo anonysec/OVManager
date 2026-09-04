@@ -39,9 +39,6 @@
     border-color: var(--focus-ring);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-}
 
 /* --- Login Page --- */
 #login-container {
@@ -454,11 +451,6 @@
 /* --- Topbar --- */
 
 
-.ops-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 
 .ops-logo-mark {
   width: 32px;
@@ -468,29 +460,9 @@
   filter: brightness(1.2);
 }
 
-.ops-brand strong {
-  font-size: 20px;
-  background: linear-gradient(90deg, var(--accent-color), #ffffff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
-.ops-brand strong span {
-  color: var(--text-primary);
-}
 
-.ops-brand img {
-  height: 28px;
-  width: auto;
-  opacity: 0.9;
-}
 
-.ops-nav {
-  display: flex;
-  gap: 8px;
-  padding: 0 20px;
-}
 
 .ops-nav-link {
   color: var(--text-secondary);
@@ -622,19 +594,6 @@
   flex-shrink: 0;
 }
 
-.avatar-sm {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--accent-color);
-  color: #000;
-  font-size: 16px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
 
 .ops-username {
   font-weight: 600;
@@ -652,29 +611,7 @@
   white-space: nowrap;
 }
 
-.profile-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  width: 220px;
-  background: var(--background-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  margin-top: 8px;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-  z-index: 100;
-  opacity: 0;
-  transform: translateY(-8px) scale(0.96);
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  pointer-events: none;
-}
 
-.profile-dropdown.open {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: auto;
-}
 
 .profile-dropdown-header {
   display: flex;
@@ -818,166 +755,38 @@
 
 
 /* --- Dashboard Grid --- */
-.ops-dashboard {
-  max-width: 1600px;
-  margin: 0 auto;
-}
 
-.ops-dashboard h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 24px;
-  background: linear-gradient(90deg, var(--accent-color), #ffffff);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
 /* Overview grid */
-.ops-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
-}
 
 /* Lower grid */
-.ops-lower-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
-  gap: 1.25rem;
-}
 
 /* --- Panels --- */
-.ops-panel {
-  background: var(--background-secondary);
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  transition: all 0.2s ease;
-  position: relative;
-}
 
 /* Accent top border — consistent across ALL cards (x-ui pattern) */
-.ops-panel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--accent-color);
-  z-index: 1;
-}
 
-.ops-panel.cyan::before {
-  background: var(--cyan);
-}
 
-.ops-panel:hover {
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-  transform: translateY(-2px);
-}
 
-.ops-panel-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 
-.ops-panel header {
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 
-.ops-panel header h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 
-.ops-panel header span {
-  opacity: 0.4;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
-}
 
-.ops-panel header span:hover {
-  opacity: 0.7;
-}
 
-.ops-panel-body {
-  padding: 20px;
-}
 
 /* --- Stats Grid --- */
 .network-card-grid,
 .health-grid,
-.security-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
 
 /* --- Tables --- */
-.ops-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0 8px;
-}
 
-.ops-table thead {
-  background: rgba(0, 0, 0, 0.3);
-}
 
 .ops-table th,
-.ops-table td {
-  padding: 14px 16px;
-  text-align: start;
-  border: none;
-}
 
-.ops-table th {
-  font-weight: 600;
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
 
-.ops-table tbody tr {
-  background: var(--background-primary);
-  border-radius: 10px;
-  transition: all 0.2s ease;
-}
 
-.ops-table tbody tr:hover {
-  background: var(--background-card-hover);
-  transform: translateX(4px);
-}
 
-.ops-table .dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 8px;
-}
 
-.ops-table .dot.online {
-  background: var(--success-color);
-  box-shadow: 0 0 10px var(--success-color);
-}
 
-.ops-table .dot {
-  background: var(--border-color);
-}
 
 /* --- Toasts --- */
 .toast-stack {
@@ -1055,10 +864,6 @@
     padding: 12px;
   }
 
-  .ops-nav {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
 
   .ops-userbar {
     flex-wrap: wrap;
@@ -1077,28 +882,13 @@
     padding: 16px;
   }
 
-  .ops-overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
-  .ops-lower-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
   .network-card-grid,
   .health-grid,
-  .security-grid {
-    grid-template-columns: 1fr;
-  }
 
-  .ops-table {
-    font-size: 13px;
-  }
 
   .ops-table th,
-  .ops-table td {
-    padding: 10px 12px;
-  }
 
   .toast-stack {
     right: 12px;
@@ -1146,9 +936,6 @@
     padding: 0;
   }
   
-  .ops-panel {
-    break-inside: avoid;
-  }
 }
 /* Skeleton loaders */
 .table-skeleton { padding: 16px; }
@@ -1997,20 +1784,8 @@
    Always visible — gives breathing room above
    mobile browser chrome and on-screen keyboard.
 ═══════════════════════════════════════════ */
-.bottom-safe-bar {
-  height: env(safe-area-inset-bottom, 0px);
-  min-height: 0;
-  flex-shrink: 0;
-  pointer-events: none;
-}
 
 /* On mobile the bottom-nav is 66px; add extra clearance */
-@media (max-width: 767.98px) {
-  .bottom-safe-bar {
-    height: calc(66px + env(safe-area-inset-bottom, 0px));
-    min-height: 16px;
-  }
-}
 
 /* ═══════════════════════════════════════════
    Topbar — override: full width, above sidebar

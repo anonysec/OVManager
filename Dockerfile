@@ -13,7 +13,8 @@ WORKDIR /app
 # Create non-root user
 RUN useradd -m -u 1000 appuser
 
-# Install build/runtime dependencies
+# Install build/runtime dependencies, sync locked deps, then drop the
+# compiler so the runtime image doesn't ship a toolchain.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -26,8 +27,12 @@ COPY main.py ./
 COPY .env.example ./.env.example
 
 # Install uv then sync from the lock file for fully reproducible builds.
+# --frozen fails closed if pyproject.toml and uv.lock are out of sync.
 RUN pip install --no-cache-dir uv \
-    && uv sync --frozen || uv sync
+    && uv sync --frozen \
+    && apt-get update \
+    && apt-get purge -y --auto-remove gcc \
+    && rm -rf /var/lib/apt/lists/*
 
 # The application writes SQLite, audit, metrics, backup, and log data here.
 RUN mkdir -p /app/data \
@@ -41,6 +46,6 @@ USER appuser
 
 EXPOSE 2095
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:2095/health', timeout=1)" || exit 1
+    CMD python -c "import os,urllib.request; p=os.getenv('PORT','2095'); urllib.request.urlopen(f'http://localhost:{p}/health', timeout=1)" || exit 1
 
 CMD ["uv", "run", "main.py"]

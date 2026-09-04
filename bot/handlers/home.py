@@ -30,7 +30,7 @@ async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
     markup = home_actions(lang=lang)
     query = update.callback_query
     if query:
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=markup)
+        await edit_or_reply(update, text, parse_mode="HTML", reply_markup=markup)
         return
     message = update.effective_message
     if message:

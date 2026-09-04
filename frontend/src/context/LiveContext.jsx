@@ -31,7 +31,18 @@ async function readEventStream(body, onEvent) {
       const block = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       if (!block || block.startsWith(':')) continue; // heartbeat / comment
-      onEvent();
+      // Parse SSE block: optional "event: <topic>" + "data: <payload>".
+      // Backend publishes lightweight invalidation topics (users/usage/nodes).
+      // Forward the topic so subscribers get targeted invalidation; fall back
+      // to a generic tick when no topic is present.
+      let topic = null;
+      for (const line of block.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('event:')) {
+          topic = trimmed.slice(6).trim();
+        }
+      }
+      onEvent(topic);
     }
   }
 }
@@ -64,9 +75,15 @@ export const LiveProvider = ({ children }) => {
   }, []);
 
   // Override tick to also publish generic 'tick' event
-  const tickWithPublish = useCallback(() => {
+  const tickWithPublish = useCallback((topic) => {
     setRefreshTick((n) => n + 1);
     publish('tick');
+    if (topic) {
+      publish(topic);
+      // Normalize backend topics to the `.changed` bus used by pages:
+      // "users" -> "users.changed", "nodes" -> "nodes.changed", etc.
+      if (!topic.includes('.')) publish(`${topic}.changed`);
+    }
   }, [publish]);
 
   // ── SSE transport ───────────────────────────────────────────────────
@@ -78,7 +95,10 @@ export const LiveProvider = ({ children }) => {
 
     const connect = async () => {
       if (stopped) return;
-      const token = localStorage.getItem('access_token');
+      // AuthContext persists the opaque session as `authToken` (not
+      // `access_token` — that was a JWT-era key). Read the same key the
+      // axios layer uses or the stream silently 401s and falls back to poll.
+      const token = localStorage.getItem('authToken');
       if (!token) {
         // token gone (logged out) — be quiet and retry shortly — a fresh login
         // will have set a token.
@@ -95,8 +115,8 @@ export const LiveProvider = ({ children }) => {
         if (!resp.ok || !resp.body) throw new Error(`live stream HTTP ${resp.status}`);
         if (!stopped) setStreamConnected(true);
         // Blocks until the stream ends or the server disappears.
-        await readEventStream(resp.body, () => {
-          if (!stopped) tickWithPublish();
+        await readEventStream(resp.body, (topic) => {
+          if (!stopped) tickWithPublish(topic);
         });
       } catch {
         // Network failure, aborted (logout/unmount), or 401 — retry below.

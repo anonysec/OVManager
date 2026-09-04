@@ -1,47 +1,64 @@
-import { useEffect, useState } from 'react';
-import { FiDatabase, FiRefreshCw, FiUpload, FiDownload } from 'react-icons/fi';
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { FiDatabase, FiDownload, FiUpload, FiRefreshCw } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '../context/ToastContext';
 import LoadingButton from '../components/LoadingButton';
 import ConfirmModal from '../components/ConfirmModal';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import DataTable from '../components/ui/DataTable';
+import { formatBytes } from '../utils/format';
 
 const Maintenance = () => {
   const { t } = useTranslation();
+  const { addToast } = useToast();
   const [backups, setBackups] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [restoreFile, setRestoreFile] = useState(null);
   const [isRestoreLoading, setIsRestoreLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [isCreateLoading, setIsCreateLoading] = useState(false);
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
   const openConfirm = (title, msg, onConfirm) => setConfirm({ open: true, title, message: msg, onConfirm });
   const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
 
-  const fetchBackups = async () => {
-    setIsLoading(true);
+  const fetchBackups = useCallback(async ({ background = false } = {}) => {
+    if (!background) setIsLoading(true);
+    setLoadError(false);
     try {
       const response = await apiClient.get('/maintenance/backup/list');
       if (response.data.success) {
         setBackups(response.data.data || []);
+      } else {
+        setLoadError(true);
       }
-    } catch (error) {
-      console.error('Error fetching backups:', error);
+    } catch {
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchBackups();
-  }, []);
+  }, [fetchBackups]);
 
   const handleCreateBackup = async () => {
-    setMessage('');
+    setIsCreateLoading(true);
     try {
       const response = await apiClient.post('/maintenance/backup');
-      setMessage(response.data.msg || 'Backup created.');
-      fetchBackups();
-    } catch (error) {
-      setMessage(error.response?.data?.msg || 'Backup failed.');
+      if (response.data?.success) {
+        addToast(response.data.msg || t('backupCreated', 'Backup created.'), 'success');
+      } else {
+        addToast(response.data?.msg || t('backupFailed', 'Backup failed.'), 'error');
+      }
+      fetchBackups({ background: true });
+    } catch (e) {
+      addToast(e.response?.data?.detail || e.response?.data?.msg || t('backupFailed', 'Backup failed.'), 'error');
+    } finally {
+      setIsCreateLoading(false);
     }
   };
 
@@ -54,137 +71,193 @@ const Maintenance = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'ovmanager-backup.db';
+      link.download = backups[0]?.name || 'ovmanager-backup.db';
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      setMessage(error.response?.data?.detail || 'Download failed.');
+    } catch (e) {
+      addToast(e.response?.data?.detail || t('downloadFailed', 'Download failed.'), 'error');
     }
   };
 
-  const handleFileChange = (e) => {
-    setRestoreFile(e.target.files[0] || null);
-  };
-
-  const handleRestoreFromServer = async (backupName) => {
-    // confirmation handled via ConfirmModal — caller wraps this in openConfirm
+  const doRestoreFromServer = async (backupName) => {
     setIsRestoreLoading(true);
-    setMessage('');
     try {
       const form = new FormData();
-      form.append('file', new File([], backupName));
       form.append('restore_from_server', backupName);
-      const response = await apiClient.post('/maintenance/backup/restore', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setMessage(response.data.msg || 'Restore complete.');
-      fetchBackups();
-    } catch (error) {
-      setMessage(error.response?.data?.msg || 'Restore failed.');
+      const response = await apiClient.post('/maintenance/backup/restore', form);
+      if (response.data?.success) {
+        addToast(response.data.msg || t('restored', 'Restore complete.'), 'success');
+      } else {
+        addToast(response.data?.msg || t('restoreFailed', 'Restore failed.'), 'error');
+      }
+      fetchBackups({ background: true });
+    } catch (e) {
+      addToast(e.response?.data?.detail || e.response?.data?.msg || t('restoreFailed', 'Restore failed.'), 'error');
     } finally {
       setIsRestoreLoading(false);
     }
   };
 
-  const handleRestore = async () => {
+  const handleRestoreFromServer = (backupName) => {
+    openConfirm(
+      t('restoreButton', 'Restore'),
+      t('confirmRestoreServer', 'Restore from "{{name}}"? This will overwrite current data.', { name: backupName }),
+      () => doRestoreFromServer(backupName)
+    );
+  };
+
+  const doRestoreFile = async () => {
     if (!restoreFile) {
-      setMessage('Please select a backup file.');
+      addToast(t('selectBackupFile', 'Please select a backup file.'), 'warning');
+      return;
+    }
+    if (!restoreFile.name.endsWith('.db')) {
+      addToast(t('backupMustBeDb', 'Backup file must be a .db file.'), 'error');
+      return;
+    }
+    if (restoreFile.size > 100 * 1024 * 1024) {
+      addToast(t('fileTooLarge', 'File too large (max 100 MB).'), 'error');
       return;
     }
     setIsRestoreLoading(true);
-    setMessage('');
     try {
       const formData = new FormData();
       formData.append('file', restoreFile);
       const response = await apiClient.post('/maintenance/backup/restore', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setMessage(response.data.msg || 'Restore complete.');
-    } catch (error) {
-      setMessage(error.response?.data?.msg || 'Restore failed.');
+      if (response.data?.success) {
+        addToast(response.data.msg || t('restored', 'Restore complete.'), 'success');
+        setRestoreFile(null);
+      } else {
+        addToast(response.data?.msg || t('restoreFailed', 'Restore failed.'), 'error');
+      }
+    } catch (e) {
+      addToast(e.response?.data?.detail || e.response?.data?.msg || t('restoreFailed', 'Restore failed.'), 'error');
     } finally {
       setIsRestoreLoading(false);
-      setRestoreFile(null);
     }
   };
 
+  const handleRestoreFileAsk = () => {
+    if (!restoreFile) {
+      addToast(t('selectBackupFile', 'Please select a backup file.'), 'warning');
+      return;
+    }
+    openConfirm(
+      t('restoreButton', 'Restore'),
+      t('confirmRestoreFile', 'Restore from "{{name}}"? This will overwrite current data.', { name: restoreFile.name }),
+      doRestoreFile
+    );
+  };
+
+  const columns = [
+    {
+      key: 'name', label: t('fileName', 'File'), sortable: true,
+      render: (b) => (
+        <span className="dt-cell-main">
+          <span className="dt-avatar" aria-hidden="true"><FiDatabase size={14} /></span>
+          <span className="dt-cell-title" title={b.name}>{b.name}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'size', label: t('fileSize', 'Size'), sortable: true, className: 'dt-num',
+      render: (b) => formatBytes(b.size),
+    },
+    {
+      key: 'modified', label: t('modified', 'Modified'), sortable: true, hideOnMobile: true,
+      render: (b) => { try { return new Date(b.modified).toLocaleString(); } catch { return b.modified || '—'; } },
+    },
+    {
+      key: 'actions', label: t('actions', 'Actions'),
+      render: (b) => (
+        <span className="dt-actions">
+          <button type="button" className="btn btn-secondary btn-sm" disabled={isRestoreLoading} onClick={() => handleRestoreFromServer(b.name)}>
+            <FiUpload size={13} /> {t('restoreButton', 'Restore')}
+          </button>
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div id="maintenance-view" className="view">
-      <h2>{t('settingsTitle')}</h2>
+      <div className="view-header">
+        <h2>{t('navMaintenance', 'Maintenance')}</h2>
+        <div className="view-header-actions">
+          <Link to="/settings" className="btn btn-secondary btn-sm">{t('navSettings', 'Settings')}</Link>
+          <LoadingButton isLoading={isCreateLoading} onClick={handleCreateBackup} className="btn btn-primary btn-sm">
+            <FiDatabase size={13} /> {t('createBackup', 'Create backup')}
+          </LoadingButton>
+          {backups.length > 0 && (
+            <button type="button" onClick={handleDownloadLatest} className="btn btn-secondary btn-sm">
+              <FiDownload size={13} /> {t('downloadLatest', 'Download latest')}
+            </button>
+          )}
+        </div>
+      </div>
 
-      <div className="stats-grid" style={{ marginBottom: '30px' }}>
-        <div className="stat-card">
-          <div className="stat-icon"><FiDatabase /></div>
-          <div className="stat-content">
-            <div className="stat-label">{t('backupTitle')}</div>
-            <div className="stat-value">{backups.length}</div>
+      <div className="user-stats-row" role="region" aria-label={t('backupTitle', 'Backups')}>
+        <div className="user-stat" style={{ '--us-accent': '#90caf9' }}>
+          <span className="us-ico"><FiDatabase aria-hidden="true" /></span>
+          <span className="us-body">
+            <span className="us-label">{t('backupTitle', 'Backups')}</span>
+            <span className="us-value">{backups.length}</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="sp-cards" style={{ marginBottom: 16 }}>
+        <div className="sp-card">
+          <h3 style={{ margin: '0 0 8px', fontSize: '0.95rem' }}>{t('restoreSection', 'Restore from file')}</h3>
+          <p className="sp-hint" style={{ marginBottom: 12 }}>{t('restoreHint', 'Select a .db backup file to restore. This overwrites current data and asks for confirmation.')}</p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label className="sp-file-label">
+              <span className="sr-only">{t('selectBackupFile', 'Select backup file')}</span>
+              <input
+                type="file"
+                accept=".db"
+                onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                disabled={isRestoreLoading}
+                aria-label={t('selectBackupFile', 'Select backup file')}
+              />
+            </label>
+            <LoadingButton isLoading={isRestoreLoading} onClick={handleRestoreFileAsk} className="btn btn-secondary btn-sm" disabled={!restoreFile}>
+              <FiRefreshCw size={13} /> {t('restoreButton', 'Restore')}
+            </LoadingButton>
+            {restoreFile && <span className="dt-cell-sub">{restoreFile.name} · {formatBytes(restoreFile.size)}</span>}
           </div>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <h3 style={{ marginBottom: '15px' }}>{t('backupActions')}</h3>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <LoadingButton isLoading={isLoading} onClick={handleCreateBackup} className="btn">
-            {t('createBackup')}
-          </LoadingButton>
-          <button onClick={handleDownloadLatest} className="btn">
-            {t('downloadLatest')}
-          </button>
-        </div>
-      </div>
+      {isLoading ? (
+        <DataTable columns={columns} rows={[]} loading />
+      ) : loadError ? (
+        <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={() => fetchBackups()} retryLabel={t('retry')} />
+      ) : backups.length === 0 ? (
+        <EmptyState
+          title={t('noBackups', 'No backups yet')}
+          description={t('noBackupsBody', 'Create your first backup to protect panel data.')}
+          actionLabel={t('createBackup', 'Create backup')}
+          onAction={handleCreateBackup}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={backups}
+          rowKey={(r) => r.name}
+          page={1}
+          pageSize={backups.length}
+          total={backups.length}
+          onPageChange={null}
+          caption={t('backupHistory', 'Backup history')}
+        />
+      )}
 
-      <div className="card" style={{ marginBottom: '20px' }}>
-        <h3 style={{ marginBottom: '15px' }}>{t('restoreSection')}</h3>
-        <div style={{ marginBottom: '15px' }}>
-          <input
-            type="file"
-            accept=".db"
-            onChange={handleFileChange}
-            disabled={isRestoreLoading}
-          />
-        </div>
-        <LoadingButton isLoading={isRestoreLoading} onClick={handleRestore} className="btn" style={{ marginBottom: '15px' }}>
-          {t('restoreButton')}
-        </LoadingButton>
-      </div>
-
-      <div className="card">
-        <h3 style={{ marginBottom: '15px' }}>{t('backupHistory')}</h3>
-        {backups.length === 0 ? (
-          <p>{t('noBackups')}</p>
-        ) : (
-          <table className="list-table">
-            <thead>
-              <tr>
-                <th>{t('fileName')}</th>
-                <th>{t('fileSize')}</th>
-                <th>{t('modified')}</th>
-                <th>{t('actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map((backup) => (
-                <tr key={backup.name}>
-                  <td>{backup.name}</td>
-                  <td>{(backup.size / 1024).toFixed(1)} KB</td>
-                  <td>{new Date(backup.modified).toLocaleString()}</td>
-                  <td>
-                    <button onClick={() => openConfirm(t('restoreButton','Restore'), `Restore from "${backup.name}"? This will overwrite current data.`, () => handleRestoreFromServer(backup.name))} className="btn">
-                      {t('restoreButton')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {message && <div className="notification" style={{ marginTop: '20px' }}>{message}</div>}
-      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger={true} confirmLabel={t("restoreButton","Restore")} cancelLabel={t("cancelButton","Cancel")} />
+      <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger confirmLabel={t('restoreButton', 'Restore')} cancelLabel={t('cancelButton', 'Cancel')} />
     </div>
   );
 };

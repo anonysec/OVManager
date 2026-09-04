@@ -23,7 +23,7 @@ from backend.node.requests import NodeRequests
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:
     """Fetch traffic usage data from a single node."""
-    nr = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+    nr = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
     return await run_in_threadpool(nr.get_usage) or {}
 
 
@@ -35,7 +35,7 @@ async def sync_all_user_limits(db: Session) -> dict:
     _semaphore = asyncio.Semaphore(20)
 
     def work(node, user):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         cn = str(user.id)
         ok = req.set_user_limit(str(user.id), int(user.max_logins or 0))
         return {
@@ -66,7 +66,7 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
     results = []
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         data = req.get_sessions(hours=8)
         if not isinstance(data, dict):
             return {"node": node.name, "success": False, "error": "diagnostics unavailable", "removed": []}
@@ -97,7 +97,7 @@ async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> 
     reachable_nodes: set[str] = set()
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=node.key, use_tls=node.use_tls)
+        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
         data = req.get_sessions(hours=1)
         return node, data if isinstance(data, dict) else {}
 

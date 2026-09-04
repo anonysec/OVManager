@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from bot.api import Panel
 from bot.config import config
 from bot.formatters import esc, plan_label
+from bot.handlers.access import ensure_panel_ok
 from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
@@ -32,11 +33,7 @@ async def start_create(update: Update, context: ContextTypes.DEFAULT_TYPE, actor
     lang = lang_of(update, context)
     context.user_data["flow"] = {"kind": "create", "step": "name"}
     suggested = await Panel(actor.token).next_username()
-    hint = (
-        t(lang, "create_hint_suggest", name=esc(suggested))
-        if suggested
-        else t(lang, "create_hint_type")
-    )
+    hint = t(lang, "create_hint_suggest", name=esc(suggested)) if suggested else t(lang, "create_hint_type")
     message = update.effective_message
     if message and not update.callback_query:
         await message.reply_text(t(lang, "create_start"), reply_markup=main_menu(in_flow=True, lang=lang))
@@ -58,6 +55,10 @@ async def handle_create_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
         return
     if step == "logins":
         await _accept_int(update, context, actor, text, "logins", 0, 1000, "confirm", None)
+        # _accept_int leaves the step unchanged when validation fails — only
+        # advance to confirm on actual success, not on stale values.
+        if _flow(context).get("step") != "confirm":
+            return
         await _show_confirm(update, context)
         return
     await edit_or_reply(update, t(lang, "create_use_buttons"))
@@ -180,6 +181,8 @@ async def _commit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
         int(flow.get("logins") or 0),
     )
     context.user_data.pop("flow", None)
+    if not await ensure_panel_ok(update, context, actor, result):
+        return
     if not result.get("success"):
         await edit_or_reply(
             update,

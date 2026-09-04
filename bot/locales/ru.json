@@ -5,7 +5,6 @@
   "btn_nodes": "Узлы",
   "btn_cancel": "Отмена",
   "btn_language": "Язык",
-
   "home_browse": "Список пользователей",
   "home_create": "Создать пользователя",
   "home_status": "Статус панели",
@@ -15,12 +14,10 @@
   "welcome": "<b>OVManager</b>\n{role} · {username}\n\nПользуйтесь меню ниже или введите имя пользователя.\nСоздание — короткий диалог, без слэш-команд.",
   "role_owner": "Владелец",
   "role_operator": "Оператор",
-
   "denied": "Этот Telegram-аккаунт не привязан к OVManager.\n\nПопросите владельца панели добавить ваш Telegram ID в Настройки → Бот (владелец) или Управление администраторами (операторы).",
   "rate_limited": "Слишком быстро. Подождите немного и попробуйте снова.",
   "unknown_action": "Это действие больше недоступно.",
   "error": "Что-то пошло не так. Попробуйте снова из меню.",
-
   "users_empty": "Пока нет пользователей.\nНажмите <b>{new}</b>, чтобы создать первого.",
   "users_header": "<b>Пользователи</b>  ·  {count} всего  ·  стр. {page}/{pages}",
   "users_hint": "Нажмите имя или введите его для поиска.",
@@ -32,7 +29,6 @@
   "user_list": "Список пользователей",
   "nav_prev": "Назад",
   "nav_next": "Далее",
-
   "act_extend": "Продлить",
   "act_config": "Конфиг",
   "act_enable": "Включить",
@@ -53,12 +49,10 @@
   "act_suggest": "Использовать предложенное имя",
   "act_back_user": "К пользователю",
   "act_refresh": "Обновить",
-
   "plan_standard": "Стандарт",
   "plan_team": "Команда",
   "plan_unlimited": "Безлимит",
   "plan_custom": "Свой",
-
   "unlimited": "Безлимит",
   "no_expiry": "Без срока",
   "expired_ago": "Истёк {days} дн. назад",
@@ -85,7 +79,6 @@
   "card_devices": "Устройства",
   "card_owner": "Владелец",
   "card_sub": "Ссылка подписки",
-
   "create_hint_suggest": "Имя по вашему префиксу: <code>{name}</code>\nОтправьте его, введите другое или нажмите кнопку ниже.",
   "create_hint_type": "Введите имя (3–64 буквы, цифры или подчёркивания).",
   "create_title": "<b>Новый пользователь</b>\n\n{hint}",
@@ -106,7 +99,6 @@
   "create_ok": "Создан <b>{name}</b>.",
   "create_ok_list": "Создан <b>{name}</b>. Откройте Пользователи, чтобы увидеть карточку.",
   "create_unknown_error": "Неизвестная ошибка",
-
   "extend_title": "Продлить <b>{name}</b>",
   "updating": "Обновление…",
   "updated_days": "Обновлено. +{days} дн.",
@@ -134,7 +126,6 @@
   "dl_fail": "Не удалось создать конфиг. Проверьте, что узел онлайн и пользователь активен.",
   "dl_sent": "Отправлен <b>{filename}</b>.",
   "node_fallback": "Узел {id}",
-
   "panel": "Панель",
   "version_uptime": "Версия {version}  ·  аптайм {uptime}",
   "cpu_ram_disk": "CPU {cpu}  ·  ОЗУ {ram}  ·  Диск {disk}",
@@ -147,7 +138,30 @@
   "node_up": "онлайн",
   "node_down": "офлайн",
   "node_line": "<b>{name}</b>  —  {mark}",
-
   "lang_title": "<b>Язык</b>\n\nТе же языки, что у панели. Выберите — меню обновится сразу.",
-  "lang_set": "Язык изменён на {name}."
+  "lang_set": "Язык изменён на {name}.",
+  "session_expired": "Сессия истекла — нажмите ещё раз, чтобы продолжить.",
+  "panel_unreachable": "Панель недоступна. Попробуйте позже.",
+  "act_undo": "↩ Отменить удаление",
+  "restoring": "Восстановление…",
+  "restored_ok": "Пользователь восстановлен.",
+  "restore_fail": "Не удалось восстановить (возможно, время вышло).",
+  "act_edit": "✏ Изменить лимиты",
+  "edit_owner_only": "Изменение лимитов доступно только владельцу.",
+  "edit_title": "Изменить <b>{name}</b> — выберите поле:",
+  "edit_value_traffic": "Новая квота в ГБ (0 = безлимит):",
+  "edit_value_expiry": "Новый срок в днях от сегодня (1–3650):",
+  "edit_value_devices": "Новый лимит устройств (0 = безлимит, макс. 1000):",
+  "edit_confirm": "Установить для <b>{name}</b>: {value}?",
+  "edit_ok": "{name} обновлён.",
+  "act_save": "✓ Сохранить",
+  "edit_field_traffic": "📊 Квота",
+  "edit_field_expiry": "📅 Срок",
+  "edit_field_devices": "📱 Устройства",
+  "node_gone": "Узел не найден.",
+  "node_detail_status": "Статус: {status}",
+  "node_detail_cpu": "CPU: {cpu}",
+  "node_detail_mem": "Память: {mem}",
+  "node_detail_live": "Активных сессий: {live}",
+  "node_detail_version": "Агент: {version}"
 }

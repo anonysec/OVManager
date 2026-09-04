@@ -11,8 +11,9 @@ from telegram.ext import ContextTypes
 from bot.handlers.access import require_actor
 from bot.handlers.actions import dispatch_action
 from bot.handlers.create import handle_create_callback, handle_create_text, start_create
+from bot.handlers.edit import handle_edit_callback, handle_edit_text
 from bot.handlers.home import apply_language, show_home, show_languages
-from bot.handlers.status import show_nodes, show_status
+from bot.handlers.status import show_node_detail, show_nodes, show_status
 from bot.handlers.users import prompt_search, search_users, show_user, show_users
 from bot.i18n import has_lang, lang_of, menu_action, t
 from bot.ui import answer, edit_or_reply
@@ -20,7 +21,39 @@ from bot.ui import answer, edit_or_reply
 log = logging.getLogger(__name__)
 
 
+async def on_unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Any /command other than /start /help: point back at the menu instead
+    of dropping it silently (filters.COMMAND never reaches on_text)."""
+    if not update.effective_message:
+        return
+    try:
+        if not has_lang(update, context):
+            await show_languages(update, context, first=True)
+            return
+        actor = await require_actor(update, context)
+        if actor is None:
+            return
+        context.user_data.pop("flow", None)
+        await show_home(update, context, actor)
+    except Exception:
+        log.exception("Unknown-command handler failed")
+        try:
+            await edit_or_reply(update, t(lang_of(update, context), "error"))
+        except Exception:
+            pass
+
+
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.effective_message:
+        return
+    try:
+        await _on_text(update, context)
+    except Exception:
+        log.exception("Text handler failed")
+        await edit_or_reply(update, t(lang_of(update, context), "error"))
+
+
+async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_message:
         return
     text = (update.effective_message.text or "").strip()
@@ -65,6 +98,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if flow and flow.get("kind") == "create":
         await handle_create_text(update, context, actor, text)
         return
+    if flow and flow.get("kind") == "edit":
+        await handle_edit_text(update, context, actor, text)
+        return
     if flow and flow.get("kind") == "search":
         context.user_data.pop("flow", None)
         await search_users(update, context, actor, text)
@@ -96,6 +132,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         lang = lang_of(update, context)
         if await handle_create_callback(update, context, actor, data):
+            return
+        if await handle_edit_callback(update, context, actor, data):
             return
         if data in {"home", "cancel"}:
             await answer(update)
@@ -129,6 +167,14 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if data.startswith("u:"):
             await answer(update)
             await show_user(update, context, actor, data[2:])
+            return
+        if data.startswith("ns:"):
+            await answer(update)
+            try:
+                node_id = int(data.split(":", 1)[1])
+            except ValueError:
+                node_id = 0
+            await show_node_detail(update, context, actor, node_id)
             return
         if await dispatch_action(update, context, actor, data):
             return

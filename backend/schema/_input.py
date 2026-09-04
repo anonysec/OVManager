@@ -41,7 +41,8 @@ class NodeCreate(BaseModel):
     key: str | None = Field(default=None, min_length=16, max_length=128)
     status: bool = Field(default=True)
     set_new_setting: bool = Field(default=False)
-    use_tls: bool = Field(default=False)
+    # TLS on by default for new nodes; existing rows keep their stored value.
+    use_tls: bool = Field(default=True)
 
 
 class AdminCreate(BaseModel):

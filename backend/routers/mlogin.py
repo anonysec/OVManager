@@ -67,7 +67,12 @@ def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node
         raise HTTPException(status_code=401, detail="Missing node name/key")
     node = db.query(Node).filter(Node.name == node_name).first()
     # Use hmac.compare_digest to prevent timing side-channel leaking key bytes.
-    if not node or not hmac.compare_digest(node.key, key):
+    # node.key is Fernet-encrypted at rest — compare against the plaintext.
+    if not node:
+        raise HTTPException(status_code=401, detail="Invalid node key")
+    from backend.db.crud import decrypt_node_key
+
+    if not hmac.compare_digest(decrypt_node_key(node.key), key):
         raise HTTPException(status_code=401, detail="Invalid node key")
     return node
 
@@ -82,10 +87,12 @@ def _split_addr(addr: str) -> tuple[str, str]:
 def _fetch_node_usage(node) -> dict | None:
     """Blocking HTTP call to fetch usage from a single node (run in threadpool)."""
     try:
+        from backend.db.crud import decrypt_node_key
+
         scheme = "https" if node.use_tls else "http"
         r = requests.get(
             f"{scheme}://{node.address}:{node.port}/sync/usage",
-            headers={"key": node.key},
+            headers={"key": decrypt_node_key(node.key)},
             timeout=_NODE_TIMEOUT,
         )
         if r.status_code != 200:

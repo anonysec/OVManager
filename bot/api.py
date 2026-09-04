@@ -64,6 +64,10 @@ async def login(username: str, password: str) -> str | None:
 class Panel:
     def __init__(self, token: str):
         self.token = token
+        # Last HTTP status of request()/download_ovpn (None = no call yet).
+        # Handlers use it to tell "panel unreachable" (0) apart from an
+        # empty-but-healthy response — get_users() returns [] in both cases.
+        self.last_status: int | None = None
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}", "X-Requested-With": "ovmanager-bot"}
@@ -74,7 +78,9 @@ class Panel:
             resp = await client().request(method, url, headers=self._headers(), **kwargs)
         except Exception as exc:
             log.error("API %s %s failed: %s", method, path, exc)
+            self.last_status = 0
             return {"success": False, "msg": "Panel is unreachable.", "status": 0}
+        self.last_status = resp.status_code
         if resp.status_code == 200:
             try:
                 body = resp.json()
@@ -162,6 +168,10 @@ class Panel:
     async def delete_user(self, uuid: str) -> dict:
         return await self.request("DELETE", f"/users/{uuid}")
 
+    async def restore_user(self, uuid: str) -> dict:
+        """Undo a recent delete (panel keeps a ≤120s undo window)."""
+        return await self.request("POST", f"/users/{uuid}/restore")
+
     # ── Nodes / system ───────────────────────────────────────────────
 
     async def get_nodes(self) -> list[dict]:
@@ -172,6 +182,10 @@ class Panel:
         if isinstance(data, dict):
             return list(data.get("nodes") or [])
         return []
+
+    async def node_status(self, node_id: int) -> dict:
+        """Full result dict (check success/data) for the node drill-down."""
+        return await self.request("GET", f"/nodes/{node_id}/status/")
 
     async def get_settings(self) -> dict:
         result = await self.request("GET", "/server/settings")

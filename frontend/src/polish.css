@@ -1,0 +1,683 @@
+/* polish.css — single home for new shared bits.
+   Uses only tokens.css variables + logical props. New code lands here instead
+   of scattering across index.css / styles.css / Settings.css. */
+
+.sp-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.sp-cell-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.sp-node-row.sp-err-row {
+  align-items: baseline;
+}
+
+.sp-viewall {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+.sp-viewall:hover {
+  text-decoration: underline;
+}
+
+.sp-file-label input[type="file"],
+.sp-file-input {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.panel-footer-meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.login-status-orbit--vector {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+}
+
+.login-status-orbit--vector {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS — definitions for sp-* classes rendered by Settings.jsx that
+   never had CSS (previously unstyled browser defaults). Additive only:
+   Settings.css keeps its rules; polish.css loads after it so these fill
+   the gaps (section-header flex, btn-group wrap) without touching legacy.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sp-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sp-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.sp-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sp-stat > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.sp-stat > strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.sp-stat--danger > strong { color: var(--danger-text); }
+.sp-stat--warn > strong { color: var(--warning-text); }
+.sp-stat--ok > strong { color: var(--success-text); }
+.sp-stat--muted > strong { color: var(--text-secondary); }
+
+/* Section header: icon beside the title (was margin-only, icon stacked). */
+.sp-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sp-section-header > div {
+  min-width: 0;
+}
+
+/* Value row + inline edit (Display / General sections). */
+.sp-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.sp-code--muted {
+  color: var(--text-secondary);
+}
+
+.sp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sp-icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.sp-icon-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sp-inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sp-row-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-urlpath-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-soft);
+}
+
+.sp-url-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.sp-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.sp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.sp-link:hover {
+  text-decoration: underline;
+}
+
+/* Hours toggle (Security section). */
+.sp-hours-toggle {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.sp-hour-btn {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sp-hour-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.sp-hour-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.sp-hour-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Node / backup rows. */
+.sp-node-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sp-node-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.sp-node-row:last-child {
+  border-bottom: none;
+}
+
+.sp-node-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sp-badge.danger,
+.sp-badge--danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger-text);
+}
+
+.sp-badge.warn,
+.sp-badge--warn {
+  background: var(--warning-soft);
+  border-color: var(--warning);
+  color: var(--warning-text);
+}
+
+.sp-badge.ok,
+.sp-badge--ok {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success-text);
+}
+
+.sp-badge.info,
+.sp-badge--info {
+  background: var(--info-soft);
+  border-color: var(--info);
+  color: var(--info-text);
+}
+
+.sp-badge.muted,
+.sp-badge--muted {
+  background: var(--surface-3);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.sp-backup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-backup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  min-width: 0;
+}
+
+.sp-backup-name {
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-backup-size {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.sp-backup-row > svg {
+  color: var(--text-secondary);
+  flex: none;
+}
+
+/* Language / alert option rows (Appearance / Alerts sections). */
+.sp-lang-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sp-lang-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sp-lang-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.sp-lang-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.sp-lang-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sp-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sp-alert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sp-alert-label {
+  flex: 1;
+  min-width: 160px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+/* Five-option pill row (sidebar corner): even columns that wrap sanely. */
+.sp-pills-5 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.sp-pills-5 .sp-theme-pill {
+  min-width: 0;
+}
+
+/* Button group must wrap on narrow screens (was inline-flex, overflow). */
+.sp-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* File input must not overflow small cards. */
+.sp-file-input {
+  max-width: 100%;
+}
+
+/* Toggle input keyboard visibility (input itself is visually hidden). */
+.sp-toggle input:focus-visible ~ .sp-toggle-track {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Accent swatches expose selection to assistive tech via aria-pressed. */
+.accent-swatch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Spacing utilities (replace ad-hoc inline margins). */
+.sp-mb-6 { margin-bottom: 6px; }
+.sp-mb-12 { margin-bottom: 12px; }
+.sp-mb-14 { margin-bottom: 14px; }
+.sp-mb-16 { margin-bottom: 16px; }
+.sp-mt-12 { margin-top: 12px; }
+.sp-mt-16 { margin-top: 16px; }
+.sp-mt-18 { margin-top: 18px; }
+.sp-mt-20 { margin-top: 20px; }
+
+/* Sticky jumpnav: stays under the fixed topbar, scrolls horizontally
+   on phones instead of wrapping into 4 rows. */
+.sp-jumpnav {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 5;
+}
+
+.sp-jumpnav-link[aria-current="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+/* Deep-link target offset (fixed topbar + sticky jumpnav) + focus. */
+.sp-section {
+  scroll-margin-top: calc(var(--topbar-h) + 64px);
+  outline: none;
+}
+
+.sp-section:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIDEBAR RAIL — smooth collapse instead of instant unmount pops.
+   Labels stay mounted (Sidebar.jsx) and collapse via max-width/opacity so
+   the width tween looks continuous. Higher specificity than the legacy
+   `.ops-sidebar--collapsed … { display: none }` rules; polish.css also
+   loads last. Logical props throughout for RTL.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ops-sidebar .sidebar-nav-label {
+  display: inline-block;
+  max-width: 160px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--transition-normal), opacity var(--transition-fast), margin var(--transition-normal);
+}
+
+.ops-sidebar.ops-sidebar--collapsed .sidebar-nav-label {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  margin-inline-start: 0;
+}
+
+/* Group labels become hairline dividers in the rail (context without text). */
+.ops-sidebar.ops-sidebar--collapsed .sidebar-section-label {
+  font-size: 0;
+  line-height: 0;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: 8px 14px;
+  background: var(--border);
+  overflow: hidden;
+  display: block;
+}
+
+.ops-sidebar .sidebar-section-label {
+  transition: margin var(--transition-normal), height var(--transition-normal);
+}
+
+/* Profile info collapses; footer centers; logout stays reachable. */
+.ops-sidebar .sidebar-profile-info {
+  max-width: 200px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--transition-normal), opacity var(--transition-fast);
+}
+
+.ops-sidebar.ops-sidebar--collapsed .sidebar-profile-info {
+  max-width: 0;
+  opacity: 0;
+}
+
+.ops-sidebar.ops-sidebar--collapsed .sidebar-profile {
+  justify-content: center;
+}
+
+.ops-sidebar.ops-sidebar--collapsed .sidebar-footer {
+  display: flex;
+  justify-content: center;
+}
+
+.ops-sidebar.ops-sidebar--collapsed .sidebar-logout-btn {
+  display: inline-flex;
+}
+
+/* Collapse toggle: reachable 32px target docked at the top corner. */
+.ops-sidebar .sidebar-toggle {
+  width: 32px;
+  height: 32px;
+  top: 12px;
+  transition: inset-inline-end var(--transition-normal), background var(--transition-fast);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE DRAWER LAYERING — the open drawer + overlay sit above the bottom
+   nav (z 95) and the topbar (z 110); the hamburger stays on top so it can
+   also close. Corner docking applies on desktop only — on phones the
+   drawer always slides from below the topbar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sidebar-mobile-overlay {
+  z-index: 118;
+}
+
+.ops-sidebar--mobile {
+  z-index: 119;
+}
+
+.sidebar-hamburger {
+  z-index: 120;
+}
+
+@media (max-width: 767.98px) {
+  .ops-sidebar[data-corner] {
+    top: var(--topbar-h);
+  }
+
+  /* Seven-tab owner bar: keep labels on one line. */
+  .mobile-nav--6 .mobile-nav-link span,
+  .mobile-nav--7 .mobile-nav-link span {
+    font-size: 9px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+}
+
+.stale-badge {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  color: var(--warning-text);
+  vertical-align: middle;
+}
+
+/* Settings responsive + motion guards (Settings.css has no @media). */
+@media (max-width: 767.98px) {
+  .sp-two-col {
+    grid-template-columns: 1fr;
+  }
+  .sp-jumpnav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sp-jumpnav-link {
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-page {
+    animation: none;
+  }
+}
