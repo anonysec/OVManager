@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
@@ -10,7 +10,10 @@ import { LiveProvider } from '../context/LiveContext';
 import { ToastProvider } from '../context/ToastContext';
 import Sidebar from '../components/Sidebar';
 import Logo from '../components/Logo';
-import OnboardingChecklist from '../components/OnboardingChecklist';
+// Code-split: the 350-line checklist (illustrations + CSS) loads only for
+// operators who haven't dismissed it — steady-state sessions skip the chunk
+// and its per-tick /nodes + /users polls entirely.
+const OnboardingChecklist = lazy(() => import('../components/OnboardingChecklist'));
 import CommandPalette from '../components/CommandPalette';
 import ShortcutsHelp from '../components/ShortcutsHelp';
 import MobileNav from '../components/MobileNav';
@@ -30,6 +33,12 @@ const DashboardLayout = () => {
   const langRef = useRef(null);
   const gPending = useRef(false);
   const location = useLocation();
+  // Read once: dismissed operators never download the checklist chunk.
+  // (In-session dismiss hides it via its own state; the chunk is loaded.)
+  const [onboardVisible] = useState(() => {
+    try { return localStorage.getItem('ovmanager-onboard-dismissed') !== '1'; }
+    catch { return true; }
+  });
 
   const getPageTitle = (pathname) => {
     const map = {
@@ -363,7 +372,11 @@ const DashboardLayout = () => {
             </header>
 
             <main id="main-content" className={mainContentClass} tabIndex="-1">
-              <OnboardingChecklist />
+              {onboardVisible && (
+                <Suspense fallback={null}>
+                  <OnboardingChecklist />
+                </Suspense>
+              )}
               <Outlet />
             </main>
           </div>
