@@ -7,7 +7,7 @@
  * `en` (dead weight / renamed-key leftovers).
  *
  * Budgets (missing keys tolerated today):
- *   frontend fa/ru/cn: 23 each (nodeBundle* + onboardStep* strings)
+ *   frontend fa/ru/cn: 13 each (post-onboarding-removal remainder)
  *   bot      fa/ru/cn: 0  (currently fully in sync)
  *
  * Lower a budget to zero once translations land — never raise one without
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GROUPS = [
-  { dir: join(root, 'src', 'lang'), locales: ['fa', 'ru', 'cn'], budget: 23 },
+  { dir: join(root, 'src', 'lang'), locales: ['fa', 'ru', 'cn'], budget: 13 },
   { dir: join(root, '..', 'bot', 'locales'), locales: ['fa', 'ru', 'cn'], budget: 0 },
 ];
 
