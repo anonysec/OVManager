@@ -88,7 +88,10 @@ async def sync_all_user_limits(db: Session) -> dict:
 
 
 async def clean_stale_sessions_all_nodes(db: Session) -> dict:
-    """Remove stale markers where no live session exists."""
+    """Remove stale markers, including dead ones for users that also hold a
+    healthy session (previously skipped forever: one stuck dead marker +
+    one live session read as "full"). Live sessions are never touched —
+    those CNs get the selective cleanup, the rest the full disconnect."""
     nodes = crud.get_all_nodes(db)
     results = []
 
@@ -101,9 +104,8 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
         stale_cns = sorted({m.get("common_name") for m in (data.get("stale_markers") or []) if m.get("common_name")})
         removed = []
         for cn in stale_cns:
-            if cn in live_cns:
-                continue
-            res = req.disconnect_user(cn)
+            # Dead markers beside a live session: selective cleanup only.
+            res = req.disconnect_user(cn, only_stale=(cn in live_cns))
             if isinstance(res, dict):
                 removed.extend(res.get("removed_markers") or [])
         return {"node": node.name, "success": True, "removed": removed}
