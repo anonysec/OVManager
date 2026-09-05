@@ -131,3 +131,16 @@ def test_backup_restore_roundtrip_on_scratch_db(monkeypatch, tmp_path):
             assert any(p.name.startswith("pre_restore_backup_") for p in fake_backups.glob("*.db"))
     finally:
         fake_engine.dispose()
+
+
+def test_safe_filename_allowlists_and_rejects():
+    from backend.routers.maintenance import _safe_filename
+
+    assert _safe_filename("backup.db") == "backup.db"
+    assert _safe_filename("my backup 2026.db") == "mybackup2026.db"
+    assert _safe_filename("../../etc/passwd") == "passwd"
+    assert _safe_filename("..\\windows\\x.db") == "x.db"
+    assert _safe_filename("") == ""
+    assert _safe_filename(None) == ""
+    assert _safe_filename("...") == ""
+    assert _safe_filename("a\x00b.db") == "ab.db"
