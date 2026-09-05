@@ -7,6 +7,7 @@ Every method follows the same pattern: build URL, send request, check response.
 One _request() helper handles all of it.
 """
 
+import warnings as _warnings
 from urllib.parse import urlsplit
 
 import requests as _req
@@ -41,21 +42,39 @@ class NodeRequests:
         return f"{self.scheme}://{self.address}{path}"
 
     def _request(self, method: str, path: str, **kw) -> dict | None:
-        """Send request, return parsed JSON or None on failure."""
+        """Send request, return parsed JSON or None on failure.
+
+        TLS is verified strictly first (Let's Encrypt nodes). A node with a
+        self-signed cert (installer default) fails verification — retry once
+        unverified with a loud warning instead of bricking TLS nodes.
+        """
         kw.setdefault("timeout", TIMEOUT)
         try:
-            r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
-            if r.status_code != 200:
-                logger.error("Node %s %s → %s", self.address, path, r.status_code)
+            return self._send(method, path, verify=True, **kw)
+        except _req.exceptions.SSLError as e:
+            logger.warning("Node %s %s: TLS verify failed (%s) — retrying unverified (self-signed?)", self.address, path, e)
+            try:
+                with _warnings.catch_warnings():
+                    _warnings.simplefilter("ignore")
+                    return self._send(method, path, verify=False, **kw)
+            except Exception as e2:
+                logger.error("Node %s %s: %s", self.address, path, e2)
                 return None
-            data = r.json()
-            if not data.get("success"):
-                logger.error("Node %s %s: %s", self.address, path, data.get("msg"))
-                return None
-            return data
         except Exception as e:
             logger.error("Node %s %s: %s", self.address, path, e)
             return None
+
+    def _send(self, method: str, path: str, **kw) -> dict | None:
+        """One attempt: send request, return parsed JSON or None on failure."""
+        r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
+        if r.status_code != 200:
+            logger.error("Node %s %s → %s", self.address, path, r.status_code)
+            return None
+        data = r.json()
+        if not data.get("success"):
+            logger.error("Node %s %s: %s", self.address, path, data.get("msg"))
+            return None
+        return data
 
     # ── Node management ──────────────────────────────────────────
 
@@ -114,24 +133,48 @@ class NodeRequests:
 
     # ── OVPN download ────────────────────────────────────────────
 
-    def download_ovpn_client(self, uid: str) -> Response | None:
+    def _get_raw(self, path: str, **kw) -> bytes | None:
+        """GET raw bytes with the same TLS policy as _request.
+
+        Verified first (LE nodes); one unverified retry with a warning for
+        self-signed nodes. Returns None on any failure.
+        """
+        url = self._url(path)
+        headers = kw.pop("headers", self.headers)
         try:
-            r = _req.get(
-                self._url(f"/sync/download/ovpn/{uid}"),
-                headers={**self.headers, "Accept": "application/x-openvpn-profile"},
-                timeout=120,
-            )
-            body = r.content
-            if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
-                return Response(
-                    content=body,
-                    media_type="application/x-openvpn-profile",
-                    headers={"Content-Disposition": f'attachment; filename="{uid}.ovpn"'},
-                )
-            logger.error("Node %s OVPN %s: invalid response", self.address, uid)
+            r = _req.get(url, headers=headers, **kw)
+        except _req.exceptions.SSLError as e:
+            logger.warning("Node %s %s: TLS verify failed (%s) — retrying unverified (self-signed?)", self.address, path, e)
+            try:
+                with _warnings.catch_warnings():
+                    _warnings.simplefilter("ignore")
+                    r = _req.get(url, headers=headers, verify=False, **kw)
+            except Exception as e2:
+                logger.error("Node %s %s: %s", self.address, path, e2)
+                return None
         except Exception as e:
-            logger.error("Node %s OVPN %s: %s", self.address, uid, e)
+            logger.error("Node %s %s: %s", self.address, path, e)
+            return None
+        body = r.content
+        if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
+            return body
+        logger.error("Node %s %s: invalid response", self.address, path)
         return None
+
+    def download_ovpn_client(self, uid: str) -> Response | None:
+        body = self._get_raw(
+            f"/sync/download/ovpn/{uid}",
+            headers={**self.headers, "Accept": "application/x-openvpn-profile"},
+            timeout=120,
+        )
+        if body is None:
+            logger.error("Node %s OVPN %s: invalid response", self.address, uid)
+            return None
+        return Response(
+            content=body,
+            media_type="application/x-openvpn-profile",
+            headers={"Content-Disposition": f'attachment; filename="{uid}.ovpn"'},
+        )
 
     # ── Sessions & usage ─────────────────────────────────────────
 
@@ -144,16 +187,11 @@ class NodeRequests:
 
     def download_ovpn_bytes(self, uid: str) -> bytes | None:
         """Return the raw .ovpn file bytes (for ZIP bundling etc.)."""
-        try:
-            r = _req.get(
-                self._url(f"/sync/download/ovpn/{uid}"),
-                headers={**self.headers, "Accept": "application/x-openvpn-profile"},
-                timeout=120,
-            )
-            body = r.content
-            if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
-                return body
+        body = self._get_raw(
+            f"/sync/download/ovpn/{uid}",
+            headers={**self.headers, "Accept": "application/x-openvpn-profile"},
+            timeout=120,
+        )
+        if body is None:
             logger.error("Node %s OVPN bytes %s: invalid response", self.address, uid)
-        except Exception as e:
-            logger.error("Node %s OVPN bytes %s: %s", self.address, uid, e)
-        return None
+        return body

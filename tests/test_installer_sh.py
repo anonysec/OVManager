@@ -164,3 +164,16 @@ def test_fresh_dry_run_json_shape(tmp_path):
     assert data["node"]["name"] == "mynode"
     assert len(data["node"]["api_key"]) >= 32
     assert data["node"]["same_server"] is True
+
+
+def test_docker_data_dir_and_perms_are_container_safe():
+    """Fresh Docker installs crash-looped twice: .env carried the HOST data
+    path into the container (appuser mkdir → PermissionError), then the
+    root-owned host dir masked /app/data, then unreadable TLS keys.
+    Pin the three guards: container DATA_DIR, host chown, readable certs."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert '[[ "$MODE" == "docker" ]] && data_dir="/app/data"' in content
+    assert 'chown -R 1000:1000 "$DATA_DIR"' in content
+    assert "chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem" in content
+    assert '>/dev/stderr' in content  # build output must not pollute --json stdout
