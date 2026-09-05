@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
@@ -14,30 +14,28 @@ import { Card, Field } from './shared';
 /* ═══════════════════════════════════════════════════════
    BOT — Telegram bot configuration (compact)
 ═══════════════════════════════════════════════════════ */
-const BotSection = () => {
+const BotSection = ({ shared }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [token, setToken] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [ownerId, setOwnerId] = useState('');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [encryptKeyMissing, setEncryptKeyMissing] = useState(false);
+  const loading = shared?.loading ?? true;
+  const loadError = shared?.error ?? false;
+  const load = shared?.reload ?? (() => {});
+  const synced = useRef(false);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(false);
-      const r = await apiClient.get('/server/settings');
-      const d = r.data?.data || {};
-      setEnabled(d.bot_enabled || false);
-      setOwnerId(d.owner_telegram_id || '');
-      setEncryptKeyMissing(false);
-    } catch { setLoadError(true); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  // Mount-only sync (as before — no refreshTick revalidation here).
+  useEffect(() => {
+    const d = shared?.data;
+    if (!d || synced.current) return;
+    synced.current = true;
+    setEnabled(d.bot_enabled || false);
+    setOwnerId(d.owner_telegram_id || '');
+    setEncryptKeyMissing(false);
+  }, [shared]);
 
   const save = async () => {
     setSaving(true);

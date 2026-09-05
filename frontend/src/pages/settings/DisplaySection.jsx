@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
@@ -15,29 +15,28 @@ import useInlineEditFocus from './useInlineEditFocus';
 /* ═══════════════════════════════════════════════════════
    DISPLAY — timezone used everywhere in the UI
 ═══════════════════════════════════════════════════════ */
-const DisplaySection = () => {
+const DisplaySection = ({ shared }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [timezone, setTimezone] = useState('UTC');
   const [editing, setEditing] = useState(false);
   const [tzValue, setTzValue] = useState('UTC');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const loading = shared?.loading ?? true;
+  const loadError = shared?.error ?? false;
+  const load = shared?.reload ?? (() => {});
+  const synced = useRef(false);
   const inputRef = useRef(null);
   const triggerRef = useRef(null);
   useInlineEditFocus(editing, inputRef, triggerRef);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(false);
-      const res = await apiClient.get('/server/settings');
-      setTimezone(res.data?.data?.timezone || 'UTC');
-    } catch { setLoadError(true); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  // Mount-only sync (as before — no refreshTick revalidation here).
+  useEffect(() => {
+    const tz = shared?.data?.timezone;
+    if (!tz || synced.current) return;
+    synced.current = true;
+    setTimezone(tz);
+  }, [shared]);
 
   const save = async () => {
     setSaving(true);
