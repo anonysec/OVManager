@@ -49,21 +49,28 @@ def _owner_headers() -> dict:
 
 def test_backup_create_list_download_roundtrip():
     before = {p.name for p in m.BACKUP_DIR.glob("ovmanager_backup_*.db")} if m.BACKUP_DIR.exists() else set()
-    with TestClient(api) as client:
-        r = client.post("/api/maintenance/backup", headers=_owner_headers())
-        assert r.status_code == 200 and r.json()["success"] is True
-        name = r.json()["data"]["filename"]
-        assert name not in before
+    created = None
+    try:
+        with TestClient(api) as client:
+            r = client.post("/api/maintenance/backup", headers=_owner_headers())
+            assert r.status_code == 200 and r.json()["success"] is True
+            created = r.json()["data"]["filename"]
+            assert created not in before
 
-        r = client.get("/api/maintenance/backup/list", headers=_owner_headers())
-        names = [b["name"] for b in r.json()["data"]]
-        assert name in names
+            r = client.get("/api/maintenance/backup/list", headers=_owner_headers())
+            names = [b["name"] for b in r.json()["data"]]
+            assert created in names
 
-        r = client.get("/api/maintenance/backup/download", headers=_owner_headers())
-        assert r.status_code == 200
-        assert len(r.content) > 0
-        # A real SQLite file, not an error page.
-        assert r.content[:6] == b"SQLite"
+            r = client.get("/api/maintenance/backup/download", headers=_owner_headers())
+            assert r.status_code == 200
+            assert len(r.content) > 0
+            # A real SQLite file, not an error page.
+            assert r.content[:6] == b"SQLite"
+    finally:
+        # Never leave test artifacts in the dev backup dir (it is gitignored,
+        # but a stray .db must not linger or get committed by `git add -A`).
+        if created:
+            (m.BACKUP_DIR / created).unlink(missing_ok=True)
 
 
 def test_restore_rejects_bad_extension_and_traversal():
