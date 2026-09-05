@@ -31,10 +31,15 @@ from backend.db.engine import SessionLocal, get_db
 logger = logging.getLogger("auth")
 
 # ── Rate limiter ──────────────────────────────────────────────────
-# DB-backed with in-memory write-through cache. Survives restarts (unlike
-# the old pure-dict limiter) and keys by (IP, username) so one user's
-# failures behind a shared NAT/proxy don't lock out everyone else.
-# A coarser per-IP bucket still caps credential-stuffing across usernames.
+# In-memory only, keyed by (IP, username) so one user's failures behind a
+# shared NAT/proxy don't lock out everyone else. A coarser per-IP bucket
+# still caps credential-stuffing across usernames.
+#
+# Deliberately NOT persisted: the panel is a single process, a lockout lasts
+# 5 minutes, and a restart clearing lockouts is acceptable (fail-open on
+# restart beats fail-closed against the operator). This removes two DB
+# round-trips from every login attempt and the whole login_attempts table
+# dance (the dormant table is left in place by migrations — harmless).
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
@@ -43,141 +48,29 @@ _CLEANUP_INTERVAL = 600  # purge stale entries every 10 min
 _last_cleanup: float = 0.0
 
 
-def _ensure_rate_table(db) -> None:
-    try:
-        from sqlalchemy import text as _text
-
-        db.execute(
-            _text(
-                "CREATE TABLE IF NOT EXISTS login_attempts ("
-                "key_hash TEXT PRIMARY KEY, attempts TEXT NOT NULL DEFAULT '[]', "
-                "updated REAL NOT NULL DEFAULT 0)"
-            )
-        )
-    except Exception:
-        pass
-
-
-def _db_load(key_hash: str) -> list[float]:
-    try:
-        import json
-
-        from sqlalchemy import text
-
-        from backend.db.engine import SessionLocal as _SL
-
-        _db = _SL()
-        try:
-            _ensure_rate_table(_db)
-            row = _db.execute(
-                text("SELECT attempts FROM login_attempts WHERE key_hash = :k"),
-                {"k": key_hash},
-            ).fetchone()
-            if not row or not row[0]:
-                return []
-            vals = json.loads(row[0])
-            now = time.time()
-            return [float(t) for t in vals if now - float(t) < _LOCKOUT_SECONDS]
-        finally:
-            _db.close()
-    except Exception:
-        return []
-
-
-def _db_save(key_hash: str, times: list[float]) -> None:
-    try:
-        import json
-
-        from sqlalchemy import text
-
-        from backend.db.engine import SessionLocal as _SL
-
-        _db = _SL()
-        try:
-            _ensure_rate_table(_db)
-            _db.execute(
-                text(
-                    "INSERT INTO login_attempts (key_hash, attempts, updated) VALUES (:k, :a, :u) "
-                    "ON CONFLICT(key_hash) DO UPDATE SET attempts = :a, updated = :u"
-                ),
-                {"k": key_hash, "a": json.dumps(times), "u": time.time()},
-            )
-            _db.commit()
-        finally:
-            _db.close()
-    except Exception:
-        pass
-
-
-def _db_clear(key_hash: str) -> None:
-    try:
-        from sqlalchemy import text
-
-        from backend.db.engine import SessionLocal as _SL
-
-        _db = _SL()
-        try:
-            _db.execute(text("DELETE FROM login_attempts WHERE key_hash = :k"), {"k": key_hash})
-            _db.commit()
-        finally:
-            _db.close()
-    except Exception:
-        pass
-
-
 def _get_bucket(key_hash: str) -> list[float]:
     now = time.time()
-    cached = _login_attempts.get(key_hash)
-    if cached is not None:
-        fresh = [t for t in cached if now - t < _LOCKOUT_SECONDS]
-        if len(fresh) != len(cached):
-            _login_attempts[key_hash] = fresh
-        # Refresh from DB in case another process wrote (single-process
-        # normally, but cheap and keeps restarts consistent).
-        db_vals = _db_load(key_hash)
-        if db_vals:
-            merged = sorted(set(fresh) | set(db_vals))
-            merged = [t for t in merged if now - t < _LOCKOUT_SECONDS]
-            _login_attempts[key_hash] = merged
-            return merged
-        return fresh
-    vals = _db_load(key_hash)
-    _login_attempts[key_hash] = vals
-    return vals
+    bucket = _login_attempts.get(key_hash, [])
+    fresh = [t for t in bucket if now - t < _LOCKOUT_SECONDS]
+    if len(fresh) != len(bucket):
+        _login_attempts[key_hash] = fresh
+    return fresh
 
 
 def _put_bucket(key_hash: str, times: list[float]) -> None:
     _login_attempts[key_hash] = times
-    _db_save(key_hash, times)
 
 
 def _purge_stale_attempts() -> None:
-    """Remove IPs with no recent attempts to bound memory growth."""
+    """Remove buckets with no recent attempts to bound memory growth."""
     global _last_cleanup
     now = time.time()
     if now - _last_cleanup < _CLEANUP_INTERVAL:
         return
     _last_cleanup = now
-    stale_keys = [ip for ip, times in _login_attempts.items() if not times or now - times[-1] > _LOCKOUT_SECONDS]
+    stale_keys = [k for k, times in _login_attempts.items() if not times or now - times[-1] > _LOCKOUT_SECONDS]
     for k in stale_keys:
         _login_attempts.pop(k, None)
-    # Best-effort DB purge of rows not touched within the window.
-    try:
-        from sqlalchemy import text
-
-        from backend.db.engine import SessionLocal as _SL
-
-        _db = _SL()
-        try:
-            _db.execute(
-                text("DELETE FROM login_attempts WHERE updated < :c"),
-                {"c": now - _LOCKOUT_SECONDS},
-            )
-            _db.commit()
-        finally:
-            _db.close()
-    except Exception:
-        pass
 
 
 # ── Router ───────────────────────────────────────────────────────
@@ -283,7 +176,6 @@ async def login(
         )
 
     _login_attempts.pop(user_key, None)
-    _db_clear(user_key)
     purge_expired(db)  # opportunistic cleanup of dead sessions
     raw_token = create_session(
         db,
