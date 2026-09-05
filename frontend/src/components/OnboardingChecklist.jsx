@@ -133,6 +133,9 @@ const OnboardingChecklist = () => {
   const [currentStep, setCurrentStep] = useState(0);
 
   const load = useCallback(async () => {
+    // Dismissed (e.g. mid-session): don't burn /nodes + /users polls for a
+    // checklist that renders null. Read live so no stale closure lingers.
+    try { if (localStorage.getItem('ovmanager-onboard-dismissed') === '1') return; } catch { /* private mode */ }
     try {
       // Independent counts: a failing /users/ shouldn't reset the node step
       // back to "not done" and re-open a checklist the user already finished.
