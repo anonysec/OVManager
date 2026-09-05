@@ -67,7 +67,6 @@ const UserManagement = () => {
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [lastDeleted, setLastDeleted] = useState(null);
-  const [density, setDensity] = useState(() => localStorage.getItem('ovmanager-ui-density') || 'comfort');
 
   const [sort, setSort] = useState(() => {
     try {
@@ -363,21 +362,6 @@ const UserManagement = () => {
     );
   }, [addToast, fetchUsers, t]);
 
-  const handleExportCsv = useCallback(() => {
-    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const head = ['name', 'uuid', 'status', 'used_bytes', 'total_bytes', 'max_logins', 'expiry_date', 'last_online', 'owner'];
-    const rows = filteredUsers.map((u) => [
-      u.name, u.uuid, u.is_active ? 'active' : 'inactive', u.used || 0, u.total ?? '', u.max_logins ?? '', u.expiry_date || '', u.last_online || '', u.owner || '',
-    ]);
-    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `ovmanager-users-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    addToast(t('exported', 'CSV exported'), 'success');
-  }, [filteredUsers, addToast, t]);
-
   const runBulk = useCallback(async (op, label) => {
     if (selected.size === 0) return;
     setBulkBusy(true);
@@ -508,12 +492,6 @@ const UserManagement = () => {
       <div className="view-header">
         <h2>{t('users')}</h2>
         <div className="view-header-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => { const next = density === 'comfort' ? 'compact' : 'comfort'; setDensity(next); localStorage.setItem('ovmanager-ui-density', next); }} aria-pressed={density === 'compact'}>
-            {t('density', 'Density')}: {t(density === 'compact' ? 'densityCompact' : 'densityComfort', density === 'compact' ? 'Compact' : 'Comfort')}
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleExportCsv}>
-            <FiDownload size={14} aria-hidden="true" /> {t('exportCsv')}
-          </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsAddModalOpen(true)}>
             <FiPlus size={14} aria-hidden="true" /> {t('addUser')}
           </button>
@@ -590,7 +568,7 @@ const UserManagement = () => {
       )}
 
       {isLoading && users.length === 0 ? (
-        <DataTable columns={columns} rows={[]} loading density={density} />
+        <DataTable columns={columns} rows={[]} loading />
       ) : loadError ? (
         <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={() => fetchUsers()} retryLabel={t('retry')} />
       ) : users.length === 0 ? (
@@ -635,7 +613,6 @@ const UserManagement = () => {
           total={sortedUsers.length}
           onPageChange={setPage}
           onPageSizeChange={(n) => { setPageSize(n); localStorage.setItem(PAGE_SIZE_KEY, String(n)); setPage(1); }}
-          density={density}
           caption={t('users', 'Users')}
         />
       )}

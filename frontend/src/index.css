@@ -168,26 +168,29 @@
 
 .input-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-weight: 600;
   color: var(--text-secondary);
   font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .input-group input,
 .input-group select {
   width: 100%;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   font-family: var(--font-family);
   background-color: var(--background-primary);
   color: var(--text-primary);
-  font-size: 16px;
-  transition: all 0.2s ease;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+/* Quotas/ports are typed, never spun — hide the native steppers. */
+.input-group input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.input-group input[type="number"]::-webkit-outer-spin-button,
+.input-group input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 .input-group input:focus,
 .input-group select:focus {

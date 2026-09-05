@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight,
-  FiMenu, FiList, FiBarChart2, FiDatabase,
+  FiMenu, FiList, FiBarChart2,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -124,7 +124,6 @@ const Sidebar = () => {
     navItems.push(
       { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupManage', 'Manage') },
       { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiBarChart2, group: t('navGroupSystem', 'System') },
-      { to: '/maintenance', label: t('navMaintenance', 'Maintenance'), icon: FiDatabase, group: t('navGroupSystem', 'System') },
     );
   }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus, FiDownload, FiGlobe, FiEdit2, FiTrash2, FiRefreshCw, FiEye } from 'react-icons/fi';
+import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus, FiDownload, FiEdit2, FiTrash2, FiRefreshCw, FiEye } from 'react-icons/fi';
 import NodeDrawer from '../components/NodeDrawer';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
@@ -32,7 +32,6 @@ const NodeManagement = () => {
   const closeConfirm = () => setConfirm(c => ({ ...c, open: false }));
   const [loadError, setLoadError] = useState(false);
   const [drawerNode, setDrawerNode] = useState(null);
-  const [grouped, setGrouped] = useState(() => localStorage.getItem('ovmanager-ui-node-grouped') === '1');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
@@ -40,7 +39,6 @@ const NodeManagement = () => {
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [density] = useState(() => localStorage.getItem('ovmanager-ui-density') || 'comfort');
 
   const fetchNodes = useCallback(async ({ background = false } = {}) => {
     if (!background) setIsLoading(true);
@@ -132,35 +130,18 @@ const NodeManagement = () => {
       }
     };
     arr.sort((a, b) => {
-      if (grouped) {
-        const ga = nodeMeta(a).name || '';
-        const gb = nodeMeta(b).name || '';
-        if (ga !== gb) return ga.localeCompare(gb);
-      }
       const va = val(a); const vb = val(b);
       if (va < vb) return -1 * mul;
       if (va > vb) return 1 * mul;
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
     return arr;
-  }, [filteredNodes, sort, grouped]);
+  }, [filteredNodes, sort]);
 
   const pagedNodes = useMemo(() => {
-    if (grouped) return sortedNodes;
     const start = (page - 1) * pageSize;
     return sortedNodes.slice(start, start + pageSize);
-  }, [sortedNodes, page, pageSize, grouped]);
-
-  const groupedSections = useMemo(() => {
-    if (!grouped) return null;
-    const map = new Map();
-    for (const n of sortedNodes) {
-      const country = nodeMeta(n).name || t('unknown', 'Unknown');
-      if (!map.has(country)) map.set(country, []);
-      map.get(country).push(n);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [grouped, sortedNodes, t]);
+  }, [sortedNodes, page, pageSize]);
 
   const onSort = useCallback((key) => {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
@@ -250,19 +231,6 @@ const NodeManagement = () => {
     setIsAddModalOpen(false);
     addToast(t('nodeCreatedSuccess'), 'success');
     fetchNodes();
-  };
-
-  const handleExportCsv = () => {
-    const esc = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const head = ['id', 'name', 'address', 'port', 'protocol', 'ovpn_port', 'status', 'country'];
-    const rows = filteredNodes.map(n => [n.id, n.name, n.address, n.port, n.protocol, n.ovpn_port, n.status ? 'active' : 'inactive', nodeMeta(n).name || n.country_code || '']);
-    const csv = [head, ...rows].map(r => r.map(esc).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `ovmanager-nodes-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    addToast(t('exported'), 'success');
   };
 
   const handleNodeUpdated = (msg) => {
@@ -365,7 +333,6 @@ const NodeManagement = () => {
         return next;
       });
     },
-    density,
   };
 
   return (
@@ -373,12 +340,6 @@ const NodeManagement = () => {
       <div className="view-header">
         <h2>{t('nodes')}</h2>
         <div className="view-header-actions">
-          <button type="button" className={`btn btn-secondary btn-sm${grouped ? ' btn-active' : ''}`} aria-pressed={grouped} onClick={() => { setGrouped(!grouped); localStorage.setItem('ovmanager-ui-node-grouped', grouped ? '0' : '1'); }} title={t('groupByCountry')}>
-            <FiGlobe aria-hidden="true" /> {t('groupByCountry', 'Group')}
-          </button>
-          <button type="button" onClick={handleExportCsv} className="btn btn-secondary btn-sm" aria-label={t('exportCsv')}>
-            <FiDownload aria-hidden="true" /> {t('exportCsv', 'CSV')}
-          </button>
           <button type="button" onClick={() => setIsAddModalOpen(true)} className="btn btn-primary btn-sm">
             <FiPlus aria-hidden="true" />
             <span>{t('addNewNode')}</span>
@@ -457,7 +418,7 @@ const NodeManagement = () => {
       )}
 
       {isLoading ? (
-        <DataTable columns={columns} rows={[]} loading density={density} />
+        <DataTable columns={columns} rows={[]} loading />
       ) : loadError ? (
         <ErrorState title={t('loadError')} message={t('loadErrorDetail')} onRetry={() => fetchNodes()} retryLabel={t('retry')} />
       ) : nodes.length === 0 ? (
@@ -469,15 +430,6 @@ const NodeManagement = () => {
           actionLabel={t('clearFilters', 'Clear filters')}
           onAction={() => { setSearchTerm(''); setStatusFilter('all'); }}
         />
-      ) : grouped ? (
-        <div className="dt-grouped">
-          {groupedSections.map(([country, list]) => (
-            <section key={country} aria-label={country} style={{ marginBottom: 16 }}>
-              <h3 className="dt-group-title">{country} <span className="count">{list.length}</span></h3>
-              <DataTable columns={columns} rows={list} rowKey={(r) => String(r.id)} {...tableProps} page={1} pageSize={list.length} total={list.length} onPageChange={null} />
-            </section>
-          ))}
-        </div>
       ) : (
         <DataTable
           columns={columns}

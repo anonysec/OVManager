@@ -26,6 +26,27 @@ _GEO_CACHE_MISSES = 0
 # Timeout for geolocation requests
 _TIMEOUT = 5.0
 
+# One silent retry — ip-api.com free tier rate-limits (429) and the node
+# add/edit path must not persist a failure as if it were a location.
+_MAX_ATTEMPTS = 2
+
+
+def _valid_result(data: dict) -> dict | None:
+    """Validate an ip-api payload; return the normalized dict or None."""
+    if not isinstance(data, dict) or data.get("status") != "success":
+        return None
+    code = str(data.get("countryCode") or "").strip().upper()
+    if len(code) not in (2, 3) or not code.isalpha():
+        return None
+    try:
+        lat = float(data.get("lat"))
+        lon = float(data.get("lon"))
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return {"country_code": code, "latitude": lat, "longitude": lon}
+
 
 def _extract_host(address: str) -> str | None:
     """Extract a hostname/IP from hostnames, URLs, host:port, and IPv6 input."""
@@ -86,22 +107,25 @@ def geolocate(address: str) -> dict | None:
     if not ip:
         return None
 
-    try:
-        resp = httpx2.get(
-            f"https://ip-api.com/json/{ip}",
-            timeout=_TIMEOUT,
-            params={"fields": "status,countryCode,lat,lon"},
-        )
-        data = resp.json()
-        if data.get("status") == "success":
-            result = {
-                "country_code": data.get("countryCode", ""),
-                "latitude": data.get("lat", 0.0),
-                "longitude": data.get("lon", 0.0),
-            }
-            _geo_cache[host] = {"data": result, "_ts": _time.time()}
-            return result
-    except Exception as e:
-        logger.error("Geolocation failed for %s: %s", host, e)
+    last_error = None
+    for _ in range(_MAX_ATTEMPTS):
+        try:
+            # NOTE: plain HTTP on purpose — ip-api.com's free tier answers
+            # 403 "SSL unavailable" on HTTPS. No secret crosses the wire
+            # (just the public server IP being asked about).
+            resp = httpx2.get(
+                f"http://ip-api.com/json/{ip}",
+                timeout=_TIMEOUT,
+                params={"fields": "status,message,countryCode,lat,lon"},
+            )
+            result = _valid_result(resp.json())
+            if result:
+                _geo_cache[host] = {"data": result, "_ts": _time.time()}
+                return result
+            last_error = "lookup returned no usable location"
+            break  # well-formed "fail" response (e.g. private IP) — no retry
+        except Exception as e:
+            last_error = e
+    logger.warning("Geolocation failed for %s: %s", host, last_error)
 
     return None

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
-import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiGlobe, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
+import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
 import { daysUntil } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
@@ -353,16 +353,15 @@ const ServerStats = () => {
     <div className="ds-page">
       <div className="ds-header">
         <div className="ds-header-copy">
-          <span className="ds-eyebrow">
+          <h1>{t('operationalOverview', 'Operations')}</h1>
+          <p className="ds-live">
             <span className="ds-live-dot" aria-hidden="true" />
             <span>{t('liveOperations', 'Live operations')}</span>
             <span className="ds-updated" aria-live="polite">
               · {t('updatedAt', 'Updated')} {fmtUpdated(lastUpdated)}
               {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale — refresh failed')}</span>}
             </span>
-          </span>
-          <h1>{t('operationalOverview', 'Operations')}</h1>
-          <p>{t('dashboardIntro', 'Real-time view of your network.')}</p>
+          </p>
         </div>
         <div className="ds-header-actions">
           <button type="button" className="btn btn-sm" onClick={() => navigate('/users?add=1')}>
@@ -388,7 +387,6 @@ const ServerStats = () => {
             value={probesPending ? '—' : activeConnections.toLocaleString()}
             animate={probesPending ? undefined : activeConnections}
             spark={trafficSeries.conns}
-            accent="var(--info)"
             to="/users?view=online"
             sub={t('heroConnsSub', '{{count}} sessions live', { count: probesPending ? 0 : activeConnections })}
           />
@@ -399,7 +397,6 @@ const ServerStats = () => {
             animate={errors.users ? undefined : totalUsed}
             format={formatBytes}
             spark={trafficSeries.bytes}
-            accent="var(--accent)"
             sub={t('heroTrafficSub', 'All users combined')}
           />
           <KpiCard
@@ -407,7 +404,6 @@ const ServerStats = () => {
             label={t('onlineNodes', 'Nodes online')}
             value={probesPending ? '—' : `${onlineNodes}/${nodes?.length || 0}`}
             tone={offlineNodes ? 'warn' : 'ok'}
-            accent="var(--success)"
             to="/nodes"
             sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
           />
@@ -416,7 +412,6 @@ const ServerStats = () => {
             label={t('onlineUsers', 'Users online')}
             value={String(onlineTotal)}
             tone={onlineTotal ? 'ok' : null}
-            accent="var(--info)"
             to={attentionUsers.length ? '/users' : '/users?view=online'}
             sub={attentionUsers.length ? t('heroUsersWarn', '{{count}} need attention', { count: attentionUsers.length }) : t('heroUsersOk', 'Nobody waiting')}
           />
@@ -461,7 +456,6 @@ const ServerStats = () => {
             <section className="ds-card">
               <div className="ds-card-head">
                 <h3 className="ds-card-title">
-                  <span className="ds-card-title-icon" aria-hidden="true"><FiUsers size={14} /></span>
                   {t('users', 'Users')}
                 </h3>
                 <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate(userTab === 'attention' ? '/users' : '/users?view=online')}>
@@ -532,10 +526,9 @@ const ServerStats = () => {
 
           <section className="ds-card">
             <div className="ds-card-head">
-              <h3 className="ds-card-title">
-                <span className="ds-card-title-icon" aria-hidden="true"><FiGlobe size={14} /></span>
-                {t('nodeMap', 'Nodes')}
-              </h3>
+                <h3 className="ds-card-title">
+                  {t('nodeMap', 'Nodes')}
+                </h3>
               <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes')}>
                 {t('viewAll', 'View all')}
               </button>

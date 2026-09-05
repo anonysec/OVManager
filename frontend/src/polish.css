@@ -61,26 +61,19 @@
   color: var(--text-secondary);
 }
 
+/* Inner logo chip: must stay INSIDE the 76px .login-status-orbit circle
+   (60px on mobile) — the old 96px size overflowed the ring and read as a
+   second, bigger orange circle around the main one. */
 .login-status-orbit--vector {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 96px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background: var(--accent-soft);
   border: 1px solid var(--accent-border);
-}
-
-.login-status-orbit--vector {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -3,15 +3,16 @@ import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import LoadingButton from './LoadingButton';
 import Modal from './Modal';
+import { CODES } from '../utils/geo';
 
-const parseBundle = (raw) => {
+const parseBundle = (raw, t) => {
   // ovnode://<name>@<host>:<port>?key=<APIKEY>&tls=0|1  (printed by the node installer)
   const m = String(raw || '').trim().match(/^ovnode:\/\/([^@]+)@([^:/?#]+)(?::(\d+))?\?([^#]*)$/);
-  if (!m) return { error: 'That does not look like a node bundle (ovnode://name@host:port?key=…&tls=…).' };
+  if (!m) return { error: t('nodeBundleInvalid') };
   const [, name, address, port, query] = m;
   const params = new URLSearchParams(query);
   const key = params.get('key') || '';
-  if (!name || !address || !key) return { error: 'Bundle is missing the name, address or key.' };
+  if (!name || !address || !key) return { error: t('nodeBundleMissing') };
   return {
     values: {
       name,
@@ -26,6 +27,7 @@ const parseBundle = (raw) => {
 const BLANK = {
   name: '', address: '', tunnel_address: '', protocol: 'tcp',
   ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: true,
+  country_code: '',
 };
 
 // Unified add/edit node form. mode="create" (node=null) or mode="edit".
@@ -50,6 +52,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
         key: '', status: node.status === 'active' || node.status === true,
         set_new_setting: false, // metadata edits must not require the node to be online
         use_tls: node.use_tls === true,
+        country_code: node.country_code || '',
       });
     } else if (!isEdit) {
       setFormData(BLANK);
@@ -67,7 +70,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
   };
 
   const applyBundle = () => {
-    const parsed = parseBundle(bundle);
+    const parsed = parseBundle(bundle, t);
     if (parsed.error) {
       setBundleError(parsed.error);
       return;
@@ -82,6 +85,8 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       ...formData,
       ovpn_port: Number(formData.ovpn_port),
       port: Number(formData.port),
+      // Blank = auto-detect; the API rejects "" (pattern), so send null.
+      country_code: (formData.country_code || '').trim() || null,
     };
     if (isEdit) {
       payload.status = Boolean(formData.status);
@@ -109,7 +114,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       const response = await apiClient.post('/nodes/test', buildPayload());
       setTestResult({ ok: !!response.data.success, msg: response.data.msg || '' });
     } catch (err) {
-      setTestResult({ ok: false, msg: requestError(err, 'Test failed — is the panel itself reachable?') });
+      setTestResult({ ok: false, msg: requestError(err, t('nodeTestFailed')) });
     } finally {
       setIsTesting(false);
     }
@@ -126,10 +131,10 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       if (response.data.success) {
         onSaved(response.data.msg);
       } else {
-        setError(response.data.msg || (isEdit ? 'Unable to update node.' : 'Unable to create node.'));
+        setError(response.data.msg || t(isEdit ? 'nodeUpdateFailed' : 'nodeCreateFailed'));
       }
     } catch (err) {
-      setError(requestError(err, isEdit ? 'An error occurred while updating the node.' : 'An error occurred while creating the node.'));
+      setError(requestError(err, t(isEdit ? 'nodeUpdateFailed' : 'nodeCreateFailed')));
     } finally {
       setIsLoading(false);
     }
@@ -138,46 +143,52 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
   const idp = (s) => `${isEdit ? 'edit' : 'new'}-${s}`;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? t('modal_editNodeTitle', 'Edit Node') : t('modal_createNodeTitle')} size="large">
+    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('modal_editNodeTitle', 'Edit Node')} — ${node?.name || ''}` : t('modal_createNodeTitle')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
         {!isEdit && (
-          <div className="input-group" style={{ gridColumn: '1 / -1' }}>
-            <label htmlFor="node-bundle">{t('nodeBundleLabel', 'Quick setup — paste node bundle')}</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <>
+            <p className="modal-section-title">{t('nodeSectionQuick', 'Quick setup')}</p>
+            <div className="input-group">
+              <label htmlFor="node-bundle">{t('nodeBundleLabel', 'Paste node bundle')}</label>
+            <div className="shortcut-row">
               <input
                 type="text"
                 id="node-bundle"
                 value={bundle}
                 onChange={(e) => setBundle(e.target.value)}
                 placeholder={t('nodeBundlePlaceholder', 'ovnode://node-1@203.0.113.10:2083?key=…&tls=1')}
-                style={{ flex: 1 }}
+                className="shortcut-input"
                 spellCheck={false}
               />
-              <button type="button" onClick={applyBundle} className="btn btn-secondary">
-                {t('nodeBundleApply', 'Fill fields')}
-              </button>
+              <div className="shortcut-btns">
+                <button type="button" onClick={applyBundle} className="btn btn-secondary btn-sm">
+                  {t('nodeBundleApply', 'Fill fields')}
+                </button>
+              </div>
             </div>
             <span className="input-hint">
               {t('nodeBundleHint', 'Printed by the node installer (“Bundle”) and its --json output. Fills every field below.')}
             </span>
-            {bundleError && <p className="error-message">{bundleError}</p>}
-          </div>
+            {bundleError && <p className="modal-error" role="alert">{bundleError}</p>}
+            </div>
+          </>
         )}
+        <p className="modal-section-title">{t('nodeSectionConnection', 'Connection')}</p>
         <div className="modal-grid">
           <div className="input-group">
             <label htmlFor={idp('name')}>{t('nodeName')}</label>
-            <input type="text" id={idp('name')} name="name" value={formData.name} onChange={handleChange} required
-              title={isEdit ? undefined : t('nodeNameHint', 'Must match the --name given to the node installer, exactly.')} />
+            <input type="text" id={idp('name')} name="name" value={formData.name} onChange={handleChange} required />
+            {!isEdit && <span className="input-hint">{t('nodeNameHint', 'Must match the --name given to the node installer, exactly.')}</span>}
           </div>
           <div className="input-group">
             <label htmlFor={idp('address')}>{t('th_address')}</label>
-            <input type="text" id={idp('address')} name="address" value={formData.address} onChange={handleChange} required
-              title={isEdit ? undefined : t('nodeAddressHint', 'Public IP or hostname of the node server — not the 1194 VPN port.')} />
+            <input type="text" id={idp('address')} name="address" value={formData.address} onChange={handleChange} required />
+            {!isEdit && <span className="input-hint">{t('nodeAddressHint', 'Public IP or hostname of the node server.')}</span>}
           </div>
           <div className="input-group">
             <label htmlFor={idp('port')}>{t('nodePort')}</label>
-            <input type="number" id={idp('port')} name="port" value={formData.port} onChange={handleChange} required
-              title={isEdit ? undefined : t('nodePortHint', 'Sync API port (2083 default) — not the OpenVPN port.')} />
+            <input type="number" id={idp('port')} name="port" value={formData.port} onChange={handleChange} required />
+            {!isEdit && <span className="input-hint">{t('nodePortHint', 'Sync API port (2083 default) — not the OpenVPN port.')}</span>}
           </div>
           <div className="input-group">
             <label htmlFor={idp('tunnel_address')}>{t('tunnelAddress')} <span className="input-hint">({t('optional', 'Optional')})</span></label>
@@ -193,6 +204,18 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
           <div className="input-group">
             <label htmlFor={idp('ovpn_port')}>{t('ovpnPort')}</label>
             <input type="number" id={idp('ovpn_port')} name="ovpn_port" value={formData.ovpn_port} onChange={handleChange} required />
+          </div>
+          <div className="input-group">
+            <label htmlFor={idp('country_code')}>{t('nodeCountry', 'Country')}</label>
+            <select id={idp('country_code')} name="country_code" value={formData.country_code} onChange={handleChange}>
+              <option value="">{t('nodeCountryAuto', 'Auto-detect from IP')}</option>
+              {Object.entries(CODES).map(([code, entry]) => (
+                <option key={code} value={code}>{entry.name}</option>
+              ))}
+            </select>
+            <span className="input-hint">
+              {t('nodeCountryHint', 'Leave on auto-detect unless the lookup is wrong — a manual pick always wins.')}
+            </span>
           </div>
           <div className="input-group" style={{ gridColumn: '1 / -1' }}>
             <label htmlFor={idp('key')}>{t('key')}</label>
@@ -213,21 +236,20 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
               </span>
             </label>
           ) : (
-            <div className="input-group checkbox-group" style={{ gridColumn: '1 / -1' }}>
-              <label htmlFor="node-use_tls">
-                <input type="checkbox" id="node-use_tls" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
-                {' '}{t('nodeUseTls', 'Use TLS (https)')}
-              </label>
-              <span className="input-hint">
-                {t('nodeUseTlsHint', 'On when the node used self-signed or Let’s Encrypt; off only when the node used TLS None.')}
+            <label className="modal-check-row" style={{ gridColumn: '1 / -1' }} htmlFor="node-use_tls">
+              <input type="checkbox" id="node-use_tls" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
+              <span>
+                {t('nodeUseTls', 'Use TLS (https)')}
+                <small>{t('nodeUseTlsHint', 'On when the node used self-signed or Let’s Encrypt; off only when the node used TLS None.')}</small>
               </span>
-            </div>
+            </label>
           )}
         </div>
 
         {testResult && (
-          <p className={testResult.ok ? 'success-message' : 'error-message'} role="status">{testResult.msg}</p>
+          <p className={testResult.ok ? 'success-message' : 'modal-error'} role="status">{testResult.msg}</p>
         )}
+        {error && <p className="modal-error" role="alert">{error}</p>}
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           {!isEdit && (
@@ -239,7 +261,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
             {isEdit ? t('updateNodeButton', 'Update Node') : t('createNodeButton')}
           </LoadingButton>
         </div>
-        {error && <p className="error-message">{error}</p>}
       </form>
     </Modal>
   );
