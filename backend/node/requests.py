@@ -126,9 +126,11 @@ class NodeRequests:
             self._request("put", "/sync/user/limit", json={"id": uid, "max_logins": max_logins}, timeout=LONG_TIMEOUT) is not None
         )
 
-    def disconnect_user(self, uid: str) -> dict:
+    def disconnect_user(self, uid: str, only_stale: bool = False) -> dict:
         # First call runs two full diagnostics (journal + mgmt probes).
-        r = self._request("post", f"/sync/user/{uid}/disconnect", timeout=LONG_TIMEOUT)
+        # only_stale cleans dead markers without touching live sessions.
+        kw = {"params": {"only_stale": "true"}} if only_stale else {}
+        r = self._request("post", f"/sync/user/{uid}/disconnect", timeout=LONG_TIMEOUT, **kw)
         return (r or {}).get("data", {})
 
     # ── OVPN download ────────────────────────────────────────────
