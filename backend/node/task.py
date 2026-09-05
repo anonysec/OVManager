@@ -29,7 +29,6 @@ from .ops import (
     update_node_handler,
 )
 from .sync import (
-    clean_global_mlogin_registry,
     clean_stale_sessions_all_nodes,
     get_users_used_traffic,
     sync_all_user_limits,
@@ -50,7 +49,6 @@ __all__ = [
     "get_users_used_traffic",
     "sync_all_user_limits",
     "clean_stale_sessions_all_nodes",
-    "clean_global_mlogin_registry",
     "get_active_connection_counts",
     "get_user_session_diagnostics",
     "disconnect_user_on_all_nodes",

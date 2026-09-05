@@ -17,7 +17,6 @@ from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
 from backend.db.engine import engine, get_db
 from backend.node.task import (
-    clean_global_mlogin_registry,
     clean_stale_sessions_all_nodes,
     login_diagnostics,
     login_health_summary,
@@ -341,13 +340,11 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
 
 @router.post("/clean-global-registry", response_model=ResponseModel)
 async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    data = await clean_global_mlogin_registry(db)
-    log_event(
-        db,
-        "maintenance.clean_global_registry",
-        actor=user.get("username"),
-        detail=f"removed={len(data.get('removed') or [])}",
-    )
+    # Retired: the panel-side registry was never written to, so there is
+    # nothing to clean. Endpoint kept (UI button + old scripts call it);
+    # shape kept ({removed: []}) so callers don't break.
+    data = {"removed": [], "message": "registry retired — live sessions are authoritative"}
+    log_event(db, "maintenance.clean_global_registry", actor=user.get("username"), detail="removed=0 (retired)")
     return ResponseModel(success=True, msg="Global login registry cleaned", data=data)
 
 
