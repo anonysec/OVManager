@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
@@ -15,7 +15,7 @@ import useInlineEditFocus from './useInlineEditFocus';
 /* ═══════════════════════════════════════════════════════
    GENERAL (advanced) — Panel URL path + subscription prefix
 ═══════════════════════════════════════════════════════ */
-const GeneralSection = () => {
+const GeneralSection = ({ shared }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [urlPath, setUrlPath] = useState('');
@@ -24,12 +24,14 @@ const GeneralSection = () => {
   const [confirmSaved, setConfirmSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [subPrefix, setSubPrefix] = useState('');
   const [subPrefixEditing, setSubPrefixEditing] = useState(false);
   const [subPrefixValue, setSubPrefixValue] = useState('');
   const [subPrefixSaving, setSubPrefixSaving] = useState(false);
+  const loading = shared?.loading ?? true;
+  const loadError = shared?.error ?? false;
+  const load = shared?.reload ?? (() => {});
+  const synced = useRef(false);
   const urlInputRef = useRef(null);
   const urlTriggerRef = useRef(null);
   const subInputRef = useRef(null);
@@ -37,18 +39,14 @@ const GeneralSection = () => {
   useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
   useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(false);
-      const res = await apiClient.get('/server/settings');
-      const s = res.data?.data || {};
-      setUrlPath(s.urlpath || '');
-      setSubPrefix(s.subscription_url_prefix || '');
-    } catch { setLoadError(true); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  // Mount-only sync (as before — no refreshTick revalidation here).
+  useEffect(() => {
+    const s = shared?.data;
+    if (!s || synced.current) return;
+    synced.current = true;
+    setUrlPath(s.urlpath || '');
+    setSubPrefix(s.subscription_url_prefix || '');
+  }, [shared]);
 
   const saveUrlPath = async () => {
     setSaving(true); setError('');

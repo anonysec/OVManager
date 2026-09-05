@@ -1,10 +1,9 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
-import { useLive } from '../../context/LiveContext';
 import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
 import PanelSkeleton from '../../components/ui/PanelSkeleton';
@@ -14,31 +13,26 @@ import { Card, Field } from './shared';
 
 /* ═══════════════════════════════════════════════════════
    DEFAULTS — new user defaults (used by the Telegram bot)
+   Values come from the root's shared /server/settings load.
 ═══════════════════════════════════════════════════════ */
-const DefaultsSection = () => {
+const DefaultsSection = ({ shared }) => {
   const { t } = useTranslation();
-  const { refreshTick } = useLive();
   const { addToast } = useToast();
   const [days, setDays] = useState(30);
   const [trafficGb, setTrafficGb] = useState(100);
   const [devices, setDevices] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const loading = shared?.loading ?? true;
+  const loadError = shared?.error ?? false;
+  const load = shared?.reload ?? (() => {});
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(false);
-      const res = await apiClient.get('/server/settings');
-      const s = res.data?.data || {};
-      setDays(Number(s.default_days) || 30);
-      setTrafficGb(Number(s.default_traffic_gb) || 100);
-      setDevices(Number(s.default_max_users) || 1);
-    } catch { setLoadError(true); } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load, refreshTick]);
+  useEffect(() => {
+    const s = shared?.data;
+    if (!s) return;
+    setDays(Number(s.default_days) || 30);
+    setTrafficGb(Number(s.default_traffic_gb) || 100);
+    setDevices(Number(s.default_max_users) || 1);
+  }, [shared]);
 
   const save = async () => {
     setSaving(true);

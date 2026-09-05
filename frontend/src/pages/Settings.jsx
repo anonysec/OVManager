@@ -16,9 +16,11 @@
  * scrolls the matching <section> into view. Previously the hash was ignored
  * and the page reset to the top.
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useLive } from '../context/LiveContext';
+import apiClient from '../services/api';
 import {
   FiServer, FiShield, FiArchive, FiSend, FiActivity,
   FiLink, FiUserPlus, FiClock, FiMonitor, FiBell,
@@ -52,6 +54,22 @@ const SECTIONS = [
 const Settings = () => {
   const { t } = useTranslation();
   const location = useLocation();
+  const { refreshTick } = useLive();
+
+  // Single shared load of /server/settings for the sections that need it
+  // (Defaults/Bot/Display/General). Previously each one fetched it on mount
+  // and on every live tick — same data, N requests. Saves live on the wire;
+  // each section keeps its own skeleton/error/retry visuals.
+  const [shared, setShared] = useState({ data: null, loading: true, error: false });
+  const reloadShared = useCallback(async () => {
+    try {
+      setShared((s) => ({ ...s, loading: true, error: false }));
+      const res = await apiClient.get('/server/settings');
+      setShared({ data: res.data?.data || {}, loading: false, error: false });
+    } catch { setShared((s) => ({ ...s, loading: false, error: true })); }
+  }, []);
+
+  useEffect(() => { reloadShared(); }, [reloadShared, refreshTick]);
 
   // All sections always visible — no Simple/Advanced split
   const visible = useMemo(() => SECTIONS, []);
@@ -94,6 +112,8 @@ const Settings = () => {
       <div className="sp-sections">
         {visible.map((sec) => {
           const Component = sec.Component;
+          // Sections that read server settings share the single load above.
+          const sharedProp = ['defaults', 'bot', 'display', 'general'].includes(sec.id) ? { shared } : {};
           return (
             <section key={sec.id} className="sp-section" id={`sp-section-${sec.id}`} tabIndex={-1} aria-labelledby={`sp-heading-${sec.id}`}>
               <SectionHeader
@@ -102,7 +122,7 @@ const Settings = () => {
                 label={t(sec.labelKey, sec.label)}
                 description={t(sec.descKey, sec.desc)}
               />
-              <Component />
+              <Component {...sharedProp} />
             </section>
           );
         })}
