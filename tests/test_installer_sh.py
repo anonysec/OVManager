@@ -177,3 +177,10 @@ def test_docker_data_dir_and_perms_are_container_safe():
     assert 'chown -R 1000:1000 "$DATA_DIR"' in content
     assert "chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem" in content
     assert '>/dev/stderr' in content  # build output must not pollute --json stdout
+
+
+def test_repo_override_for_forks():
+    """OVM_REPO redirects source downloads/update pulls to a fork."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'REPO="${OVM_REPO:-anonysec/OVManager}"' in content
