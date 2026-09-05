@@ -11,7 +11,6 @@ import asyncio
 import datetime
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.db import crud
@@ -245,33 +244,9 @@ async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
     health = await login_health_summary(db, hours=hours)
     health_row = next((u for u in health.get("users", []) if u.get("name") == name), None)
 
-    registry = []
-    try:
-        rows = db.execute(
-            text(
-                "SELECT username, common_name, node_name, session_key, trusted_ip, trusted_port, "
-                "pool_ip, created_at, updated_at "
-                "FROM global_mlogin_sessions WHERE username = :username ORDER BY updated_at DESC"
-            ),
-            {"username": name},
-        ).fetchall()
-        for r in rows:
-            registry.append(
-                {
-                    "username": r[0],
-                    "common_name": r[1],
-                    "node_name": r[2],
-                    "session_key": r[3],
-                    "trusted_ip": r[4],
-                    "trusted_port": r[5],
-                    "pool_ip": r[6],
-                    "created_at": r[7],
-                    "updated_at": r[8],
-                    "created_at_utc": datetime.datetime.utcfromtimestamp(float(r[7] or 0)).isoformat() if r[7] else None,
-                }
-            )
-    except Exception:
-        registry = []
+    # Retired: global_mlogin_sessions was never written to, so the registry
+    # read always returned []. Kept as an empty list for response shape.
+    registry: list = []
 
     used = user.used or 0
     policy = []

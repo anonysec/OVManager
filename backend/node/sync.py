@@ -9,15 +9,12 @@ reconciliation.
 """
 
 import asyncio
-import time
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.db import crud
 from backend.db.models import Node
-from backend.logger import logger
 from backend.node.requests import NodeRequests
 
 
@@ -118,73 +115,3 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
         else:
             results.append(item)
     return {"nodes": results, "removed_total": sum(len(r.get("removed") or []) for r in results)}
-
-
-async def clean_global_mlogin_registry(db: Session, grace_seconds: int = 30) -> dict:
-    """Clean stale panel-side global_mlogin_sessions rows."""
-    nodes = crud.get_all_nodes(db)
-    live_keys: set[tuple[str, str, str, str]] = set()
-    reachable_nodes: set[str] = set()
-
-    def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
-        data = req.get_sessions(hours=1)
-        return node, data if isinstance(data, dict) else {}
-
-    raw = await asyncio.gather(*[run_in_threadpool(work, n) for n in nodes], return_exceptions=True)
-    for item in raw:
-        if isinstance(item, Exception):
-            logger.warning("global registry cleanup: node failed: %s", item)
-            continue
-        node_data, data = item
-        if not data:
-            continue
-        reachable_nodes.add(node_data.name)
-        for sess in data.get("live_sessions") or []:
-            live_keys.add(
-                (
-                    node_data.name,
-                    str(sess.get("common_name") or ""),
-                    str(sess.get("trusted_ip") or ""),
-                    str(sess.get("trusted_port") or ""),
-                )
-            )
-
-    try:
-        rows = db.execute(
-            text("SELECT id, username, common_name, node_name, trusted_ip, trusted_port, created_at FROM global_mlogin_sessions")
-        ).fetchall()
-    except Exception:
-        return {"reachable_nodes": sorted(reachable_nodes), "removed": [], "kept": [], "message": "registry table missing"}
-
-    now = time.time()
-    removed = []
-    kept_count = 0
-    for row in rows:
-        key = (str(row[3] or ""), str(row[2] or ""), str(row[4] or ""), str(row[5] or ""))
-        node_name = key[0]
-        if node_name not in reachable_nodes:
-            kept_count += 1
-            continue
-        if float(row[6] or 0) > now - int(grace_seconds or 30):
-            kept_count += 1
-            continue
-        if key not in live_keys:
-            db.execute(text("DELETE FROM global_mlogin_sessions WHERE id = :id"), {"id": row[0]})
-            removed.append(
-                {
-                    "id": row[0],
-                    "username": row[1],
-                    "common_name": row[2],
-                    "node": row[3],
-                    "trusted_ip": row[4],
-                    "trusted_port": row[5],
-                }
-            )
-    db.commit()
-    return {
-        "reachable_nodes": sorted(reachable_nodes),
-        "removed": removed,
-        "kept_count": kept_count,
-        "live_count": len(live_keys),
-    }
