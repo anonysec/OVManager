@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 — 2026-09-05
+
+- Tests: multi-node failure degradation (dead node, real refused sockets).
+- Perf: single shared `/server/settings` load for 4 sections (was 4,
+  vision-verified pixel-identical).
+- Docs: badges, compat matrix, acceptable-use note, `OVM_REPO` fork override.
+
 ## 2.0.0 — 2026-09-05
 
 Panel `2.x` requires node `>= 2.0`.
