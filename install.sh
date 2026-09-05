@@ -13,7 +13,8 @@
 #
 set -Eeuo pipefail
 
-REPO="anonysec/OVManager"
+# Forks: point source downloads (and update pulls) at your own repo.
+REPO="${OVM_REPO:-anonysec/OVManager}"
 BRANCH="main"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"

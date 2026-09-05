@@ -1,6 +1,22 @@
 # OVManager
 
+[![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)](CHANGELOG.md)
+
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
+
+| Panel | Node | Status |
+| ----- | ---- | ------ |
+| 2.x   | ≥ 2.0 | supported (sync API contract) |
+| 1.x   | 1.x  | legacy, upgrade both together |
+
+## Acceptable use
+
+You operate the VPN: abuse complaints (spam, scanning, copyright) go to
+**you**, not to this project. Enforce per-user traffic quotas and expiry,
+watch Security → Authentication Summary, disable abusers promptly, and
+respect your provider's ToS and local law.
 
 ## Quickstart (beginners start here)
 
@@ -46,6 +62,10 @@ Useful flags: `--port 2095` `--path dash` (or `--path root` for `/`) `--tls-self
 `--tls-le example.com` `--dry-run`. Same values can be set with `OVM_MODE`,
 `OVM_PORT`, `OVM_PATH`, `OVM_ADMIN_USER`, `OVM_ADMIN_PASS`, `OVM_TLS`.
 `CI=true` implies `--yes`. Run the script with `--help` for the full list.
+
+Forks: `OVM_REPO=myorg/OVManager` points source downloads and update
+pulls at your own repo (the `anonysec.github.io` one-liner keeps working
+from your fork's Pages).
 
 If `--admin-pass` is omitted under `-y`, a password is generated and printed
 (and included in `--json`).
