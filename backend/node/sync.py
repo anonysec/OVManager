@@ -27,15 +27,27 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
     return await run_in_threadpool(nr.get_usage) or {}
 
 
+# Last successfully pushed (node_id, user_id) -> max_logins. The 30-minute
+# sweep then skips pairs that already hold the value instead of pushing
+# nodes×users limits every tick. Failures stay dirty and are retried; only
+# successful pushes update the cache. Single process + one scheduler slot,
+# so no locking is needed.
+_last_pushed_limits: dict[tuple[int, int], int] = {}
+
+
 async def sync_all_user_limits(db: Session) -> dict:
-    """Push every user's max_login limit to every reachable node.
+    """Push changed max_login limits to every reachable node.
 
     Offline nodes (status=False) are skipped — pushing to them only burns
     timeouts every 30 minutes. They re-sync on next successful contact
     (add/update flows) or via the manual maintenance sync-limits endpoint.
     """
+    global _last_pushed_limits
     users = crud.get_all_users(db)
     nodes = crud.get_active_nodes(db)
+    desired = {(n.id, u.id): int(u.max_logins or 0) for n in nodes for u in users}
+    todo = [(n, u) for n in nodes for u in users if _last_pushed_limits.get((n.id, u.id)) != int(u.max_logins or 0)]
+    skipped = len(desired) - len(todo)
     results = []
     _semaphore = asyncio.Semaphore(20)
 
@@ -55,14 +67,27 @@ async def sync_all_user_limits(db: Session) -> dict:
         async with _semaphore:
             return await run_in_threadpool(work, node, user)
 
-    tasks = [bounded_work(n, u) for n in nodes for u in users]
+    tasks = [bounded_work(n, u) for n, u in todo]
     raw = await asyncio.gather(*tasks, return_exceptions=True)
     for item in raw:
         if isinstance(item, Exception):
             results.append({"success": False, "error": str(item)})
         else:
             results.append(item)
-    return {"total": len(results), "success": sum(1 for r in results if r.get("success")), "results": results}
+    # Refresh the cache from successes only (gather preserves task order, so
+    # results line up with todo); failures stay dirty for the next sweep.
+    # Pairs absent from desired (deleted users/nodes) drop out.
+    kept = {pair: val for pair, val in _last_pushed_limits.items() if pair in desired and desired[pair] == val}
+    for (n, u), item in zip(todo, raw, strict=True):
+        if not isinstance(item, Exception) and item.get("success"):
+            kept[(n.id, u.id)] = desired[(n.id, u.id)]
+    _last_pushed_limits = kept
+    return {
+        "total": len(results),
+        "success": sum(1 for r in results if r.get("success")),
+        "skipped": skipped,
+        "results": results,
+    }
 
 
 async def clean_stale_sessions_all_nodes(db: Session) -> dict:

@@ -327,7 +327,7 @@ async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(requir
         db,
         "maintenance.sync_limits",
         actor=user.get("username"),
-        detail=f"{data.get('success')}/{data.get('total')} synced",
+        detail=f"{data.get('success')}/{data.get('total')} synced, {data.get('skipped', 0)} unchanged",
     )
     return ResponseModel(success=True, msg="Login limits synced", data=data)
 
