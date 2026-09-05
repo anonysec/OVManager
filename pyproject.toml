@@ -34,7 +34,6 @@ dependencies = [
     # it emits a StarletteDeprecationWarning, which fails the test run because
     # pytest is configured with filterwarnings = ["error"].
     "httpx2>=0.0.4",
-    "werkzeug>=3.1.8",
 ]
 
 [tool.setuptools.packages.find]

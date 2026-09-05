@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import text as _text
 from sqlalchemy.orm import Session
-from werkzeug.utils import secure_filename
 
 from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
@@ -137,6 +136,22 @@ async def list_backups(user: dict = Depends(require_owner)):
     return ResponseModel(success=True, msg="Backups listed", data=files)
 
 
+def _safe_filename(name: str | None) -> str:
+    """Basename + allowlist sanitizer for backup uploads (no werkzeug).
+
+    Keeps ASCII alphanumerics plus ``._-``; drops directories, backslash
+    tricks and NUL bytes; rejects empty/all-dots results. Callers still
+    resolve() the final path against BACKUP_DIR as defense in depth.
+    """
+    if not name:
+        return ""
+    base = os.path.basename(name.replace("\\", "/")).replace("\x00", "")
+    cleaned = "".join(c for c in base if c.isascii() and (c.isalnum() or c in "._-"))
+    if not cleaned or set(cleaned) <= {"."}:
+        return ""
+    return cleaned
+
+
 def _sqlite_backup(src: str, dst: str) -> None:
     """Online backup via the SQLite backup API (consistent under writers)."""
     src_conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True, timeout=30)
@@ -241,7 +256,7 @@ async def restore_backup(
             return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
 
         # Sanitize filename to prevent path traversal
-        safe_name = secure_filename(file.filename)
+        safe_name = _safe_filename(file.filename)
         if not safe_name:
             return ResponseModel(success=False, msg="Invalid filename", data=None)
 
