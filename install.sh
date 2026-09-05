@@ -423,6 +423,9 @@ generate_self_signed() {
         -keyout /etc/ssl/self-signed/privkey.pem \
         -out /etc/ssl/self-signed/fullchain.pem \
         -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=${cn}" >/dev/null 2>&1
+    # The Docker image runs as appuser (uid 1000) with these files mounted
+    # read-only — they must be world-readable or the panel crash-loops.
+    chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem
     TLS_KEY="/etc/ssl/self-signed/privkey.pem"
     TLS_CERT="/etc/ssl/self-signed/fullchain.pem"
     step "Certificate  $TLS_CERT"
@@ -463,8 +466,11 @@ issue_lets_encrypt() {
     "$HOME/.acme.sh/acme.sh" --install-cert -d "$domain" \
         --key-file "$outdir/privkey.pem" \
         --fullchain-file "$outdir/fullchain.pem" \
-        --reloadcmd "systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || docker restart ovmanager >/dev/null 2>&1 || true" \
+        --reloadcmd "chmod 644 $outdir/privkey.pem $outdir/fullchain.pem; systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || docker restart ovmanager >/dev/null 2>&1 || true" \
         >/dev/null 2>&1 || die "Failed to install certificate to $outdir"
+    # Docker appuser (uid 1000) reads these via a read-only mount (renewals
+    # re-apply perms through the reloadcmd above).
+    chmod 644 "$outdir/privkey.pem" "$outdir/fullchain.pem"
     step "Certificate  $outdir"
 }
 
@@ -492,6 +498,7 @@ setup_tls() {
             mkdir -p "$out"
             cp "$TLS_KEY" "$out/privkey.pem"
             cp "$TLS_CERT" "$out/fullchain.pem"
+            chmod 644 "$out/privkey.pem" "$out/fullchain.pem"  # Docker appuser reads via ro mount
             TLS_KEY="$out/privkey.pem"; TLS_CERT="$out/fullchain.pem"
             ;;
         none) ;;
@@ -519,6 +526,12 @@ write_env() {
     local jwt bot
     jwt="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
     bot="$(fernet_key)"
+    # In Docker mode the .env is consumed INSIDE the container, where the
+    # data dir is the /app/data mount — never the host path (writing the
+    # host path here made fresh Docker installs crash-loop with
+    # PermissionError as appuser). Native mode keeps the host path.
+    local data_dir="$DATA_DIR"
+    [[ "$MODE" == "docker" ]] && data_dir="/app/data"
     umask 077
     {
         printf 'HOST=0.0.0.0\n'
@@ -527,7 +540,7 @@ write_env() {
         printf 'ADMIN_USERNAME=%s\n' "$ADMIN_USER"
         printf 'ADMIN_PASSWORD=%s\n' "$ADMIN_PASS"
         printf 'JWT_SECRET_KEY=%s\n' "$jwt"
-        printf 'DATA_DIR=%s\n' "$DATA_DIR"
+        printf 'DATA_DIR=%s\n' "$data_dir"
         [[ -n "$PUBLIC_URL" ]] && printf 'PUBLIC_URL=%s\n' "$PUBLIC_URL"
         [[ -n "$bot" ]] && printf 'BOT_ENCRYPT_KEY=%s\n' "$bot"
         [[ -n "$TLS_KEY" ]] && printf 'SSL_KEYFILE=%s\n' "$TLS_KEY"
@@ -586,6 +599,10 @@ COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 
 write_compose() {
     mkdir -p "$DATA_DIR"
+    # The image runs as appuser (uid 1000); a root-owned host dir would
+    # make the container crash-loop on first DB write (the mount masks
+    # the prepared /app/data). Match Dockerfile's `useradd -u 1000`.
+    chown -R 1000:1000 "$DATA_DIR"
     cat > "$COMPOSE_FILE" << COMPOSE
 services:
   ovmanager:
@@ -615,8 +632,15 @@ COMPOSE
 compose_up() {
     write_compose
     info "Building image (first run takes a few minutes)…"
-    ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build ) \
-        || die "docker compose up failed — docker logs ovmanager"
+    # BuildKit progress goes to stdout — keep the --json contract (exactly
+    # one JSON object on stdout, logs on stderr) by sinking it otherwise.
+    if [[ "$JSON" -eq 1 ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build >/dev/stderr ) \
+            || die "docker compose up failed — docker logs ovmanager"
+    else
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build ) \
+            || die "docker compose up failed — docker logs ovmanager"
+    fi
     step "Container  ovmanager"
 }
 
