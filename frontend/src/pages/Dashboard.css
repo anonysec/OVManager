@@ -1,15 +1,15 @@
-/* Dashboard — full rewrite, modern SaaS aesthetic.
-   App-matched language: sp-card geometry, semantic tokens, logical props.
+/* Dashboard — ops-console look: flat stat strip, underline tabs, quiet
+   panels. No gradient washes, no card lift, no uppercase kickers.
    Owns ALL dashboard visuals; do not add dashboard rules to styles.css. */
 
 /* ── Page wrapper ─────────────────────────────────────────────────── */
 .ds-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   max-width: var(--content-max);
   margin: 0 auto;
-  padding-bottom: 48px;
+  padding-bottom: 32px;
 }
 
 /* ── Header ──────────────────────────────────────────────────────── */
@@ -22,39 +22,41 @@
 }
 
 .ds-header-copy h1 {
-  margin: 6px 0 4px;
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--text-primary);
-  line-height: 1.1;
-}
-
-.ds-header-copy p {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.15;
 }
 
+.ds-live {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Keep the legacy eyebrow hook rendering identically to .ds-live in case
+   any consumer still uses it. */
 .ds-eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--text-secondary);
 }
 
 .ds-live-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 0 4px var(--success-soft);
-  animation: ds-pulse 2s ease-in-out infinite;
   flex: none;
 }
 
@@ -81,109 +83,89 @@
   50% { box-shadow: 0 0 0 8px transparent; }
 }
 
-/* ── KPI Hero ────────────────────────────────────────────────────── */
+/* ── Stat strip (was 4 floating KPI cards) ─────────────────────────── */
 .ds-hero {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .ds-kpi {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
+  gap: 6px;
+  padding: 16px 20px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   font: inherit;
   color: inherit;
   text-align: start;
-  cursor: pointer;
   overflow: hidden;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
-.ds-kpi::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--ds-accent, var(--accent));
-  border-radius: 14px 14px 0 0;
-}
+button.ds-kpi { cursor: pointer; }
 
-.ds-kpi:hover {
-  border-color: var(--accent-border);
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
+.ds-kpi + .ds-kpi {
+  border-inline-start: 1px solid var(--border);
 }
 
 .ds-kpi:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
-.ds-kpi-top {
+.ds-kpi-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
 }
 
 .ds-kpi-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--ds-accent, var(--accent));
-  font-size: 16px;
+  flex: none;
+  font-size: 14px;
+  color: var(--info);
+}
+
+.ds-kpi--ok .ds-kpi-icon { color: var(--success); }
+.ds-kpi--warn .ds-kpi-icon { color: var(--warning); }
+.ds-kpi--danger .ds-kpi-icon { color: var(--danger); }
+
+.ds-kpi-arrow {
+  margin-inline-start: auto;
+  opacity: 0.4;
+  color: var(--text-muted);
   flex: none;
 }
 
-.ds-kpi--ok .ds-kpi-icon { background: var(--success-soft); color: var(--success); }
-.ds-kpi--warn .ds-kpi-icon { background: var(--warning-soft); color: var(--warning); }
-.ds-kpi--danger .ds-kpi-icon { background: var(--danger-soft); color: var(--danger); }
-
-.ds-kpi-arrow {
-  opacity: 0;
-  color: var(--text-muted);
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
-}
-
-.ds-kpi:hover .ds-kpi-arrow,
-.ds-kpi:focus-visible .ds-kpi-arrow {
-  opacity: 1;
-  transform: translateX(2px);
-}
-
-[dir="rtl"] .ds-kpi:hover .ds-kpi-arrow,
-[dir="rtl"] .ds-kpi:focus-visible .ds-kpi-arrow {
-  transform: translateX(-2px);
-}
+button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-kpi-label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ds-kpi-value {
-  font-size: 1.875rem;
+  font-size: 1.65rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.15;
   font-family: var(--font-display);
-  min-height: 2.0625rem;
+  min-height: 1.9rem;
 }
 
 .ds-kpi--ok .ds-kpi-value { color: var(--success-text); }
@@ -191,37 +173,24 @@
 .ds-kpi--danger .ds-kpi-value { color: var(--danger-text); }
 
 .ds-kpi-sub {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
 .ds-kpi-spark {
-  height: 32px;
-  margin-top: 4px;
+  height: 28px;
+  margin-top: 2px;
 }
 
 .ds-kpi--loading {
-  min-height: 130px;
-  background: var(--surface-2);
-  border-color: var(--border);
+  min-height: 118px;
   pointer-events: none;
+  animation: ds-blink 1.2s ease-in-out infinite;
 }
 
-.ds-kpi--loading::before { display: none; }
-
-.ds-kpi--loading::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, var(--surface-3), transparent);
-  background-size: 200% 100%;
-  animation: ds-shimmer 1.4s infinite;
-  border-radius: 14px;
-}
-
-@keyframes ds-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes ds-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 /* ── Alert strip ─────────────────────────────────────────────────── */
@@ -240,12 +209,10 @@
 
 .ds-alerts--has-items {
   border-color: var(--warning);
-  background: linear-gradient(180deg, var(--warning-soft), var(--surface-1));
 }
 
 .ds-alerts--clear {
   border-color: var(--success);
-  background: linear-gradient(180deg, var(--success-soft), var(--surface-1));
 }
 
 .ds-alerts-icon {
@@ -353,19 +320,10 @@
 }
 
 .ds-card-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
-}
-
-.ds-card-title-icon {
-  color: var(--text-secondary);
-  font-size: 14px;
-  display: inline-flex;
 }
 
 .ds-card-action {
@@ -798,39 +756,37 @@
   outline-offset: 2px;
 }
 
-/* ── Tabs ────────────────────────────────────────────────────────── */
+/* ── Tabs (underline, not pills) ───────────────────────────────────── */
 .ds-tabs {
   display: flex;
   gap: 4px;
   margin-bottom: 12px;
-  padding: 3px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  width: fit-content;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
 }
 
 .ds-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 8px 12px;
+  margin-bottom: -1px;
   border: none;
+  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 0;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .ds-tab:hover { color: var(--text-primary); }
 
 .ds-tab.active {
-  background: var(--surface-1);
   color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+  border-bottom-color: var(--accent);
 }
 
 .ds-tab:focus-visible {
@@ -998,6 +954,8 @@
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .ds-hero { grid-template-columns: repeat(2, 1fr); }
+  .ds-kpi:nth-child(odd) { border-inline-start: 0; }
+  .ds-kpi:nth-child(n+3) { border-top: 1px solid var(--border); }
   .ds-grid-2 { grid-template-columns: 1fr; }
   .ds-grid-1-2 { grid-template-columns: 1fr; }
   .ds-health-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1006,7 +964,9 @@
 @media (max-width: 767.98px) {
   .ds-page { gap: 16px; padding-bottom: 32px; }
   .ds-header { flex-direction: column; align-items: flex-start; }
-  .ds-header-copy h1 { font-size: 1.5rem; }
+  .ds-hero { grid-template-columns: 1fr; }
+  .ds-kpi + .ds-kpi { border-inline-start: 0; border-top: 1px solid var(--border); }
+  .ds-header-copy h1 { font-size: 1.35rem; }
   .ds-card-body { padding: 16px; }
   .ds-card-head { padding: 12px 16px; }
   .ds-feed-item { padding: 10px 16px; }
@@ -1020,7 +980,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ds-live-dot,
   .ds-chart-pulse,
-  .ds-kpi--loading::after,
+  .ds-kpi--loading,
   .ds-chart-status--live {
     animation: none;
   }

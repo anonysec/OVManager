@@ -4,9 +4,10 @@
 /**
  * Settings — single friendly page. Every section is always visible (no
  * Simple/Advanced split): defaults → bot → display → appearance → alerts →
- * general → system → security → backup → activity. The page was a "user
+ * general → system → security → backup. The page was a "user
  * friendly" wish-list item (2026-09): fewer clicks to reach any control, the
- * most-touched settings sit at the top.
+ * most-touched settings sit at the top. (The activity feed that used to live
+ * here was the same data as the Audit Log page — it now lives only there.)
  *
  * Sections live in ./settings/ (one file each, split from the 1157-line
  * original with no logic changes). This file only owns the registry,
@@ -22,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import {
-  FiServer, FiShield, FiArchive, FiSend, FiActivity,
+  FiServer, FiShield, FiArchive, FiSend,
   FiLink, FiUserPlus, FiClock, FiMonitor, FiBell,
 } from 'react-icons/fi';
 import { SectionHeader } from './settings/shared';
@@ -35,7 +36,6 @@ import GeneralSection from './settings/GeneralSection';
 import SystemSection from './settings/SystemSection';
 import SecuritySection from './settings/SecuritySection';
 import BackupSection from './settings/BackupSection';
-import ActivitySection from './settings/ActivitySection';
 import './Settings.css';
 
 const SECTIONS = [
@@ -48,7 +48,6 @@ const SECTIONS = [
   { id: 'system',     icon: FiServer,    labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection, simple: false },
   { id: 'security',   icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection, simple: false },
   { id: 'backup',     icon: FiArchive,   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection, simple: false },
-  { id: 'activity',   icon: FiActivity,  labelKey: 'settingsActivity',   label: 'Activity',   descKey: 'settingsActivityDesc',   desc: 'Recent administrator actions', Component: ActivitySection, simple: false },
 ];
 
 const Settings = () => {

@@ -18,7 +18,6 @@ const loadUsers = () => import('./pages/UserManagement');
 const loadNodes = () => import('./pages/NodeManagement');
 const loadSettings = () => import('./pages/Settings');
 const loadAudit = () => import('./pages/AuditLog');
-const loadMaintenance = () => import('./pages/Maintenance');
 const loadAdmins = () => import('./pages/AdminManagement');
 
 const LoginPage = lazy(loadLogin);
@@ -28,7 +27,6 @@ const UserManagement = lazy(loadUsers);
 const NodeManagement = lazy(loadNodes);
 const Settings = lazy(loadSettings);
 const AuditLog = lazy(loadAudit);
-const Maintenance = lazy(loadMaintenance);
 const AdminManagement = lazy(loadAdmins);
 
 // Set favicon
@@ -135,7 +133,6 @@ function App({ onReady }) {
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
             <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
-            {userRole === 'owner' && <Route path="maintenance" element={<Page name="maintenance"><Maintenance /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
           </Route>

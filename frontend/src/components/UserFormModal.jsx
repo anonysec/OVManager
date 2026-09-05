@@ -68,14 +68,22 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
       const res = await apiClient.get('/users/next-username');
       if (res.data?.success && res.data?.data?.username) {
         setSuggest(res.data.data.username);
-      } else {
-        setSuggest('');
+        return res.data.data.username;
       }
+      setSuggest('');
+      return '';
     } catch {
       setSuggest('');
+      return '';
     } finally {
       setSuggestLoading(false);
     }
+  };
+
+  // One click fills the field — no two-step chip dance.
+  const handleSuggest = async () => {
+    const value = suggest || (await fetchSuggest());
+    if (value) setName(value);
   };
 
   const reset = () => { setName(''); setExpiryDate(''); setTotalTraffic(''); setMaxLogins('1'); setError(''); setSuggest(''); };
@@ -104,12 +112,10 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
         if (!isEdit) reset();
         onSaved();
       } else {
-        setError(response.data.msg || (isEdit ? 'Failed to update user.' : 'Failed to create user.'));
+        setError(response.data.msg || t(isEdit ? 'userUpdateFailed' : 'userCreateFailed'));
       }
     } catch (err) {
-      setError(parseError(err, isEdit
-        ? 'An error occurred while updating the user.'
-        : 'An error occurred. The username might already exist.'));
+      setError(parseError(err, t(isEdit ? 'userUpdateFailed' : 'userCreateFailed')));
     } finally {
       setIsLoading(false);
     }
@@ -148,18 +154,13 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
                     type="button"
                     className="shortcut-chip"
                     disabled={suggestLoading}
-                    onClick={async () => { if (!suggest) await fetchSuggest(); }}
+                    onClick={handleSuggest}
                     onMouseEnter={() => { if (!suggest && isOpen) fetchSuggest(); }}
                     onFocus={() => { if (!suggest) fetchSuggest(); }}
                     title={t('suggestUsername', 'Suggest next username')}
                   >
-                    {suggestLoading ? '…' : t('suggest', 'Suggest')}
+                    {suggestLoading ? '…' : (suggest ? `${t('suggest', 'Suggest')}: ${suggest}` : t('suggest', 'Suggest'))}
                   </button>
-                  {suggest && (
-                    <button type="button" className="shortcut-chip active" onClick={() => setName(suggest)} title={suggest}>
-                      {suggest}
-                    </button>
-                  )}
                 </div>
               </div>
               <small id={`${idp('name-hint')}`} className="input-hint">{t('usernameHint', '3–64 characters.')}</small>
@@ -221,13 +222,13 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
           </div>
           <small className="input-hint">{t('modal_maxLoginsHint')}</small>
         </div>
+        {error && <p id={`${idp('error')}`} className="modal-error" role="alert">{error}</p>}
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           <LoadingButton isLoading={isLoading} type="submit" className="btn">
             {isEdit ? t('updateUserButton', 'Update User') : t('createUserButton')}
           </LoadingButton>
         </div>
-        {error && <p id={`${idp('error')}`} className="error-message" role="alert">{error}</p>}
       </form>
     </Modal>
   );

@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import { useLive } from '../../context/LiveContext';
 import apiClient from '../../services/api';
@@ -100,7 +99,6 @@ const BackupSection = () => {
               <FiDownload size={13} /> {t('downloadLatest', 'Download latest')}
             </button>
           )}
-          <Link to="/maintenance" className="btn btn-sm btn-secondary">{t('viewAll', 'View all')}</Link>
         </div>
         {loadError && backups.length === 0 ? (
           <ErrorState title={t('loadError', 'Could not load data')} message={t('loadErrorDetail', 'Could not reach backup list.')} onRetry={load} retryLabel={t('retry', 'Retry')} />
@@ -108,16 +106,13 @@ const BackupSection = () => {
           <EmptyState title={t('noBackups', 'No backups yet')} description={t('noBackupsBody', 'Create your first backup to protect panel data.')} />
         ) : (
           <div className="sp-backup-list">
-            {backups.slice(0, 8).map(b => (
+            {backups.map(b => (
               <div key={b.name} className="sp-backup-row">
                 <FiDatabase size={13} aria-hidden="true" />
                 <span className="sp-backup-name">{b.name}</span>
                 {b.size && <span className="sp-backup-size">{formatBytes(b.size)}</span>}
               </div>
             ))}
-            {backups.length > 8 && (
-              <Link to="/maintenance" className="sp-viewall">{t('showingMore', 'Showing 8 of {{total}} — view all', { total: backups.length })}</Link>
-            )}
           </div>
         )}
       </Card>

@@ -72,7 +72,7 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? t('editAdmin') : t('addNewAdmin')} size="small">
+    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('editAdmin')} — ${admin?.username || ''}` : t('addNewAdmin')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
         <div className="input-group">
           <label htmlFor="admin-username">{t('username')}</label>
@@ -95,13 +95,13 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
           <label htmlFor="admin-username_prefix">{t("usernamePrefix", "Username Prefix")}</label>
           <input type="text" id="admin-username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder={t("usernamePrefixPlaceholder", "420 (auto-generates 4201, 4202...)")} />
         </div>
+        {error && <p className="modal-error" role="alert">{error}</p>}
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
           <LoadingButton type="submit" className="btn" isLoading={isLoading}>
             {isEdit ? t('updateAdminButton') : t('createAdminButton')}
           </LoadingButton>
         </div>
-        {error && <p className="error-message">{error}</p>}
       </form>
     </Modal>
   );

@@ -3,7 +3,7 @@
 
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CreateUser(BaseModel):
@@ -45,6 +45,18 @@ class NodeCreate(BaseModel):
     set_new_setting: bool = Field(default=False)
     # TLS on by default for new nodes; existing rows keep their stored value.
     use_tls: bool = Field(default=True)
+    # Manual country override (ISO 3166-1 alpha-2/3, e.g. "DE"). Blank/None =
+    # auto-detect from the node address via geolocate(). Manual always wins.
+    country_code: str | None = Field(default=None, max_length=3, pattern=r"^[A-Za-z]{2,3}$")
+
+    @field_validator("key", mode="before")
+    @classmethod
+    def _blank_key_to_none(cls, value):
+        # Edit forms send "" for "keep existing key" — that must validate,
+        # not 422. crud.update_node only overwrites on non-empty values.
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class AdminCreate(BaseModel):

@@ -373,7 +373,14 @@ def get_node_by_name(db: Session, name: str):
     return db.query(Node).filter(Node.name == name).first()
 
 
+def _manual_country(request: NodeCreate) -> str | None:
+    """Manual country override from the form, normalized — or None for auto."""
+    raw = (request.country_code or "").strip().upper()
+    return raw or None
+
+
 def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
+    manual = _manual_country(request)
     new_node = Node(
         name=request.name,
         address=request.address,
@@ -384,9 +391,9 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
         key=encrypt_node_key(request.key),
         status=request.status,
         use_tls=request.use_tls,
-        country_code=geolocation.get("country_code") if geolocation else None,
-        latitude=geolocation.get("latitude") if geolocation else None,
-        longitude=geolocation.get("longitude") if geolocation else None,
+        country_code=manual or (geolocation.get("country_code") if geolocation else None),
+        latitude=None if manual else (geolocation.get("latitude") if geolocation else None),
+        longitude=None if manual else (geolocation.get("longitude") if geolocation else None),
     )
 
     db.add(new_node)
@@ -406,7 +413,14 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
     node.ovpn_port = request.ovpn_port
     node.protocol = request.protocol
     node.port = request.port
-    if geolocation:
+    manual = _manual_country(request)
+    if manual:
+        # Operator override wins; stale auto coords are cleared so the UI
+        # never mixes a manual country with coordinates from another one.
+        node.country_code = manual
+        node.latitude = None
+        node.longitude = None
+    elif geolocation:
         node.country_code = geolocation.get("country_code")
         node.latitude = geolocation.get("latitude")
         node.longitude = geolocation.get("longitude")

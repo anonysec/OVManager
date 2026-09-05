@@ -44,20 +44,15 @@ const COUNTRY_ALIASES = {
 };
 
 const normalizeCountryCode = (node) => {
-  const sources = [node.country_code, node.country, node.location, node.name]
-    .filter(Boolean)
-    .map((value) => String(value).trim().toUpperCase());
-
-  for (const source of sources) {
-    const compact = source.replace(/[^A-Z]/g, '');
-    const alias = COUNTRY_ALIASES[compact] || compact;
-    if (CODES[alias]) return alias;
-    const match = Object.entries(CODES).find(([, entry]) => compact === entry.name.replace(/[^A-Z]/g, '').toUpperCase() || compact.includes(entry.name.replace(/[^A-Z]/g, '').toUpperCase()));
-    if (match) return match[0];
-    const codeMatch = source.match(/\b[A-Z]{2,3}\b/);
-    if (codeMatch && CODES[COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0]]) return COUNTRY_ALIASES[codeMatch[0]] || codeMatch[0];
-  }
-  return null;
+  // ONLY the stored ISO code from the backend counts. Never guess from the
+  // node name — fuzzy matching once turned "node-1" into Netherlands
+  // (lowercase-stripped names matched country initials).
+  const raw = String(node?.country_code || '').trim().toUpperCase();
+  if (!raw) return null;
+  if (CODES[raw]) return raw;
+  if (COUNTRY_ALIASES[raw] && CODES[COUNTRY_ALIASES[raw]]) return COUNTRY_ALIASES[raw];
+  // Unknown-but-plausible ISO code: show the code text, no flag.
+  return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
 };
 
 const nodeMeta = (node) => {
@@ -70,8 +65,8 @@ const nodeMeta = (node) => {
   const entry = code ? CODES[code] : null;
 
   return {
-    name: entry?.name || (node.country_code ? String(node.country_code).toUpperCase() : 'Location unavailable'),
-    flagCode: code,
+    name: entry?.name || (code || 'Location unavailable'),
+    flagCode: entry ? code : null,
     coords: hasCoordinates ? [longitude, latitude] : (entry?.coords || null),
     approximate: !hasCoordinates && Boolean(entry?.coords),
   };

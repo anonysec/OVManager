@@ -58,7 +58,7 @@ const LoginPage = () => {
           </div>
           <div className="login-showcase-status">
             <div className="login-status-orbit" aria-hidden="true">
-              <span className="login-status-orbit--vector"><Logo size={56} /></span>
+              <span className="login-status-orbit--vector"><Logo size={34} /></span>
               <span className="orbit-dot orbit-dot-one" />
               <span className="orbit-dot orbit-dot-two" />
             </div>
