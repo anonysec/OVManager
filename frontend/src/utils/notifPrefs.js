@@ -15,7 +15,6 @@ const KEYS = {
   maxLogins: 'ovmanager-pref-alert-maxlogin',
   authErrors: 'ovmanager-pref-alert-auth',
   rejects: 'ovmanager-pref-alert-reject',
-  stale: 'ovmanager-pref-alert-stale',
   refreshSec: 'ovmanager-pref-refresh',
 };
 
@@ -24,7 +23,6 @@ const DEFAULTS = {
   maxLogins: true,
   authErrors: true,
   rejects: true,
-  stale: true,
   refreshSec: 30,
 };
 
@@ -59,6 +57,5 @@ export const alertPrefKey = (id) => {
   if (String(id).startsWith('full-')) return 'maxLogins';
   if (id === 'auth') return 'authErrors';
   if (id === 'rej') return 'rejects';
-  if (id === 'stale') return 'stale';
   return null;
 };
