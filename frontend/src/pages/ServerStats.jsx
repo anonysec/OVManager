@@ -20,6 +20,7 @@ import AlertStrip from '../components/dashboard/AlertStrip';
 import ServerHealth from '../components/dashboard/ServerHealth';
 import SessionsBreakdown from '../components/dashboard/SessionsBreakdown';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
+import TopTraffic from '../components/dashboard/TopTraffic';
 import StreamChart from '../components/dashboard/StreamChart';
 import { Panel, PanelState } from '../components/dashboard/Panel';
 import './Dashboard.css';
@@ -53,6 +54,15 @@ const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesRea
   (users || []).forEach((u) => {
     if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
       out.push({ id: `full-${u.uuid}`, level: 'warning', link: `/users?user=${u.uuid}`, title: t('notifUserAtMax', 'User {{name}} at max logins', { name: u.name }) });
+    }
+    const quota = Number(u.total || 0);
+    if (quota > 0) {
+      const pct = Number(u.used || 0) / quota;
+      if (pct >= 1) {
+        out.push({ id: `quota-${u.uuid}`, level: 'danger', link: `/users?user=${u.uuid}`, title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }) });
+      } else if (pct >= 0.8) {
+        out.push({ id: `quota-${u.uuid}`, level: 'warning', link: `/users?user=${u.uuid}`, title: t('notifUserNearQuota', 'User {{name}} at {{pct}}% of quota', { name: u.name, pct: Math.round(pct * 100) }) });
+      }
     }
   });
   const prefs = readPrefs();
@@ -513,6 +523,7 @@ const ServerStats = () => {
                     />
                   )
                 )}
+                <TopTraffic />
               </div>
             </section>
 

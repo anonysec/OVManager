@@ -9,6 +9,7 @@ from backend.auth.authz import require_owner
 from backend.auth.hash import hash_password
 from backend.db import crud
 from backend.db.engine import get_db
+from backend.operations.audit import log_event
 from backend.schema._input import AdminCreate, AdminUpdate
 from backend.schema.output import Admins, ResponseModel
 
@@ -46,6 +47,7 @@ async def create_admin(
         return ResponseModel(success=False, msg="Admin with this username already exists", data=None)
 
     new_admin = crud.create_admin(db, admin)
+    log_event(db, "admin.create", actor=user.get("username"), target=new_admin.username)
     return ResponseModel(
         success=True,
         msg="Admin created successfully",
@@ -76,6 +78,7 @@ async def update_admin(
 
     db.commit()
     db.refresh(existing_admin)
+    log_event(db, "admin.update", actor=user.get("username"), target=existing_admin.username)
     return ResponseModel(
         success=True,
         msg="Admin updated successfully",
@@ -99,6 +102,7 @@ async def delete_admin(
 
     revoke_user_sessions(db, username)
     crud.delete_admin(db, existing_admin)
+    log_event(db, "admin.delete", actor=user.get("username"), target=username)
     return ResponseModel(
         success=True,
         msg="Admin deleted successfully",

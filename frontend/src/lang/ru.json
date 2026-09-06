@@ -469,6 +469,11 @@
   "alertMaxLogins": "Пользователь на максимуме входов",
   "alertAuthErrors": "Ошибки аутентификации",
   "alertRejects": "Отклонённые подключения",
+  "alertQuota": "Предупреждения о квоте (80%+)",
+  "notifUserOverQuota": "Пользователь {{name}} превысил квоту",
+  "notifUserOverQuotaDetail": "Лимит исчерпан — будет отключён при следующей проверке",
+  "notifUserNearQuota": "Пользователь {{name}} на {{pct}}% квоты",
+  "notifUserNearQuotaDetail": "Квота почти исчерпана",
   "refreshCard": "Интервал обновления",
   "refreshInterval": "Обновление панели (секунды)",
   "refreshDesc": "Как часто панель и колокольчик запрашивают свежие данные.",
@@ -520,6 +525,11 @@
   "pullToRefresh": "Потяните для обновления",
   "nodeTabOverview": "Обзор",
   "nodeTabSessions": "Сессии",
+  "nodeTabLogs": "Логи",
+  "logLevel": "Уровень",
+  "refreshLogs": "Обновить",
+  "nodeLogsFailed": "Не удалось загрузить логи узла.",
+  "nodeLogsEmpty": "Записей на этом уровне нет.",
   "nodeTabConfig": "Конфиг",
   "nodeTabDanger": "Опасно",
   "nodeDetails": "Детали узла",
@@ -686,5 +696,7 @@
   "chartOffline": "Не в сети",
   "chartPolling": "Опрос",
   "nodeSectionQuick": "Быстрая настройка",
-  "nodeSectionConnection": "Подключение"
+  "nodeSectionConnection": "Подключение",
+  "trafficHistory14d": "Трафик за 14 дней",
+  "topTraffic7d": "Топ трафика за 7 дней"
 }

@@ -674,3 +674,81 @@
     animation: none;
   }
 }
+
+/* ── Usage history (user detail graph + dashboard top talkers) ── */
+.uhist { margin-top: 4px; }
+.uhist .ud-k { display: block; margin-bottom: 8px; }
+.uhist-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 56px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.uhist-bar {
+  flex: 1;
+  min-width: 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-bottom: 0;
+}
+.ds-toptraffic {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.ds-toptraffic-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.ds-toptraffic ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ds-toptraffic li { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; gap: 10px; align-items: center; font-size: 0.82rem; }
+.ds-toptraffic-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-weight: 600; }
+.ds-toptraffic-bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.ds-toptraffic-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.ds-toptraffic-val { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
+
+/* ── Node drawer log viewer ── */
+.nd-logbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.nd-loglevel { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.nd-loglevel select {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+.nd-logerror {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger-color) 40%, transparent);
+  color: var(--danger-color);
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.nd-loglist { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }
+.nd-log {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.nd-log--error { border-color: color-mix(in srgb, var(--danger-color) 45%, transparent); }
+.nd-log--warning { border-color: color-mix(in srgb, var(--warning, var(--accent-color)) 40%, transparent); }
+.nd-log-time { font-variant-numeric: tabular-nums; color: var(--text-muted); white-space: nowrap; }
+.nd-log-msg { overflow-wrap: anywhere; color: var(--text-primary); }

@@ -4,12 +4,14 @@
 from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
+from backend.node.requests import NodeRequests
 from backend.node.task import (
     add_node_handler,
     delete_node_handler,
@@ -20,6 +22,7 @@ from backend.node.task import (
     update_node_handler,
 )
 from backend.operations import live
+from backend.operations.audit import log_event
 from backend.schema._input import NodeCreate
 from backend.schema.output import ResponseModel
 
@@ -36,6 +39,7 @@ async def add_node(
     new_node = await add_node_handler(request, db)
     if new_node:
         live.publish("nodes", {"op": "add"})
+        log_event(db, "node.create", actor=user.get("username"), target=request.name)
     return ResponseModel(
         success=new_node,
         msg="Node added successfully"
@@ -92,6 +96,7 @@ async def update_node(
     success, msg = await update_node_handler(node_id, request, db)
     if success:
         live.publish("nodes", {"op": "update"})
+        log_event(db, "node.update", actor=user.get("username"), target=request.name)
     return ResponseModel(success=success, msg=msg)
 
 
@@ -110,6 +115,28 @@ async def get_node_status(
         msg="Node status retrieved successfully",
         data=node_status,
     )
+
+
+@router.get("/{node_id}/logs", response_model=ResponseModel)
+async def get_node_logs(
+    node_id: int,
+    level: str = "WARNING",
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    """Proxy the node's in-memory log ring (NodeDrawer Logs tab)."""
+    node = crud.get_node_by_id(db, node_id)
+    if node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    req = NodeRequests(
+        address=node.address,
+        port=node.port,
+        api_key=crud.node_api_key(node),
+        use_tls=node.use_tls,
+    )
+    data = await run_in_threadpool(req.get_logs, level, limit)
+    return ResponseModel(success=True, msg="Node logs retrieved successfully", data=data)
 
 
 @router.get("/", response_model=ResponseModel)
@@ -178,6 +205,7 @@ async def delete_node(
     result = await delete_node_handler(node_id, db)
     if result:
         live.publish("nodes", {"op": "delete"})
+        log_event(db, "node.delete", actor=user.get("username"), target=str(node_id))
     return ResponseModel(
         success=result,
         msg="Node deleted successfully" if result else "Failed to delete node",

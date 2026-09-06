@@ -329,6 +329,11 @@ def delete_user(db: Session, name: str):
     if not user:
         raise NotFoundError("User", name)
 
+    # Daily rows key by id and SQLite reuses ids — orphaned bytes would leak
+    # into an unrelated future user's history graph.
+    from sqlalchemy import text as _text
+
+    db.execute(_text("DELETE FROM user_traffic_daily WHERE user_id = :uid"), {"uid": user.id})
     db.delete(user)
     db.commit()
 

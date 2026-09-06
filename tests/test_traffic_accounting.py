@@ -1,13 +1,15 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-"""Traffic accounting: per-session deltas never double-count, enforce works.
+"""Traffic accounting: totals-based billing never double-counts, enforce works.
 
 Covers backend/operations/daily_checks.py:
 - _compute_session_delta: accurate path, first-seen, legacy fallback, reset.
-- _extract_username: dashed usernames keep working.
-- _collect_node_traffic (node fetch stubbed): second identical poll adds 0;
-  reconnects count only new sessions; unknown users are skipped.
+- _extract_username: exact match wins, legacy -node suffix stripped, unknown
+  keys pass through unmangled (dashed names are never billed to mangled names).
+- _collect_node_traffic (node fetch stubbed): lifetime totals billed on
+  growth only; baselines on first sight/reset; banked-only payloads bill;
+  drops bill zero and rebaseline; numeric CNs resolve via id map.
 - enforce_user_limits (node push stubbed): expired + over-quota users are
   deactivated in the DB, healthy users untouched.
 """
@@ -45,13 +47,20 @@ def _mkrow(name: str, **fields):
 
 
 def _drop(name: str):
+    from sqlalchemy import text
+
     from backend.db.engine import SessionLocal
     from backend.db.models import User
 
     db = SessionLocal()
     try:
-        db.query(User).filter(User.name == name).delete()
-        db.commit()
+        row = db.query(User).filter(User.name == name).first()
+        if row is not None:
+            # Daily rows key by id; SQLite may reuse the id for a later row,
+            # so orphaned bytes would leak into an unrelated user's history.
+            db.execute(text("DELETE FROM user_traffic_daily WHERE user_id = :uid"), {"uid": row.id})
+            db.query(User).filter(User.name == name).delete()
+            db.commit()
     finally:
         db.close()
 
@@ -97,6 +106,13 @@ def test_delta_legacy_fallback_without_sessions():
 def test_extract_username_keeps_dashes():
     assert dc._extract_username("john-doe-eu1", "eu1") == "john-doe"
     assert dc._extract_username("alice-eu1", "eu1") == "alice"
+
+
+def test_extract_username_exact_match_wins():
+    # Bare usernames (what nodes actually send) match exactly — even dashed.
+    assert dc._extract_username("john-doe", "node-1", {"john-doe"}) == "john-doe"
+    # Unknown keys pass through unmangled so warnings name the real key.
+    assert dc._extract_username("ghost-9", "node-1", {"alice"}) == "ghost-9"
 
 
 # ── collector integration (stubbed node fetch) ────────────────────
@@ -146,6 +162,143 @@ def test_collect_never_double_counts(monkeypatch):
             db.close()
     finally:
         _drop(name)
+
+
+def test_collect_totals_bills_growth_rebaselines_drops(monkeypatch):
+    """Lifetime totals: growth billed, identical +0, drops bill 0 and
+    rebaseline (reset/daemon restart can only shrink the counter)."""
+    from backend.db.engine import SessionLocal
+
+    name = f"tt_tot_{_uuid.uuid4().hex[:8]}"
+    _mkrow(name, used=0)
+    node = SimpleNamespace(name="tnode", address="127.0.0.1")
+    payloads = [
+        {"users": {name: 1000}, "sessions": {name: {"s1": 1000}}, "totals": {name: 1000}},
+        {"users": {name: 1000}, "sessions": {name: {"s1": 1000}}, "totals": {name: 1000}},
+        {"users": {name: 500}, "sessions": {name: {"s2": 500}}, "totals": {name: 1800}},
+        {"users": {name: 500}, "sessions": {name: {"s2": 500}}, "totals": {name: 300}},
+    ]
+
+    async def fake_fetch(node, db=None):
+        return payloads.pop(0)
+
+    monkeypatch.setattr(dc, "get_users_used_traffic", fake_fetch)
+    try:
+        db = SessionLocal()
+        try:
+            from backend.db.models import User
+
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 0  # first sight: baseline, no billing
+            db.expire_all()
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 0  # identical: +0
+            db.expire_all()
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 800  # banked completion billed once
+            db.expire_all()
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 800  # drop: +0, rebaselined
+        finally:
+            db.close()
+    finally:
+        _drop(name)
+
+
+def test_collect_banked_only_payload_bills_offline_bytes(monkeypatch):
+    """Node reports only totals (user offline, sessions gone): the completed
+    bytes must still be billed — previously silently dropped."""
+    from backend.db.engine import SessionLocal
+
+    name = f"tt_bank_{_uuid.uuid4().hex[:8]}"
+    _mkrow(name, used=100)
+    node = SimpleNamespace(name="tnode", address="127.0.0.1")
+    payloads = [
+        {"users": {}, "sessions": {}, "totals": {name: 700}},
+        {"users": {}, "sessions": {}, "totals": {name: 950}},
+    ]
+
+    async def fake_fetch(node, db=None):
+        return payloads.pop(0)
+
+    monkeypatch.setattr(dc, "get_users_used_traffic", fake_fetch)
+    try:
+        db = SessionLocal()
+        try:
+            from backend.db.models import User
+
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 100  # baseline, nothing billed yet
+            db.expire_all()
+            assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
+            assert _used(name) == 350  # offline-completed bytes billed
+        finally:
+            db.close()
+    finally:
+        _drop(name)
+
+
+def test_collect_dashed_username_billed_not_mangled(monkeypatch):
+    """Bare dashed usernames (what nodes send) bill to the exact user."""
+    from backend.db.engine import SessionLocal
+
+    base = f"tt-dash-{_uuid.uuid4().hex[:6]}"
+    _mkrow(base, used=0)
+    node = SimpleNamespace(name="tnode", address="127.0.0.1")
+    payloads = [
+        {"users": {base: 400}, "sessions": {}, "totals": {base: 400}},
+        {"users": {base: 900}, "sessions": {}, "totals": {base: 900}},
+    ]
+
+    async def fake_fetch(node, db=None):
+        return payloads.pop(0)
+
+    monkeypatch.setattr(dc, "get_users_used_traffic", fake_fetch)
+    try:
+        db = SessionLocal()
+        try:
+            from backend.db.models import User
+
+            assert _run(dc._collect_node_traffic(node, {base: db.query(User).filter(User.name == base).first()}, db)) is True
+            db.expire_all()
+            assert _run(dc._collect_node_traffic(node, {base: db.query(User).filter(User.name == base).first()}, db)) is True
+            assert _used(base) == 500, "dashed user must be billed exactly once"
+        finally:
+            db.close()
+    finally:
+        _drop(base)
+
+
+def test_reset_usage_fans_out_to_nodes(monkeypatch):
+    """Panel reset must zero node banked files too (best-effort per node)."""
+    from backend.node import ops as node_ops
+
+    nodes = [
+        SimpleNamespace(id=1, name="n1", address="10.0.0.1", port=2083, use_tls=True),
+        SimpleNamespace(id=2, name="n2", address="10.0.0.2", port=2083, use_tls=True),
+    ]
+    called = []
+
+    class FakeNR:
+        def __init__(self, address=None, port=None, api_key=None, use_tls=None):
+            pass
+
+        def reset_usage(self, uid):
+            called.append(uid)
+            return uid != "9"
+
+    monkeypatch.setattr(node_ops.crud, "get_active_nodes", lambda db: nodes)
+    monkeypatch.setattr(node_ops.crud, "node_api_key", lambda node: "k")
+    monkeypatch.setattr(node_ops, "NodeRequests", FakeNR)
+    import backend.db.engine as _eng
+
+    db = _eng.SessionLocal()
+    try:
+        out = _run(node_ops.reset_user_usage_on_all_nodes(7, db))
+        assert called == ["7", "7"], out
+        assert out == {"ok": True, "failed": []}
+    finally:
+        db.close()
 
 
 def test_enforce_disables_expired_and_over_quota(monkeypatch):

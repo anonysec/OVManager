@@ -469,6 +469,11 @@
   "alertMaxLogins": "کاربر در حداکثر ورود",
   "alertAuthErrors": "خطاهای احراز هویت",
   "alertRejects": "رد اتصال‌ها",
+  "alertQuota": "هشدارهای سهمیه (۸۰٪+)",
+  "notifUserOverQuota": "کاربر {{name}} از سهمیه گذشت",
+  "notifUserOverQuotaDetail": "مصرف تمام شد — در بررسی بعدی غیرفعال می‌شود",
+  "notifUserNearQuota": "کاربر {{name}} در {{pct}}٪ سهمیه",
+  "notifUserNearQuotaDetail": "سهمیه رو به اتمام است",
   "refreshCard": "فاصله به‌روزرسانی",
   "refreshInterval": "به‌روزرسانی داشبورد (ثانیه)",
   "refreshDesc": "هر چند وقت یک‌بار داشبورد و زنگ اعلان داده تازه دریافت کنند.",
@@ -520,6 +525,11 @@
   "pullToRefresh": "برای بازنشانی بکشید",
   "nodeTabOverview": "نمای کلی",
   "nodeTabSessions": "نشست‌ها",
+  "nodeTabLogs": "گزارش‌ها",
+  "logLevel": "سطح",
+  "refreshLogs": "بازنشانی",
+  "nodeLogsFailed": "بارگیری گزارش‌های نود ممکن نشد.",
+  "nodeLogsEmpty": "رکوردی در این سطح نیست.",
   "nodeTabConfig": "پیکربندی",
   "nodeTabDanger": "خطرناک",
   "nodeDetails": "جزئیات نود",
@@ -686,5 +696,7 @@
   "chartOffline": "آفلاین",
   "chartPolling": "نمونه‌برداری",
   "nodeSectionQuick": "راه‌اندازی سریع",
-  "nodeSectionConnection": "اتصال"
+  "nodeSectionConnection": "اتصال",
+  "trafficHistory14d": "ترافیک ۱۴ روز اخیر",
+  "topTraffic7d": "پرمصرف‌ترین‌ها، ۷ روز"
 }

@@ -25,6 +25,7 @@ from .ops import (
     download_ovpn_client_from_node,
     get_node_status_handler,
     list_nodes_handler,
+    reset_user_usage_on_all_nodes,
     set_user_limit_on_all_nodes,
     update_node_handler,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "get_node_status_handler",
     "create_user_on_all_nodes",
     "change_user_status_on_all_nodes",
+    "reset_user_usage_on_all_nodes",
     "set_user_limit_on_all_nodes",
     "download_ovpn_client_from_node",
     "download_all_ovpn_clients_from_node",

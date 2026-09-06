@@ -106,7 +106,8 @@ def usage_line(user: dict, *, lang: str = DEFAULT_LANG) -> str:
         pct = min(100, int(round(100 * float(user.get("used") or 0) / float(total))))
     except (TypeError, ValueError, ZeroDivisionError):
         pct = 0
-    return t(lang, "usage_quota", used=used, total=fmt_bytes(total, lang=lang), pct=pct)
+    warn = " ⚠️" if pct >= 80 else ""
+    return t(lang, "usage_quota", used=used, total=fmt_bytes(total, lang=lang), pct=pct) + warn
 
 
 def logins_label(user: dict, *, lang: str = DEFAULT_LANG) -> str:

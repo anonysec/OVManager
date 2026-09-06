@@ -128,6 +128,15 @@ _EXTRA_DDL: tuple[str, ...] = (
         updated REAL NOT NULL DEFAULT 0
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS user_traffic_daily (
+        user_id INTEGER NOT NULL,
+        day TEXT NOT NULL,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, day)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day)",
 )
 
 _lock = threading.Lock()

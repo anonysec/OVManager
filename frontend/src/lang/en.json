@@ -482,6 +482,11 @@
   "alertMaxLogins": "User at max logins",
   "alertAuthErrors": "Authentication errors",
   "alertRejects": "Connection rejects",
+  "alertQuota": "Quota warnings (80%+)",
+  "notifUserOverQuota": "User {{name}} over quota",
+  "notifUserOverQuotaDetail": "Usage exceeded — will be disabled on next check",
+  "notifUserNearQuota": "User {{name}} at {{pct}}% of quota",
+  "notifUserNearQuotaDetail": "Quota almost used up",
   "refreshCard": "Refresh Interval",
   "refreshInterval": "Dashboard refresh (seconds)",
   "refreshDesc": "How often the dashboard and notification bell poll for fresh data.",
@@ -533,6 +538,11 @@
   "pullToRefresh": "Pull to refresh",
   "nodeTabOverview": "Overview",
   "nodeTabSessions": "Sessions",
+  "nodeTabLogs": "Logs",
+  "logLevel": "Level",
+  "refreshLogs": "Refresh",
+  "nodeLogsFailed": "Could not load node logs.",
+  "nodeLogsEmpty": "No log records at this level.",
   "nodeTabConfig": "Config",
   "nodeTabDanger": "Danger",
   "nodeDetails": "Node details",
@@ -699,5 +709,7 @@
   "chartOffline": "Offline",
   "chartPolling": "Polling",
   "nodeSectionQuick": "Quick setup",
-  "nodeSectionConnection": "Connection"
+  "nodeSectionConnection": "Connection",
+  "trafficHistory14d": "Traffic, last 14 days",
+  "topTraffic7d": "Top traffic, 7 days"
 }

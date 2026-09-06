@@ -18,6 +18,27 @@ from backend.logger import logger
 TIMEOUT = 10
 LONG_TIMEOUT = 30
 
+# Flap-aware RPC logging. Poll loops hit every endpoint every few seconds,
+# so a dead node would spam one ERROR per tick. The first failure (or a
+# changed message) logs at warning; identical repeats go to debug; recovery
+# logs once at warning. State transitions stay visible, spam doesn't.
+_rpc_last_error: dict[tuple[str, str], str] = {}
+
+
+def _rpc_failed(address: str, path: str, message: object) -> None:
+    msg = str(message)
+    key = (address, path)
+    if _rpc_last_error.get(key) != msg:
+        _rpc_last_error[key] = msg
+        logger.warning("Node %s %s: %s", address, path, msg)
+    else:
+        logger.debug("Node %s %s (still failing): %s", address, path, msg)
+
+
+def _rpc_ok(address: str, path: str) -> None:
+    if _rpc_last_error.pop((address, path), None) is not None:
+        logger.warning("Node %s %s: recovered", address, path)
+
 
 class NodeRequests:
     __slots__ = ("address", "headers", "scheme")
@@ -52,28 +73,31 @@ class NodeRequests:
         try:
             return self._send(method, path, verify=True, **kw)
         except _req.exceptions.SSLError as e:
-            logger.warning("Node %s %s: TLS verify failed (%s) — retrying unverified (self-signed?)", self.address, path, e)
+            # Expected for self-signed nodes (the installer default) — debug,
+            # not a warning: it fires on every single request otherwise.
+            logger.debug("Node %s %s: TLS verify failed (%s) — retrying unverified", self.address, path, e)
             try:
                 with _warnings.catch_warnings():
                     _warnings.simplefilter("ignore")
                     return self._send(method, path, verify=False, **kw)
             except Exception as e2:
-                logger.error("Node %s %s: %s", self.address, path, e2)
+                _rpc_failed(self.address, path, e2)
                 return None
         except Exception as e:
-            logger.error("Node %s %s: %s", self.address, path, e)
+            _rpc_failed(self.address, path, e)
             return None
 
     def _send(self, method: str, path: str, **kw) -> dict | None:
         """One attempt: send request, return parsed JSON or None on failure."""
         r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
         if r.status_code != 200:
-            logger.error("Node %s %s → %s", self.address, path, r.status_code)
+            _rpc_failed(self.address, path, f"HTTP {r.status_code}")
             return None
         data = r.json()
         if not data.get("success"):
-            logger.error("Node %s %s: %s", self.address, path, data.get("msg"))
+            _rpc_failed(self.address, path, data.get("msg"))
             return None
+        _rpc_ok(self.address, path)
         return data
 
     # ── Node management ──────────────────────────────────────────
@@ -133,6 +157,13 @@ class NodeRequests:
         r = self._request("post", f"/sync/user/{uid}/disconnect", timeout=LONG_TIMEOUT, **kw)
         return (r or {}).get("data", {})
 
+    def reset_usage(self, uid: str) -> bool:
+        """Zero a user's banked counters on the node. Best-effort: the DB
+        reset is authoritative; a failed node push only delays (never
+        resurrects — the collector rebaselines totals it hasn't seen)."""
+        r = self._request("post", f"/sync/user/{uid}/reset-usage", timeout=LONG_TIMEOUT)
+        return bool((r or {}).get("success"))
+
     # ── OVPN download ────────────────────────────────────────────
 
     def _get_raw(self, path: str, **kw) -> bytes | None:
@@ -146,7 +177,7 @@ class NodeRequests:
         try:
             r = _req.get(url, headers=headers, **kw)
         except _req.exceptions.SSLError as e:
-            logger.warning("Node %s %s: TLS verify failed (%s) — retrying unverified (self-signed?)", self.address, path, e)
+            logger.debug("Node %s %s: TLS verify failed (%s) — retrying unverified", self.address, path, e)
             try:
                 with _warnings.catch_warnings():
                     _warnings.simplefilter("ignore")
@@ -185,6 +216,15 @@ class NodeRequests:
         if common_name:
             params["common_name"] = common_name
         r = self._request("get", "/sync/sessions", params=params, timeout=LONG_TIMEOUT)
+        return (r or {}).get("data", {})
+
+    def get_logs(self, level: str = "WARNING", limit: int = 100) -> dict:
+        """Fetch the node's in-memory log ring (remote diagnostics)."""
+        level = (level or "WARNING").upper()
+        if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+            level = "WARNING"
+        limit = max(1, min(int(limit or 100), 500))
+        r = self._request("get", "/sync/logs", params={"level": level, "limit": limit}, timeout=LONG_TIMEOUT)
         return (r or {}).get("data", {})
 
     def download_ovpn_bytes(self, uid: str) -> bytes | None:
