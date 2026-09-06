@@ -469,6 +469,11 @@
   "alertMaxLogins": "用户达到最大登录数",
   "alertAuthErrors": "身份验证错误",
   "alertRejects": "连接被拒绝",
+  "alertQuota": "配额警告（80%+）",
+  "notifUserOverQuota": "用户 {{name}} 已超配额",
+  "notifUserOverQuotaDetail": "用量已超限——下次检查将被禁用",
+  "notifUserNearQuota": "用户 {{name}} 已用 {{pct}}%",
+  "notifUserNearQuotaDetail": "配额即将用完",
   "refreshCard": "刷新间隔",
   "refreshInterval": "仪表盘刷新（秒）",
   "refreshDesc": "仪表盘和通知铃铛多久获取一次新数据。",
@@ -520,6 +525,11 @@
   "pullToRefresh": "下拉刷新",
   "nodeTabOverview": "概览",
   "nodeTabSessions": "会话",
+  "nodeTabLogs": "日志",
+  "logLevel": "级别",
+  "refreshLogs": "刷新",
+  "nodeLogsFailed": "无法加载节点日志。",
+  "nodeLogsEmpty": "该级别暂无记录。",
   "nodeTabConfig": "配置",
   "nodeTabDanger": "危险操作",
   "nodeDetails": "节点详情",
@@ -686,5 +696,7 @@
   "chartOffline": "离线",
   "chartPolling": "轮询",
   "nodeSectionQuick": "快速设置",
-  "nodeSectionConnection": "连接"
+  "nodeSectionConnection": "连接",
+  "trafficHistory14d": "近14天流量",
+  "topTraffic7d": "近7天流量排行"
 }

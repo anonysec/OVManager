@@ -157,6 +157,9 @@ async def login(
     ip_attempts = _get_bucket(ip_key)
 
     if len(attempts) >= _MAX_ATTEMPTS or len(ip_attempts) >= _MAX_PER_IP:
+        from backend.operations.audit import log_event
+
+        log_event(db, "auth.lockout", actor=form_data.username, target=ip, detail="Too many login attempts")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please try again later.",
@@ -169,6 +172,9 @@ async def login(
         _put_bucket(user_key, attempts)
         ip_attempts.append(now)
         _put_bucket(ip_key, ip_attempts)
+        from backend.operations.audit import log_event
+
+        log_event(db, "auth.login_fail", actor=form_data.username, target=ip, detail="Bad credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="The username or password is incorrect",

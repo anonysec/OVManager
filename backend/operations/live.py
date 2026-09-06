@@ -217,7 +217,9 @@ async def collect_live_snapshot() -> None:
     online: dict[str, bool] = {}
     for item in results:
         if isinstance(item, Exception):
-            logger.warning("live collector: node probe failed: %s", item)
+            # Debug: the RPC layer already warned once + on recovery; this
+            # fires per failed probe per tick and would spam just as loudly.
+            logger.debug("live collector: node probe failed: %s", item)
             continue
         node, data = item
         if not isinstance(data, dict) or not data:

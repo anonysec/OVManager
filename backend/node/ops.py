@@ -302,3 +302,23 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
     return {"ok": not failed, "failed": failed}
+
+
+async def reset_user_usage_on_all_nodes(user_id: int, db: Session) -> dict:
+    """Zero a user's banked counters on every active node (panel reset fan-out).
+
+    Best-effort like delete: an offline node keeps its banked file, but the
+    panel already cleared its baselines, so the collector rebaselines (bills
+    zero) instead of resurrecting old bytes when the node returns.
+    Returns {"ok", "failed"} naming unreachable nodes.
+    """
+    nodes = crud.get_active_nodes(db)
+    if not nodes:
+        return {"ok": True, "failed": []}
+    tasks = []
+    for n in nodes:
+        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        tasks.append(run_in_threadpool(nr.reset_usage, str(user_id)))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
+    return {"ok": not failed, "failed": failed}

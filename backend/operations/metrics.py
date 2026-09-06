@@ -71,7 +71,9 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
         }
         return row, sessions
     except Exception as e:
-        logger.warning("metrics: node snapshot failed for %s: %s", node.name, e)
+        # Debug: per-snapshot RPC failures are already flap-logged once by
+        # the RPC layer; warning here would repeat them every 5 minutes.
+        logger.debug("metrics: node snapshot failed for %s: %s", node.name, e)
         row = {
             "node_id": node.id,
             "node_name": node.name,

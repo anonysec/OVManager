@@ -184,6 +184,15 @@ const DashboardLayout = () => {
         if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
           out.push({ id: `full-${u.uuid}`, level: 'warning', title: t('notifUserAtMax', 'User {{name}} at max logins', { name: u.name }), detail: t('notifUserAtMaxDetail', '{{active}}/{{max}} sessions', { active: u.active_connections, max: u.max_logins }), action: null, action_path: null });
         }
+        const quota = Number(u.total || 0);
+        if (quota > 0) {
+          const pct = Number(u.used || 0) / quota;
+          if (pct >= 1) {
+            out.push({ id: `quota-${u.uuid}`, level: 'danger', title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }), detail: t('notifUserOverQuotaDetail', 'Usage exceeded — will be disabled on next check'), action: null, action_path: null });
+          } else if (pct >= 0.8) {
+            out.push({ id: `quota-${u.uuid}`, level: 'warning', title: t('notifUserNearQuota', 'User {{name}} at {{pct}}% of quota', { name: u.name, pct: Math.round(pct * 100) }), detail: t('notifUserNearQuotaDetail', 'Quota almost used up'), action: null, action_path: null });
+          }
+        }
       });
       if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: security.auth_errors }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
       if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: security.rejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null, action_path: null });

@@ -224,6 +224,81 @@ def test_activity_feed_scopes_admin_to_own_events():
     assert {"test.owner_action", "test.admin_action"} <= actions
 
 
+def test_activity_action_prefix_filter():
+    """?action= filters server-side by prefix (owner sees all actors)."""
+    _ensure_schema()
+    from backend.db.engine import SessionLocal
+    from backend.operations.audit import log_event
+
+    db = SessionLocal()
+    try:
+        log_event(db, "flt.user_create", actor="flt_actor", target="t1")
+        log_event(db, "flt.node_create", actor="flt_actor", target="t2")
+        log_event(db, "other.ping", actor="flt_actor", target="t3")
+    finally:
+        db.close()
+
+    client = TestClient(api)
+    resp = client.get("/api/activity/", params={"action": "flt.user"}, headers=_owner_headers())
+    assert resp.status_code == 200
+    actions = [e["action"] for e in resp.json()["data"]]
+    assert actions and all(a.startswith("flt.user") for a in actions)
+
+    # Admin scoping still applies on top of the filter.
+    _ensure_admin("ac_admin_flt")
+    resp = client.get("/api/activity/", params={"action": "flt"}, headers=_token("ac_admin_flt", "admin"))
+    assert resp.status_code == 200
+    assert all(e["actor"] == "ac_admin_flt" for e in resp.json()["data"])
+
+
+def test_failed_login_is_audited():
+    """401s and lockouts land in the audit trail (actor=attempted user)."""
+    _ensure_schema()
+    client = TestClient(api)
+    resp = client.post(
+        "/api/login",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={"username": "ghost_login_xyz", "password": "wrong-wrong-wrong"},
+    )
+    assert resp.status_code == 401
+    from backend.db.engine import SessionLocal
+    from backend.operations.audit import recent_events
+
+    db = SessionLocal()
+    try:
+        fails = [e for e in recent_events(db, limit=50) if e["action"] == "auth.login_fail"]
+        assert any(e["actor"] == "ghost_login_xyz" and e["target"] for e in fails)
+    finally:
+        db.close()
+
+
+def test_admin_lifecycle_is_audited():
+    """admin.create/update/delete land in the audit trail with the actor."""
+    _ensure_schema()
+    client = TestClient(api)
+    name = "ac_audit_admin"
+    headers = _owner_headers()
+    client.delete(f"/api/admin/{name}", headers=headers)
+    resp = client.post("/api/admin/", json={"username": name, "password": "pw-ac-audit-12345"}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    resp = client.put("/api/admin/", json={"username": name, "password": "pw-ac-audit-67890"}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    resp = client.delete(f"/api/admin/{name}", headers=headers)
+    assert resp.status_code == 200, resp.text
+
+    from backend.db.engine import SessionLocal
+    from backend.operations.audit import recent_events
+
+    db = SessionLocal()
+    try:
+        got = {(e["action"], e["target"]) for e in recent_events(db, limit=100) if e["target"] == name}
+        assert ("admin.create", name) in got
+        assert ("admin.update", name) in got
+        assert ("admin.delete", name) in got
+    finally:
+        db.close()
+
+
 # ── mlogin JWT path honors revocation ──────────────────────────────────────
 
 

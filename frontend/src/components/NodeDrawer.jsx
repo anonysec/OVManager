@@ -51,6 +51,7 @@ const NodeDrawer = ({ node, onClose, onEdit, onDelete, onToggleStatus, onCheckSt
   const tabs = [
     { id: 'overview', label: t('nodeTabOverview', 'Overview') },
     { id: 'sessions', label: t('nodeTabSessions', 'Sessions') },
+    { id: 'logs', label: t('nodeTabLogs', 'Logs') },
     { id: 'config', label: t('nodeTabConfig', 'Config') },
     { id: 'danger', label: t('nodeTabDanger', 'Danger'), danger: true },
   ];
@@ -123,6 +124,10 @@ const NodeDrawer = ({ node, onClose, onEdit, onDelete, onToggleStatus, onCheckSt
             </div>
           )}
 
+          {tab === 'logs' && (
+            <NodeLogsTab nodeId={node.id} t={t} />
+          )}
+
           {tab === 'config' && (
             <div className="nd-stack">
               {[
@@ -158,6 +163,68 @@ const NodeDrawer = ({ node, onClose, onEdit, onDelete, onToggleStatus, onCheckSt
           )}
         </div>
       </aside>
+    </div>
+  );
+};
+
+const NodeLogsTab = ({ nodeId, t }) => {
+  const [level, setLevel] = useState('WARNING');
+  const [logs, setLogs] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = async (lv) => {
+    setLoading(true);
+    try {
+      const r = await apiClient.get(`/nodes/${nodeId}/logs`, { params: { level: lv, limit: 100 } });
+      const data = r.data?.data || {};
+      const records = Array.isArray(data.records) ? data.records : [];
+      setLogs({ records, lastError: data.last_error || null, errors: data.errors_1h || 0 });
+    } catch {
+      setLogs({ records: [], lastError: null, errors: 0, failed: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(level);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeId, level]);
+
+  return (
+    <div className="nd-stack">
+      <div className="nd-logbar">
+        <label className="nd-loglevel">
+          {t('logLevel', 'Level')}
+          <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label={t('logLevel', 'Level')}>
+            {['ERROR', 'WARNING', 'INFO'].map((lv) => (
+              <option key={lv} value={lv}>{lv}</option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="btn btn-sm btn-secondary" onClick={() => load(level)} disabled={loading}>
+          <FiRefreshCw size={12} /> {t('refreshLogs', 'Refresh')}
+        </button>
+      </div>
+      {logs?.lastError && (
+        <div className="nd-logerror" role="alert">{logs.lastError}</div>
+      )}
+      {loading && logs === null ? (
+        <div className="nd-empty">{t('loading', 'Loading…')}</div>
+      ) : logs?.failed ? (
+        <div className="nd-empty">{t('nodeLogsFailed', 'Could not load node logs.')}</div>
+      ) : logs?.records?.length ? (
+        <div className="nd-loglist">
+          {logs.records.slice().reverse().map((r, i) => (
+            <div key={i} className={`nd-log nd-log--${String(r.level || 'info').toLowerCase()}`}>
+              <span className="nd-log-time">{r.time || ''}</span>
+              <span className="nd-log-msg" title={r.where || ''}>{r.message || ''}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="nd-empty">{t('nodeLogsEmpty', 'No log records at this level.')}</div>
+      )}
     </div>
   );
 };

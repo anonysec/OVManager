@@ -12,12 +12,14 @@ from backend.auth.auth import get_current_user
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import User
+from backend.logger import logger
 from backend.node.task import (
     change_user_status_on_all_nodes,
     delete_user_on_all_nodes,
     disconnect_user_on_all_nodes,
     get_active_connection_counts,
     get_user_session_diagnostics,
+    reset_user_usage_on_all_nodes,
     set_user_limit_on_all_nodes,
 )
 from backend.operations import live as live_ops
@@ -92,6 +94,41 @@ async def get_next_username(
     )
 
 
+@router.get("/traffic/top", response_model=ResponseModel)
+async def top_traffic_users(
+    days: int = Query(default=7, ge=1, le=90),
+    limit: int = Query(default=5, ge=1, le=25),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Top users by billed bytes over the last N days (admins: own users)."""
+    from backend.operations.usage_history import top_users
+
+    owner = None if user.get("type") == "owner" else user.get("username")
+    return ResponseModel(success=True, msg="Top traffic users retrieved", data=top_users(db, days=days, limit=limit, owner=owner))
+
+
+@router.get("/{uuid}/traffic", response_model=ResponseModel)
+async def user_traffic_history(
+    uuid: str,
+    days: int = Query(default=14, ge=1, le=90),
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Per-day billed bytes for one user (zero-filled), plus lifetime used."""
+    from backend.operations.usage_history import user_daily_series
+
+    db_user = crud.get_user_by_uuid(db, uuid)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    _require_user_access(db_user, user)
+    return ResponseModel(
+        success=True,
+        msg="User traffic history retrieved",
+        data={"days": user_daily_series(db, db_user.id, days=days), "used": db_user.used or 0, "total": db_user.total},
+    )
+
+
 @router.get("/", response_model=ResponseModel)
 async def get_all_users(
     page: int | None = Query(default=None, ge=1, le=10_000),
@@ -136,9 +173,7 @@ async def get_all_users(
             total = len(page_users)
     elif user["type"] == "admin":
         if server_filter:
-            page_users, total = crud.get_users_page(
-                db, owner=user["username"], search=needle, page=page, page_size=page_size
-            )
+            page_users, total = crud.get_users_page(db, owner=user["username"], search=needle, page=page, page_size=page_size)
         else:
             page_users = crud.get_users_by_admin(db, admin_username=user["username"])
             total = len(page_users)
@@ -167,6 +202,13 @@ async def reset_user_usage(uuid: str, db: Session = Depends(get_db), user: dict 
     reset = crud.reset_user_usage(db, uuid)
     if not reset:
         raise HTTPException(status_code=404, detail="User not found")
+    # Fan out to nodes (best-effort): node banked files must go too, or the
+    # totals-based collector would resurrect pre-reset bytes as "growth".
+    # An offline node is fine — the cleared panel baselines make its return
+    # rebaseline instead of rebill.
+    fanout = await reset_user_usage_on_all_nodes(db_user.id, db)
+    if fanout.get("failed"):
+        logger.warning("reset-usage node fan-out failed on: %s", fanout["failed"])
     live_ops.publish("users", {"op": "reset-usage"})
     return ResponseModel(success=True, msg="User usage reset successfully", data=None)
 

@@ -325,12 +325,16 @@ async def auto_clean_stale_job():
 
 async def auto_prune_audit_job():
     from backend.operations.audit import prune_audit_logs
+    from backend.operations.usage_history import prune_daily
 
     db = SessionLocal()
     try:
         removed = await asyncio.to_thread(prune_audit_logs, db)
         if removed:
             logger.info("Pruned %s audit log row(s) older than 90 days", removed)
+        removed_daily = await asyncio.to_thread(prune_daily, db)
+        if removed_daily:
+            logger.info("Pruned %s daily usage row(s) older than 90 days", removed_daily)
     finally:
         db.close()
 

@@ -28,6 +28,11 @@ services:
       - /opt/ovmanager/data:/app/data
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
     security_opt:
       - no-new-privileges:true
     deploy:

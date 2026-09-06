@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FiEdit2, FiActivity, FiDownload, FiCopy, FiCheck, FiWifi, FiHardDrive, FiClock, FiUsers, FiUserX, FiUserCheck } from 'react-icons/fi';
 import Modal from './Modal';
+import apiClient from '../services/api';
 import { formatTraffic } from '../utils/format';
 import { daysUntil, formatDate } from '../utils/time';
 import { copyText } from '../utils/clipboard';
@@ -15,10 +16,52 @@ const statusOf = (user, t) => {
   return { label: t('statusOffline'), cls: 'idle' };
 };
 
+const TrafficHistory = ({ days, t }) => {
+  const max = Math.max(...days.map((d) => Number(d.bytes || 0)), 1);
+  return (
+    <div className="uhist" aria-label={t('trafficHistory14d', 'Traffic, last 14 days')}>
+      <span className="ud-k">{t('trafficHistory14d', 'Traffic, last 14 days')}</span>
+      <div className="uhist-bars">
+        {days.map((d) => (
+          <span
+            key={d.day}
+            className="uhist-bar"
+            title={`${d.day}: ${formatTraffic(d.bytes)}`}
+            style={{ height: `${Math.max(3, Math.round((Number(d.bytes || 0) / max) * 100))}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSessions, onDownload, onToggleStatus, onDelete, onExtend, onResetUsage }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
+  const [history, setHistory] = useState(null);
+
+  // Per-day billed bytes (last 14 days) for the traffic graph.
+  useEffect(() => {
+    if (!isOpen || !user?.uuid) {
+      setHistory(null);
+      return;
+    }
+    let cancelled = false;
+    apiClient
+      .get(`/users/${user.uuid}/traffic`, { params: { days: 14 } })
+      .then((r) => {
+        if (cancelled) return;
+        const list = r.data?.data?.days;
+        setHistory(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, user?.uuid]);
 
   // Generate QR code via a plain dynamic import — lazy() is for React components,
   // not for calling library functions directly.
@@ -83,9 +126,11 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
           </div>
         </div>
 
+        {history && history.length > 0 && history.some((d) => Number(d.bytes) > 0) && (
+          <TrafficHistory days={history} t={t} />
+        )}
         <div className="udetail-sub">
-          <span className="ud-k">{t('subscriptionLink')}</span>
-          <div className="udetail-linkrow">
+          <span className="ud-k">{t('subscriptionLink')}</span>          <div className="udetail-linkrow">
             <code className="udetail-link">{subscriptionLink || '—'}</code>
             <button type="button" className="code-copy" onClick={copyLink} aria-label={t('copyLink')} disabled={!subscriptionLink}>
               {copied ? <FiCheck /> : <FiCopy />}
