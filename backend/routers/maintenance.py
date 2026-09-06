@@ -338,16 +338,6 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
 
 
-@router.post("/clean-global-registry", response_model=ResponseModel)
-async def clean_global_registry(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    # Retired: the panel-side registry was never written to, so there is
-    # nothing to clean. Endpoint kept (UI button + old scripts call it);
-    # shape kept ({removed: []}) so callers don't break.
-    data = {"removed": [], "message": "registry retired — live sessions are authoritative"}
-    log_event(db, "maintenance.clean_global_registry", actor=user.get("username"), detail="removed=0 (retired)")
-    return ResponseModel(success=True, msg="Global login registry cleaned", data=data)
-
-
 @router.get("/login-diagnostics/{username}", response_model=ResponseModel)
 async def user_login_diagnostics(
     username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)

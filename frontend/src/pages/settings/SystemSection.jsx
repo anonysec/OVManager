@@ -10,7 +10,7 @@ import { settle } from '../../hooks/useAsyncData';
 import LoadingButton from '../../components/LoadingButton';
 import PanelSkeleton from '../../components/ui/PanelSkeleton';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiServer, FiZap, FiRefreshCw, FiBarChart2 } from 'react-icons/fi';
+import { FiServer, FiZap, FiRefreshCw } from 'react-icons/fi';
 import { Card, Stat } from './shared';
 import { formatBytes } from '../../utils/format';
 import { formatUptime } from '../../utils/time';
@@ -89,9 +89,6 @@ const SystemSection = () => {
           </button>
           <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/clean-stale'} onClick={() => run('/maintenance/clean-stale', t('cleanStale', 'Stale'))}>
             {busy === '/maintenance/clean-stale' ? spin : <><FiRefreshCw size={13} aria-hidden="true" /> {t('cleanStale', 'Clean stale sessions')}</>}
-          </button>
-          <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/clean-global-registry'} onClick={() => run('/maintenance/clean-global-registry', t('cleanRegistry', 'Registry'))}>
-            {busy === '/maintenance/clean-global-registry' ? spin : <><FiBarChart2 size={13} aria-hidden="true" /> {t('cleanRegistry', 'Clean registry')}</>}
           </button>
         </div>
       </Card>

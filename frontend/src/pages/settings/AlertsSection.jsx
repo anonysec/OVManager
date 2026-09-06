@@ -24,7 +24,6 @@ const AlertsSection = () => {
     { key: 'maxLogins', label: t('alertMaxLogins', 'User at max logins'), icon: FiAlertTriangle },
     { key: 'authErrors', label: t('alertAuthErrors', 'Authentication errors'), icon: FiAlertTriangle },
     { key: 'rejects', label: t('alertRejects', 'Connection rejects'), icon: FiAlertTriangle },
-    { key: 'stale', label: t('alertStale', 'Stale session markers'), icon: FiAlertTriangle },
   ];
 
   return (

@@ -66,13 +66,12 @@ def test_mlogin_status_needs_no_table():
         assert body["data"]["sessions"] == []
 
 
-def test_clean_global_registry_is_retired_but_green():
+def test_clean_global_registry_endpoint_gone():
+    """The retired shim (button + endpoint) was removed as a pair: no POST
+    route answers anymore (404, or 405 from the app-level method guard)."""
     with TestClient(api) as client:
         r = client.post("/api/maintenance/clean-global-registry", headers=_owner_headers())
-        assert r.status_code == 200
-        body = r.json()
-        assert body["success"] is True
-        assert body["data"]["removed"] == []
+        assert r.status_code in (404, 405)
 
 
 def test_login_diagnostics_registry_empty():
