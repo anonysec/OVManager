@@ -108,6 +108,7 @@ def test_second_identical_sweep_pushes_nothing(monkeypatch):
     monkeypatch.setattr(sync_mod, "NodeRequests", FakeRequests)
     node_id, user_id, name = _seed()
     try:
+
         def ours():
             return [c for c in calls if c[0] == str(user_id)]
 
@@ -157,6 +158,7 @@ def test_failed_push_is_retried_next_sweep(monkeypatch):
     node_id, user_id, name = _seed()
     target["uid"] = str(user_id)
     try:
+
         def ours():
             return [c for c in calls if c[0] == str(user_id)]
 

@@ -109,9 +109,9 @@ def test_dry_run_never_touches_live_flows():
     early version ran a real update when /opt/ovmanager existed)."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert 'Dry run — nothing changed (re-run without --dry-run to update/uninstall)' in content
-    assert 'Dry run — nothing changed (would back up data, pull, rebuild)' in content
-    assert 'Dry run — nothing changed (would stop the service' in content
+    assert "Dry run — nothing changed (re-run without --dry-run to update/uninstall)" in content
+    assert "Dry run — nothing changed (would back up data, pull, rebuild)" in content
+    assert "Dry run — nothing changed (would stop the service" in content
 
 
 def test_already_installed_menu_defaults_to_quit():
@@ -176,7 +176,7 @@ def test_docker_data_dir_and_perms_are_container_safe():
     assert '[[ "$MODE" == "docker" ]] && data_dir="/app/data"' in content
     assert 'chown -R 1000:1000 "$DATA_DIR"' in content
     assert "chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem" in content
-    assert '>/dev/stderr' in content  # build output must not pollute --json stdout
+    assert ">/dev/stderr" in content  # build output must not pollute --json stdout
 
 
 def test_repo_override_for_forks():

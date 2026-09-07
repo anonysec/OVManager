@@ -33,6 +33,11 @@ from backend.version import __version__
 
 _scheduler = None
 _bot_process = None
+# Monotonic deadline while a clean (rc=0 = disabled, no token / toggled off)
+# bot exit suppresses restart attempts. Prevents a per-minute fork+WARNING
+# loop on installs without a bot token; real crashes (rc!=0) still restart.
+_bot_disabled_until: float | None = None
+_BOT_DISABLED_RETRY_SECONDS = 3600
 
 
 # ── Security Headers Middleware ───────────────────────────────────
@@ -438,13 +443,27 @@ def start_bot():
 
 def _watchdog_bot():
     """Restart the bot process if it has died. Called by scheduler every minute."""
-    global _bot_process
+    global _bot_process, _bot_disabled_until
     if _bot_process is None:
         return  # Bot was never started (no bot.main.py)
     rc = _bot_process.poll()
-    if rc is not None:
-        logger.warning("Telegram bot exited (rc=%s) — restarting", rc)
-        start_bot()
+    if rc is None:
+        _bot_disabled_until = None
+        return
+    if rc == 0:
+        # Clean exit = disabled (no token or turned off in Settings).
+        # Don't hot-loop: retry at most once per hour, at INFO level.
+        import time
+
+        now = time.monotonic()
+        if _bot_disabled_until is not None and now < _bot_disabled_until:
+            return
+        _bot_disabled_until = now + _BOT_DISABLED_RETRY_SECONDS
+        logger.info("Telegram bot disabled (no token or turned off) — will retry in 1h")
+        return
+    _bot_disabled_until = None
+    logger.warning("Telegram bot exited (rc=%s) — restarting", rc)
+    start_bot()
 
 
 # Startup/shutdown are now managed by the lifespan context manager above.
