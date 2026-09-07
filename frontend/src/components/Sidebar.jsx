@@ -15,11 +15,6 @@ const readCollapsed = () => {
   catch { return false; }
 };
 
-const readCorner = () => {
-  try { return localStorage.getItem('ovmanager-sidebar-corner') || 'inline-start'; }
-  catch { return 'inline-start'; }
-};
-
 const Sidebar = () => {
   const { userRole, logout } = useAuth();
   const { t } = useTranslation();
@@ -27,7 +22,6 @@ const Sidebar = () => {
   const { subscribe, unsubscribe } = useLive();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [corner, setCorner] = useState(readCorner);
   const [stats, setStats] = useState({ totalUsers: 0, totalUsage: 0 });
   const hamburgerRef = useRef(null);
   const drawerRef = useRef(null);
@@ -44,20 +38,6 @@ const Sidebar = () => {
     try { localStorage.setItem('ovmanager-sidebar-collapsed', String(collapsed)); } catch { /* private mode */ }
     window.dispatchEvent(new Event('sidebar-pin-change'));
   }, [collapsed]);
-
-  // Sidebar position can change live from Settings (no reload) or another tab.
-  useEffect(() => {
-    const applyCorner = (e) => {
-      if (e?.detail?.corner) setCorner(e.detail.corner);
-      else setCorner(readCorner());
-    };
-    window.addEventListener('sidebar-corner-change', applyCorner);
-    window.addEventListener('storage', applyCorner);
-    return () => {
-      window.removeEventListener('sidebar-corner-change', applyCorner);
-      window.removeEventListener('storage', applyCorner);
-    };
-  }, []);
 
   useEffect(() => {
     const onResize = () => { if (window.innerWidth >= 768) setMobileOpen(false); };
@@ -187,7 +167,6 @@ const Sidebar = () => {
         ref={drawerRef}
         id="ops-sidebar"
         className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''} ${mobileOpen ? 'ops-sidebar--mobile ops-sidebar--open' : ''}`}
-        data-corner={corner}
         aria-label={t('mainNavigation', 'Main navigation')}
       >
         {/* Collapse toggle */}

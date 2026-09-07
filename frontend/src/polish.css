@@ -460,17 +460,6 @@
   color: var(--text-primary);
 }
 
-/* Five-option pill row (sidebar corner): even columns that wrap sanely. */
-.sp-pills-5 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 6px;
-}
-
-.sp-pills-5 .sp-theme-pill {
-  min-width: 0;
-}
-
 /* Button group must wrap on narrow screens (was inline-flex, overflow). */
 .sp-btn-group {
   display: flex;
@@ -609,8 +598,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE DRAWER LAYERING — the open drawer + overlay sit above the bottom
    nav (z 95) and the topbar (z 110); the hamburger stays on top so it can
-   also close. Corner docking applies on desktop only — on phones the
-   drawer always slides from below the topbar.
+   also close.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .sidebar-mobile-overlay {
@@ -626,10 +614,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .ops-sidebar[data-corner] {
-    top: var(--topbar-h);
-  }
-
   /* Seven-tab owner bar: keep labels on one line. */
   .mobile-nav--6 .mobile-nav-link span,
   .mobile-nav--7 .mobile-nav-link span {
