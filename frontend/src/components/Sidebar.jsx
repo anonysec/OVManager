@@ -117,7 +117,9 @@ const Sidebar = () => {
   const navItems = [
     { to: '/',          label: t('navDashboard', 'Dashboard'), icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
     { to: '/users',     label: t('navUsers',     'Users'),     icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
-    { to: '/nodes',     label: t('navNodes',     'Nodes'),     icon: FiServer,             group: t('navGroupManage',   'Manage')   },
+    ...(userRole === 'owner' ? [
+      { to: '/nodes',   label: t('navNodes',     'Nodes'),     icon: FiServer,             group: t('navGroupManage',   'Manage')   },
+    ] : []),
   ];
 
   if (userRole === 'owner') {

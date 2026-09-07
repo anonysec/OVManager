@@ -14,6 +14,7 @@ import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
+import { useAuth } from '../context/AuthContext';
 import { DataTable, StatusBadge, ErrorState, EmptyState, SkeletonTable } from '../components/ui';
 import KpiCard from '../components/dashboard/KpiCard';
 import AlertStrip from '../components/dashboard/AlertStrip';
@@ -95,6 +96,10 @@ const fmtUpdated = (date) => {
 const ServerStats = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  // Normal admins get a scoped dashboard: node list, server info, metrics
+  // history and per-node probes are owner-only (backend 403s them).
+  const { userRole } = useAuth();
+  const isOwner = userRole === 'owner';
 
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState(null);
@@ -114,35 +119,38 @@ const ServerStats = () => {
     if (!background) setLoading(true);
 
     const res = await settle({
-      stats: apiClient.get('/server/info'),
+      // Owner-only reads live behind isOwner so admins never 403-spam.
+      ...(isOwner ? {
+        stats: apiClient.get('/server/info'),
+        nodes: apiClient.get('/nodes/'),
+        metrics: apiClient.get('/metrics/history?hours=24'),
+      } : {}),
       users: apiClient.get('/users/'),
-      nodes: apiClient.get('/nodes/'),
-      metrics: apiClient.get('/metrics/history?hours=24'),
       notifs: apiClient.get('/notifications/'),
       activity: apiClient.get('/activity/?limit=8'),
     });
 
     const nextErrors = {};
 
-    if (res.stats.ok) setStats(res.stats.data.data?.data || res.stats.data.data || null);
-    else nextErrors.stats = res.stats.error;
+    if (res.stats?.ok) setStats(res.stats.data.data?.data || res.stats.data.data || null);
+    else if (res.stats) nextErrors.stats = res.stats.error;
 
     if (res.users.ok) setUsers(asList(res.users.data, 'users'));
     else nextErrors.users = res.users.error;
 
     let nodesData = [];
-    if (res.nodes.ok) {
+    if (res.nodes?.ok) {
       nodesData = asList(res.nodes.data, 'nodes');
       setNodes(nodesData);
-    } else nextErrors.nodes = res.nodes.error;
+    } else if (res.nodes) nextErrors.nodes = res.nodes.error;
 
-    if (res.metrics.ok) {
+    if (res.metrics?.ok) {
       const series = res.metrics.data.data?.data?.traffic || res.metrics.data.data?.traffic || [];
       setTrafficSeries({
         conns: series.map((p) => Number(p.active_connections || 0)),
         bytes: series.map((p) => Number(p.total_used || 0)),
       });
-    } else nextErrors.metrics = res.metrics.error;
+    } else if (res.metrics) nextErrors.metrics = res.metrics.error;
 
     if (res.notifs?.ok) {
       const items = res.notifs.data.data?.data ?? res.notifs.data.data ?? [];
@@ -177,7 +185,7 @@ const ServerStats = () => {
       setNodeStatus(Object.fromEntries(results));
       setProbesDone(true);
     } catch { /* keep previous */ }
-  }, []);
+  }, [isOwner]);
 
   const { subscribe, streamConnected } = useLive();
 
@@ -211,7 +219,9 @@ const ServerStats = () => {
     const st = nodeStatus[n.id] || {};
     return st.reachable === true || (st.reachable === undefined && st.node_info !== undefined && st.session_diagnostics !== undefined);
   }).length;
-  const activeConnections = Object.values(nodeStatus).reduce((sum, s) => sum + Number(s?.session_diagnostics?.live_count || 0), 0);
+  const activeConnections = isOwner
+    ? Object.values(nodeStatus).reduce((sum, s) => sum + Number(s?.session_diagnostics?.live_count || 0), 0)
+    : (users || []).reduce((sum, u) => sum + Number(u.active_connections || 0), 0);
   const totalUsed = (users || []).reduce((sum, u) => sum + Number(u.used || 0), 0);
   const activeNodeCount = (nodes || []).filter((n) => n.status).length;
   const offlineNodes = probesDone ? Math.max(0, activeNodeCount - onlineNodes) : 0;
@@ -355,9 +365,10 @@ const ServerStats = () => {
   ], [t, nodeStatus]);
 
   const allFailed = !loading
-    && Boolean(errors.stats && errors.users && errors.nodes && errors.activity && errors.metrics);
+    && Boolean(errors.users && errors.activity)
+    && (isOwner ? Boolean(errors.stats && errors.nodes && errors.metrics) : true);
 
-  const heroLoading = loading && !stats && !users && !nodes;
+  const heroLoading = loading && !users && (isOwner ? (!stats && !nodes) : true);
 
   return (
     <div className="ds-page">
@@ -377,9 +388,11 @@ const ServerStats = () => {
           <button type="button" className="btn btn-sm" onClick={() => navigate('/users?add=1')}>
             <FiPlus size={12} aria-hidden="true" /> {t('addUser', 'Add user')}
           </button>
+          {isOwner && (
           <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes?add=1')}>
             <FiPlus size={12} aria-hidden="true" /> {t('addNode', 'Add node')}
           </button>
+          )}
         </div>
       </div>
 
@@ -409,6 +422,7 @@ const ServerStats = () => {
             spark={trafficSeries.bytes}
             sub={t('heroTrafficSub', 'All users combined')}
           />
+          {isOwner && (
           <KpiCard
             icon={FiServer}
             label={t('onlineNodes', 'Nodes online')}
@@ -417,6 +431,7 @@ const ServerStats = () => {
             to="/nodes"
             sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
           />
+          )}
           <KpiCard
             icon={FiUsers}
             label={t('onlineUsers', 'Users online')}
@@ -441,8 +456,9 @@ const ServerStats = () => {
         </div>
       ) : (
         <>
-          <StreamChart period="24h" hours={24} />
+          {isOwner && <StreamChart period="24h" hours={24} />}
 
+          {isOwner && (
           <div className="ds-grid-1-2">
             <ServerHealth
               stats={stats}
@@ -461,6 +477,7 @@ const ServerStats = () => {
               onRetry={() => loadData()}
             />
           </div>
+          )}
 
           <div className="ds-grid-2">
             <section className="ds-card">
@@ -535,6 +552,7 @@ const ServerStats = () => {
             />
           </div>
 
+          {isOwner && (
           <section className="ds-card">
             <div className="ds-card-head">
                 <h3 className="ds-card-title">
@@ -583,6 +601,7 @@ const ServerStats = () => {
               )}
             </div>
           </section>
+          )}
         </>
       )}
     </div>

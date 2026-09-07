@@ -8,12 +8,12 @@ import { asList } from '../utils/apiData';
 const PAGES = (t, isAdmin) => [
   { label: t('navDashboard', 'Dashboard'), path: '/', icon: FiServer, group: t('navGroupPages', 'Pages') },
   { label: t('navUsers', 'Users'), path: '/users', icon: FiUsers, group: t('navGroupPages', 'Pages') },
-  { label: t('navNodes', 'Nodes'), path: '/nodes', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   { label: t('navSettings', 'Settings'), path: '/settings', icon: FiSettings, group: t('navGroupPages', 'Pages') },
+  { label: t('addNewUser', 'Add user'), path: '/users?add=1', icon: FiUsers, group: t('navGroupPages', 'Pages') },
   ...(isAdmin ? [
+    { label: t('navNodes', 'Nodes'), path: '/nodes', icon: FiFileText, group: t('navGroupPages', 'Pages') },
     { label: t('navAdmins', 'Admins'), path: '/admins', icon: FiUserCheck, group: t('navGroupPages', 'Pages') },
     { label: t('navAudit', 'Audit Log'), path: '/audit', icon: FiShield, group: t('navGroupPages', 'Pages') },
-    { label: t('addNewUser', 'Add user'), path: '/users?add=1', icon: FiUsers, group: t('navGroupPages', 'Pages') },
     { label: t('addNewNode', 'Add node'), path: '/nodes?add=1', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   ] : []),
 ];
@@ -54,12 +54,13 @@ const CommandPalette = ({ userRole }) => {
     try {
       const [u, n] = await Promise.all([
         apiClient.get('/users/'),
-        apiClient.get('/nodes/'),
+        // Nodes are owner-only: don't 403-spam as an admin.
+        ...(isAdmin ? [apiClient.get('/nodes/')] : [Promise.resolve(null)]),
       ]);
       setUsers(asList(u.data, 'users').slice(0, 50));
-      setNodes(asList(n.data, 'nodes').slice(0, 50));
+      setNodes(n ? asList(n.data, 'nodes').slice(0, 50) : []);
     } catch { /* palette stays usable with pages only */ }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (open) {

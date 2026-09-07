@@ -131,7 +131,7 @@ function App({ onReady }) {
             element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
             <Route index element={<Page name="dashboard"><ServerStats /></Page>} />
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
-            <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />
+            {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />

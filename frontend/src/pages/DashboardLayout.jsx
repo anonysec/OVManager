@@ -123,8 +123,9 @@ const DashboardLayout = () => {
       const lower = key.toLowerCase();
       if (gPending.current) {
         gPending.current = false;
-        const routes = { d: '/', u: '/users', n: '/nodes', s: '/settings' };
+        const routes = { d: '/', u: '/users', s: '/settings' };
         if (userRole === 'owner') routes.a = '/admins';
+        if (userRole === 'owner') routes.n = '/nodes';
         if (routes[lower]) {
           e.preventDefault();
           navigate(routes[lower]);
@@ -152,14 +153,17 @@ const DashboardLayout = () => {
       // possible failure mode for an alerting surface.
       const res = await settle({
         users: apiClient.get('/users/'),
-        nodes: apiClient.get('/nodes/'),
-        security: apiClient.get('/security/summary?hours=8'),
+        // Nodes + security summary are owner-only: skip them as an admin.
+        ...(userRole === 'owner' ? {
+          nodes: apiClient.get('/nodes/'),
+          security: apiClient.get('/security/summary?hours=8'),
+        } : {}),
         serverNotifs: apiClient.get('/notifications/'),
       });
 
       const users = asList(res.users.ok ? res.users.data : null, 'users');
-      const nodes = asList(res.nodes.ok ? res.nodes.data : null, 'nodes');
-      const security = res.security.ok ? (res.security.data.data?.data || {}) : {};
+      const nodes = asList(res.nodes?.ok ? res.nodes.data : null, 'nodes');
+      const security = res.security?.ok ? (res.security.data.data?.data || {}) : {};
       const serverItems = res.serverNotifs?.ok
         ? (res.serverNotifs.data.data?.data ?? res.serverNotifs.data.data ?? [])
         : [];
@@ -205,7 +209,7 @@ const DashboardLayout = () => {
     } catch {
       // keep existing; API interceptor surfaces real errors as toasts
     }
-  }, [t]);
+  }, [t, userRole]);
 
   // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
   // immediately when the preference changes. The bell always loads once on
