@@ -31,24 +31,3 @@ export const applyAccent = () => {
   }
 };
 
-
-/** Panel visual style: 'normal' (rich cards) or 'minimal' (flat, hairline).
-    Stored per browser; applied as data-ui-style on <html> so the whole
-    stylesheet can react without touching every component. */
-export const getUiStyle = () => getUiPref('style', 'normal');
-
-export const applyUiStyle = () => {
-  const style = getUiStyle();
-  const root = document.documentElement;
-  if (style === 'minimal') {
-    root.setAttribute('data-ui-style', 'minimal');
-  } else {
-    root.removeAttribute('data-ui-style');
-  }
-};
-
-export const setUiStyle = (style) => {
-  setUiPref('style', style);
-  applyUiStyle();
-};
-

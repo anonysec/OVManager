@@ -3540,34 +3540,8 @@ html[data-theme="light"] .mobile-nav {
    tighter collapsed rail, RTL, profile in sidebar footer.
 ═══════════════════════════════════════════════════════════ */
 
-/* Corner anchoring. "inline-start" is the default (left in LTR, right in RTL),
-   spanning full height. Corners (top-left/right, bottom-left/right) shrink
-   the sidebar to 60vh max and anchor to that corner. */
-.ops-sidebar[data-corner="inline-start"] {
-  left: 0;
-  right: auto;
-  bottom: 0;
-  top: 0;
-  height: 100vh;
-  max-height: none;
-}
-html[dir="rtl"] .ops-sidebar[data-corner="inline-start"] {
-  left: auto;
-  right: 0;
-}
 
-.ops-sidebar[data-corner="top-left"]    { top: 0;    bottom: auto; height: auto; max-height: 60vh; border-bottom: 1px solid var(--border); }
-.ops-sidebar[data-corner="top-right"]   { top: 0;    bottom: auto; right: 0; left: auto; height: auto; max-height: 60vh; border-bottom: 1px solid var(--border); }
-.ops-sidebar[data-corner="bottom-left"] { top: auto; bottom: 0;    height: auto; max-height: 60vh; border-top: 1px solid var(--border); }
-.ops-sidebar[data-corner="bottom-right"]{ top: auto; bottom: 0;    right: 0; left: auto; height: auto; max-height: 60vh; border-top: 1px solid var(--border); }
-
-/* RTL corner mirrors LTR — corners stay physical so users get the same
-   visual placement regardless of writing direction. */
 html[dir="rtl"] .ops-sidebar                     { left: auto; right: 0; }
-html[dir="rtl"] .ops-sidebar[data-corner="top-right"]    { right: 0; left: auto; }
-html[dir="rtl"] .ops-sidebar[data-corner="top-left"]     { right: auto; left: 0; }
-html[dir="rtl"] .ops-sidebar[data-corner="bottom-right"] { right: 0; left: auto; }
-html[dir="rtl"] .ops-sidebar[data-corner="bottom-left"]  { right: auto; left: 0; }
 
 .ops-sidebar .sidebar-nav {
   flex: 1 1 auto;
@@ -4419,121 +4393,6 @@ html[dir="rtl"] .notification-popover {
 /* ── view-header-actions (nodes page) ──────────────────── */
 .view-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-/* ═══════════════════════════════════════════════════════════════════
-   MINIMAL UI STYLE — flat surfaces, hairline borders, quiet chrome.
-   Enabled in Settings → Appearance → Panel style (sets
-   data-ui-style="minimal" on <html>). Complements the dark/light themes
-   and never touches the user's chosen accent color.
-═══════════════════════════════════════════════════════════════════ */
-html[data-ui-style="minimal"] {
-  --bg: #0b0d11;
-  --bg-elevated: #0e1116;
-  --surface-1: #10131a;
-  --surface-2: #12161e;
-  --surface-3: #171c26;
-  --border: #1d222c;
-  --border-strong: #29303d;
-  --shadow: none;
-  --shadow-sm: none;
-  --shadow-lg: none;
-  --background-primary: var(--surface-1);
-  --background-secondary: var(--surface-2);
-  --background-card-hover: var(--surface-3);
-}
-
-html[data-ui-style="minimal"][data-theme="light"] {
-  --bg: #f4f5f7;
-  --bg-elevated: #ffffff;
-  --surface-1: #ffffff;
-  --surface-2: #fafbfc;
-  --surface-3: #f0f2f5;
-  --border: #dfe3ea;
-  --border-strong: #c9d1dc;
-}
-
-/* ── Shell: sidebar + topbar + bottom nav go flat ─────────────── */
-html[data-ui-style="minimal"] .ops-sidebar { background: transparent; box-shadow: none; }
-html[data-ui-style="minimal"] .ops-topbar-minimal {
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
-  border-bottom-color: var(--border);
-}
-html[data-ui-style="minimal"] .mobile-nav {
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
-}
-
-/* ── Cards / panels → flat hairline boxes ─────────────────────── */
-html[data-ui-style="minimal"] .ops-panel { background: transparent; border-radius: 6px; box-shadow: none; }
-html[data-ui-style="minimal"] .ops-panel:hover { box-shadow: none; transform: none; }
-html[data-ui-style="minimal"] .ops-panel header { border-bottom-color: var(--border); }
-html[data-ui-style="minimal"] .user-stat { background: transparent; border-radius: 4px; }
-html[data-ui-style="minimal"] .user-stat::before { display: none; }
-html[data-ui-style="minimal"] .sp-card,
-html[data-ui-style="minimal"] .setting-card { background: transparent; border-radius: 4px; }
-html[data-ui-style="minimal"] .sp-card:hover { box-shadow: none; }
-html[data-ui-style="minimal"] .statcard,
-html[data-ui-style="minimal"] .dashboard-kpi-compact,
-html[data-ui-style="minimal"] .quick-link,
-html[data-ui-style="minimal"] .dashboard-quick-links .quick-link { background: transparent; border-radius: 4px; box-shadow: none; }
-
-/* ── Lists: no card chrome, hairline rows ─────────────────────── */
-html[data-ui-style="minimal"] .list-table-container { border-radius: 4px; background: transparent; }
-html[data-ui-style="minimal"] .list-table.user-list-table tbody tr,
-html[data-ui-style="minimal"] .list-table.node-list-table tbody tr,
-html[data-ui-style="minimal"] .list-table.audit-table tbody tr { background: transparent; }
-html[data-ui-style="minimal"] .list-table.user-list-table tbody tr:nth-child(even),
-html[data-ui-style="minimal"] .list-table.node-list-table tbody tr:nth-child(even) { background: rgba(255,255,255,.015); }
-html[data-ui-style="minimal"] .list-table.user-list-table thead th,
-html[data-ui-style="minimal"] .list-table.node-list-table thead th,
-html[data-ui-style="minimal"] .list-table.audit-table thead th { background: transparent; border-bottom-width: 1px; }
-html[data-ui-style="minimal"] .list-table.user-list-table tbody tr.selected td { background: color-mix(in srgb, var(--accent-color) 9%, transparent); }
-html[data-ui-style="minimal"] .list-table.user-list-table tbody tr:hover td,
-html[data-ui-style="minimal"] .list-table.node-list-table tbody tr:hover td { background: rgba(255,255,255,.03); }
-
-/* ── Controls: smaller radius, no glow ────────────────────────── */
-html[data-ui-style="minimal"] .btn,
-html[data-ui-style="minimal"] .btn-secondary,
-html[data-ui-style="minimal"] .loading-btn,
-html[data-ui-style="minimal"] .topbar-search-trigger,
-html[data-ui-style="minimal"] .icon-btn,
-html[data-ui-style="minimal"] .row-actions button,
-html[data-ui-style="minimal"] .actions-dropdown-trigger,
-html[data-ui-style="minimal"] .sp-theme-pill,
-html[data-ui-style="minimal"] .accent-swatch,
-html[data-ui-style="minimal"] .density-toggle,
-html[data-ui-style="minimal"] .filter-chip,
-html[data-ui-style="minimal"] .sidebar-hamburger { border-radius: 4px; box-shadow: none; }
-html[data-ui-style="minimal"] .btn { background: var(--accent-color); }
-html[data-ui-style="minimal"] .btn:hover { box-shadow: none; }
-html[data-ui-style="minimal"] input,
-html[data-ui-style="minimal"] select,
-html[data-ui-style="minimal"] textarea { border-radius: 4px; }
-html[data-ui-style="minimal"] .topbar-search-trigger kbd { display: none; }
-
-/* ── Badges / chips → outline style ───────────────────────────── */
-html[data-ui-style="minimal"] .badge,
-html[data-ui-style="minimal"] .status-badge,
-html[data-ui-style="minimal"] .chip { border-radius: 3px; }
-
-/* ── Popovers / dropdowns / modals flat ───────────────────────── */
-html[data-ui-style="minimal"] .notification-popover,
-html[data-ui-style="minimal"] .lang-dropdown,
-html[data-ui-style="minimal"] .profile-dropdown,
-html[data-ui-style="minimal"] .sidebar-profile-dropdown,
-html[data-ui-style="minimal"] .actions-dropdown,
-html[data-ui-style="minimal"] .row-quick-menu,
-html[data-ui-style="minimal"] .command-palette { border-radius: 6px; box-shadow: none; }
-html[data-ui-style="minimal"] .modal,
-html[data-ui-style="minimal"] .modal-box,
-html[data-ui-style="minimal"] .confirm-modal { border-radius: 6px; box-shadow: none; }
-
-/* ── Settings pills: 2-up variant for the Panel style picker ──── */
-.sp-theme-pills.sp-pills-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* ═══════════════════════════════════════════════════════════
    Loading & failure states

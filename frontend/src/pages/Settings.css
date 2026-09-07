@@ -282,7 +282,6 @@
 
 /* ── Theme/Style pills ───────────────────── */
 .sp-theme-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-.sp-pills-2 .sp-theme-pill { flex: 1; min-width: 120px; }
 .sp-theme-pill {
   display: inline-flex;
   align-items: center;

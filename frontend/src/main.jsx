@@ -12,12 +12,11 @@ import { ThemeProvider } from './context/ThemeContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { getUrlPath } from './utils/panelUrl';
-import { applyAccent, applyUiStyle } from './utils/uiPrefs';
+import { applyAccent } from './utils/uiPrefs';
 import './i18n';
 
-// Apply persisted UI preferences (custom accent, minimal style) before first paint.
+// Apply persisted UI preferences (custom accent) before first paint.
 try { applyAccent(); } catch { /* noop */ }
-try { applyUiStyle(); } catch { /* noop */ }
 
 // Router basename comes from the <base href> the backend injects, e.g.
 // "/dashboard" when served at /dashboard/, "" when served at root. The
