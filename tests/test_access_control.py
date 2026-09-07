@@ -299,6 +299,45 @@ def test_admin_lifecycle_is_audited():
         db.close()
 
 
+# ── Owner-only read surface (nodes / settings / info / security / metrics) ──
+
+
+def test_owner_only_reads_reject_admin():
+    """Normal admins get 403 on node list, settings, server info,
+    security summary and metrics history; owner keeps 200."""
+    _ensure_schema()
+    _ensure_admin("ac_admin_readgate")
+    client = TestClient(api)
+    admin = _token("ac_admin_readgate", "admin")
+    owner = _owner_headers()
+    for path in (
+        "/api/nodes/",
+        "/api/server/settings",
+        "/api/server/info",
+        "/api/security/summary",
+        "/api/metrics/history",
+    ):
+        resp = client.get(path, headers=admin)
+        assert resp.status_code == 403, f"{path} allowed for admin"
+    for path in (
+        "/api/nodes/",
+        "/api/server/settings",
+        "/api/server/info",
+        "/api/metrics/history",
+    ):
+        resp = client.get(path, headers=owner)
+        assert resp.status_code == 200, f"{path} broke for owner: {resp.text[:200]}"
+
+
+def test_security_summary_owner_still_works():
+    """Owner keeps 200 on the security summary (admin is 403 above)."""
+    _ensure_schema()
+    client = TestClient(api)
+    resp = client.get("/api/security/summary", headers=_owner_headers())
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
 # ── mlogin JWT path honors revocation ──────────────────────────────────────
 
 

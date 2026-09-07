@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
-from backend.auth.auth import get_current_user
+from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.node.requests import NodeRequests
@@ -78,7 +78,7 @@ def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None)
 
 
 @router.get("/summary", response_model=ResponseModel)
-async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     nodes = crud.get_all_nodes(db)
     panel_tz = _get_panel_tz(db)
     tz_name = str(panel_tz)
