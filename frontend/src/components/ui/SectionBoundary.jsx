@@ -1,4 +1,4 @@
-import { Component, Suspense } from 'react';
+import { Component } from 'react';
 import { withTranslation } from 'react-i18next';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 
@@ -61,16 +61,5 @@ class SectionBoundaryInner extends Component {
 }
 
 const SectionBoundary = withTranslation()(SectionBoundaryInner);
-
-/**
- * Convenience wrapper: error boundary + Suspense in one. Use for lazily
- * imported widgets so a chunk that fails to load degrades to a retry card
- * instead of an unhandled rejection.
- */
-export const LazySection = ({ name, title, fallback, compact, children }) => (
-  <SectionBoundary name={name} title={title} compact={compact}>
-    <Suspense fallback={fallback ?? null}>{children}</Suspense>
-  </SectionBoundary>
-);
 
 export default SectionBoundary;

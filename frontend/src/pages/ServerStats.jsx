@@ -23,7 +23,6 @@ import SessionsBreakdown from '../components/dashboard/SessionsBreakdown';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
 import TopTraffic from '../components/dashboard/TopTraffic';
 import StreamChart from '../components/dashboard/StreamChart';
-import { Panel, PanelState } from '../components/dashboard/Panel';
 import './Dashboard.css';
 
 /**

@@ -8,7 +8,7 @@ import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
 import PanelSkeleton from '../../components/ui/PanelSkeleton';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiSend, FiCheck } from 'react-icons/fi';
+import { FiSend } from 'react-icons/fi';
 import { Card, Field } from './shared';
 
 /* ═══════════════════════════════════════════════════════

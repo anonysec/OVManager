@@ -348,12 +348,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   gap: 16px;
 }
 
-.ds-grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
 .ds-grid-1-2 {
   display: grid;
   grid-template-columns: 1fr 2fr;
@@ -589,11 +583,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   border-radius: 50%;
   background: var(--text-muted);
   flex: none;
-}
-
-.ds-chart-status--live {
-  background: var(--success);
-  animation: ds-pulse 1.5s ease-in-out infinite;
 }
 
 .ds-chart-status--error {
@@ -990,4 +979,4 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   .ds-session-bar-fill {
     transition: none;
   }
-}
+}/*tail*/
