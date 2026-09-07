@@ -4,7 +4,6 @@ import App from './App.jsx'
 import './tokens.css'
 import './index.css'
 import './styles.css'
-import './polish.css'
 import './pages/Dashboard.css'
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext.jsx';

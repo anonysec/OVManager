@@ -11,10 +11,6 @@ export function getTimezone() {
   return localStorage.getItem(STORAGE_KEY) || 'UTC';
 }
 
-export function setTimezone(tz) {
-  if (tz) localStorage.setItem(STORAGE_KEY, tz);
-}
-
 // Format an ISO string (UTC) into the operator timezone.
 export function fmtDateTime(iso, opts = {}) {
   if (!iso) return '—';

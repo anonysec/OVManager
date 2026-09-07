@@ -10,60 +10,10 @@
   animation: fadeUp .2s ease both;
 }
 
-/* ── Simple / Advanced mode bar ───────────────── */
-.sp-modebar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding: 9px 12px;
-  background: var(--surface-1, var(--panel));
-  border: 1px solid var(--border, var(--line));
-  border-radius: 10px;
-}
-
-.sp-mode-toggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 3px;
-  padding: 3px;
-  background: var(--surface-2, rgba(255,255,255,.04));
-  border: 1px solid var(--border, var(--line));
-  border-radius: 8px;
-}
-
-.sp-mode-toggle button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 11px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted, var(--muted));
-  font: 700 11px/1 var(--font-family);
-  cursor: pointer;
-  transition: background .12s ease, color .12s ease, border-color .12s ease;
-}
-
-.sp-mode-toggle button:hover {
-  color: var(--text-primary, var(--text));
-}
-
 .sp-mode-toggle button.active {
   background: var(--accent-color-transparent, rgba(252,122,30,.14));
   border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border, var(--line)));
   color: var(--accent-color, var(--orange));
-}
-
-.sp-mode-hint {
-  flex: 1 1 200px;
-  min-width: 0;
-  margin: 0;
-  color: var(--text-muted, var(--muted));
-  font-size: 11px;
-  line-height: 1.4;
 }
 
 /* ── Jump navigation bar ─────────────────── */
@@ -267,9 +217,6 @@
 }
 .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(18px); }
 .sp-toggle input:disabled ~ .sp-toggle-track { opacity: .45; cursor: not-allowed; }
-
-/* ── Accent swatches ─────────────────────── */
-.sp-accent-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .accent-swatch {
   width: 24px; height: 24px;
   border-radius: 6px;
@@ -334,115 +281,7 @@
 .btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
 
 .btn-sm { padding: 6px 10px; font-size: 11px; }
-
-/* ── Panel URL display ───────────────────── */
-.urlpath-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--surface-1, var(--panel));
-  border: 1px solid var(--border, var(--line));
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-
-.urlpath-label {
-  font-size: 11px;
-  color: var(--text-secondary, var(--muted));
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.urlpath-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-color, var(--orange));
-  background: transparent;
-  padding: 0;
-}
-
-.urlpath-edit-btn {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: var(--surface-2, rgba(255,255,255,.05));
-  color: var(--text-secondary, var(--muted));
-  cursor: pointer;
-  border-radius: 5px;
-  transition: all .12s ease;
-}
-.urlpath-edit-btn:hover {
-  color: var(--accent-color, var(--orange));
-  background: var(--accent-color-transparent, rgba(252,122,30,.12));
-}
-
-/* ── System info rows ────────────────────── */
-.sp-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border, var(--line));
-}
-.sp-info-row:last-child { border-bottom: none; }
-.sp-info-label { color: var(--text-muted, var(--muted)); font-size: 12px; }
-.sp-info-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-
-/* ── Maintenance actions ─────────────────── */
-.sp-maintain-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: var(--surface-1, var(--panel));
-  border: 1px solid var(--border, var(--line));
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-.sp-maintain-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sp-maintain-title { font-weight: 600; font-size: 13px; color: var(--text-primary, var(--text)); }
-.sp-maintain-desc { font-size: 11px; color: var(--text-muted, var(--muted)); max-width: 360px; }
-
-/* ── Security / Feed ─────────────────────── */
-.sp-feed { display: flex; flex-direction: column; gap: 1px; }
-.sp-feed-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 3px;
-  border-bottom: 1px solid var(--border, var(--line));
-  flex-wrap: wrap;
-}
-.sp-feed-row:last-child { border-bottom: none; }
-.sp-feed-body { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; flex-wrap: wrap; }
-.sp-feed-actor { font-size: 11px; font-weight: 700; color: var(--accent-color, var(--orange)); }
-.sp-feed-target { font-size: 11px; font-weight: 500; color: var(--text-primary, var(--text)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; }
-.sp-feed-time { font-size: 10px; color: var(--text-muted, var(--muted)); white-space: nowrap; margin-left: auto; }
-.sp-muted { color: var(--text-muted, var(--muted)); }
 .sp-hint { margin: 6px 0 0; font-size: 10px; color: var(--text-muted, var(--muted)); line-height: 1.4; }
-
-/* ── Skeleton ────────────────────────────── */
-.sp-skeleton-card {
-  background: var(--surface-1, var(--panel));
-  border: 1px solid var(--border, var(--line));
-  border-radius: 10px;
-  padding: 20px;
-}
-.sp-skeleton-line {
-  height: 14px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--surface-2, var(--panel)) 25%, var(--surface-1, var(--panel)) 50%, var(--surface-2, var(--panel)) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  margin-bottom: 10px;
-}
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
@@ -450,4 +289,3 @@
 
 /* ── Error / Empty states ────────────────── */
 .sp-error { padding: 24px; text-align: center; color: var(--danger-text, var(--danger)); font-weight: 600; }
-.sp-empty { padding: 32px; text-align: center; color: var(--text-muted, var(--muted)); }

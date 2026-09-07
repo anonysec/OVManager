@@ -26,12 +26,3 @@ const baseHref = () => {
 
 /** Current URLPATH prefix, e.g. "dashboard" or "" (panel at root). */
 export const getUrlPath = () => baseHref().replace(/^\/+|\/+$/g, '');
-
-/** Base path prefix for the router, e.g. "/dashboard" or "" at root. */
-export const getPanelBase = () => {
-  const path = getUrlPath();
-  return path ? `/${path}` : '';
-};
-
-/** Origin + prefix, e.g. "https://panel.example.com/dashboard". */
-export const getPanelOrigin = () => `${window.location.origin}${getPanelBase()}`;

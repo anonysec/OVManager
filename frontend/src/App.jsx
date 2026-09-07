@@ -9,8 +9,8 @@ import { SkeletonPanel, SkeletonBlock } from './components/ui/Skeleton';
 import favicon from './assets/ovmanager-character-clean.png';
 
 // Lazy-loaded pages for code splitting. Each factory is hoisted to a named
-// const so it can be reused for prefetching (see prefetchRoutes below) without
-// creating a second, separate chunk.
+// const so it can be reused by useRoutePrefetch without creating a second,
+// separate chunk.
 const loadLogin = () => import('./pages/LoginPage');
 const loadDashboard = () => import('./pages/DashboardLayout');
 const loadServerStats = () => import('./pages/ServerStats');

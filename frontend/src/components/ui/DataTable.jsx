@@ -17,14 +17,12 @@ const DataTable = ({
   allSelected = false,
   someSelected = false,
   loading = false,
-  skeletonRows = 8,
   page = 1,
   pageSize = 25,
   total = null,
   onPageChange = null,
   onPageSizeChange = null,
   pageSizeOptions = [10, 25, 50, 100],
-  empty = null,
   caption = null,
   density = 'comfort',
 }) => {
@@ -36,10 +34,8 @@ const DataTable = ({
   const to = Math.min(totalRows, safePage * pageSize);
 
   if (loading) {
-    return <SkeletonTable rows={skeletonRows} cols={columns.length + (selectable ? 1 : 0)} />;
+    return <SkeletonTable rows={8} cols={columns.length + (selectable ? 1 : 0)} />;
   }
-
-  if (!rows.length && empty) return empty;
 
   return (
     <div className={`dt-wrap dt-${density}`}>

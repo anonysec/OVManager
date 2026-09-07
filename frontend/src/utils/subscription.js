@@ -5,8 +5,7 @@
 //   subscription_url_prefix already ends with "/" (DB > env > request base)
 //   subscription_path defaults to "sub"
 //   Public page:  {prefix}{path}/{uuid}
-//   Per-node dl:  {prefix}{path}/download/{uuid}/{nodeName}  (server-side route,
-//   kept here for completeness; panel downloads use /api/nodes/ovpn/* instead)
+//   (Panel downloads use /api/nodes/ovpn/* instead.)
 //
 // Previous UserManagement.getSubscriptionLink built
 //   `${proto}://${domain}:${port}/${prefix}/${user.name}`
@@ -19,10 +18,4 @@ export function buildSubscriptionLink(settings, uuid) {
   if (!rawPrefix) return '';
   const prefix = rawPrefix.endsWith('/') ? rawPrefix : `${rawPrefix}/`;
   return `${prefix}${rawPath}/${uuid}`;
-}
-
-export function buildSubscriptionDownloadLink(settings, uuid, nodeName) {
-  const base = buildSubscriptionLink(settings, uuid);
-  if (!base || !nodeName) return base;
-  return `${base.replace(/\/$/, '')}/download/${uuid}/${encodeURIComponent(nodeName)}`;
 }

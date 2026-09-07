@@ -8,7 +8,7 @@ const ICONS = {
   idle: FiCircle,
 };
 
-const StatusBadge = ({ status = 'idle', label, showDot = true }) => {
+const StatusBadge = ({ status = 'idle', label }) => {
   const Icon = ICONS[status] || FiHelpCircle;
   const dotClass =
     status === 'online' ? 'online' :
@@ -19,9 +19,7 @@ const StatusBadge = ({ status = 'idle', label, showDot = true }) => {
     '';
   return (
     <span className={`status-badge status-${status}`}>
-      {showDot && (
-        <span className={`status-dot ${dotClass}`} aria-hidden="true" />
-      )}
+      <span className={`status-dot ${dotClass}`} aria-hidden="true" />
       <Icon size={13} className="status-badge-icon" aria-hidden="true" />
       <span>{label}</span>
     </span>

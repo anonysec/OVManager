@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-
 /**
  * Resolve several independent requests without letting one failure sink the
  * rest. Returns a keyed map of { data, error, ok }.
@@ -24,81 +22,4 @@ export async function settle(sources) {
   }, {});
 }
 
-/**
- * Single-source async state with the two loading modes that matter for
- * perceived speed:
- *
- *   - `loading`     first load, nothing to show yet  -> render a skeleton
- *   - `refreshing`  background refresh, data on screen -> keep the data,
- *                   show a subtle indicator, never flash a skeleton
- *
- * `fetcher` must be a stable reference (wrap it in useCallback), the same
- * contract as useEffect dependencies.
- */
-export function useAsyncData(fetcher, { immediate = true } = {}) {
-  const [state, setState] = useState({
-    data: null,
-    error: null,
-    loading: immediate,
-    refreshing: false,
-    lastUpdated: null,
-  });
-
-  // Guards against setState-after-unmount and out-of-order responses: a slow
-  // request that resolves after a newer one must not clobber fresher data.
-  const mounted = useRef(true);
-  const runId = useRef(0);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-
-  const run = useCallback(async ({ background = false } = {}) => {
-    const id = ++runId.current;
-
-    setState((s) => ({
-      ...s,
-      error: null,
-      // Only show the skeleton when there is genuinely nothing to look at.
-      loading: background ? s.loading : s.data === null,
-      refreshing: background,
-    }));
-
-    try {
-      const result = await fetcher();
-      if (!mounted.current || id !== runId.current) return result;
-      setState({
-        data: result,
-        error: null,
-        loading: false,
-        refreshing: false,
-        lastUpdated: new Date(),
-      });
-      return result;
-    } catch (err) {
-      if (!mounted.current || id !== runId.current) return null;
-      // Keep whatever data we already had: stale content plus an error beats
-      // an empty screen.
-      setState((s) => ({ ...s, error: err, loading: false, refreshing: false }));
-      return null;
-    }
-  }, [fetcher]);
-
-  useEffect(() => {
-    if (immediate) run();
-  }, [run, immediate]);
-
-  const refresh = useCallback(() => run({ background: true }), [run]);
-  const retry = useCallback(() => run({ background: false }), [run]);
-
-  return {
-    ...state,
-    hasData: state.data !== null,
-    run,
-    refresh,
-    retry,
-  };
-}
-
-export default useAsyncData;
+export default settle;
