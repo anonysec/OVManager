@@ -26,6 +26,11 @@ vi.mock('../context/LiveContext', () => ({
   useLive: () => ({ subscribe: () => () => {}, unsubscribe: () => {}, streamConnected: false, refreshTick: 0 }),
 }));
 
+let mockRole = 'owner';
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ userRole: mockRole }),
+}));
+
 vi.mock('../utils/notifPrefs', async (importOriginal) => {
   const mod = await importOriginal();
   return { ...mod, readPrefs: () => ({ refreshSec: 3600 }) };
@@ -67,7 +72,7 @@ const renderWithPath = () => {
 };
 
 describe('ServerStats resilience', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mockRole = 'owner'; });
 
   it('renders the dashboard when only /activity fails', async () => {
     baseMock((url) => {
@@ -225,5 +230,38 @@ describe('ServerStats resilience', () => {
     });
     const { container } = renderStats();
     await waitFor(() => expect(container.querySelectorAll('.ds-meter').length).toBeGreaterThan(0));
+  });
+});
+
+describe('ServerStats admin scoping', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockRole = 'admin'; });
+
+  it('hides owner-only widgets and never calls owner-only endpoints', async () => {
+    baseMock(() => undefined);
+    renderStats();
+    await waitFor(() => {
+      expect(screen.queryByText('Operations')).toBeTruthy();
+    });
+    const calls = apiClient.get.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain('/server/info');
+    expect(calls).not.toContain('/nodes/');
+    expect(calls.some((u) => u.includes('metrics'))).toBe(false);
+    expect(calls.some((u) => u.includes('security'))).toBe(false);
+    // Owner-only widgets are gone; user widgets stay.
+    expect(screen.queryByText('Online Nodes')).toBeNull();
+    expect(screen.queryByText('Add node')).toBeNull();
+    expect(screen.queryByText('Online Users')).toBeTruthy();
+  });
+
+  it('derives active sessions from the scoped user list', async () => {
+    baseMock((url) => {
+      if (url === '/users/') return ok({ users: [{ name: 'a', uuid: 'u1', active_connections: 3, max_logins: 5, total: 0, used: 0, is_active: true }] });
+      return undefined;
+    });
+    renderStats();
+    await waitFor(() => {
+      expect(screen.getByText('Active Connections')).toBeTruthy();
+    });
+    expect(screen.getByText('3')).toBeTruthy();
   });
 });

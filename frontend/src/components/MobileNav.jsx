@@ -10,8 +10,8 @@ const MobileNav = () => {
   const items = [
     { to: '/', label: t('navDashboard', 'Dashboard'), icon: FiGrid, end: true },
     { to: '/users', label: t('navUsers', 'Users'), icon: FiUsers },
-    { to: '/nodes', label: t('navNodes', 'Nodes'), icon: FiServer },
     ...(userRole === 'owner' ? [
+      { to: '/nodes', label: t('navNodes', 'Nodes'), icon: FiServer },
       { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList },
       { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiShield },
     ] : []),

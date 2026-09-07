@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * Settings — single friendly page. Every section is always visible (no
+ * Settings — single friendly page. Owners see every section (no
  * Simple/Advanced split): defaults → bot → display → appearance → alerts →
- * general → system → security → backup. The page was a "user
+ * general → system → security → backup. Normal admins see only the
+ * local-only sections (appearance, alerts) — every server-backed section
+ * talks to owner-only endpoints. The page was a "user
  * friendly" wish-list item (2026-09): fewer clicks to reach any control, the
  * most-touched settings sit at the top. (The activity feed that used to live
  * here was the same data as the Audit Log page — it now lives only there.)
@@ -21,6 +23,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
+import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/api';
 import {
   FiServer, FiShield, FiArchive, FiSend,
@@ -54,6 +57,10 @@ const Settings = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { refreshTick } = useLive();
+  // Admins see only the local-only sections (alerts, appearance) — every
+  // server-backed section PUTs to owner-only endpoints.
+  const { userRole } = useAuth();
+  const isOwner = userRole === 'owner';
 
   // Single shared load of /server/settings for the sections that need it
   // (Defaults/Bot/Display/General). Previously each one fetched it on mount
@@ -68,10 +75,10 @@ const Settings = () => {
     } catch { setShared((s) => ({ ...s, loading: false, error: true })); }
   }, []);
 
-  useEffect(() => { reloadShared(); }, [reloadShared, refreshTick]);
+  useEffect(() => { if (isOwner) reloadShared(); else setShared({ data: {}, loading: false, error: false }); }, [reloadShared, refreshTick, isOwner]);
 
-  // All sections always visible — no Simple/Advanced split
-  const visible = useMemo(() => SECTIONS, []);
+  // Owners see all sections; admins only the local-only ones (no server data).
+  const visible = useMemo(() => (isOwner ? SECTIONS : SECTIONS.filter((s) => s.id === 'alerts' || s.id === 'appearance')), [isOwner]);
   const activeHash = location.hash.replace(/^#/, '');
 
   // Deep-link scroll: when URL has #section-id, scroll that section into
