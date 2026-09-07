@@ -197,9 +197,7 @@ def test_api_update_node_manual_country_wins(monkeypatch):
     from backend.config import config
 
     # Auto-lookup claims FR; the form says DE — DE must win, no node contact.
-    monkeypatch.setattr(
-        ops_mod, "geolocate", lambda address: {"country_code": "FR", "latitude": 1.0, "longitude": 2.0}
-    )
+    monkeypatch.setattr(ops_mod, "geolocate", lambda address: {"country_code": "FR", "latitude": 1.0, "longitude": 2.0})
     db = _db()
     try:
         node = crud.create_node(db, _node_payload(), None)

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.2 — 2026-09-07
+
+Panel `2.x` requires node `>= 2.0`.
+
+- Billing: lifetime totals (short sessions/tails/offline counted, resets
+  rebaseline); dashed names bill exactly; reset fans out to nodes; delete
+  cleans daily rows. Enforce on traffic ticks; 80%/over-quota bell+strip
+  warnings + pref; history daily table, 14d graph, top-5/7d, 90d prune.
+- Logs: node Logs tab (proxy+validated client), panel rotation/stdout/
+  format + docker caps, flap-aware RPC logging, hook ip/pool on decisions,
+  node 401/429 client IP, audit widened (node/admin/login-fail/lockout) +
+  `?action=` filter.
+- UI+geo: plain-HTTP country lookup + retry + validation, manual override
+  dropdown, stored-code-only display; lists unified; settings Activity +
+  Maintenance pages removed (backup stays); modals one size + sectioned;
+  dashboard redesigned (stat strip, underline tabs, flat alerts).
+- Sync: clean-stale clears dead markers beside live sessions; no-op PUT
+  audited, same PID.
+- Removed: onboarding checklist + 42 dead i18n keys; dead stale alert
+  toggle + retired registry shim; `Dashboard.css.bak` era CSS already gone.
+- Fix: Telegram bot disabled (no token / toggled off) no longer WARNINGs
+  every minute — INFO once, retry hourly; crashes still warn+restart.
+
 ## 2.0.1 — 2026-09-05
 
 - Tests: multi-node failure degradation (dead node, real refused sockets).

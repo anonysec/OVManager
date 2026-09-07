@@ -353,9 +353,7 @@ def _encrypt_node_keys(db: Session) -> None:
     logger.info("migrations v2: encrypted %s node key(s)", updated)
 
 
-STEPS: tuple[tuple[int, str, object], ...] = (
-    (2, "encrypt node API keys at rest", _encrypt_node_keys),
-)
+STEPS: tuple[tuple[int, str, object], ...] = ((2, "encrypt node API keys at rest", _encrypt_node_keys),)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
