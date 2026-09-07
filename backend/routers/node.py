@@ -142,7 +142,7 @@ async def get_node_logs(
 @router.get("/", response_model=ResponseModel)
 async def list_nodes(
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_owner),
 ):
     nodes = await list_nodes_handler(db)
     return ResponseModel(

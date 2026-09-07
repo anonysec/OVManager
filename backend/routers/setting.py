@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
 from backend.config import config
 from backend.db import crud
@@ -24,7 +23,7 @@ router = APIRouter(prefix="/server", tags=["Panel Settings"])
 async def get_settings(
     request: Request,
     db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
+    user: str = Depends(require_owner),
 ):
     db_settings = crud.get_settings(db)
     urlpath = _get_urlpath()
@@ -225,7 +224,7 @@ async def update_urlpath(
     response_model=ResponseModel,
     description="Get server information (cpu, memory, ...)",
 )
-async def get_server_information(user: dict = Depends(get_current_user)):
+async def get_server_information(user: dict = Depends(require_owner)):
     result = await get_server_info()
     return ResponseModel(
         success=True,
