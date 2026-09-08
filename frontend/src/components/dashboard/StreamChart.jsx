@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
+import { readPrefs } from '../../utils/notifPrefs';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
 import { Panel } from './Panel';
@@ -61,7 +62,8 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     return () => { cancelled = true; };
   }, [hours]);
 
-  // Refresh every 30s so the chart stays current without a second SSE stream.
+  // Refresh on the user's dashboard cadence so the chart stays current
+  // without a second SSE stream.
   useEffect(() => {
     const id = setInterval(() => {
       apiClient.get(`/metrics/history?hours=${hours}`)
@@ -70,7 +72,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           if (data.length) setSeries(data.slice(-MAX_POINTS));
         })
         .catch(() => { /* keep existing */ });
-    }, 30000);
+    }, readPrefs().refreshSec * 1000);
     return () => clearInterval(id);
   }, [hours]);
 

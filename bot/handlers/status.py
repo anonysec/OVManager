@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -17,10 +19,12 @@ from bot.ui import edit_or_reply
 async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
     lang = lang_of(update, context)
     panel = Panel(actor.token)
-    info = await panel.get_info()
-    settings = await panel.get_settings()
-    users = await panel.get_users()
-    nodes = await panel.get_nodes()
+    info, settings, users, nodes = await asyncio.gather(
+        panel.get_info(),
+        panel.get_settings(),
+        panel.get_users(),
+        panel.get_nodes(),
+    )
     if panel.last_status == 0 and not users and not nodes and not info and not settings:
         await edit_or_reply(update, t(lang, "panel_unreachable"))
         return
@@ -88,9 +92,11 @@ async def show_nodes(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: 
 async def show_node_detail(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, node_id: int) -> None:
     lang = lang_of(update, context)
     panel = Panel(actor.token)
-    nodes = await panel.get_nodes()
+    nodes, result = await asyncio.gather(
+        panel.get_nodes(),
+        panel.node_status(node_id),
+    )
     node = next((n for n in nodes if int(n.get("id") or 0) == node_id), None)
-    result = await panel.node_status(node_id)
     if not result.get("success"):
         if panel.last_status == 0 or result.get("status") == 0:
             await edit_or_reply(update, t(lang, "panel_unreachable"))

@@ -97,7 +97,7 @@ export const LiveProvider = ({ children }) => {
       if (stopped) return;
       // AuthContext persists the opaque session as `authToken` (not
       // `access_token` — that was a JWT-era key). Read the same key the
-      // axios layer uses or the stream silently 401s and falls back to poll.
+      // api layer uses or the stream silently 401s and falls back to poll.
       const token = localStorage.getItem('authToken');
       if (!token) {
         // token gone (logged out) — be quiet and retry shortly — a fresh login

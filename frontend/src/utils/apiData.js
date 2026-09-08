@@ -3,7 +3,7 @@
  *
  * GET /users/ and GET /nodes/ return `{ users|nodes, total, … }` inside the
  * standard `{ success, data }` envelope. Callers may hand us:
- *   - the axios response (`res` from settle(), whose `.data` is the body)
+ *   - the fetch response (`res` from settle(), whose `.data` is the body)
  *   - the API body (`response.data` from apiClient.get)
  *   - the inner `{ users, total }` object
  *   - a bare array (legacy / other endpoints)
