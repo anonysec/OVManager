@@ -15,12 +15,12 @@ from sqlalchemy.orm import Session
 
 from backend.db import crud
 from backend.db.models import Node
-from backend.node.requests import NodeRequests
+from backend.node.requests import node_client
 
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:
     """Fetch traffic usage data from a single node."""
-    nr = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
+    nr = node_client(node)
     return await run_in_threadpool(nr.get_usage) or {}
 
 
@@ -49,7 +49,7 @@ async def sync_all_user_limits(db: Session) -> dict:
     _semaphore = asyncio.Semaphore(20)
 
     def work(node, user):
-        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
+        req = node_client(node)
         cn = str(user.id)
         ok = req.set_user_limit(str(user.id), int(user.max_logins or 0))
         return {
@@ -96,7 +96,7 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
     results = []
 
     def work(node):
-        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
+        req = node_client(node)
         data = req.get_sessions(hours=8)
         if not isinstance(data, dict):
             return {"node": node.name, "success": False, "error": "diagnostics unavailable", "removed": []}

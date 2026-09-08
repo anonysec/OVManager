@@ -105,7 +105,7 @@ def test_second_identical_sweep_pushes_nothing(monkeypatch):
             calls.append((uid, limit))
             return True
 
-    monkeypatch.setattr(sync_mod, "NodeRequests", FakeRequests)
+    monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()
     try:
 
@@ -154,7 +154,7 @@ def test_failed_push_is_retried_next_sweep(monkeypatch):
                 raise ConnectionError("node down")
             return True
 
-    monkeypatch.setattr(sync_mod, "NodeRequests", FakeRequests)
+    monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()
     target["uid"] = str(user_id)
     try:

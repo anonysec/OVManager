@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.logger import logger
-from backend.node.requests import NodeRequests
+from backend.node.requests import node_client
 
 # Set once the metrics tables are confirmed present, so the periodic collector
 # and every graph query stop re-running CREATE TABLE IF NOT EXISTS.
@@ -44,7 +44,7 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
     per-user connection counts without a second fan-out to every node.
     """
     start = time.perf_counter()
-    req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
+    req = node_client(node)
     try:
         info, sessions = await asyncio.gather(
             run_in_threadpool(req.get_node_info),

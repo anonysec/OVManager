@@ -172,7 +172,7 @@ async def collect_live_snapshot() -> None:
     """
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.node.requests import NodeRequests
+    from backend.node.requests import node_client
 
     # Nothing is watching and the snapshot is still fresh enough for the
     # non-SSE consumers: skip the fan-out entirely. With no browser open this
@@ -205,7 +205,7 @@ async def collect_live_snapshot() -> None:
     def probe(node) -> tuple[object, dict]:
         # The sessions summary is a superset of the health check: a node that
         # answers with any payload is up; an unreachable node returns {}.
-        req = NodeRequests(address=node.address, port=node.port, api_key=crud.node_api_key(node), use_tls=node.use_tls)
+        req = node_client(node)
         return node, req.get_sessions(hours=1)
 
     results = await asyncio.gather(

@@ -40,6 +40,23 @@ def _rpc_ok(address: str, path: str) -> None:
         logger.warning("Node %s %s: recovered", address, path)
 
 
+def node_client(node, **kw) -> "NodeRequests":
+    """Build a NodeRequests for a Node row.
+
+    Single construction site: decrypts the stored key (cached) and maps
+    the row fields. Extra kwargs pass through to NodeRequests.
+    """
+    from backend.db import crud
+
+    return NodeRequests(
+        address=node.address,
+        port=node.port,
+        api_key=crud.node_api_key(node),
+        use_tls=node.use_tls,
+        **kw,
+    )
+
+
 class NodeRequests:
     __slots__ = ("address", "headers", "scheme")
 

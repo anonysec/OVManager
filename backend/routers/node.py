@@ -11,7 +11,7 @@ from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.node.requests import NodeRequests
+from backend.node.requests import node_client
 from backend.node.task import (
     add_node_handler,
     delete_node_handler,
@@ -129,12 +129,7 @@ async def get_node_logs(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    req = NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=crud.node_api_key(node),
-        use_tls=node.use_tls,
-    )
+    req = node_client(node)
     data = await run_in_threadpool(req.get_logs, level, limit)
     return ResponseModel(success=True, msg="Node logs retrieved successfully", data=data)
 
