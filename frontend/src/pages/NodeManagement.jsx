@@ -4,6 +4,7 @@ import { FiServer, FiCheckCircle, FiXCircle, FiSearch, FiPlus, FiDownload, FiEdi
 import NodeDrawer from '../components/NodeDrawer';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
+import { readPrefs } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo';
 import NodeFormModal from '../components/NodeFormModal';
 import ErrorState from '../components/ui/ErrorState';
@@ -92,7 +93,7 @@ const NodeManagement = () => {
       if (!cancelled) setNodeInfo((prev) => ({ ...prev, ...info }));
     };
     fetchAllNodeStatus();
-    const intervalId = setInterval(fetchAllNodeStatus, 30000);
+    const intervalId = setInterval(fetchAllNodeStatus, readPrefs().refreshSec * 1000);
     return () => { cancelled = true; clearInterval(intervalId); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length]);
