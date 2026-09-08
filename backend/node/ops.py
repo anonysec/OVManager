@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import crud
 from backend.logger import logger
-from backend.node.requests import NodeRequests
+from backend.node.requests import NodeRequests, node_client
 from backend.operations.geolocation import geolocate
 from backend.schema._input import NodeCreate
 
@@ -159,12 +159,7 @@ async def get_node_status_handler(node_id: int, db: Session):
     if not node:
         return None
 
-    nr = NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=crud.node_api_key(node),
-        use_tls=node.use_tls,
-    )
+    nr = node_client(node)
 
     started = time.perf_counter()
     info, sessions = await asyncio.gather(
@@ -197,7 +192,7 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     uid = str(user_id) if user_id else None
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        nr = node_client(n)
         tasks.append(run_in_threadpool(nr.create_user, name, max_logins, uid))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
@@ -209,7 +204,7 @@ async def change_user_status_on_all_nodes(user_id: int, name: str, status: bool,
     uid = str(user_id)
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        nr = node_client(n)
         tasks.append(run_in_threadpool(nr.change_user_status, name, status, max_logins, uid))
     if not tasks:
         return True
@@ -223,7 +218,7 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     uid = str(user_id) if user_id else name
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        nr = node_client(n)
         tasks.append(run_in_threadpool(nr.set_user_limit, uid, int(max_logins or 0)))
     if not tasks:
         return True
@@ -237,15 +232,7 @@ async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session
     if not node:
         return None
 
-    nr = NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=crud.node_api_key(node),
-        tunnel_address=node.tunnel_address or "",
-        protocol=node.protocol,
-        ovpn_port=node.ovpn_port,
-        use_tls=node.use_tls,
-    )
+    nr = node_client(node)
     return await run_in_threadpool(nr.download_ovpn_client, str(user_id))
 
 
@@ -256,15 +243,7 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
         return None
 
     users = crud.get_all_users(db)
-    nr = NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=crud.node_api_key(node),
-        tunnel_address=node.tunnel_address or "",
-        protocol=node.protocol,
-        ovpn_port=node.ovpn_port,
-        use_tls=node.use_tls,
-    )
+    nr = node_client(node)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
@@ -297,7 +276,7 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict
         return {"ok": True, "failed": []}
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        nr = node_client(n)
         tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
@@ -317,7 +296,7 @@ async def reset_user_usage_on_all_nodes(user_id: int, db: Session) -> dict:
         return {"ok": True, "failed": []}
     tasks = []
     for n in nodes:
-        nr = NodeRequests(address=n.address, port=n.port, api_key=crud.node_api_key(n), use_tls=n.use_tls)
+        nr = node_client(n)
         tasks.append(run_in_threadpool(nr.reset_usage, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]

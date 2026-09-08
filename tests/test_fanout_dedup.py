@@ -91,7 +91,7 @@ def test_health_summary_polls_each_node_once(monkeypatch):
                 "management_available": True,
             }
 
-    monkeypatch.setattr(diag, "NodeRequests", FakeRequests)
+    monkeypatch.setattr(diag, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     import asyncio
 
     db = SessionLocal()

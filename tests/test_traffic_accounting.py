@@ -289,7 +289,7 @@ def test_reset_usage_fans_out_to_nodes(monkeypatch):
 
     monkeypatch.setattr(node_ops.crud, "get_active_nodes", lambda db: nodes)
     monkeypatch.setattr(node_ops.crud, "node_api_key", lambda node: "k")
-    monkeypatch.setattr(node_ops, "NodeRequests", FakeNR)
+    monkeypatch.setattr(node_ops, "node_client", lambda node, **kw: FakeNR())
     import backend.db.engine as _eng
 
     db = _eng.SessionLocal()

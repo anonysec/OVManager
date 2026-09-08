@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from datetime import UTC, datetime
+from functools import lru_cache
 from uuid import uuid4
 
 from cryptography.fernet import Fernet
@@ -50,8 +51,13 @@ def encrypt_node_key(plain: str) -> str:
     return "enc:" + _node_fernet.encrypt(plain.encode()).decode()
 
 
+@lru_cache(maxsize=4096)
 def decrypt_node_key(stored: str | None) -> str:
-    """Decrypt a stored node key; legacy plaintext passes through."""
+    """Decrypt a stored node key; legacy plaintext passes through.
+
+    Pure in (stored, process key) — cached so per-tick fan-outs over N
+    nodes don't pay a Fernet decrypt per node per RPC.
+    """
     if not stored:
         return ""
     if stored.startswith("enc:") and _node_fernet is not None:

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.node.requests import NodeRequests
+from backend.node.requests import node_client
 from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/security", tags=["Security"])
@@ -84,7 +84,7 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
     tz_name = str(panel_tz)
 
     async def node_diag(node):
-        req = NodeRequests(node.address, node.port, crud.node_api_key(node), use_tls=node.use_tls)
+        req = node_client(node)
         data = await run_in_threadpool(req.get_sessions, None, hours)
         return node.name, data or {}
 

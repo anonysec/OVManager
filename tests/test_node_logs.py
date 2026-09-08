@@ -70,7 +70,7 @@ def test_node_logs_proxy_passthrough(monkeypatch):
             calls.update(level=level, limit=limit)
             return {"records": [{"level": "ERROR", "message": "boom"}], "errors_1h": 1}
 
-    monkeypatch.setattr(node_router, "NodeRequests", FakeNR)
+    monkeypatch.setattr(node_router, "node_client", lambda node, **kw: FakeNR())
     node = _node()
     try:
         client = TestClient(api)
