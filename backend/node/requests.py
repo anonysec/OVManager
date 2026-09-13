@@ -24,6 +24,11 @@ LONG_TIMEOUT = 30
 # logs once at warning. State transitions stay visible, spam doesn't.
 _rpc_last_error: dict[tuple[str, str], str] = {}
 
+# Nodes whose TLS verification has been bypassed (self-signed fallback).
+# Keyed by node address; value is True once the loud one-time warning has
+# been emitted so poll loops don't spam it every tick.
+_tls_fallback_warned: set[str] = set()
+
 
 def _rpc_failed(address: str, path: str, message: object) -> None:
     msg = str(message)
@@ -58,7 +63,7 @@ def node_client(node, **kw) -> "NodeRequests":
 
 
 class NodeRequests:
-    __slots__ = ("address", "headers", "scheme")
+    __slots__ = ("address", "headers", "scheme", "tls_verified")
 
     def __init__(self, address: str, port: int, api_key: str, use_tls: bool = False, **_):
         raw = str(address or "").strip()
@@ -75,31 +80,82 @@ class NodeRequests:
         self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
         self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
+        # Set by the TLS policy on each request: True after a VERIFIED
+        # handshake, False once the self-signed fallback has been used.
+        # None until the first request (or for plain HTTP). Lets callers
+        # (node status, UI) surface "unverified TLS" instead of hiding it.
+        self.tls_verified: bool | None = None
+
+    @property
+    def tls_mode(self) -> str:
+        """Connection security for the UI: plain / verified /
+        unverified-self-signed / unknown (never connected)."""
+        if self.scheme != "https":
+            return "plain"
+        if self.tls_verified is True:
+            return "verified"
+        if self.tls_verified is False:
+            return "unverified-self-signed"
+        return "unknown"
 
     def _url(self, path: str) -> str:
         return f"{self.scheme}://{self.address}{path}"
+
+    def _note_tls_fallback(self, path: str, exc: Exception) -> None:
+        """Warn about the unverified-TLS fallback, loudly once per node.
+
+        Expected for self-signed nodes (the installer default). Poll loops
+        would spam every tick, so repeats go to debug — but the API key
+        crosses the wire to an unverified endpoint from here, so the first
+        occurrence must stay visible.
+        """
+        if self.address not in _tls_fallback_warned:
+            _tls_fallback_warned.add(self.address)
+            logger.warning(
+                "Node %s: TLS cert not publicly trusted (%s) — falling back "
+                "to UNVERIFIED TLS (self-signed?). API key is sent without "
+                "MITM protection; switch the node to Let's Encrypt.",
+                self.address,
+                exc,
+            )
+        else:
+            logger.debug("Node %s %s: TLS verify failed — retrying unverified", self.address, path)
 
     def _request(self, method: str, path: str, **kw) -> dict | None:
         """Send request, return parsed JSON or None on failure.
 
         TLS is verified strictly first (Let's Encrypt nodes). A node with a
         self-signed cert (installer default) fails verification — retry once
-        unverified with a loud warning instead of bricking TLS nodes.
+        unverified with a ONE-TIME loud warning per node address instead of
+        bricking TLS nodes. ``tls_verified`` records which path was used so
+        the UI can show "unverified (self-signed)" rather than hiding it.
         """
         kw.setdefault("timeout", TIMEOUT)
+        if self.scheme != "https":
+            return self._send_plain(method, path, **kw)
         try:
-            return self._send(method, path, verify=True, **kw)
+            result = self._send(method, path, verify=True, **kw)
+            self.tls_verified = True
+            return result
         except _req.exceptions.SSLError as e:
-            # Expected for self-signed nodes (the installer default) — debug,
-            # not a warning: it fires on every single request otherwise.
-            logger.debug("Node %s %s: TLS verify failed (%s) — retrying unverified", self.address, path, e)
+            self._note_tls_fallback(path, e)
             try:
                 with _warnings.catch_warnings():
                     _warnings.simplefilter("ignore")
-                    return self._send(method, path, verify=False, **kw)
+                    result = self._send(method, path, verify=False, **kw)
+                    self.tls_verified = False
+                    return result
             except Exception as e2:
                 _rpc_failed(self.address, path, e2)
                 return None
+        except Exception as e:
+            _rpc_failed(self.address, path, e)
+            return None
+
+    def _send_plain(self, method: str, path: str, **kw) -> dict | None:
+        """Non-TLS request path (use_tls=False)."""
+        try:
+            return self._send(method, path, **kw)
         except Exception as e:
             _rpc_failed(self.address, path, e)
             return None
@@ -126,9 +182,9 @@ class NodeRequests:
     def get_node_info(self, **settings) -> dict:
         return (self._request("get", "/sync/status", json=settings) or {}).get("data", {})
 
-    def get_usage(self) -> dict:
+    def get_usage(self, timeout: float = LONG_TIMEOUT) -> dict:
         """Return per-user traffic counters from the node."""
-        return (self._request("get", "/sync/usage", timeout=LONG_TIMEOUT) or {}).get("data", {})
+        return (self._request("get", "/sync/usage", timeout=timeout) or {}).get("data", {})
 
     def update_config(self, *, tunnel_address: str, protocol: str, ovpn_port: int, set_new_setting: bool = True) -> bool:
         """Apply OpenVPN endpoint settings on the node."""
@@ -191,20 +247,32 @@ class NodeRequests:
         """
         url = self._url(path)
         headers = kw.pop("headers", self.headers)
-        try:
-            r = _req.get(url, headers=headers, **kw)
-        except _req.exceptions.SSLError as e:
-            logger.debug("Node %s %s: TLS verify failed (%s) — retrying unverified", self.address, path, e)
+        # Plain-HTTP nodes: no TLS policy involved.
+        if self.scheme != "https":
             try:
-                with _warnings.catch_warnings():
-                    _warnings.simplefilter("ignore")
-                    r = _req.get(url, headers=headers, verify=False, **kw)
-            except Exception as e2:
-                logger.error("Node %s %s: %s", self.address, path, e2)
+                r = _req.get(url, headers=headers, **kw)
+            except Exception as e:
+                logger.error("Node %s %s: %s", self.address, path, e)
                 return None
-        except Exception as e:
-            logger.error("Node %s %s: %s", self.address, path, e)
-            return None
+        else:
+            kw.setdefault("verify", True)
+            try:
+                r = _req.get(url, headers=headers, **kw)
+                self.tls_verified = True
+            except _req.exceptions.SSLError as e:
+                self._note_tls_fallback(path, e)
+                try:
+                    with _warnings.catch_warnings():
+                        _warnings.simplefilter("ignore")
+                        kw["verify"] = False
+                        r = _req.get(url, headers=headers, **kw)
+                        self.tls_verified = False
+                except Exception as e2:
+                    logger.error("Node %s %s: %s", self.address, path, e2)
+                    return None
+            except Exception as e:
+                logger.error("Node %s %s: %s", self.address, path, e)
+                return None
         body = r.content
         if r.status_code == 200 and (body.lstrip().startswith(b"client") or b"<ca>" in body):
             return body

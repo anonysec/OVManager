@@ -95,6 +95,7 @@ const NodeDrawer = ({ node, onClose, onEdit, onDelete, onToggleStatus, onCheckSt
                 <div className="nd-cell"><FiActivity /><span>{t('liveSessions', 'Live sessions')}</span><b>{live}</b></div>
                 <div className="nd-cell"><FiGlobe /><span>{t('th_protocol', 'Protocol')}</span><b>{node.protocol || 'tcp'}</b></div>
               </div>
+              <TlsChip status={status} t={t} />
               {certExpiry && <CertExpiryChip expiry={certExpiry} />}
               <div className="nd-actions">
                 <button className="btn btn-sm" onClick={() => onCheckStatus?.(node.id)}><FiRefreshCw size={12} /> {t('check', 'Check')}</button>
@@ -225,6 +226,27 @@ const NodeLogsTab = ({ nodeId, t }) => {
       ) : (
         <div className="nd-empty">{t('nodeLogsEmpty', 'No log records at this level.')}</div>
       )}
+    </div>
+  );
+};
+
+const TlsChip = ({ status, t }) => {
+  const mode = status?.tls_mode;
+  // 'unknown' = never connected (offline or legacy response): stay silent,
+  // the Online/Offline cell already covers it.
+  if (!mode || mode === 'verified' || mode === 'unknown') return null;
+  if (mode === 'plain') {
+    return (
+      <div className="nd-cert is-critical" role="alert">
+        <span>⚠</span>
+        {t('tlsPlainDetail', 'Plain HTTP — API key crosses the network in cleartext. Enable TLS on the node.')}
+      </div>
+    );
+  }
+  return (
+    <div className="nd-cert is-soon" role="alert">
+      <span>⚠</span>
+      {t('tlsUnverified', 'Unverified TLS (self-signed) — no MITM protection. Switch the node to Let\'s Encrypt.')}
     </div>
   );
 };

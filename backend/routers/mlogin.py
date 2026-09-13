@@ -13,19 +13,16 @@ import hmac
 import os
 from collections.abc import Iterable
 
-import requests
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from backend.db.engine import get_db
 from backend.db.models import Node
-from backend.logger import logger
+from backend.node.requests import node_client
 from backend.schema.output import ResponseModel
 
 router = APIRouter(prefix="/mlogin", tags=["Global Multi-login"])
-
-_NODE_TIMEOUT = float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))
 
 
 def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node:
@@ -52,24 +49,21 @@ def _split_addr(addr: str) -> tuple[str, str]:
 
 
 def _fetch_node_usage(node) -> dict | None:
-    """Blocking HTTP call to fetch usage from a single node (run in threadpool)."""
-    try:
-        from backend.db.crud import decrypt_node_key
+    """Blocking usage fetch for one node (run in threadpool).
 
-        scheme = "https" if node.use_tls else "http"
-        r = requests.get(
-            f"{scheme}://{node.address}:{node.port}/sync/usage",
-            headers={"key": decrypt_node_key(node.key)},
-            timeout=_NODE_TIMEOUT,
-        )
-        if r.status_code != 200:
-            return None
-        payload = r.json()
-        if not payload.get("success"):
-            return None
-        return payload.get("data") or {}
-    except Exception as e:
-        logger.warning("mlogin: node %s unavailable: %s", node.name, e)
+    Goes through :class:`NodeRequests` so the mlogin path shares the main
+    client's address sanitising, self-signed TLS fallback and flap-aware
+    logging — the previous bare ``requests.get`` failed every self-signed
+    node and silently undercounted global sessions.
+    """
+    try:
+        req = node_client(node)
+        # `or None` preserves the old contract: transport failure → None
+        # (caller skips the node), while a live-but-idle node returns its
+        # (truthy) payload dict. Without it every dead node would count as
+        # "reachable with zero sessions".
+        return req.get_usage(timeout=float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))) or None
+    except Exception:
         return None
 
 
@@ -125,7 +119,7 @@ async def global_mlogin_status(
 
     Accepts two caller types:
     1. OVNode hook: authenticates with X-Node-Name + key headers.
-    2. Panel UI (owner only): authenticates with Bearer JWT in Authorization header.
+    2. Panel UI (owner only): authenticates with a Bearer session token in Authorization header.
     """
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):

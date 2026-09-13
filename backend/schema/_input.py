@@ -61,14 +61,14 @@ class NodeCreate(BaseModel):
 
 class AdminCreate(BaseModel):
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=12, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
 
 
 class AdminUpdate(BaseModel):
     username: str
-    password: str | None = Field(default=None, min_length=8, max_length=128)
+    password: str | None = Field(default=None, min_length=12, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
 

@@ -527,5 +527,11 @@
   "nodeSectionQuick": "Quick setup",
   "nodeSectionConnection": "Connection",
   "trafficHistory14d": "Traffic, last 14 days",
-  "topTraffic7d": "Top traffic, 7 days"
+  "topTraffic7d": "Top traffic, 7 days",
+  "tlsVerified": "Verified",
+  "tlsSelfSigned": "Self-signed",
+  "tlsPlain": "Plain HTTP",
+  "tlsUnverified": "Unverified TLS (self-signed) — no MITM protection. Switch the node to Let's Encrypt.",
+  "tlsPlainDetail": "Plain HTTP — API key crosses the network in cleartext. Enable TLS on the node.",
+  "minPasswordHint": "Minimum 12 characters"
 }
