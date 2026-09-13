@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
+import { setDisplayTimezone } from '../utils/displayTimezone';
 import { formatBytes } from '../utils/format';
 import { copyText } from '../utils/clipboard';
 import UserFormModal from '../components/UserFormModal';
@@ -104,6 +105,7 @@ const UserManagement = () => {
       const res = await apiClient.get('/server/settings');
       const data = res.data?.data || res.data;
       if (data?.subscription_url_prefix) setSubSettings(data);
+      if (data?.timezone) setDisplayTimezone(data.timezone);
     } catch { /* subscription links degrade to hidden, table still works */ }
   }, []);
 

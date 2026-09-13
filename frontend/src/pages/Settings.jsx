@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
 import apiClient from '../services/api';
+import { setDisplayTimezone } from '../utils/displayTimezone';
 import {
   FiServer, FiShield, FiArchive, FiSend,
   FiLink, FiUserPlus, FiClock, FiMonitor, FiBell,
@@ -72,6 +73,7 @@ const Settings = () => {
       setShared((s) => ({ ...s, loading: true, error: false }));
       const res = await apiClient.get('/server/settings');
       setShared({ data: res.data?.data || {}, loading: false, error: false });
+      if (res.data?.data?.timezone) setDisplayTimezone(res.data.data.timezone);
     } catch { setShared((s) => ({ ...s, loading: false, error: true })); }
   }, []);
 

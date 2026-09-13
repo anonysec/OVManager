@@ -14,15 +14,12 @@
     <!--
       Fonts are loaded here (not via an @import inside index.css) because a CSS
       @import is render-blocking and serialises: html -> css -> font css -> font.
-      preconnect warms the TLS handshake and the print/onload swap makes the
-      stylesheet non-blocking, so first paint no longer waits on Google Fonts.
+      preconnect warms the TLS handshake so first paint doesn't wait on fonts.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      media="print"
-      onload="this.media='all';this.onload=null"
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
     />
     <noscript>

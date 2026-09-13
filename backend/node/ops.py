@@ -162,12 +162,20 @@ async def get_node_status_handler(node_id: int, db: Session):
     nr = node_client(node)
 
     started = time.perf_counter()
+    # Separate clients per concurrent call: tls_verified is per-instance
+    # mutable state, so sharing one NodeRequests across two threads races.
+    nr_sessions = node_client(node)
     info, sessions = await asyncio.gather(
         run_in_threadpool(nr.get_node_info),
-        run_in_threadpool(nr.get_sessions, None, 8),
+        run_in_threadpool(nr_sessions.get_sessions, None, 8),
     )
     info = info if isinstance(info, dict) else {}
     sessions = sessions if isinstance(sessions, dict) else {}
+
+    # Either call proves the TLS path (same node, same cert); prefer the
+    # verified result if they ever disagree.
+    tls_verified = nr.tls_verified if nr.tls_verified is True else nr_sessions.tls_verified
+    tls_mode = nr.tls_mode if nr.tls_verified is True else nr_sessions.tls_mode
 
     return {
         "node": {
@@ -182,8 +190,8 @@ async def get_node_status_handler(node_id: int, db: Session):
         "reachable": bool(info),
         # True = verified TLS; False = self-signed fallback (API key without
         # MITM protection); None = plain HTTP or never connected (unknown).
-        "tls_verified": nr.tls_verified,
-        "tls_mode": nr.tls_mode,
+        "tls_verified": tls_verified,
+        "tls_mode": tls_mode,
     }
 
 

@@ -15,6 +15,7 @@ import ShortcutsHelp from '../components/ShortcutsHelp';
 import MobileNav from '../components/MobileNav';
 import RouteProgress from '../components/RouteProgress';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { getDisplayTimezone, setDisplayTimezone } from '../utils/displayTimezone';
 import { settle } from '../hooks/useAsyncData';
 
 const DashboardLayout = () => {
@@ -55,6 +56,30 @@ const DashboardLayout = () => {
     document.documentElement.lang = lang;
     localStorage.setItem('ovmanager-lang', lang);
   }, [i18n.language]);
+
+  // Seed the operator display timezone once per layout mount (i.e. per full
+  // page load, not per tab switch). Owners read it from /server/settings;
+  // everyone else keeps the guarded localStorage cache (or UTC on a fresh
+  // browser) — the endpoint is owner-only. Re-renders once when the zone
+  // arrives after first paint so already-rendered dates reformat.
+  const [, bumpTz] = useState(0);
+  useEffect(() => {
+    if (userRole !== 'owner') return;
+    let cancelled = false;
+    apiClient
+      .get('/server/settings')
+      .then((res) => {
+        const tz = res.data?.data?.timezone;
+        if (!cancelled && tz && getDisplayTimezone() !== tz) {
+          setDisplayTimezone(tz);
+          bumpTz((n) => n + 1);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userRole]);
 
   useEffect(() => {
     if (!notifOpen && !langOpen) return;
