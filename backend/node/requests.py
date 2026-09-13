@@ -7,6 +7,7 @@ Every method follows the same pattern: build URL, send request, check response.
 One _request() helper handles all of it.
 """
 
+import time as _time
 import warnings as _warnings
 from urllib.parse import urlsplit
 
@@ -18,6 +19,9 @@ from backend.logger import logger
 TIMEOUT = 10
 LONG_TIMEOUT = 30
 
+# Cap for single-flight 429 retries (honors the node's Retry-After).
+_MAX_429_WAIT = 60.0
+
 # Flap-aware RPC logging. Poll loops hit every endpoint every few seconds,
 # so a dead node would spam one ERROR per tick. The first failure (or a
 # changed message) logs at warning; identical repeats go to debug; recovery
@@ -26,8 +30,11 @@ _rpc_last_error: dict[tuple[str, str], str] = {}
 
 # Nodes whose TLS verification has been bypassed (self-signed fallback).
 # Keyed by node address; value is True once the loud one-time warning has
-# been emitted so poll loops don't spam it every tick.
+# been emitted so poll loops don't spam it every tick. Bounded: node
+# addresses are operator-controlled (cardinality = node count), the cap is
+# only belt-and-braces against unbounded growth.
 _tls_fallback_warned: set[str] = set()
+_TLS_WARNED_CAP = 10_000
 
 
 def _rpc_failed(address: str, path: str, message: object) -> None:
@@ -43,6 +50,17 @@ def _rpc_failed(address: str, path: str, message: object) -> None:
 def _rpc_ok(address: str, path: str) -> None:
     if _rpc_last_error.pop((address, path), None) is not None:
         logger.warning("Node %s %s: recovered", address, path)
+
+
+def _retry_after_s(value: object) -> float:
+    """Parse a Retry-After header into a capped sleep (seconds)."""
+    try:
+        wait = float(str(value or "").strip())
+    except (TypeError, ValueError):
+        return 5.0
+    if wait != wait or wait < 1.0:  # NaN or sub-second
+        return 1.0
+    return min(wait, _MAX_429_WAIT)
 
 
 def node_client(node, **kw) -> "NodeRequests":
@@ -110,6 +128,10 @@ class NodeRequests:
         occurrence must stay visible.
         """
         if self.address not in _tls_fallback_warned:
+            if len(_tls_fallback_warned) >= _TLS_WARNED_CAP:
+                # Arbitrary eviction; worst case the evicted node re-warns
+                # once. Keeps the set bounded no matter the caller.
+                _tls_fallback_warned.pop()
             _tls_fallback_warned.add(self.address)
             logger.warning(
                 "Node %s: TLS cert not publicly trusted (%s) — falling back "
@@ -161,8 +183,24 @@ class NodeRequests:
             return None
 
     def _send(self, method: str, path: str, **kw) -> dict | None:
-        """One attempt: send request, return parsed JSON or None on failure."""
+        """Send request, return parsed JSON or None on failure.
+
+        A single Retry-After-aware retry on 429 keeps bulk fan-outs (create
+        100 users → 100 cert ops) from hard-failing when they brush the
+        node's cert-op bucket: slow down once instead of reporting failure.
+        Runs in a threadpool worker, so the sleep never blocks the loop.
+        """
         r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
+        if r.status_code == 429:
+            wait = _retry_after_s(r.headers.get("Retry-After"))
+            logger.warning(
+                "Node %s %s: rate-limited (429) — retrying once in %.0fs",
+                self.address,
+                path,
+                wait,
+            )
+            _time.sleep(wait)
+            r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
         if r.status_code != 200:
             _rpc_failed(self.address, path, f"HTTP {r.status_code}")
             return None

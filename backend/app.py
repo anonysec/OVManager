@@ -46,12 +46,13 @@ _BOT_DISABLED_RETRY_SECONDS = 3600
 # the subscription page load Google Fonts (Manrope/Space Grotesk) and the
 # subscription page uses a jsdelivr-hosted Arad font, so those two origins are
 # explicitly allowed for fonts + the Google Fonts stylesheet. Inline styles
-# are needed for React style props. No inline <script> is used anywhere (the
-# subscription page's script was extracted to /sub/static/subscription.js) —
-# `'unsafe-inline'` for script-src is intentionally NOT granted.
+# are needed for React style props. The single inline boot script in
+# index.html (theme/dir pre-paint, no network access) is allowlisted by hash;
+# everything else must be same-origin (the subscription page's script was
+# extracted to /sub/static/subscription.js).
 CSP_POLICY = (
     "default-src 'self'; "
-    "script-src 'self'; "
+    "script-src 'self' 'sha256-DfXw4dmojGxppeSGQd3gY5VwJccQpen/20YT8l+VMDQ='; "
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "img-src 'self' data:; "
     "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "

@@ -40,3 +40,40 @@ def test_decrypt_cache_returns_same_result():
         assert info.hits >= 1
     finally:
         crud.decrypt_node_key.cache_clear()
+
+
+def test_retry_after_parsing():
+    from backend.node.requests import _retry_after_s
+
+    assert _retry_after_s("7") == 7.0
+    assert _retry_after_s(None) == 5.0
+    assert _retry_after_s("garbage") == 5.0
+    assert _retry_after_s("9999") == 60.0  # capped
+    assert _retry_after_s("0") == 1.0  # floored
+
+
+def test_send_retries_once_on_429_then_succeeds(monkeypatch):
+    import backend.node.requests as nr_mod
+
+    calls = []
+
+    class Resp:
+        def __init__(self, status, headers=None, payload=None):
+            self.status_code = status
+            self.headers = headers or {}
+            self._payload = payload or {"success": True, "data": {}}
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, headers=None, **kw):
+        calls.append(url)
+        if len(calls) == 1:
+            return Resp(429, {"Retry-After": "0"})
+        return Resp(200)
+
+    monkeypatch.setattr(nr_mod._req, "get", fake_get)
+    monkeypatch.setattr(nr_mod._time, "sleep", lambda s: None)
+    req = NodeRequests(address="10.0.0.9", port=2083, api_key="k", use_tls=False)
+    assert req._request("get", "/sync/status") == {"success": True, "data": {}}
+    assert len(calls) == 2

@@ -8,7 +8,7 @@ import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
-import { daysUntil } from '../utils/time';
+import { daysUntil, fmtDateTime } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
@@ -89,7 +89,9 @@ const statusLabelFor = (u, t) => {
 
 const fmtUpdated = (date) => {
   if (!date) return '—';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Operator display timezone (not browser-local): consistent with every
+  // other timestamp in the panel. Seconds kept — this label ticks live.
+  return fmtDateTime(date.toISOString(), { second: '2-digit' });
 };
 
 const ServerStats = () => {

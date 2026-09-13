@@ -11,6 +11,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import { FiClock, FiEdit2, FiCheck, FiX } from 'react-icons/fi';
 import { Card } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
+import { setDisplayTimezone } from '../../utils/displayTimezone';
 
 /* ═══════════════════════════════════════════════════════
    DISPLAY — timezone used everywhere in the UI
@@ -36,6 +37,7 @@ const DisplaySection = ({ shared }) => {
     if (!tz || synced.current) return;
     synced.current = true;
     setTimezone(tz);
+    setDisplayTimezone(tz);
   }, [shared]);
 
   const save = async () => {
@@ -43,6 +45,7 @@ const DisplaySection = ({ shared }) => {
     try {
       await apiClient.put('/server/settings/timezone', { timezone: tzValue });
       setTimezone(tzValue); setEditing(false);
+      setDisplayTimezone(tzValue);
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast(e.response?.data?.msg || t('error', 'Error'), 'error'); }
     finally { setSaving(false); }

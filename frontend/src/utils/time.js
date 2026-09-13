@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 // Date/time formatting helpers shared across the app.
-// Timestamps render in UTC unless the caller passes { timeZone } (e.g. the
-// operator timezone from backend Settings).
+// Timestamps render in the operator display timezone from backend Settings
+// (see displayTimezone.js) unless the caller passes { timeZone }.
+
+import { getDisplayTimezone } from './displayTimezone';
 
 // Format an ISO string (UTC) into the operator timezone.
 export function fmtDateTime(iso, opts = {}) {
   if (!iso) return '—';
-  const { timeZone = 'UTC', ...rest } = opts;
+  const { timeZone = getDisplayTimezone(), ...rest } = opts;
   const d = new Date(iso);
   if (isNaN(d)) return '—';
   try {
@@ -28,7 +30,7 @@ export function fmtDateTime(iso, opts = {}) {
 
 export function fmtDate(iso, opts = {}) {
   if (!iso) return '—';
-  const { timeZone = 'UTC', ...rest } = opts;
+  const { timeZone = getDisplayTimezone(), ...rest } = opts;
   const d = new Date(iso);
   if (isNaN(d)) return '—';
   try {

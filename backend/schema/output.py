@@ -1,10 +1,10 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from backend.version import __version__
 
@@ -26,6 +26,17 @@ class Users(BaseModel):
     uuid: str
     last_online: str | None = None
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("last_online", mode="before")
+    @classmethod
+    def _coerce_last_online(cls, value):
+        # The metrics job stores a datetime on the ORM row while the API
+        # contract is an ISO string (or null). Coerce here so every
+        # model_validate(db_user) call site survives a non-null value —
+        # otherwise the first user to come online 500s the whole list.
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
 
 
 class ServerInfo(BaseModel):
