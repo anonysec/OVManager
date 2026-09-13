@@ -25,7 +25,21 @@ const applyDocumentDir = (lng) => {
   document.body.setAttribute('dir', dir);
 };
 
-const stored = localStorage.getItem('ovmanager-lang') || 'en';
+// localStorage is missing in some contexts (tests without a DOM origin,
+// privacy modes that throw on access) — the app must still boot in English.
+const readStoredLang = () => {
+  try {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem('ovmanager-lang');
+  } catch { /* blocked storage: fall back to English */ }
+  return null;
+};
+const writeStoredLang = (lng) => {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('ovmanager-lang', lng);
+  } catch { /* preference only: never break a language switch */ }
+};
+
+const stored = readStoredLang() || 'en';
 // Start on a language we definitely have. If the stored preference is a lazy
 // locale we boot in English and swap the instant its bundle lands — this keeps
 // first paint immediate instead of blocking render on a JSON fetch.
@@ -78,7 +92,7 @@ export async function loadLanguage(lng) {
   }
 
   await i18n.changeLanguage(lng);
-  localStorage.setItem('ovmanager-lang', lng);
+  writeStoredLang(lng);
 }
 
 // Restore the user's real language right after boot. Deferred so it never

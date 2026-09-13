@@ -291,6 +291,17 @@ const NodeManagement = () => {
       render: (n) => nodeMeta(n).name || '—',
     },
     {
+      key: 'tls', label: t('th_tls', 'TLS'), sortable: false, hideOnMobile: true,
+      render: (n) => {
+        const live = nodeInfo[n.id];
+        const mode = live?.tls_mode;
+        if (!mode || mode === 'unknown') return <span className="dt-num">—</span>;
+        if (mode === 'verified') return <StatusBadge status="online" label={t('tlsVerified', 'Verified')} />;
+        if (mode === 'plain') return <StatusBadge status="offline" label={t('tlsPlain', 'Plain HTTP')} />;
+        return <StatusBadge status="warning" label={t('tlsSelfSigned', 'Self-signed')} />;
+      },
+    },
+    {
       key: 'actions', label: t('th_actions', 'Actions'),
       render: (n) => (
         <span className="dt-actions" role="group" aria-label={`${n.name} ${t('actions', 'Actions')}`}>

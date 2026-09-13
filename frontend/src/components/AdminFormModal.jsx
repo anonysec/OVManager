@@ -84,7 +84,8 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
           <label htmlFor="admin-password">{isEdit ? t('newPassword') : t('password')}</label>
           <input
             type="password" id="admin-password" name="password" value={formData.password} onChange={handleChange} required
-            placeholder={isEdit ? t('enterNewPassword') : undefined}
+            minLength={12} autoComplete={isEdit ? 'new-password' : undefined}
+            placeholder={isEdit ? t('enterNewPassword') : t('minPasswordHint', 'Minimum 12 characters')}
           />
         </div>
         <div className="input-group">

@@ -64,6 +64,7 @@
   "nodeCountry": "کشور",
   "nodeCountryAuto": "تشخیص خودکار از IP",
   "nodeCountryHint": "روی تشخیص خودکار بماند مگر اینکه اشتباه باشد — انتخاب دستی همیشه اولویت دارد.",
+  "nodeUseTlsHint": "برای خودامضا یا Let's Encrypt روشن باشد. خودامضا = رمزنگاری‌شده اما تأییدنشده (بدون محافظت در برابر شنود)؛ Let's Encrypt = کاملاً تأییدشده. خاموش یعنی کلید API به‌صورت متن ساده منتقل می‌شود.",
   "cancelButton": "انصراف",
   "createUserButton": "افزودن کاربر",
   "updateUserButton": "ذخیره تغییرات",
@@ -514,5 +515,11 @@
   "nodeSectionQuick": "راه‌اندازی سریع",
   "nodeSectionConnection": "اتصال",
   "trafficHistory14d": "ترافیک ۱۴ روز اخیر",
-  "topTraffic7d": "پرمصرف‌ترین‌ها، ۷ روز"
+  "topTraffic7d": "پرمصرف‌ترین‌ها، ۷ روز",
+  "tlsVerified": "تأییدشده",
+  "tlsSelfSigned": "خودامضا",
+  "tlsPlain": "HTTP ساده",
+  "tlsUnverified": "TLS تأییدنشده (خودامضا) — بدون محافظت در برابر شنود. نود را به Let's Encrypt منتقل کنید.",
+  "tlsPlainDetail": "HTTP ساده — کلید API به‌صورت متن ساده در شبکه منتقل می‌شود. روی نود TLS را فعال کنید.",
+  "minPasswordHint": "حداقل ۱۲ نویسه"
 }

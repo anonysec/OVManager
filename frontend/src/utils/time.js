@@ -1,31 +1,25 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Timezone-aware formatting helpers shared across the app.
-// The operator timezone is persisted in the backend Settings (timezone field)
-// and mirrored to localStorage for instant use before the settings load.
-
-const STORAGE_KEY = 'ovTimezone';
-
-export function getTimezone() {
-  return localStorage.getItem(STORAGE_KEY) || 'UTC';
-}
+// Date/time formatting helpers shared across the app.
+// Timestamps render in UTC unless the caller passes { timeZone } (e.g. the
+// operator timezone from backend Settings).
 
 // Format an ISO string (UTC) into the operator timezone.
 export function fmtDateTime(iso, opts = {}) {
   if (!iso) return '—';
-  const tz = getTimezone();
+  const { timeZone = 'UTC', ...rest } = opts;
   const d = new Date(iso);
   if (isNaN(d)) return '—';
   try {
     return new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
+      timeZone,
       year: 'numeric',
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      ...opts,
+      ...rest,
     }).format(d);
   } catch {
     return d.toLocaleString();
@@ -34,16 +28,16 @@ export function fmtDateTime(iso, opts = {}) {
 
 export function fmtDate(iso, opts = {}) {
   if (!iso) return '—';
-  const tz = getTimezone();
+  const { timeZone = 'UTC', ...rest } = opts;
   const d = new Date(iso);
   if (isNaN(d)) return '—';
   try {
     return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
+      timeZone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-      ...opts,
+      ...rest,
     }).format(d);
   } catch {
     return d.toISOString().slice(0, 10);

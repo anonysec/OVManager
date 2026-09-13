@@ -64,6 +64,7 @@
   "nodeCountry": "国家",
   "nodeCountryAuto": "根据 IP 自动检测",
   "nodeCountryHint": "除非检测有误，否则保持自动检测——手动选择始终优先。",
+  "nodeUseTlsHint": "自签名或 Let's Encrypt 请开启。自签名 = 加密但未验证（无中间人防护）；Let's Encrypt = 完全验证。关闭则以明文发送 API 密钥。",
   "cancelButton": "取消",
   "createUserButton": "添加用户",
   "updateUserButton": "保存更改",
@@ -514,5 +515,11 @@
   "nodeSectionQuick": "快速设置",
   "nodeSectionConnection": "连接",
   "trafficHistory14d": "近14天流量",
-  "topTraffic7d": "近7天流量排行"
+  "topTraffic7d": "近7天流量排行",
+  "tlsVerified": "已验证",
+  "tlsSelfSigned": "自签名",
+  "tlsPlain": "明文 HTTP",
+  "tlsUnverified": "未验证的 TLS（自签名）——无中间人防护。请将节点切换到 Let's Encrypt。",
+  "tlsPlainDetail": "明文 HTTP——API 密钥以明文传输。请在节点上启用 TLS。",
+  "minPasswordHint": "至少 12 个字符"
 }

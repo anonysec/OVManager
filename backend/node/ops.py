@@ -180,6 +180,10 @@ async def get_node_status_handler(node_id: int, db: Session):
         "session_diagnostics": sessions,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         "reachable": bool(info),
+        # True = verified TLS; False = self-signed fallback (API key without
+        # MITM protection); None = plain HTTP or never connected (unknown).
+        "tls_verified": nr.tls_verified,
+        "tls_mode": nr.tls_mode,
     }
 
 

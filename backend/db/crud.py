@@ -57,14 +57,23 @@ def decrypt_node_key(stored: str | None) -> str:
 
     Pure in (stored, process key) — cached so per-tick fan-outs over N
     nodes don't pay a Fernet decrypt per node per RPC.
+
+    Fail-closed: an ``enc:`` value that cannot be decrypted (wrong or
+    rotated key, corrupt row) yields ``""`` instead of leaking the
+    ciphertext as a bearer key. Callers then get a clean 401 from the
+    node, and the operator knows to re-enter the key.
     """
     if not stored:
         return ""
-    if stored.startswith("enc:") and _node_fernet is not None:
+    if stored.startswith("enc:"):
+        if _node_fernet is None:
+            logger.error("Node key is encrypted but no NODE/BOT_ENCRYPT_KEY is configured — refusing to use it")
+            return ""
         try:
             return _node_fernet.decrypt(stored[4:].encode()).decode()
         except Exception:
-            return stored
+            logger.error("Stored node key failed to decrypt (wrong key or corrupt row) — refusing to use it")
+            return ""
     return stored
 
 

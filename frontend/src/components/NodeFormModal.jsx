@@ -240,7 +240,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
               <input type="checkbox" id="node-use_tls" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
               <span>
                 {t('nodeUseTls', 'Use TLS (https)')}
-                <small>{t('nodeUseTlsHint', 'On when the node used self-signed or Let’s Encrypt; off only when the node used TLS None.')}</small>
+                <small>{t('nodeUseTlsHint', 'On for self-signed or Let’s Encrypt. Self-signed = encrypted but unverified (no MITM protection); Let’s Encrypt = fully verified. Off sends the API key in cleartext.')}</small>
               </span>
             </label>
           )}

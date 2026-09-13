@@ -64,6 +64,7 @@
   "nodeCountry": "Страна",
   "nodeCountryAuto": "Определить по IP",
   "nodeCountryHint": "Оставьте автоопределение, если оно верно — ручной выбор всегда приоритетнее.",
+  "nodeUseTlsHint": "Вкл для самоподписанных или Let's Encrypt. Самоподписанный = шифрование без проверки (нет защиты от MITM); Let's Encrypt = полная проверка. Выкл отправляет ключ API открытым текстом.",
   "cancelButton": "Отмена",
   "createUserButton": "Добавить пользователя",
   "updateUserButton": "Сохранить",
@@ -514,5 +515,11 @@
   "nodeSectionQuick": "Быстрая настройка",
   "nodeSectionConnection": "Подключение",
   "trafficHistory14d": "Трафик за 14 дней",
-  "topTraffic7d": "Топ трафика за 7 дней"
+  "topTraffic7d": "Топ трафика за 7 дней",
+  "tlsVerified": "Проверен",
+  "tlsSelfSigned": "Самоподписанный",
+  "tlsPlain": "Обычный HTTP",
+  "tlsUnverified": "Непроверенный TLS (самоподписанный) — нет защиты от MITM. Переведите узел на Let's Encrypt.",
+  "tlsPlainDetail": "Обычный HTTP — ключ API идёт открытым текстом. Включите TLS на узле.",
+  "minPasswordHint": "Минимум 12 символов"
 }

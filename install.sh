@@ -143,7 +143,7 @@ OPTIONS
   --path PATH           URL prefix (scanner-hiding). "root" = /
                         Default: random 8 hex chars
   --admin-user USER     Admin username                           [admin]
-  --admin-pass PASS     Admin password (min 8). Generated if omitted
+  --admin-pass PASS     Admin password (min 12). Generated if omitted
                         under -y / non-interactive
   --public-url URL      Canonical public origin for sub links
   --with-node [NAME]    Also print a ready OVNode one-liner for this server
@@ -653,10 +653,10 @@ validate_input() {
     if [[ -z "$ADMIN_PASS" ]]; then
         ADMIN_PASS="$(rand_pass)"
         GENERATED_PASS=1
-        [[ ${#ADMIN_PASS} -ge 8 ]] || die "Could not generate an admin password"
+        [[ ${#ADMIN_PASS} -ge 12 ]] || die "Could not generate an admin password"
         warn "No password given — generated one (shown at the end)"
     fi
-    [[ ${#ADMIN_PASS} -ge 8 ]] || die "Admin password must be at least 8 characters"
+    [[ ${#ADMIN_PASS} -ge 12 ]] || die "Admin password must be at least 12 characters (the panel requires >= 12)"
     if [[ -n "$PATHPREFIX" ]]; then
         [[ "$PATHPREFIX" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "URL path: letters, digits, dash, underscore"
     fi

@@ -89,7 +89,12 @@ def test_short_admin_password_rejected(tmp_path):
     sb, _ = sandbox(tmp_path)
     r = sh_sb(sb, "install", "-y", "--admin-pass", "short")
     assert r.returncode == 1
-    assert "at least 8" in r.stderr or "root" in r.stderr
+    assert "at least 12" in r.stderr or "root" in r.stderr
+    # 8-char passwords passed the installer but 422ed at the panel; now they
+    # fail fast with the same 12-char floor the API enforces.
+    r = sh_sb(sb, "install", "-y", "--admin-pass", "eight888")
+    assert r.returncode == 1
+    assert "at least 12" in r.stderr or "root" in r.stderr
 
 
 def test_unknown_option_fails():
