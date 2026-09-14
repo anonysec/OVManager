@@ -26,7 +26,11 @@ import DataTable from '../components/ui/DataTable';
 import StatusBadge from '../components/ui/StatusBadge';
 
 const PAGE_SIZE_KEY = 'ovmanager-ui-users-pagesize';
-const SORT_KEY = 'ovmanager-ui-users-sort';
+// Bumped to v2 to roll out the newest-first default to browsers that cached
+// the old name-asc preference under v1.
+const SORT_KEY = 'ovmanager-ui-users-sort-v2';
+// Default: newest first. `id` is autoincrement = creation order (a reused id
+// after delete still belongs to a new row, so it sorts correctly on top).
 
 const statusOf = (u) => {
   const online = u.online || Number(u.active_connections || 0) > 0;
@@ -74,7 +78,7 @@ const UserManagement = () => {
       const raw = JSON.parse(localStorage.getItem(SORT_KEY) || 'null');
       if (raw?.key) return raw;
     } catch { /* ignore */ }
-    return { key: 'name', dir: 'asc' };
+    return { key: 'id', dir: 'desc' };
   });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
