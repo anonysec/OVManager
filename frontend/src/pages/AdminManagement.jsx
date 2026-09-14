@@ -25,7 +25,8 @@ const AdminManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sort, setSort] = useState({ key: 'username', dir: 'asc' });
+  // Default: newest first (`id` autoincrement = creation order), like Users/Nodes.
+  const [sort, setSort] = useState({ key: 'id', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
   const [selected, setSelected] = useState(() => new Set());

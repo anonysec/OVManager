@@ -615,18 +615,18 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-area {
-  fill: url(#ds-chart-grad);
-  opacity: 0.85;
+  opacity: 0.9;
   transition: d 0.4s ease;
 }
 
 .ds-chart-line {
   fill: none;
   stroke: var(--info);
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
   transition: d 0.4s ease;
+  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 0.18));
 }
 
 .ds-chart-pulse {
@@ -672,9 +672,20 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-tooltip strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.ds-chart-tip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+  flex: none;
 }
 
 .ds-chart-tooltip span {
@@ -690,11 +701,17 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-axis--max { top: 0; inset-inline-end: 4px; }
+.ds-chart-axis--mid { top: 50%; inset-inline-end: 4px; transform: translateY(-50%); }
 .ds-chart-axis--min { bottom: 0; inset-inline-end: 4px; }
+.ds-chart-axis--t0 {
+  bottom: 0;
+  inset-inline-start: 2px;
+  font-size: 0.68rem;
+}
 
 .ds-chart-summary {
   display: flex;
-  gap: 24px;
+  gap: 12px;
   flex-wrap: wrap;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -704,6 +721,12 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1 1 120px;
+  min-width: 110px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
 
 .ds-chart-summary b {

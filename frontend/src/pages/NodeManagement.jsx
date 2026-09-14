@@ -35,7 +35,8 @@ const NodeManagement = () => {
   const [drawerNode, setDrawerNode] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [sort, setSort] = useState({ key: 'name', dir: 'asc' });
+  // Default: newest first (`id` autoincrement = creation order), like Users/Admins.
+  const [sort, setSort] = useState({ key: 'id', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
   const [selected, setSelected] = useState(() => new Set());

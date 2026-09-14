@@ -16,6 +16,7 @@ class ResponseModel(BaseModel):
 
 
 class Users(BaseModel):
+    id: int  # autoincrement creation order; UI default-sorts newest-first
     name: str
     is_active: bool
     total: int | None = None
@@ -68,6 +69,7 @@ class Settings(BaseModel):
 
 
 class Admins(BaseModel):
+    id: int  # autoincrement creation order; UI default-sorts newest-first
     username: str
     users_count: int = 0
     telegram_id: int | None = None

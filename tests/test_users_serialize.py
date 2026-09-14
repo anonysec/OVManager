@@ -16,6 +16,7 @@ from backend.schema.output import Users
 
 def _row(**kw):
     base = {
+        "id": 44,
         "name": "uip_regression",
         "is_active": True,
         "total": None,
@@ -42,3 +43,10 @@ def test_last_online_datetime_coerced():
 def test_last_online_string_passthrough():
     item = Users.model_validate(_row(last_online="2026-09-13T22:55:00")).model_dump()
     assert item["last_online"] == "2026-09-13T22:55:00"
+
+
+def test_users_schema_exposes_id_for_newest_first_sort():
+    from backend.schema.output import Admins, Users
+
+    assert Users.model_validate(_row()).id == 44
+    assert Admins.model_validate({"id": 7, "username": "a"}).id == 7

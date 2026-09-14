@@ -32,6 +32,27 @@ const tsToIso = (ts) => {
   return new Date(n * 1000).toISOString();
 };
 
+// Catmull-Rom -> cubic Bezier smoothing so spiky traffic reads as a calm
+// curve instead of a jagged polyline. Control points are clamped to the
+// viewBox so overshoot can never poke above the frame or below zero.
+const smoothPath = (pts) => {
+  if (pts.length < 2) return '';
+  const clamp = (v) => Math.min(100, Math.max(0, v));
+  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = clamp(p1.y + (p2.y - p0.y) / 6);
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = clamp(p2.y - (p3.y - p1.y) / 6);
+    d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
+};
+
 export default function StreamChart({ period: initialPeriod = '24h', hours: initialHours = 24 }) {
   const { t } = useTranslation();
   const [period, setPeriod] = useState(initialPeriod);
@@ -101,9 +122,11 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     setHoverIdx(Math.round(ratio * (points.length - 1)));
   };
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  const linePath = smoothPath(points);
   const areaPath = points.length ? `${linePath} L100,100 L0,100 Z` : '';
   const last = points[points.length - 1];
+  const halfVal = peak / 2;
+  const firstTs = series.length ? tsToIso(series[0].ts) : null;
 
   return (
     <Panel
@@ -142,7 +165,8 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           >
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--info)" stopOpacity="0.32" />
+                <stop offset="0%" stopColor="var(--info)" stopOpacity="0.38" />
+                <stop offset="55%" stopColor="var(--info)" stopOpacity="0.12" />
                 <stop offset="100%" stopColor="var(--info)" stopOpacity="0" />
               </linearGradient>
             </defs>
@@ -164,12 +188,14 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
               className="ds-chart-tooltip"
               style={{ left: `clamp(48px, ${hovered.x}%, calc(100% - 48px))` }}
             >
-              <strong>{fmt(hovered.v)}</strong>
+              <strong><i className="ds-chart-tip-dot" aria-hidden="true" />{fmt(hovered.v)}</strong>
               <span>{fmtDateTime(tsToIso(hovered.ts) || new Date().toISOString())}</span>
             </div>
           )}
           <span className="ds-chart-axis ds-chart-axis--max">{fmt(peak)}</span>
+          {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmt(halfVal)}</span>}
           <span className="ds-chart-axis ds-chart-axis--min">0</span>
+          {firstTs && <span className="ds-chart-axis ds-chart-axis--t0">{fmtDateTime(firstTs)}</span>}
           {(loading || loadError || points.length < 2) && (
             <div className="ds-chart-empty">
               {loading ? t('loading', 'Loading…') : loadError ? t('panelLoadFailed', 'Could not load chart') : t('noMetrics', 'No metrics yet')}
