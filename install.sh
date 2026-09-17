@@ -21,7 +21,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="2.1.2"
+VERSION="2.1.3"
 # Terminal command installed by install_cli() (copy of this installer).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -1272,7 +1272,8 @@ offer_same_server_node() {
     [[ "$DRY" -eq 0 && "$JSON" -eq 0 ]] || return 0
     can_prompt || return 0
     line ""
-    if ! confirm "Install a VPN node on this same server too?" "n"; then
+    # Default NO: a bare Enter must not provision a VPN node.
+    if ! confirm_no "Install a VPN node on this same server too?"; then
         info "Skipped. Install OVNode on a separate server and add it in"
         info "Nodes → Add Node — or re-run this installer with --with-node."
         return 0
@@ -1288,24 +1289,40 @@ offer_same_server_node() {
     local node_repo="${OVNODE_REPO:-anonysec/OVNode}" node_branch="${OVNODE_BRANCH:-main}"
     local url="https://raw.githubusercontent.com/${node_repo}/${node_branch}/install.sh"
     local tmp; tmp="$(mktemp)"
+    local node_tls="1"
     info "Installing OVNode '${node_name}' (Express)…"
-    local node_json=""
-    if curl -fsSL "$url" -o "$tmp" 2>/dev/null \
-        && node_json="$(bash "$tmp" install --json --name "$node_name" --api-key "$node_key" \
-                        --tls selfsigned --port "$node_port")"; then
-        step "VPN node installed (service port ${node_port}, TLS self-signed)"
+    local node_json="" rc=0
+    if curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
+        node_json="$(bash "$tmp" install --json --name "$node_name" --api-key "$node_key" \
+                        --tls selfsigned --port "$node_port")" || rc=$?
     else
-        rm -f "$tmp"
-        warn "Node install failed — install OVNode later, then add it via Nodes → Add Node."
-        return 0
+        rc=1
     fi
     rm -f "$tmp"
+    if [[ "$rc" -eq 0 ]]; then
+        step "VPN node installed (service port ${node_port}, TLS self-signed)"
+    elif [[ "$rc" -eq 3 && -f /opt/ovnode/.env ]]; then
+        # The node agent is already installed here: adopt its settings instead
+        # of failing, then register that node in the panel.
+        warn "OVNode is already installed on this server — registering the existing node."
+        node_name="$(env_get /opt/ovnode/.env NODE_NAME)"; : "${node_name:=ovnode}"
+        node_key="$(env_get /opt/ovnode/.env API_KEY)"
+        node_port="$(env_get /opt/ovnode/.env SERVICE_PORT)"; : "${node_port:=2083}"
+        [[ "$(env_get /opt/ovnode/.env TLS_METHOD)" == "none" ]] && node_tls="0"
+        if [[ -z "$node_key" ]]; then
+            warn "Could not read the node API key from /opt/ovnode/.env — add the node manually."
+            return 0
+        fi
+    else
+        warn "Node install failed (exit $rc) — install OVNode later, then add it via Nodes → Add Node."
+        return 0
+    fi
 
     local auto=1
     if [[ "$EXPRESS" -eq 0 ]]; then
         confirm "Add it to the panel automatically now?" || auto=0
     fi
-    if [[ "$auto" -eq 1 ]] && register_node_in_panel "$node_name" "$node_key" "$node_port"; then
+    if [[ "$auto" -eq 1 ]] && register_node_in_panel "$node_name" "$node_key" "$node_port" "$node_tls"; then
         return 0
     fi
     print_node_registration "$node_name" "$node_key" "$node_port"
@@ -1314,7 +1331,7 @@ offer_same_server_node() {
 # Log into the fresh panel (loopback) and POST the node. Best-effort: any
 # failure falls back to printing the details for manual entry.
 register_node_in_panel() {
-    local name="$1" key="$2" port="$3"
+    local name="$1" key="$2" port="$3" use_tls="${4:-1}"
     local base scheme ip token payload resp
     scheme="$(scheme_of)"
     base="${scheme}://127.0.0.1:${PORT}"
@@ -1332,7 +1349,7 @@ register_node_in_panel() {
         return 1
     fi
 
-    payload="$(python3 - "$name" "$ip" "$port" "$key" <<'PY'
+    payload="$(python3 - "$name" "$ip" "$port" "$key" "$use_tls" <<'PY'
 import json, sys
 name, ip, port, key = sys.argv[1:5]
 print(json.dumps({
@@ -1345,7 +1362,7 @@ print(json.dumps({
     "key": key,
     "status": True,
     "set_new_setting": True,
-    "use_tls": True,
+    "use_tls": bool(int(sys.argv[5])),
 }))
 PY
 )"

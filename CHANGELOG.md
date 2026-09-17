@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.3 — 2026-09-17
+
+- "Install a VPN node on this same server too?" now defaults to **No**
+  (`[y/N]`); previously the prompt ignored its default and a bare Enter
+  installed a node.
+- If OVNode is already installed, the offer now adopts that node's settings
+  (name, API key, port, TLS from `/opt/ovnode/.env`) and registers it in the
+  panel instead of failing with "Already installed".
 ## 2.1.2 — 2026-09-17
 
 - **Uninstall no longer looks frozen**: `systemctl stop` could wait out
