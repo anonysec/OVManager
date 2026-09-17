@@ -108,3 +108,9 @@ class Settings(Base):
     # When set, requests to root or other paths get an empty response (no 404).
     # Changeable at runtime via the web UI — no restart required.
     urlpath: Mapped[str] = mapped_column(default="", nullable=False)
+    # Scheduled automatic database backup (OFF by default). `auto_backup_time`
+    # is HH:MM in 24-hour server-local time; `auto_backup_keep` caps how many
+    # timestamped backups are retained.
+    auto_backup_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)
+    auto_backup_time: Mapped[str] = mapped_column(default="03:30", nullable=False)
+    auto_backup_keep: Mapped[int] = mapped_column(default=50, nullable=False)

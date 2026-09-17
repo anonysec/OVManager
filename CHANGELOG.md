@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.1 — 2026-09-17
+
+- Installer: Express no longer exits right after the password prompt
+  (`set -e` trap); passwords now echo as `*` while typing. Related
+  non-fatal returns in `backup`/`update` no longer abort the run.
+- Installer: same-server node registration tolerated a duplicated response
+  body (it reported failure even though the node was added) and now falls
+  back to checking the node list; the frontend build no longer leaves the
+  installer in `frontend/`.
+- Installer: uninstall asks "Also delete data and backups?" (default No);
+  the TUI entry is "Backup" plus a new "Auto backup (host timer)".
+- Automatic backups: new settings (Settings → Advanced → Backup), off by
+  default — daily time + how many to keep; and a host timer via
+  `ovmanager auto-backup on|off|status [--time HH:MM] [--keep N]`.
+  `backup --keep N` prunes `/var/backups`.
+- Default node name is `ovnode` (was `node-1`).
+
 ## 2.1.0 — 2026-09-17
 
 The "clean, fast, beginner-friendly" release tracked in `docs/ROADMAP.md`.

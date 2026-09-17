@@ -94,7 +94,9 @@ the next start. The same menu has start/stop/restart, logs, backup and TLS.
 
 ## Backup and restore
 
-`ovmanager backup` tars the data directory into `/var/backups`. **Settings →
-Backups** also creates a downloadable database copy and restores an upload
+`ovmanager backup` tars the data directory into `/var/backups` (newest 14
+kept; `--keep N` changes that), and `ovmanager auto-backup on` adds a daily
+systemd timer for it. **Settings → Advanced → Backup** can instead schedule
+database backups inside the panel (off by default) and restores an upload
 atomically: writes are refused (HTTP 503) until the swap finishes, the current
 database is kept as a fallback, and the restored one is migrated on the spot.

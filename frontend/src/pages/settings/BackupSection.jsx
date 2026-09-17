@@ -9,15 +9,41 @@ import apiClient from '../../services/api';
 import ConfirmModal from '../../components/ConfirmModal';
 import ErrorState from '../../components/ui/ErrorState';
 import EmptyState from '../../components/ui/EmptyState';
-import { FiArchive, FiDatabase, FiUpload, FiDownload, FiRefreshCw } from 'react-icons/fi';
-import { Card } from './shared';
+import { FiArchive, FiDatabase, FiUpload, FiDownload, FiRefreshCw, FiClock } from 'react-icons/fi';
+import { Card, Field } from './shared';
 import { formatBytes } from '../../utils/format';
+import './BackupSection.css';
+
+const MIN_KEEP = 1;
+const MAX_KEEP = 500;
+const DEFAULT_TIME = '03:30';
+
+const clampKeep = (value) => {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 50;
+  return Math.max(MIN_KEEP, Math.min(MAX_KEEP, n));
+};
+
+const formatAge = (iso, locale) => {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return null;
+  const diffSec = Math.round((then - Date.now()) / 1000);
+  const abs = Math.abs(diffSec);
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale || 'en', { numeric: 'auto' });
+    if (abs < 3600) return rtf.format(Math.round(diffSec / 60), 'minute');
+    if (abs < 86400) return rtf.format(Math.round(diffSec / 3600), 'hour');
+    return rtf.format(Math.round(diffSec / 86400), 'day');
+  } catch {
+    return new Date(then).toLocaleString();
+  }
+};
 
 /* ═══════════════════════════════════════════════════════
    BACKUP (advanced) — Create, download, restore
 ═══════════════════════════════════════════════════════ */
 const BackupSection = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { refreshTick } = useLive();
   const { addToast } = useToast();
   const [backups, setBackups] = useState([]);
@@ -26,6 +52,53 @@ const BackupSection = () => {
   const [loadError, setLoadError] = useState(false);
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', onConfirm: null });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
+
+  const [autoEnabled, setAutoEnabled] = useState(false);
+  const [autoTime, setAutoTime] = useState(DEFAULT_TIME);
+  const [autoKeep, setAutoKeep] = useState('50');
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoMsg, setAutoMsg] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient.get('/server/settings')
+      .then((res) => {
+        if (cancelled) return;
+        const d = res?.data?.data || {};
+        setAutoEnabled(d.auto_backup_enabled === true);
+        if (typeof d.auto_backup_time === 'string' && d.auto_backup_time) {
+          setAutoTime(d.auto_backup_time.slice(0, 5));
+        }
+        if (d.auto_backup_keep !== undefined && d.auto_backup_keep !== null) {
+          setAutoKeep(String(clampKeep(d.auto_backup_keep)));
+        }
+      })
+      .catch(() => { /* keep the defaults; the card still renders */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  const saveAuto = async () => {
+    setAutoSaving(true);
+    setAutoMsg(null);
+    const keep = clampKeep(autoKeep);
+    try {
+      const r = await apiClient.put('/server/settings/bot', {
+        auto_backup_enabled: autoEnabled,
+        auto_backup_time: autoTime || DEFAULT_TIME,
+        auto_backup_keep: keep,
+      });
+      if (r?.data?.success === false) {
+        setAutoMsg({ type: 'error', text: r.data?.msg || t('error', 'Failed') });
+      } else {
+        setAutoKeep(String(keep));
+        setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
+      }
+    } catch (e) {
+      setAutoMsg({ type: 'error', text: e.response?.data?.detail || e.response?.data?.msg || t('error', 'Failed') });
+    } finally {
+      setAutoSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +160,9 @@ const BackupSection = () => {
     });
   };
 
+  const newestBackup = backups[0];
+  const newestAge = newestBackup?.modified ? formatAge(newestBackup.modified, i18n.language) : null;
+
   return (
     <div className="sp-cards">
       <Card title={t('backupTitle', 'Database Backup')} icon={FiDatabase}>
@@ -114,6 +190,73 @@ const BackupSection = () => {
               </div>
             ))}
           </div>
+        )}
+      </Card>
+
+      <Card title={t('backupAutoTitle', 'Automatic backups')} icon={FiClock}>
+        <p className="sp-hint sp-mb-12">
+          {t('backupAutoHint', 'Off by default. When enabled, the panel writes a database backup every day at this time and keeps only the newest N.')}
+        </p>
+
+        <Field label={t('backupAutoToggle', 'Enable automatic backups')} horizontal inputId="backup-auto-enabled">
+          <label className="sp-toggle">
+            <input
+              id="backup-auto-enabled"
+              type="checkbox"
+              checked={autoEnabled}
+              disabled={autoSaving}
+              aria-label={t('backupAutoToggle', 'Enable automatic backups')}
+              onChange={(e) => setAutoEnabled(e.target.checked)}
+            />
+            <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
+          </label>
+        </Field>
+
+        <div className="sp-two-col">
+          <Field label={t('backupAutoTime', 'Backup time')} inputId="backup-auto-time">
+            <input
+              id="backup-auto-time"
+              className="sp-input"
+              type="time"
+              value={autoTime}
+              disabled={!autoEnabled || autoSaving}
+              onChange={(e) => setAutoTime(e.target.value)}
+            />
+          </Field>
+          <Field
+            label={t('backupAutoKeep', 'Keep newest backups')}
+            hint={t('backupAutoKeepHint', 'How many daily backups to keep (1–500). Older ones are removed.')}
+            inputId="backup-auto-keep"
+          >
+            <input
+              id="backup-auto-keep"
+              className="sp-input"
+              type="number"
+              min={MIN_KEEP}
+              max={MAX_KEEP}
+              value={autoKeep}
+              disabled={autoSaving}
+              onChange={(e) => setAutoKeep(e.target.value)}
+            />
+          </Field>
+        </div>
+
+        {newestAge && (
+          <p className="sp-hint sp-mt-12">
+            {t('backupAutoNewest', 'Newest backup: {{name}} ({{age}})', { name: newestBackup.name, age: newestAge })}
+          </p>
+        )}
+
+        <div className="sp-btn-group sp-mt-18">
+          <button className="btn btn-sm" disabled={autoSaving} aria-busy={autoSaving} onClick={saveAuto}>
+            {autoSaving ? <span className="button-spinner" aria-hidden="true" /> : t('backupAutoSave', 'Save')}
+          </button>
+        </div>
+
+        {autoMsg && (
+          <p className={`bs-auto-msg bs-auto-msg--${autoMsg.type}`} role={autoMsg.type === 'error' ? 'alert' : 'status'}>
+            {autoMsg.text}
+          </p>
         )}
       </Card>
 

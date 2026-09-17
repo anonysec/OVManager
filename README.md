@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
@@ -85,8 +85,8 @@ bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
 ## Terminal menu
 
 Every install adds a command — run `ovmanager` (or `ovm`) on the server and
-pick from a menu: **Status · Start/Stop/Restart · Logs · Backup · Update ·
-TLS · Recovery · Uninstall**. Recovery shows the panel URL and login, resets
+pick from a menu: **Status · Start/Stop/Restart · Logs · Backup · Auto
+backup · Update · TLS · Recovery · Uninstall**. Recovery shows the panel URL and login, resets
 the owner password, or clears the secret URL path. `logs -f` follows live;
 with `whiptail` installed the menu uses boxed dialogs.
 

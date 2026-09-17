@@ -38,6 +38,43 @@ BACKUP_DIR = DB_DIR / "backups"
 _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
 
+def create_panel_backup(keep: int | None = None) -> Path | None:
+    """Create a timestamped panel database backup and prune old ones.
+
+    Shared by the owner-only POST route and the scheduled auto-backup job.
+    Checkpoints the WAL first so the backup sees a consistent snapshot, then
+    copies through the SQLite online-backup API (safe while writers are
+    active). Returns the new backup path, or ``None`` when the database file
+    does not exist; other failures raise to the caller.
+
+    ``keep`` caps how many timestamped backups are retained (defaults to the
+    module-wide ``_MAX_BACKUPS``).
+    """
+    if not DB_PATH.exists():
+        return None
+
+    max_backups = _MAX_BACKUPS if keep is None else max(1, int(keep))
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    backup_path = BACKUP_DIR / f"ovmanager_backup_{ts}.db"
+    with engine.connect() as conn:
+        conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
+        conn.commit()
+    _sqlite_backup(str(DB_PATH), str(backup_path))
+    # Prune old backups — keep only the most recent ``max_backups``
+    all_backups = sorted(
+        BACKUP_DIR.glob("ovmanager_backup_*.db"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for old in all_backups[max_backups:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return backup_path
+
+
 @router.post("/backup", response_model=ResponseModel)
 def backup_database(user: dict = Depends(require_owner)):
     """Create a backup of the panel database (POST only).
@@ -47,31 +84,10 @@ def backup_database(user: dict = Depends(require_owner)):
     the threadpool, so a large database does not block the event loop.
     """
 
-    if not DB_PATH.exists():
-        return ResponseModel(success=False, msg="Database file not found", data=None)
-
     try:
-        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        backup_path = BACKUP_DIR / f"ovmanager_backup_{ts}.db"
-        # Checkpoint WAL so the backup sees a consistent snapshot, then use
-        # the SQLite online-backup API instead of a raw file copy (safe
-        # while writers are active).
-        with engine.connect() as conn:
-            conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
-            conn.commit()
-        _sqlite_backup(str(DB_PATH), str(backup_path))
-        # Prune old backups — keep only the most recent _MAX_BACKUPS
-        all_backups = sorted(
-            BACKUP_DIR.glob("ovmanager_backup_*.db"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        for old in all_backups[_MAX_BACKUPS:]:
-            try:
-                old.unlink()
-            except OSError:
-                pass
+        backup_path = create_panel_backup()
+        if backup_path is None:
+            return ResponseModel(success=False, msg="Database file not found", data=None)
         log_event(
             None,
             "maintenance.backup",
