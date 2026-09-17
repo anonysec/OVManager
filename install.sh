@@ -21,7 +21,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="2.1.1"
+VERSION="2.1.2"
 # Terminal command installed by install_cli() (copy of this installer).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -936,7 +936,7 @@ do_install() {
         run_step "Python packages" "$UV_BIN" sync --quiet
         build_frontend
         write_systemd_unit
-        run_step "Service started" systemctl restart "$SYSTEMD_SERVICE"
+        run_step "Service started" systemctl_bounded restart
     fi
 
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
@@ -946,7 +946,7 @@ do_install() {
     if [[ "$MODE" == "docker" ]]; then
         docker restart ovmanager >/dev/null 2>&1 || true
     else
-        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+        systemctl_bounded restart >/dev/null 2>&1 || true
     fi
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
         || warn "No answer on /health after finalize"
@@ -991,7 +991,7 @@ do_update() {
     else
         run_step "Python packages" "$UV_BIN" sync --quiet
         build_frontend
-        run_step "Service restarted" systemctl restart "$SYSTEMD_SERVICE"
+        run_step "Service restarted" systemctl_bounded restart
     fi
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 60 \
         || warn "No answer on /health — check logs"
@@ -1123,7 +1123,8 @@ do_reset_password() {
             warn "Could not restart the container — run: docker restart ovmanager"
         fi
     else
-        if systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1; then
+        systemctl_bounded restart
+        if systemctl is-active --quiet "$SYSTEMD_SERVICE"; then
             step "Service restarted  $SYSTEMD_SERVICE"
         else
             warn "Could not restart $SYSTEMD_SERVICE — run: systemctl restart $SYSTEMD_SERVICE"
@@ -1156,7 +1157,7 @@ do_uninstall() {
         exit 0
     fi
     confirm "Remove OVManager and stop the service?" || die "Cancelled."
-    systemctl stop "$SYSTEMD_SERVICE" 2>/dev/null || true
+    systemctl_bounded stop
     systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
     rm -f "/etc/systemd/system/$SYSTEMD_SERVICE"
     systemctl daemon-reload 2>/dev/null || true
@@ -1433,12 +1434,42 @@ env_set() {  # env_set FILE KEY VALUE — rewrite one line, atomically
     mv -f "$tmp" "$file"
 }
 
+# systemd waits up to TimeoutStopSec (90s default) for a stuck service, which
+# operators read as a frozen installer. Bound the wait, then force the unit.
+STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
+
+systemctl_bounded() {  # systemctl_bounded stop|restart [unit]
+    local action="$1" unit="${2:-$SYSTEMD_SERVICE}"
+    # Not loaded (fresh machine, Docker install): nothing to stop, no warning.
+    if [[ "$(systemctl show -p LoadState --value "$unit" 2>/dev/null)" != "loaded" ]]; then
+        return 0
+    fi
+    if timeout "$STOP_TIMEOUT" systemctl "$action" "$unit" 2>/dev/null; then
+        return 0
+    fi
+    warn "systemctl $action $unit did not finish in ${STOP_TIMEOUT}s — forcing it"
+    systemctl kill -s SIGKILL "$unit" >/dev/null 2>&1 || true
+    sleep 1
+    if [[ "$action" == "restart" ]]; then
+        timeout "$STOP_TIMEOUT" systemctl start "$unit" 2>/dev/null || true
+    fi
+    return 0
+}
+
 service_action() {  # start|stop|restart
     if is_docker_mode; then
         command -v docker >/dev/null 2>&1 || die "Docker not found on this host"
-        docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed"
+        if [[ "$1" == "restart" ]]; then
+            docker restart -t 10 ovmanager >/dev/null || die "docker restart ovmanager failed"
+        else
+            docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed"
+        fi
     else
-        systemctl "$1" "$SYSTEMD_SERVICE" || die "systemctl $1 $SYSTEMD_SERVICE failed"
+        if [[ "$1" == "restart" ]]; then
+            systemctl_bounded restart
+        else
+            systemctl_bounded "$1"
+        fi
     fi
     step "Panel $1: done"
 }
