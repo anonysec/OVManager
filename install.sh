@@ -21,7 +21,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="2.1.0"
+VERSION="2.1.1"
 # Terminal command installed by install_cli() (copy of this installer).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -52,6 +52,7 @@ PUBLIC_URL="" MODE="" ACTION="install"
 YES=0 PURGE=0 JSON=0 DRY=0 GENERATED_PASS=0 PATH_SET=0
 WANT_NODE=0 NODE_NAME="" NODE_KEY=""
 LOGS_ARG=""
+AUTO_BACKUP_ACTION="" BACKUP_TIME="" BACKUP_KEEP=""
 # CLI_GIVEN: any flag/command was passed (as opposed to a bare run → menu).
 # EXPRESS: the start menu's zero-questions install preset is active.
 CLI_GIVEN=0 EXPRESS=0
@@ -93,12 +94,31 @@ has_tty() {
     return 1
 }
 
+# Masked input: prints one * per character on stderr, backspace works, and
+# the value goes to stdout (never echoed as plain text). Reads stdin, so
+# callers redirect /dev/tty when needed.
+_masked_read() {
+    local buf="" ch
+    while IFS= read -rsn1 ch; do
+        case "$ch" in
+            ""|$'\n'|$'\r') break ;;
+            $'\x7f'|$'\b')
+                if [[ -n "$buf" ]]; then buf="${buf%?}"; printf '\b \b' >&2; fi ;;
+            *) buf+="$ch"; printf '*' >&2 ;;
+        esac
+    done
+    printf '\n' >&2
+    printf '%s' "$buf"
+}
+
 _read_reply() {  # hidden? → prints the line on stdout
     local hidden="${1:-}" buf=""
     if [[ -t 0 ]]; then
-        if [[ "$hidden" == "h" ]]; then read -r -s buf; printf '\n' >&2; else read -r buf; fi
+        if [[ "$hidden" == "h" ]]; then _masked_read; return 0; fi
+        read -r buf
     elif [[ -e /dev/tty && -r /dev/tty ]]; then
-        if [[ "$hidden" == "h" ]]; then read -r -s buf </dev/tty; printf '\n' >&2; else read -r buf </dev/tty; fi
+        if [[ "$hidden" == "h" ]]; then _masked_read </dev/tty; return 0; fi
+        read -r buf </dev/tty
     else
         return 1
     fi
@@ -122,6 +142,17 @@ confirm() {
     local c=""
     c="$(_read_reply)" || true
     [[ ! "$c" =~ ^[Nn]$ ]]
+}
+
+# Explicit-yes prompt (default NO): used for destructive extras like deleting
+# data during uninstall. Non-interactive runs keep the safe answer.
+confirm_no() {
+    [[ "$YES" -eq 1 ]] && return 1
+    can_prompt || return 1
+    printf '  %s [y/%bN%b] : ' "$1" "$GR" "$NC" >&2
+    local c=""
+    c="$(_read_reply)" || true
+    [[ "$c" =~ ^[Yy]$ ]]
 }
 
 banner() {
@@ -152,7 +183,9 @@ COMMANDS
   status                Show panel URL, health and version
   start | stop | restart   Control the panel service
   logs [N|-f]           Last N log lines (default 100), or follow with -f
-  backup                Save a data backup now (/var/backups)
+  backup [--keep N]     Save a data backup now (/var/backups, newest N kept)
+  auto-backup on|off|status   Host timer: daily backup at 03:30 (default)
+                        Options for on: --time HH:MM --keep N
   tls                   Show/replace the certificate (self-signed, LE, custom)
   recovery              Show login info, reset owner password, reset URL path
   reset-urlpath         Serve the panel at / again (forgot the secret path)
@@ -178,7 +211,7 @@ OPTIONS
                         under -y / non-interactive
   --public-url URL      Canonical public origin for sub links
   --with-node [NAME]    Also print a ready OVNode one-liner for this server
-                        (generates an API key; optional NAME, default node-1)
+                        (generates an API key; optional NAME, default ovnode)
   --tls-none            REMOVED: plain HTTP is not allowed. Use --tls-self
                         (default), --tls-le DOMAIN / --tls-ip, or --tls-custom
   --tls-self            Self-signed certificate
@@ -251,6 +284,11 @@ parse_args() {
             stop)          ACTION="stop"; shift ;;
             restart)       ACTION="restart"; shift ;;
             backup)        ACTION="backup"; shift ;;
+            auto-backup)
+                           ACTION="auto-backup"; shift
+                           if [[ $# -ge 1 && "$1" != -* ]]; then AUTO_BACKUP_ACTION="$1"; shift; fi ;;
+            --keep)        [[ $# -ge 2 ]] || die "--keep needs a number"; BACKUP_KEEP="$2"; shift 2 ;;
+            --time)        [[ $# -ge 2 ]] || die "--time needs HH:MM"; BACKUP_TIME="$2"; shift 2 ;;
             tls)           ACTION="tls"; shift ;;
             recovery)      ACTION="recovery"; shift ;;
             reset-urlpath) ACTION="reset-urlpath"; shift ;;
@@ -654,9 +692,13 @@ UNIT
 
 build_frontend() {
     [[ -f "$INSTALL_DIR/frontend/package.json" ]] || return 0
-    cd "$INSTALL_DIR/frontend"
-    run_step "Node.js dependencies" npm ci --no-audit --no-fund
-    run_step "Frontend build" npm run build
+    # Subshell: the installer must keep its own working directory, or later
+    # steps (node offer, registration) run from frontend/.
+    (
+        cd "$INSTALL_DIR/frontend" || exit 1
+        run_step "Node.js dependencies" npm ci --no-audit --no-fund
+        run_step "Frontend build" npm run build
+    )
 }
 
 # ── Docker ─────────────────────────────────────────────────────────────
@@ -725,7 +767,7 @@ validate_input() {
         [[ "$PATHPREFIX" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "URL path: letters, digits, dash, underscore"
     fi
     if [[ "$WANT_NODE" -eq 1 ]]; then
-        [[ -n "$NODE_NAME" ]] || NODE_NAME="node-1"
+        [[ -n "$NODE_NAME" ]] || NODE_NAME="ovnode"
         [[ "$NODE_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
         [[ ${#NODE_KEY} -ge 16 ]] || die "Node API key must be at least 16 characters"
     fi
@@ -1151,7 +1193,8 @@ already_installed_menu() {
             status    "Status — URL, health, version" \
             service   "Start / Stop / Restart" \
             logs      "Logs" \
-            backup    "Backup now" \
+            backup    "Backup" \
+            auto      "Auto backup (host timer)" \
             update    "Update" \
             tls       "TLS certificate" \
             recovery  "Recovery — login, password, URL path" \
@@ -1162,10 +1205,15 @@ already_installed_menu() {
             service)   do_service_menu || warn "Service action failed" ;;
             logs)      show_logs || warn "Could not read logs" ;;
             backup)    check_root; backup_now || warn "Backup failed" ;;
+            auto)      check_root; auto_backup_menu || warn "Auto-backup action failed" ;;
             update)    check_root; detect_os; check_deps; do_update || warn "Update failed" ;;
             tls)       check_root; do_tls_menu || warn "TLS action failed" ;;
             recovery)  check_root; do_recovery_menu || warn "Recovery action failed" ;;
-            uninstall) check_root; do_uninstall; return 0 ;;
+            uninstall)
+                check_root
+                confirm_no "Also delete data and backups?" && PURGE=1
+                do_uninstall
+                return 0 ;;
             *)         return 0 ;;
         esac
     done
@@ -1231,7 +1279,7 @@ offer_same_server_node() {
     warn "Not recommended for production: a node on its own server keeps"
     warn "panel and VPN traffic independent. Continuing anyway."
     local node_name node_key node_port=2083
-    node_name="$(ask "Node name" "node-1")"
+    node_name="$(ask "Node name" "ovnode")"
     [[ "$node_name" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
     node_key="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
     while port_in_use "$node_port"; do node_port=$((node_port + 1)); done
@@ -1305,11 +1353,39 @@ PY
         -H "Content-Type: application/json" \
         -H "X-Requested-With: XMLHttpRequest" \
         -d "$payload" 2>/dev/null)" || true
-    if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("success") else 1)' <<<"${resp:-{}}"; then
+    # Tolerant parse: take the FIRST JSON object. Some proxies/appended bodies
+    # made a strict json.load() fail with "Extra data" even when the node was
+    # added, which turned a success into a scary warning.
+    if python3 -c '
+import json, sys
+raw = sys.stdin.read().strip()
+if not raw:
+    raise SystemExit(1)
+obj, _ = json.JSONDecoder().raw_decode(raw)
+raise SystemExit(0 if obj.get("success") else 1)
+' <<<"${resp:-}"; then
         step "Node '${name}' added to the panel."
         return 0
     fi
-    warn "Panel did not accept the node yet: $(printf '%s' "$resp" | head -c 160)"
+
+    # The response may be a duplicate/truncated body; ask the panel directly.
+    local check
+    check="$(curl -sk --max-time 20 -H "Authorization: Bearer ${token}" "${base}/api/nodes/" 2>/dev/null)" || true
+    if python3 -c '
+import json, sys
+name = sys.argv[1]
+raw = sys.stdin.read().strip()
+if not raw:
+    raise SystemExit(1)
+obj, _ = json.JSONDecoder().raw_decode(raw)
+nodes = (obj.get("data") if isinstance(obj, dict) else obj) or []
+raise SystemExit(0 if any((n or {}).get("name") == name for n in nodes) else 1)
+' "$name" <<<"${check:-}"; then
+        step "Node '${name}' is registered in the panel."
+        return 0
+    fi
+
+    warn "Panel did not accept the node (${#resp} bytes): $(printf '%s' "$resp" | head -c 200)"
     return 1
 }
 
@@ -1383,9 +1459,104 @@ show_logs() {
     fi
 }
 
+# Keep only the newest N tarballs this installer writes (/var/backups).
+prune_backups() {
+    local keep="${1:-14}" i=0 f
+    [[ "$keep" =~ ^[0-9]+$ ]] || keep=14
+    shopt -s nullglob
+    local files=(/var/backups/panel-*.tar.gz)
+    shopt -u nullglob
+    ((${#files[@]} > keep)) || return 0
+    while IFS= read -r f; do
+        i=$((i + 1))
+        if ((i > keep)); then rm -f "$f"; fi
+    done < <(ls -1t "${files[@]}" 2>/dev/null)
+    return 0
+}
+
 backup_now() {
     mkdir -p "$DATA_DIR"
     backup_dir "$DATA_DIR" "panel"
+    prune_backups "${BACKUP_KEEP:-14}"
+}
+
+# Host-level daily backup: a systemd timer that runs `ovmanager backup`.
+# Separate from the panel-scheduled backup (Settings → Advanced → Backup).
+auto_backup_units_write() {
+    local time="$1" keep="$2"
+    local service="/etc/systemd/system/ovmanager-backup.service"
+    local timer="/etc/systemd/system/ovmanager-backup.timer"
+    cat > "$service" << EOF
+[Unit]
+Description=OVManager automatic backup
+
+[Service]
+Type=oneshot
+ExecStart=${BIN_DIR}/${CLI_NAME} backup --keep ${keep}
+EOF
+    cat > "$timer" << EOF
+[Unit]
+Description=Daily OVManager backup
+
+[Timer]
+OnCalendar=*-*-* ${time}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+}
+
+auto_backup_cli() {
+    local action="${1:-status}" service timer time keep
+    service="/etc/systemd/system/ovmanager-backup.service"
+    timer="/etc/systemd/system/ovmanager-backup.timer"
+    time="${BACKUP_TIME:-03:30}"
+    keep="${BACKUP_KEEP:-14}"
+    case "$action" in
+        on)
+            [[ "$time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || die "Invalid time '$time' (use HH:MM)"
+            [[ "$keep" =~ ^[0-9]+$ ]] && ((keep >= 1 && keep <= 500)) || die "Invalid --keep '$keep' (1-500)"
+            command -v systemctl >/dev/null 2>&1 || die "systemd not found — the auto-backup timer needs it"
+            auto_backup_units_write "$time" "$keep"
+            systemctl daemon-reload
+            systemctl enable --now ovmanager-backup.timer >/dev/null 2>&1 \
+                || die "Could not enable the backup timer (systemd available?)"
+            step "Auto backup enabled: daily at ${time}, keeping ${keep} tarballs"
+            ;;
+        off)
+            systemctl disable --now ovmanager-backup.timer >/dev/null 2>&1 || true
+            rm -f "$timer" "$service"
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            step "Auto backup disabled (host timer removed)"
+            ;;
+        status|"")
+            if [[ -f "$timer" ]]; then
+                info "Host timer: enabled ($(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown))"
+                systemctl list-timers ovmanager-backup.timer --no-pager 2>/dev/null | sed -n '2p' || true
+            else
+                info "Host timer: disabled  (enable: ${CLI_NAME} auto-backup on)"
+            fi
+            info "Panel schedule is separate and configured in Settings → Advanced → Backup."
+            ;;
+        *)
+            die "Usage: $CLI_NAME auto-backup on [--time HH:MM] [--keep N] | off | status" ;;
+    esac
+}
+
+auto_backup_menu() {
+    local tag
+    tag="$(tui_select "Auto backup (host timer)" \
+        status  "Status" \
+        enable  "Enable daily backup" \
+        disable "Disable" \
+        back    "Back")"
+    case "$tag" in
+        status)  auto_backup_cli status ;;
+        enable)  auto_backup_cli on ;;
+        disable) auto_backup_cli off ;;
+        *)       return 0 ;;
+    esac
 }
 
 show_login_info() {
@@ -1535,6 +1706,7 @@ main() {
         start|stop|restart) check_root; detect_os; service_action "$ACTION"; exit 0 ;;
         logs) detect_os; show_logs "$LOGS_ARG"; exit 0 ;;
         backup) check_root; detect_os; backup_now; exit 0 ;;
+        auto-backup) check_root; detect_os; auto_backup_cli "$AUTO_BACKUP_ACTION"; exit 0 ;;
         tls) check_root; detect_os; do_tls_menu; exit 0 ;;
         recovery) check_root; detect_os; do_recovery_menu; exit 0 ;;
         reset-urlpath) check_root; detect_os; reset_urlpath_now; exit 0 ;;
@@ -1587,7 +1759,7 @@ main() {
         : "${TLS_MODE:=self}"
         : "${MODE:=native}"
         if [[ "$WANT_NODE" -eq 1 ]]; then
-            : "${NODE_NAME:=node-1}"
+            : "${NODE_NAME:=ovnode}"
             if [[ -z "$NODE_KEY" ]]; then
                 NODE_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
             fi

@@ -1,0 +1,27 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Backup settings section — inline save feedback for the "Automatic backups"
+   card. Colours come only from tokens.css, so both themes are covered without
+   extra rules. Namespaced `bs-` to avoid collisions. */
+
+.bs-auto-msg {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.bs-auto-msg--success {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success-text);
+}
+
+.bs-auto-msg--error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger-text);
+}

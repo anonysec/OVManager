@@ -1,6 +1,9 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
+import logging
+import re
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -15,7 +18,15 @@ from backend.urlpath import get_urlpath as _get_urlpath
 from backend.urlpath import set_urlpath as _set_urlpath
 from backend.version import __version__
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
+
+# 24-hour HH:MM as persisted in Settings.auto_backup_time.
+_AUTO_BACKUP_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_AUTO_BACKUP_KEEP_MIN = 1
+_AUTO_BACKUP_KEEP_MAX = 500
+_AUTO_BACKUP_FIELDS = frozenset({"auto_backup_enabled", "auto_backup_time", "auto_backup_keep"})
 
 
 @router.get("/settings/", response_model=ResponseModel, include_in_schema=False)
@@ -60,6 +71,11 @@ async def get_settings(
     data = settings.model_dump()
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
+    # Scheduled automatic backup (off by default). Merged here for the same
+    # backward-compatibility reason as the notification flags above.
+    data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
+    data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
+    data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
@@ -86,6 +102,10 @@ class BotConfigUpdate(BaseModel):
     # Daily Telegram alert categories (panel-sent, independent of bot polling).
     notify_expiry: bool | None = None
     notify_traffic: bool | None = None
+    # Scheduled automatic database backup (OFF by default).
+    auto_backup_enabled: bool | None = None
+    auto_backup_time: str | None = None
+    auto_backup_keep: int | None = None
 
 
 class URLPathUpdate(BaseModel):
@@ -147,6 +167,20 @@ async def update_bot_config(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
+    # Scheduled-backup fields are validated before anything is persisted.
+    if payload.auto_backup_time is not None and not _AUTO_BACKUP_TIME_RE.match(payload.auto_backup_time):
+        return ResponseModel(
+            success=False,
+            msg="auto_backup_time must be a valid 24-hour time in HH:MM format",
+            data=None,
+        )
+    if payload.auto_backup_keep is not None and not (_AUTO_BACKUP_KEEP_MIN <= payload.auto_backup_keep <= _AUTO_BACKUP_KEEP_MAX):
+        return ResponseModel(
+            success=False,
+            msg=f"auto_backup_keep must be between {_AUTO_BACKUP_KEEP_MIN} and {_AUTO_BACKUP_KEEP_MAX}",
+            data=None,
+        )
+
     kwargs = payload.model_dump(exclude_unset=True)
     try:
         crud.update_bot_config(db, **kwargs)
@@ -163,6 +197,20 @@ async def update_bot_config(
     db_settings = crud.get_settings(db)
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
+    data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
+    data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
+    data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
+
+    # Apply a new schedule immediately — no restart required. Imported lazily
+    # because backend.app imports the routers (circular otherwise).
+    if _AUTO_BACKUP_FIELDS & payload.model_fields_set:
+        try:
+            from backend.app import reschedule_auto_backup
+
+            reschedule_auto_backup()
+        except Exception:
+            logger.exception("Could not reschedule the automatic backup job")
+
     return ResponseModel(
         success=True,
         msg="Bot config updated",

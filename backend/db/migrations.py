@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 VERSION_TABLE = "schema_version"
 
@@ -408,12 +408,31 @@ def _add_notification_flags(db: Session) -> None:
         db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_auto_backup_settings(db: Session) -> None:
+    """Add ``settings.auto_backup_*`` for databases stamped before v7.
+
+    Auto backup is off by default, so existing installs keep behaving exactly
+    as before after the upgrade. A database stamped at 6 has the settings
+    table but not the columns, and reconciliation only runs while adopting a
+    pre-runner database — hence this step.
+    """
+    if "settings" not in table_names(db):
+        return
+    present = column_names(db, "settings")
+    for name in ("auto_backup_enabled", "auto_backup_time", "auto_backup_keep"):
+        if name in present:
+            continue
+        column = Base.metadata.tables["settings"].columns[name]
+        db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
     (4, "add lookup indices", _add_lookup_indices),
     (5, "add admin disabled flag", _add_admin_disabled_flag),
     (6, "add Telegram notification flags", _add_notification_flags),
+    (7, "add automatic backup settings", _add_auto_backup_settings),
 )
 
 

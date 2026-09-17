@@ -408,3 +408,73 @@ def test_express_password_path_does_not_exit_early():
     assert blank.returncode == 0, blank.stderr
 
 
+
+
+def _extract_function(name: str) -> str:
+    lines = Path(INSTALLER).read_text(encoding="utf-8").splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith(f"{name}()"))
+    end = start
+    while lines[end] != "}":
+        end += 1
+    return "\n".join(lines[start : end + 1])
+
+
+def test_masked_password_echoes_stars_and_handles_backspace():
+    source = _extract_function("_masked_read")
+    harness = f"set -Eeuo pipefail\n{source}\n_masked_read\n"
+    r = subprocess.run(
+        ["bash", "-c", harness],
+        input="ab\x7fc\n",
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "ac"
+    assert r.stderr.count("*") == 3  # a, b, c each echoed as a star
+    assert "\b \b" in r.stderr  # backspace erased one star
+
+
+def test_confirm_no_is_safe_by_default():
+    source = _extract_function("confirm_no")
+    template = (
+        "set -Eeuo pipefail\nGR=''; NC=''\n"
+        "can_prompt() {{ return {prompt}; }}\nYES={yes}\n"
+        "_read_reply() {{ printf '%s' '{reply}'; }}\n{fn}\nconfirm_no 'Delete data?'\n"
+    )
+    fn = source
+    cases = [("0", "0", "y", 0), ("0", "0", "Y", 0), ("0", "0", "", 1), ("0", "0", "n", 1), ("1", "0", "y", 1)]
+    for prompt, yes, reply, expected in cases:
+        r = subprocess.run(
+            ["bash", "-c", template.format(prompt=prompt, yes=yes, reply=reply, fn=fn)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert r.returncode == expected, (prompt, yes, reply, r.returncode, r.stderr)
+
+
+def test_uninstall_asks_about_data():
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'confirm_no "Also delete data and backups?" && PURGE=1' in content
+
+
+def test_auto_backup_host_timer_wiring():
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert "ovmanager-backup.timer" in content
+    assert "ovmanager-backup.service" in content
+    assert "backup --keep ${keep}" in content
+    assert "auto-backup on|off|status" in content
+    assert 'auto-backup) check_root; detect_os; auto_backup_cli "$AUTO_BACKUP_ACTION"' in content
+    # /var/backups is pruned, so a daily timer cannot fill the disk.
+    assert "prune_backups" in content
+
+
+def test_default_node_name_is_ovnode():
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert ': "${NODE_NAME:=ovnode}"' in content
+    assert 'node_name="$(ask "Node name" "ovnode")"' in content
+    assert "default node-1" not in content

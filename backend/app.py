@@ -424,6 +424,101 @@ async def auto_prune_audit_job():
         db.close()
 
 
+async def auto_backup_job():
+    """Run the scheduled panel database backup when enabled in settings.
+
+    Best-effort by design: every outcome is audited and logged, and nothing
+    is ever raised — a failed backup must not kill the scheduler.
+    """
+    from backend.operations.audit import log_event
+    from backend.routers.maintenance import create_panel_backup
+
+    try:
+        from backend.db.models import Settings
+
+        db = SessionLocal()
+        try:
+            settings = db.query(Settings).first()
+            enabled = bool(getattr(settings, "auto_backup_enabled", False))
+            keep = int(getattr(settings, "auto_backup_keep", 50) or 50)
+        finally:
+            db.close()
+
+        if not enabled:
+            return
+
+        try:
+            backup_path = await asyncio.to_thread(create_panel_backup, keep)
+        except Exception as exc:
+            logger.exception("Scheduled auto backup failed")
+            log_event(None, "maintenance.backup", actor="auto", detail=f"Scheduled backup failed: {exc}")
+            return
+
+        if backup_path is None:
+            logger.warning("Scheduled auto backup skipped: database file not found")
+            log_event(None, "maintenance.backup", actor="auto", detail="Scheduled backup skipped: database file not found")
+            return
+
+        logger.info("Scheduled auto backup created: %s", backup_path.name)
+        log_event(None, "maintenance.backup", actor="auto", detail=f"Backup created: {backup_path.name}")
+    except Exception:
+        logger.exception("Scheduled auto backup job crashed")
+
+
+def reschedule_auto_backup():
+    """Re-register the daily auto-backup job from the current settings.
+
+    Removes any existing ``auto_backup`` job, then adds it back with the
+    configured time when auto backup is enabled. A no-op when the scheduler
+    is not running. Called at startup and after a settings update.
+    """
+    scheduler = _scheduler
+    if scheduler is None:
+        return
+    try:
+        scheduler.remove_job("auto_backup")
+    except Exception:
+        # JobLookupError (nothing registered) is the common case; a stopped
+        # scheduler is equally harmless here.
+        pass
+
+    try:
+        from backend.db.models import Settings
+
+        db = SessionLocal()
+        try:
+            settings = db.query(Settings).first()
+            enabled = bool(getattr(settings, "auto_backup_enabled", False))
+            raw_time = str(getattr(settings, "auto_backup_time", "") or "")
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("Could not read auto backup settings")
+        return
+
+    if not enabled:
+        return
+
+    try:
+        hour, minute = (int(part) for part in raw_time.split(":"))
+    except (TypeError, ValueError):
+        logger.warning("Auto backup not scheduled: invalid auto_backup_time %r", raw_time)
+        return
+
+    try:
+        scheduler.add_job(
+            auto_backup_job,
+            CronTrigger(hour=hour, minute=minute),
+            id="auto_backup",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+    except Exception:
+        logger.exception("Could not register the auto backup job for %r", raw_time)
+        return
+    logger.info("Automatic backup scheduled daily at %02d:%02d", hour, minute)
+
+
 def start_scheduler():
     global _scheduler
     if _scheduler and _scheduler.running:
@@ -498,6 +593,8 @@ def start_scheduler():
     )
     scheduler.start()
     _scheduler = scheduler
+    # Auto backup is OFF by default; only registered when enabled in settings.
+    reschedule_auto_backup()
     return scheduler
 
 
