@@ -478,3 +478,22 @@ def test_default_node_name_is_ovnode():
     assert ': "${NODE_NAME:=ovnode}"' in content
     assert 'node_name="$(ask "Node name" "ovnode")"' in content
     assert "default node-1" not in content
+
+
+def test_same_server_node_offer_defaults_to_no():
+    """A bare Enter must not install a VPN node (explicit yes required)."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'confirm_no "Install a VPN node on this same server too?"' in content
+    assert 'confirm "Install a VPN node on this same server too?" "n"' not in content
+
+
+def test_same_server_offer_adopts_existing_node():
+    """If OVNode is already installed, the offer registers that node instead
+    of failing on 'already installed'."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'elif [[ "$rc" -eq 3 && -f /opt/ovnode/.env ]]' in content
+    assert "env_get /opt/ovnode/.env API_KEY" in content
+    assert 'register_node_in_panel "$node_name" "$node_key" "$node_port" "$node_tls"' in content
+    assert 'node_tls="0"' in content
