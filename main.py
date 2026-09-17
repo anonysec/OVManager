@@ -67,6 +67,10 @@ def main():
         date_header=False,
         ssl_keyfile=key or None,
         ssl_certfile=cert or None,
+        # Bounded graceful shutdown: without this, an open live/SSE stream
+        # keeps uvicorn waiting and `systemctl stop` hangs until systemd's
+        # 90-second timeout (observed on uninstall).
+        timeout_graceful_shutdown=5,
     )
 
 

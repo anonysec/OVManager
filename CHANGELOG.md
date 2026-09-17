@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.2 — 2026-09-17
+
+- **Uninstall no longer looks frozen**: `systemctl stop` could wait out
+  systemd's 90-second timeout when the panel had open live/SSE streams.
+  uvicorn now shuts down with a 5-second graceful cap, and the installer
+  bounds every service stop/restart (20s) before force-killing the unit.
+  This also applies to the node installer (agent, NAT and OpenVPN units).
+- Cleaner messages when a unit is not loaded (Docker installs / no NAT).
 ## 2.1.1 — 2026-09-17
 
 - Installer: Express no longer exits right after the password prompt
