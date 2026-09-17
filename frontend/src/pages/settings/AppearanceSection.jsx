@@ -1,11 +1,12 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getUiPref, setUiPref } from '../../utils/uiPrefs';
-import { FiSun, FiMoon, FiMonitor, FiGlobe } from 'react-icons/fi';
+import { FiSun, FiMoon, FiMonitor, FiGlobe, FiDownload } from 'react-icons/fi';
+import apiClient from '../../services/api';
 import { Card } from './shared';
 
 /* ═══════════════════════════════════════════════════════
@@ -53,6 +54,61 @@ const AppearanceSection = () => {
     setUiPref('accent', hex);
     document.documentElement.style.setProperty('--accent-color', hex);
   };
+
+  // ── Install app (PWA) ──────────────────────────────────────────────────
+  // Chrome/Edge fire beforeinstallprompt when the app is installable; we
+  // store the event and replay it from the button. Safari/iOS never fires it,
+  // so the card simply stays hidden there.
+  const [installEvent, setInstallEvent] = useState(null);
+  const [installHint, setInstallHint] = useState(true);
+  const [installed, setInstalled] = useState(
+    () =>
+      window.matchMedia?.('(display-mode: standalone)').matches === true ||
+      window.navigator.standalone === true,
+  );
+
+  useEffect(() => {
+    const onBeforeInstall = (e) => {
+      e.preventDefault();
+      setInstallEvent(e);
+    };
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallEvent(null);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  // Phones refuse to install over an untrusted certificate, so ask the panel
+  // what it is serving and hide the hint when install cannot succeed.
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get('/health/tls')
+      .then((res) => {
+        if (!cancelled) setInstallHint(res.data?.install_hint !== false);
+      })
+      .catch(() => {
+        /* keep the hint; the browser prompt is still the authoritative check */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const install = async () => {
+    if (!installEvent) return;
+    installEvent.prompt();
+    await installEvent.userChoice.catch(() => null);
+    setInstallEvent(null);
+  };
+
+  const showInstallCard = installed || installEvent !== null || installHint === false;
 
   return (
     <div className="sp-cards">
@@ -117,6 +173,28 @@ const AppearanceSection = () => {
         </div>
         <p className="sp-hint">{t('languageDesc', 'Interface language. Persian switches the panel to RTL.')}</p>
       </Card>
+
+      {showInstallCard && (
+        <Card title={t('pwaInstallTitle', 'Install app')} icon={FiDownload}>
+          {installed ? (
+            <p className="sp-hint" style={{ margin: 0 }}>
+              {t('pwaInstalled', 'Installed')}
+            </p>
+          ) : installHint === false ? (
+            <p className="sp-hint" style={{ margin: 0 }}>
+              {t('pwaCertRequired', "Install needs a trusted certificate — switch to Let's Encrypt, then reload.")}
+            </p>
+          ) : (
+            <>
+              <button type="button" className="btn btn-primary btn-sm" onClick={install}>
+                <FiDownload size={13} aria-hidden="true" />
+                <span>{t('pwaInstallButton', 'Install app')}</span>
+              </button>
+              <p className="sp-hint">{t('pwaInstallDesc', 'Install OVManager on this device for a full-screen window.')}</p>
+            </>
+          )}
+        </Card>
+      )}
     </div>
   );
 };

@@ -16,18 +16,22 @@ const loadDashboard = () => import('./pages/DashboardLayout');
 const loadServerStats = () => import('./pages/ServerStats');
 const loadUsers = () => import('./pages/UserManagement');
 const loadNodes = () => import('./pages/NodeManagement');
+const loadHealth = () => import('./pages/HealthCenter');
 const loadSettings = () => import('./pages/Settings');
 const loadAudit = () => import('./pages/AuditLog');
 const loadAdmins = () => import('./pages/AdminManagement');
+const loadSetup = () => import('./pages/SetupWizard');
 
 const LoginPage = lazy(loadLogin);
 const DashboardLayout = lazy(loadDashboard);
 const ServerStats = lazy(loadServerStats);
 const UserManagement = lazy(loadUsers);
 const NodeManagement = lazy(loadNodes);
+const HealthCenter = lazy(loadHealth);
 const Settings = lazy(loadSettings);
 const AuditLog = lazy(loadAudit);
 const AdminManagement = lazy(loadAdmins);
+const SetupWizard = lazy(loadSetup);
 
 // Set favicon
 const link = document.createElement('link');
@@ -78,7 +82,7 @@ function useRoutePrefetch(isAuthenticated, userRole) {
 
     const handle = idle(() => {
       // Ordered by likelihood of being visited from the dashboard.
-      const queue = [loadUsers, loadNodes, loadSettings];
+      const queue = [loadUsers, loadNodes, loadHealth, loadSettings];
       if (userRole === 'owner') queue.push(loadAdmins);
       // Chain sequentially so we never saturate the connection pool.
       queue.reduce((p, load) => p.then(() => load().catch(() => {})), Promise.resolve());
@@ -132,9 +136,11 @@ function App({ onReady }) {
             <Route index element={<Page name="dashboard"><ServerStats /></Page>} />
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
             {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
+            <Route path="health" element={<Page name="health"><HealthCenter /></Page>} />
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
+            <Route path="setup" element={<Page name="setup"><SetupWizard /></Page>} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
         </Routes>

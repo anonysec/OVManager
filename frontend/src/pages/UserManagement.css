@@ -1,0 +1,507 @@
+/* Users page — list, toolbar and the shared user form/detail modal styles.
+   All values come from tokens.css so both themes and RTL need no overrides.
+   Loaded by UserManagement.jsx; the modal markup renders in a portal but the
+   class names below are global. */
+
+/* ── Page shell ──────────────────────────────────────────────────── */
+.um-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding-bottom: var(--space-7);
+}
+
+/* The page grid owns the rhythm; PageHeader must not add its own bottom gap. */
+.um-page > .ui-page-header { margin-bottom: 0; }
+
+.um-meta {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.um-meta strong {
+  color: var(--text-primary);
+}
+
+/* ── Stat tiles ──────────────────────────────────────────────────── */
+.um-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.um-stat {
+  min-width: 0;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────── */
+.um-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.um-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.um-search-icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.um-search-input {
+  padding-inline-start: 36px;
+}
+
+.um-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.um-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.um-chip:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.um-chip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.um-chip.is-active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.um-chip-count {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-size: var(--font-size-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.um-chip.is-active .um-chip-count {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.um-clear {
+  padding: 4px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.um-clear:hover {
+  background: var(--accent-soft);
+}
+
+.um-clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+/* ── Bulk / undo bar ─────────────────────────────────────────────── */
+.um-bulkbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.um-bulkbar strong {
+  margin-inline-end: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+/* ── User form modal ─────────────────────────────────────────────── */
+.uf-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.uf-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.uf-legend {
+  padding: 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.uf-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.uf-name-row .ui-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.uf-suggest {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+}
+
+.uf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.uf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.uf-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.uf-error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.uf-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ── User detail modal ───────────────────────────────────────────── */
+.ud-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ud-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ud-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.ud-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.ud-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.ud-uuid {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ud-label {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.ud-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.ud-usage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ud-usage-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.ud-progress {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.ud-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width var(--transition-normal);
+}
+
+[dir="rtl"] .ud-progress-fill {
+  inset: 0 0 0 auto;
+}
+
+.ud-progress--warn .ud-progress-fill { background: var(--warning); }
+.ud-progress--danger .ud-progress-fill { background: var(--danger); }
+
+.ud-usage-note {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ud-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.ud-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.ud-ico {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+
+.ud-value {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.ud-value.is-soon {
+  color: var(--warning-text);
+}
+
+.ud-subline {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.ud-hist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ud-hist-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 56px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.ud-hist-bar {
+  flex: 1;
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.ud-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ud-linkrow {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ud-link {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 9px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.ud-qr {
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+}
+
+.ud-qr img {
+  width: 180px;
+  height: 180px;
+}
+
+.ud-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--warning);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.ud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ud-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .um-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599.98px) {
+  .um-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .um-search {
+    max-width: none;
+  }
+
+  .uf-grid,
+  .ud-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .uf-footer {
+    flex-direction: column-reverse;
+  }
+
+  .uf-footer .ui-btn {
+    width: 100%;
+  }
+}

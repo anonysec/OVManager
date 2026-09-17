@@ -130,6 +130,61 @@ def test_adoption_preserves_existing_settings_values(session):
     assert row[2] == "UTC"
 
 
+def test_adoption_runs_numbered_steps(session, monkeypatch):
+    """Adopted databases must still run numbered steps.
+
+    Regression: adoption used to stamp straight at HEAD, skipping every step
+    forever — plaintext node API keys stayed plaintext and future data fixes
+    never ran.
+    """
+    from cryptography.fernet import Fernet
+
+    from backend.db import crud
+
+    session.execute(
+        text(
+            "CREATE TABLE users ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR NOT NULL, total BIGINT, "
+            "used BIGINT, expiry_date DATE NOT NULL, is_active BOOLEAN NOT NULL, owner VARCHAR NOT NULL)"
+        )
+    )
+    session.commit()
+    migrations.migrate(session)  # adoption creates the mapped tables
+
+    # Simulate a database stamped before the encryption step with a plaintext key.
+    session.execute(
+        text(
+            "INSERT INTO nodes (name, address, protocol, ovpn_port, port, key, status, use_tls) "
+            "VALUES ('legacy-node', '203.0.113.5', 'udp', 1194, 2083, 'plaintext-key-123456', 1, 1)"
+        )
+    )
+    session.execute(text("DELETE FROM schema_version"))
+    session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (1, 0, 'pre-step')"))
+    session.commit()
+
+    monkeypatch.setattr(crud, "_node_fernet", Fernet(Fernet.generate_key()))
+    migrations.migrate(session)
+
+    stored = session.execute(text("SELECT key FROM nodes WHERE name = 'legacy-node'")).scalar()
+    assert stored.startswith("enc:"), "the v2 encryption step must run on adopted databases"
+    assert migrations.current_version(session) == SCHEMA_VERSION
+
+
+def test_orphan_daily_traffic_rows_are_cleaned(session):
+    """History rows for a deleted user id must be removed (ids get reused)."""
+    migrations.migrate(session)
+    session.execute(
+        text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (99999, '2030-01-01', 12345)")
+    )
+    session.commit()
+
+    migrations._cleanup_orphan_daily_rows(session)
+    session.commit()
+
+    remaining = session.execute(text("SELECT COUNT(*) FROM user_traffic_daily WHERE user_id = 99999")).scalar()
+    assert remaining == 0
+
+
 # ── Refusing to downgrade ────────────────────────────────────────────────────
 
 

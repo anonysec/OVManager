@@ -24,25 +24,39 @@ router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
 _SUB_ATTEMPTS: dict[str, list[float]] = {}
 _SUB_MAX = 30
 _SUB_WINDOW = 60
+_sub_last_cleanup = 0.0
 
 
 def _sub_client_ip(request: Request) -> str:
-    if config.TRUSTED_PROXY:
-        fwd = request.headers.get("X-Forwarded-For")
-        if fwd:
-            return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    from backend.client_ip import client_ip
+
+    return client_ip(request)
+
+
+def _sub_purge_stale(now: float) -> None:
+    """Drop idle buckets so the dict cannot grow without bound."""
+    global _sub_last_cleanup
+    if now - _sub_last_cleanup < _SUB_WINDOW:
+        return
+    _sub_last_cleanup = now
+    for key in [k for k, hits in _SUB_ATTEMPTS.items() if not hits or now - hits[-1] >= _SUB_WINDOW]:
+        _SUB_ATTEMPTS.pop(key, None)
 
 
 def _sub_rate_limited(request: Request) -> bool:
+    import hashlib
+
     ip = _sub_client_ip(request)
+    # Hash the address: rate limiting does not need the raw IP in memory.
+    key = hashlib.sha256(ip.encode()).hexdigest()[:16]
     now = time.monotonic()
-    hits = [t for t in _SUB_ATTEMPTS.get(ip, []) if now - t < _SUB_WINDOW]
+    _sub_purge_stale(now)
+    hits = [t for t in _SUB_ATTEMPTS.get(key, []) if now - t < _SUB_WINDOW]
     if len(hits) >= _SUB_MAX:
-        _SUB_ATTEMPTS[ip] = hits
+        _SUB_ATTEMPTS[key] = hits
         return True
     hits.append(now)
-    _SUB_ATTEMPTS[ip] = hits
+    _SUB_ATTEMPTS[key] = hits
     return False
 
 

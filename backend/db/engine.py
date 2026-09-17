@@ -1,6 +1,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
+import threading
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
@@ -11,6 +12,11 @@ from backend.data_paths import DATA_DIR
 BASE_DIR = Path(__file__).resolve().parent
 
 DATABASE_URL = f"sqlite:///{DATA_DIR / 'ovmanager.db'}"
+
+#: Set while a database restore swaps the file on disk. The ASGI middleware
+#: rejects writes during that window so in-flight sessions cannot commit to
+#: the unlinked old file (split-brain) or race the restored database.
+restore_lock = threading.Event()
 
 # OVManager uses SQLite by default. The panel performs scheduled writes while
 # admins may also be using the UI, so the default SQLite settings can raise

@@ -15,7 +15,7 @@ from bot.handlers.access import ensure_panel_ok
 from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
-from bot.keyboards import confirm_create, main_menu, name_prompt, plan_picker
+from bot.keyboards import cancel_actions, confirm_create, main_menu, name_prompt, plan_picker
 from bot.ui import answer, edit_or_reply
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
@@ -30,18 +30,19 @@ def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict:
 
 
 async def start_create(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
+    """Plan first: the operator only types a name (and custom values)."""
     lang = lang_of(update, context)
-    context.user_data["flow"] = {"kind": "create", "step": "name"}
-    suggested = await Panel(actor.token).next_username()
-    hint = t(lang, "create_hint_suggest", name=esc(suggested)) if suggested else t(lang, "create_hint_type")
+    context.user_data["flow"] = {"kind": "create", "step": "plan"}
     message = update.effective_message
     if message and not update.callback_query:
-        await message.reply_text(t(lang, "create_start"), reply_markup=main_menu(in_flow=True, lang=lang))
-    await edit_or_reply(update, t(lang, "create_title", hint=hint), reply_markup=name_prompt(lang=lang))
+        await message.reply_text(
+            t(lang, "create_start"),
+            reply_markup=main_menu(in_flow=True, lang=lang, is_owner=actor.role == "owner"),
+        )
+    await edit_or_reply(update, t(lang, "create_choose_plan"), reply_markup=plan_picker(lang=lang))
 
 
 async def handle_create_text(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, text: str) -> None:
-    lang = lang_of(update, context)
     flow = _flow(context)
     step = flow.get("step")
     if step == "name":
@@ -61,7 +62,9 @@ async def handle_create_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
             return
         await _show_confirm(update, context)
         return
-    await edit_or_reply(update, t(lang, "create_use_buttons"))
+    # A button step (plan/confirm) received free text — re-show its buttons
+    # instead of dead-ending or silently treating the text as a name.
+    await _reprompt(update, context, actor)
 
 
 async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, data: str) -> bool:
@@ -80,17 +83,14 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
     if data.startswith("plan:"):
         await answer(update)
         plan = data.split(":", 1)[1]
-        if plan == "custom":
-            flow.update(step="days")
-            await edit_or_reply(update, t(lang, "create_custom_days"))
-            return True
-        spec = config.plans.get(plan) or config.plans.get("standard")
-        if not spec:
-            spec = (config.default_days, config.default_traffic_gb, config.default_max_users)
-        flow["days"], flow["traffic"], flow["logins"] = spec
         flow["plan"] = plan
-        flow["step"] = "confirm"
-        await _show_confirm(update, context)
+        flow["step"] = "name"
+        if plan != "custom":
+            spec = config.plans.get(plan) or config.plans.get("standard")
+            if not spec:
+                spec = (config.default_days, config.default_traffic_gb, config.default_max_users)
+            flow["days"], flow["traffic"], flow["logins"] = spec
+        await _prompt_name(update, context, actor)
         return True
     if data == "okc":
         await answer(update, t(lang, "create_creating"))
@@ -106,24 +106,48 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
     return False
 
 
+async def _prompt_name(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
+    lang = lang_of(update, context)
+    suggested = await Panel(actor.token).next_username()
+    hint = t(lang, "create_hint_suggest", name=esc(suggested)) if suggested else t(lang, "create_hint_type")
+    await edit_or_reply(update, t(lang, "create_title", hint=hint), reply_markup=name_prompt(lang=lang))
+
+
+async def _reprompt(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
+    flow = _flow(context)
+    step = flow.get("step")
+    if step == "plan":
+        lang = lang_of(update, context)
+        await edit_or_reply(update, t(lang, "create_choose_plan"), reply_markup=plan_picker(lang=lang))
+        return
+    if step == "name":
+        await _prompt_name(update, context, actor)
+        return
+    if step == "confirm":
+        await _show_confirm(update, context)
+        return
+    lang = lang_of(update, context)
+    await edit_or_reply(update, t(lang, "create_use_buttons"), reply_markup=cancel_actions(lang=lang))
+
+
 async def _accept_name(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, raw: str) -> None:
     lang = lang_of(update, context)
     name = raw.strip().replace(" ", "_")
     if not _NAME_RE.match(name):
-        await edit_or_reply(update, t(lang, "create_bad_name"))
+        await edit_or_reply(update, t(lang, "create_bad_name"), reply_markup=cancel_actions(lang=lang))
         return
     existing = await Panel(actor.token).get_user(name=name)
     if existing:
-        await edit_or_reply(update, t(lang, "create_exists", name=esc(name)))
+        await edit_or_reply(update, t(lang, "create_exists", name=esc(name)), reply_markup=cancel_actions(lang=lang))
         return
     flow = _flow(context)
     flow["name"] = name
-    flow["step"] = "plan"
-    await edit_or_reply(
-        update,
-        t(lang, "create_pick_plan", name=esc(name)),
-        reply_markup=plan_picker(lang=lang),
-    )
+    if flow.get("plan") == "custom":
+        flow["step"] = "days"
+        await edit_or_reply(update, t(lang, "create_custom_days"), reply_markup=cancel_actions(lang=lang))
+        return
+    flow["step"] = "confirm"
+    await _show_confirm(update, context)
 
 
 async def _accept_int(
@@ -141,16 +165,16 @@ async def _accept_int(
     try:
         value = int(raw.strip())
     except ValueError:
-        await edit_or_reply(update, t(lang, "create_need_int"))
+        await edit_or_reply(update, t(lang, "create_need_int"), reply_markup=cancel_actions(lang=lang))
         return
     if value < lo or value > hi:
-        await edit_or_reply(update, t(lang, "create_need_range", lo=lo, hi=hi))
+        await edit_or_reply(update, t(lang, "create_need_range", lo=lo, hi=hi), reply_markup=cancel_actions(lang=lang))
         return
     flow = _flow(context)
     flow[field] = value
     flow["step"] = next_step
     if prompt_key:
-        await edit_or_reply(update, t(lang, prompt_key))
+        await edit_or_reply(update, t(lang, prompt_key), reply_markup=cancel_actions(lang=lang))
 
 
 async def _show_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

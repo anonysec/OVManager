@@ -6,15 +6,16 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: Backend
-FROM python:3.12-slim
+# Stage 2: Builder — resolve locked Python deps into /app/.venv
+FROM python:3.12-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
 WORKDIR /app
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser
-
-# Install build/runtime dependencies, sync locked deps, then drop the
-# compiler so the runtime image doesn't ship a toolchain.
+# gcc is builder-only: it never reaches the runtime image.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
@@ -24,15 +25,29 @@ COPY pyproject.toml uv.lock* README.md ./
 COPY backend/ ./backend/
 COPY bot/ ./bot/
 COPY main.py ./
-COPY .env.example ./.env.example
 
 # Install uv then sync from the lock file for fully reproducible builds.
 # --frozen fails closed if pyproject.toml and uv.lock are out of sync.
 RUN pip install --no-cache-dir uv \
-    && uv sync --frozen \
-    && apt-get update \
-    && apt-get purge -y --auto-remove gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && uv sync --frozen
+
+# Stage 3: Runtime — ships only the venv, sources and frontend build
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:${PATH}"
+
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser
+
+# Copy the pre-built venv (no uv, no compiler) and the sources.
+COPY --from=builder /app/.venv ./.venv
+COPY backend/ ./backend/
+COPY bot/ ./bot/
+COPY main.py ./
+COPY .env.example ./.env.example
 
 # The application writes SQLite, audit, metrics, backup, and log data here.
 RUN mkdir -p /app/data \
@@ -48,4 +63,4 @@ EXPOSE 2095
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import os,urllib.request; p=os.getenv('PORT','2095'); urllib.request.urlopen(f'http://localhost:{p}/health', timeout=1)" || exit 1
 
-CMD ["uv", "run", "main.py"]
+CMD ["/app/.venv/bin/python", "main.py"]

@@ -1,0 +1,97 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* StatCard primitive — KPI tile used by the redesigned Home/Health pages. */
+
+.ui-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+  text-align: start;
+}
+
+.ui-stat-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ui-stat-card-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ui-stat-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.ui-stat-card-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  color: var(--text-primary);
+}
+
+.ui-stat-card-hint {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+  color: var(--text-muted);
+}
+
+.ui-stat-card--interactive {
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.ui-stat-card--interactive:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.ui-stat-card--interactive:active {
+  transform: translateY(1px);
+}
+
+.ui-stat-card--success .ui-stat-card-icon {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.ui-stat-card--warning .ui-stat-card-icon {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.ui-stat-card--danger .ui-stat-card-icon {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.ui-stat-card--accent .ui-stat-card-icon {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}

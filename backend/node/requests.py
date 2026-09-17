@@ -125,7 +125,8 @@ class NodeRequests:
         Expected for self-signed nodes (the installer default). Poll loops
         would spam every tick, so repeats go to debug — but the API key
         crosses the wire to an unverified endpoint from here, so the first
-        occurrence must stay visible.
+        occurrence must stay visible. The same first occurrence also writes
+        one ``node.tls_unverified`` audit event per address.
         """
         if self.address not in _tls_fallback_warned:
             if len(_tls_fallback_warned) >= _TLS_WARNED_CAP:
@@ -140,6 +141,18 @@ class NodeRequests:
                 self.address,
                 exc,
             )
+            try:
+                from backend.operations.audit import log_event
+
+                log_event(
+                    None,
+                    "node.tls_unverified",
+                    actor=None,
+                    target=self.address,
+                    detail="API key sent over unverified TLS (self-signed node?)",
+                )
+            except Exception:
+                pass  # audit is best-effort; never break the request
         else:
             logger.debug("Node %s %s: TLS verify failed — retrying unverified", self.address, path)
 
@@ -151,12 +164,17 @@ class NodeRequests:
         unverified with a ONE-TIME loud warning per node address instead of
         bricking TLS nodes. ``tls_verified`` records which path was used so
         the UI can show "unverified (self-signed)" rather than hiding it.
+
+        ``require_success=False`` returns the node's envelope even when it
+        answers ``success: false`` (e.g. an update refusal), so callers can
+        surface the node's own message; transport errors still return None.
         """
+        require_success = bool(kw.pop("require_success", True))
         kw.setdefault("timeout", TIMEOUT)
         if self.scheme != "https":
-            return self._send_plain(method, path, **kw)
+            return self._send_plain(method, path, require_success=require_success, **kw)
         try:
-            result = self._send(method, path, verify=True, **kw)
+            result = self._send(method, path, verify=True, require_success=require_success, **kw)
             self.tls_verified = True
             return result
         except _req.exceptions.SSLError as e:
@@ -164,7 +182,7 @@ class NodeRequests:
             try:
                 with _warnings.catch_warnings():
                     _warnings.simplefilter("ignore")
-                    result = self._send(method, path, verify=False, **kw)
+                    result = self._send(method, path, verify=False, require_success=require_success, **kw)
                     self.tls_verified = False
                     return result
             except Exception as e2:
@@ -182,7 +200,7 @@ class NodeRequests:
             _rpc_failed(self.address, path, e)
             return None
 
-    def _send(self, method: str, path: str, **kw) -> dict | None:
+    def _send(self, method: str, path: str, require_success: bool = True, **kw) -> dict | None:
         """Send request, return parsed JSON or None on failure.
 
         A single Retry-After-aware retry on 429 keeps bulk fan-outs (create
@@ -205,7 +223,7 @@ class NodeRequests:
             _rpc_failed(self.address, path, f"HTTP {r.status_code}")
             return None
         data = r.json()
-        if not data.get("success"):
+        if not data.get("success") and require_success:
             _rpc_failed(self.address, path, data.get("msg"))
             return None
         _rpc_ok(self.address, path)
@@ -224,15 +242,78 @@ class NodeRequests:
         """Return per-user traffic counters from the node."""
         return (self._request("get", "/sync/usage", timeout=timeout) or {}).get("data", {})
 
-    def update_config(self, *, tunnel_address: str, protocol: str, ovpn_port: int, set_new_setting: bool = True) -> bool:
-        """Apply OpenVPN endpoint settings on the node."""
+    def update_config(
+        self,
+        *,
+        tunnel_address: str,
+        protocol: str,
+        ovpn_port: int,
+        set_new_setting: bool = True,
+        dns1: str | None = None,
+        dns2: str | None = None,
+        enable_ipv6: bool | None = None,
+        ipv6_prefix: str | None = None,
+        extra_ports: str | None = None,
+        return_envelope: bool = False,
+    ) -> bool | dict | None:
+        """Apply OpenVPN endpoint settings on the node.
+
+        dns1/dns2, enable_ipv6/ipv6_prefix and extra_ports are optional
+        per-node settings. They are included in the payload only when
+        provided: omitting them leaves the node's current values untouched,
+        and an old node simply ignores them. ``enable_ipv6=False`` and the
+        empty string for ``extra_ports`` (clear the extras) are real values
+        and are sent as such — only ``None`` means "unchanged".
+
+        With ``return_envelope=True`` the node's whole response envelope is
+        returned (None on transport failure) so callers can surface the
+        node's own message; the default keeps the historical bool result.
+        """
         payload = {
             "tunnel_address": tunnel_address or "",
             "protocol": protocol,
             "ovpn_port": int(ovpn_port),
             "set_new_setting": bool(set_new_setting),
         }
+        if dns1 is not None:
+            payload["dns1"] = dns1
+        if dns2 is not None:
+            payload["dns2"] = dns2
+        if enable_ipv6 is not None:
+            payload["enable_ipv6"] = bool(enable_ipv6)
+        if ipv6_prefix is not None:
+            payload["ipv6_prefix"] = ipv6_prefix
+        if extra_ports is not None:
+            payload["extra_ports"] = extra_ports
+        if return_envelope:
+            return self._request("post", "/sync/config", json=payload, timeout=LONG_TIMEOUT, require_success=False)
         return self._request("post", "/sync/config", json=payload, timeout=LONG_TIMEOUT) is not None
+
+    def restart_vpn(self) -> dict | None:
+        """Ask the node to restart its OpenVPN service (POST /sync/restart).
+
+        Returns the node's response envelope even when the restart failed
+        (``success: false`` + ``msg`` carry the reason), so the caller can
+        surface the node's own message; None means a transport-level failure.
+        """
+        return self._request("post", "/sync/restart", timeout=LONG_TIMEOUT, require_success=False)
+
+    def renew_server_cert(self) -> dict | None:
+        """Ask the node to renew its OpenVPN server certificate.
+
+        POST /sync/renew-cert. Returns the node's envelope even on refusal
+        (``success: false`` + ``msg``); None means a transport failure.
+        """
+        return self._request("post", "/sync/renew-cert", timeout=LONG_TIMEOUT, require_success=False)
+
+    def trigger_update(self) -> dict | None:
+        """Ask the node to run its self-update (POST /sync/update).
+
+        Returns the node's response envelope even when the node refuses
+        (Docker installs answer success=false), so callers surface the
+        node's own guidance. None means a transport-level failure.
+        """
+        return self._request("post", "/sync/update", timeout=LONG_TIMEOUT, require_success=False)
 
     # ── User operations ──────────────────────────────────────────
 

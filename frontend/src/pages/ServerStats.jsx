@@ -6,22 +6,22 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
-import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiAlertTriangle, FiArrowRight } from 'react-icons/fi';
+import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight, FiClock } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
-import { daysUntil, fmtDateTime } from '../utils/time';
+import { daysUntil, fmtDateTime, fmtDate } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
-import { DataTable, StatusBadge, ErrorState, EmptyState, SkeletonTable } from '../components/ui';
+import {
+  Badge, Button, Card, DataTable, EmptyState, ErrorState, PageHeader, SkeletonTable, StatusBadge, Tabs,
+} from '../components/ui';
 import KpiCard from '../components/dashboard/KpiCard';
 import AlertStrip from '../components/dashboard/AlertStrip';
 import ServerHealth from '../components/dashboard/ServerHealth';
-import SessionsBreakdown from '../components/dashboard/SessionsBreakdown';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
-import TopTraffic from '../components/dashboard/TopTraffic';
 import StreamChart from '../components/dashboard/StreamChart';
 import './Dashboard.css';
 
@@ -94,6 +94,20 @@ const fmtUpdated = (date) => {
   return fmtDateTime(date.toISOString(), { second: '2-digit' });
 };
 
+// Growth of the cumulative "total_used" counter across the metrics window.
+// Usage resets can make a single step negative; those are clamped to zero so
+// a reset never shows up as negative traffic.
+const sumPositiveDeltas = (values) => {
+  const list = (values || []).map(Number).filter(Number.isFinite);
+  if (list.length < 2) return null;
+  let sum = 0;
+  for (let i = 1; i < list.length; i += 1) {
+    const delta = list[i] - list[i - 1];
+    if (delta > 0) sum += delta;
+  }
+  return sum;
+};
+
 const ServerStats = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -108,6 +122,7 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [serverNotifs, setServerNotifs] = useState([]);
   const [activity, setActivity] = useState(null);
+  const [topUsers, setTopUsers] = useState(null);
   const [trafficSeries, setTrafficSeries] = useState({ conns: [], bytes: [] });
   const [probesDone, setProbesDone] = useState(false);
   const [refreshStale, setRefreshStale] = useState(false);
@@ -127,6 +142,7 @@ const ServerStats = () => {
         metrics: apiClient.get('/metrics/history?hours=24'),
       } : {}),
       users: apiClient.get('/users/'),
+      topUsers: apiClient.get('/users/traffic/top', { params: { days: 7, limit: 5 } }),
       notifs: apiClient.get('/notifications/'),
       activity: apiClient.get('/activity/?limit=8'),
     });
@@ -152,6 +168,13 @@ const ServerStats = () => {
         bytes: series.map((p) => Number(p.total_used || 0)),
       });
     } else if (res.metrics) nextErrors.metrics = res.metrics.error;
+
+    if (res.topUsers?.ok) {
+      const list = res.topUsers.data.data?.data ?? res.topUsers.data.data;
+      setTopUsers(Array.isArray(list) ? list : []);
+    } else if (res.topUsers) {
+      setTopUsers([]);
+    }
 
     if (res.notifs?.ok) {
       const items = res.notifs.data.data?.data ?? res.notifs.data.data ?? [];
@@ -227,9 +250,13 @@ const ServerStats = () => {
   const activeNodeCount = (nodes || []).filter((n) => n.status).length;
   const offlineNodes = probesDone ? Math.max(0, activeNodeCount - onlineNodes) : 0;
   const onlineTotal = (users || []).filter((u) => Number(u.active_connections || 0) > 0).length;
+  const activeTotal = (users || []).filter((u) => u.is_active).length;
+  const totalUsers = (users || []).length;
   const probesReady = probesDone || (nodes?.length || 0) === 0;
   const probesPending = !probesReady;
   const notifications = deriveNotifications({ users, nodes, nodeStatus, serverNotifs, probesReady, t });
+
+  const trafficToday = useMemo(() => sumPositiveDeltas(trafficSeries.bytes), [trafficSeries.bytes]);
 
   const attentionUsers = useMemo(() => {
     const rows = [];
@@ -244,6 +271,31 @@ const ServerStats = () => {
     }
     return rows;
   }, [users]);
+
+  const expiringUsers = useMemo(() => (users || [])
+    .filter((u) => {
+      if (!u?.name) return false;
+      const d = daysUntil(u.expiry_date);
+      return d >= 0 && d <= 7;
+    })
+    .sort((a, b) => daysUntil(a.expiry_date) - daysUntil(b.expiry_date)), [users]);
+
+  const topMax = useMemo(
+    () => Math.max(...(topUsers || []).map((x) => Number(x.bytes || 0)), 1),
+    [topUsers],
+  );
+
+  const nodeHealthRows = useMemo(() => (nodes || []).map((n) => {
+    const st = nodeStatus[n.id] || {};
+    const reachable = Boolean(n.status) && (st.reachable === true || (st.reachable === undefined && st.node_info !== undefined));
+    return {
+      node: n,
+      status: !n.status ? 'off' : reachable ? 'online' : 'down',
+      live: Number(st.session_diagnostics?.live_count || 0),
+      latency: Number(st.latency_ms || 0),
+      meta: nodeMeta(n),
+    };
+  }), [nodes, nodeStatus]);
 
   const attentionReasonLabel = useCallback((reason) => {
     if (reason === 'expiring') return t('filterExpiring', 'Expiring soon');
@@ -321,49 +373,12 @@ const ServerStats = () => {
     },
   ], [t, navigate, attentionReasonLabel]);
 
-  const nodeColumns = useMemo(() => [
-    { key: 'name', label: t('th_id', 'Node'),
-      render: (node) => {
-        const meta = nodeMeta(node);
-        return (
-          <span className="dt-cell-main">
-            {meta.flagCode && <FlagIcon code={meta.flagCode} />}
-            <span style={{ minWidth: 0 }}>
-              <span className="dt-cell-title">{node.name}</span>
-              <br />
-              <span className="dt-cell-sub">{meta.name}{meta.approximate ? ` (${t('approximate', 'approx.')})` : ''}</span>
-            </span>
-          </span>
-        );
-      },
-    },
-    { key: 'status', label: t('th_status', 'Status'),
-      render: (node) => {
-        const st = nodeStatus[node.id] || {};
-        const reachable = node.status && (st.reachable === true || (st.reachable === undefined && st.node_info !== undefined));
-        return <StatusBadge status={reachable ? 'online' : 'offline'} label={reachable ? t('statusOnline', 'Online') : (node.status ? t('statusDown', 'Down') : t('statusOff', 'Off'))} />;
-      },
-    },
-    { key: 'cpu', label: t('th_cpu', 'CPU'), className: 'dt-num', hideOnMobile: true,
-      render: (node) => {
-        const cpu = nodeStatus[node.id]?.node_info?.cpu_usage;
-        return Number.isFinite(Number(cpu)) ? `${Number(cpu).toFixed(0)}%` : '—';
-      },
-    },
-    { key: 'mem', label: t('kv_memory', 'Memory'), className: 'dt-num', hideOnMobile: true,
-      render: (node) => {
-        const mem = nodeStatus[node.id]?.node_info?.memory_usage;
-        return Number.isFinite(Number(mem)) ? `${Number(mem).toFixed(0)}%` : '—';
-      },
-    },
-    { key: 'conns', label: t('th_conns', 'Conns'), className: 'dt-num',
-      render: (node) => {
-        const st = nodeStatus[node.id] || {};
-        const conns = Number(st.session_diagnostics?.live_count || 0);
-        return st.latency_ms ? `${conns} · ${st.latency_ms}ms` : `${conns}`;
-      },
-    },
-  ], [t, nodeStatus]);
+  const userTabs = useMemo(() => [
+    { id: 'online', label: t('filterOnline', 'Online'), count: onlineTotal },
+    { id: 'attention', label: t('needsAttention', 'Needs attention'), count: attentionUsers.length },
+  ], [t, onlineTotal, attentionUsers.length]);
+
+  const heroCards = isOwner ? 6 : 5;
 
   const allFailed = !loading
     && Boolean(errors.users && errors.activity)
@@ -373,33 +388,36 @@ const ServerStats = () => {
 
   return (
     <div className="ds-page">
-      <div className="ds-header">
-        <div className="ds-header-copy">
-          <h1>{t('operationalOverview', 'Operations')}</h1>
-          <p className="ds-live">
+      <PageHeader
+        title={t('operationalOverview', 'Operations')}
+        icon={<FiActivity />}
+        meta={(
+          <span className="ds-live">
             <span className="ds-live-dot" aria-hidden="true" />
             <span>{t('liveOperations', 'Live operations')}</span>
             <span className="ds-updated" aria-live="polite">
               · {t('updatedAt', 'Updated')} {fmtUpdated(lastUpdated)}
               {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale — refresh failed')}</span>}
             </span>
-          </p>
-        </div>
-        <div className="ds-header-actions">
-          <button type="button" className="btn btn-sm" onClick={() => navigate('/users?add=1')}>
-            <FiPlus size={12} aria-hidden="true" /> {t('addUser', 'Add user')}
-          </button>
-          {isOwner && (
-          <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes?add=1')}>
-            <FiPlus size={12} aria-hidden="true" /> {t('addNode', 'Add node')}
-          </button>
-          )}
-        </div>
-      </div>
+          </span>
+        )}
+        actions={(
+          <>
+            <Button variant="primary" size="sm" icon={<FiPlus size={12} aria-hidden="true" />} onClick={() => navigate('/users?add=1')}>
+              {t('addUser', 'Add user')}
+            </Button>
+            {isOwner && (
+              <Button variant="secondary" size="sm" icon={<FiPlus size={12} aria-hidden="true" />} onClick={() => navigate('/nodes?add=1')}>
+                {t('addNode', 'Add node')}
+              </Button>
+            )}
+          </>
+        )}
+      />
 
       {heroLoading ? (
         <div className="ds-hero" role="status" aria-live="polite" aria-label={t('loading', 'Loading…')}>
-          {[0, 1, 2, 3].map((i) => (
+          {Array.from({ length: heroCards }, (_, i) => (
             <div className="ds-kpi ds-kpi--loading" key={i} aria-hidden="true" />
           ))}
         </div>
@@ -407,7 +425,7 @@ const ServerStats = () => {
         <div className="ds-hero">
           <KpiCard
             icon={FiActivity}
-            label={t('activeConnections', 'Active sessions')}
+            label={t('activeConnections', 'Active Connections')}
             value={probesPending ? '—' : activeConnections.toLocaleString()}
             animate={probesPending ? undefined : activeConnections}
             spark={trafficSeries.conns}
@@ -415,32 +433,51 @@ const ServerStats = () => {
             sub={t('heroConnsSub', '{{count}} sessions live', { count: probesPending ? 0 : activeConnections })}
           />
           <KpiCard
-            icon={FiBarChart2}
-            label={t('totalTraffic', 'Total bandwidth')}
-            value={errors.users ? '—' : formatBytes(totalUsed)}
-            animate={errors.users ? undefined : totalUsed}
-            format={formatBytes}
-            spark={trafficSeries.bytes}
-            sub={t('heroTrafficSub', 'All users combined')}
-          />
-          {isOwner && (
-          <KpiCard
-            icon={FiServer}
-            label={t('onlineNodes', 'Nodes online')}
-            value={probesPending ? '—' : `${onlineNodes}/${nodes?.length || 0}`}
-            tone={offlineNodes ? 'warn' : 'ok'}
-            to="/nodes"
-            sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
-          />
-          )}
-          <KpiCard
             icon={FiUsers}
-            label={t('onlineUsers', 'Users online')}
+            label={t('onlineUsers', 'Online Users')}
             value={String(onlineTotal)}
+            animate={onlineTotal}
             tone={onlineTotal ? 'ok' : null}
-            to={attentionUsers.length ? '/users' : '/users?view=online'}
+            to="/users?view=online"
             sub={attentionUsers.length ? t('heroUsersWarn', '{{count}} need attention', { count: attentionUsers.length }) : t('heroUsersOk', 'Nobody waiting')}
           />
+          <KpiCard
+            icon={FiUsers}
+            label={t('activeUsers', 'Active Users')}
+            value={errors.users ? '—' : String(activeTotal)}
+            animate={errors.users ? undefined : activeTotal}
+            to="/users"
+            sub={t('activeUsersSub', 'Enabled accounts')}
+          />
+          <KpiCard
+            icon={FiUsers}
+            label={t('totalUsers', 'Total Users')}
+            value={errors.users ? '—' : String(totalUsers)}
+            animate={errors.users ? undefined : totalUsers}
+            to="/users"
+            sub={t('usersSummarySub', '{{active}} active · {{online}} online', { active: activeTotal, online: onlineTotal })}
+          />
+          <KpiCard
+            icon={FiBarChart2}
+            label={isOwner ? t('trafficToday', 'Traffic today') : t('totalTraffic', 'Total Traffic')}
+            value={isOwner
+              ? (trafficToday === null ? '—' : formatBytes(trafficToday))
+              : (errors.users ? '—' : formatBytes(totalUsed))}
+            animate={isOwner ? undefined : (errors.users ? undefined : totalUsed)}
+            format={isOwner ? undefined : formatBytes}
+            spark={trafficSeries.bytes}
+            sub={isOwner ? t('trafficTodaySub', 'Traffic in the last 24 hours') : t('heroTrafficSub', 'All users combined')}
+          />
+          {isOwner && (
+            <KpiCard
+              icon={FiServer}
+              label={t('onlineNodes', 'Online Nodes')}
+              value={probesPending ? '—' : `${onlineNodes}/${nodes?.length || 0}`}
+              tone={offlineNodes ? 'warn' : 'ok'}
+              to="/nodes"
+              sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
+            />
+          )}
         </div>
       )}
 
@@ -460,49 +497,149 @@ const ServerStats = () => {
           {isOwner && <StreamChart period="24h" hours={24} />}
 
           {isOwner && (
-          <div className="ds-grid-1-2">
-            <ServerHealth
-              stats={stats}
-              traffic={trafficSeries}
-              error={errors.stats}
-              loading={loading}
-              onRetry={() => loadData()}
-              onlineNodes={onlineNodes}
-              totalNodes={nodes?.length || 0}
-            />
-            <SessionsBreakdown
-              nodes={nodes}
-              nodeStatus={nodeStatus}
-              error={errors.nodes}
-              loading={loading}
-              onRetry={() => loadData()}
-            />
-          </div>
+            <div className="ds-grid-1-2">
+              <ServerHealth
+                stats={stats}
+                traffic={trafficSeries}
+                error={errors.stats}
+                loading={loading}
+                onRetry={() => loadData()}
+                onlineNodes={onlineNodes}
+                totalNodes={nodes?.length || 0}
+              />
+              <Card
+                title={t('nodeHealthTitle', 'Node health')}
+                icon={<FiServer aria-hidden="true" />}
+                actions={(
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/nodes')}>
+                    {t('viewAll', 'View all')}
+                  </Button>
+                )}
+              >
+                <div className="ds-node-summary">
+                  <Badge tone="success" dot>{t('statusOnline', 'Online')}: {onlineNodes}</Badge>
+                  <Badge tone={offlineNodes ? 'danger' : 'neutral'} dot>{t('statusDown', 'Down')}: {offlineNodes}</Badge>
+                  <span className="ds-node-summary-total">
+                    {t('nodesTotal', 'Total Nodes')}: {nodes?.length || 0}
+                  </span>
+                </div>
+                {loading ? (
+                  <SkeletonTable rows={4} cols={4} label={t('loading', 'Loading…')} />
+                ) : nodeHealthRows.length > 0 ? (
+                  <ul className="ds-node-list">
+                    {nodeHealthRows.slice(0, 6).map(({ node, status, live, latency, meta }) => (
+                      <li key={node.id} className="ds-node-row">
+                        <span className="ds-node-name">
+                          {meta.flagCode && <FlagIcon code={meta.flagCode} />}
+                          <span title={node.name}>{node.name}</span>
+                        </span>
+                        <StatusBadge
+                          status={status === 'online' ? 'online' : 'offline'}
+                          label={status === 'online' ? t('statusOnline', 'Online') : status === 'off' ? t('statusOff', 'Off') : t('statusDown', 'Down')}
+                        />
+                        <span className="ds-node-metric">{live} {t('th_sessions', 'Sessions')}</span>
+                        <span className="ds-node-metric">{latency > 0 ? `${latency} ms` : '—'}</span>
+                        <button
+                          type="button"
+                          className="ds-node-arrow"
+                          aria-label={`${t('clickToManageNode', 'Click to manage node')} ${node.name}`}
+                          onClick={() => navigate('/nodes')}
+                        >
+                          <FiArrowRight size={14} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState
+                    title={t('noNodes', 'No nodes')}
+                    description={t('noNodesDesc', 'Add a node to see its live status on the map and table.')}
+                    actionLabel={t('addNode', 'Add node')}
+                    onAction={() => navigate('/nodes')}
+                  />
+                )}
+              </Card>
+            </div>
           )}
 
           <div className="ds-grid-2">
-            <section className="ds-card">
-              <div className="ds-card-head">
-                <h3 className="ds-card-title">
-                  {t('users', 'Users')}
-                </h3>
-                <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate(userTab === 'attention' ? '/users' : '/users?view=online')}>
+            <Card
+              title={t('filterExpiring', 'Expiring soon')}
+              icon={<FiClock aria-hidden="true" />}
+              subtitle={t('expiringSoonDesc', 'Access ends in the next 7 days.')}
+              actions={(
+                <Button variant="secondary" size="sm" onClick={() => navigate('/users?view=expiring')}>
                   {t('viewAll', 'View all')}
-                </button>
-              </div>
-              <div className="ds-card-body">
-                <div className="ds-tabs" role="tablist" aria-label={t('users', 'Users')}>
-                  <button type="button" role="tab" aria-selected={userTab === 'online'}
-                    className={`ds-tab${userTab === 'online' ? ' active' : ''}`}
-                    onClick={() => setUserTab('online')}>
-                    {t('filterOnline', 'Online')} <span className="ds-tab-count">{onlineTotal}</span>
-                  </button>
-                  <button type="button" role="tab" aria-selected={userTab === 'attention'}
-                    className={`ds-tab${userTab === 'attention' ? ' active' : ''}`}
-                    onClick={() => setUserTab('attention')}>
-                    {t('needsAttention', 'Needs attention')} <span className="ds-tab-count">{attentionUsers.length}</span>
-                  </button>
-                </div>
+                </Button>
+              )}
+            >
+              {expiringUsers.length > 0 ? (
+                <ul className="ds-expiring-list">
+                  {expiringUsers.slice(0, 5).map((u) => {
+                    const d = daysUntil(u.expiry_date);
+                    return (
+                      <li key={u.uuid || u.name}>
+                        <button
+                          type="button"
+                          className="ds-expiring-row"
+                          onClick={() => navigate(`/users?user=${u.uuid}`)}
+                        >
+                          <span className="dt-avatar" aria-hidden="true">{String(u.name).slice(0, 1).toUpperCase()}</span>
+                          <span className="ds-expiring-name" title={u.name}>
+                            {`${u.name} · ${t('expiresIn', 'Expires in {{days}} days', { days: d })}`}
+                          </span>
+                          <span className="ds-expiring-date">{fmtDate(u.expiry_date)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <EmptyState
+                  title={t('allSystemsClear', 'All Clear')}
+                  description={t('noExpiringSoon', 'No users expire in the next 7 days.')}
+                />
+              )}
+            </Card>
+
+            <Card
+              title={t('topTraffic7d', 'Top traffic, 7 days')}
+              icon={<FiBarChart2 aria-hidden="true" />}
+              subtitle={t('topTalkersDesc', 'Users with the most traffic this week.')}
+            >
+              {topUsers && topUsers.length > 0 ? (
+                <ul className="ds-top-list">
+                  {topUsers.map((r) => (
+                    <li key={r.name} className="ds-top-row">
+                      <span className="ds-top-name" title={r.name}>{r.name}</span>
+                      <span className="ds-top-bar" aria-hidden="true">
+                        <span style={{ width: `${Math.max(2, Math.round((Number(r.bytes || 0) / topMax) * 100))}%` }} />
+                      </span>
+                      <span className="ds-top-value">{formatBytes(r.bytes || 0)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  title={t('noData', 'No data')}
+                  description={t('topTalkersEmpty', 'No traffic recorded in the last 7 days.')}
+                />
+              )}
+            </Card>
+          </div>
+
+          <div className="ds-grid-2">
+            <Card
+              title={t('users', 'Users')}
+              icon={<FiUsers aria-hidden="true" />}
+              actions={(
+                <Button variant="secondary" size="sm" onClick={() => navigate(userTab === 'attention' ? '/users' : '/users?view=online')}>
+                  {t('viewAll', 'View all')}
+                </Button>
+              )}
+            >
+              <Tabs tabs={userTabs} value={userTab} onChange={setUserTab} ariaLabel={t('users', 'Users')} />
+              <div className="ds-users-panel">
                 {userTab === 'online' ? (
                   previewUsers.length > 0 ? (
                     <>
@@ -541,9 +678,8 @@ const ServerStats = () => {
                     />
                   )
                 )}
-                <TopTraffic />
               </div>
-            </section>
+            </Card>
 
             <ActivityFeed
               items={activity}
@@ -553,56 +689,6 @@ const ServerStats = () => {
             />
           </div>
 
-          {isOwner && (
-          <section className="ds-card">
-            <div className="ds-card-head">
-                <h3 className="ds-card-title">
-                  {t('nodeMap', 'Nodes')}
-                </h3>
-              <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/nodes')}>
-                {t('viewAll', 'View all')}
-              </button>
-            </div>
-            <div className="ds-card-body">
-              {loading ? (
-                <SkeletonTable rows={6} cols={5} label={t('loading', 'Loading…')} />
-              ) : errors.nodes ? (
-                <div className="ds-inline-error" role="alert">
-                  <FiAlertTriangle aria-hidden="true" />
-                  <div>
-                    <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
-                    <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
-                  </div>
-                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => loadData()}>
-                    {t('retry', 'Retry')}
-                  </button>
-                </div>
-              ) : (nodes || []).length > 0 ? (
-                <>
-                  <DataTable
-                    columns={nodeColumns}
-                    rows={(nodes || []).slice(0, 8)}
-                    rowKey={(r) => String(r.id)}
-                    density="comfort"
-                    caption={t('nodeMap', 'Nodes')}
-                  />
-                  {(nodes || []).length > 8 && (
-                    <div className="ds-panel-foot">
-                      <span>{t('showingPreviewNodes', 'Showing 8 of {{total}} nodes', { total: (nodes || []).length })}</span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <EmptyState
-                  title={t('noNodes', 'No nodes')}
-                  description={t('noNodesDesc', 'Add your first node to get started.')}
-                  actionLabel={t('addNode', 'Add node')}
-                  onAction={() => navigate('/nodes')}
-                />
-              )}
-            </div>
-          </section>
-          )}
         </>
       )}
     </div>

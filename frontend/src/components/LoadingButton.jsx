@@ -1,5 +1,3 @@
-import React from 'react';
-
 const LoadingButton = ({ isLoading, onClick, className, children, disabled = false }) => {
   // Strip 'btn' from className to avoid duplication since we always add it
   const cleanClass = (className || '').replace(/\bbtn\b/g, '').trim();

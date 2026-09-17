@@ -40,6 +40,7 @@ class Admin(Base):
     password: Mapped[str] = mapped_column()
     telegram_id: Mapped[int] = mapped_column(nullable=True, unique=True)
     username_prefix: Mapped[str] = mapped_column(nullable=True)
+    disabled: Mapped[bool] = mapped_column(default=False, server_default="0")
 
 
 class AuthSession(Base):
@@ -95,6 +96,10 @@ class Settings(Base):
     default_traffic_gb: Mapped[int] = mapped_column(default=100)
     default_max_users: Mapped[int] = mapped_column(default=1)
     owner_telegram_id: Mapped[int] = mapped_column(nullable=True)
+    # Daily Telegram alerts: which categories the panel should push itself
+    # (the bot only polls; sending is an independent HTTPS call).
+    notify_expiry: Mapped[bool] = mapped_column(default=True, nullable=False)
+    notify_traffic: Mapped[bool] = mapped_column(default=True, nullable=False)
     # Subscription link settings — persisted to DB (was in-memory only).
     subscription_url_prefix: Mapped[str] = mapped_column(nullable=True)
     subscription_path: Mapped[str] = mapped_column(default="sub", nullable=False)

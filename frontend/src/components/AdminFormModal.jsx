@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import LoadingButton from './LoadingButton';
 import Modal from './Modal';
+import Button from './ui/Button';
+import Field from './ui/Field';
 
 // Unified add/edit admin form. mode="create" (admin=null) or mode="edit".
 // Replaces AddAdminModal + EditAdminModal, which were identical except for
@@ -53,7 +54,8 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
         ? await apiClient.put('/admin/', payload)
         : await apiClient.post('/admin/', payload);
       if (response.data.success) {
-        onSaved();
+        // Hand the backend message to the caller so it can surface it in a toast.
+        onSaved(response.data.msg);
       } else {
         setError(response.data.msg || (isEdit ? t('unableToUpdateAdmin') : t('unableToCreateAdmin')));
       }
@@ -74,34 +76,33 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('editAdmin')} — ${admin?.username || ''}` : t('addNewAdmin')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
-        <div className="input-group">
-          <label htmlFor="admin-username">{t('username')}</label>
+        <Field label={t('username')} required={!isEdit}>
           {isEdit
             ? <input type="text" id="admin-username" name="username" value={formData.username} disabled readOnly />
             : <input type="text" id="admin-username" name="username" value={formData.username} onChange={handleChange} required />}
-        </div>
-        <div className="input-group">
-          <label htmlFor="admin-password">{isEdit ? t('newPassword') : t('password')}</label>
+        </Field>
+        <Field
+          label={isEdit ? t('newPassword') : t('password')}
+          hint={t('minPasswordHint', 'Minimum 12 characters')}
+          required
+        >
           <input
             type="password" id="admin-password" name="password" value={formData.password} onChange={handleChange} required
             minLength={12} autoComplete={isEdit ? 'new-password' : undefined}
-            placeholder={isEdit ? t('enterNewPassword') : t('minPasswordHint', 'Minimum 12 characters')}
           />
-        </div>
-        <div className="input-group">
-          <label htmlFor="admin-telegram_id">{t("telegramId", "Telegram ID")}</label>
-          <input type="number" id="admin-telegram_id" name="telegram_id" value={formData.telegram_id} onChange={handleChange} placeholder={t("telegramIdPlaceholder", "123456789 (empty = no access)")} />
-        </div>
-        <div className="input-group">
-          <label htmlFor="admin-username_prefix">{t("usernamePrefix", "Username Prefix")}</label>
-          <input type="text" id="admin-username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder={t("usernamePrefixPlaceholder", "420 (auto-generates 4201, 4202...)")} />
-        </div>
+        </Field>
+        <Field label={t('telegramId', 'Telegram ID')} hint={t('adminTelegramHint', 'Numeric Telegram user ID. Empty = no bot access.')}>
+          <input type="number" id="admin-telegram_id" name="telegram_id" value={formData.telegram_id} onChange={handleChange} placeholder="123456789" />
+        </Field>
+        <Field label={t('usernamePrefix', 'Username Prefix')} hint={t('adminPrefixHint', 'Auto-generates user names such as 4201, 4202…')}>
+          <input type="text" id="admin-username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder="420" />
+        </Field>
         {error && <p className="modal-error" role="alert">{error}</p>}
         <div className="modal-footer">
-          <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
-          <LoadingButton type="submit" className="btn" isLoading={isLoading}>
+          <Button variant="secondary" onClick={onClose}>{t('cancelButton')}</Button>
+          <Button type="submit" variant="primary" loading={isLoading}>
             {isEdit ? t('updateAdminButton') : t('createAdminButton')}
-          </LoadingButton>
+          </Button>
         </div>
       </form>
     </Modal>

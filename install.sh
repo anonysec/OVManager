@@ -21,7 +21,11 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="2.0"
+VERSION="2.1.0"
+# Terminal command installed by install_cli() (copy of this installer).
+BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
+CLI_NAME="ovmanager"
+CLI_ALIAS="ovm"
 
 # ── Colour / TTY ───────────────────────────────────────────────────────
 NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
@@ -47,6 +51,10 @@ TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 PUBLIC_URL="" MODE="" ACTION="install"
 YES=0 PURGE=0 JSON=0 DRY=0 GENERATED_PASS=0 PATH_SET=0
 WANT_NODE=0 NODE_NAME="" NODE_KEY=""
+LOGS_ARG=""
+# CLI_GIVEN: any flag/command was passed (as opposed to a bare run → menu).
+# EXPRESS: the start menu's zero-questions install preset is active.
+CLI_GIVEN=0 EXPRESS=0
 
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
@@ -71,7 +79,17 @@ fernet_key() {
 can_prompt() {
     [[ "$YES" -eq 0 ]] || return 1
     [[ -t 0 ]] && return 0
-    [[ -e /dev/tty && -r /dev/tty ]] && return 0
+    # /dev/tty can exist but be unopenable (containers, detached shells):
+    # actually try to open it, or prompts silently fall back to defaults.
+    { : </dev/tty; } 2>/dev/null && return 0
+    return 1
+}
+
+# Stronger check for the interactive menu: stdin must be a real terminal or
+# an openable /dev/tty. Scripts and pipes take the subcommand path instead.
+has_tty() {
+    [[ -t 0 ]] && return 0
+    { : </dev/tty; } 2>/dev/null && return 0
     return 1
 }
 
@@ -120,8 +138,9 @@ usage() {
 OVManager installer v${VERSION}
 
 USAGE
-  Human (wizard — keeps the terminal as stdin):
+  Human (menu — keeps the terminal as stdin):
     bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
+    Menu: 1) Express (safe defaults)  2) Custom  3) Update  4) Uninstall
 
   AI / script (no prompts; flags or env vars):
     curl -sSL URL | sudo bash -s -- -y --mode native --admin-pass 'SECRET'
@@ -131,7 +150,19 @@ COMMANDS
   install               Install (default)
   update                Pull, rebuild, restart (backs up data first)
   status                Show panel URL, health and version
+  start | stop | restart   Control the panel service
+  logs [N|-f]           Last N log lines (default 100), or follow with -f
+  backup                Save a data backup now (/var/backups)
+  tls                   Show/replace the certificate (self-signed, LE, custom)
+  recovery              Show login info, reset owner password, reset URL path
+  reset-urlpath         Serve the panel at / again (forgot the secret path)
+  reset-password        Set a new owner password, then restart the panel
+  menu                  Open the interactive menu
   uninstall             Remove the app (data kept unless --purge)
+
+  After installing, the same commands are available as ovmanager (alias: ovm).
+
+  Locked out?  bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
 
 MODE
   --mode native         systemd + uv + Node on the host          [default]
@@ -148,7 +179,8 @@ OPTIONS
   --public-url URL      Canonical public origin for sub links
   --with-node [NAME]    Also print a ready OVNode one-liner for this server
                         (generates an API key; optional NAME, default node-1)
-  --tls-none            Plain HTTP
+  --tls-none            REMOVED: plain HTTP is not allowed. Use --tls-self
+                        (default), --tls-le DOMAIN / --tls-ip, or --tls-custom
   --tls-self            Self-signed certificate
   --tls-le DOMAIN       Let's Encrypt for a domain (needs :80)
   --tls-ip              Let's Encrypt short-lived cert for this IP
@@ -166,7 +198,7 @@ ENVIRONMENT  (used when the matching flag is omitted)
   OVM_PATH          url path ("root" for /)
   OVM_ADMIN_USER    admin username
   OVM_ADMIN_PASS    admin password
-  OVM_TLS           none | self | le | le-ip | custom
+  OVM_TLS           self | le | le-ip | custom ("none" is rejected)
   OVM_TLS_DOMAIN    domain for --tls-le
   OVM_PUBLIC_URL    public origin
   OVM_WITH_NODE     1 to print a same-server OVNode one-liner (or a node name)
@@ -182,6 +214,7 @@ EOF
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
+        CLI_GIVEN=1
         case "$1" in
             --port)        [[ $# -ge 2 ]] || die "--port needs a value"; PORT="$2"; shift 2 ;;
             --path)        [[ $# -ge 2 ]] || die "--path needs a value"
@@ -200,7 +233,7 @@ parse_args() {
             --tls-self)    TLS_MODE="self"; shift ;;
             --tls-custom)  [[ $# -ge 3 ]] || die "--tls-custom needs KEY CERT"
                            TLS_MODE="custom"; TLS_KEY="$2"; TLS_CERT="$3"; shift 3 ;;
-            --tls-none)    TLS_MODE="none"; shift ;;
+            --tls-none)    die "Plain HTTP is not allowed. Use --tls-self (default), --tls-le DOMAIN, --tls-ip or --tls-custom KEY CERT." ;;
             --mode)        [[ $# -ge 2 ]] || die "--mode needs native or docker"; MODE="$2"; shift 2 ;;
             --docker)      MODE="docker"; shift ;;
             --yes|-y|--non-interactive) YES=1; shift ;;
@@ -209,9 +242,25 @@ parse_args() {
             --purge)       PURGE=1; shift ;;
             --uninstall)   ACTION="uninstall"; shift ;;
             --help|-h)     usage ;;
+            help)          usage ;;
             install)       ACTION="install"; shift ;;
             update)        ACTION="update"; shift ;;
             status)        ACTION="status"; shift ;;
+            reset-password) ACTION="reset-password"; shift ;;
+            start)         ACTION="start"; shift ;;
+            stop)          ACTION="stop"; shift ;;
+            restart)       ACTION="restart"; shift ;;
+            backup)        ACTION="backup"; shift ;;
+            tls)           ACTION="tls"; shift ;;
+            recovery)      ACTION="recovery"; shift ;;
+            reset-urlpath) ACTION="reset-urlpath"; shift ;;
+            menu)          ACTION="menu"; shift ;;
+            logs)          ACTION="logs"
+                           if [[ $# -ge 2 && ( "$2" == "-f" || "$2" =~ ^[0-9]+$ ) ]]; then
+                               LOGS_ARG="$2"; shift 2
+                           else
+                               shift
+                           fi ;;
             uninstall)     ACTION="uninstall"; shift ;;
             *)             die "Unknown option: $1  (see --help)" ;;
         esac
@@ -416,6 +465,20 @@ panel_url() {
 }
 
 # ── TLS ────────────────────────────────────────────────────────────────
+# Private keys must never be world-readable. Native mode runs the panel as
+# root (600 root-owned is fine); Docker mode runs it as appuser (uid 1000)
+# with the files mounted read-only, so the key is owned by that uid. The
+# certificate is public and stays 644.
+secure_tls_files() {
+    local key="$1" cert="$2"
+    if [[ -f "$key" ]]; then
+        chown 1000:1000 "$key" 2>/dev/null || true
+        chmod 600 "$key"
+    fi
+    [[ -f "$cert" ]] && chmod 644 "$cert"
+    return 0
+}
+
 generate_self_signed() {
     info "Self-signed certificate…"
     mkdir -p /etc/ssl/self-signed
@@ -424,9 +487,7 @@ generate_self_signed() {
         -keyout /etc/ssl/self-signed/privkey.pem \
         -out /etc/ssl/self-signed/fullchain.pem \
         -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=${cn}" >/dev/null 2>&1
-    # The Docker image runs as appuser (uid 1000) with these files mounted
-    # read-only — they must be world-readable or the panel crash-loops.
-    chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem
+    secure_tls_files /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem
     TLS_KEY="/etc/ssl/self-signed/privkey.pem"
     TLS_CERT="/etc/ssl/self-signed/fullchain.pem"
     step "Certificate  $TLS_CERT"
@@ -467,11 +528,11 @@ issue_lets_encrypt() {
     "$HOME/.acme.sh/acme.sh" --install-cert -d "$domain" \
         --key-file "$outdir/privkey.pem" \
         --fullchain-file "$outdir/fullchain.pem" \
-        --reloadcmd "chmod 644 $outdir/privkey.pem $outdir/fullchain.pem; systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || docker restart ovmanager >/dev/null 2>&1 || true" \
+        --reloadcmd "chown 1000:1000 $outdir/privkey.pem 2>/dev/null || true; chmod 600 $outdir/privkey.pem; chmod 644 $outdir/fullchain.pem; systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || docker restart ovmanager >/dev/null 2>&1 || true" \
         >/dev/null 2>&1 || die "Failed to install certificate to $outdir"
     # Docker appuser (uid 1000) reads these via a read-only mount (renewals
     # re-apply perms through the reloadcmd above).
-    chmod 644 "$outdir/privkey.pem" "$outdir/fullchain.pem"
+    secure_tls_files "$outdir/privkey.pem" "$outdir/fullchain.pem"
     step "Certificate  $outdir"
 }
 
@@ -499,7 +560,7 @@ setup_tls() {
             mkdir -p "$out"
             cp "$TLS_KEY" "$out/privkey.pem"
             cp "$TLS_CERT" "$out/fullchain.pem"
-            chmod 644 "$out/privkey.pem" "$out/fullchain.pem"  # Docker appuser reads via ro mount
+            secure_tls_files "$out/privkey.pem" "$out/fullchain.pem"
             TLS_KEY="$out/privkey.pem"; TLS_CERT="$out/fullchain.pem"
             ;;
         none) ;;
@@ -513,12 +574,14 @@ fetch_source() {
         run_step "Cloning ${REPO}@${BRANCH}" \
             git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$INSTALL_DIR"
     else
+        local tmp
+        tmp="$(mktemp)"
         run_step "Downloading source tarball" \
-            curl -sSLo /tmp/ovm.tar.gz "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+            curl -fsSLo "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
         mkdir -p "$INSTALL_DIR"
-        tar -xzf /tmp/ovm.tar.gz --strip-components=1 -C "$INSTALL_DIR" \
-            || die "Extract failed"
-        rm -f /tmp/ovm.tar.gz
+        tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" \
+            || { rm -f "$tmp"; die "Extract failed"; }
+        rm -f "$tmp"
         step "Source extracted"
     fi
 }
@@ -668,7 +731,9 @@ validate_input() {
     case "$TLS_MODE" in
         le)
             [[ -n "$TLS_DOMAIN" ]] || die "--tls-le needs a domain" ;;
-        le-ip|self|custom|none) ;;
+        le-ip|self|custom) ;;
+        none)
+            die "Plain HTTP is not allowed — pick TLS: self-signed (default),\\n         Let's Encrypt (--tls-le / --tls-ip) or custom (--tls-custom)." ;;
         *) die "Invalid TLS mode: '$TLS_MODE'" ;;
     esac
     if [[ "$TLS_MODE" == "custom" ]]; then
@@ -705,36 +770,20 @@ wizard() {
     fi
     if [[ -z "$TLS_MODE" ]]; then
         line ""
-        line "${B}TLS — encrypts your login and the panel${NC}"
-        line "  ${WH}1${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
-        line "  ${WH}2${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
-        line "  ${WH}3${NC}  Self-signed                encrypted; browser shows one warning to click through"
+        line "${B}TLS — encrypts your login and the panel (always on)${NC}"
+        line "  ${WH}1${NC}  Self-signed (default)      encrypted; browser shows one warning to click through"        line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
+        line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
         line "  ${WH}4${NC}  Custom key + cert          you already have PEM files"
-        line "  ${WH}5${NC}  None — HTTP only           fine on a private network, unsafe on the internet"
         local tls
-        tls="$(ask "TLS" "3")"
-        case "${tls:-3}" in
-            1) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
+        tls="$(ask "TLS" "1")"
+        case "${tls:-1}" in
+            1) TLS_MODE="self" ;;
+            2) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
                [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
-            2) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
-            3) TLS_MODE="self" ;;
+            3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
             4) TLS_MODE="custom"; TLS_KEY="$(ask "Key file" "")"; TLS_CERT="$(ask "Cert file" "")" ;;
-            *) TLS_MODE="none" ;;
+            *) TLS_MODE="self" ;;
         esac
-    fi
-    if [[ "$WANT_NODE" -eq 0 ]]; then
-        line ""
-        if confirm "Also run a VPN node on THIS server? (easiest setup)"; then
-            WANT_NODE=1
-        fi
-    fi
-    if [[ "$WANT_NODE" -eq 1 ]]; then
-        [[ -n "$NODE_NAME" ]] || NODE_NAME="$(ask "Node name" "node-1")"
-        [[ "$NODE_NAME" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
-        if [[ -z "$NODE_KEY" ]]; then
-            NODE_KEY="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-            [[ ${#NODE_KEY} -ge 16 ]] || die "Could not generate a node API key"
-        fi
     fi
 }
 
@@ -751,9 +800,6 @@ print_plan() {
     fi
     kv "Install" "$INSTALL_DIR"
     kv "Data"    "$DATA_DIR"
-    if [[ "$TLS_MODE" == "none" ]]; then
-        warn "TLS off — login travels in plaintext. Use --tls-self / --tls-le on the public internet."
-    fi
     hr
 }
 
@@ -862,8 +908,10 @@ do_install() {
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
         || warn "No answer on /health after finalize"
     open_firewall_port "$PORT"
+    install_cli
     success_card
     [[ "$JSON" -eq 1 ]] && emit_json 1
+    offer_same_server_node
 }
 
 do_update() {
@@ -887,10 +935,12 @@ do_update() {
         git stash pop --quiet 2>/dev/null || true
     else
         warn "No git checkout — re-downloading source (.env + data kept)"
+        local tmp
+        tmp="$(mktemp)"
         run_step "Downloading source" \
-            curl -sSLo /tmp/ovm.tar.gz "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
-        tar -xzf /tmp/ovm.tar.gz --strip-components=1 -C "$INSTALL_DIR" || die "Extract failed"
-        rm -f /tmp/ovm.tar.gz
+            curl -fsSLo "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+        tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" || { rm -f "$tmp"; die "Extract failed"; }
+        rm -f "$tmp"
     fi
     local scheme; scheme="$(scheme_of)"
     if [[ "$MODE" == "docker" ]]; then
@@ -902,6 +952,7 @@ do_update() {
     fi
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 60 \
         || warn "No answer on /health — check logs"
+    install_cli
     step "Update complete"
     line ""
     [[ "$JSON" -eq 1 ]] && emit_json 1
@@ -954,6 +1005,106 @@ PY
     fi
 }
 
+# Mirrors the panel's boot-time validation (backend/config.py): >= 12 chars
+# and no placeholder-looking values.
+validate_admin_password() {
+    local pass="$1" lowered
+    [[ -n "$pass" ]] || die "Admin password must not be empty"
+    [[ "$pass" != *$'\n'* && "$pass" != *$'\r'* ]] || die "Admin password must be a single line"
+    [[ ${#pass} -ge 12 ]] || die "Admin password must be at least 12 characters (the panel requires >= 12)"
+    lowered="${pass,,}"
+    case "$lowered" in
+        *change-me*|*changeme*|*change_me*|*password123*|*admin123*)
+            die "Admin password looks like a placeholder — choose a strong password (the panel rejects change-me/changeme/change_me/password123/admin123)" ;;
+    esac
+}
+
+# Recovery for a lost owner password: rewrite only ADMIN_PASSWORD= in the
+# installed .env, restart, then wait for /health. Never echoes the password.
+do_reset_password() {
+    if [[ -n "$ADMIN_PASS" ]]; then
+        validate_admin_password "$ADMIN_PASS"
+    fi
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
+    local envfile="$INSTALL_DIR/.env"
+    [[ -f "$envfile" ]] || die "Config not found: $envfile — install OVManager first."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+
+    if [[ -z "$ADMIN_PASS" ]]; then
+        can_prompt || die "No password given. Use: $0 reset-password --admin-pass 'new-password'  (or set OVM_ADMIN_PASS)"
+        line ""
+        local p1 p2
+        p1="$(ask "New password" "" "h")"
+        p2="$(ask "Confirm password" "" "h")"
+        [[ "$p1" == "$p2" ]] || die "Passwords do not match."
+        ADMIN_PASS="$p1"
+        validate_admin_password "$ADMIN_PASS"
+    fi
+
+    if [[ "$DRY" -eq 1 ]]; then
+        info "Dry run — nothing changed (would update ADMIN_PASSWORD in $envfile and restart)."
+        exit 0
+    fi
+
+    [[ -w "$envfile" ]] || die "Config $envfile is not writable — chmod 600 $envfile and retry."
+    local tmp
+    tmp="$(mktemp "${envfile}.XXXXXX")" || die "Could not create a temp file next to $envfile"
+    # Value rides in the environment, not in an awk -v assignment: passwords
+    # may contain backslashes and -v would interpret them. Only the
+    # ADMIN_PASSWORD line changes; every other line is copied verbatim.
+    if ! PASS_VALUE="$ADMIN_PASS" awk '
+        BEGIN { pass = ENVIRON["PASS_VALUE"] }
+        /^ADMIN_PASSWORD=/ { print "ADMIN_PASSWORD=" pass; found = 1; next }
+        { print }
+        END { if (!found) exit 1 }
+    ' "$envfile" > "$tmp"; then
+        rm -f "$tmp"
+        die "Could not update $envfile (no ADMIN_PASSWORD= line?)"
+    fi
+    chown --reference="$envfile" "$tmp" 2>/dev/null || true
+    chmod 600 "$tmp"
+    if ! mv -f "$tmp" "$envfile" 2>/dev/null; then
+        rm -f "$tmp"
+        die "Could not replace $envfile — is it read-only?"
+    fi
+    step "Config updated  $envfile (0600)"
+
+    # A failed restart must not hide the successful password change: warn
+    # and still report the new credentials/login URL.
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        if command -v docker >/dev/null 2>&1 && docker restart ovmanager >/dev/null 2>&1; then
+            step "Container restarted  ovmanager"
+        else
+            warn "Could not restart the container — run: docker restart ovmanager"
+        fi
+    else
+        if systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1; then
+            step "Service restarted  $SYSTEMD_SERVICE"
+        else
+            warn "Could not restart $SYSTEMD_SERVICE — run: systemctl restart $SYSTEMD_SERVICE"
+        fi
+    fi
+
+    local scheme url admin
+    scheme="$(scheme_of)"
+    wait_health "${scheme}://127.0.0.1:${PORT}/health" 12 \
+        || warn "No answer on /health yet — check the logs (install.sh status)"
+    # Same source as `status`: URLPATH from .env (a later Settings change
+    # lives in the DB, not here).
+    PATHPREFIX="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" | tr -d '\r')"
+    url="$(panel_url)"
+    admin="$(awk -F= '/^ADMIN_USERNAME=/{print $2; exit}' "$envfile" | tr -d '\r')"
+    [[ -n "$admin" ]] || admin="$DEFAULT_USER"
+    line ""
+    hr
+    kv "Password" "${GR}updated${NC}"
+    kv "Login"    "${WH}${admin}${NC}"
+    kv "Open"     "${WH}${url}${NC}"
+    hr
+    line ""
+}
+
 do_uninstall() {
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
     if [[ "$DRY" -eq 1 ]]; then
@@ -969,6 +1120,7 @@ do_uninstall() {
         ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
         docker rm -f ovmanager >/dev/null 2>&1 || true
     fi
+    remove_cli
     rm -rf "$INSTALL_DIR"
     if [[ "$PURGE" -eq 1 ]]; then
         backup_dir "$DATA_DIR" "panel-pre-purge"
@@ -987,22 +1139,371 @@ already_installed_menu() {
         info "Dry run — nothing changed (re-run without --dry-run to update/uninstall)."
         exit 0
     fi
-    if can_prompt; then
-        line ""
-        line "  ${GR}1${NC}  Update to latest"
-        line "  ${YL}2${NC}  Uninstall"
-        line "  ${GY}3${NC}  Quit"
-        line ""
-        local choice; choice="$(ask "Select" "3")"
-        case "${choice:-3}" in
-            1) ACTION="update"; check_root; do_update ;;
-            2) ACTION="uninstall"; check_root; do_uninstall ;;
-            *) exit 0 ;;
-        esac
-    else
+    if ! can_prompt; then
         fail "Already installed. Re-run with:  $0 update"
         exit 2
     fi
+    while true; do
+        local tag
+        tag="$(tui_select "OVManager — panel" \
+            status    "Status — URL, health, version" \
+            service   "Start / Stop / Restart" \
+            logs      "Logs" \
+            backup    "Backup now" \
+            update    "Update" \
+            tls       "TLS certificate" \
+            recovery  "Recovery — login, password, URL path" \
+            uninstall "Uninstall" \
+            quit      "Quit")"
+        case "$tag" in
+            status)    do_status ;;
+            service)   do_service_menu ;;
+            logs)      show_logs ;;
+            backup)    check_root; backup_now ;;
+            update)    check_root; detect_os; check_deps; do_update ;;
+            tls)       check_root; do_tls_menu ;;
+            recovery)  check_root; do_recovery_menu ;;
+            uninstall) check_root; do_uninstall; return 0 ;;
+            *)         return 0 ;;
+        esac
+    done
+}
+
+
+# ── Start menu / Express / same-server node ────────────────────────────
+
+# Express preset: safe defaults, then the single admin-password question.
+panel_express_defaults() {
+    EXPRESS=1
+    : "${MODE:=native}"
+    : "${PORT:=$DEFAULT_PORT}"
+    if [[ "$PATH_SET" -eq 0 ]]; then PATHPREFIX="$(rand_path)"; fi
+    : "${ADMIN_USER:=$DEFAULT_USER}"
+    [[ -n "$TLS_MODE" ]] || TLS_MODE="self"
+    if [[ -z "$ADMIN_PASS" ]]; then
+        line ""
+        ADMIN_PASS="$(ask "Admin password (blank = generate)" "" "h")"
+        [[ -z "$ADMIN_PASS" ]] && GENERATED_PASS=1
+    fi
+}
+
+# Friendly front door, shown only for a bare interactive invocation.
+start_menu() {
+    line "  What do you want to do?"
+    line ""
+    line "  ${GR}1${NC})  Express    Install with safe defaults (recommended)"
+    line "  ${WH}2${NC})  Custom     Choose every option yourself"
+    line "  ${CY}3${NC})  Update     Update to the latest version"
+    line "  ${YL}4${NC})  Uninstall  Remove OVManager (data kept by default)"
+    line ""
+    local choice
+    choice="$(ask "Select" "1")"
+    case "${choice:-1}" in
+        1) panel_express_defaults ;;
+        2) EXPRESS=0 ;;
+        3) detect_os; check_root; confirm "Update OVManager now?" || exit 0; check_deps; do_update; exit 0 ;;
+        4) ACTION="uninstall"; check_root; do_uninstall; exit 0 ;;
+        *) panel_express_defaults ;;
+    esac
+    line ""
+}
+
+# After the Ready card: offer a same-server node (interactive installs only).
+# Express registers it in the panel automatically; Custom asks first.
+offer_same_server_node() {
+    [[ "$DRY" -eq 0 && "$JSON" -eq 0 ]] || return 0
+    can_prompt || return 0
+    line ""
+    if ! confirm "Install a VPN node on this same server too?" "n"; then
+        info "Skipped. Install OVNode on a separate server and add it in"
+        info "Nodes → Add Node — or re-run this installer with --with-node."
+        return 0
+    fi
+    warn "Not recommended for production: a node on its own server keeps"
+    warn "panel and VPN traffic independent. Continuing anyway."
+    local node_name node_key node_port=2083
+    node_name="$(ask "Node name" "node-1")"
+    [[ "$node_name" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "Node name: 1–64 letters, digits, dash, underscore"
+    node_key="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    while port_in_use "$node_port"; do node_port=$((node_port + 1)); done
+
+    local node_repo="${OVNODE_REPO:-anonysec/OVNode}" node_branch="${OVNODE_BRANCH:-main}"
+    local url="https://raw.githubusercontent.com/${node_repo}/${node_branch}/install.sh"
+    local tmp; tmp="$(mktemp)"
+    info "Installing OVNode '${node_name}' (Express)…"
+    local node_json=""
+    if curl -fsSL "$url" -o "$tmp" 2>/dev/null \
+        && node_json="$(bash "$tmp" install --json --name "$node_name" --api-key "$node_key" \
+                        --tls selfsigned --port "$node_port")"; then
+        step "VPN node installed (service port ${node_port}, TLS self-signed)"
+    else
+        rm -f "$tmp"
+        warn "Node install failed — install OVNode later, then add it via Nodes → Add Node."
+        return 0
+    fi
+    rm -f "$tmp"
+
+    local auto=1
+    if [[ "$EXPRESS" -eq 0 ]]; then
+        confirm "Add it to the panel automatically now?" || auto=0
+    fi
+    if [[ "$auto" -eq 1 ]] && register_node_in_panel "$node_name" "$node_key" "$node_port"; then
+        return 0
+    fi
+    print_node_registration "$node_name" "$node_key" "$node_port"
+}
+
+# Log into the fresh panel (loopback) and POST the node. Best-effort: any
+# failure falls back to printing the details for manual entry.
+register_node_in_panel() {
+    local name="$1" key="$2" port="$3"
+    local base scheme ip token payload resp
+    scheme="$(scheme_of)"
+    base="${scheme}://127.0.0.1:${PORT}"
+    [[ -n "$PATHPREFIX" ]] && base="${base}/${PATHPREFIX}"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [[ -n "$ip" ]] || { warn "Could not detect this server's IP."; return 1; }
+
+    token="$(curl -sk --max-time 20 -X POST "${base}/api/login" \
+        -H "X-Requested-With: XMLHttpRequest" \
+        --data-urlencode "username=${ADMIN_USER}" \
+        --data-urlencode "password=${ADMIN_PASS}" 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token",""))' 2>/dev/null)" || true
+    if [[ -z "$token" ]]; then
+        warn "Could not log in to the panel automatically."
+        return 1
+    fi
+
+    payload="$(python3 - "$name" "$ip" "$port" "$key" <<'PY'
+import json, sys
+name, ip, port, key = sys.argv[1:5]
+print(json.dumps({
+    "name": name,
+    "address": ip,
+    "tunnel_address": ip,
+    "protocol": "udp",
+    "ovpn_port": 1194,
+    "port": int(port),
+    "key": key,
+    "status": True,
+    "set_new_setting": True,
+    "use_tls": True,
+}))
+PY
+)"
+    resp="$(curl -sk --max-time 30 -X POST "${base}/api/nodes/" \
+        -H "Authorization: Bearer ${token}" \
+        -H "Content-Type: application/json" \
+        -H "X-Requested-With: XMLHttpRequest" \
+        -d "$payload" 2>/dev/null)" || true
+    if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("success") else 1)' <<<"${resp:-{}}"; then
+        step "Node '${name}' added to the panel."
+        return 0
+    fi
+    warn "Panel did not accept the node yet: $(printf '%s' "$resp" | head -c 160)"
+    return 1
+}
+
+print_node_registration() {
+    local name="$1" key="$2" port="$3"
+    local ip; ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    line ""
+    info "Add the node manually in the panel: Nodes → Add Node"
+    kv "Name"    "$name"
+    kv "Address" "${ip:-<this server IP>}"
+    kv "Port"    "$port"
+    kv "TLS"     "on (self-signed)"
+    kv "API key" "$key"
+    line ""
+}
+
+# ── Terminal command (TUI) ─────────────────────────────────────────────
+# The installer copies itself to $BIN_DIR as "ovmanager" (+ "ovm" alias), so
+# a bare `ovmanager` opens this menu. Every action is also a plain subcommand
+# for scripts: status | start | stop | restart | logs [N|-f] | backup |
+# update | tls | recovery | reset-password | reset-urlpath | uninstall.
+
+is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
+
+env_get() {  # env_get FILE KEY → value (empty when missing)
+    [[ -f "$1" ]] || return 0
+    awk -F= -v k="$2" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$1" | tr -d '\r'
+}
+
+env_set() {  # env_set FILE KEY VALUE — rewrite one line, atomically
+    local file="$1" key="$2" value="$3" tmp
+    if [[ ! -f "$file" ]]; then
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+        return 0
+    fi
+    tmp="$(mktemp "${file}.XXXXXX")" || die "Could not create a temp file next to $file"
+    ENV_K="$key" ENV_V="$value" awk '
+        BEGIN { k = ENVIRON["ENV_K"]; v = ENVIRON["ENV_V"]; done = 0 }
+        index($0, k "=") == 1 { if (!done) { print k "=" v; done = 1 } ; next }
+        { print }
+        END { if (!done) print k "=" v }
+    ' "$file" > "$tmp" || { rm -f "$tmp"; die "Could not update $file"; }
+    chmod --reference="$file" "$tmp" 2>/dev/null || chmod 600 "$tmp"
+    chown --reference="$file" "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$file"
+}
+
+service_action() {  # start|stop|restart
+    if is_docker_mode; then
+        command -v docker >/dev/null 2>&1 || die "Docker not found on this host"
+        docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed"
+    else
+        systemctl "$1" "$SYSTEMD_SERVICE" || die "systemctl $1 $SYSTEMD_SERVICE failed"
+    fi
+    step "Panel $1: done"
+}
+
+restart_service() {
+    service_action restart >/dev/null 2>&1 || warn "Restart failed — check the service manually"
+}
+
+show_logs() {
+    local arg="${1:-100}"
+    if is_docker_mode; then
+        if [[ "$arg" == "-f" ]]; then docker logs -f --tail 100 ovmanager; else docker logs --tail "$arg" ovmanager; fi \
+            || warn "Could not read container logs"
+    elif [[ "$arg" == "-f" ]]; then
+        journalctl -u "$SYSTEMD_SERVICE" -n 100 -f || warn "Could not read logs"
+    else
+        journalctl -u "$SYSTEMD_SERVICE" -n "$arg" --no-pager || warn "Could not read logs"
+    fi
+}
+
+backup_now() {
+    mkdir -p "$DATA_DIR"
+    backup_dir "$DATA_DIR" "panel"
+}
+
+show_login_info() {
+    local user path port ip url
+    user="$(env_get "$INSTALL_DIR/.env" ADMIN_USERNAME)"; : "${user:=admin}"
+    path="$(env_get "$INSTALL_DIR/.env" URLPATH)"
+    port="$(env_get "$INSTALL_DIR/.env" PORT)"; : "${port:=$DEFAULT_PORT}"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$path" ]]; then url="https://${ip}:${port}/${path}/"; else url="https://${ip}:${port}/"; fi
+    kv "URL"   "$url"
+    kv "Login" "$user"
+    info "Password: the one you set (or the generated one saved at install)."
+    info "If the URL 404s, the live path may differ — change it in Settings → General."
+}
+
+reset_urlpath_now() {
+    if is_docker_mode; then
+        docker exec ovmanager /app/.venv/bin/python main.py --reset-urlpath || die "Reset failed"
+    else
+        ( cd "$INSTALL_DIR" && .venv/bin/python main.py --reset-urlpath ) || die "Reset failed"
+    fi
+    step "Panel path reset — the panel is served at / again"
+}
+
+do_tls_menu() {
+    local envfile="$INSTALL_DIR/.env"
+    [[ -f "$envfile" ]] || die "Not installed ($envfile missing)"
+    local key cert expiry
+    key="$(env_get "$envfile" SSL_KEYFILE)"
+    cert="$(env_get "$envfile" SSL_CERTFILE)"
+    expiry="$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2 || true)"
+    line ""
+    line "${B}TLS certificate${NC}"
+    kv "Key file"  "${key:-<none>}"
+    kv "Cert file" "${cert:-<none>}"
+    [[ -n "$expiry" ]] && kv "Expires" "$expiry"
+    line ""
+    line "  1) Self-signed (regenerate)"
+    line "  2) Let's Encrypt for a domain"
+    line "  3) Let's Encrypt for this IP"
+    line "  4) Custom key + cert paths"
+    line "  0) Back"
+    local c; c="$(ask "Select" "0")"
+    case "${c:-0}" in
+        1) TLS_MODE="self" ;;
+        2) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "")"
+           [[ -n "$TLS_DOMAIN" ]] || { warn "Domain required"; return 0; } ;;
+        3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
+        4) TLS_MODE="custom"; TLS_KEY="$(ask "Key file" "")"; TLS_CERT="$(ask "Cert file" "")"
+           [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || { warn "Key/cert files not found"; return 0; } ;;
+        0|*) return 0 ;;
+    esac
+    setup_tls || return 0
+    env_set "$envfile" SSL_KEYFILE "$TLS_KEY"
+    env_set "$envfile" SSL_CERTFILE "$TLS_CERT"
+    step "Certificate updated"
+    restart_service
+    return 0
+}
+
+do_recovery_menu() {
+    while true; do
+        line ""
+        line "${B}Recovery${NC}"
+        line "  1) Show panel URL and login"
+        line "  2) Reset the owner password"
+        line "  3) Reset the panel URL path"
+        line "  0) Back"
+        local c; c="$(ask "Select" "0")"
+        case "${c:-0}" in
+            1) show_login_info ;;
+            2) do_reset_password ;;
+            3) reset_urlpath_now ;;
+            0|*) return 0 ;;
+        esac
+    done
+}
+
+do_service_menu() {
+    local tag
+    tag="$(tui_select "Service" start "Start" stop "Stop" restart "Restart" back "Back")"
+    case "$tag" in
+        start|stop|restart) check_root; service_action "$tag" ;;
+        *) return 0 ;;
+    esac
+}
+
+# Boxed menu when whiptail is already installed; colored menu otherwise.
+tui_select() {  # tui_select "Title" tag label [tag label ...] → prints the tag
+    local title="$1"; shift
+    local tags=() labels=() tag label i=0
+    while [[ $# -ge 2 ]]; do tags+=("$1"); labels+=("$2"); shift 2; done
+    if command -v whiptail >/dev/null 2>&1 && can_prompt; then
+        local args=() out
+        for tag in "${tags[@]}"; do args+=("$tag" "${labels[$i]}"); i=$((i + 1)); done
+        out="$(whiptail --title "$title" --menu "Choose an action" 24 78 12 "${args[@]}" 3>&1 1>&2 2>&3)" && {
+            printf '%s' "$out"
+            return 0
+        }
+        return 0
+    fi
+    line "${B}${title}${NC}"; line ""
+    i=0
+    for tag in "${tags[@]}"; do
+        i=$((i + 1))
+        printf '  %b%d%b)  %s\n' "$WH" "$i" "$NC" "${labels[$((i - 1))]}" >&2
+    done
+    line ""
+    local choice; choice="$(ask "Select" "1")"
+    [[ "$choice" =~ ^[0-9]+$ ]] || { printf '%s' "${tags[0]}"; return 0; }
+    printf '%s' "${tags[$(((choice - 1) % ${#tags[@]}))]}"
+}
+
+install_cli() {
+    local src="${INSTALL_DIR}/install.sh"
+    [[ -f "$src" ]] || return 0
+    mkdir -p "$BIN_DIR" 2>/dev/null || { warn "Could not create $BIN_DIR"; return 0; }
+    if cp -f "$src" "$BIN_DIR/$CLI_NAME" 2>/dev/null && chmod 0755 "$BIN_DIR/$CLI_NAME"; then
+        ln -sf "$CLI_NAME" "$BIN_DIR/$CLI_ALIAS" 2>/dev/null || true
+        step "Command  ${BIN_DIR}/${CLI_NAME}  (alias: ${CLI_ALIAS})"
+    else
+        warn "Could not install the $CLI_NAME command into $BIN_DIR"
+    fi
+}
+
+remove_cli() {
+    rm -f "$BIN_DIR/$CLI_NAME" "$BIN_DIR/$CLI_ALIAS" 2>/dev/null || true
 }
 
 # ── Main ───────────────────────────────────────────────────────────────
@@ -1020,7 +1521,20 @@ main() {
     # work for anyone, including CI sandboxes and non-root operators.
     case "$ACTION" in
         uninstall) [[ "$DRY" -eq 0 ]] && check_root; do_uninstall; exit 0 ;;
-        status) check_root; detect_os; do_status; exit 0 ;;
+        status) detect_os; do_status; exit 0 ;;
+        reset-password) check_root; do_reset_password; exit 0 ;;
+        start|stop|restart) check_root; detect_os; service_action "$ACTION"; exit 0 ;;
+        logs) detect_os; show_logs "$LOGS_ARG"; exit 0 ;;
+        backup) check_root; detect_os; backup_now; exit 0 ;;
+        tls) check_root; detect_os; do_tls_menu; exit 0 ;;
+        recovery) check_root; detect_os; do_recovery_menu; exit 0 ;;
+        reset-urlpath) check_root; detect_os; reset_urlpath_now; exit 0 ;;
+        menu)
+            has_tty || { fail "No terminal available — run '$0 help' for the command list."; exit 2; }
+            detect_os
+            if [[ -d "$INSTALL_DIR" ]]; then already_installed_menu; exit 0; fi
+            start_menu
+            ;;
         update)
             detect_os
             if [[ "$DRY" -eq 1 ]]; then
@@ -1043,15 +1557,25 @@ main() {
 
     detect_os
 
+    # Bare interactive run → friendly start menu (Express/Custom/Update/Uninstall).
+    if [[ "$CLI_GIVEN" -eq 0 && "$DRY" -eq 0 && "$JSON" -eq 0 ]] && can_prompt; then
+        start_menu
+    fi
+
     if can_prompt && [[ "$YES" -eq 0 ]]; then
-        wizard
+        if [[ "$EXPRESS" -eq 1 ]]; then
+            # Express already collected its single answer (admin password).
+            :
+        else
+            wizard
+        fi
     else
         : "${PORT:=$DEFAULT_PORT}"
         if [[ "$PATH_SET" -eq 0 ]]; then
             PATHPREFIX="$(rand_path)"
         fi
         : "${ADMIN_USER:=$DEFAULT_USER}"
-        : "${TLS_MODE:=none}"
+        : "${TLS_MODE:=self}"
         : "${MODE:=native}"
         if [[ "$WANT_NODE" -eq 1 ]]; then
             : "${NODE_NAME:=node-1}"

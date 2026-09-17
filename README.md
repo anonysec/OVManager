@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
@@ -24,12 +24,13 @@ respect your provider's ToS and local law.
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
 ```
 
-Answer the wizard (defaults in brackets are fine: Native, port `2095`,
-random URL path, `admin`, blank password = generated, self-signed TLS),
-save the green **Ready** card (panel URL + login), log in — then follow the
-built-in setup checklist (node → user → download `.ovpn`).
+Answer the menu — **Express** (safe defaults: native, port `2095`, random URL
+path, `admin`, blank password = generated, self-signed TLS) or **Custom** to
+choose everything. Save the green **Ready** card (panel URL + login), log in —
+then follow the built-in setup checklist (node → user → download `.ovpn`).
 
 Step-by-step with pictures-in-words: [docs/quickstart.md](docs/quickstart.md) ·
+under the hood: [docs/how-it-works.md](docs/how-it-works.md) ·
 one server: [docs/single-vps.md](docs/single-vps.md) ·
 many servers: [docs/multi-node.md](docs/multi-node.md) ·
 stuck: [docs/troubleshooting.md](docs/troubleshooting.md).
@@ -77,7 +78,21 @@ bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) update
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall
 # also drop data:
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall --purge
+# forgot the owner password (scripts: add --admin-pass 'new-password'):
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
 ```
+
+## Terminal menu
+
+Every install adds a command — run `ovmanager` (or `ovm`) on the server and
+pick from a menu: **Status · Start/Stop/Restart · Logs · Backup · Update ·
+TLS · Recovery · Uninstall**. Recovery shows the panel URL and login, resets
+the owner password, or clears the secret URL path. `logs -f` follows live;
+with `whiptail` installed the menu uses boxed dialogs.
+
+Every item is also a plain command for scripts (stable exit codes):
+`ovmanager status | start | stop | restart | logs [N|-f] | backup | update |
+tls | recovery | reset-password | reset-urlpath | menu | help`.
 
 ## Manual Install (developers only — beginners: use the installer above)
 
@@ -94,7 +109,7 @@ uv run main.py
 
 The panel can be served under a secret URL prefix (e.g. `/k3f9xq2m/`) which
 hides it from internet scanners: requests outside the prefix get an empty
-response, not even a 404.
+404, so the server looks like an ordinary empty website.
 
 - The installer generates a **random path by default** (override with
   `--path mypath`, or `--path root` to serve at `/`).

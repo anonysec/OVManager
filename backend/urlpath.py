@@ -198,8 +198,9 @@ class URLPathMiddleware:
     - If URLPATH is set (e.g. "mysecret"):
       - Requests to /mysecret/... → strip prefix, pass to app as /...
       - Requests to /mysecret (exact) → strip prefix, pass as /
-      - Any other request → return empty 200 response (no 404, no redirect)
-        This hides the panel from scanners and unauthorized visitors.
+      - Any other request → return an empty 404 response (no redirect)
+        This hides the panel from scanners and unauthorized visitors while
+        still looking like a normal (if empty) website to monitoring tools.
 
     This is an ASGI middleware (not Starlette BaseHTTPMiddleware) because it
     needs to modify the request scope before routing, and must short-circuit
@@ -235,7 +236,15 @@ class URLPathMiddleware:
             _sub_prefix = f"/{_panel_config.SUBSCRIPTION_PATH.strip('/')}/"
         except Exception:
             _sub_prefix = "/sub/"
-        _ALWAYS_ALLOWED_PREFIXES = ("/assets/", _sub_prefix, "/health")
+        _ALWAYS_ALLOWED_PREFIXES = (
+            "/assets/",
+            _sub_prefix,
+            "/health",
+            # PWA files are requested by the browser at root paths.
+            "/manifest.webmanifest",
+            "/sw.js",
+            "/icons/",
+        )
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
             return
@@ -256,17 +265,23 @@ class URLPathMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Path doesn't match the prefix → return empty response (security)
-        # No 404, no redirect, no headers that reveal the server exists.
+        # Path doesn't match the prefix → return an empty 404 so the panel
+        # looks like an ordinary empty website (a blank 200 read as "broken").
+        # No body, no redirect, no headers that reveal the server exists.
         await self._send_empty(send)
 
     @staticmethod
     async def _send_empty(send):
-        """Send a minimal empty response that reveals nothing."""
+        """Send a minimal empty 404 that reveals nothing.
+
+        The empty body keeps the response content-free while the standard 404
+        status stops monitoring tools and humans from reading an empty 200 as
+        "the server is not running anything".
+        """
         await send(
             {
                 "type": "http.response.start",
-                "status": 200,
+                "status": 404,
                 "headers": [
                     [b"content-type", b"text/plain"],
                     [b"content-length", b"0"],

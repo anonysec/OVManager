@@ -9,6 +9,7 @@ from pathlib import Path
 from shutil import copy2
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy import text as _text
 from sqlalchemy.orm import Session
@@ -37,15 +38,13 @@ BACKUP_DIR = DB_DIR / "backups"
 _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
 
 
-@router.get("/backup", response_model=ResponseModel)
 @router.post("/backup", response_model=ResponseModel)
-async def backup_database(user: dict = Depends(require_owner)):
-    """Create a backup of the panel database.
+def backup_database(user: dict = Depends(require_owner)):
+    """Create a backup of the panel database (POST only).
 
     Exports a SQLite copy + config snapshot. Downloadable as .db file.
-    Only owner can access this.
-
-    Supports both GET (legacy panel builds) and POST (REST-correct create).
+    Only owner can access this. Declared sync on purpose: FastAPI runs it in
+    the threadpool, so a large database does not block the event loop.
     """
 
     if not DB_PATH.exists():
@@ -165,16 +164,49 @@ def _sqlite_backup(src: str, dst: str) -> None:
         src_conn.close()
 
 
+def _remove_sqlite_sidecars(db_path: Path) -> None:
+    """Delete -wal/-shm files so a swapped database cannot replay stale frames."""
+    for suffix in ("-wal", "-shm"):
+        sidecar = db_path.with_name(db_path.name + suffix)
+        try:
+            sidecar.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            logger.warning("Could not remove %s: %s", sidecar, e)
+
+
+def _apply_migrations_after_restore() -> None:
+    """Bring a restored database up to date, or fail loudly.
+
+    Restoring a backup from an older release must not serve requests against
+    a schema with missing columns; migrations plus the schema check make that
+    impossible (the caller rolls back to the pre-restore copy on failure).
+    """
+    from backend.db.migrations import migrate, verify_schema
+
+    migrate()
+    problems = verify_schema()
+    if problems:
+        raise RuntimeError("restored database failed schema verification: " + "; ".join(problems))
+
+
 def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel:
     """Atomically restore DB from src_path to DB_PATH using os.replace.
 
-    Creates a backup of current DB first, then atomically swaps.
+    Creates a backup of current DB first, rejects writes through the ASGI
+    middleware while swapping, cleans stale WAL/SHM files, and migrates the
+    restored database before reporting success.
     """
+    from backend.db.engine import restore_lock
+
     # Validate it's a SQLite DB
     try:
         conn = sqlite3.connect(str(src_path))
-        conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        conn.close()
+        try:
+            conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        finally:
+            conn.close()
     except Exception as e:
         return ResponseModel(success=False, msg=f"Invalid SQLite database: {e}", data=None)
 
@@ -184,25 +216,32 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         pre_restore_backup = BACKUP_DIR / f"pre_restore_backup_{ts}.db"
         try:
-            # Checkpoint WAL first
+            # Checkpoint WAL first and verify it succeeded: a busy checkpoint
+            # leaves a non-empty WAL, which we never want to replay against a
+            # swapped database file.
             with engine.connect() as conn:
-                conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
+                row = conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()
                 conn.commit()
+            if row and int(row[0]) != 0:
+                logger.warning("Pre-restore WAL checkpoint returned %s (busy)", row[0])
             BACKUP_DIR.mkdir(parents=True, exist_ok=True)
             _sqlite_backup(str(DB_PATH), str(pre_restore_backup))
         except Exception as e:
             logger.warning("Failed to create pre-restore backup: %s", e)
+            pre_restore_backup = None
 
-    # Close all connections and dispose engine
-    engine.dispose()
-
+    restore_lock.set()
     try:
+        # Close all connections and dispose engine
+        engine.dispose()
+
         # Atomic replace: write to temp file next to target, then os.replace
         # This is atomic on POSIX (single filesystem rename)
         tmp_path = DB_PATH.with_suffix(".db.tmp")
         copy2(str(src_path), str(tmp_path))
-        # Atomic swap
         os.replace(str(tmp_path), str(DB_PATH))
+        _remove_sqlite_sidecars(DB_PATH)
+        _apply_migrations_after_restore()
 
         log_event(
             None,
@@ -212,13 +251,21 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
         )
         return ResponseModel(success=True, msg="Database restored successfully", data=None)
     except Exception as e:
+        logger.exception("Restore failed; rolling back to the pre-restore backup")
         # Try to restore pre-restore backup if it exists
         if pre_restore_backup and pre_restore_backup.exists():
             try:
-                os.replace(str(pre_restore_backup), str(DB_PATH))
+                tmp_path = DB_PATH.with_suffix(".db.tmp")
+                copy2(str(pre_restore_backup), str(tmp_path))
+                os.replace(str(tmp_path), str(DB_PATH))
+                _remove_sqlite_sidecars(DB_PATH)
+                _apply_migrations_after_restore()
             except Exception:
-                pass
+                logger.exception("Rollback to the pre-restore backup also failed")
         return ResponseModel(success=False, msg=f"Restore failed: {e}", data=None)
+    finally:
+        engine.dispose()
+        restore_lock.clear()
 
 
 @router.post("/backup/restore", response_model=ResponseModel)
@@ -248,7 +295,11 @@ async def restore_backup(
                 return ResponseModel(success=False, msg=f"Backup file '{restore_from_server}' not found", data=None)
             if not restore_from_server.endswith(".db"):
                 return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
-            return _atomic_db_restore(src_path, user, f"Restored from server backup: {restore_from_server}")
+            # Restore is blocking file I/O + engine dispose + migrations: run it
+            # off the event loop so health checks and SSE keep flowing.
+            return await run_in_threadpool(
+                _atomic_db_restore, src_path, user, f"Restored from server backup: {restore_from_server}"
+            )
 
         # Original path: restore from uploaded file
         if file is None or not file.filename or not file.filename.endswith(".db"):
@@ -304,7 +355,7 @@ async def restore_backup(
         os.replace(str(tmp_path), str(final_tmp))
         tmp_path = final_tmp
 
-        result = _atomic_db_restore(tmp_path, user, f"Restored from: {file.filename}")
+        result = await run_in_threadpool(_atomic_db_restore, tmp_path, user, f"Restored from: {file.filename}")
 
         # Clean up temp file
         tmp_path.unlink(missing_ok=True)

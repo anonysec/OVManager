@@ -44,11 +44,12 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
     per-user connection counts without a second fan-out to every node.
     """
     start = time.perf_counter()
-    req = node_client(node)
     try:
+        # One client per concurrent threadpool call: a shared NodeRequests
+        # instance races on its per-request tls_verified state.
         info, sessions = await asyncio.gather(
-            run_in_threadpool(req.get_node_info),
-            run_in_threadpool(req.get_sessions, None, 8),
+            run_in_threadpool(node_client(node).get_node_info),
+            run_in_threadpool(node_client(node).get_sessions, None, 8),
             return_exceptions=True,
         )
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
@@ -129,9 +130,14 @@ async def collect_metrics() -> None:
                 for sess in sessions.get("live_sessions") or []:
                     username = id_to_name.get(sess.get("common_name", ""), sess.get("common_name", ""))
                     active_counts[username] = active_counts.get(username, 0) + 1
+            full_users = 0
             for u in users:
-                if int(active_counts.get(u.name, 0) or 0) > 0:
+                count = int(active_counts.get(u.name, 0) or 0)
+                if count > 0:
                     u.last_online = datetime.now(UTC_DT)
+                limit = int(u.max_logins or 0)
+                if limit > 0 and count >= limit:
+                    full_users += 1
             db.commit()
         except Exception as e:
             logger.warning("metrics: failed to update last_online: %s", e)

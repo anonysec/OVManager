@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 
 const THEME_KEY = 'ovmanager-theme';
 const ThemeContext = createContext(null);

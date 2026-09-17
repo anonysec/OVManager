@@ -25,9 +25,10 @@ async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
         if actor is None:
             return
     lang = lang_of(update, context)
+    is_owner = actor.role == "owner"
     context.user_data.pop("flow", None)
     text = _welcome(actor, lang)
-    markup = home_actions(lang=lang)
+    markup = home_actions(lang=lang, is_owner=is_owner)
     query = update.callback_query
     if query:
         await edit_or_reply(update, text, parse_mode="HTML", reply_markup=markup)
@@ -37,7 +38,7 @@ async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
         await message.reply_text(
             text,
             parse_mode="HTML",
-            reply_markup=main_menu(lang=lang),
+            reply_markup=main_menu(lang=lang, is_owner=is_owner),
         )
         await message.reply_text(t(lang, "home_prompt"), reply_markup=markup)
 
@@ -70,11 +71,16 @@ async def apply_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cod
         return
     message = update.effective_message
     if message:
+        is_owner = actor.role == "owner"
         await message.reply_text(
             t(lang, "lang_set", name=LANG_NAMES.get(lang, lang)),
-            reply_markup=main_menu(lang=lang),
+            reply_markup=main_menu(lang=lang, is_owner=is_owner),
         )
-        await message.reply_text(_welcome(actor, lang), parse_mode="HTML", reply_markup=home_actions(lang=lang))
+        await message.reply_text(
+            _welcome(actor, lang),
+            parse_mode="HTML",
+            reply_markup=home_actions(lang=lang, is_owner=is_owner),
+        )
 
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

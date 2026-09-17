@@ -3,7 +3,9 @@ import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import LoadingButton from './LoadingButton';
 import Modal from './Modal';
+import { Badge } from './ui';
 import { FiServer, FiDownload, FiCheck } from 'react-icons/fi';
+import './SelectNodeForDownloadModal.css';
 
 const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
   const [nodes, setNodes] = useState([]);
@@ -123,7 +125,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
         ) : nodes.length === 0 ? (
           <div className="node-pick-empty">{t('noNodesAvailable', 'No active nodes available for download.')}</div>
         ) : (
-          <div className="node-pick-list">
+          <div className="node-pick-list" aria-busy={isDownloading}>
             {nodes.map((node) => {
               const active = String(selectedNodeId) === String(node.id);
               return (
@@ -132,12 +134,18 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
                   key={node.id}
                   className={`node-pick-item${active ? ' active' : ''}`}
                   onClick={() => setSelectedNodeId(String(node.id))}
+                  disabled={isDownloading}
                   aria-pressed={active}
                 >
                   <span className="npi-ico"><FiServer /></span>
                   <span className="npi-body">
                     <span className="npi-name">{node.name}</span>
                     <span className="npi-addr">{node.address}:{node.port}</span>
+                  </span>
+                  <span className="npi-chip">
+                    <Badge tone="neutral">
+                      {(node.protocol || 'udp').toUpperCase()} · {node.ovpn_port ?? '—'}
+                    </Badge>
                   </span>
                   {active && <span className="npi-check"><FiCheck /></span>}
                 </button>
@@ -146,7 +154,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }) => {
           </div>
         )}
 
-        {error && <p className="error-message">{error}</p>}
+        {error && <p className="error-message" role="alert">{error}</p>}
 
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>

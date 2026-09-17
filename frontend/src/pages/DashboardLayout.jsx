@@ -1,7 +1,10 @@
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor } from 'react-icons/fi';
+import {
+  FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor,
+  FiCompass, FiArrowRight, FiX,
+} from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +20,77 @@ import RouteProgress from '../components/RouteProgress';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { getDisplayTimezone, setDisplayTimezone } from '../utils/displayTimezone';
 import { settle } from '../hooks/useAsyncData';
+import './SetupWizard.css';
+
+const SETUP_DISMISS_KEY = 'ovmanager-setup-dismissed';
+const SETUP_CONFIG_DONE_KEY = 'ovmanager-setup-config-done';
+
+/**
+ * Small Home-only banner that keeps the first-login wizard discoverable.
+ *
+ * It reads the same counters as the wizard and hides itself once the node and
+ * user steps are done, once the operator dismisses it, or once an admin has
+ * completed the manual "download a config" step. It never redirects — it only
+ * links to /setup, and only renders on the Home route.
+ */
+const SetupBanner = () => {
+  const { t } = useTranslation();
+  const { pathname } = useLocation();
+  const { userRole } = useAuth();
+  const [setup, setSetup] = useState(null);
+  const [hidden, setHidden] = useState(() => localStorage.getItem(SETUP_DISMISS_KEY) === '1');
+
+  useEffect(() => {
+    if (hidden) return undefined;
+    let cancelled = false;
+    apiClient
+      .get('/health/setup')
+      .then((res) => { if (!cancelled) setSetup(res.data || null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [hidden]);
+
+  const dismiss = () => {
+    localStorage.setItem(SETUP_DISMISS_KEY, '1');
+    setHidden(true);
+  };
+
+  if (hidden || pathname !== '/' || !setup) return null;
+  const nodeDone = !!setup.has_active_node;
+  const userDone = !!setup.has_user;
+  const isOwner = userRole === 'owner';
+  if (userDone) return null;
+  // Admins can only act on the user step — stay quiet until a node exists.
+  if (!isOwner && !setup.has_node) return null;
+  const configDone = localStorage.getItem(SETUP_CONFIG_DONE_KEY) === '1';
+  const doneCount = [nodeDone, userDone, configDone].filter(Boolean).length;
+
+  return (
+    <div className="setup-banner" role="status">
+      <span className="setup-banner-icon" aria-hidden="true"><FiCompass /></span>
+      <div className="setup-banner-text">
+        <strong>{t('setupBannerTitle', 'Finish setting up OVManager')}</strong>
+        <span>
+          {isOwner
+            ? t('setupBannerBody', '{{done}} of 3 steps done — add a node, create a user, download a config.', { done: doneCount })
+            : t('setupBannerAdminBody', 'Your account has no users yet — create one to hand out VPN access.')}
+        </span>
+      </div>
+      <Link to="/setup" className="setup-banner-link">
+        {t('setupBannerAction', 'Open setup')} <FiArrowRight size={13} aria-hidden="true" />
+      </Link>
+      <button
+        type="button"
+        className="setup-banner-dismiss"
+        onClick={dismiss}
+        aria-label={t('setupDismiss', 'Dismiss')}
+        title={t('setupDismiss', 'Dismiss')}
+      >
+        <FiX size={15} aria-hidden="true" />
+      </button>
+    </div>
+  );
+};
 
 const DashboardLayout = () => {
   const { userRole, logout } = useAuth();
@@ -33,20 +107,24 @@ const DashboardLayout = () => {
 
   const getPageTitle = (pathname) => {
     const map = {
-      '/': t('navDashboard', 'Dashboard'),
+      '/': t('navHome', 'Home'),
       '/users': t('navUsers', 'Users'),
       '/nodes': t('navNodes', 'Nodes'),
+      '/health': t('navHealth', 'Health'),
       '/admins': t('navAdmins', 'Admins'),
       '/audit': t('navAudit', 'Audit Log'),
       '/settings': t('navSettings', 'Settings'),
+      '/setup': t('setupTitle', 'Setup wizard'),
     };
     if (map[pathname]) return map[pathname];
     if (pathname.startsWith('/users')) return t('navUsers', 'Users');
     if (pathname.startsWith('/nodes')) return t('navNodes', 'Nodes');
+    if (pathname.startsWith('/health')) return t('navHealth', 'Health');
     if (pathname.startsWith('/admins')) return t('navAdmins', 'Admins');
     if (pathname.startsWith('/audit')) return t('navAudit', 'Audit Log');
     if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
-    return t('navDashboard', 'Dashboard');
+    if (pathname.startsWith('/setup')) return t('setupTitle', 'Setup wizard');
+    return t('navHome', 'Home');
   };
 
   useEffect(() => {
@@ -148,7 +226,7 @@ const DashboardLayout = () => {
       const lower = key.toLowerCase();
       if (gPending.current) {
         gPending.current = false;
-        const routes = { d: '/', u: '/users', s: '/settings' };
+        const routes = { d: '/', u: '/users', s: '/settings', h: '/health' };
         if (userRole === 'owner') routes.a = '/admins';
         if (userRole === 'owner') routes.n = '/nodes';
         if (routes[lower]) {
@@ -315,7 +393,7 @@ const DashboardLayout = () => {
                 <ol>
                   {location.pathname !== '/' && (
                     <>
-                      <li><Link to="/" className="ops-breadcrumb-link">{t('navDashboard', 'Dashboard')}</Link></li>
+                      <li><Link to="/" className="ops-breadcrumb-link">{t('navHome', 'Home')}</Link></li>
                       <li className="ops-breadcrumb-separator">/</li>
                     </>
                   )}
@@ -398,6 +476,7 @@ const DashboardLayout = () => {
             </header>
 
             <main id="main-content" className={mainContentClass} tabIndex="-1">
+              <SetupBanner />
               <Outlet />
             </main>
           </div>

@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 6
 
 VERSION_TABLE = "schema_version"
 
@@ -353,7 +353,68 @@ def _encrypt_node_keys(db: Session) -> None:
     logger.info("migrations v2: encrypted %s node key(s)", updated)
 
 
-STEPS: tuple[tuple[int, str, object], ...] = ((2, "encrypt node API keys at rest", _encrypt_node_keys),)
+def _cleanup_orphan_daily_rows(db: Session) -> None:
+    """Delete per-day history rows whose user no longer exists.
+
+    SQLite reuses auto-increment ids, so a deleted user's orphaned rows would
+    otherwise surface under the next user that inherits the id.
+    """
+    if "user_traffic_daily" not in table_names(db):
+        return
+    result = db.execute(text("DELETE FROM user_traffic_daily WHERE user_id NOT IN (SELECT id FROM users)"))
+    logger.info("migrations v3: removed %s orphan daily traffic row(s)", result.rowcount or 0)
+
+
+def _add_lookup_indices(db: Session) -> None:
+    """Add indices for columns the scheduler filters on every tick (v4)."""
+    statements = (
+        "CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner)",
+        "CREATE INDEX IF NOT EXISTS idx_users_expiry ON users(expiry_date)",
+        "CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)",
+        "CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name)",
+    )
+    for statement in statements:
+        db.execute(text(statement))
+
+
+def _add_admin_disabled_flag(db: Session) -> None:
+    """Add ``admins.disabled`` for databases stamped before v5.
+
+    Adoption from a pre-runner database already reconciles the column, and a
+    database stamped at 4 has the table but not the column — reconciliation
+    does not run for those before the numbered steps, so add it here.
+    """
+    if "admins" not in table_names(db) or "disabled" in column_names(db, "admins"):
+        return
+    column = Base.metadata.tables["admins"].columns["disabled"]
+    db.execute(text(_add_column_sql("admins", column)))
+
+
+def _add_notification_flags(db: Session) -> None:
+    """Add ``settings.notify_expiry`` / ``settings.notify_traffic`` (v6).
+
+    Both default to True, so existing installs keep sending the daily
+    Telegram alerts after the upgrade. A database stamped at 5 has the
+    settings table but not the columns, and reconciliation only runs while
+    adopting a pre-runner database — hence this step.
+    """
+    if "settings" not in table_names(db):
+        return
+    present = column_names(db, "settings")
+    for name in ("notify_expiry", "notify_traffic"):
+        if name in present:
+            continue
+        column = Base.metadata.tables["settings"].columns[name]
+        db.execute(text(_add_column_sql("settings", column)))
+
+
+STEPS: tuple[tuple[int, str, object], ...] = (
+    (2, "encrypt node API keys at rest", _encrypt_node_keys),
+    (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
+    (4, "add lookup indices", _add_lookup_indices),
+    (5, "add admin disabled flag", _add_admin_disabled_flag),
+    (6, "add Telegram notification flags", _add_notification_flags),
+)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -391,22 +452,18 @@ def migrate(db: Session | None = None) -> int:
                 _create_extra_tables(session)
                 added = _reconcile_columns(session)
                 _seed_settings(session)
-                _stamp(session, SCHEMA_VERSION, f"adopted legacy database (+{len(added)} columns)")
+                # Stamp at the pre-step baseline (1) and let the numbered STEPS
+                # below bring the database to HEAD. Stamping straight at HEAD
+                # used to skip every step on adopted databases — node API keys
+                # could stay in plaintext forever and future data fixes would
+                # never run.
+                _stamp(session, 1, f"adopted legacy database (+{len(added)} columns)")
                 session.commit()
-                # Opportunistically encrypt plaintext node keys on adoption
-                # when a key is configured (best-effort, never fails migrate).
-                try:
-                    _encrypt_node_keys(session)
-                    session.commit()
-                except Exception as e:
-                    logger.warning("migrations: node key encryption on adoption failed: %s", e)
-                    session.rollback()
+                before = 1
                 logger.info(
-                    "migrations: adopted legacy database at version %s (added columns: %s)",
-                    SCHEMA_VERSION,
+                    "migrations: adopted legacy database (added columns: %s)",
                     ", ".join(added) or "none",
                 )
-                return SCHEMA_VERSION
 
             if before > SCHEMA_VERSION:
                 # Database written by a newer OVManager than this binary.

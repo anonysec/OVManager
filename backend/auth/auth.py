@@ -78,16 +78,11 @@ router = APIRouter(tags=["Login"])
 
 
 def _client_ip(request: Request) -> str:
-    """Extract client IP. Honours X-Forwarded-For only from trusted
-    proxies (when running behind a known reverse proxy like nginx/caddy).
-    If no proxy headers are present, uses the direct client address.
-    """
-    # Only trust X-Forwarded-For when a trusted proxy is configured
-    if config.TRUSTED_PROXY:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract the client IP, honouring X-Forwarded-For only from a trusted
+    proxy and only its rightmost entry (the one the proxy appended)."""
+    from backend.client_ip import client_ip
+
+    return client_ip(request)
 
 
 def _ip_hash(ip: str) -> str:
@@ -120,6 +115,8 @@ def authenticate_user(db: Session, username: str, password: str):
 
     admin = crud.it_is_admin(db, username=username)
     if admin:
+        if admin.disabled:
+            return None
         if verify_password(password, admin.password):
             # Opportunistic upgrade: legacy $2a$/low-cost hashes get
             # re-hashed to the current policy on next successful login.
@@ -134,10 +131,13 @@ def authenticate_user(db: Session, username: str, password: str):
     return None
 
 
-def _role_is_current(db: Session, username: str, role: str) -> bool:
+def role_is_current(db: Session, username: str, role: str) -> bool:
     if role == "owner":
         return username == config.ADMIN_USERNAME
-    return role == "admin" and crud.get_admin_by_username(db, username=username) is not None
+    if role != "admin":
+        return False
+    admin = crud.get_admin_by_username(db, username=username)
+    return admin is not None and not admin.disabled
 
 
 @router.post("/login")
@@ -283,6 +283,6 @@ def get_current_user(
     user = verify_session_token(raw, db) if raw else None
     if user is None or user["type"] not in ("admin", "owner"):
         raise credentials_exception
-    if not _role_is_current(db, user["username"], user["type"]):
+    if not role_is_current(db, user["username"], user["type"]):
         raise credentials_exception
     return user

@@ -13,6 +13,7 @@ from bot.handlers.actions import dispatch_action
 from bot.handlers.create import handle_create_callback, handle_create_text, start_create
 from bot.handlers.edit import handle_edit_callback, handle_edit_text
 from bot.handlers.home import apply_language, show_home, show_languages
+from bot.handlers.settings import show_settings
 from bot.handlers.status import show_node_detail, show_nodes, show_status
 from bot.handlers.users import prompt_search, search_users, show_user, show_users
 from bot.i18n import has_lang, lang_of, menu_action, t
@@ -94,6 +95,10 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop("flow", None)
         await show_nodes(update, context, actor)
         return
+    if action == "settings":
+        context.user_data.pop("flow", None)
+        await show_settings(update, context, actor)
+        return
 
     if flow and flow.get("kind") == "create":
         await handle_create_text(update, context, actor, text)
@@ -151,6 +156,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if data == "nodes":
             await answer(update)
             await show_nodes(update, context, actor)
+            return
+        if data == "settings":
+            await answer(update)
+            context.user_data.pop("flow", None)
+            await show_settings(update, context, actor)
             return
         if data == "search":
             await answer(update)

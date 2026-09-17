@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import apiClient, { AUTH_EXPIRED_EVENT } from '../services/api';
 
 const AuthContext = createContext(null);

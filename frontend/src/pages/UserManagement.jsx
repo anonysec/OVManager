@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  FiDownload, FiSearch, FiPlus, FiCheck, FiWifi, FiX,
+  FiDownload, FiSearch, FiPlus, FiCheck, FiWifi, FiUsers,
   FiEdit2, FiActivity, FiTrash2, FiCopy, FiClock, FiUserCheck, FiUserX, FiRefreshCw,
 } from 'react-icons/fi';
 import apiClient from '../services/api';
@@ -19,11 +19,10 @@ import ExtendUserModal from '../components/ExtendUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
 import UserDetailModal from '../components/UserDetailModal';
+import UserStatCard from '../components/UserStatCard';
 import ConfirmModal from '../components/ConfirmModal';
-import ErrorState from '../components/ui/ErrorState';
-import EmptyState from '../components/ui/EmptyState';
-import DataTable from '../components/ui/DataTable';
-import StatusBadge from '../components/ui/StatusBadge';
+import { Button, DataTable, EmptyState, ErrorState, PageHeader, StatusBadge } from '../components/ui';
+import './UserManagement.css';
 
 const PAGE_SIZE_KEY = 'ovmanager-ui-users-pagesize';
 // Bumped to v2 to roll out the newest-first default to browsers that cached
@@ -494,82 +493,79 @@ const UserManagement = () => {
   const someSelected = allPageKeys.some((k) => selected.has(k));
 
   return (
-    <div id="users-view" className="view">
-      <div className="view-header">
-        <h2>{t('users')}</h2>
-        <div className="view-header-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsAddModalOpen(true)}>
-            <FiPlus size={14} aria-hidden="true" /> {t('addUser')}
-          </button>
-        </div>
+    <div id="users-view" className="view um-page">
+      <PageHeader
+        title={t('users')}
+        icon={<FiUsers aria-hidden="true" />}
+        meta={(
+          <span className="um-meta">
+            <strong>{filteredUsers.length}</strong> {t('results', 'results')}
+          </span>
+        )}
+        actions={(
+          <Button variant="primary" icon={<FiPlus size={14} aria-hidden="true" />} onClick={() => setIsAddModalOpen(true)}>
+            {t('addUser')}
+          </Button>
+        )}
+      />
+
+      <div className="um-stats" role="region" aria-label={t('userStats', 'User statistics')}>
+        <UserStatCard icon={<FiUsers aria-hidden="true" />} label={t('totalUsers')} value={userStats.total} tone="accent" />
+        <UserStatCard icon={<FiCheck aria-hidden="true" />} label={t('activeUsers')} value={userStats.active} tone="success" />
+        <UserStatCard icon={<FiWifi aria-hidden="true" />} label={t('onlineUsers')} value={userStats.online} tone="success" />
+        <UserStatCard icon={<FiUserX aria-hidden="true" />} label={t('inactiveUsers')} value={userStats.inactive} tone="danger" />
       </div>
 
-      <div className="user-stats-row" role="region" aria-label={t('userStats', 'User statistics')}>
-        <div className="user-stat" style={{ '--us-accent': '#ff7a1e' }}>
-          <span className="us-ico"><FiPlus aria-hidden="true" /></span>
-          <span className="us-body"><span className="us-label">{t('totalUsers')}</span><span className="us-value">{userStats.total}</span></span>
-        </div>
-        <div className="user-stat" style={{ '--us-accent': '#43a047' }}>
-          <span className="us-ico"><FiCheck aria-hidden="true" /></span>
-          <span className="us-body"><span className="us-label">{t('activeUsers')}</span><span className="us-value">{userStats.active}</span></span>
-        </div>
-        <div className="user-stat" style={{ '--us-accent': '#66bb6a' }}>
-          <span className="us-ico"><FiWifi aria-hidden="true" /></span>
-          <span className="us-body"><span className="us-label">{t('onlineUsers')}</span><span className="us-value">{userStats.online}</span></span>
-        </div>
-        <div className="user-stat" style={{ '--us-accent': '#e53935' }}>
-          <span className="us-ico"><FiX aria-hidden="true" /></span>
-          <span className="us-body"><span className="us-label">{t('inactiveUsers')}</span><span className="us-value">{userStats.inactive}</span></span>
-        </div>
-      </div>
-
-      <div className="search-with-filters">
-        <label className="search-field" style={{ flex: 1, maxWidth: 320 }}>
-          <FiSearch className="search-icon" aria-hidden="true" />
-          <input type="search" placeholder={t('searchByUsername')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" aria-label={t('searchByUsername')} />
+      <div className="um-toolbar">
+        <label className="um-search">
+          <FiSearch className="um-search-icon" aria-hidden="true" />
+          <input
+            type="search"
+            className="ui-input um-search-input"
+            placeholder={t('searchByUsername')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label={t('searchByUsername')}
+          />
         </label>
-        <div className="results-meta" aria-live="polite">
-          <strong>{filteredUsers.length}</strong> {t('results', 'results')}
+        <div className="um-filters" role="group" aria-label={t('userFilters', 'User filters')}>
+          {[
+            { id: 'all', label: t('filterAll', 'All') },
+            { id: 'online', label: t('filterOnline', 'Online') },
+            { id: 'expiring', label: t('filterExpiring', 'Expiring soon') },
+            { id: 'quota', label: t('filterQuota', 'Near quota') },
+            { id: 'disabled', label: t('filterDisabled', 'Disabled') },
+            { id: 'unlimited', label: t('filterUnlimited', 'Unlimited') },
+          ].map((f) => (
+            <button key={f.id} type="button" className={`um-chip${view === f.id ? ' is-active' : ''}`} aria-pressed={view === f.id} onClick={() => setView(f.id)}>
+              {f.label} <span className="um-chip-count">{filterCounts[f.id] ?? 0}</span>
+            </button>
+          ))}
           {(searchTerm || view !== 'all') && (
-            <button type="button" className="toolbar-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>
+            <button type="button" className="um-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>
               {t('clear', 'Clear')}
             </button>
           )}
         </div>
       </div>
 
-      <div className="user-filter-chips" role="group" aria-label={t('userFilters', 'User filters')}>
-        {[
-          { id: 'all', label: t('filterAll', 'All') },
-          { id: 'online', label: t('filterOnline', 'Online') },
-          { id: 'expiring', label: t('filterExpiring', 'Expiring soon') },
-          { id: 'quota', label: t('filterQuota', 'Near quota') },
-          { id: 'disabled', label: t('filterDisabled', 'Disabled') },
-          { id: 'unlimited', label: t('filterUnlimited', 'Unlimited') },
-        ].map((f) => (
-          <button key={f.id} type="button" className={`filter-chip${view === f.id ? ' active' : ''}`} aria-pressed={view === f.id} onClick={() => setView(f.id)}>
-            {f.label} <span className="count">{filterCounts[f.id] ?? 0}</span>
-          </button>
-        ))}
-      </div>
-
       {lastDeleted && (
-        <div className="dt-bulkbar" role="status" aria-live="polite">
+        <div className="um-bulkbar" role="status" aria-live="polite">
           <span>{t('userDeletedUndo', 'User {{name}} deleted', { name: lastDeleted.name })}</span>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleUndoDelete}>{t('undo', 'Undo')}</button>
-          <button type="button" className="toolbar-clear" onClick={() => setLastDeleted(null)} aria-label={t('dismiss', 'Dismiss')}>✕</button>
+          <Button size="sm" onClick={handleUndoDelete}>{t('undo', 'Undo')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setLastDeleted(null)} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
         </div>
       )}
 
       {selected.size > 0 && (
-        <div className="dt-bulkbar" role="toolbar" aria-label={t('bulkActions', 'Bulk actions')}>
+        <div className="um-bulkbar" role="toolbar" aria-label={t('bulkActions', 'Bulk actions')}>
           <strong>{t('selectedCount', '{{count}} selected', { count: selected.size })}</strong>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={bulkBusy} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}><FiClock size={13} /> {t('extend30d', 'Extend +30 days')}</button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={bulkBusy} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}><FiUserCheck size={13} /> {t('enable', 'Enable')}</button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={bulkBusy} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}><FiUserX size={13} /> {t('disable', 'Disable')}</button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={bulkBusy} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}><FiRefreshCw size={13} /> {t('resetUsageButton', 'Reset usage')}</button>
-          <button type="button" className="btn btn-danger btn-sm" disabled={bulkBusy} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}><FiTrash2 size={13} /> {t('delete', 'Delete')}</button>
-          <button type="button" className="toolbar-clear" onClick={() => setSelected(new Set())}>{t('clear', 'Clear')}</button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiClock size={13} aria-hidden="true" />} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}>{t('extend30d', 'Extend +30 days')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={13} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={13} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
+          <Button size="sm" variant="danger" disabled={bulkBusy} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t('clear', 'Clear')}</Button>
         </div>
       )}
 

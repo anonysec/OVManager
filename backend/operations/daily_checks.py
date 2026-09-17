@@ -4,6 +4,8 @@
 import asyncio
 import json
 
+from sqlalchemy import text
+
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.logger import logger
@@ -29,10 +31,17 @@ async def enforce_user_limits():
             user.is_active = False
         db.commit()
 
-        # Push status to all nodes concurrently (gather all at once)
+        # Push status to all nodes concurrently (gather all at once). The
+        # active-node list is loaded once for the whole sweep and passed down;
+        # per-user calls would otherwise re-query it (N+1) and, with the
+        # fan-out semaphore in node/ops.py, still queue thousands of jobs.
         if users_to_disable:
+            nodes = crud.get_active_nodes(db)
             await asyncio.gather(
-                *[change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db) for u in users_to_disable],
+                *[
+                    change_user_status_on_all_nodes(user_id=u.id, name=u.name, status=False, db=db, nodes=nodes)
+                    for u in users_to_disable
+                ],
                 return_exceptions=True,
             )
             # Let live subscribers (admin dashboards) see the flips immediately.
@@ -118,6 +127,34 @@ def _load_node_usage(user) -> dict:
 # ── Main traffic collection loop ─────────────────────────────────
 
 
+def _apply_user_traffic(db, user_id: int, expected_used, expected_state: str, new_used: int, new_state: str, delta: int) -> bool:
+    """Persist one user's traffic only if the row still holds the loaded values.
+
+    A concurrent reset-usage or delete changes those values, so a stale
+    update becomes a no-op instead of resurrecting old numbers. The daily
+    history row is written only when the user row was actually updated, so a
+    deleted user cannot reappear as an orphan ``user_traffic_daily`` row.
+    """
+    result = db.execute(
+        text(
+            "UPDATE users SET used = :new_used, node_usage = :new_state "
+            "WHERE id = :uid AND used IS :old_used AND node_usage IS :old_state"
+        ),
+        {
+            "uid": int(user_id),
+            "new_used": int(new_used),
+            "new_state": new_state,
+            "old_used": expected_used,
+            "old_state": expected_state,
+        },
+    )
+    if result.rowcount != 1:
+        return False
+    if delta:
+        record_daily_bytes(db, int(user_id), int(delta))
+    return True
+
+
 async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | None = None) -> bool:
     """Collect traffic data from a single node and update user records.
 
@@ -142,6 +179,11 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
 
     id_to_name = id_to_name or {}
     known = set(all_users)
+    # Build every user's update first: a payload can key the same user by CN
+    # *and* by username (legacy nodes), and both deltas must land in one
+    # conditional write. The write happens after the loop, so a reset or
+    # delete that lands in between simply makes it a no-op.
+    pending: dict[int, dict] = {}
     for client_key in set(per_user_total) | set(totals_map):
         username = _extract_username(client_key, node.name, known)
         user = all_users.get(username)
@@ -153,7 +195,8 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
             logger.warning("User not found: %s (node %s)", client_key, node.name)
             continue
 
-        node_usage = _load_node_usage(user)
+        entry = pending.get(user.id)
+        node_usage = entry["node_usage"] if entry else _load_node_usage(user)
         state = node_usage.get(node.name)
         totals_now = totals_map.get(client_key)
         if totals_now is not None:
@@ -177,11 +220,12 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
             else:
                 delta, new_state = _compute_session_delta(sessions, state, per_user_total.get(client_key, 0))
             node_usage[node.name] = new_state
+
         delta = max(int(delta), 0)
-        if delta:
-            user.used = (user.used or 0) + delta
-            record_daily_bytes(db, user.id, delta)
-        user.node_usage = json.dumps(node_usage)
+        if entry is None:
+            entry = {"user": user, "delta": 0, "node_usage": node_usage}
+            pending[user.id] = entry
+        entry["delta"] += delta
 
         logger.debug(
             "[%s] node=%s total=%s delta=%d",
@@ -190,6 +234,19 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
             totals_now if totals_now is not None else int(per_user_total.get(client_key, 0)),
             delta,
         )
+
+    for user_id, entry in pending.items():
+        user = entry["user"]
+        old_used = user.used or 0
+        old_state = user.node_usage or "{}"
+        new_state = json.dumps(entry["node_usage"])
+        if entry["delta"] == 0 and new_state == old_state:
+            continue
+        if not _apply_user_traffic(db, user_id, old_used, old_state, old_used + entry["delta"], new_state, entry["delta"]):
+            logger.info(
+                "Traffic update skipped for %s: counters changed concurrently (reset or delete)",
+                user.name,
+            )
 
     db.commit()
     return True

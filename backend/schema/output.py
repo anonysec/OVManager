@@ -74,5 +74,6 @@ class Admins(BaseModel):
     users_count: int = 0
     telegram_id: int | None = None
     username_prefix: str | None = None
+    disabled: bool = False
 
     model_config = ConfigDict(from_attributes=True)

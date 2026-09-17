@@ -307,17 +307,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
 html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 
-/* redesigned user stat tiles (Total / Active / Inactive) */
-.user-stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
-.user-stat { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 14px; background: linear-gradient(135deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); }
-.user-stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--us-accent, var(--orange)); }
-.user-stat .us-ico { flex: 0 0 auto; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--us-accent, var(--orange)) 18%, transparent); color: var(--us-accent, var(--orange)); }
-.user-stat .us-ico svg { width: 22px; height: 22px; }
-.user-stat .us-body { display: flex; flex-direction: column; }
-.user-stat .us-label { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-.user-stat .us-value { font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-html[data-theme="light"] .user-stat { background: linear-gradient(135deg, var(--surface-1), #f4f7fb); }
-
 /* premium bugfix pass */
 .notification-wrap { position: relative; }
 .notification-popover {
@@ -400,7 +389,6 @@ html[data-theme="light"] .user-stat { background: linear-gradient(135deg, var(--
 .user-title h3,
 .node-top h3,
 .admin-username,
-.login-box h2,
 .settings-panel .settings-row-title h3 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
@@ -700,25 +688,22 @@ html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; bord
    destructive action is still visually distinct from edit in light mode. */
 html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
 html[data-theme="light"] .icon-btn.danger:hover { color: #fff !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
-html[data-theme="light"] .user-stat { box-shadow: 0 12px 24px rgba(20,30,50,.10); }
 html[data-theme="light"] .empty-state { color: #5b6473; }
 html[data-theme="light"] .ops-panel header span.has-tip, html[data-theme="light"] .panel-tip { background: rgba(30,40,60,.14); }
 html[data-theme="light"] .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); font-weight: 700; }
 html[data-theme="light"] .seg-toggle button.active { color: var(--surface-1); }
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border-color: var(--bg); }
-html[data-theme="light"] .ops-panel, html[data-theme="light"] .user-stat, html[data-theme="light"] .ops-stat-cell { border: 1px solid var(--bg); box-shadow: 0 18px 34px rgba(20,30,50,.08); }
+html[data-theme="light"] .ops-panel, html[data-theme="light"] .ops-stat-cell { border: 1px solid var(--bg); box-shadow: 0 18px 34px rgba(20,30,50,.08); }
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg); }
 /* ---- Light mode: topbar + brand visibility ---- */
 html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
 html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !important; }
 /* ---- Light mode: borderless dashboard panels (shadow only) ---- */
 html[data-theme="light"] .ops-panel { border: none !important; box-shadow: none !important; }
-html[data-theme="light"] .user-stat { border: none !important; box-shadow: none !important; }
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg) !important; }
 /* ---- Authoritative light-mode: zero shadows everywhere (override any earlier rules) ---- */
 html[data-theme="light"] .ops-panel,
-html[data-theme="light"] .user-stat,
 html[data-theme="light"] .ops-stat-cell,
 html[data-theme="light"] .ops-topbar,
 html[data-theme="light"] .row-menu,
@@ -762,14 +747,6 @@ html[dir="rtl"] .modal-window .modal-footer { display: flex; flex-direction: row
 html[data-theme="light"] .btn-secondary { background: var(--surface-1) !important; color: var(--text-primary) !important; border: 1px solid #c3ccd8 !important; }
 html[data-theme="light"] .btn-secondary:hover { border-color: var(--orange) !important; color: var(--orange) !important; }
 
-/* ---- Users stat tiles: 4 columns (Total / Active / Online / Inactive) ---- */
-.user-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
-@media (max-width: 900px) {
-  .user-stats-row { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 520px) {
-  .user-stats-row { grid-template-columns: 1fr; }
-}
 .row-menu-item.danger:hover { background: rgba(255,83,104,.10); color: #ff7a8a; }
 
 /* ---- User detail popup (mirrors the sub/download page) ---- */
@@ -1483,30 +1460,6 @@ input[type="checkbox"]:focus-visible,
   gap: 8px;
 }
 
-.user-stats-row {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.user-stat {
-  min-width: 0;
-  padding: 15px 16px;
-  border-radius: 13px;
-  background: var(--surface-1);
-  box-shadow: none;
-}
-
-.user-stat .us-ico {
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-}
-
-.user-stat .us-value {
-  font-size: 25px;
-}
-
 .search-with-filters,
 .search-pagination-controls {
   display: flex;
@@ -1619,353 +1572,6 @@ input[type="checkbox"]:focus-visible,
   background: color-mix(in srgb, var(--accent-color) 22%, transparent);
 }
 
-.login-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 460px);
-  align-items: stretch;
-  width: min(1120px, 100%);
-  min-height: min(680px, calc(100vh - 48px));
-  margin: 0 auto;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .35);
-}
-
-.login-showcase {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: clamp(28px, 5vw, 64px);
-  overflow: hidden;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--accent-color) 18%, var(--surface-1)), transparent 50%),
-    var(--surface-1);
-}
-
-.login-showcase::after {
-  position: absolute;
-  right: -100px;
-  bottom: -130px;
-  width: 390px;
-  height: 390px;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 22%, transparent);
-  border-radius: 50%;
-  box-shadow: 0 0 0 30px color-mix(in srgb, var(--accent-color) 5%, transparent), 0 0 0 60px color-mix(in srgb, var(--accent-color) 3%, transparent);
-  content: '';
-  pointer-events: none;
-}
-
-.login-showcase-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  margin-inline-start: -10px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-primary);
-  font: 800 21px/1 var(--font-display);
-  letter-spacing: -.04em;
-  cursor: pointer;
-  transition: background-color var(--transition-fast), transform var(--transition-fast);
-  -webkit-tap-highlight-color: transparent;
-}
-.login-showcase-brand:hover {
-  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-.login-showcase-brand:active {
-  transform: scale(0.98);
-}
-
-.login-showcase-brand > span span {
-  color: var(--accent-color);
-}
-
-.login-showcase-copy {
-  position: relative;
-  z-index: 1;
-  max-width: 560px;
-  margin: auto 0 36px;
-}
-
-.login-showcase-kicker,
-.login-status-copy .status-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  /* Text, not a fill: --accent is a swatch colour and only reaches 3.09:1 on
-     the light showcase panel. --accent-text is the read-safe tone. */
-  color: var(--accent-text);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.login-showcase-kicker svg {
-  width: 14px;
-  height: 14px;
-}
-
-.login-showcase-copy h1 {
-  max-width: 510px;
-  margin: 14px 0 13px;
-  color: var(--text-primary);
-  font: 700 clamp(34px, 4vw, 56px)/1.02 var(--font-display);
-  letter-spacing: -.06em;
-}
-
-.login-showcase-copy p {
-  max-width: 470px;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1.65;
-}
-
-.login-showcase-status {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  max-width: 460px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-}
-
-.login-status-orbit {
-  position: relative;
-  flex: 0 0 auto;
-  display: grid;
-  width: 76px;
-  height: 76px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 35%, transparent);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-
-.login-status-orbit::before {
-  position: absolute;
-  inset: 8px;
-  border: 1px dashed color-mix(in srgb, var(--accent-color) 48%, transparent);
-  border-radius: 50%;
-  content: '';
-  animation: orbit-spin 10s linear infinite;
-}
-
-.login-status-orbit img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-  animation: botFloat 4s ease-in-out infinite;
-}
-
-.orbit-dot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border: 2px solid var(--surface-1);
-  border-radius: 50%;
-  background: var(--success-color);
-  box-shadow: 0 0 9px var(--success-color);
-}
-
-.orbit-dot-one { top: 2px; right: 10px; }
-.orbit-dot-two { bottom: 8px; left: 3px; background: var(--accent-color); box-shadow: 0 0 9px var(--accent-color); }
-
-.login-status-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.login-status-copy .status-kicker {
-  /* --success is the dot/fill green (3.18:1 here); --success-text reads. */
-  color: var(--success-text);
-  font-size: 10px;
-  letter-spacing: .08em;
-}
-
-.login-status-copy .status-kicker i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.login-status-copy strong {
-  color: var(--text-primary);
-  font-size: 14px;
-}
-
-.login-status-copy > span:last-child {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.login-feature-list {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px 16px;
-  margin-top: 26px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.login-feature-list span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.login-feature-list svg {
-  color: var(--accent-color);
-}
-
-.login-shell .login-box {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: auto;
-  max-width: none;
-  padding: clamp(28px, 5vw, 54px);
-  border: 0;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--bg-elevated);
-  box-shadow: none;
-  text-align: start;
-}
-
-.login-box-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 26px;
-}
-
-.login-box-kicker {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--accent-text);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-}
-
-.login-shell .login-box h2 {
-  margin: 0;
-  color: var(--text-primary);
-  background: none;
-  font: 700 30px/1.1 var(--font-display);
-  letter-spacing: -.04em;
-  -webkit-text-fill-color: initial;
-}
-
-.login-shell .login-subtitle {
-  max-width: 290px;
-  margin: 9px 0 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.login-lock-badge {
-  display: grid;
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, var(--border));
-  border-radius: 11px;
-  background: var(--accent-color-transparent);
-  color: var(--accent-color);
-}
-
-.login-shell .input-group {
-  margin-bottom: 17px;
-  text-align: start;
-}
-
-.login-shell .input-group label {
-  margin-bottom: 7px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  letter-spacing: .06em;
-}
-
-.login-shell .input-group input {
-  height: 46px;
-  padding: 0 13px;
-  border-radius: 10px;
-  background: var(--surface-1);
-  font-size: 14px;
-}
-
-.login-shell .input-group input::placeholder {
-  color: var(--text-muted);
-}
-
-.password-field {
-  position: relative;
-}
-
-.password-field input {
-  padding-right: 46px !important;
-}
-
-.password-toggle {
-  position: absolute;
-  top: 50%;
-  right: 7px;
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.password-toggle:hover {
-  background: var(--surface-2);
-  color: var(--accent-color);
-}
-
-.login-submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 46px;
-  margin-top: 8px;
-  gap: 8px;
-  border-radius: 10px;
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-color) 22%, transparent);
-}
-
-.login-submit:disabled {
-  cursor: wait;
-  opacity: .75;
-}
-
 .button-spinner {
   width: 14px;
   height: 14px;
@@ -1977,15 +1583,6 @@ input[type="checkbox"]:focus-visible,
 }
 @media (prefers-reduced-motion: reduce) {
   .button-spinner { animation-duration: 1.4s; }
-}
-
-.login-shell .error-message {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--danger-color) 35%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
-  font-size: 12px;
 }
 
 .login-footnote {
@@ -2078,33 +1675,6 @@ input[type="checkbox"]:focus-visible,
   }
 }
 
-@media (max-width: 900px) {
-  .login-shell {
-    grid-template-columns: 1fr;
-    width: min(520px, 100%);
-    min-height: auto;
-  }
-
-  .login-showcase {
-    min-height: 360px;
-    padding: 30px;
-  }
-
-  .login-showcase-copy {
-    margin-top: var(--topbar-h);
-    margin-bottom: 24px;
-  }
-
-  .login-showcase-copy h1 {
-    font-size: 38px;
-  }
-
-  .login-shell .login-box {
-    border-top: 1px solid var(--border);
-    border-left: 0;
-  }
-}
-
 @media (max-width: 767.98px) {
   .ops-main-content {
     padding: 20px 14px 36px;
@@ -2180,10 +1750,6 @@ input[type="checkbox"]:focus-visible,
     justify-content: center;
   }
 
-  .user-stats-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .search-with-filters,
   .search-pagination-controls {
     align-items: stretch;
@@ -2217,67 +1783,6 @@ input[type="checkbox"]:focus-visible,
     justify-content: center;
   }
 
-  .login-showcase {
-    min-height: 330px;
-    padding: 24px;
-  }
-
-  .login-showcase-copy {
-    margin-top: 56px;
-  }
-
-  .login-showcase-copy h1 {
-    font-size: 32px;
-  }
-
-  .login-showcase-status {
-    gap: 12px;
-    padding: 12px;
-  }
-
-  .login-status-orbit {
-    width: 60px;
-    height: 60px;
-  }
-
-  .login-status-orbit img {
-    width: 38px;
-    height: 38px;
-  }
-
-  .login-feature-list {
-    gap: 7px 12px;
-    margin-top: 18px;
-    font-size: 10px;
-  }
-
-  .login-shell .login-box {
-    padding: 28px 22px;
-  }
-}
-
-@media (max-width: 460px) {
-  #login-container {
-    padding: 0;
-  }
-
-  .login-shell {
-    min-height: 100vh;
-    border: 0;
-    border-radius: 0;
-  }
-
-  .login-showcase {
-    min-height: 300px;
-  }
-
-  .login-showcase-copy p {
-    font-size: 13px;
-  }
-
-  .user-stats-row {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Very narrow phones: shrink the brand wordmark + userbar icons a notch so
@@ -2312,15 +1817,6 @@ input[type="checkbox"]:focus-visible,
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .live-indicator,
-  .login-status-orbit::before,
-  .login-status-orbit img,
-  .is-spinning {
-    animation: none !important;
-  }
-}
-
 /* Light-mode surfaces for the new chrome */
 html[data-theme="light"] .ops-topbar-minimal {
   background: rgba(255, 255, 255, .92);
@@ -2330,7 +1826,6 @@ html[data-theme="light"] .ops-topbar-minimal {
 
 html[data-theme="light"] .topbar-search-trigger,
 html[data-theme="light"] .quick-link,
-html[data-theme="light"] .user-stat,
 html[data-theme="light"] .search-with-filters,
 html[data-theme="light"] .search-pagination-controls,
 html[data-theme="light"] .list-table-container {
@@ -2342,26 +1837,6 @@ html[data-theme="light"] .search-field .search-input,
 html[data-theme="light"] .search-container .search-input,
 html[data-theme="light"] .seg-toggle {
   background: #f6f8fb;
-}
-
-html[data-theme="light"] .login-shell {
-  background: var(--surface-1);
-  box-shadow: 0 28px 80px rgba(26, 42, 66, .12);
-}
-
-html[data-theme="light"] .login-showcase {
-  background:
-    linear-gradient(145deg, rgba(255, 122, 30, .13), transparent 50%),
-    #f8fafc;
-}
-
-html[data-theme="light"] .login-shell .login-box {
-  background: var(--surface-1);
-}
-
-html[data-theme="light"] .login-status-orbit,
-html[data-theme="light"] .login-showcase-status {
-  background: rgba(255, 255, 255, .72);
 }
 
 html[data-theme="light"] .ops-sidebar {
@@ -3003,7 +2478,6 @@ html[dir="rtl"] .col-last-online,
 html[dir="rtl"] .latency-note,
 html[dir="rtl"] .mini-line,
 html[dir="rtl"] .list-table td .traffic-limit,
-html[dir="rtl"] .user-stat .us-value,
 html[dir="rtl"] .sp-url-preview a {
   direction: ltr;
   unicode-bidi: plaintext;
@@ -3470,21 +2944,6 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-file-input {
   font-size: 0.85rem;
   color: var(--text-secondary);
-}
-
-/* Inner logo chip: must stay INSIDE the 76px .login-status-orbit circle
-   (60px on mobile) — the old 96px size overflowed the ring and read as a
-   second, bigger orange circle around the main one. */
-.login-status-orbit--vector {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4057,7 +3516,7 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
   }
 }
 
-/* ── Usage history (user detail graph + dashboard top talkers) ── */
+/* ── Usage history (user detail graph) ── */
 .uhist { margin-top: 4px; }
 .uhist .ud-k { display: block; margin-bottom: 8px; }
 .uhist-bars {
@@ -4078,25 +3537,6 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
   border: 1px solid var(--accent-border);
   border-bottom: 0;
 }
-.ds-toptraffic {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.ds-toptraffic-title {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.ds-toptraffic ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.ds-toptraffic li { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; gap: 10px; align-items: center; font-size: 0.82rem; }
-.ds-toptraffic-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-weight: 600; }
-.ds-toptraffic-bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.ds-toptraffic-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-.ds-toptraffic-val { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
-
 /* ── Node drawer log viewer ── */
 .nd-logbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 .nd-loglevel { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }

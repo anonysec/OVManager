@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import LoadingButton from './LoadingButton';
+import { FiPlus, FiWifi } from 'react-icons/fi';
 import Modal from './Modal';
+import { Button, Field } from './ui';
 import { CODES } from '../utils/geo';
+import './NodeFormModal.css';
 
 const parseBundle = (raw, t) => {
   // ovnode://<name>@<host>:<port>?key=<APIKEY>&tls=0|1  (printed by the node installer)
@@ -24,15 +26,27 @@ const parseBundle = (raw, t) => {
   };
 };
 
+// New nodes default to UDP: it is the faster transport and what the node
+// installer sets up first. Edit keeps whatever the node record already has.
 const BLANK = {
-  name: '', address: '', tunnel_address: '', protocol: 'tcp',
+  name: '', address: '', tunnel_address: '', protocol: 'udp',
   ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: true,
   country_code: '',
 };
 
+const errorText = (err, fallback) => {
+  const detail = err.response?.data?.detail;
+  if (Array.isArray(detail)) return detail.map((item) => item.msg || JSON.stringify(item)).join(', ');
+  if (detail && typeof detail === 'object') return JSON.stringify(detail);
+  if (typeof detail === 'string') return detail;
+  if (typeof err.response?.data?.msg === 'string' && err.response.data.msg) return err.response.data.msg;
+  return fallback;
+};
+
 // Unified add/edit node form. mode="create" (node=null) or mode="edit".
-// Replaces AddNodeModal + EditNodeModal. Create-only: bundle paste + test
-// connection. Edit-only: blank-key-keeps-existing + apply-settings checkbox.
+// Fields are grouped into Quick setup / Connection / VPN / Location / Security
+// so each screen is a few small decisions, and every problem is reported next
+// to the field that caused it.
 const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
   const isEdit = !!node;
   const { t } = useTranslation();
@@ -40,6 +54,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
   const [bundle, setBundle] = useState('');
   const [bundleError, setBundleError] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // {ok, msg}
@@ -48,7 +63,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
     if (isEdit && node) {
       setFormData({
         name: node.name || '', address: node.address || '', tunnel_address: node.tunnel_address || '',
-        protocol: node.protocol || 'tcp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
+        protocol: node.protocol || 'udp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
         key: '', status: node.status === 'active' || node.status === true,
         set_new_setting: false, // metadata edits must not require the node to be online
         use_tls: node.use_tls === true,
@@ -60,12 +75,14 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       setBundleError('');
     }
     setError('');
+    setFieldErrors({});
     setTestResult(null);
-  }, [node, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [node, isOpen, isEdit]);
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
     setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: undefined } : prev));
     setTestResult(null);
   };
 
@@ -80,9 +97,22 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
     setTestResult(null);
   };
 
+  const validate = () => {
+    const errors = {};
+    if (!String(formData.name || '').trim()) errors.name = t('nodeNameRequired', 'Enter a name for this node.');
+    if (!String(formData.address || '').trim()) errors.address = t('nodeAddressRequired', "Enter the node's public IP address or hostname.");
+    const syncPort = Number(formData.port);
+    if (!Number.isInteger(syncPort) || syncPort < 1 || syncPort > 65535) errors.port = t('nodePortInvalid', 'Port must be a whole number from 1 to 65535.');
+    const vpnPort = Number(formData.ovpn_port);
+    if (!Number.isInteger(vpnPort) || vpnPort < 1 || vpnPort > 65535) errors.ovpn_port = t('nodeOvpnPortInvalid', 'VPN port must be a whole number from 1 to 65535.');
+    if (!isEdit && !String(formData.key || '').trim()) errors.key = t('nodeKeyRequired', "Paste the node's API key.");
+    return errors;
+  };
+
   const buildPayload = () => {
     const payload = {
       ...formData,
+      protocol: formData.protocol || 'udp',
       ovpn_port: Number(formData.ovpn_port),
       port: Number(formData.port),
       // Blank = auto-detect; the API rejects "" (pattern), so send null.
@@ -95,18 +125,12 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
     return payload;
   };
 
-  const requestError = (err, fallback) => {
-    const errorData = err.response?.data;
-    if (errorData?.detail) {
-      return Array.isArray(errorData.detail)
-        ? errorData.detail.map(item => item.msg).join(', ')
-        : typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
-    }
-    if (typeof errorData?.msg === 'string' && errorData.msg) return errorData.msg;
-    return fallback;
-  };
-
   const handleTest = async () => {
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
     setError('');
     setTestResult(null);
     setIsTesting(true);
@@ -114,7 +138,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       const response = await apiClient.post('/nodes/test', buildPayload());
       setTestResult({ ok: !!response.data.success, msg: response.data.msg || '' });
     } catch (err) {
-      setTestResult({ ok: false, msg: requestError(err, t('nodeTestFailed')) });
+      setTestResult({ ok: false, msg: errorText(err, t('nodeTestFailed')) });
     } finally {
       setIsTesting(false);
     }
@@ -122,7 +146,13 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
     setError('');
+    setFieldErrors({});
     setIsLoading(true);
     try {
       const response = isEdit
@@ -134,101 +164,103 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
         setError(response.data.msg || t(isEdit ? 'nodeUpdateFailed' : 'nodeCreateFailed'));
       }
     } catch (err) {
-      setError(requestError(err, t(isEdit ? 'nodeUpdateFailed' : 'nodeCreateFailed')));
+      setError(errorText(err, t(isEdit ? 'nodeUpdateFailed' : 'nodeCreateFailed')));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const idp = (s) => `${isEdit ? 'edit' : 'new'}-${s}`;
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('modal_editNodeTitle', 'Edit Node')} — ${node?.name || ''}` : t('modal_createNodeTitle')} size="medium">
-      <form onSubmit={handleSubmit} className="modal-form">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEdit ? `${t('modal_editNodeTitle', 'Edit Node')} — ${node?.name || ''}` : t('modal_createNodeTitle')}
+      size="medium"
+    >
+      <form onSubmit={handleSubmit} className="nf-form" noValidate>
         {!isEdit && (
-          <>
-            <p className="modal-section-title">{t('nodeSectionQuick', 'Quick setup')}</p>
-            <div className="input-group">
-              <label htmlFor="node-bundle">{t('nodeBundleLabel', 'Paste node bundle')}</label>
-            <div className="shortcut-row">
+          <fieldset className="nf-section">
+            <legend className="nf-legend">{t('nodeSectionQuick', 'Quick setup')}</legend>
+            <Field label={t('nodeBundleLabel', 'Paste node bundle')} hint={t('nodeBundleHint', 'Printed by the node installer ("Bundle") and its --json output. Fills every field below.')} error={bundleError}>
               <input
                 type="text"
-                id="node-bundle"
                 value={bundle}
-                onChange={(e) => setBundle(e.target.value)}
+                onChange={(e) => { setBundle(e.target.value); setBundleError(''); }}
                 placeholder={t('nodeBundlePlaceholder', 'ovnode://node-1@203.0.113.10:2083?key=…&tls=1')}
-                className="shortcut-input"
                 spellCheck={false}
               />
-              <div className="shortcut-btns">
-                <button type="button" onClick={applyBundle} className="btn btn-secondary btn-sm">
-                  {t('nodeBundleApply', 'Fill fields')}
-                </button>
-              </div>
+            </Field>
+            <div className="nf-inline">
+              <Button variant="secondary" onClick={applyBundle}>{t('nodeBundleApply', 'Fill fields')}</Button>
             </div>
-            <span className="input-hint">
-              {t('nodeBundleHint', 'Printed by the node installer (“Bundle”) and its --json output. Fills every field below.')}
-            </span>
-            {bundleError && <p className="modal-error" role="alert">{bundleError}</p>}
-            </div>
-          </>
+          </fieldset>
         )}
-        <p className="modal-section-title">{t('nodeSectionConnection', 'Connection')}</p>
-        <div className="modal-grid">
-          <div className="input-group">
-            <label htmlFor={idp('name')}>{t('nodeName')}</label>
-            <input type="text" id={idp('name')} name="name" value={formData.name} onChange={handleChange} required />
-            {!isEdit && <span className="input-hint">{t('nodeNameHint', 'Must match the --name given to the node installer, exactly.')}</span>}
+
+        <fieldset className="nf-section">
+          <legend className="nf-legend">{t('nodeSectionConnection', 'Connection')}</legend>
+          <div className="nf-grid">
+            <Field label={t('nodeName')} required error={fieldErrors.name} hint={!isEdit ? t('nodeNameHint', 'Must match the --name given to the node installer, exactly.') : undefined}>
+              <input
+                type="text" name="name" value={formData.name} onChange={handleChange}
+                autoFocus={!isEdit} autoComplete="off" spellCheck={false}
+              />
+            </Field>
+            <Field label={t('th_address')} required error={fieldErrors.address} hint={!isEdit ? t('nodeAddressHint', 'Public IP or hostname of the node server.') : undefined}>
+              <input type="text" name="address" value={formData.address} onChange={handleChange} autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={t('nodePort')} required error={fieldErrors.port} hint={!isEdit ? t('nodePortHint', 'Sync API port (2083 default) — not the OpenVPN port.') : undefined}>
+              <input type="number" name="port" value={formData.port} onChange={handleChange} min="1" max="65535" step="1" inputMode="numeric" />
+            </Field>
+            <Field label={`${t('tunnelAddress', 'Tunnel address')} (${t('optional', 'Optional')})`}>
+              <input type="text" name="tunnel_address" value={formData.tunnel_address} onChange={handleChange} autoComplete="off" spellCheck={false} />
+            </Field>
           </div>
-          <div className="input-group">
-            <label htmlFor={idp('address')}>{t('th_address')}</label>
-            <input type="text" id={idp('address')} name="address" value={formData.address} onChange={handleChange} required />
-            {!isEdit && <span className="input-hint">{t('nodeAddressHint', 'Public IP or hostname of the node server.')}</span>}
+        </fieldset>
+
+        <fieldset className="nf-section">
+          <legend className="nf-legend">{t('nodeSectionVpn', 'VPN')}</legend>
+          <div className="nf-grid">
+            <Field label={t('th_protocol', 'Protocol')} hint={t('nodeProtocolHint', 'UDP is usually faster; TCP gets through stricter networks.')}>
+              <select name="protocol" value={formData.protocol} onChange={handleChange}>
+                <option value="udp">UDP</option>
+                <option value="tcp">TCP</option>
+              </select>
+            </Field>
+            <Field label={t('ovpnPort', 'OpenVPN port')} required error={fieldErrors.ovpn_port}>
+              <input type="number" name="ovpn_port" value={formData.ovpn_port} onChange={handleChange} min="1" max="65535" step="1" inputMode="numeric" />
+            </Field>
           </div>
-          <div className="input-group">
-            <label htmlFor={idp('port')}>{t('nodePort')}</label>
-            <input type="number" id={idp('port')} name="port" value={formData.port} onChange={handleChange} required />
-            {!isEdit && <span className="input-hint">{t('nodePortHint', 'Sync API port (2083 default) — not the OpenVPN port.')}</span>}
-          </div>
-          <div className="input-group">
-            <label htmlFor={idp('tunnel_address')}>{t('tunnelAddress')} <span className="input-hint">({t('optional', 'Optional')})</span></label>
-            <input type="text" id={idp('tunnel_address')} name="tunnel_address" value={formData.tunnel_address} onChange={handleChange} />
-          </div>
-          <div className="input-group">
-            <label htmlFor={idp('protocol')}>{t('th_protocol')}</label>
-            <select id={idp('protocol')} name="protocol" value={formData.protocol} onChange={handleChange}>
-              <option value="tcp">TCP</option>
-              <option value="udp">UDP</option>
-            </select>
-          </div>
-          <div className="input-group">
-            <label htmlFor={idp('ovpn_port')}>{t('ovpnPort')}</label>
-            <input type="number" id={idp('ovpn_port')} name="ovpn_port" value={formData.ovpn_port} onChange={handleChange} required />
-          </div>
-          <div className="input-group">
-            <label htmlFor={idp('country_code')}>{t('nodeCountry', 'Country')}</label>
-            <select id={idp('country_code')} name="country_code" value={formData.country_code} onChange={handleChange}>
+          {!isEdit && <p className="nf-note">{t('nodeDefaultsNote', 'New nodes default to UDP — change it if the installer used TCP.')}</p>}
+        </fieldset>
+
+        <fieldset className="nf-section">
+          <legend className="nf-legend">{t('nodeSectionLocation', 'Location')}</legend>
+          <Field label={t('nodeCountry', 'Country')} hint={t('nodeCountryHint', 'Leave on auto-detect unless the lookup is wrong — a manual pick always wins.')}>
+            <select name="country_code" value={formData.country_code} onChange={handleChange}>
               <option value="">{t('nodeCountryAuto', 'Auto-detect from IP')}</option>
               {Object.entries(CODES).map(([code, entry]) => (
                 <option key={code} value={code}>{entry.name}</option>
               ))}
             </select>
-            <span className="input-hint">
-              {t('nodeCountryHint', 'Leave on auto-detect unless the lookup is wrong — a manual pick always wins.')}
-            </span>
-          </div>
-          <div className="input-group" style={{ gridColumn: '1 / -1' }}>
-            <label htmlFor={idp('key')}>{t('key')}</label>
+          </Field>
+        </fieldset>
+
+        <fieldset className="nf-section">
+          <legend className="nf-legend">{t('nodeSectionSecurity', 'Security')}</legend>
+          <Field
+            label={t('key', 'API key')}
+            required={!isEdit}
+            error={fieldErrors.key}
+            hint={!isEdit ? t('nodeKeyHint', 'Paste the API key from the node installer summary.') : undefined}
+          >
             <input
-              type="text" id={idp('key')} name="key" value={formData.key} onChange={handleChange}
-              required={!isEdit}
-              placeholder={isEdit
-                ? t('keyKeepExistingHint', 'Leave blank to keep existing key')
-                : t('nodeKeyHint', 'From the node installer summary (API key) — copy it exactly.')}
+              type="text" name="key" value={formData.key} onChange={handleChange}
+              placeholder={isEdit ? t('keyKeepExistingHint', 'Leave blank to keep the current key') : ''}
+              autoComplete="off" spellCheck={false}
             />
-          </div>
+          </Field>
           {isEdit ? (
-            <label className="modal-check-row" style={{ gridColumn: '1 / -1' }}>
+            <label className="nf-check">
               <input type="checkbox" name="set_new_setting" checked={formData.set_new_setting} onChange={handleChange} />
               <span>
                 {t('applyNodeSettings', 'Apply new VPN settings on the node')}
@@ -236,30 +268,31 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
               </span>
             </label>
           ) : (
-            <label className="modal-check-row" style={{ gridColumn: '1 / -1' }} htmlFor="node-use_tls">
-              <input type="checkbox" id="node-use_tls" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
+            <label className="nf-check">
+              <input type="checkbox" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
               <span>
                 {t('nodeUseTls', 'Use TLS (https)')}
                 <small>{t('nodeUseTlsHint', 'On for self-signed or Let’s Encrypt. Self-signed = encrypted but unverified (no MITM protection); Let’s Encrypt = fully verified. Off sends the API key in cleartext.')}</small>
               </span>
             </label>
           )}
-        </div>
+        </fieldset>
 
         {testResult && (
-          <p className={testResult.ok ? 'success-message' : 'modal-error'} role="status">{testResult.msg}</p>
+          <p className={`nf-result${testResult.ok ? ' is-ok' : ' is-error'}`} role="status">{testResult.msg}</p>
         )}
-        {error && <p className="modal-error" role="alert">{error}</p>}
-        <div className="modal-footer">
-          <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
+        {error && <p className="nf-result is-error" role="alert">{error}</p>}
+
+        <div className="nf-footer">
+          <Button variant="secondary" onClick={onClose}>{t('cancelButton')}</Button>
           {!isEdit && (
-            <button type="button" onClick={handleTest} className="btn btn-secondary" disabled={isTesting || isLoading}>
-              {isTesting ? t('nodeTesting', 'Testing…') : t('nodeTestButton', 'Test connection')}
-            </button>
+            <Button variant="secondary" loading={isTesting} disabled={isLoading} icon={<FiWifi size={14} aria-hidden="true" />} onClick={handleTest}>
+              {t('nodeTestButton', 'Test connection')}
+            </Button>
           )}
-          <LoadingButton isLoading={isLoading} type="submit" className="btn">
-            {isEdit ? t('updateNodeButton', 'Update Node') : t('createNodeButton')}
-          </LoadingButton>
+          <Button type="submit" variant="primary" loading={isLoading} icon={<FiPlus size={14} aria-hidden="true" />}>
+            {isEdit ? t('updateNodeButton', 'Save changes') : t('createNodeButton')}
+          </Button>
         </div>
       </form>
     </Modal>

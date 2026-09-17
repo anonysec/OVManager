@@ -36,7 +36,7 @@ def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node
         raise HTTPException(status_code=401, detail="Invalid node key")
     from backend.db.crud import decrypt_node_key
 
-    if not hmac.compare_digest(decrypt_node_key(node.key), key):
+    if not hmac.compare_digest(decrypt_node_key(node.key).encode("utf-8"), key.encode("utf-8", "ignore")):
         raise HTTPException(status_code=401, detail="Invalid node key")
     return node
 
@@ -124,12 +124,14 @@ async def global_mlogin_status(
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         # Panel-user path: validate session token and require owner role.
-        from backend.auth.auth import verify_session_token
+        from backend.auth.auth import role_is_current, verify_session_token
 
         user = verify_session_token(auth_header[7:], db)
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        if user.get("type") != "owner":
+        # Re-check role currency: a session minted while this username was the
+        # owner must stop working after ADMIN_USERNAME changes.
+        if user.get("type") != "owner" or not role_is_current(db, user.get("username", ""), "owner"):
             raise HTTPException(status_code=403, detail="Owner privileges required")
     else:
         # OVNode hook path: authenticate by node name + API key
