@@ -36,6 +36,11 @@ jobs:
           npm ci
           npm run build
 
+      # The canonical one-liner (README/docs) is served from the Pages root,
+      # so the installer has to be part of the artifact.
+      - name: Include installer in the site
+        run: cp install.sh frontend/dist/install.sh
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
