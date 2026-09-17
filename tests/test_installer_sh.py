@@ -338,3 +338,73 @@ def test_menu_without_terminal_is_usage_error():
 def test_logs_command_never_crashes():
     r = sh("logs", "5")
     assert r.returncode == 0
+
+
+def _function_tails(path):
+    """[(name, last_line, closing_line)] for every multi-line function."""
+    import re
+
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    out = []
+    func = None
+    body = []
+    for i, line in enumerate(lines, 1):
+        m = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\(\)\s*\{$", line)
+        if m and func is None:
+            func, body = m.group(1), []
+            continue
+        if func is None:
+            continue
+        if line == "}":
+            tail = next((ln.strip() for ln in reversed(body) if ln.strip() and not ln.strip().startswith("#")), "")
+            out.append((func, tail, i))
+            func = None
+        else:
+            body.append(line)
+    return out
+
+
+def test_no_function_ends_with_a_failing_test():
+    """`set -e` trap: a function whose last statement is `[[ ... ]] && ...`
+    returns 1 when the test is false, which exits the whole installer. This
+    was the Express admin-password bug (typing a password exited silently)."""
+    import re
+
+    offenders = [
+        (name, tail, line)
+        for name, tail, line in _function_tails(INSTALLER)
+        if re.match(r"^\[\[.*\]\]\s*&&", tail)
+    ]
+    assert not offenders, offenders
+
+
+def test_express_password_path_does_not_exit_early():
+    """Entering a password must continue the installer, not return 1."""
+    lines = Path(INSTALLER).read_text(encoding="utf-8").splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("panel_express_defaults()"))
+    end = start
+    while lines[end] != "}":
+        end += 1
+    source = "\n".join(lines[start : end + 1])
+
+    def harness(password: str, expect_generated: int) -> str:
+        return f"""set -Eeuo pipefail
+    line() {{ :; }}
+    step() {{ :; }}
+    ask() {{ printf '%s' '{password}'; }}
+    rand_path() {{ echo testpath; }}
+    DEFAULT_PORT=2095; DEFAULT_USER=admin
+    EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
+    ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
+    {source}
+    panel_express_defaults
+    [[ "$ADMIN_PASS" == '{password}' ]]
+    [[ "$GENERATED_PASS" -eq {expect_generated} ]]
+    """
+
+    typed = subprocess.run(["bash", "-c", harness("long-enough-password", 0)], capture_output=True, text=True, timeout=30)
+    assert typed.returncode == 0, typed.stderr
+    blank = subprocess.run(["bash", "-c", harness("", 1)], capture_output=True, text=True, timeout=30)
+    assert blank.returncode == 0, blank.stderr
+
+

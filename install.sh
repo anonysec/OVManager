@@ -427,7 +427,8 @@ backup_dir() {
     info "Backup ${label} → $file"
     tar -czf "$file" -C "$(dirname "$src")" "$base" 2>/dev/null \
         || warn "Backup failed for $src — continuing"
-    [[ -f "$file" ]] && step "Backup  $file"
+    if [[ -f "$file" ]]; then step "Backup  $file"; fi
+    return 0
 }
 
 open_firewall_port() {
@@ -955,7 +956,8 @@ do_update() {
     install_cli
     step "Update complete"
     line ""
-    [[ "$JSON" -eq 1 ]] && emit_json 1
+    if [[ "$JSON" -eq 1 ]]; then emit_json 1; fi
+    return 0
 }
 
 do_status() {
@@ -1156,13 +1158,13 @@ already_installed_menu() {
             uninstall "Uninstall" \
             quit      "Quit")"
         case "$tag" in
-            status)    do_status ;;
-            service)   do_service_menu ;;
-            logs)      show_logs ;;
-            backup)    check_root; backup_now ;;
-            update)    check_root; detect_os; check_deps; do_update ;;
-            tls)       check_root; do_tls_menu ;;
-            recovery)  check_root; do_recovery_menu ;;
+            status)    do_status || warn "Status failed" ;;
+            service)   do_service_menu || warn "Service action failed" ;;
+            logs)      show_logs || warn "Could not read logs" ;;
+            backup)    check_root; backup_now || warn "Backup failed" ;;
+            update)    check_root; detect_os; check_deps; do_update || warn "Update failed" ;;
+            tls)       check_root; do_tls_menu || warn "TLS action failed" ;;
+            recovery)  check_root; do_recovery_menu || warn "Recovery action failed" ;;
             uninstall) check_root; do_uninstall; return 0 ;;
             *)         return 0 ;;
         esac
@@ -1183,8 +1185,15 @@ panel_express_defaults() {
     if [[ -z "$ADMIN_PASS" ]]; then
         line ""
         ADMIN_PASS="$(ask "Admin password (blank = generate)" "" "h")"
-        [[ -z "$ADMIN_PASS" ]] && GENERATED_PASS=1
+        if [[ -z "$ADMIN_PASS" ]]; then
+            GENERATED_PASS=1
+        else
+            step "Password set (hidden while typing)"
+        fi
     fi
+    # Explicit success: a trailing `[[ ... ]] && ...` returning non-zero would
+    # trip `set -e` and exit the whole installer right after the prompt.
+    return 0
 }
 
 # Friendly front door, shown only for a bare interactive invocation.
