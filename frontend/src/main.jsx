@@ -17,6 +17,13 @@ import './i18n';
 // Apply persisted UI preferences (custom accent) before first paint.
 try { applyAccent(); } catch { /* noop */ }
 
+// PWA: cache the static app shell so the panel can reload offline. Production
+// only — the dev server serves unbundled source files and caching them would
+// break hot reload. Registration failures are not worth surfacing.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* optional */ });
+}
+
 // Router basename comes from the <base href> the backend injects, e.g.
 // "/dashboard" when served at /dashboard/, "" when served at root. The
 // frontend never hard-codes or builds the prefix itself.

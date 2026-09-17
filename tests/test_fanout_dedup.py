@@ -92,6 +92,19 @@ def test_health_summary_polls_each_node_once(monkeypatch):
             }
 
     monkeypatch.setattr(diag, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
+    # Isolate from other node rows in the shared dev DB: the assertion below
+    # counts polls, so a leftover active node would double the count.
+    from backend.db.engine import SessionLocal as _SL
+    from backend.db.models import Node as _Node
+
+    def _only_dup(_db):
+        session = _SL()
+        try:
+            return [session.query(_Node).filter(_Node.name == "dup_node").first()]
+        finally:
+            session.close()
+
+    monkeypatch.setattr(diag.crud, "get_active_nodes", _only_dup)
     import asyncio
 
     db = SessionLocal()

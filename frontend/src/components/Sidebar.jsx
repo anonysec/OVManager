@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight,
-  FiMenu, FiList, FiBarChart2,
+  FiMenu, FiList, FiBarChart2, FiActivity,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -93,25 +93,25 @@ const Sidebar = () => {
   };
   const isActiveClass = (item) => isActive(item) ? 'sidebar-nav-link active' : 'sidebar-nav-link';
 
-  // Build flat nav list — Settings is a plain link like all other pages.
+  // Primary nav: Home · Users · Nodes · Health · Settings. Admins and Audit
+  // stay owner-only but are now secondary entries in an "Advanced" group until
+  // Settings grows an Advanced tab in the page-level redesign wave.
   const navItems = [
-    { to: '/',          label: t('navDashboard', 'Dashboard'), icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
-    { to: '/users',     label: t('navUsers',     'Users'),     icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
+    { to: '/',          label: t('navHome',     'Home'),     icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
+    { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
     ...(userRole === 'owner' ? [
-      { to: '/nodes',   label: t('navNodes',     'Nodes'),     icon: FiServer,             group: t('navGroupManage',   'Manage')   },
+      { to: '/nodes',   label: t('navNodes',    'Nodes'),    icon: FiServer,             group: t('navGroupManage',   'Manage')   },
+      { to: '/health',  label: t('navHealth',   'Health'),   icon: FiActivity,           group: t('navGroupSystem',   'System')   },
     ] : []),
+    { to: '/settings',  label: t('navSettings', 'Settings'), icon: FiSettings,           group: t('navGroupSystem',   'System')   },
   ];
 
   if (userRole === 'owner') {
     navItems.push(
-      { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupManage', 'Manage') },
-      { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiBarChart2, group: t('navGroupSystem', 'System') },
+      { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupAdvanced', 'Advanced') },
+      { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiBarChart2, group: t('navGroupAdvanced', 'Advanced') },
     );
   }
-
-  navItems.push(
-    { to: '/settings', label: t('navSettings', 'Settings'), icon: FiSettings, group: t('navGroupSystem', 'System') }
-  );
 
   // Labels stay mounted in both modes — the collapsed rail fades/collapses
   // them via CSS instead of unmounting, so the width tween looks smooth and

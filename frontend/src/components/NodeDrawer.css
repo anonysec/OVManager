@@ -1,0 +1,176 @@
+/* Node drawer — additive styles for the redesigned tabs.
+   The shell (.node-drawer*, .nd-grid, .nd-cell, .nd-row, .nd-cert, .nd-log*)
+   stays in styles.css; only the new Settings/Actions blocks live here. */
+
+.nd-tabs {
+  padding: 0 var(--space-2);
+}
+
+.nd-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+/* ── Overview: live users ────────────────────────────────────────── */
+.nd-live {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.nd-live-count {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-extrabold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.nd-live-label {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* ── Settings sections ───────────────────────────────────────────── */
+.nd-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.nd-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.nd-section-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.nd-section-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nd-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.nd-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.nd-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+/* ── Result lines ────────────────────────────────────────────────── */
+.nd-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.nd-result svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.nd-result.is-ok {
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.nd-result.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+/* ── Actions tab ─────────────────────────────────────────────────── */
+.nd-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.nd-action-text {
+  min-width: 0;
+}
+
+.nd-action-text h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.nd-action-text p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.nd-action .nd-result {
+  grid-column: 1 / -1;
+}
+
+.nd-action--danger {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+@media (max-width: 599.98px) {
+  .nd-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nd-action {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nd-action .ui-btn {
+    justify-self: start;
+  }
+}

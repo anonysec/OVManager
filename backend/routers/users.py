@@ -45,6 +45,8 @@ def _snapshot_user(u: User) -> dict:
         "uuid": u.uuid,
         "total": u.total,
         "used": u.used,
+        "node_usage": u.node_usage,
+        "last_node_usage": u.last_node_usage,
         "max_logins": u.max_logins,
         "expiry_date": u.expiry_date.isoformat() if u.expiry_date else None,
         "is_active": u.is_active,
@@ -80,7 +82,10 @@ async def get_next_username(
 
     # Fetch only names that start with the prefix and end with digits.
     # Limit to 100_000 to bound memory; in practice admins have far fewer users.
-    existing = db.query(User.name).filter(User.name.like(f"{prefix}%")).limit(100_000).all()
+    # Escape LIKE wildcards: a prefix like "50%" must be a literal prefix, not
+    # "every username starting with 50".
+    escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    existing = db.query(User.name).filter(User.name.like(f"{escaped}%", escape="\\")).limit(100_000).all()
     taken = {n[0] for n in existing}
 
     i = 1
@@ -284,6 +289,13 @@ async def change_user_status(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     _require_user_access(db_user, user)
+    if request.status:
+        # Same rule as the edit form: an expired or out-of-traffic account
+        # must not be switched on, or it would stay online until the next
+        # enforce sweep.
+        blocked = crud.activation_blocked(db_user)
+        if blocked:
+            return ResponseModel(success=False, msg=f"Cannot activate: user is {blocked}", data=None)
     db_user.is_active = bool(request.status)
     db.commit()
     synced = await change_user_status_on_all_nodes(db_user.id, db_user.name, request.status, db)
@@ -390,7 +402,8 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
 
 class _UserAdjust(BaseModel):
     days: int = Field(default=0, ge=0, le=3650)
-    bytes: int = Field(default=0, ge=0)
+    # Bounded so the SQLite 64-bit INTEGER column cannot overflow.
+    bytes: int = Field(default=0, ge=0, le=2**60)
 
 
 @router.post("/{uuid}/extend", response_model=ResponseModel)

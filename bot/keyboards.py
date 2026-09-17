@@ -10,12 +10,19 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMa
 from bot.i18n import DEFAULT_LANG, LANG_NAMES, LOCALES, t
 
 
-def main_menu(*, in_flow: bool = False, lang: str = DEFAULT_LANG) -> ReplyKeyboardMarkup:
+def main_menu(*, in_flow: bool = False, lang: str = DEFAULT_LANG, is_owner: bool = False) -> ReplyKeyboardMarkup:
+    """Persistent sections: Users · Create · Stats · Nodes · Settings · Language.
+
+    Settings is owner-only, so admins get the same menu without that button.
+    """
     rows = [
         [t(lang, "btn_users"), t(lang, "btn_new")],
         [t(lang, "btn_status"), t(lang, "btn_nodes")],
-        [t(lang, "btn_language")],
     ]
+    if is_owner:
+        rows.append([t(lang, "btn_settings"), t(lang, "btn_language")])
+    else:
+        rows.append([t(lang, "btn_language")])
     if in_flow:
         rows.append([t(lang, "btn_cancel")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
@@ -25,14 +32,16 @@ def inline(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=data) for label, data in row] for row in rows])
 
 
-def home_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
-    return inline(
-        [
-            [(t(lang, "home_browse"), "users:0"), (t(lang, "home_create"), "new")],
-            [(t(lang, "home_status"), "status"), (t(lang, "home_nodes"), "nodes")],
-            [(t(lang, "home_language"), "lang")],
-        ]
-    )
+def home_actions(*, lang: str = DEFAULT_LANG, is_owner: bool = False) -> InlineKeyboardMarkup:
+    rows = [
+        [(t(lang, "home_browse"), "users:0"), (t(lang, "home_create"), "new")],
+        [(t(lang, "home_status"), "status"), (t(lang, "home_nodes"), "nodes")],
+    ]
+    last = [(t(lang, "home_language"), "lang")]
+    if is_owner:
+        last.insert(0, (t(lang, "btn_settings"), "settings"))
+    rows.append(last)
+    return inline(rows)
 
 
 def language_menu() -> ReplyKeyboardMarkup:
@@ -77,12 +86,15 @@ def users_nav(page: int, total_pages: int, *, has_users: bool, lang: str = DEFAU
 
 
 def user_actions(user: dict, *, is_owner: bool = False, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    """Every user operation is a direct button — no hidden sub-menus."""
     uuid = user["uuid"]
     toggle = t(lang, "act_enable") if not user.get("is_active") else t(lang, "act_disable")
     rows = [
-        [(t(lang, "act_extend"), f"ext:{uuid}"), (t(lang, "act_config"), f"cfg:{uuid}")],
-        [(toggle, f"tog:{uuid}"), (t(lang, "act_sub"), f"sub:{uuid}")],
+        [(t(lang, "act_plus_30d"), f"e30:{uuid}"), (t(lang, "act_plus_90d"), f"e90:{uuid}")],
+        [(t(lang, "act_plus_10gb"), f"eb10:{uuid}"), (t(lang, "act_plus_100gb"), f"eb100:{uuid}")],
+        [(t(lang, "act_reset"), f"rst:{uuid}"), (toggle, f"tog:{uuid}")],
         [(t(lang, "act_disconnect"), f"dis:{uuid}"), (t(lang, "act_delete"), f"del:{uuid}")],
+        [(t(lang, "act_config"), f"cfg:{uuid}"), (t(lang, "act_sub"), f"sub:{uuid}")],
     ]
     if is_owner:
         rows.append([(t(lang, "act_edit"), f"edt:{uuid}")])
@@ -119,7 +131,12 @@ def confirm_create(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
 
 
 def name_prompt(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
-    return inline([[(t(lang, "act_suggest"), "auto")]])
+    return inline(
+        [
+            [(t(lang, "act_suggest"), "auto")],
+            [(t(lang, "btn_cancel"), "cancel")],
+        ]
+    )
 
 
 def plan_picker(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
@@ -127,6 +144,20 @@ def plan_picker(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
         [
             [(t(lang, "plan_standard"), "plan:standard"), (t(lang, "plan_team"), "plan:team")],
             [(t(lang, "plan_unlimited"), "plan:unlimited"), (t(lang, "plan_custom"), "plan:custom")],
+            [(t(lang, "btn_cancel"), "cancel")],
+        ]
+    )
+
+
+def cancel_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline([[(t(lang, "btn_cancel"), "cancel")]])
+
+
+def settings_actions(*, lang: str = DEFAULT_LANG) -> InlineKeyboardMarkup:
+    return inline(
+        [
+            [(t(lang, "home_language"), "lang"), (t(lang, "act_refresh"), "settings")],
+            [(t(lang, "act_back"), "home")],
         ]
     )
 

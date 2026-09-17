@@ -1,0 +1,112 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Settings page shell — Simple/Advanced tabs, tab note, owner-only notice.
+   Section styling keeps living in Settings.css; this file only owns the
+   page chrome added by the Simple/Advanced redesign. */
+
+.sp-tabs {
+  margin-bottom: 0;
+}
+
+.sp-tab-note {
+  margin: 10px 0 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.sp-owner-note {
+  margin-top: 8px;
+}
+
+.sp-owner-note-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.sp-owner-note-inner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--warning-text);
+}
+
+.sp-owner-note-inner strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.sp-owner-note-inner p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* TLS status card */
+.sp-tls-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-tls-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.sp-tls-hint {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+html[dir="rtl"] .sp-tls-hint {
+  border-left: 1px solid var(--border);
+  border-right: 3px solid var(--warning);
+}
+
+.sp-tls-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 18px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sp-tls-meta div {
+  min-width: 0;
+}
+
+.sp-tls-meta dt {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sp-tls-meta dd {
+  margin: 3px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.sp-tls-actions {
+  margin-top: 16px;
+}

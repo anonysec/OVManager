@@ -151,3 +151,75 @@ def test_safe_filename_allowlists_and_rejects():
     assert _safe_filename(None) == ""
     assert _safe_filename("...") == ""
     assert _safe_filename("a\x00b.db") == "ab.db"
+
+
+def test_get_backup_is_rejected():
+    """Creating a backup must require POST (CSRF-safe); GET must not reach it."""
+    with TestClient(api) as client:
+        r = client.get("/api/maintenance/backup", headers=_owner_headers())
+        assert r.status_code in (404, 405)
+
+
+def test_writes_are_rejected_while_restore_lock_is_set():
+    """The ASGI middleware answers 503 on writes during a restore."""
+    from backend.db.engine import restore_lock
+
+    restore_lock.set()
+    try:
+        with TestClient(api) as client:
+            r = client.post("/api/maintenance/backup", headers=_owner_headers())
+            assert r.status_code == 503
+            assert r.json()["success"] is False
+            # Reads stay available.
+            assert client.get("/health").status_code == 200
+    finally:
+        restore_lock.clear()
+
+
+def test_failed_post_restore_migration_rolls_back(monkeypatch, tmp_path):
+    """A restore whose migrated database fails verification is reverted."""
+    scratch = tmp_path / "live.db"
+    conn = sqlite3.connect(str(scratch))
+    conn.execute("CREATE TABLE probe (id INTEGER PRIMARY KEY, v TEXT)")
+    conn.execute("INSERT INTO probe (v) VALUES ('before')")
+    conn.commit()
+    conn.close()
+
+    fake_engine = create_engine(f"sqlite:///{scratch}")
+    fake_backups = tmp_path / "backups"
+    monkeypatch.setattr(m, "DB_PATH", scratch)
+    monkeypatch.setattr(m, "BACKUP_DIR", fake_backups)
+    monkeypatch.setattr(m, "engine", fake_engine)
+
+    def _boom():
+        raise RuntimeError("schema drift after restore")
+
+    monkeypatch.setattr(m, "_apply_migrations_after_restore", _boom)
+    try:
+        with TestClient(api) as client:
+            h = _owner_headers()
+            r = client.post("/api/maintenance/backup", headers=h)
+            assert r.json()["success"] is True
+            snap = r.json()["data"]["filename"]
+
+            conn = sqlite3.connect(str(scratch))
+            conn.execute("INSERT INTO probe (v) VALUES ('after')")
+            # Stale WAL/SHM from the old database must be cleaned on rollback.
+            scratch.with_name(scratch.name + "-wal").write_bytes(b"stale")
+            scratch.with_name(scratch.name + "-shm").write_bytes(b"stale")
+            conn.commit()
+            conn.close()
+
+            r = client.post("/api/maintenance/backup/restore", data={"restore_from_server": snap}, headers=h)
+            assert r.json()["success"] is False
+
+            conn = sqlite3.connect(str(scratch))
+            try:
+                rows = [row[0] for row in conn.execute("SELECT v FROM probe ORDER BY id").fetchall()]
+            finally:
+                conn.close()
+            assert rows == ["before", "after"], "the pre-restore state must be back"
+            assert not scratch.with_name(scratch.name + "-wal").exists()
+            assert not scratch.with_name(scratch.name + "-shm").exists()
+    finally:
+        fake_engine.dispose()

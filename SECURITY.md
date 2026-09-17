@@ -30,6 +30,25 @@ Telegram bot token handling.
 Out of scope: DDoS/volumetric abuse, OpenVPN or EasyRSA upstream CVEs
 (update those packages), social engineering, physical access.
 
+## Self-signed node TLS fallback (known risk)
+
+The panel first verifies a node's TLS certificate strictly. If verification
+fails — normal for a node using a self-signed certificate, which is the
+installer default — it retries the request once with verification disabled.
+A `node.tls_unverified` audit event is written the first time this happens
+per node.
+
+The risk: an active network attacker who can intercept the connection to the
+node can impersonate it and capture the node's API key, which is sent with
+every request. The fallback is deliberate, so self-signed nodes keep working.
+
+Mitigations:
+
+- Use a Let's Encrypt certificate on nodes so strict verification passes.
+- Watch the node's TLS chip in the UI; "unverified (self-signed)" means
+  requests to that node are not protected against impersonation.
+- Check the audit log for `node.tls_unverified` events and investigate.
+
 ## Hardening checklist (production)
 
 - Install with random secrets (`ADMIN_PASSWORD`, `BOT_ENCRYPT_KEY`,

@@ -16,6 +16,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 INSTALLER = os.path.join(os.path.dirname(__file__), "..", "install.sh")
 INSTALLER_PATH = Path(INSTALLER)
 INSTALL_DIR = "/opt/ovmanager"
@@ -102,6 +104,67 @@ def test_unknown_option_fails():
     assert r.returncode == 1
 
 
+def test_help_documents_reset_password():
+    r = sh("--help")
+    assert r.returncode == 0
+    assert "reset-password" in r.stdout or "reset-password" in r.stderr
+
+
+def test_reset_password_rejects_weak_passwords(tmp_path):
+    """Same floor + placeholder block the panel applies at boot."""
+    sb, _ = sandbox(tmp_path)
+    for weak, hint in (("short", "at least 12"), ("change-me-please-123", "placeholder")):
+        r = sh_sb(sb, "reset-password", "--admin-pass", weak)
+        assert r.returncode == 1, r.stderr
+        assert hint in r.stderr or "root" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password itself requires root")
+def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
+    """Only the ADMIN_PASSWORD line changes (0600 kept, other lines intact)
+    and a failed service restart is a warning, not a failed recovery."""
+    sb, fake_opt = sandbox(tmp_path)
+    install = Path(fake_opt)
+    install.mkdir(parents=True)
+    env = install / ".env"
+    env.write_text(
+        "HOST=0.0.0.0\n"
+        "PORT=2095\n"
+        "ADMIN_USERNAME=admin\n"
+        "ADMIN_PASSWORD=old-password-123\n"
+        "URLPATH=sekret\n"
+        "JWT_SECRET_KEY=keep-me\n",
+        encoding="utf-8",
+    )
+    env.chmod(0o600)
+
+    # curl succeeds so the /health wait is instant; systemctl fails on purpose.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for name, rc in (("curl", 0), ("systemctl", 1)):
+        tool = fake_bin / name
+        tool.write_text(f"#!/bin/sh\nexit {rc}\n", encoding="utf-8")
+        tool.chmod(0o755)
+
+    r = sh_sb(
+        sb,
+        "reset-password",
+        "--admin-pass",
+        "brand-new-password",
+        env={"PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"},
+    )
+    assert r.returncode == 0, r.stderr
+    text = env.read_text(encoding="utf-8")
+    assert "ADMIN_PASSWORD=brand-new-password\n" in text
+    assert "old-password-123" not in text
+    for kept in ("HOST=0.0.0.0", "PORT=2095", "ADMIN_USERNAME=admin", "URLPATH=sekret", "JWT_SECRET_KEY=keep-me"):
+        assert kept in text, f"lost {kept}"
+    assert (env.stat().st_mode & 0o777) == 0o600
+    # The new password never echoes back, and the restart failure is a warning.
+    assert "brand-new-password" not in r.stdout + r.stderr
+    assert "Could not restart" in r.stderr
+
+
 def test_bad_node_name_rejected(tmp_path):
     sb, _ = sandbox(tmp_path)
     r = sh_sb(sb, "install", "-y", "--admin-pass", "long-enough-password", "--with-node", "bad name!")
@@ -119,12 +182,14 @@ def test_dry_run_never_touches_live_flows():
     assert "Dry run — nothing changed (would stop the service" in content
 
 
-def test_already_installed_menu_defaults_to_quit():
-    """On EOF/Enter the menu must quit, never auto-start update/uninstall."""
+def test_already_installed_menu_never_auto_runs_destructive_actions():
+    """Enter/EOF/cancel must not start update or uninstall by default."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert 'choice="$(ask "Select" "3")"' in content
-    assert 'case "${choice:-3}"' in content
+    assert 'tui_select "OVManager — panel"' in content
+    assert 'quit      "Quit")' in content
+    # Unmatched/cancelled selections return to the caller (or quit) only.
+    assert "*)         return 0 ;;" in content
 
 
 def test_already_installed_menu_is_safe_by_default(tmp_path):
@@ -180,7 +245,10 @@ def test_docker_data_dir_and_perms_are_container_safe():
         content = f.read()
     assert '[[ "$MODE" == "docker" ]] && data_dir="/app/data"' in content
     assert 'chown -R 1000:1000 "$DATA_DIR"' in content
-    assert "chmod 644 /etc/ssl/self-signed/privkey.pem /etc/ssl/self-signed/fullchain.pem" in content
+    # Keys stay private (600, owned by the container uid); only the cert is 644.
+    assert "secure_tls_files" in content
+    assert "chmod 600" in content
+    assert "chmod 644 /etc/ssl/self-signed/privkey.pem" not in content
     assert ">/dev/stderr" in content  # build output must not pollute --json stdout
 
 
@@ -189,3 +257,84 @@ def test_repo_override_for_forks():
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
     assert 'REPO="${OVM_REPO:-anonysec/OVManager}"' in content
+
+
+def test_plain_http_flag_is_rejected():
+    """--tls-none must fail fast: plain HTTP is no longer offered."""
+    r = sh("--tls-none", "--dry-run")
+    assert r.returncode != 0
+    assert "Plain HTTP is not allowed" in r.stderr
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'TLS_MODE="none"' not in content
+
+
+def test_start_menu_and_express_defaults():
+    """A bare run offers Express/Custom/Update/Uninstall; Express asks only
+    for the admin password and picks TLS self-signed."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    for label in ("Express", "Custom", "Update", "Uninstall"):
+        assert label in content
+    assert "panel_express_defaults()" in content
+    assert 'tls="$(ask "TLS" "1")"' in content
+    assert "None — HTTP only" not in content
+    assert ': "${TLS_MODE:=self}"' in content
+
+
+def test_same_server_node_offer_auto_registers():
+    """End of install offers a same-server node; Express auto-registers it,
+    Custom asks first; the OVNode repo can be overridden for forks."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert "offer_same_server_node" in content
+    assert "not recommended" in content.lower()
+    assert "OVNODE_REPO:-anonysec/OVNode" in content
+    assert "register_node_in_panel" in content
+    assert 'confirm "Add it to the panel automatically now?"' in content
+    # Node install runs the separate project's installer, never a bundled copy.
+    assert "install.sh" in content and "install --json" in content
+
+
+def test_terminal_command_and_tui_are_installed():
+    """The installer copies itself to /usr/local/bin as ovmanager (+ ovm)."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"' in content
+    assert 'CLI_NAME="ovmanager"' in content
+    assert 'CLI_ALIAS="ovm"' in content
+    # copied on install and update, removed on uninstall
+    assert content.count("install_cli") >= 3  # definition + do_install + do_update
+    assert content.count("remove_cli") >= 2  # definition + do_uninstall
+    # whiptail when present, colored fallback otherwise
+    assert "command -v whiptail" in content
+    assert "tui_select" in content
+
+
+def test_tui_subcommands_documented():
+    r = sh("help")
+    assert r.returncode == 0
+    output = r.stdout + r.stderr
+    for token in (
+        "start | stop | restart",
+        "logs [N|-f]",
+        "backup",
+        "tls",
+        "recovery",
+        "reset-urlpath",
+        "menu",
+        "ovmanager (alias: ovm)",
+    ):
+        assert token in output, token
+
+
+def test_menu_without_terminal_is_usage_error():
+    """`menu` must not fall back to defaults and start installing."""
+    r = sh("menu")
+    assert r.returncode == 2
+    assert "No terminal available" in r.stderr
+
+
+def test_logs_command_never_crashes():
+    r = sh("logs", "5")
+    assert r.returncode == 0

@@ -78,7 +78,7 @@ def test_refresh_endpoint_retired():
 
 
 def test_urlpath_middleware_blocks_non_matching():
-    """When URLPATH is set, non-matching paths get empty response.
+    """When URLPATH is set, non-matching paths get an empty 404.
     But /assets/ and /health are always allowed through."""
     from backend.urlpath import set_urlpath
 
@@ -90,9 +90,14 @@ def test_urlpath_middleware_blocks_non_matching():
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-        # Non-matching path: should get empty 200
+        # Non-matching path: empty 404 (looks like an ordinary empty site)
         response = client.get("/other-path")
-        assert response.status_code == 200
+        assert response.status_code == 404
+        assert response.content == b""
+
+        # The exact root is also a wrong address while a prefix is set.
+        response = client.get("/")
+        assert response.status_code == 404
         assert response.content == b""
 
         # /health without prefix is now allowed through (not blocked)

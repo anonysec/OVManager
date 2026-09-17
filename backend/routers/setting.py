@@ -54,10 +54,16 @@ async def get_settings(
         owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
         urlpath=urlpath,
     )
+    # Daily Telegram alert prefs. Kept out of the shared output schema (owned
+    # by another module) and merged here so the response stays backwards
+    # compatible: every previous field is unchanged, two are added.
+    data = settings.model_dump()
+    data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
+    data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
-        data=settings,
+        data=data,
     )
 
 
@@ -77,6 +83,9 @@ class BotConfigUpdate(BaseModel):
     default_traffic_gb: int | None = None
     default_max_users: int | None = None
     owner_telegram_id: int | None = None
+    # Daily Telegram alert categories (panel-sent, independent of bot polling).
+    notify_expiry: bool | None = None
+    notify_traffic: bool | None = None
 
 
 class URLPathUpdate(BaseModel):
@@ -148,10 +157,16 @@ async def update_bot_config(
             msg=str(exc) + ". Set BOT_ENCRYPT_KEY in your .env file before saving a bot token.",
             data=None,
         )
+    data = crud.get_bot_config(db)
+    # The alert prefs live on the same Settings row; add them to the payload
+    # so the UI can confirm the new values without a second request.
+    db_settings = crud.get_settings(db)
+    data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
+    data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
     return ResponseModel(
         success=True,
         msg="Bot config updated",
-        data=crud.get_bot_config(db),
+        data=data,
     )
 
 

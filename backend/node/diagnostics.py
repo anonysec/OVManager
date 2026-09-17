@@ -170,10 +170,12 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
             username = id_to_name.get(cn, cn)
             stale_counts[username] = stale_counts.get(username, 0) + 1
 
-        # Auth errors from journal
+        # Auth errors from journal — map CNs to usernames like the other
+        # counters, or the per-user "auth_events" column is always 0.
         for cn, count in (data.get("auth_errors_by_cn") or {}).items():
             if isinstance(count, int):
-                auth_counts[cn] = auth_counts.get(cn, 0) + count
+                username = id_to_name.get(str(cn), str(cn))
+                auth_counts[username] = auth_counts.get(username, 0) + count
 
         node_rows.append(
             {

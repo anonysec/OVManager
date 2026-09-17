@@ -1,0 +1,90 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Field primitive: label/hint/error chrome plus the shared `.ui-input`
+   control skin applied by Field or usable directly. */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ui-field-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  color: var(--text-secondary);
+}
+
+.ui-field-required {
+  margin-inline-start: 2px;
+  color: var(--danger-text);
+}
+
+.ui-field-control {
+  min-width: 0;
+}
+
+.ui-field-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+  color: var(--text-muted);
+}
+
+.ui-field-error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  color: var(--danger-text);
+}
+
+/* ── Shared control skin ────────────────────────────────────────────────── */
+
+.ui-input {
+  width: 100%;
+  min-height: var(--control-h-md);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ui-input::placeholder {
+  color: var(--text-muted);
+}
+
+.ui-input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.ui-input:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.ui-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-field--invalid .ui-input {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+.ui-field--invalid .ui-input:focus-visible {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}

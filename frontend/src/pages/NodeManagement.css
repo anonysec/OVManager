@@ -1,0 +1,265 @@
+/* Nodes page — stats, toolbar and the per-node list rows.
+   All values come from tokens.css so both themes and RTL need no overrides. */
+
+/* ── Page shell ──────────────────────────────────────────────────── */
+.nm-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding-bottom: var(--space-7);
+}
+
+.nm-page > .ui-page-header {
+  margin-bottom: 0;
+}
+
+.nm-meta {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.nm-meta strong {
+  color: var(--text-primary);
+}
+
+/* ── Stat tiles ──────────────────────────────────────────────────── */
+.nm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────── */
+.nm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nm-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.nm-search-icon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.nm-search-input {
+  padding-inline-start: 36px;
+}
+
+.nm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.nm-results {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.nm-results strong {
+  color: var(--text-primary);
+}
+
+.nm-clear {
+  margin-inline-start: var(--space-2);
+  padding: 4px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.nm-clear:hover {
+  background: var(--accent-soft);
+}
+
+.nm-clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+/* ── Node rows ───────────────────────────────────────────────────── */
+.nm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.nm-node {
+  overflow: hidden;
+}
+
+.nm-node-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.6fr) minmax(0, 1.4fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.nm-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nm-name {
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nm-name:hover {
+  color: var(--accent-text);
+}
+
+.nm-name:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.nm-sub {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+.nm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.nm-users {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.nm-users-value {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.nm-users-label {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.nm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+/* ── Loading placeholder ─────────────────────────────────────────── */
+.nm-node-skeleton {
+  padding: var(--space-4);
+}
+
+.nm-skel-line {
+  display: block;
+  width: 45%;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+  animation: nm-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes nm-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-skel-line {
+    animation: none;
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .nm-node-main {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'status identity users'
+      'chips chips actions';
+  }
+
+  .nm-node-main > .status-badge { grid-area: status; }
+  .nm-identity { grid-area: identity; }
+  .nm-chips { grid-area: chips; }
+  .nm-users { grid-area: users; }
+  .nm-actions { grid-area: actions; }
+}
+
+@media (max-width: 599.98px) {
+  .nm-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nm-search {
+    max-width: none;
+  }
+
+  .nm-results {
+    margin-inline-start: 0;
+  }
+
+  .nm-node-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'status'
+      'identity'
+      'chips'
+      'users'
+      'actions';
+  }
+
+  .nm-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}

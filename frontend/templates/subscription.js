@@ -10,7 +10,11 @@
                 if (rawContent.includes('{{') || rawContent === '') {
                     console.log("Template tags detected. Activating Preview Mode with Mock Data.");
                     document.getElementById('username').textContent = "User_12345";
-                    document.getElementById('expiry').textContent = "2025/12/30";
+                    document.getElementById('expiry').textContent = "2026/12/30";
+                    const daysEl = document.getElementById('days-left');
+                    if (daysEl) daysEl.textContent = "104";
+                    const totalEl = document.getElementById('total-traffic');
+                    if (totalEl) totalEl.textContent = "100.00 GB";
 
                     const statusWrapper = document.getElementById('template-status-wrapper');
                     if (statusWrapper) {
@@ -18,6 +22,16 @@
                         statusBadge.innerHTML = `<span class="status-dot"></span><span id="status-text">Active</span>`;
                         statusBadge.className = 'status-badge active';
                     }
+
+                    // Mock usage meter
+                    const pctEl = document.getElementById('usage-pct');
+                    if (pctEl) pctEl.textContent = "28%";
+                    const fillEl = document.getElementById('usage-fill');
+                    if (fillEl) fillEl.style.width = '28%';
+                    const usedEl = document.getElementById('usage-used');
+                    if (usedEl) usedEl.textContent = "28.00 GB";
+                    const usageTotalEl = document.getElementById('usage-total');
+                    if (usageTotalEl) usageTotalEl.textContent = "100.00 GB";
 
                     const linksList = document.getElementById('links-list');
                     if (linksList) {
@@ -147,21 +161,25 @@
 
             // --- 4. CORE UI FUNCTIONS ---
             function updateUI(lang, themePref) {
-                const dict = langData[lang];
-                document.getElementById('title').textContent = dict.title;
-                document.getElementById('brand-sub').textContent = dict.brandSub;
-                document.getElementById('username-label').textContent = dict.username;
-                document.getElementById('total-traffic-label').textContent = dict.totalTraffic;
-                document.getElementById('expiry-label').textContent = dict.expiry;
-                document.getElementById('days-left-label').textContent = dict.daysLeft;
-                document.getElementById('usage-label').textContent = dict.usage;
-                document.getElementById('links-label').textContent = dict.links;
-                const noLinksText = document.getElementById('no-links-text');
-                if (noLinksText) noLinksText.textContent = dict.noLinks;
-                document.getElementById('howto-title').textContent = dict.howtoTitle;
-                document.getElementById('howto-body').textContent = dict.howtoBody;
-                document.getElementById('client-text').textContent = dict.client;
-                document.getElementById('footer-note').textContent = dict.footer;
+                const dict = langData[lang] || langData.en;
+                const setText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                };
+
+                setText('title', dict.title);
+                setText('brand-sub', dict.brandSub);
+                setText('username-label', dict.username);
+                setText('total-traffic-label', dict.totalTraffic);
+                setText('expiry-label', dict.expiry);
+                setText('days-left-label', dict.daysLeft);
+                setText('usage-label', dict.usage);
+                setText('links-label', dict.links);
+                setText('no-links-text', dict.noLinks);
+                setText('howto-title', dict.howtoTitle);
+                setText('howto-body', dict.howtoBody);
+                setText('client-text', dict.client);
+                setText('footer-note', dict.footer);
                 // node subtitle on each card
                 document.querySelectorAll('.node-sub').forEach(el => el.textContent = dict.nodeSub);
 
@@ -195,13 +213,13 @@
                 document.querySelector(`[data-lang="${lang}"]`)?.classList.add('selected');
                 document.querySelector(`[data-theme="${themePref}"]`)?.classList.add('selected');
 
-                // Color the usage bar by level
+                // Color the usage bar by level (warn >= 75%, danger >= 90%).
                 const usageFill = document.getElementById('usage-fill');
                 const pctText = (document.getElementById('usage-pct')?.textContent || '').replace('%', '').trim();
-                if (usageFill && pctText && !isNaN(pctText)) {
-                    const p = parseInt(pctText, 10);
-                    usageFill.classList.toggle('warn', p >= 75 && p < 90);
-                    usageFill.classList.toggle('danger', p >= 90);
+                const pct = parseInt(pctText, 10);
+                if (usageFill) {
+                    usageFill.classList.toggle('warn', pct >= 75 && pct < 90);
+                    usageFill.classList.toggle('danger', pct >= 90);
                 }
 
                 localStorage.setItem('sub_lang', lang);
@@ -211,11 +229,15 @@
             // --- 5. DROPDOWN LOGIC ---
             function setupDropdown(id) {
                 const container = document.getElementById(id);
+                if (!container) return;
                 const btn = container.querySelector('.icon-btn');
                 btn.onclick = (e) => {
                     e.stopPropagation();
                     document.querySelectorAll('.dropdown').forEach(d => {
-                        if (d !== container) d.classList.remove('open');
+                        if (d !== container) {
+                            d.classList.remove('open');
+                            d.querySelector('.icon-btn')?.classList.remove('active');
+                        }
                     });
                     container.classList.toggle('open');
                     btn.classList.toggle('active');
@@ -227,7 +249,7 @@
             document.addEventListener('click', () => {
                 document.querySelectorAll('.dropdown').forEach(d => {
                     d.classList.remove('open');
-                    d.querySelector('.icon-btn').classList.remove('active');
+                    d.querySelector('.icon-btn')?.classList.remove('active');
                 });
             });
 

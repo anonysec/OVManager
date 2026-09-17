@@ -1,0 +1,185 @@
+/* Login — a single centered card. Everything is token-driven so both themes
+   and RTL work without overrides. The old split showcase lives in styles.css
+   (legacy) and is intentionally no longer used by this page. */
+
+.login-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-6);
+  background:
+    radial-gradient(circle at 50% 0%, var(--accent-soft), transparent 55%),
+    var(--bg);
+}
+
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: min(420px, 100%);
+  padding: var(--space-7);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.login-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+}
+
+.login-brand {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: -0.03em;
+  line-height: var(--line-height-tight);
+}
+
+.login-brand span {
+  color: var(--accent-text);
+}
+
+.login-card-subtitle {
+  margin: 0;
+  max-width: 30ch;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+/* The error area occupies its own row above the form, so submitting twice
+   never shifts the fields around. */
+.login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.login-error svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.login-password-wrap {
+  position: relative;
+}
+
+.login-password-input {
+  padding-inline-end: var(--space-8);
+}
+
+[dir="rtl"] .login-password-input {
+  padding-inline-end: var(--space-8);
+}
+
+.login-password-toggle {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.login-password-toggle:hover {
+  background: var(--surface-2);
+  color: var(--accent-text);
+}
+
+.login-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.login-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.login-features li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.login-features svg {
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+
+.login-footnotes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.login-footnote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.login-footnote-help {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+@media (max-width: 479.98px) {
+  .login-page {
+    padding: var(--space-4);
+  }
+
+  .login-card {
+    padding: var(--space-5);
+  }
+}

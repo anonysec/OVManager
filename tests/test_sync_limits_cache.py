@@ -94,6 +94,21 @@ def _run_sync():
         db.close()
 
 
+def _only_seeded_node(monkeypatch, node_id: int) -> None:
+    """Make the sweep see only this test's node (dev DBs accumulate rows)."""
+    from backend.db.engine import SessionLocal
+    from backend.db.models import Node
+
+    def _get_active(db_):
+        session = SessionLocal()
+        try:
+            return [session.query(Node).filter(Node.id == node_id).first()]
+        finally:
+            session.close()
+
+    monkeypatch.setattr(sync_mod.crud, "get_active_nodes", _get_active)
+
+
 def test_second_identical_sweep_pushes_nothing(monkeypatch):
     calls: list[tuple] = []
 
@@ -107,6 +122,7 @@ def test_second_identical_sweep_pushes_nothing(monkeypatch):
 
     monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()
+    _only_seeded_node(monkeypatch, node_id)
     try:
 
         def ours():
@@ -157,6 +173,7 @@ def test_failed_push_is_retried_next_sweep(monkeypatch):
     monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()
     target["uid"] = str(user_id)
+    _only_seeded_node(monkeypatch, node_id)
     try:
 
         def ours():

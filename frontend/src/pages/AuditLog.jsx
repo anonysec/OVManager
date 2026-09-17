@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
-import { FiActivity, FiRefreshCw, FiDownload, FiCopy, FiCheck } from 'react-icons/fi';
-import { fmtDateTime } from '../utils/time';
+import { FiActivity, FiRefreshCw, FiDownload, FiCopy, FiCheck, FiFilter } from 'react-icons/fi';
+import { fmtDateTime, fmtRelative } from '../utils/time';
 import { copyText } from '../utils/clipboard';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
@@ -10,16 +10,27 @@ import EmptyState from '../components/ui/EmptyState';
 import ErrorState from '../components/ui/ErrorState';
 import DataTable from '../components/ui/DataTable';
 import Modal from '../components/Modal';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import './AuditLog.css';
 
-const ACTION_COLORS = {
-  'user.create': 'ok', 'user.delete': 'danger', 'user.update': 'info',
-  'user.status': 'info', 'user.disconnect': 'warn', 'user.reset': 'info',
-  'user.extend': 'ok', 'user.restore': 'ok',
-  'node.create': 'ok', 'node.delete': 'danger', 'node.update': 'info',
-  'maintenance.backup': 'info', 'maintenance.restore': 'warn',
+// Tone per action root. Unknown actions fall back to neutral.
+const ACTION_TONES = {
+  user: 'info', node: 'accent', admin: 'warning',
+  maintenance: 'warning', auth: 'danger', security: 'danger',
 };
 
+const toneForAction = (action) => ACTION_TONES[String(action || '').split('.')[0]] || 'neutral';
+
 const PAGE_SIZE_KEY = 'ovmanager-ui-audit-pagesize';
+
+const TIME_RANGES = [
+  { id: 'all', seconds: 0 },
+  { id: '1h', seconds: 3600 },
+  { id: '24h', seconds: 86400 },
+  { id: '7d', seconds: 604800 },
+  { id: '30d', seconds: 2592000 },
+];
 
 const fmtDetail = (d) => {
   if (d == null || d === '') return '—';
@@ -28,18 +39,23 @@ const fmtDetail = (d) => {
 };
 
 const AuditLog = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { addToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [actorFilter, setActorFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
   const [sort, setSort] = useState({ key: 'ts', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
   const [detailEvent, setDetailEvent] = useState(null);
   const [copied, setCopied] = useState(false);
+  // Wall-clock seconds, updated on an interval. Kept in state so relative
+  // times and the time-range filter never call Date.now() during render.
+  const [nowTs, setNowTs] = useState(0);
 
   const load = useCallback(async ({ background = false } = {}) => {
     if (!background) { setLoading(true); setError(''); }
@@ -64,30 +80,78 @@ const AuditLog = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const update = () => setNowTs(Math.floor(Date.now() / 1000));
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, []);
+
   const { subscribe } = useLive();
   useEffect(() => {
     const u = subscribe('tick', () => {});
     return () => u();
   }, [subscribe]);
 
-  const actionKinds = useMemo(() => {
-    const kinds = new Map();
-    for (const e of events) {
-      const root = String(e.action || '').split('.')[0] || 'other';
-      kinds.set(root, (kinds.get(root) || 0) + 1);
-    }
-    return [...kinds.entries()].sort((a, b) => b[1] - a[1]);
+  // Localized "3h ago" via Intl (falls back to the shared English helper).
+  const relative = useMemo(() => {
+    let rtf;
+    try { rtf = new Intl.RelativeTimeFormat(i18n.language || 'en', { numeric: 'auto' }); } catch { rtf = null; }
+    return (ts, now) => {
+      if (!ts) return '—';
+      // `now` is 0 until the first effect pass — fall back to the shared
+      // helper so the very first paint cannot show a nonsense distance.
+      if (!rtf || !now) return fmtRelative(new Date(Number(ts) * 1000).toISOString());
+      const diff = Math.round(Number(ts) - now);
+      const abs = Math.abs(diff);
+      if (abs < 45) return rtf.format(0, 'second');
+      if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
+      if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+      if (abs < 604800) return rtf.format(Math.round(diff / 86400), 'day');
+      if (abs < 2592000) return rtf.format(Math.round(diff / 604800), 'week');
+      if (abs < 31536000) return rtf.format(Math.round(diff / 2592000), 'month');
+      return rtf.format(Math.round(diff / 31536000), 'year');
+    };
+  }, [i18n.language]);
+
+  const actors = useMemo(() => {
+    const set = new Set();
+    for (const e of events) set.add(e.actor || 'system');
+    return [...set].sort((a, b) => a.localeCompare(b));
   }, [events]);
+
+  const actions = useMemo(() => {
+    const counts = new Map();
+    for (const e of events) {
+      const key = String(e.action || 'unknown');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [events]);
+
+  const filtersActive = query !== '' || actorFilter !== 'all' || actionFilter !== 'all' || timeFilter !== 'all';
+
+  const clearFilters = () => {
+    setQuery('');
+    setActorFilter('all');
+    setActionFilter('all');
+    setTimeFilter('all');
+    setPage(1);
+  };
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const range = TIME_RANGES.find((r) => r.id === timeFilter);
+    const cutoff = range && range.seconds && nowTs ? nowTs - range.seconds : 0;
     return events.filter((e) => {
-      if (actionFilter !== 'all' && !String(e.action || '').startsWith(actionFilter)) return false;
+      if (actionFilter !== 'all' && String(e.action || '') !== actionFilter) return false;
+      if (actorFilter !== 'all' && (e.actor || 'system') !== actorFilter) return false;
+      if (cutoff && Number(e.ts || 0) < cutoff) return false;
       if (!q) return true;
       const hay = `${e.actor || ''} ${e.action || ''} ${e.target || ''} ${fmtDetail(e.detail)}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [events, query, actionFilter]);
+  }, [events, query, actorFilter, actionFilter, timeFilter, nowTs]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -148,7 +212,15 @@ const AuditLog = () => {
   const columns = useMemo(() => [
     {
       key: 'ts', label: t('th_lastOnline', 'Time'), sortable: true,
-      render: (e) => <span className="dt-num">{e.ts ? fmtDateTime(new Date(e.ts * 1000).toISOString()) : '—'}</span>,
+      render: (e) => {
+        const iso = e.ts ? new Date(e.ts * 1000).toISOString() : '';
+        return (
+          <span className="adt-time" title={fmtDateTime(iso)}>
+            <span className="adt-time-rel">{relative(e.ts, nowTs)}</span>
+            <span className="adt-time-abs">{fmtDateTime(iso)}</span>
+          </span>
+        );
+      },
     },
     {
       key: 'actor', label: t('th_admin', 'Actor'), sortable: true,
@@ -161,7 +233,7 @@ const AuditLog = () => {
     },
     {
       key: 'action', label: t('status', 'Action'), sortable: true,
-      render: (e) => <span className={`status-pill ${ACTION_COLORS[e.action] || 'muted'}`}>{e.action}</span>,
+      render: (e) => <Badge tone={toneForAction(e.action)}>{e.action || '—'}</Badge>,
     },
     {
       key: 'target', label: t('user', 'Target'), sortable: true, hideOnMobile: true,
@@ -171,30 +243,42 @@ const AuditLog = () => {
       key: 'detail', label: t('node', 'Detail'), hideOnMobile: true,
       render: (e) => (
         <button type="button" className="dt-rowlink" onClick={() => setDetailEvent(e)} title={t('viewDetails', 'View details')}>
-          <span className="dt-cell-sub" style={{ display: 'block', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="dt-cell-sub adt-detail">
             {fmtDetail(e.detail)}
           </span>
         </button>
       ),
     },
-  ], [t]);
+  ], [t, relative, nowTs]);
 
   return (
-    <div id="audit-view" className="view">
-      <div className="view-header">
-        <h2><FiActivity aria-hidden="true" /> {t('navAudit', 'Audit Log')}</h2>
-        <div className="view-header-actions">
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleExportCsv} disabled={filtered.length === 0}>
-            <FiDownload size={13} aria-hidden="true" /> {t('exportCsv', 'CSV')}
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => load()} title={t('refresh', 'Refresh')}>
-            <FiRefreshCw size={13} aria-hidden="true" /> {t('refresh', 'Refresh')}
-          </button>
+    <div id="audit-view" className="view adt-page">
+      <div className="adt-head">
+        <div>
+          <h2 className="adt-title"><FiActivity aria-hidden="true" /> {t('navAudit', 'Audit Log')}</h2>
+          <p className="adt-subtitle">{t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}</p>
+        </div>
+        <div className="adt-head-actions">
+          <Button
+            variant="secondary" size="sm"
+            icon={<FiDownload size={13} aria-hidden="true" />}
+            onClick={handleExportCsv}
+            disabled={filtered.length === 0}
+          >
+            {t('exportCsv', 'CSV')}
+          </Button>
+          <Button
+            variant="secondary" size="sm"
+            icon={<FiRefreshCw size={13} aria-hidden="true" />}
+            onClick={() => load()}
+          >
+            {t('refresh', 'Refresh')}
+          </Button>
         </div>
       </div>
 
-      <div className="search-with-filters">
-        <label className="search-field" style={{ flex: 1, maxWidth: 320 }}>
+      <div className="adt-filters">
+        <label className="search-field adt-search">
           <input
             type="search"
             className="search-input"
@@ -204,28 +288,60 @@ const AuditLog = () => {
             aria-label={t('auditSearch', 'Search audit log')}
           />
         </label>
+
+        <label className="adt-filter">
+          <span className="adt-filter-label">{t('auditActorFilter', 'Actor')}</span>
+          <select
+            className="ui-input adt-select"
+            value={actorFilter}
+            onChange={(e) => { setActorFilter(e.target.value); setPage(1); }}
+          >
+            <option value="all">{t('auditAllActors', 'All actors')}</option>
+            {actors.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </label>
+
+        <label className="adt-filter">
+          <span className="adt-filter-label">{t('auditActionFilter', 'Action')}</span>
+          <select
+            className="ui-input adt-select"
+            value={actionFilter}
+            onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
+          >
+            <option value="all">{t('auditAllActions', 'All actions')}</option>
+            {actions.map(([action, count]) => (
+              <option key={action} value={action}>{action} ({count})</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="adt-filter">
+          <span className="adt-filter-label">{t('auditTimeFilter', 'Time range')}</span>
+          <select
+            className="ui-input adt-select"
+            value={timeFilter}
+            onChange={(e) => { setTimeFilter(e.target.value); setPage(1); }}
+          >
+            {TIME_RANGES.map((r) => (
+              <option key={r.id} value={r.id}>
+                {t(`auditTime_${r.id}`, {
+                  all: 'All time', '1h': 'Last hour', '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days',
+                }[r.id])}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="results-meta" aria-live="polite">
+          <FiFilter aria-hidden="true" />
           <strong>{filtered.length}</strong> {t('results', 'results')}
-          {(query || actionFilter !== 'all') && (
-            <button type="button" className="toolbar-clear" onClick={() => { setQuery(''); setActionFilter('all'); setPage(1); }}>
+          {filtersActive && (
+            <button type="button" className="toolbar-clear" onClick={clearFilters}>
               {t('clear', 'Clear')}
             </button>
           )}
         </div>
       </div>
-
-      {actionKinds.length > 1 && (
-        <div className="user-filter-chips" role="group" aria-label={t('filterByAction', 'Filter by action')}>
-          <button type="button" className={`filter-chip${actionFilter === 'all' ? ' active' : ''}`} aria-pressed={actionFilter === 'all'} onClick={() => { setActionFilter('all'); setPage(1); }}>
-            {t('filterAll', 'All')} <span className="count">{events.length}</span>
-          </button>
-          {actionKinds.map(([kind, count]) => (
-            <button key={kind} type="button" className={`filter-chip${actionFilter === kind ? ' active' : ''}`} aria-pressed={actionFilter === kind} onClick={() => { setActionFilter(kind); setPage(1); }}>
-              {kind} <span className="count">{count}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {loading ? (
         <DataTable columns={columns} rows={[]} loading />
@@ -241,7 +357,7 @@ const AuditLog = () => {
           title={t('noMatchesTitle', 'No matching entries')}
           description={t('noMatchesBody', 'Try a different search term or clear the active filter.')}
           actionLabel={t('clearFilters', 'Clear filters')}
-          onAction={() => { setQuery(''); setActionFilter('all'); }}
+          onAction={clearFilters}
         />
       ) : (
         <DataTable

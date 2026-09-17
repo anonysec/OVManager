@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field, field_validator
 
 class CreateUser(BaseModel):
     name: str = Field(min_length=3, max_length=64)
-    total: int | None = None
-    used: int | None = None
+    total: int | None = Field(default=None, ge=0, le=2**60)
+    used: int | None = Field(default=None, ge=0, le=2**60)
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: int = Field(default=1, ge=0, le=1000)
     # Optional: omitted → today + Settings.default_days (crud.create_user).
@@ -19,8 +19,8 @@ class CreateUser(BaseModel):
 
 class UpdateUser(BaseModel):
     name: str
-    total: int | None = None
-    used: int | None = None
+    total: int | None = Field(default=None, ge=0, le=2**60)
+    used: int | None = Field(default=None, ge=0, le=2**60)
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
     max_logins: int | None = Field(default=None, ge=0, le=1000)
     # `date | None` with no default is REQUIRED in Pydantic v2 (Optional does
@@ -75,4 +75,8 @@ class AdminUpdate(BaseModel):
 
 class StatusToggle(BaseModel):
     name: str
+    status: bool
+
+
+class AdminStatusUpdate(BaseModel):
     status: bool

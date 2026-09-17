@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 import time
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 # Set to True once the table has been confirmed to exist, so log_event()
 # does not call CREATE TABLE IF NOT EXISTS on every write.
@@ -46,6 +49,15 @@ def log_event(db, action, actor=None, target=None, detail=None):
             {"ts": time.time(), "actor": actor, "action": action, "target": target, "detail": detail},
         )
         db.commit()
+    except Exception:
+        # Audit is best-effort: a failed insert must never turn an action that
+        # already succeeded into a 500 for the client, and must not leave the
+        # caller's transaction poisoned.
+        logger.exception("Could not write audit event %s", action)
+        try:
+            db.rollback()
+        except Exception:
+            logger.debug("Audit rollback failed", exc_info=True)
     finally:
         if created:
             db.close()

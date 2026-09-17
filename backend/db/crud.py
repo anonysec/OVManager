@@ -255,6 +255,21 @@ def create_user(db: Session, request: CreateUser, owner: str):
     return new_user
 
 
+def activation_blocked(user: User) -> str | None:
+    """Reason this user must not be active, or None when activation is fine.
+
+    An expired or out-of-traffic account must never be active, even when an
+    admin flips the status switch on; both the edit form and the status
+    endpoint share this rule so they cannot disagree.
+    """
+    used = user.used or 0
+    if user.expiry_date and user.expiry_date < datetime.now(UTC).date():
+        return "expired"
+    if user.total is not None and user.total <= used:
+        return "out of traffic"
+    return None
+
+
 def update_user(db: Session, uuid: str, request: UpdateUser):
     user = db.query(User).filter(User.uuid == uuid).first()
     if not user:
@@ -286,15 +301,11 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
 
     # Evaluate the activation guards against the POST-UPDATE row, not the
     # request: with partial updates the request may not carry these fields.
-    used = user.used or 0
-    # total=None means unlimited traffic, so it is never "exceeded".
-    not_expired = user.expiry_date >= datetime.now(UTC).date() if user.expiry_date else True
-    has_traffic = user.total is None or user.total > used
     # Manual status (from the edit modal checkbox) wins, but expiry/traffic
     # violations still force-disable: an expired or out-of-traffic account
     # must never be active even if the admin flipped the switch on.
     requested_status = user.is_active if request.status is None else bool(request.status)
-    user.is_active = requested_status and not_expired and has_traffic
+    user.is_active = requested_status and activation_blocked(user) is None
 
     db.commit()
     db.refresh(user)
@@ -509,6 +520,11 @@ def restore_user(db: Session, snapshot: dict):
         uuid=snapshot.get("uuid") or str(uuid4()),
         total=snapshot.get("total"),
         used=snapshot.get("used"),
+        # Restore the per-node traffic baselines too: without them the next
+        # collector poll rebaselines to the node's current counters and any
+        # traffic consumed between delete and undo is never billed.
+        node_usage=snapshot.get("node_usage") or "{}",
+        last_node_usage=int(snapshot.get("last_node_usage") or 0),
         max_logins=int(snapshot.get("max_logins") or 1),
         expiry_date=expiry,
         is_active=bool(snapshot.get("is_active", True)),
@@ -518,9 +534,13 @@ def restore_user(db: Session, snapshot: dict):
     try:
         db.commit()
         db.refresh(new_user)
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise ConflictError("User", "name", snapshot["name"]) from None
+        # Only a duplicate name is a real conflict; anything else (e.g. a
+        # corrupt snapshot) must not masquerade as "already exists".
+        if "users.name" in str(exc):
+            raise ConflictError("User", "name", snapshot["name"]) from None
+        raise ValidationError("user", f"could not restore user: {exc}") from None
     return new_user
 
 

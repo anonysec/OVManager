@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -97,13 +97,33 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # During a database restore the file on disk is being swapped: reject
+        # writes (503) so in-flight sessions cannot commit to the unlinked old
+        # file. Reads stay available for the UI's progress polling.
+        from backend.db.engine import restore_lock
+
+        if restore_lock.is_set() and scope.get("method", "GET") not in ("GET", "HEAD", "OPTIONS"):
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 503,
+                    "headers": [
+                        [b"content-type", b"application/json"],
+                        [b"retry-after", b"5"],
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": b'{"success":false,"msg":"Database restore in progress"}'})
+            return
+
         # HSTS is meaningful only on HTTPS. Trust the forwarded proto only when
-        # the deployment explicitly trusts its reverse proxy.
+        # the deployment explicitly trusts its reverse proxy — and only the
+        # rightmost hop (the one the proxy appended; earlier ones are spoofable).
         is_https = scope.get("scheme") == "https"
         if not is_https and config.TRUSTED_PROXY:
             for key, value in scope.get("headers") or ():
                 if key == b"x-forwarded-proto":
-                    is_https = value.lower() == b"https"
+                    is_https = value.split(b",")[-1].strip().lower() == b"https"
                     break
 
         extra: list[list[bytes]] = [
@@ -221,6 +241,14 @@ async def lifespan(app: FastAPI):
     _db = _SL()
     try:
         ensure_audit_table(_db)
+        # Create the operations-owned tables once at startup: the traffic
+        # collector must never run DDL (and its implicit commit) in the middle
+        # of a billing transaction.
+        from backend.operations.metrics import ensure_metrics_tables
+        from backend.operations.usage_history import ensure_daily_table
+
+        ensure_daily_table(_db)
+        ensure_metrics_tables(_db)
     finally:
         _db.close()
     start_scheduler()
@@ -294,8 +322,15 @@ api.add_middleware(
 
 # ── Health check (always at /health — hidden by middleware when URLPATH set) ─
 @api.get("/health", tags=["Health"])
-async def health_check():
-    return {"status": "ok", "version": __version__}
+async def health_check(request: Request):
+    # The version is only reported to loopback callers (installer, Docker
+    # healthcheck, `install.sh status`). Unauthenticated internet scanners get
+    # a plain "ok" without a version fingerprint.
+    client = request.client.host if request.client else ""
+    data: dict = {"status": "ok"}
+    if client in ("127.0.0.1", "::1", "localhost"):
+        data["version"] = __version__
+    return data
 
 
 # ── Frontend static assets ────────────────────────────────────────
@@ -310,6 +345,41 @@ mimetypes.add_type("application/json", ".json")
 
 if os.path.isdir(assets_path):
     api.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+# PWA files: manifest + icons + service worker. They live at well-known
+# root paths so the browser can find them regardless of the panel prefix;
+# the URLPATH middleware whitelists them too.
+_icons_path = os.path.join(frontend_build_path, "icons")
+if os.path.isdir(_icons_path):
+    api.mount("/icons", StaticFiles(directory=_icons_path), name="icons")
+
+
+@api.get("/manifest.webmanifest", include_in_schema=False)
+async def pwa_manifest():
+    path = os.path.join(frontend_build_path, "manifest.webmanifest")
+    if not os.path.isfile(path):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    return FileResponse(
+        path,
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@api.get("/sw.js", include_in_schema=False)
+async def pwa_service_worker():
+    """Served with no-cache so a new build's service worker is picked up."""
+    path = os.path.join(frontend_build_path, "sw.js")
+    if not os.path.isfile(path):
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    return FileResponse(
+        path,
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        },
+    )
 
 
 # ── Background jobs ───────────────────────────────────────────────
@@ -327,6 +397,15 @@ async def auto_clean_stale_job():
         await clean_stale_sessions_all_nodes(db)
     finally:
         db.close()
+
+
+async def auto_daily_alerts_job():
+    """Push the daily expiring/out-of-traffic summary to the owner once a day."""
+    from backend.operations.notifier import run_daily_alerts
+
+    # Sync job: run off the event loop so the blocking HTTPS call cannot
+    # stall request handling (same pattern as the audit prune below).
+    await asyncio.to_thread(run_daily_alerts)
 
 
 async def auto_prune_audit_job():
@@ -391,6 +470,13 @@ def start_scheduler():
         id="prune_audit_logs",
         replace_existing=True,
         misfire_grace_time=300,
+    )
+    scheduler.add_job(
+        auto_daily_alerts_job,
+        CronTrigger(hour=9, minute=15),
+        id="daily_alerts",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
     # Live collector: single poller for all nodes. Request handlers and SSE
     # subscribers use its in-memory snapshot instead of fanning out to nodes.

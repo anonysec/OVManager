@@ -8,14 +8,15 @@ creating, activating/deactivating, deleting users, and downloading configs.
 """
 
 import asyncio
-import io
 import time
 import zipfile
+from tempfile import SpooledTemporaryFile
 from zipfile import ZIP_DEFLATED
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from backend.db import crud
 from backend.logger import logger
@@ -23,10 +24,38 @@ from backend.node.requests import NodeRequests, node_client
 from backend.operations.geolocation import geolocate
 from backend.schema._input import NodeCreate
 
+# Cap on concurrent per-node threadpool jobs for every fan-out below. A batch
+# of 300 users × N nodes would otherwise queue thousands of jobs and starve
+# unrelated requests on the AnyIO threadpool; 20 matches the sync.py sweep.
+# asyncio primitives bind to the loop that first contends on them, so
+# _fanout_semaphore() swaps in a fresh instance for a new loop (tests run one
+# loop per case via asyncio.run).
+NODE_FANOUT_LIMIT = 20
+_node_fanout_semaphore = asyncio.Semaphore(NODE_FANOUT_LIMIT)
+_node_fanout_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _fanout_semaphore() -> asyncio.Semaphore:
+    """Return the fan-out semaphore for the running event loop."""
+    global _node_fanout_semaphore, _node_fanout_loop
+    loop = asyncio.get_running_loop()
+    if _node_fanout_loop is not loop:
+        _node_fanout_semaphore = asyncio.Semaphore(NODE_FANOUT_LIMIT)
+        _node_fanout_loop = loop
+    return _node_fanout_semaphore
+
+
+async def _run_bounded(fn, *args):
+    """Run one blocking node call in the threadpool under the fan-out cap."""
+    async with _fanout_semaphore():
+        return await run_in_threadpool(fn, *args)
+
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     """Add a new node: validate connectivity, geolocate, persist to DB."""
-    geo = geolocate(request.address)
+    # Geolocation does blocking DNS + HTTP (up to ~10s): run it in the
+    # threadpool so a slow lookup cannot stall every other request.
+    geo = await run_in_threadpool(geolocate, request.address)
     if not request.use_tls:
         logger.warning(
             "Node %s added without TLS — API key and traffic cross the network in cleartext. "
@@ -80,7 +109,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     if not existing:
         return False, "Node not found"
 
-    geo = geolocate(request.address)
+    geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or crud.decrypt_node_key(existing.key)
 
     # Persist first — this is the source of truth for the panel.
@@ -205,19 +234,31 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(run_in_threadpool(nr.create_user, name, max_logins, uid))
+        tasks.append(_run_bounded(nr.create_user, name, max_logins, uid))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
 
-async def change_user_status_on_all_nodes(user_id: int, name: str, status: bool, db: Session, max_logins: int = None) -> bool:
-    """Toggle user status on every active node. Uses numeric user ID."""
-    nodes = crud.get_active_nodes(db)
+async def change_user_status_on_all_nodes(
+    user_id: int,
+    name: str,
+    status: bool,
+    db: Session,
+    max_logins: int = None,
+    nodes: list | None = None,
+) -> bool:
+    """Toggle user status on every active node. Uses numeric user ID.
+
+    ``nodes`` lets a sweep that already loaded the active list (e.g.
+    enforce_user_limits) pass it in once instead of re-querying per user.
+    ``None`` keeps the old behavior: query here.
+    """
+    nodes = crud.get_active_nodes(db) if nodes is None else nodes
     uid = str(user_id)
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(run_in_threadpool(nr.change_user_status, name, status, max_logins, uid))
+        tasks.append(_run_bounded(nr.change_user_status, name, status, max_logins, uid))
     if not tasks:
         return True
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -231,7 +272,7 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(run_in_threadpool(nr.set_user_limit, uid, int(max_logins or 0)))
+        tasks.append(_run_bounded(nr.set_user_limit, uid, int(max_logins or 0)))
     if not tasks:
         return True
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -257,7 +298,9 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     users = crud.get_all_users(db)
     nr = node_client(node)
 
-    buf = io.BytesIO()
+    # Spool to disk past 8 MB so a node with thousands of users cannot pin
+    # the whole archive in memory on a small VPS.
+    buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
         for user in users:
             # Use download_ovpn_bytes() which returns raw bytes — avoids
@@ -271,6 +314,7 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
         buf,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{node.name}_all_clients.zip"'},
+        background=BackgroundTask(buf.close),
     )
 
 
@@ -289,7 +333,7 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(run_in_threadpool(nr.delete_user, str(user_id)))
+        tasks.append(_run_bounded(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
     return {"ok": not failed, "failed": failed}
@@ -309,7 +353,7 @@ async def reset_user_usage_on_all_nodes(user_id: int, db: Session) -> dict:
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(run_in_threadpool(nr.reset_usage, str(user_id)))
+        tasks.append(_run_bounded(nr.reset_usage, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
     return {"ok": not failed, "failed": failed}

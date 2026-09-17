@@ -36,6 +36,7 @@ _MENU_KEYS = {
     "btn_nodes": "nodes",
     "btn_cancel": "cancel",
     "btn_language": "language",
+    "btn_settings": "settings",
 }
 
 _prefs: dict[str, str] = {}

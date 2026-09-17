@@ -3,8 +3,8 @@
 ## I lost my panel URL (the `/random-path/` part)
 
 The panel hides behind a secret path; requests without it get an empty
-reply (not even a 404) — that is normal, not a crash. Recover with shell
-access (native install):
+404 page — that is normal, not a crash. Recover with shell access
+(native install):
 
 ```bash
 cd /opt/ovmanager && sudo uv run main.py --reset-urlpath
@@ -14,16 +14,46 @@ The panel is served at `/` again. Set a new path in
 **Settings → General → Panel URL Path** (tick “I saved the new URL” —
 the page redirects you to it). Docker: run the same command inside the
 container (`docker exec -it ovmanager …`) or check the installer output /
-`install.sh status`.
+`install.sh status`. Lost the owner password too? `reset-password` (below)
+sets a new one — it does not change or reveal the URL.
+
+## I forgot the owner password
+
+The owner password lives in `/opt/ovmanager/.env` (`ADMIN_PASSWORD=`) and is
+read at startup. With shell access, the installer resets it — data is
+untouched and every other `.env` line is preserved:
+
+```bash
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
+```
+
+It asks for the new password twice (hidden input, ≥ 12 characters), updates
+only that line, keeps the file `0600`, restarts the panel and waits for
+`/health`. Scripts and AI skip the prompts:
+
+```bash
+bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password --admin-pass 'new-long-password'
+# or: OVM_ADMIN_PASS='new-long-password' bash install.sh reset-password
+```
+
+Docker installs work the same way — the command finds and restarts the
+container. Placeholder-looking passwords (`change-me`, `changeme`, …) are
+refused, exactly like the panel.
+
+## The panel is down / I need server-side actions
+
+Run `ovmanager` (alias `ovm`) on the server. The menu covers status, start /
+stop / restart, logs, backup, update, TLS and recovery — all without the
+web UI. For scripts: `ovmanager status`, `ovmanager logs 200`,
+`ovmanager restart`, `ovmanager backup`.
 
 ## Login fails with “username or password is incorrect”
 
 * Caps lock / trailing space in the password. Passwords are case-sensitive.
 * 5 wrong tries in 5 minutes locks that username for 5 minutes (per-IP and
   per-user limits). Wait and retry — a restart does **not** clear it.
-* Still stuck and you have shell access? Re-run the installer `update`
-  path or reset the owner password in `.env` (`/opt/ovmanager/.env`,
-  `ADMIN_PASSWORD=…`, then restart the service/container).
+* Still stuck and you have shell access? Use the `reset-password` command —
+  see [I forgot the owner password](#i-forgot-the-owner-password) above.
 
 ## Browser warns about the certificate
 

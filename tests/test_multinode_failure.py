@@ -99,8 +99,21 @@ def test_list_users_survives_dead_node(dead_node_and_user):
         assert user_name in names
 
 
-def test_delete_names_unreachable_node_but_succeeds(dead_node_and_user):
+def test_delete_names_unreachable_node_but_succeeds(dead_node_and_user, monkeypatch):
     node_name, _, uuid = dead_node_and_user
+    # Isolate the fan-out from other node rows in the shared dev DB: the test
+    # asserts the exact failed-node list.
+    from backend.db.engine import SessionLocal
+    from backend.db.models import Node
+
+    def _only_dead(_db):
+        session = SessionLocal()
+        try:
+            return [session.query(Node).filter(Node.name == node_name).first()]
+        finally:
+            session.close()
+
+    monkeypatch.setattr("backend.node.ops.crud.get_active_nodes", _only_dead)
     with TestClient(api) as client:
         r = client.delete(f"/api/users/{uuid}", headers=_owner_headers())
         assert r.status_code == 200

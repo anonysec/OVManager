@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import LoadingButton from './LoadingButton';
+import { FiPlus, FiZap } from 'react-icons/fi';
 import Modal from './Modal';
+import { Button, Field } from './ui';
 
 const bytesFromGB = (value) => {
   const cleaned = value?.toString().trim();
@@ -30,14 +31,22 @@ const parseError = (err, fallback) => {
   return detail || fallback;
 };
 
+const defaultExpiryDate = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d.toISOString().split('T')[0];
+};
+
+const DATE_SHORTCUTS = [['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]];
+
 // Unified add/edit user form. mode="create" (user=null) or mode="edit".
-// Replaces AddUserModal + EditUserModal, which shared bytes/date/logins
-// widgets and error parsing. Create-only: editable name + suggest flow.
-// Edit-only: name shown disabled, fields prefilled from the user row.
+// Fields are grouped into Account / Validity / Limits so the form reads as
+// three small decisions instead of one long column. Create defaults to a
+// 30-day expiry and a single device, both one click away from any value.
 const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
   const isEdit = !!user;
   const [name, setName] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
+  const [expiryDate, setExpiryDate] = useState(defaultExpiryDate);
   const [totalTraffic, setTotalTraffic] = useState('');
   const [maxLogins, setMaxLogins] = useState('1');
   const [error, setError] = useState('');
@@ -58,9 +67,14 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
       setMaxLogins(user.max_logins === null || user.max_logins === undefined ? '1' : user.max_logins.toString());
       setError('');
     } else if (!isEdit && isOpen) {
+      setName('');
+      setExpiryDate(defaultExpiryDate());
+      setTotalTraffic('');
+      setMaxLogins('1');
+      setSuggest('');
       setError('');
     }
-  }, [user, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, isOpen, isEdit]);
 
   const fetchSuggest = async () => {
     setSuggestLoading(true);
@@ -86,7 +100,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
     if (value) setName(value);
   };
 
-  const reset = () => { setName(''); setExpiryDate(''); setTotalTraffic(''); setMaxLogins('1'); setError(''); setSuggest(''); };
+  const reset = () => { setName(''); setExpiryDate(defaultExpiryDate()); setTotalTraffic(''); setMaxLogins('1'); setError(''); setSuggest(''); };
 
   const handleClose = () => {
     if (!isEdit) reset();
@@ -121,8 +135,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
     }
   };
 
-  const idp = (s) => `${isEdit ? 'edit-user' : 'new-user'}-${s}`;
-
   return (
     <Modal
       isOpen={isOpen}
@@ -130,104 +142,117 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
       title={isEdit ? `${t('modal_editUserTitle', 'Edit User')} — ${user?.name || ''}` : t('modal_createUserTitle')}
       size="medium"
     >
-      <form onSubmit={handleSubmit} className="modal-form">
-        <div className="input-group">
-          <label htmlFor={`${idp('name')}`}>{t('username')}</label>
-          {isEdit ? (
-            <input type="text" id={`${idp('name')}`} value={user?.name || ''} disabled />
-          ) : (
-            <>
-              <div className="shortcut-row">
-                <input
-                  type="text"
-                  id={`${idp('name')}`}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required minLength="3" maxLength="64"
-                  autoFocus
-                  aria-invalid={Boolean(error)}
-                  aria-describedby={error ? `${idp('error')} ${idp('name-hint')}` : `${idp('name-hint')}`}
-                  className="shortcut-input"
-                />
-                <div className="shortcut-btns">
-                  <button
-                    type="button"
-                    className="shortcut-chip"
-                    disabled={suggestLoading}
-                    onClick={handleSuggest}
-                    onMouseEnter={() => { if (!suggest && isOpen) fetchSuggest(); }}
-                    onFocus={() => { if (!suggest) fetchSuggest(); }}
-                    title={t('suggestUsername', 'Suggest next username')}
-                  >
-                    {suggestLoading ? '…' : (suggest ? `${t('suggest', 'Suggest')}: ${suggest}` : t('suggest', 'Suggest'))}
-                  </button>
-                </div>
-              </div>
-              <small id={`${idp('name-hint')}`} className="input-hint">{t('usernameHint', '3–64 characters.')}</small>
-            </>
+      <form onSubmit={handleSubmit} className="uf-form">
+        <fieldset className="uf-section">
+          <legend className="uf-legend">{t('formSectionAccount', 'Account')}</legend>
+          <div className="ui-field">
+            <label className="ui-field-label" htmlFor="uf-username">
+              {t('username')}
+              {!isEdit && <span className="ui-field-required" aria-hidden="true">*</span>}
+            </label>
+            <div className="ui-field-control uf-name-row">
+              <input
+                id="uf-username"
+                className="ui-input"
+                type="text"
+                value={isEdit ? (user?.name || '') : name}
+                onChange={(e) => setName(e.target.value)}
+                required={!isEdit}
+                minLength={isEdit ? undefined : 3}
+                maxLength={64}
+                autoFocus={!isEdit}
+                disabled={isEdit}
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={!isEdit ? 'uf-username-hint' : undefined}
+              />
+              {!isEdit && (
+                <Button
+                  variant="secondary"
+                  onClick={handleSuggest}
+                  loading={suggestLoading}
+                  icon={<FiZap size={14} aria-hidden="true" />}
+                  title={t('suggestUsername', 'Suggest next username')}
+                  className="uf-suggest"
+                  onMouseEnter={() => { if (!suggest && isOpen) fetchSuggest(); }}
+                  onFocus={() => { if (!suggest) fetchSuggest(); }}
+                >
+                  {suggest ? `${t('suggest', 'Suggest')}: ${suggest}` : t('suggest', 'Suggest')}
+                </Button>
+              )}
+            </div>
+            {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameHint', '3–64 characters.')}</p>}
+          </div>
+          {!isEdit && (
+            <p className="uf-note">{t('createUserDefaults', 'New users start with 30 days and 1 device — change anything below.')}</p>
           )}
-        </div>
-        <div className="input-group">
-          <label htmlFor={`${idp('expiry')}`}>{t('modal_expiryDate')}</label>
-          <div className="date-input-wrap">
+        </fieldset>
+
+        <fieldset className="uf-section">
+          <legend className="uf-legend">{t('formSectionValidity', 'Validity')}</legend>
+          <Field label={t('modal_expiryDate')} required>
             <input
               type="date"
-              id={`${idp('expiry')}`}
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
-              required
-              className="date-input"
+              className="uf-date"
             />
-            <div className="date-shortcuts">
-              {[['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]].map(([label, days]) => (
-                <button key={label} type="button" className="date-chip" onClick={() => {
-                  const d = new Date(); d.setDate(d.getDate() + days);
+          </Field>
+          <div className="uf-chips" role="group" aria-label={t('modal_expiryDate')}>
+            {DATE_SHORTCUTS.map(([label, days]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + days);
                   setExpiryDate(d.toISOString().split('T')[0]);
-                }}>{label}</button>
-              ))}
-            </div>
+                }}
+              >
+                +{label}
+              </Button>
+            ))}
           </div>
-        </div>
-        <div className="input-group">
-          <label htmlFor={`${idp('total')}`}>{t('modal_totalTraffic')}</label>
-          <input
-            type="number"
-            id={`${idp('total')}`}
-            value={totalTraffic}
-            onChange={(e) => setTotalTraffic(e.target.value)}
-            min="0"
-            step="0.01"
-            placeholder={t('modal_totalTrafficPlaceholder')}
-          />
-          <small className="input-hint">{t('modal_totalTrafficHint')}</small>
-        </div>
-        <div className="input-group">
-          <label htmlFor={`${idp('max-logins')}`}>{t('modal_maxLogins')}</label>
-          <div className="shortcut-row">
-            <input
-              type="number"
-              id={`${idp('max-logins')}`}
-              value={maxLogins}
-              onChange={(e) => setMaxLogins(e.target.value)}
-              min="1"
-              step="1"
-              placeholder={t('modal_maxLoginsPlaceholder')}
-              className="shortcut-input"
-            />
-            <div className="shortcut-btns">
-              <button type="button" className={`shortcut-chip${maxLogins === '1' ? ' active' : ''}`} onClick={() => setMaxLogins('1')}>1</button>
-              <button type="button" className={`shortcut-chip${maxLogins === '2' ? ' active' : ''}`} onClick={() => setMaxLogins('2')}>2</button>
-              <button type="button" className={`shortcut-chip${maxLogins === '0' ? ' active' : ''}`} onClick={() => setMaxLogins('0')}>∞</button>
-            </div>
+        </fieldset>
+
+        <fieldset className="uf-section">
+          <legend className="uf-legend">{t('formSectionLimits', 'Limits')}</legend>
+          <div className="uf-grid">
+            <Field label={t('modal_totalTraffic')} hint={t('modal_totalTrafficHint')}>
+              <input
+                type="number"
+                value={totalTraffic}
+                onChange={(e) => setTotalTraffic(e.target.value)}
+                min="0"
+                step="0.01"
+                placeholder={t('modal_totalTrafficPlaceholder')}
+              />
+            </Field>
+            <Field label={t('modal_maxLogins')} hint={t('modal_maxLoginsHint')}>
+              <input
+                type="number"
+                value={maxLogins}
+                onChange={(e) => setMaxLogins(e.target.value)}
+                min="1"
+                step="1"
+                placeholder={t('modal_maxLoginsPlaceholder')}
+              />
+            </Field>
           </div>
-          <small className="input-hint">{t('modal_maxLoginsHint')}</small>
-        </div>
-        {error && <p id={`${idp('error')}`} className="modal-error" role="alert">{error}</p>}
-        <div className="modal-footer">
-          <button type="button" onClick={onClose} className="btn btn-secondary">{t('cancelButton')}</button>
-          <LoadingButton isLoading={isLoading} type="submit" className="btn">
+          <div className="uf-chips" role="group" aria-label={t('modal_maxLogins')}>
+            <Button size="sm" variant={maxLogins === '1' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('1')}>1</Button>
+            <Button size="sm" variant={maxLogins === '2' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('2')}>2</Button>
+            <Button size="sm" variant={maxLogins === '0' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('0')}>∞</Button>
+          </div>
+        </fieldset>
+
+        {error && <p className="uf-error" role="alert">{error}</p>}
+
+        <div className="uf-footer">
+          <Button variant="secondary" onClick={handleClose}>{t('cancelButton')}</Button>
+          <Button type="submit" variant="primary" loading={isLoading} icon={<FiPlus size={14} aria-hidden="true" />}>
             {isEdit ? t('updateUserButton', 'Update User') : t('createUserButton')}
-          </LoadingButton>
+          </Button>
         </div>
       </form>
     </Modal>

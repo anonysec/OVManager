@@ -1,0 +1,133 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Button primitive. Namespaced `ui-` so it can never collide with the legacy
+   `.btn` rules in index.css/styles.css. Colours come only from tokens.css. */
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h-md);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.ui-btn:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.ui-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ui-btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.ui-btn-label {
+  display: inline-block;
+}
+
+/* ── Variants ───────────────────────────────────────────────────────────── */
+
+.ui-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.ui-btn--primary:not(:disabled):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.ui-btn--primary:not(:disabled):active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+.ui-btn--secondary {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.ui-btn--secondary:not(:disabled):hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.ui-btn--ghost:not(:disabled):hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.ui-btn--danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+  color: var(--danger-text);
+}
+.ui-btn--danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--danger) 26%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+/* ── Sizes ──────────────────────────────────────────────────────────────── */
+
+.ui-btn--sm {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  border-radius: var(--radius-sm);
+}
+
+.ui-btn--lg {
+  height: var(--control-h-lg);
+  padding: 0 var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.ui-btn--block {
+  width: 100%;
+}
+
+/* ── Loading ────────────────────────────────────────────────────────────── */
+
+.ui-btn-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: ui-btn-spin 0.6s linear infinite;
+}
+
+@keyframes ui-btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn-spinner { animation-duration: 1.6s; }
+}

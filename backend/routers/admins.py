@@ -1,16 +1,20 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
+import time
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.auth.authz import require_owner
 from backend.auth.hash import hash_password
+from backend.config import config
 from backend.db import crud
 from backend.db.engine import get_db
+from backend.db.models import AuthSession
 from backend.operations.audit import log_event
-from backend.schema._input import AdminCreate, AdminUpdate
+from backend.schema._input import AdminCreate, AdminStatusUpdate, AdminUpdate
 from backend.schema.output import Admins, ResponseModel
 
 router = APIRouter(prefix="/admin", tags=["Admins"])
@@ -78,6 +82,14 @@ async def update_admin(
 
     db.commit()
     db.refresh(existing_admin)
+
+    # A password change must end the admin's live sessions: a stolen bearer
+    # token would otherwise keep working until idle expiry.
+    if admin.password:
+        from backend.auth.sessions import revoke_user_sessions
+
+        revoke_user_sessions(db, existing_admin.username)
+
     log_event(db, "admin.update", actor=user.get("username"), target=existing_admin.username)
     return ResponseModel(
         success=True,
@@ -107,4 +119,99 @@ async def delete_admin(
         success=True,
         msg="Admin deleted successfully",
         data=None,
+    )
+
+
+@router.put("/{username}/status", response_model=ResponseModel)
+async def set_admin_status(
+    username: str,
+    payload: AdminStatusUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    # The owner lives in .env, not the admins table, and must never be
+    # lockable through this surface.
+    if username == config.ADMIN_USERNAME:
+        return ResponseModel(success=False, msg="The owner account status cannot be changed", data=None)
+
+    existing_admin = crud.get_admin_by_username(db, username=username)
+    if not existing_admin:
+        return ResponseModel(success=False, msg="Admin not found", data=None)
+
+    existing_admin.disabled = not payload.status
+    db.commit()
+    db.refresh(existing_admin)
+
+    # Disabling must kill every live bearer token at once; enabling does not
+    # need to because disabled admins cannot authenticate in the first place.
+    revoked = 0
+    if existing_admin.disabled:
+        from backend.auth.sessions import revoke_user_sessions
+
+        revoked = revoke_user_sessions(db, existing_admin.username)
+
+    log_event(
+        db,
+        "admin.disable" if existing_admin.disabled else "admin.enable",
+        actor=user.get("username"),
+        target=existing_admin.username,
+    )
+    return ResponseModel(
+        success=True,
+        msg="Admin disabled successfully" if existing_admin.disabled else "Admin enabled successfully",
+        data={"disabled": existing_admin.disabled, "revoked_sessions": revoked},
+    )
+
+
+@router.get("/{username}/sessions", response_model=ResponseModel)
+async def get_admin_sessions(
+    username: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    existing_admin = crud.get_admin_by_username(db, username=username)
+    if not existing_admin:
+        return ResponseModel(success=False, msg="Admin not found", data=None)
+
+    now = time.time()
+    sessions = (
+        db.query(AuthSession)
+        .filter(AuthSession.username == username)
+        .order_by(AuthSession.id)
+        .all()
+    )
+    # Never expose token_hash: the response is id + metadata only.
+    data = [
+        {
+            "id": session.id,
+            "ip": session.ip,
+            "user_agent": session.user_agent,
+            "created_at": session.created_at,
+            "last_seen_at": session.last_seen_at,
+            "expires_at": session.expires_at,
+        }
+        for session in sessions
+        if now < session.expires_at and now - (session.last_seen_at or 0) <= config.SESSION_IDLE_SECONDS
+    ]
+    return ResponseModel(success=True, msg="Admin sessions retrieved successfully", data=data)
+
+
+@router.post("/{username}/sessions/revoke", response_model=ResponseModel)
+async def revoke_admin_sessions(
+    username: str,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    existing_admin = crud.get_admin_by_username(db, username=username)
+    if not existing_admin:
+        return ResponseModel(success=False, msg="Admin not found", data=None)
+
+    from backend.auth.sessions import revoke_user_sessions
+
+    revoked = revoke_user_sessions(db, username)
+    log_event(db, "admin.sessions_revoke", actor=user.get("username"), target=username)
+    return ResponseModel(
+        success=True,
+        msg=f"Revoked {revoked} session(s)",
+        data={"revoked": revoked},
     )

@@ -9,7 +9,10 @@ You need: a Linux VPS (Debian/Ubuntu recommended), `sudo` access, and about
 bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
 ```
 
-The wizard asks, in order:
+The menu offers **Express** (recommended) or **Custom**. Express asks only
+for an admin password (blank = generated), then installs with safe defaults:
+native mode, port `2095`, a random secret URL path, admin user `admin`, and
+self-signed TLS. Custom asks everything (same questions as before):
 
 | Question | What to answer as a beginner |
 |---|---|
@@ -18,7 +21,7 @@ The wizard asks, in order:
 | URL path | Press Enter (`random`). This hides your panel from scanners at an address like `/a1b2c3d4/`. **Save the full URL shown at the end.** |
 | Admin user | Press Enter (`admin`). |
 | Admin pass | Type a long password — or leave blank and the installer generates one and shows it at the end. **Save it.** |
-| TLS | `3` Self-signed if this is your first time (encrypted; your browser shows a warning you click through once). `1` Let's Encrypt once you have a domain pointed at the server. `5` None only on a private network you trust. |
+| TLS | `1` Self-signed (default) if this is your first time (encrypted; your browser shows a warning you click through once). `2` Let's Encrypt once you have a domain pointed at the server. Plain HTTP is not offered. |
 
 Type `y` to confirm the plan, wait a few minutes, and you get a green
 **Ready** card:

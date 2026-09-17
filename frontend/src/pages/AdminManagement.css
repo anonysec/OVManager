@@ -1,0 +1,251 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Admins page — header, KPI tiles, status switch and sessions modal.
+   Colours come from tokens.css only, so dark/light both work. */
+
+.adm-page {
+  max-width: var(--content-max);
+}
+
+.adm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: 2px 0 var(--space-5);
+}
+
+.adm-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+
+.adm-title svg {
+  color: var(--accent-text);
+}
+
+.adm-subtitle {
+  margin: var(--space-2) 0 0;
+  max-width: 68ch;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--text-secondary);
+}
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.adm-search {
+  flex: 1;
+  max-width: 320px;
+}
+
+/* ── Enable/disable switch ─────────────────────────────────────────────── */
+
+.adm-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.adm-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.adm-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.adm-switch-thumb {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.adm-switch input:checked + .adm-switch-track {
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+.adm-switch input:checked + .adm-switch-track .adm-switch-thumb {
+  background: var(--success);
+  transform: translateX(16px);
+}
+
+html[dir="rtl"] .adm-switch input:checked + .adm-switch-track .adm-switch-thumb {
+  transform: translateX(-16px);
+}
+
+.adm-switch input:focus-visible + .adm-switch-track {
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.adm-switch input:disabled + .adm-switch-track {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.adm-switch-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+}
+
+.adm-switch-label.is-on {
+  color: var(--success-text);
+}
+
+/* ── Sessions modal ────────────────────────────────────────────────────── */
+
+.adm-modal-hint {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--text-secondary);
+}
+
+.adm-modal-state {
+  margin: 0;
+  padding: var(--space-6) 0;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.adm-modal-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+  color: var(--danger-text);
+  font-size: var(--font-size-sm);
+}
+
+.adm-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.adm-session {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.adm-session-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.adm-session-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.adm-session-agent {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.adm-session-ip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.adm-session-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-2);
+}
+
+.adm-session-times span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.adm-session-times em {
+  font-style: normal;
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.adm-session-times time {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .adm-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .adm-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .adm-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
