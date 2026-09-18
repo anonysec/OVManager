@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.2.0 — 2026-09-18
+
+The "polish + ops safety" release: a full interface audit, faster asset
+delivery, and two operator features.
+
+**Interface & UX**
+
+- Full UI audit (146 screenshots across themes, languages and devices):
+  numeric cells render correctly in Persian/RTL, the Audit Log table shows
+  proper headers, health-route handling fixed, clipped labels and wrapping
+  fixed, plural fixes.
+- Right-to-left support rebuilt on logical CSS properties: layout, spacing,
+  dropdowns and toggles now flip automatically in Persian.
+- Design tokens for spacing, type scale and layering; phone tables get
+  44px touch targets and a "Swipe to see more" hint when a table is wider
+  than the screen.
+- Creating a user now ends with a handoff screen: get config, copy the
+  subscription link, or open the node picker immediately.
+- New user tags: optional label shown on the user row, searchable and
+  filterable (e.g. "monthly", "vip").
+
+**Security & speed**
+
+- The owner password is stored as a bcrypt hash (`ADMIN_PASSWORD_HASH`);
+  plaintext `.env` passwords are migrated automatically on first start and
+  `reset-password` writes hashed values.
+- Fonts are self-hosted (no Google Fonts requests); the Content-Security-
+  Policy was trimmed accordingly.
+- Static assets ship precompressed (gzip) and are cached immutably — the
+  main bundle drops from ~316 KB to ~101 KB over the wire.
+- Dependencies slimmed (`pexpect`, `colorama` removed).
+
+**Operations**
+
+- **Node-down Telegram alert**: when a node stops answering, the owner gets
+  one Telegram message; a recovery message follows when it returns
+  (toggle in Settings → Alerts, on by default).
+- **Offsite backups**: optionally copy the newest scheduled backup to
+  `user@server:/path` with rsync (scp fallback) — Settings → Backup.
+- One-screen user creation now reuses the defaults from Settings.
+
 ## 2.1.3 — 2026-09-17
 
 - "Install a VPN node on this same server too?" now defaults to **No**
