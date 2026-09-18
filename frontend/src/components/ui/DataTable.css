@@ -154,8 +154,14 @@
   font-family: ui-monospace, monospace;
 }
 
+.dt-table td {
+  unicode-bidi: plaintext;
+}
+
 .dt-num {
   font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .dt-usage {

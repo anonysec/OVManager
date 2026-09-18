@@ -26,6 +26,23 @@ def test_health_endpoint():
     assert response.json()["status"] == "ok"
 
 
+def test_health_browser_navigation_serves_spa():
+    """A browser reload/bookmark of /health must show the SPA Health page,
+    while monitors (no Sec-Fetch-Mode) keep getting the JSON probe."""
+    client = TestClient(api)
+    browser = client.get(
+        "/health",
+        headers={"Sec-Fetch-Mode": "navigate", "Accept": "text/html,application/xhtml+xml"},
+    )
+    assert browser.status_code == 200
+    assert "text/html" in browser.headers["content-type"]
+    assert 'id="root"' in browser.text
+
+    probe = client.get("/health", headers={"Accept": "application/json"})
+    assert probe.headers["content-type"].startswith("application/json")
+    assert probe.json()["status"] == "ok"
+
+
 def test_api_users_requires_auth():
     """API endpoints require authentication."""
     client = TestClient(api)

@@ -416,7 +416,7 @@ const UserManagement = () => {
             <span style={{ minWidth: 0 }}>
               <span className="dt-cell-title">{u.name}</span>
               <br />
-              <span className="dt-cell-sub">{String(u.uuid || '').slice(0, 8)}… · {u.owner || '—'}</span>
+              <span className="dt-cell-sub">{u.owner || '—'}</span>
             </span>
           </span>
         </button>
@@ -499,7 +499,7 @@ const UserManagement = () => {
         icon={<FiUsers aria-hidden="true" />}
         meta={(
           <span className="um-meta">
-            <strong>{filteredUsers.length}</strong> {t('results', 'results')}
+            <strong>{filteredUsers.length}</strong> {filteredUsers.length === 1 ? t('resultOne', 'result') : t('resultsMany', 'results')}
           </span>
         )}
         actions={(

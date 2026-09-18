@@ -45,6 +45,8 @@
 }
 
 .ui-stat-card-value {
+  direction: ltr;
+  unicode-bidi: isolate;
   font-family: var(--font-display);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);

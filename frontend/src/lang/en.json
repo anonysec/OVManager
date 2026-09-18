@@ -807,5 +807,12 @@
   "createUserDefaults": "New users start with 30 days and 1 device — change anything below.",
   "quotaLabel": "Quota",
   "quotaUsed": "{{pct}}% used",
-  "downloadConfigHint": "Download this user's OpenVPN profile (.ovpn)."
+  "downloadConfigHint": "Download this user's OpenVPN profile (.ovpn).",
+  "th_time": "Time",
+  "th_action": "Action",
+  "th_target": "Target",
+  "th_detail": "Detail",
+  "justNow": "just now",
+  "resultOne": "result",
+  "resultsMany": "results"
 }

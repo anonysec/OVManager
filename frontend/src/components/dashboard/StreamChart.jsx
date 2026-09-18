@@ -105,7 +105,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     const vals = series.map(valueAt);
     const max = Math.max(...vals, 1);
     return series.map((p, i) => {
-      const x = (i / (series.length - 1)) * 100;
+      const x = 2 + (i / (series.length - 1)) * 96;
       const y = 100 - (vals[i] / max) * 88 - 6;
       return { x, y, v: vals[i], ts: p.ts };
     });
@@ -130,6 +130,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
 
   return (
     <Panel
+      className="ds-chart-panel"
       title={t('trafficChartTitle', 'Traffic')}
       action={
         <div className="ds-chart-controls">

@@ -97,6 +97,8 @@
 
 /* Relative + absolute time stack */
 .adt-time {
+  direction: ltr;
+  unicode-bidi: isolate;
   display: flex;
   flex-direction: column;
   gap: 1px;

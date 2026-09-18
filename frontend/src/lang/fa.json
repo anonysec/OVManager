@@ -807,5 +807,12 @@
   "createUserDefaults": "کاربران جدید با ۳۰ روز و ۱ دستگاه شروع می‌کنند — هر موردی را پایین تغییر دهید.",
   "quotaLabel": "سهمیه",
   "quotaUsed": "{{pct}}٪ مصرف‌شده",
-  "downloadConfigHint": "پروفایل OpenVPN این کاربر (.ovpn) را دانلود کنید."
+  "downloadConfigHint": "پروفایل OpenVPN این کاربر (.ovpn) را دانلود کنید.",
+  "th_time": "زمان",
+  "th_action": "عملیات",
+  "th_target": "هدف",
+  "th_detail": "جزئیات",
+  "justNow": "همین حالا",
+  "resultOne": "نتیجه",
+  "resultsMany": "نتیجه"
 }

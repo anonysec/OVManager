@@ -323,6 +323,17 @@ api.add_middleware(
 # ── Health check (always at /health — hidden by middleware when URLPATH set) ─
 @api.get("/health", tags=["Health"])
 async def health_check(request: Request):
+    # Browser navigation to /health (F5, bookmark, open-in-new-tab on the
+    # sidebar link) must see the SPA Health page, not this JSON: the SPA
+    # routes /health to the Health center. Browsers send Sec-Fetch-Mode:
+    # navigate; uptime monitors, curl, installers and the Docker healthcheck
+    # never do, so they keep getting the JSON probe.
+    if request.headers.get("sec-fetch-mode") == "navigate" and "text/html" in request.headers.get("accept", ""):
+        from fastapi.responses import HTMLResponse
+
+        html = _read_index_html()
+        if html is not None:
+            return HTMLResponse(html)
     # The version is only reported to loopback callers (installer, Docker
     # healthcheck, `install.sh status`). Unauthenticated internet scanners get
     # a plain "ok" without a version fingerprint.

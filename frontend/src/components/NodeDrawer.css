@@ -1,5 +1,9 @@
 /* Node drawer — additive styles for the redesigned tabs.
-   The shell (.node-drawer*, .nd-grid, .nd-cell, .nd-row, .nd-cert, .nd-log*)
+   The shell (.node-drawer*, .nd-grid, .nd-cell {
+  unicode-bidi: plaintext;
+}
+
+.nd-cell, .nd-row, .nd-cert, .nd-log*)
    stays in styles.css; only the new Settings/Actions blocks live here. */
 
 .nd-tabs {
