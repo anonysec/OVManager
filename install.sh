@@ -1087,21 +1087,47 @@ do_reset_password() {
     fi
 
     if [[ "$DRY" -eq 1 ]]; then
-        info "Dry run — nothing changed (would update ADMIN_PASSWORD in $envfile and restart)."
+        info "Dry run — nothing changed (would update ADMIN_PASSWORD_HASH in $envfile and restart)."
         exit 0
     fi
+
+    # Store the password as a bcrypt hash (ADMIN_PASSWORD_HASH) and drop the
+    # legacy plaintext line. Falls back to plaintext mode only when the
+    # panel's Python (bcrypt) is not available.
+    local pass_line="ADMIN_PASSWORD=$ADMIN_PASS"
+    local pybin="$INSTALL_DIR/.venv/bin/python"
+    [[ "$MODE" == "docker" ]] && pybin="docker exec ovmanager /app/.venv/bin/python"
+    if [[ -x "$INSTALL_DIR/.venv/bin/python" || "$MODE" == "docker" ]]; then
+        local h
+        if h="$(HASH_SRC="$ADMIN_PASS" $pybin - <<'PY' 2>/dev/null
+import os, sys
+sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
+try:
+    from backend.auth.hash import hash_password
+    print(hash_password(os.environ["HASH_SRC"]))
+except Exception:
+    sys.exit(1)
+PY
+)"; then
+            [[ -n "$h" ]] && pass_line="ADMIN_PASSWORD_HASH=$h"
+        fi
+    fi
+    [[ "$pass_line" == ADMIN_PASSWORD_HASH=* ]] \
+        && step "Password hashed (bcrypt) — no plaintext in .env" \
+        || warn "bcrypt unavailable — writing plaintext (it will be hashed on first panel boot)."
 
     [[ -w "$envfile" ]] || die "Config $envfile is not writable — chmod 600 $envfile and retry."
     local tmp
     tmp="$(mktemp "${envfile}.XXXXXX")" || die "Could not create a temp file next to $envfile"
     # Value rides in the environment, not in an awk -v assignment: passwords
     # may contain backslashes and -v would interpret them. Only the
-    # ADMIN_PASSWORD line changes; every other line is copied verbatim.
-    if ! PASS_VALUE="$ADMIN_PASS" awk '
-        BEGIN { pass = ENVIRON["PASS_VALUE"] }
-        /^ADMIN_PASSWORD=/ { print "ADMIN_PASSWORD=" pass; found = 1; next }
+    # ADMIN_PASSWORD(_HASH) line changes; every other line is copied verbatim.
+    if ! NEWLINE="$pass_line" awk '
+        BEGIN { nl = ENVIRON["NEWLINE"] }
+        /^ADMIN_PASSWORD=/ { found = 1; next }
+        /^ADMIN_PASSWORD_HASH=/ { print nl; hashfound = 1; next }
         { print }
-        END { if (!found) exit 1 }
+        END { if (!hashfound && found) print nl; if (!found && !hashfound) exit 1 }
     ' "$envfile" > "$tmp"; then
         rm -f "$tmp"
         die "Could not update $envfile (no ADMIN_PASSWORD= line?)"

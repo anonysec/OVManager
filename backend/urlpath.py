@@ -238,6 +238,7 @@ class URLPathMiddleware:
             _sub_prefix = "/sub/"
         _ALWAYS_ALLOWED_PREFIXES = (
             "/assets/",
+            "/fonts/",
             _sub_prefix,
             "/health",
             # PWA files are requested by the browser at root paths.

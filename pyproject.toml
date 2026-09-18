@@ -19,7 +19,6 @@ dependencies = [
     "pydantic-settings>=2.11.0",
     "SQLAlchemy>=2.0.43,<2.1",
     "python-dotenv>=1.2.2",
-    "pexpect>=4.9.0",
     "psutil>=7.1.0",
     # Used directly (see backend/auth/hash.py). passlib was removed: it is
     # unmaintained and incompatible with bcrypt >= 4.1.
@@ -27,7 +26,6 @@ dependencies = [
     "cryptography>=46.0.0",
     "python-multipart>=0.0.20",
     "apscheduler>=3.11.0",
-    "colorama>=0.4.6",
     "python-telegram-bot>=22.5",
     # httpx2, not httpx: it is the maintained successor, and starlette.testclient
     # (reached via fastapi.testclient) imports it first — with only httpx present

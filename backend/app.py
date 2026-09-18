@@ -42,20 +42,18 @@ _BOT_DISABLED_RETRY_SECONDS = 3600
 
 # ── Security Headers Middleware ───────────────────────────────────
 # CSP: strict-by-default. The SPA loads only same-origin scripts/styles;
-# images may come from data: URIs (QR codes, inline flag SVGs). The panel and
-# the subscription page load Google Fonts (Manrope/Space Grotesk) and the
-# subscription page uses a jsdelivr-hosted Arad font, so those two origins are
-# explicitly allowed for fonts + the Google Fonts stylesheet. Inline styles
-# are needed for React style props. The single inline boot script in
+# images may come from data: URIs (QR codes, inline flag SVGs). Fonts are
+# self-hosted under /fonts/ (no third-party origin needed anymore). Inline
+# styles are needed for React style props. The single inline boot script in
 # index.html (theme/dir pre-paint, no network access) is allowlisted by hash;
 # everything else must be same-origin (the subscription page's script was
 # extracted to /sub/static/subscription.js).
 CSP_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'sha256-DfXw4dmojGxppeSGQd3gY5VwJccQpen/20YT8l+VMDQ='; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
-    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+    "font-src 'self' data:; "
     "connect-src 'self'; "
     "object-src 'none'; "
     "base-uri 'self'; "
@@ -316,7 +314,7 @@ api.add_middleware(
     allow_origins=_allow_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Refresh-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 
@@ -356,6 +354,12 @@ mimetypes.add_type("application/json", ".json")
 
 if os.path.isdir(assets_path):
     api.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+# Self-hosted fonts (see frontend/public/fonts). Root-level like the PWA
+# files so the public subscription page can use them without the prefix.
+_fonts_path = os.path.join(frontend_build_path, "fonts")
+if os.path.isdir(_fonts_path):
+    api.mount("/fonts", StaticFiles(directory=_fonts_path), name="fonts")
 
 # PWA files: manifest + icons + service worker. They live at well-known
 # root paths so the browser can find them regardless of the panel prefix;

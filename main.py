@@ -20,6 +20,47 @@ os.chdir(APP_DIR)
 sys.path.insert(0, APP_DIR)
 
 
+def _migrate_owner_password(env_file: str | None = None):
+    """Hash the plaintext owner password on first boot (best effort).
+
+    Installs start with legacy ADMIN_PASSWORD in .env. Once the venv is up
+    we can hash it: rewrite .env with ADMIN_PASSWORD_HASH= and drop the
+    plaintext line. Never blocks startup — a read-only .env (Docker images
+    with baked env files) just keeps working in plaintext mode.
+    """
+    from backend.auth.hash import hash_password
+    from backend.logger import logger
+
+    if config.ADMIN_PASSWORD_HASH or not config.ADMIN_PASSWORD:
+        return
+    path = Path(env_file) if env_file else Path(config.model_config.get("env_file") or "")
+    if path is None or not path.is_file():
+        logger.info("Owner password stays in the environment (no .env file) — run install.sh reset-password to hash it")
+        return
+    try:
+        new_hash = hash_password(config.ADMIN_PASSWORD)
+        lines = path.read_text().splitlines(keepends=True)
+        out, wrote_hash = [], False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("ADMIN_PASSWORD="):
+                continue
+            if stripped.startswith("ADMIN_PASSWORD_HASH="):
+                out.append(f"ADMIN_PASSWORD_HASH={new_hash}\n")
+                wrote_hash = True
+            else:
+                out.append(line)
+        if not wrote_hash:
+            out.append(f"ADMIN_PASSWORD_HASH={new_hash}\n")
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("".join(out))
+        tmp.chmod(0o600)
+        tmp.replace(path)
+        logger.info("Owner password migrated to ADMIN_PASSWORD_HASH in %s", path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not hash the owner password in .env (%s) — it stays in plaintext mode", e)
+
+
 def _resolve_ssl_paths() -> tuple[str | None, str | None]:
     """Return the active (key, cert) pair for uvicorn.
 
@@ -48,6 +89,8 @@ def main():
             raise SystemExit(0)
         print("Could not reset URLPATH (database unavailable?). Start the panel once, then retry.", file=sys.stderr)
         raise SystemExit(1)
+
+    _migrate_owner_password()
 
     key, cert = _resolve_ssl_paths()
     if key and not os.path.isfile(key):
