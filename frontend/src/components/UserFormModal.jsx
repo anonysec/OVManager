@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
 import { FiCheckCircle, FiCopy, FiDownload, FiPlus, FiZap } from 'react-icons/fi';
@@ -58,6 +58,10 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggest, setSuggest] = useState('');
+  // `null` = the endpoint is not usable for this account (no username prefix
+  // configured) or unreachable — the button then stays hidden instead of
+  // sitting there dead. Empty string = not fetched yet.
+  const [suggestUnavailable, setSuggestUnavailable] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [createdUser, setCreatedUser] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -82,31 +86,60 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
       setTotalTraffic('');
       setMaxLogins(defaultLogins);
       setSuggest('');
+      setSuggestUnavailable(false);
       setCreatedUser(null);
       setCopied(false);
       setError('');
     }
   }, [user, isOpen, isEdit, days, defaultLogins]);
 
-  const fetchSuggest = async () => {
+  const fetchSuggest = useCallback(async () => {
     setSuggestLoading(true);
     try {
       const res = await apiClient.get('/users/next-username');
       if (res.data?.success && res.data?.data?.username) {
         setSuggest(res.data.data.username);
+        setSuggestUnavailable(false);
         return res.data.data.username;
       }
       setSuggest('');
+      setSuggestUnavailable(true);
       return '';
     } catch {
       setSuggest('');
+      setSuggestUnavailable(true);
       return '';
     } finally {
       setSuggestLoading(false);
     }
-  };
+  }, []);
 
-  // One click fills the field — no two-step chip dance.
+  // One click fills the field. Availability is probed once when the modal
+  // opens so a dead button never renders.
+  useEffect(() => {
+    if (!isOpen || isEdit) return undefined;
+    setSuggestLoading(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get('/users/next-username');
+        if (cancelled) return;
+        if (res.data?.success && res.data?.data?.username) {
+          setSuggest(res.data.data.username);
+          setSuggestUnavailable(false);
+        } else {
+          setSuggest('');
+          setSuggestUnavailable(true);
+        }
+      } catch {
+        if (!cancelled) { setSuggest(''); setSuggestUnavailable(true); }
+      } finally {
+        if (!cancelled) setSuggestLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, isEdit]);
+
   const handleSuggest = async () => {
     const value = suggest || (await fetchSuggest());
     if (value) setName(value);
@@ -226,7 +259,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                 aria-invalid={Boolean(error) || undefined}
                 aria-describedby={!isEdit ? 'uf-username-hint' : undefined}
               />
-              {!isEdit && (
+              {!isEdit && !suggestUnavailable && (
                 <Button
                   variant="secondary"
                   onClick={handleSuggest}
@@ -234,8 +267,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                   icon={<FiZap size={14} aria-hidden="true" />}
                   title={t('suggestUsername', 'Suggest next username')}
                   className="uf-suggest"
-                  onMouseEnter={() => { if (!suggest && isOpen) fetchSuggest(); }}
-                  onFocus={() => { if (!suggest) fetchSuggest(); }}
                 >
                   {suggest ? `${t('suggest', 'Suggest')}: ${suggest}` : t('suggest', 'Suggest')}
                 </Button>
@@ -310,12 +341,12 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                 step="1"
                 placeholder={t('modal_maxLoginsPlaceholder')}
               />
+              <div className="uf-devices-chips" role="group" aria-label={t('modal_maxLogins')}>
+                <button type="button" className={`uf-device-chip${maxLogins === '1' ? ' is-active' : ''}`} onClick={() => setMaxLogins('1')}>1</button>
+                <button type="button" className={`uf-device-chip${maxLogins === '2' ? ' is-active' : ''}`} onClick={() => setMaxLogins('2')}>2</button>
+                <button type="button" className={`uf-device-chip${maxLogins === '0' ? ' is-active' : ''}`} onClick={() => setMaxLogins('0')}>∞</button>
+              </div>
             </Field>
-          </div>
-          <div className="uf-chips" role="group" aria-label={t('modal_maxLogins')}>
-            <Button size="sm" variant={maxLogins === '1' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('1')}>1</Button>
-            <Button size="sm" variant={maxLogins === '2' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('2')}>2</Button>
-            <Button size="sm" variant={maxLogins === '0' ? 'primary' : 'ghost'} onClick={() => setMaxLogins('0')}>∞</Button>
           </div>
         </fieldset>
 

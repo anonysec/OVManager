@@ -213,6 +213,42 @@
   gap: var(--space-2);
 }
 
+/* Device-count presets (1 / 2 / ∞) attach directly to the Devices field. */
+.uf-devices-chips {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.uf-device-chip {
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.uf-device-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.uf-device-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.uf-device-chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 .uf-note {
   margin: 0;
   color: var(--text-muted);
