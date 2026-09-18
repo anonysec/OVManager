@@ -18,7 +18,7 @@ const AlertsSection = () => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [prefs, setPrefs] = useState(readPrefs);
-  const [telegram, setTelegram] = useState({ notify_expiry: true, notify_traffic: true });
+  const [telegram, setTelegram] = useState({ notify_expiry: true, notify_traffic: true, notify_node_down: true });
   const [telegramReady, setTelegramReady] = useState(false);
 
   useEffect(() => {
@@ -31,6 +31,7 @@ const AlertsSection = () => {
         setTelegram({
           notify_expiry: data.notify_expiry !== false,
           notify_traffic: data.notify_traffic !== false,
+          notify_node_down: data.notify_node_down !== false,
         });
       })
       .catch(() => { /* leave the defaults; the toggle still renders */ })
@@ -66,6 +67,7 @@ const AlertsSection = () => {
   const TELEGRAM_ALERTS = [
     { key: 'notify_expiry', label: t('notifyExpiry', 'Users expiring within 3 days') },
     { key: 'notify_traffic', label: t('notifyTraffic', 'Users out of traffic') },
+    { key: 'notify_node_down', label: t('notifyNodeDown', 'Node goes down or comes back') },
   ];
 
   return (
@@ -86,7 +88,7 @@ const AlertsSection = () => {
       </Card>
 
       <Card title={t('notifyTelegramCard', 'Telegram alerts')} icon={FiSend}>
-        <p className="sp-hint sp-mb-12">{t('notifyTelegramDesc', 'One daily Telegram summary of users expiring soon or out of traffic. Uses the bot token and owner ID from the Bot section.')}</p>
+        <p className="sp-hint sp-mb-12">{t('notifyTelegramDesc', 'One daily Telegram summary of users expiring soon or out of traffic, plus an instant alert when a node goes down or comes back. Uses the bot token and owner ID from the Bot section.')}</p>
         <div className="sp-alert-list">
           {TELEGRAM_ALERTS.map((item) => (
             <label key={item.key} className="sp-alert-row">
