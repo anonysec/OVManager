@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
+import Logo from './Logo';
 
 const readCollapsed = () => {
   try { return localStorage.getItem('ovmanager-sidebar-collapsed') === 'true'; }
@@ -162,13 +163,21 @@ const Sidebar = () => {
         <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — full height: the brand lives here, so the top-left corner
+          is never an empty notch beside the topbar. */}
       <aside
         ref={drawerRef}
         id="ops-sidebar"
         className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''} ${mobileOpen ? 'ops-sidebar--mobile ops-sidebar--open' : ''}`}
         aria-label={t('mainNavigation', 'Main navigation')}
       >
+        {/* Brand — the identity block. In rail mode it collapses to the
+            logo mark with the wordmark beneath it. */}
+        <div className="sidebar-brand" aria-hidden={collapsed}>
+          <Logo size={30} />
+          <span className="sidebar-brand-text">OV<span className="brand-accent">Manager</span></span>
+        </div>
+
         {/* Collapse toggle */}
         <button
           className="sidebar-toggle"
