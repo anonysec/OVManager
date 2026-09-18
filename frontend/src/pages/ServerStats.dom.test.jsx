@@ -223,13 +223,13 @@ describe('ServerStats resilience', () => {
     await waitFor(() => expect(screen.getAllByText('Could not load this panel').length).toBeGreaterThan(0));
   });
 
-  it('renders health meters with tones for high CPU', async () => {
+  it('renders resource stat cards with danger tone for high CPU', async () => {
     baseMock((url) => {
       if (url.includes('server/info')) return ok({ cpu: 92, memory_percent: 40, disk_percent: 20 });
       return undefined;
     });
     const { container } = renderStats();
-    await waitFor(() => expect(container.querySelectorAll('.ds-meter').length).toBeGreaterThan(0));
+    await waitFor(() => expect(container.querySelector('.ds-kpi--danger')).toBeTruthy());
   });
 });
 
