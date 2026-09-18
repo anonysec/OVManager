@@ -385,10 +385,12 @@ const DashboardLayout = () => {
 
           <div className={`ops-main-container${collapsed ? ' ops-main-container--collapsed' : ''}${isMobile ? ' ops-main-container--mobile' : ''}`}>
             <header className="ops-topbar-minimal" role="banner">
-              <div className="topbar-brand" aria-label="OVManager">
-                <Logo size={30} />
-                <span>OV<span className="brand-accent">Manager</span></span>
-              </div>
+              {isMobile && (
+                <div className="topbar-brand" aria-label="OVManager">
+                  <Logo size={30} />
+                  <span>OV<span className="brand-accent">Manager</span></span>
+                </div>
+              )}
               <nav className="ops-breadcrumb" aria-label="Breadcrumb">
                 <ol>
                   {location.pathname !== '/' && (

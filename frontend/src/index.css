@@ -935,7 +935,7 @@
 /* Sidebar with variable width based on icon size (36px vs 32px) */
 .ops-sidebar {
   position: fixed;
-  top: var(--topbar-h);
+  top: 0;
   inset-inline-start: 0;
   bottom: 0;
   width: var(--sidebar-width, 220px);
@@ -954,34 +954,44 @@
   width: var(--sidebar-collapsed-width, 72px);
 }
 
+/* Brand block — the sidebar owns the product identity (the topbar repeats
+   it only on mobile, where the sidebar is a drawer). */
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 18px;
   margin: 8px 8px 0;
+  min-height: 56px;
   flex-shrink: 0;
   z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-brand-text {
+  color: var(--text-primary);
+  font: 800 17px/1 var(--font-display);
+  letter-spacing: -.045em;
+  white-space: nowrap;
+}
+
+.sidebar-brand-text .brand-accent {
+  color: var(--accent-color);
 }
 
 .ops-sidebar--collapsed {
   width: var(--sidebar-collapsed-width, 72px);
 }
 
+/* Rail mode: logo mark only — a 72px column cannot hold the wordmark. */
 .ops-sidebar--collapsed .sidebar-brand {
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 8px;
-  text-align: center;
   justify-content: center;
+  padding: 16px 8px;
+  gap: 0;
 }
 
 .ops-sidebar--collapsed .sidebar-brand-text {
-  font-size: var(--font-size-2xs);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  display: block;
+  display: none;
 }
 
 .ops-sidebar--collapsed .sidebar-nav-link {
@@ -1111,13 +1121,20 @@
   margin-top: auto;
 }
 
-/* Mobile: show hamburger, hide sidebar by default */
+/* Mobile: show hamburger, hide sidebar by default. The drawer starts below
+   the topbar (which carries the brand there) and covers full width. */
 @media (max-width: 767.98px) {
   .sidebar-hamburger {
     display: flex;
   }
   .ops-sidebar:not(.ops-sidebar--mobile) {
     transform: translateX(-100%);
+  }
+  .ops-sidebar {
+    top: var(--topbar-h);
+  }
+  .sidebar-brand {
+    display: none;
   }
 }
 
