@@ -69,7 +69,7 @@
 
 .sp-section-header h2 {
   margin: 0 0 2px;
-  font-size: 15px;
+  font-size: var(--font-size-md);
   font-weight: 700;
   color: var(--text-primary, var(--text));
   letter-spacing: -.02em;
@@ -77,7 +77,7 @@
 
 .sp-section-header p {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted, var(--muted));
   line-height: 1.4;
 }
@@ -132,7 +132,7 @@
 .sp-label {
   display: block;
   margin-bottom: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 700;
   color: var(--text-secondary, var(--muted));
   text-transform: uppercase;
@@ -140,7 +140,7 @@
 }
 
 .sp-label-xs {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   font-weight: 800;
   color: var(--text-muted, var(--muted));
   text-transform: uppercase;
@@ -154,7 +154,7 @@
   border-radius: 7px;
   background: var(--bg, #0e1116);
   color: var(--text-primary, var(--text));
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-family: inherit;
   transition: border-color .12s, box-shadow .12s;
 }
@@ -176,13 +176,13 @@
   border-radius: 7px;
   background: var(--bg, #0e1116);
   color: var(--text-primary, var(--text));
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-family: inherit;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
-  padding-right: 36px;
+  padding-inline-end: 36px;
   transition: border-color .12s, box-shadow .12s;
 }
 
@@ -280,8 +280,8 @@
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
 
-.btn-sm { padding: 6px 10px; font-size: 11px; }
-.sp-hint { margin: 6px 0 0; font-size: 10px; color: var(--text-muted, var(--muted)); line-height: 1.4; }
+.btn-sm { padding: 6px 10px; font-size: var(--font-size-xs); }
+.sp-hint { margin: 6px 0 0; font-size: var(--font-size-2xs); color: var(--text-muted, var(--muted)); line-height: 1.4; }
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

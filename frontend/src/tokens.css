@@ -167,6 +167,17 @@
   --font-size-xl: 22px;
   --font-size-2xl: 28px;
   --font-size-3xl: 34px;
+  /* ── Layering (z-scale) — one knob per layer, ordered ───────────────── */
+  --z-nav: 70;        /* sidebar rail */
+  --z-topbar: 110;    /* sticky topbar */
+  --z-popover: 200;   /* dropdowns, popovers */
+  --z-modal: 1000;    /* modals, skip link */
+  --z-drawer: 1250;   /* node drawer backdrop/panel */
+  --z-progress: 1300; /* route progress bar */
+  --z-command: 9998;  /* command palette overlay */
+  --z-popover-high: 9999; /* notification popover — rides above drawers */
+  --z-toast: 10000;   /* always on top */
+
   --line-height-tight: 1.2;
   --line-height-snug: 1.35;
   --line-height-normal: 1.55;
