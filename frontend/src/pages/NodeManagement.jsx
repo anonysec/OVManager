@@ -294,7 +294,7 @@ const NodeManagement = () => {
           ))}
         </div>
         <span className="nm-results" aria-live="polite">
-          <strong>{filteredNodes.length}</strong> {t('results', 'results')}
+          <strong>{filteredNodes.length}</strong> {filteredNodes.length === 1 ? t('resultOne', 'result') : t('resultsMany', 'results')}
           {(searchTerm || statusFilter !== 'all') && (
             <button type="button" className="nm-clear" onClick={() => { setSearchTerm(''); setStatusFilter('all'); }}>
               {t('clear', 'Clear')}

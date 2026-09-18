@@ -467,7 +467,7 @@ const AdminManagement = () => {
           />
         </label>
         <div className="results-meta" aria-live="polite">
-          <strong>{filteredAdmins.length}</strong> {t('results', 'results')}
+          <strong>{filteredAdmins.length}</strong> {filteredAdmins.length === 1 ? t('resultOne', 'result') : t('resultsMany', 'results')}
           {searchTerm && (
             <button type="button" className="toolbar-clear" onClick={() => setSearchTerm('')}>
               {t('clear', 'Clear')}

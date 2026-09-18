@@ -807,5 +807,12 @@
   "createUserDefaults": "Новые пользователи начинают с 30 дней и 1 устройства — измените что нужно ниже.",
   "quotaLabel": "Квота",
   "quotaUsed": "Использовано {{pct}}%",
-  "downloadConfigHint": "Скачать профиль OpenVPN этого пользователя (.ovpn)."
+  "downloadConfigHint": "Скачать профиль OpenVPN этого пользователя (.ovpn).",
+  "th_time": "Время",
+  "th_action": "Действие",
+  "th_target": "Объект",
+  "th_detail": "Подробности",
+  "justNow": "только что",
+  "resultOne": "результат",
+  "resultsMany": "результатов"
 }

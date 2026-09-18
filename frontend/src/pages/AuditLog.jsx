@@ -211,7 +211,7 @@ const AuditLog = () => {
 
   const columns = useMemo(() => [
     {
-      key: 'ts', label: t('th_lastOnline', 'Time'), sortable: true,
+      key: 'ts', label: t('th_time', 'Time'), sortable: true,
       render: (e) => {
         const iso = e.ts ? new Date(e.ts * 1000).toISOString() : '';
         return (
@@ -232,15 +232,15 @@ const AuditLog = () => {
       ),
     },
     {
-      key: 'action', label: t('status', 'Action'), sortable: true,
+      key: 'action', label: t('th_action', 'Action'), sortable: true,
       render: (e) => <Badge tone={toneForAction(e.action)}>{e.action || '—'}</Badge>,
     },
     {
-      key: 'target', label: t('user', 'Target'), sortable: true, hideOnMobile: true,
+      key: 'target', label: t('th_target', 'Target'), sortable: true, hideOnMobile: true,
       render: (e) => e.target || '—',
     },
     {
-      key: 'detail', label: t('node', 'Detail'), hideOnMobile: true,
+      key: 'detail', label: t('th_detail', 'Detail'), hideOnMobile: true,
       render: (e) => (
         <button type="button" className="dt-rowlink" onClick={() => setDetailEvent(e)} title={t('viewDetails', 'View details')}>
           <span className="dt-cell-sub adt-detail">

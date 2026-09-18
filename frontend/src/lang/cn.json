@@ -807,5 +807,12 @@
   "createUserDefaults": "新用户默认 30 天和 1 台设备——可在下方修改。",
   "quotaLabel": "配额",
   "quotaUsed": "已使用 {{pct}}%",
-  "downloadConfigHint": "下载此用户的 OpenVPN 配置文件（.ovpn）。"
+  "downloadConfigHint": "下载此用户的 OpenVPN 配置文件（.ovpn）。",
+  "th_time": "时间",
+  "th_action": "操作",
+  "th_target": "对象",
+  "th_detail": "详情",
+  "justNow": "刚刚",
+  "resultOne": "条结果",
+  "resultsMany": "条结果"
 }

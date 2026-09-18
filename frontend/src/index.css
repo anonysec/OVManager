@@ -570,21 +570,6 @@
 
 
 
-/* --- Stats Grid --- */
-.network-card-grid,
-.health-grid,
-
-/* --- Tables --- */
-
-
-.ops-table th,
-
-
-
-
-
-
-
 /* --- Toasts --- */
 .toast-stack {
   position: fixed;
@@ -680,12 +665,6 @@
   }
 
 
-
-  .network-card-grid,
-  .health-grid,
-
-
-  .ops-table th,
 
   .toast-stack {
     right: 12px;

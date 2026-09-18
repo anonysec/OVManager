@@ -27,7 +27,7 @@ import './SetupWizard.css';
 
 const DISMISS_KEY = 'ovmanager-setup-dismissed';
 const CONFIG_DONE_KEY = 'ovmanager-setup-config-done';
-const NODE_INSTALL_CMD = 'bash <(curl -sSL https://anonysec.github.io/OVNode/install.sh)';
+const NODE_INSTALL_CMD = 'bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)';
 
 const SetupWizard = () => {
   const { t } = useTranslation();

@@ -395,10 +395,12 @@ const ServerStats = () => {
           <span className="ds-live">
             <span className="ds-live-dot" aria-hidden="true" />
             <span>{t('liveOperations', 'Live operations')}</span>
-            <span className="ds-updated" aria-live="polite">
-              · {t('updatedAt', 'Updated')} {fmtUpdated(lastUpdated)}
-              {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale — refresh failed')}</span>}
-            </span>
+            {lastUpdated ? (
+              <span className="ds-updated" aria-live="polite">
+                · {t('updatedAt', 'Updated')} {fmtUpdated(lastUpdated)}
+              </span>
+            ) : null}
+            {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale — refresh failed')}</span>}
           </span>
         )}
         actions={(
