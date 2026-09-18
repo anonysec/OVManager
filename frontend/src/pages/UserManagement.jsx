@@ -148,6 +148,11 @@ const UserManagement = () => {
     };
   }, [users]);
 
+  const userTags = useMemo(
+    () => [...new Set(users.map((u) => u.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [users],
+  );
+
   const searchTerm = searchParams.get('q') || '';
   const view = searchParams.get('view') || 'all';
   const patchParams = useCallback((mutate) => {
@@ -162,7 +167,7 @@ const UserManagement = () => {
     const term = searchTerm.trim().toLowerCase();
     return users.filter((user) => {
       if (term) {
-        const hay = `${user.name || ''} ${user.uuid || ''} ${user.owner || ''}`.toLowerCase();
+        const hay = `${user.name || ''} ${user.tag || ''} ${user.owner || ''}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       if (view === 'online' && !(user.online || Number(user.active_connections || 0) > 0)) return false;
@@ -170,6 +175,7 @@ const UserManagement = () => {
       if (view === 'quota') { if (!(Number(user.total) > 0 && (Number(user.used || 0) / Number(user.total)) >= 0.85)) return false; }
       if (view === 'disabled' && user.is_active) return false;
       if (view === 'unlimited' && (user.total !== null && user.total !== 0)) return false;
+      if (view.startsWith('tag:') && (user.tag || '') !== view.slice(4)) return false;
       return true;
     });
   }, [users, searchTerm, view]);
@@ -414,7 +420,10 @@ const UserManagement = () => {
           <span className="dt-cell-main">
             <span className="dt-avatar" aria-hidden="true">{String(u.name || '?').slice(0, 1).toUpperCase()}</span>
             <span style={{ minWidth: 0 }}>
-              <span className="dt-cell-title">{u.name}</span>
+              <span className="dt-cell-title">
+                {u.name}
+                {u.tag && <span className="dt-tag">{u.tag}</span>}
+              </span>
               <br />
               <span className="dt-cell-sub">{u.owner || '—'}</span>
             </span>
@@ -541,6 +550,17 @@ const UserManagement = () => {
               {f.label} <span className="um-chip-count">{filterCounts[f.id] ?? 0}</span>
             </button>
           ))}
+          {userTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className={`um-chip um-chip-tag${view === `tag:${tag}` ? ' is-active' : ''}`}
+              aria-pressed={view === `tag:${tag}`}
+              onClick={() => setView(`tag:${tag}`)}
+            >
+              {tag} <span className="um-chip-count">{users.filter((u) => u.tag === tag).length}</span>
+            </button>
+          ))}
           {(searchTerm || view !== 'all') && (
             <button type="button" className="um-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>
               {t('clear', 'Clear')}
@@ -648,7 +668,7 @@ const UserManagement = () => {
         onClose={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
         user={selectedUser}
         onSaved={async () => {
-          addToast(t('userUpdated'), 'success');
+          addToast(t('userUpdated', 'User updated'), 'success');
           setIsEditModalOpen(false);
           setSelectedUser(null);
           fetchUsers();

@@ -546,3 +546,23 @@
   gap: 10px;
   margin-top: 4px;
 }
+
+/* ── User tags ────────────────────────────────────────────────────────
+   Small bookkeeping chips: shown on the row next to the name and as
+   filter chips above the table. */
+.dt-tag {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--accent-soft, color-mix(in srgb, var(--accent-color) 14%, transparent));
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.um-chip-tag:not(.is-active) {
+  border-style: dashed;
+}

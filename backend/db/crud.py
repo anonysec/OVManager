@@ -235,12 +235,14 @@ def create_user(db: Session, request: CreateUser, owner: str):
             days = 30
         expiry = _date.today() + _timedelta(days=days)
 
+    tag = (request.tag or "").strip() or None
     new_user = User(
         name=username,
         expiry_date=expiry,
         total=request.total,
         max_logins=request.max_logins,
         owner=owner,
+        tag=tag,
         uuid=str(uuid4()),
     )
 
@@ -298,6 +300,8 @@ def update_user(db: Session, uuid: str, request: UpdateUser):
         user.total = request.total
     if "max_logins" in sent and request.max_logins is not None:
         user.max_logins = request.max_logins
+    if "tag" in sent:
+        user.tag = (request.tag or "").strip() or None
 
     # Evaluate the activation guards against the POST-UPDATE row, not the
     # request: with partial updates the request may not carry these fields.

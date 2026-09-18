@@ -687,6 +687,7 @@
   "usageResetSuccess": "Usage for {{name}} has been reset.",
   "usernameHint": "3–64 characters.",
   "showingRange": "Showing {{from}}–{{to}} of {{total}}",
+  "swipeHint": "Swipe to see more",
   "rowsPerPage": "Rows per page",
   "confirmDeleteAdmin": "Delete admin \"{{name}}\"? Their users will remain but become unassigned.",
   "shortcutsTitle": "Keyboard shortcuts",
@@ -819,5 +820,9 @@
   "createdNote": "Hand the profile to the customer — the VPN config is generated on first download.",
   "createdCopyLink": "Copy subscription link",
   "createdCopied": "Link copied",
-  "createdDone": "Done"
+  "createdDone": "Done",
+  "userTag": "Label",
+  "userTagHint": "Optional — e.g. monthly, vip, reseller-a. Shown as a chip on the user row.",
+  "userTagPlaceholder": "monthly, vip, reseller-a…",
+  "userUpdated": "User updated"
 }

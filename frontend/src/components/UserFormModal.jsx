@@ -51,6 +51,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
   const days = Number(defaults?.days) || 30;
   const defaultLogins = String(defaults?.maxLogins ?? 1);
   const [name, setName] = useState('');
+  const [tag, setTag] = useState('');
   const [expiryDate, setExpiryDate] = useState(defaultExpiryDate(days));
   const [totalTraffic, setTotalTraffic] = useState('');
   const [maxLogins, setMaxLogins] = useState(defaultLogins);
@@ -72,9 +73,11 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
       }
       setTotalTraffic(gbFromBytes(user.total));
       setMaxLogins(user.max_logins === null || user.max_logins === undefined ? '1' : user.max_logins.toString());
+      setTag(user.tag || '');
       setError('');
     } else if (!isEdit && isOpen) {
       setName('');
+      setTag('');
       setExpiryDate(defaultExpiryDate(days));
       setTotalTraffic('');
       setMaxLogins(defaultLogins);
@@ -109,7 +112,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
     if (value) setName(value);
   };
 
-  const reset = () => { setName(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setSuggest(''); setCreatedUser(null); setCopied(false); };
+  const reset = () => { setName(''); setTag(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setSuggest(''); setCreatedUser(null); setCopied(false); };
 
   const handleClose = () => {
     if (!isEdit) reset();
@@ -127,6 +130,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
         expiry_date: expiryDate,
         total: bytesFromGB(totalTraffic),
         max_logins: Number.isNaN(parsedLogins) ? 1 : parsedLogins,
+        tag: tag.trim() || null,
       };
       const response = isEdit
         ? await apiClient.put(`/users/${user.uuid}`, payload)
@@ -172,7 +176,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
       {createdUser && (
         <div className="uf-created" role="status">
           <FiCheckCircle className="uf-created-icon" aria-hidden="true" />
-          <h3 className="uf-created-title">{t('createdTitle', 'User created')}</h3>
+          <h3 className="uf-created-title">{createdUser.name}{createdUser.tag ? ` · ${createdUser.tag}` : ''}</h3>
           <p className="uf-created-note">
             {t('createdNote', 'Hand the profile to the customer — the VPN config is generated on first download.')}
           </p>
@@ -239,6 +243,18 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
             </div>
             {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameHint', '3–64 characters.')}</p>}
           </div>
+          <Field
+            label={t('userTag', 'Label')}
+            hint={t('userTagHint', 'Optional — e.g. monthly, vip, reseller-a. Shown as a chip on the user row.')}
+          >
+            <input
+              type="text"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              maxLength={64}
+              placeholder={t('userTagPlaceholder', 'monthly, vip, reseller-a…')}
+            />
+          </Field>
           {!isEdit && (
             <p className="uf-note">{t('createUserDefaults', 'New users start with {{days}} days and {{devices}} device(s) — change anything below.', { days, count: Number(defaultLogins) || 1 })}</p>
           )}

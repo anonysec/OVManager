@@ -20,6 +20,39 @@
   outline-offset: -2px;
 }
 
+.dt-body {
+  position: relative;
+}
+
+.dt-swipe-hint {
+  position: absolute;
+  inset-inline-end: 10px;
+  bottom: 10px;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+
+.dt-body.is-swipeable .dt-swipe-hint {
+  display: inline-flex;
+}
+
+/* The chevron points at the hidden edge: flips under RTL. */
+[dir='rtl'] .dt-swipe-hint svg {
+  transform: scaleX(-1);
+}
+
 .dt-table {
   width: 100%;
   border-collapse: collapse;
