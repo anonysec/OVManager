@@ -47,9 +47,12 @@ actually runs OpenVPN):
 
 ## 3. Create a user and connect
 
-1. **Users → Add User** — name, expiry, traffic limit. Leave the rest default.
-2. Click the download icon on the user row, pick a node, save the `.ovpn` file.
-3. Import it into any OpenVPN client (Windows/macOS: OpenVPN Connect,
+1. **Users → Add User** — name, expiry, traffic limit. Leave the rest default
+   (defaults come from Settings → Defaults: 30 days, 1 device).
+2. The panel immediately offers the handoff: **Get Config** (pick a node,
+   save the `.ovpn` file) or **Copy subscription link**. You can do both
+   later from the user row's download icon.
+3. Import the config into any OpenVPN client (Windows/macOS: OpenVPN Connect,
    Android/iOS: OpenVPN app, Linux: NetworkManager or `openvpn --config`).
 
 That is the whole flow. Details: [single-vps](single-vps.md),

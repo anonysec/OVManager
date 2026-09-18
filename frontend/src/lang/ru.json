@@ -804,7 +804,7 @@
   "formSectionAccount": "Аккаунт",
   "formSectionValidity": "Срок действия",
   "formSectionLimits": "Лимиты",
-  "createUserDefaults": "Новые пользователи начинают с 30 дней и 1 устройства — измените что нужно ниже.",
+  "createUserDefaults": "Новые пользователи: {{days}} дн., {{count}} устройство(а) — всё можно изменить.",
   "quotaLabel": "Квота",
   "quotaUsed": "Использовано {{pct}}%",
   "downloadConfigHint": "Скачать профиль OpenVPN этого пользователя (.ovpn).",
@@ -814,5 +814,10 @@
   "th_detail": "Подробности",
   "justNow": "только что",
   "resultOne": "результат",
-  "resultsMany": "результатов"
+  "resultsMany": "результатов",
+  "createdTitle": "Пользователь создан",
+  "createdNote": "Передайте профиль клиенту — конфиг VPN создаётся при первой загрузке.",
+  "createdCopyLink": "Скопировать ссылку",
+  "createdCopied": "Ссылка скопирована",
+  "createdDone": "Готово"
 }

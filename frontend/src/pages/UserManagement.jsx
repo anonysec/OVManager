@@ -633,9 +633,15 @@ const UserManagement = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSaved={async () => {
           addToast(t('userCreated', 'User created'), 'success');
-          setIsAddModalOpen(false);
           fetchUsers();
         }}
+        defaults={{
+          days: subSettings?.default_days || 30,
+          trafficGb: subSettings?.default_traffic_gb ?? '',
+          maxLogins: subSettings?.default_max_users ?? 1,
+        }}
+        linkForUser={getSubscriptionLink}
+        onDownloadUser={handleOpenDownloadModal}
       />
       <UserFormModal
         isOpen={isEditModalOpen}

@@ -804,7 +804,7 @@
   "formSectionAccount": "Account",
   "formSectionValidity": "Validity",
   "formSectionLimits": "Limits",
-  "createUserDefaults": "New users start with 30 days and 1 device — change anything below.",
+  "createUserDefaults": "New users start with {{days}} days and {{count}} device(s) — change anything below.",
   "quotaLabel": "Quota",
   "quotaUsed": "{{pct}}% used",
   "downloadConfigHint": "Download this user's OpenVPN profile (.ovpn).",
@@ -814,5 +814,10 @@
   "th_detail": "Detail",
   "justNow": "just now",
   "resultOne": "result",
-  "resultsMany": "results"
+  "resultsMany": "results",
+  "createdTitle": "User created",
+  "createdNote": "Hand the profile to the customer — the VPN config is generated on first download.",
+  "createdCopyLink": "Copy subscription link",
+  "createdCopied": "Link copied",
+  "createdDone": "Done"
 }
