@@ -61,7 +61,7 @@
   padding: 8px 16px;
   border-radius: 4px;
   font-weight: 600;
-  z-index: 1000;
+  z-index: var(--z-modal);
   transition: top 0.2s ease;
   text-decoration: none;
 }
@@ -127,7 +127,7 @@
   margin-bottom: 6px;
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 .input-group input,
@@ -179,7 +179,7 @@
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--font-size-md);
   font-weight: 700;
   font-family: var(--font-family);
   background-color: var(--accent);
@@ -225,7 +225,7 @@
 
 .btn.btn-sm {
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 .btn.btn-danger {
@@ -326,8 +326,7 @@
 .ops-topbar-minimal {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   z-index: 110;
   display: flex;
   align-items: center;
@@ -358,7 +357,7 @@
 .ops-breadcrumb-link {
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   transition: color 0.15s ease;
 }
@@ -374,7 +373,7 @@
 
 .ops-current-page {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -402,8 +401,7 @@
   content: '';
   position: absolute;
   bottom: -4px;
-  left: 12px;
-  right: 12px;
+  inset-inline: 12px;
   height: 3px;
   background: var(--accent-color);
   border-radius: 2px;
@@ -467,7 +465,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .ops-profile.active {
@@ -524,7 +522,7 @@
 .notification-popover {
   position: absolute;
   top: 100%;
-  right: 0;
+  inset-inline-end: 0;
   width: 280px;
   max-height: 200px;
   background: var(--background-secondary);
@@ -540,7 +538,7 @@
 .notification-popover p {
   padding: 8px 0;
   border-bottom: 1px solid var(--border-color);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
 }
 
@@ -574,7 +572,7 @@
 .toast-stack {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  inset-inline-end: 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -667,8 +665,7 @@
 
 
   .toast-stack {
-    right: 12px;
-    left: 12px;
+    inset-inline: 12px;
     max-width: none;
   }
 }
@@ -725,7 +722,7 @@
   color: var(--text-secondary);
 }
 .empty-state h3 { margin: 0 0 6px; font-size: 17px; color: var(--text-primary); }
-.empty-state p { margin: 0 0 16px; font-size: 13px; line-height: 1.5; max-width: 360px; }
+.empty-state p { margin: 0 0 16px; font-size: var(--font-size-sm); line-height: 1.5; max-width: 360px; }
 .empty-state-action { margin-top: 4px; }
 
 .onboarding-steps li.is-done {
@@ -759,7 +756,7 @@
   background: var(--surface-color);
   border-radius: 999px;
   vertical-align: middle;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   overflow: hidden;
 }
 .usage-bar-fill.warn { background: var(--accent-color); }
@@ -781,7 +778,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  z-index: 9998;
+  z-index: var(--z-command);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -832,7 +829,7 @@
 .palette-input::placeholder { color: var(--text-muted); }
 
 .palette-kbd {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--surface-color);
@@ -851,7 +848,7 @@
   padding: 24px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 .palette-item {
@@ -865,7 +862,7 @@
   color: var(--text-primary);
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   text-align: start;
   transition: background 100ms ease;
 }
@@ -884,7 +881,7 @@
   display: flex;
   align-items: center;
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: var(--font-size-md);
   width: 22px;
   justify-content: center;
   flex-shrink: 0;
@@ -898,7 +895,7 @@
 }
 
 .palette-item-label small {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
 
@@ -919,17 +916,17 @@
   gap: 16px;
   padding: 10px 16px;
   border-top: 1px solid var(--border-color);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
 
 .palette-footer kbd {
-  font-size: 10px;
+  font-size: var(--font-size-2xs);
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--surface-color);
   border: 1px solid var(--border-color);
-  margin-right: 3px;
+  margin-inline-end: 3px;
 }
 
 /* ============================================================
@@ -939,11 +936,11 @@
 .ops-sidebar {
   position: fixed;
   top: var(--topbar-h);
-  left: 0;
+  inset-inline-start: 0;
   bottom: 0;
   width: var(--sidebar-width, 220px);
   background: var(--surface-1, var(--background-secondary));
-  border-right: 1px solid var(--line, var(--border-color));
+  border-inline-end: 1px solid var(--line, var(--border-color));
   display: flex;
   flex-direction: column;
   z-index: 70;
@@ -980,7 +977,7 @@
 }
 
 .ops-sidebar--collapsed .sidebar-brand-text {
-  font-size: 9px;
+  font-size: var(--font-size-2xs);
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -991,9 +988,9 @@
   justify-content: center;
   padding: 10px;
   gap: 0;
-  border-left: none;
-  margin-left: 0;
-  padding-left: 0;
+  border-inline-start: none;
+  margin-inline-start: 0;
+  padding-inline-start: 0;
 }
 
 .ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-label {
@@ -1003,7 +1000,7 @@
 /* In rail mode the nav icons sit centered, so pull the knob tighter to the
    edge to keep it clear of them. */
 .ops-sidebar--collapsed .sidebar-toggle {
-  right: 4px;
+  inset-inline-end: 4px;
   width: 22px;
   height: 22px;
 }
@@ -1074,7 +1071,7 @@
 .sidebar-toggle {
   position: absolute;
   top: 50%;
-  right: 8px;
+  inset-inline-end: 8px;
   transform: translateY(-50%);
   z-index: 6;
   width: 26px;
@@ -1346,14 +1343,14 @@
   }
   .sidebar-hamburger {
     top: 10px;
-    left: 10px;
+    inset-inline-start: 10px;
     z-index: 105; /* above sidebar, below topbar */
   }
   .ops-main-content,
   .ops-main-content--collapsed,
   .ops-main-content--mobile {
     /* topbar height comes from --topbar-h; content starts below it on mobile */
-    margin-left: 0;
+    margin-inline: 0;
   }
 }
 
