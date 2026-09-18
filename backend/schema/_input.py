@@ -15,6 +15,9 @@ class CreateUser(BaseModel):
     # Optional: omitted → today + Settings.default_days (crud.create_user).
     # total=None stays unlimited; only expiry gets a default.
     expiry_date: date | None = None
+    # Free-form label for organizing customers ("monthly", "vip").
+    # Pure bookkeeping: never sent to nodes.
+    tag: str | None = Field(default=None, max_length=64)
 
 
 class UpdateUser(BaseModel):
@@ -30,6 +33,7 @@ class UpdateUser(BaseModel):
     # distinguishes omitted from explicitly-null via model_fields_set and
     # rejects the latter, since the column is NOT NULL.
     expiry_date: date | None = None
+    tag: str | None = Field(default=None, max_length=64)
     status: bool | None = None
 
 

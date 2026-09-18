@@ -687,6 +687,7 @@
   "usageResetSuccess": "مصرف {{name}} بازنشانی شد.",
   "usernameHint": "۳ تا ۶۴ نویسه.",
   "showingRange": "نمایش {{from}}–{{to}} از {{total}}",
+  "swipeHint": "برای دیدن بیشتر بکشید",
   "rowsPerPage": "ردیف در صفحه",
   "confirmDeleteAdmin": "ادمین «{{name}}» حذف شود؟ کاربرانش باقی می‌مانند اما بدون مالک خواهند شد.",
   "shortcutsTitle": "میانبرهای صفحه‌کلید",
@@ -819,5 +820,9 @@
   "createdNote": "پروفایل را به مشتری بدهید — کانفیگ VPN در اولین دانلود ساخته می‌شود.",
   "createdCopyLink": "کپی لینک اشتراک",
   "createdCopied": "لینک کپی شد",
-  "createdDone": "تمام"
+  "createdDone": "تمام",
+  "userTag": "برچسب",
+  "userTagHint": "اختیاری — مثلاً monthly، vip، reseller-a. روی ردیف کاربر به‌صورت چیپ نمایش داده می‌شود.",
+  "userTagPlaceholder": "monthly، vip، reseller-a…",
+  "userUpdated": "کاربر به‌روزرسانی شد"
 }

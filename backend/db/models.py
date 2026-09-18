@@ -30,6 +30,9 @@ class User(Base):
     # Last time the user had at least one live connection (set whenever
     # active_connections > 0). Used by the UI "Last Online" column.
     last_online: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    # Free-form label for organizing customers ("monthly", "reseller-a").
+    # Pure bookkeeping: never sent to nodes, never affects connectivity.
+    tag: Mapped[str] = mapped_column(nullable=True, default=None)
 
 
 class Admin(Base):

@@ -26,6 +26,7 @@ class Users(BaseModel):
     owner: str
     uuid: str
     last_online: str | None = None
+    tag: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("last_online", mode="before")

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { FiChevronUp, FiChevronDown, FiChevronsLeft, FiChevronsRight, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { SkeletonTable } from './Skeleton';
@@ -27,11 +28,27 @@ const DataTable = ({
   density = 'comfort',
 }) => {
   const { t } = useTranslation();
+  const scrollRef = useRef(null);
+  const [swipeable, setSwipeable] = useState(false);
   const totalRows = total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const from = totalRows === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const to = Math.min(totalRows, safePage * pageSize);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const check = () => setSwipeable(el.scrollWidth > el.clientWidth + 1);
+    check();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', check);
+      return () => window.removeEventListener('resize', check);
+    }
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, rows, columns]);
 
   if (loading) {
     return <SkeletonTable rows={8} cols={columns.length + (selectable ? 1 : 0)} />;
@@ -39,80 +56,86 @@ const DataTable = ({
 
   return (
     <div className={`dt-wrap dt-${density}`}>
-      <div className="dt-scroll" role="region" aria-label={caption || t('table', 'Table')} tabIndex={0}>
-        <table className="dt-table">
-          {caption && <caption className="dt-caption">{caption}</caption>}
-          <thead>
-            <tr>
-              {selectable && (
-                <th scope="col" className="dt-th dt-col-check">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                    onChange={(e) => onSelectAll?.(e.target.checked)}
-                    aria-label={t('selectAll', 'Select all')}
-                  />
-                </th>
-              )}
-              {columns.map((c) => {
-                const active = sortKey === c.key;
-                const ariaSort = !c.sortable ? undefined : active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
-                return (
-                  <th
-                    key={c.key}
-                    scope="col"
-                    aria-sort={ariaSort}
-                    className={`dt-th${c.className ? ` ${c.className}` : ''}${c.sortable ? ' dt-sortable' : ''}${c.hideOnMobile ? ' dt-hide-mobile' : ''}`}
-                  >
-                    {c.sortable ? (
-                      <button
-                        type="button"
-                        className="dt-sort-btn"
-                        onClick={() => onSort?.(c.key)}
-                        aria-label={`${c.label}: ${t('sort', 'sort')}`}
-                      >
-                        <span>{c.label}</span>
-                        <span className="dt-sort-ico" aria-hidden="true">
-                          {active ? (sortDir === 'asc' ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />) : <FiChevronDown size={13} className="dt-sort-idle" />}
-                        </span>
-                      </button>
-                    ) : c.label}
+      <div className={`dt-body${swipeable ? ' is-swipeable' : ''}`}>
+        <div className="dt-scroll" ref={scrollRef} role="region" aria-label={caption || t('table', 'Table')} tabIndex={0}>
+          <table className="dt-table">
+            {caption && <caption className="dt-caption">{caption}</caption>}
+            <thead>
+              <tr>
+                {selectable && (
+                  <th scope="col" className="dt-th dt-col-check">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                      onChange={(e) => onSelectAll?.(e.target.checked)}
+                      aria-label={t('selectAll', 'Select all')}
+                    />
                   </th>
+                )}
+                {columns.map((c) => {
+                  const active = sortKey === c.key;
+                  const ariaSort = !c.sortable ? undefined : active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+                  return (
+                    <th
+                      key={c.key}
+                      scope="col"
+                      aria-sort={ariaSort}
+                      className={`dt-th${c.className ? ` ${c.className}` : ''}${c.sortable ? ' dt-sortable' : ''}${c.hideOnMobile ? ' dt-hide-mobile' : ''}`}
+                    >
+                      {c.sortable ? (
+                        <button
+                          type="button"
+                          className="dt-sort-btn"
+                          onClick={() => onSort?.(c.key)}
+                          aria-label={`${c.label}: ${t('sort', 'sort')}`}
+                        >
+                          <span>{c.label}</span>
+                          <span className="dt-sort-ico" aria-hidden="true">
+                            {active ? (sortDir === 'asc' ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />) : <FiChevronDown size={13} className="dt-sort-idle" />}
+                          </span>
+                        </button>
+                      ) : c.label}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const k = rowKey(row, i);
+                const checked = selectedKeys?.has?.(String(k)) ?? false;
+                return (
+                  <tr key={k} className={`dt-row${checked ? ' dt-selected' : ''}`}>
+                    {selectable && (
+                      <td className="dt-td dt-col-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => onSelectRow?.(k, e.target.checked)}
+                          aria-label={t('selectRow', 'Select row')}
+                        />
+                      </td>
+                    )}
+                    {columns.map((c) => (
+                      <td
+                        key={c.key}
+                        className={`dt-td${c.className ? ` ${c.className}` : ''}${c.hideOnMobile ? ' dt-hide-mobile' : ''}`}
+                        data-label={typeof c.label === 'string' ? c.label : undefined}
+                      >
+                        {c.render ? c.render(row) : (row[c.key] ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const k = rowKey(row, i);
-              const checked = selectedKeys?.has?.(String(k)) ?? false;
-              return (
-                <tr key={k} className={`dt-row${checked ? ' dt-selected' : ''}`}>
-                  {selectable && (
-                    <td className="dt-td dt-col-check">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => onSelectRow?.(k, e.target.checked)}
-                        aria-label={t('selectRow', 'Select row')}
-                      />
-                    </td>
-                  )}
-                  {columns.map((c) => (
-                    <td
-                      key={c.key}
-                      className={`dt-td${c.className ? ` ${c.className}` : ''}${c.hideOnMobile ? ' dt-hide-mobile' : ''}`}
-                      data-label={typeof c.label === 'string' ? c.label : undefined}
-                    >
-                      {c.render ? c.render(row) : (row[c.key] ?? '—')}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+        <span className="dt-swipe-hint" aria-hidden="true">
+          <FiChevronsRight size={12} />
+          {t('swipeHint', 'Swipe to see more')}
+        </span>
       </div>
 
       {onPageChange && totalRows > 0 && (

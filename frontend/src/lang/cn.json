@@ -687,6 +687,7 @@
   "usageResetSuccess": "已重置 {{name}} 的用量。",
   "usernameHint": "3–64 个字符。",
   "showingRange": "显示第 {{from}}–{{to}} 条，共 {{total}} 条",
+  "swipeHint": "左右滑动查看更多",
   "rowsPerPage": "每页行数",
   "confirmDeleteAdmin": "删除管理员「{{name}}」？其用户将保留但变为未分配。",
   "shortcutsTitle": "键盘快捷键",
@@ -819,5 +820,9 @@
   "createdNote": "将配置交给客户——VPN 配置会在首次下载时生成。",
   "createdCopyLink": "复制订阅链接",
   "createdCopied": "已复制链接",
-  "createdDone": "完成"
+  "createdDone": "完成",
+  "userTag": "标签",
+  "userTagHint": "可选——例如 monthly、vip、reseller-a。会显示在用户行的标签中。",
+  "userTagPlaceholder": "monthly、vip、reseller-a…",
+  "userUpdated": "用户已更新"
 }

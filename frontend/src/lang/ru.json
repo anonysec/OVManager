@@ -687,6 +687,7 @@
   "usageResetSuccess": "Трафик для {{name}} сброшен.",
   "usernameHint": "От 3 до 64 символов.",
   "showingRange": "Показаны {{from}}–{{to}} из {{total}}",
+  "swipeHint": "Прокрутите, чтобы увидеть больше",
   "rowsPerPage": "Строк на странице",
   "confirmDeleteAdmin": "Удалить администратора «{{name}}»? Его пользователи останутся, но станут бесхозными.",
   "shortcutsTitle": "Горячие клавиши",
@@ -819,5 +820,9 @@
   "createdNote": "Передайте профиль клиенту — конфиг VPN создаётся при первой загрузке.",
   "createdCopyLink": "Скопировать ссылку",
   "createdCopied": "Ссылка скопирована",
-  "createdDone": "Готово"
+  "createdDone": "Готово",
+  "userTag": "Метка",
+  "userTagHint": "Необязательно — например monthly, vip, reseller-a. Показывается меткой в строке.",
+  "userTagPlaceholder": "monthly, vip, reseller-a…",
+  "userUpdated": "Пользователь обновлён"
 }
