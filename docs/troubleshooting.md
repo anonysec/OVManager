@@ -78,6 +78,24 @@ Check in order:
    `curl -sk https://127.0.0.1:2083/sync/health` should print `{"status":"ok"}`.
    Cloud security groups are the usual culprit.
 
+## No node-down Telegram alert
+
+The panel probes every node about every 5 minutes and messages the owner once
+per outage. Nothing arrives? Check in order:
+
+1. **Bot set up**: token + owner ID saved in **Settings → Bot**, and *Start*
+   tapped in the bot once (Telegram refuses messages from users who never
+   started the chat).
+2. **Toggle on**: **Settings → Alerts → "Node goes down or comes back"**.
+3. **Wait a probe**: detection is transition-based on the 5-minute collector,
+   so allow up to ~5 minutes after the node actually went down.
+4. **One message per outage**: a still-down node is not re-alerted every
+   5 minutes — you get the down message once and a "back online" message on
+   recovery. If the bot itself was broken during the outage, the panel keeps
+   retrying, so the alert arrives late (not never) once Telegram works again.
+5. **You deleted/re-added the node**: alerts key off the panel node entry —
+   re-adding it resets the "already alerted" state, which is fine.
+
 ## Subscription link shows localhost / doesn't download
 
 Subscription and download links are built from the address **you** open the

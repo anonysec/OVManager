@@ -66,6 +66,11 @@ A user's numeric panel id *is* their OpenVPN common name: user 42 gets
 certificate CN `42`. The node stores the display name alongside it, so usage
 reports can be keyed by username while the certificate layer stays numeric.
 
+Each user can also carry an optional free-text **tag** (up to 64 characters,
+for example `monthly`, `vip`, `reseller-a`). It shows on the user row and is
+searchable and filterable — a lightweight way to group customers without
+adding any schema beyond one column.
+
 ## Security model
 
 * **Secret URL path (URLPATH):** the panel is served under a random prefix
@@ -86,6 +91,15 @@ Handlers read its in-memory snapshot, so a dead node can never stall the user
 list. Other jobs clean stale sessions, push limits to nodes, prune logs and
 history, and send the daily expiry/quota summary to the owner.
 
+That same 5-minute collector watches whether each node answers its probe. On
+the **transition** the panel can message the owner on Telegram — one "node is
+unreachable" alert per outage, and one "back online" message when it answers
+again; a flapping node is throttled so it cannot page you every 5 minutes.
+The toggle (on by default) is **Settings → Alerts → "Node goes down or comes
+back"**; it needs the bot token and owner ID from the Bot section. A failed
+send (bot down, token changed) is retried on the next tick, so the alert
+still lands once Telegram works again.
+
 ## Updates
 
 Run `ovmanager update` (or **Update** in the `ovmanager`/`ovm` terminal menu);
@@ -100,3 +114,11 @@ systemd timer for it. **Settings → Advanced → Backup** can instead schedule
 database backups inside the panel (off by default) and restores an upload
 atomically: writes are refused (HTTP 503) until the swap finishes, the current
 database is kept as a fallback, and the restored one is migrated on the spot.
+
+Scheduled backups can also keep an **offsite copy**: fill in a target like
+`backup@server:/backups/panel` and after each automatic backup the newest
+file is pushed there with `rsync` (or `scp` when rsync is missing). The
+transfer uses plain SSH with key-based login (`BatchMode`, no password
+prompts), so the target machine must accept your key and the target folder
+must already exist. Success or failure is written to the Audit Log — nothing
+else on the remote side is touched or cleaned up.
