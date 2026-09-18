@@ -56,6 +56,7 @@ const BackupSection = () => {
   const [autoEnabled, setAutoEnabled] = useState(false);
   const [autoTime, setAutoTime] = useState(DEFAULT_TIME);
   const [autoKeep, setAutoKeep] = useState('50');
+  const [offsiteTarget, setOffsiteTarget] = useState('');
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMsg, setAutoMsg] = useState(null);
 
@@ -72,6 +73,9 @@ const BackupSection = () => {
         if (d.auto_backup_keep !== undefined && d.auto_backup_keep !== null) {
           setAutoKeep(String(clampKeep(d.auto_backup_keep)));
         }
+        if (typeof d.offsite_backup_target === 'string') {
+          setOffsiteTarget(d.offsite_backup_target);
+        }
       })
       .catch(() => { /* keep the defaults; the card still renders */ });
     return () => { cancelled = true; };
@@ -86,11 +90,13 @@ const BackupSection = () => {
         auto_backup_enabled: autoEnabled,
         auto_backup_time: autoTime || DEFAULT_TIME,
         auto_backup_keep: keep,
+        offsite_backup_target: offsiteTarget.trim(),
       });
       if (r?.data?.success === false) {
         setAutoMsg({ type: 'error', text: r.data?.msg || t('error', 'Failed') });
       } else {
         setAutoKeep(String(keep));
+        setOffsiteTarget((r?.data?.data?.offsite_backup_target ?? offsiteTarget.trim()));
         setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
       }
     } catch (e) {
@@ -240,6 +246,25 @@ const BackupSection = () => {
             />
           </Field>
         </div>
+
+        <Field
+          label={t('offsiteTarget', 'Offsite copy target')}
+          hint={t('offsiteTargetHint', 'Optional. After each automatic backup, the newest file is copied here with rsync (or scp). Format: user@server:/path — the target folder must already exist and SSH key login must work.')}
+          inputId="backup-offsite-target"
+        >
+          <input
+            id="backup-offsite-target"
+            className="sp-input"
+            type="text"
+            dir="ltr"
+            placeholder={t('offsiteTargetPlaceholder', 'backup@server:/backups/panel')}
+            value={offsiteTarget}
+            disabled={autoSaving}
+            autoComplete="off"
+            spellCheck="false"
+            onChange={(e) => setOffsiteTarget(e.target.value)}
+          />
+        </Field>
 
         {newestAge && (
           <p className="sp-hint sp-mt-12">

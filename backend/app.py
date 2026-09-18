@@ -537,6 +537,7 @@ async def auto_backup_job():
             settings = db.query(Settings).first()
             enabled = bool(getattr(settings, "auto_backup_enabled", False))
             keep = int(getattr(settings, "auto_backup_keep", 50) or 50)
+            offsite_target = getattr(settings, "offsite_backup_target", None) or ""
         finally:
             db.close()
 
@@ -557,6 +558,16 @@ async def auto_backup_job():
 
         logger.info("Scheduled auto backup created: %s", backup_path.name)
         log_event(None, "maintenance.backup", actor="auto", detail=f"Backup created: {backup_path.name}")
+
+        # Optional offsite copy of the fresh backup (rsync, fallback scp).
+        if offsite_target.strip():
+            from backend.operations.offsite_backup import push_offsite
+
+            pushed = await asyncio.to_thread(push_offsite, backup_path, offsite_target)
+            if pushed:
+                log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy pushed: {backup_path.name}")
+            else:
+                log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy failed for {backup_path.name}")
     except Exception:
         logger.exception("Scheduled auto backup job crashed")
 

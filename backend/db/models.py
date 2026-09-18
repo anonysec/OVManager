@@ -119,3 +119,6 @@ class Settings(Base):
     auto_backup_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)
     auto_backup_time: Mapped[str] = mapped_column(default="03:30", nullable=False)
     auto_backup_keep: Mapped[int] = mapped_column(default=50, nullable=False)
+    # Optional offsite copy of the newest scheduled backup, pushed with
+    # system rsync (fallback scp). Format: "[user@]host:/path".
+    offsite_backup_target: Mapped[str] = mapped_column(nullable=True)
