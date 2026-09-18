@@ -130,50 +130,6 @@
   box-shadow: var(--focus-ring-shadow);
 }
 
-.login-features {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-4) 0 0;
-  border-top: 1px solid var(--border);
-  list-style: none;
-}
-
-.login-features li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.login-features svg {
-  flex: 0 0 auto;
-  color: var(--accent-text);
-}
-
-.login-footnotes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.login-footnote {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-snug);
-}
-
-.login-footnote-help {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
 @media (max-width: 479.98px) {
   .login-page {
     padding: var(--space-4);

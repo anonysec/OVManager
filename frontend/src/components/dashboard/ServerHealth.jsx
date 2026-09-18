@@ -20,13 +20,64 @@ const tonify = (pct) => {
   return 'ok';
 };
 
-export default function ServerHealth({ stats, traffic, error, loading, onRetry, t: tProp, onlineNodes, totalNodes }) {
+export default function ServerHealth({ stats, traffic, error, loading, onRetry, t: tProp, onlineNodes, totalNodes, embedded = false }) {
   const { t } = useTranslation();
   const cpu = Number(stats?.cpu ?? 0);
   const mem = Number(stats?.memory_percent ?? 0);
   const disk = Number(stats?.disk_percent ?? 0);
   const load = Number(stats?.load_1 ?? stats?.load ?? 0);
   const cpuSpark = (traffic?.conns || []).slice(-24);
+
+  const meters = stats && (
+    <div className="ds-health-grid">
+      <Meter
+        label={t('panelCPU', 'CPU')}
+        value={`${cpu.toFixed(0)}%`}
+        pct={cpu}
+        tone={tonify(cpu)}
+        spark={cpuSpark}
+        ariaSuffix={t(TONE_LABEL(cpu), '')}
+      />
+      <Meter
+        label={t('panelMemory', 'Memory')}
+        value={`${mem.toFixed(0)}%`}
+        pct={mem}
+        tone={tonify(mem)}
+        spark={cpuSpark}
+      />
+      <Meter
+        label={t('disk', 'Disk')}
+        value={`${disk.toFixed(0)}%`}
+        pct={disk}
+        tone={disk > 85 ? 'danger' : 'ok'}
+        spark={cpuSpark}
+      />
+      <div className="ds-meter ds-meter--ok">
+        <div className="ds-meter-label">
+          <span>{t('load', 'Load')}</span>
+          <span className="ds-meter-value">{load ? load.toFixed(2) : '—'}</span>
+        </div>
+        <Sparkline values={(traffic?.bytes || []).slice(-24)} tone="info" className="ds-meter-spark" />
+      </div>
+    </div>
+  );
+
+  // Embedded mode renders bare meters — the dashboard's fleet card owns the
+  // card chrome and shows node reachability beside it.
+  if (embedded) {
+    return (
+      <PanelState
+        t={tProp || t}
+        loading={loading}
+        error={error}
+        isEmpty={!stats}
+        onRetry={onRetry}
+        skeleton={<SkeletonStats count={4} label={t('loading', 'Loading…')} />}
+      >
+        {meters}
+      </PanelState>
+    );
+  }
 
   return (
     <Panel
@@ -41,46 +92,12 @@ export default function ServerHealth({ stats, traffic, error, loading, onRetry, 
         onRetry={onRetry}
         skeleton={<SkeletonStats count={4} label={t('loading', 'Loading…')} />}
       >
-        {stats && (
-          <>
-            <div className="ds-health-grid">
-              <Meter
-                label={t('panelCPU', 'CPU')}
-                value={`${cpu.toFixed(0)}%`}
-                pct={cpu}
-                tone={tonify(cpu)}
-                spark={cpuSpark}
-                ariaSuffix={t(TONE_LABEL(cpu), '')}
-              />
-              <Meter
-                label={t('panelMemory', 'Memory')}
-                value={`${mem.toFixed(0)}%`}
-                pct={mem}
-                tone={tonify(mem)}
-                spark={cpuSpark}
-              />
-              <Meter
-                label={t('disk', 'Disk')}
-                value={`${disk.toFixed(0)}%`}
-                pct={disk}
-                tone={disk > 85 ? 'danger' : 'ok'}
-                spark={cpuSpark}
-              />
-              <div className="ds-meter ds-meter--ok">
-                <div className="ds-meter-label">
-                  <span>{t('load', 'Load')}</span>
-                  <span className="ds-meter-value">{load ? load.toFixed(2) : '—'}</span>
-                </div>
-                <Sparkline values={(traffic?.bytes || []).slice(-24)} tone="info" className="ds-meter-spark" />
-              </div>
-            </div>
-            <div className="ds-health-foot">
-              <span className="ds-health-foot-meta">
-                {t('nodesOnline', 'Nodes online')}: {onlineNodes}/{totalNodes}
-              </span>
-            </div>
-          </>
-        )}
+        {meters}
+        <div className="ds-health-foot">
+          <span className="ds-health-foot-meta">
+            {t('nodesOnline', 'Nodes online')}: {onlineNodes}/{totalNodes}
+          </span>
+        </div>
       </PanelState>
     </Panel>
   );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FiAlertCircle, FiEye, FiEyeOff, FiLock, FiServer, FiShield } from 'react-icons/fi';
+import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
 import './LoginPage.css';
@@ -97,19 +97,6 @@ const LoginPage = () => {
             {t('loginButton', 'Login')}
           </Button>
         </form>
-
-        <ul className="login-features">
-          <li><FiServer aria-hidden="true" /> {t('featureNodeHealth', 'Node health at a glance')}</li>
-          <li><FiShield aria-hidden="true" /> {t('featureSecuritySignals', 'Session-aware security signals')}</li>
-          <li><FiLock aria-hidden="true" /> {t('featureProtectedAccess', 'Protected admin access')}</li>
-        </ul>
-
-        <footer className="login-footnotes">
-          <p className="login-footnote">{t('loginFootnote', 'Access is limited to authorized administrators.')}</p>
-          <p className="login-footnote login-footnote-help">
-            {t('loginFirstRunHint', "New here? Your panel URL and password are on the installer's green “Ready” card. Lost the URL path? See docs/troubleshooting.md in the repo.")}
-          </p>
-        </footer>
       </main>
     </div>
   );

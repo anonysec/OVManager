@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * StreamChart — area chart fed by /metrics/history with 30s polling.
+ * StreamChart — area chart fed by /metrics/history with polling refresh.
  *
  * Data model:
  *  - Initial load: GET /metrics/history?hours={24|168} populates the series
- *  - Updates: 30s polling refresh (single live source is /live/stream
+ *  - Updates: refresh-cadence polling (single live source is /live/stream
  *    invalidation bus in LiveContext; per-chart SSE was removed to avoid
  *    a second DB-polling stream).
  *
  * The chart keeps the latest 240 points (≈ 1h at 15s cadence) to avoid
  * DOM bloat on long sessions. Hover crosshair and tooltip are pure DOM
- * to keep the chart fast.
+ * to keep the chart fast. The component renders bare (no card chrome):
+ * the dashboard hero owns the surrounding card.
  */
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,10 +21,8 @@ import apiClient from '../../services/api';
 import { readPrefs } from '../../utils/notifPrefs';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
-import { Panel } from './Panel';
 
 const MAX_POINTS = 240;
-const CHART_HEIGHT = 240;
 
 const tsToIso = (ts) => {
   if (!ts) return null;
@@ -123,16 +122,16 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
   };
 
   const linePath = smoothPath(points);
-  const areaPath = points.length ? `${linePath} L100,100 L0,100 Z` : '';
+  // All-zero data draws no curve — the overlay message explains instead.
+  const hasCurve = points.length > 1 && peak > 0;
+  const areaPath = hasCurve ? `${linePath} L100,100 L0,100 Z` : '';
   const last = points[points.length - 1];
   const halfVal = peak / 2;
   const firstTs = series.length ? tsToIso(series[0].ts) : null;
 
   return (
-    <Panel
-      className="ds-chart-panel"
-      title={t('trafficChartTitle', 'Traffic')}
-      action={
+    <div className="ds-chart-embed">
+      <div className="ds-chart-head">
         <div className="ds-chart-controls">
           <div className="ds-segmented" role="group" aria-label={t('trafficChartMetric', 'Metric')}>
             <button type="button" className={metric === 'traffic' ? 'active' : ''} aria-pressed={metric === 'traffic'} onClick={() => setMetric('traffic')}>
@@ -146,13 +145,14 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
             <button type="button" className={period === '24h' ? 'active' : ''} aria-pressed={period === '24h'} onClick={() => setPeriod('24h')}>24h</button>
             <button type="button" className={period === '7d' ? 'active' : ''} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>7d</button>
           </div>
-          <span className="ds-chart-meta" aria-live="polite">
-            <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
-            {loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}
-          </span>
         </div>
-      }
-    >
+        <span className="ds-chart-inline-stats">
+          <span>{t('trafficNow', 'Now')} <b>{fmt(lastVal)}</b></span>
+          <span>{t('trafficPeak', 'Peak')} <b>{fmt(peak)}</b></span>
+          <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
+          <span aria-live="polite">{loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}</span>
+        </span>
+      </div>
       <figure className="ds-chart-figure">
         <div className="ds-chart-wrap">
           <svg
@@ -166,24 +166,25 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           >
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--info)" stopOpacity="0.38" />
-                <stop offset="55%" stopColor="var(--info)" stopOpacity="0.12" />
-                <stop offset="100%" stopColor="var(--info)" stopOpacity="0" />
+                <stop offset="0%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.30" />
+                <stop offset="60%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.08" />
+                <stop offset="100%" stopColor="var(--accent-color, var(--info))" stopOpacity="0" />
               </linearGradient>
             </defs>
-            {[20, 40, 60, 80].map((y) => (
+            {[25, 50, 75].map((y) => (
               <line key={y} className="ds-chart-grid-line" x1="0" y1={y} x2="100" y2={y} />
             ))}
             {areaPath && <path className="ds-chart-area" d={areaPath} fill={`url(#${gradId})`} />}
-            {linePath && <path className="ds-chart-line" d={linePath} vectorEffect="non-scaling-stroke" />}
-            {last && <circle className="ds-chart-pulse" cx={last.x} cy={last.y} r="2" key={last.x + last.y} />}
+            {hasCurve && <path className="ds-chart-line" d={linePath} vectorEffect="non-scaling-stroke" />}
             {hovered && (
-              <>
-                <line className="ds-chart-hover-line" x1={hovered.x} y1="0" x2={hovered.x} y2="100" />
-                <circle className="ds-chart-hover-dot" cx={hovered.x} cy={hovered.y} r="1.5" />
-              </>
+              <line className="ds-chart-hover-line" x1={hovered.x} y1="0" x2={hovered.x} y2="100" />
             )}
           </svg>
+          {/* The current point is a DOM dot — an SVG circle would stretch into
+              an ellipse under preserveAspectRatio="none". */}
+          {hasCurve && last && (
+            <span className="ds-chart-live-dot" style={{ left: `${last.x}%`, top: `${last.y}%` }} aria-hidden="true" />
+          )}
           {hovered && (
             <div
               className="ds-chart-tooltip"
@@ -197,17 +198,16 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmt(halfVal)}</span>}
           <span className="ds-chart-axis ds-chart-axis--min">0</span>
           {firstTs && <span className="ds-chart-axis ds-chart-axis--t0">{fmtDateTime(firstTs)}</span>}
-          {(loading || loadError || points.length < 2) && (
+          {(loading || loadError || points.length < 2 || (!loadError && peak === 0)) && (
             <div className="ds-chart-empty">
-              {loading ? t('loading', 'Loading…') : loadError ? t('panelLoadFailed', 'Could not load chart') : t('noMetrics', 'No metrics yet')}
+              {loading
+                ? t('loading', 'Loading…')
+                : loadError
+                  ? t('panelLoadFailed', 'Could not load chart')
+                  : t('noTrafficYet', 'No traffic yet — the graph fills in as clients connect')}
             </div>
           )}
         </div>
-        <figcaption className="ds-chart-summary">
-          <div><b>{fmt(lastVal)}</b><span>{t('trafficNow', 'Current')}</span></div>
-          <div><b>{fmt(peak)}</b><span>{t('trafficPeak', 'Peak')}</span></div>
-          <div><b>{period === '7d' ? '7' : '24'}h</b><span>{t('trafficWindow', 'Window')}</span></div>
-        </figcaption>
         <details>
           <summary className="ds-chart-data-toggle">{t('chartDataTable', 'Data table')}</summary>
           <div className="ds-chart-data" style={{ maxHeight: 240, overflow: 'auto', marginTop: 8 }}>
@@ -230,6 +230,6 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           </div>
         </details>
       </figure>
-    </Panel>
+    </div>
   );
 }
