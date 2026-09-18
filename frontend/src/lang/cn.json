@@ -804,7 +804,7 @@
   "formSectionAccount": "账号",
   "formSectionValidity": "有效期",
   "formSectionLimits": "限制",
-  "createUserDefaults": "新用户默认 30 天和 1 台设备——可在下方修改。",
+  "createUserDefaults": "新用户默认 {{days}} 天、{{count}} 台设备——下方均可修改。",
   "quotaLabel": "配额",
   "quotaUsed": "已使用 {{pct}}%",
   "downloadConfigHint": "下载此用户的 OpenVPN 配置文件（.ovpn）。",
@@ -814,5 +814,10 @@
   "th_detail": "详情",
   "justNow": "刚刚",
   "resultOne": "条结果",
-  "resultsMany": "条结果"
+  "resultsMany": "条结果",
+  "createdTitle": "用户已创建",
+  "createdNote": "将配置交给客户——VPN 配置会在首次下载时生成。",
+  "createdCopyLink": "复制订阅链接",
+  "createdCopied": "已复制链接",
+  "createdDone": "完成"
 }

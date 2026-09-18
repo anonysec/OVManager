@@ -804,7 +804,7 @@
   "formSectionAccount": "حساب",
   "formSectionValidity": "اعتبار",
   "formSectionLimits": "محدودیت‌ها",
-  "createUserDefaults": "کاربران جدید با ۳۰ روز و ۱ دستگاه شروع می‌کنند — هر موردی را پایین تغییر دهید.",
+  "createUserDefaults": "کاربران جدید با {{days}} روز و {{count}} دستگاه شروع می‌کنند — هر مورد را می‌توانید تغییر دهید.",
   "quotaLabel": "سهمیه",
   "quotaUsed": "{{pct}}٪ مصرف‌شده",
   "downloadConfigHint": "پروفایل OpenVPN این کاربر (.ovpn) را دانلود کنید.",
@@ -814,5 +814,10 @@
   "th_detail": "جزئیات",
   "justNow": "همین حالا",
   "resultOne": "نتیجه",
-  "resultsMany": "نتیجه"
+  "resultsMany": "نتیجه",
+  "createdTitle": "کاربر ساخته شد",
+  "createdNote": "پروفایل را به مشتری بدهید — کانفیگ VPN در اولین دانلود ساخته می‌شود.",
+  "createdCopyLink": "کپی لینک اشتراک",
+  "createdCopied": "لینک کپی شد",
+  "createdDone": "تمام"
 }

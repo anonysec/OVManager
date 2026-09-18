@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { FiPlus, FiZap } from 'react-icons/fi';
+import { FiCheckCircle, FiCopy, FiDownload, FiPlus, FiZap } from 'react-icons/fi';
 import Modal from './Modal';
 import { Button, Field } from './ui';
+import { copyText } from '../utils/clipboard';
 
 const bytesFromGB = (value) => {
   const cleaned = value?.toString().trim();
@@ -31,9 +32,9 @@ const parseError = (err, fallback) => {
   return detail || fallback;
 };
 
-const defaultExpiryDate = () => {
+const defaultExpiryDate = (days = 30) => {
   const d = new Date();
-  d.setDate(d.getDate() + 30);
+  d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 };
 
@@ -41,18 +42,24 @@ const DATE_SHORTCUTS = [['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]];
 
 // Unified add/edit user form. mode="create" (user=null) or mode="edit".
 // Fields are grouped into Account / Validity / Limits so the form reads as
-// three small decisions instead of one long column. Create defaults to a
-// 30-day expiry and a single device, both one click away from any value.
-const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
+// three small decisions instead of one long column. Create defaults come
+// from Settings (30 days / 1 device unless configured otherwise), and a
+// successful create flips the modal into a handoff step: download the
+// profile or copy the subscription link without leaving the screen.
+const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, onDownloadUser }) => {
   const isEdit = !!user;
+  const days = Number(defaults?.days) || 30;
+  const defaultLogins = String(defaults?.maxLogins ?? 1);
   const [name, setName] = useState('');
-  const [expiryDate, setExpiryDate] = useState(defaultExpiryDate);
+  const [expiryDate, setExpiryDate] = useState(defaultExpiryDate(days));
   const [totalTraffic, setTotalTraffic] = useState('');
-  const [maxLogins, setMaxLogins] = useState('1');
+  const [maxLogins, setMaxLogins] = useState(defaultLogins);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggest, setSuggest] = useState('');
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const [createdUser, setCreatedUser] = useState(null);
+  const [copied, setCopied] = useState(false);
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -68,13 +75,15 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
       setError('');
     } else if (!isEdit && isOpen) {
       setName('');
-      setExpiryDate(defaultExpiryDate());
+      setExpiryDate(defaultExpiryDate(days));
       setTotalTraffic('');
-      setMaxLogins('1');
+      setMaxLogins(defaultLogins);
       setSuggest('');
+      setCreatedUser(null);
+      setCopied(false);
       setError('');
     }
-  }, [user, isOpen, isEdit]);
+  }, [user, isOpen, isEdit, days, defaultLogins]);
 
   const fetchSuggest = async () => {
     setSuggestLoading(true);
@@ -100,7 +109,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
     if (value) setName(value);
   };
 
-  const reset = () => { setName(''); setExpiryDate(defaultExpiryDate()); setTotalTraffic(''); setMaxLogins('1'); setError(''); setSuggest(''); };
+  const reset = () => { setName(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setSuggest(''); setCreatedUser(null); setCopied(false); };
 
   const handleClose = () => {
     if (!isEdit) reset();
@@ -123,8 +132,18 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
         ? await apiClient.put(`/users/${user.uuid}`, payload)
         : await apiClient.post('/users/', payload);
       if (response.data.success) {
-        if (!isEdit) reset();
-        onSaved();
+        if (!isEdit) {
+          onSaved();
+          const created = response.data?.data;
+          if (created?.uuid) {
+            setCreatedUser(created);
+          } else {
+            reset();
+          }
+        } else {
+          onSaved();
+          onClose();
+        }
       } else {
         setError(response.data.msg || t(isEdit ? 'userUpdateFailed' : 'userCreateFailed'));
       }
@@ -135,6 +154,14 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
     }
   };
 
+  const createdLink = createdUser && linkForUser ? linkForUser(createdUser) : '';
+
+  const handleCopyLink = async () => {
+    const ok = createdLink ? await copyText(createdLink) : false;
+    setCopied(Boolean(ok));
+    setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -142,6 +169,36 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
       title={isEdit ? `${t('modal_editUserTitle', 'Edit User')} — ${user?.name || ''}` : t('modal_createUserTitle')}
       size="medium"
     >
+      {createdUser && (
+        <div className="uf-created" role="status">
+          <FiCheckCircle className="uf-created-icon" aria-hidden="true" />
+          <h3 className="uf-created-title">{t('createdTitle', 'User created')}</h3>
+          <p className="uf-created-note">
+            {t('createdNote', 'Hand the profile to the customer — the VPN config is generated on first download.')}
+          </p>
+          <div className="uf-created-actions">
+            <Button
+              variant="primary"
+              icon={<FiDownload size={14} aria-hidden="true" />}
+              onClick={() => { if (onDownloadUser) { onClose(); onDownloadUser(createdUser); } }}
+            >
+              {t('downloadConfig', 'Get Config')}
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<FiCopy size={14} aria-hidden="true" />}
+              onClick={handleCopyLink}
+              disabled={!createdLink}
+            >
+              {copied ? t('createdCopied', 'Link copied') : t('createdCopyLink', 'Copy subscription link')}
+            </Button>
+          </div>
+          <div className="uf-footer">
+            <Button variant="ghost" onClick={handleClose}>{t('createdDone', 'Done')}</Button>
+          </div>
+        </div>
+      )}
+      {!createdUser && (
       <form onSubmit={handleSubmit} className="uf-form">
         <fieldset className="uf-section">
           <legend className="uf-legend">{t('formSectionAccount', 'Account')}</legend>
@@ -183,7 +240,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
             {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameHint', '3–64 characters.')}</p>}
           </div>
           {!isEdit && (
-            <p className="uf-note">{t('createUserDefaults', 'New users start with 30 days and 1 device — change anything below.')}</p>
+            <p className="uf-note">{t('createUserDefaults', 'New users start with {{days}} days and {{devices}} device(s) — change anything below.', { days, count: Number(defaultLogins) || 1 })}</p>
           )}
         </fieldset>
 
@@ -255,6 +312,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved }) => {
           </Button>
         </div>
       </form>
+      )}
     </Modal>
   );
 };

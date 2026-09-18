@@ -505,3 +505,44 @@
     width: 100%;
   }
 }
+
+/* ── Create → handoff step ────────────────────────────────────────────
+   After creating a user the modal flips into a success panel with the
+   two actions that matter: download the profile, copy the sub link. */
+.uf-created {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 8px 8px;
+  text-align: center;
+}
+
+.uf-created-icon {
+  width: 42px;
+  height: 42px;
+  color: var(--success-text);
+}
+
+.uf-created-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+.uf-created-note {
+  margin: 0;
+  max-width: 380px;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.uf-created-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
