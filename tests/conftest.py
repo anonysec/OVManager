@@ -14,7 +14,17 @@ import anyio.from_thread
 if "BlockingPortal" not in anyio.abc.__dict__:
     anyio.abc.BlockingPortal = anyio.from_thread.BlockingPortal  # type: ignore[attr-defined]
 
+import os
+
 import pytest
+
+# Deterministic owner credentials for the API tests. The workspace .env may
+# have been migrated to ADMIN_PASSWORD_HASH by a real panel boot (the
+# startup migration), so tests must not rely on a plaintext line existing
+# there. Env vars beat .env values in pydantic-settings.
+os.environ.setdefault("ADMIN_USERNAME", "admin")
+os.environ["ADMIN_PASSWORD"] = "test-owner-password-123"
+os.environ["ADMIN_PASSWORD_HASH"] = ""
 
 # This dict holds the pre-test reference to the real get_urlpath() so the
 # autouse fixture below can restore it for tests that actually exercise

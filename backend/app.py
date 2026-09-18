@@ -149,6 +149,87 @@ class SecurityHeadersMiddleware:
 # Since this panel uses Bearer tokens in Authorization header, CSRF risk is low,
 # but we add a middleware that requires a custom header for non-GET requests
 # to defend against accidental cross-origin form submissions.
+class AssetCacheMiddleware:
+    """Immutable caching + pre-compressed responses for build assets.
+
+    ``/assets/*`` filenames carry a content hash and ``/fonts/*.woff2`` are
+    frozen upstream releases, so both may be cached forever. Vite writes a
+    ``.gz`` sibling next to every compressible file; when the client accepts
+    gzip the sibling is served directly (Content-Encoding set), roughly
+    halving first-load bytes with no runtime compression cost.
+
+    Plain ASGI like the other middlewares — this only inspects the request
+    path and rewrites response headers, no body copying.
+    """
+
+    _IMMUTABLE = "public, max-age=31536000, immutable"
+    _TEXT_EXTS = {".js", ".css", ".svg", ".html", ".json", ".map"}
+
+    def __init__(self, app, frontend_dir: str):
+        self.app = app
+        self.frontend_dir = frontend_dir
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "GET":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if not (path.startswith("/assets/") or path.startswith("/fonts/")):
+            await self.app(scope, receive, send)
+            return
+
+        accept = ""
+        for key, value in scope.get("headers") or ():
+            if key == b"accept-encoding":
+                accept = value.decode("latin-1")
+                break
+
+        rel = path[len("/assets/"):] if path.startswith("/assets/") else path[len("/fonts/"):]
+        if not rel or ".." in rel:
+            await self.app(scope, receive, send)
+            return
+        base = os.path.join(self.frontend_dir, "assets" if path.startswith("/assets/") else "fonts")
+        cand = os.path.join(base, rel)
+
+        is_fonts_css = path.startswith("/fonts/") and rel.endswith(".css")
+        if (
+            accept
+            and "gzip" in accept.lower()
+            and os.path.splitext(cand)[1] in self._TEXT_EXTS
+            and os.path.isfile(cand + ".gz")
+            and (path.startswith("/assets/") or is_fonts_css)
+        ):
+            media = mimetypes.guess_type(cand)[0] or "application/octet-stream"
+            headers = [
+                [b"content-encoding", b"gzip"],
+                [b"vary", b"Accept-Encoding"],
+                [b"cache-control", self._IMMUTABLE.encode() if path.startswith("/assets/") else b"public, max-age=3600"],
+            ]
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": headers + [[b"content-type", media.encode()]],
+                }
+            )
+            with open(cand + ".gz", "rb") as fh:
+                body = fh.read()
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        cache = self._IMMUTABLE if path.startswith("/assets/") else "public, max-age=3600"
+
+        async def send_with_cache(message):
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                headers.append([b"cache-control", cache.encode()])
+            await send(message)
+
+        await self.app(scope, receive, send_with_cache)
+
+    _TEXT_EXTS = _TEXT_EXTS = {".js", ".css", ".svg", ".html", ".json", ".map"}
+
+
 class CSRFProtectionMiddleware:
     """Reject state-changing requests that look like a cross-origin form post.
 
@@ -749,6 +830,7 @@ async def spa_catchall(path: str):
 #    are applied to all responses including SPA catch-all) ──────
 api.add_middleware(SecurityHeadersMiddleware)
 api.add_middleware(CSRFProtectionMiddleware)
+api.add_middleware(AssetCacheMiddleware, frontend_dir=frontend_build_path)
 
 # ── URLPathMiddleware (MUST be added last — it wraps everything) ──
 # This is the outermost middleware: it runs first on every request.
