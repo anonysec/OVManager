@@ -99,7 +99,7 @@ describe('ServerStats resilience', () => {
   it('shows the empty chart state when metrics are truly empty', async () => {
     baseMock(() => undefined);
     renderStats();
-    await waitFor(() => expect(screen.getByText('No metrics yet')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/No traffic yet/)).toBeTruthy());
   });
 
   it('merges server notifications into the alert strip', async () => {
@@ -178,9 +178,9 @@ describe('ServerStats resilience', () => {
     await waitFor(() => expect(container.querySelectorAll('.ds-kpi').length).toBeGreaterThanOrEqual(4));
     const buttons = container.querySelectorAll('button.ds-kpi');
     expect(buttons.length).toBeGreaterThanOrEqual(3);
-    // Click the active sessions card (first KPI)
-    const activeBtn = Array.from(buttons).find((b) => b.getAttribute('aria-label')?.includes('Active'));
-    fireEvent.click(activeBtn);
+    // Click the online-users tile (first navigable KPI)
+    const onlineBtn = Array.from(buttons).find((b) => b.getAttribute('aria-label')?.includes('Online'));
+    fireEvent.click(onlineBtn);
     expect(getPath()).toBe('/users?view=online');
     const nodesBtn = Array.from(buttons).find((b) => b.getAttribute('aria-label')?.includes('Nodes'));
     fireEvent.click(nodesBtn);

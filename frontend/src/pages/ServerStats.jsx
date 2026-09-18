@@ -6,9 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
-import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight, FiClock } from 'react-icons/fi';
+import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
-import { daysUntil, fmtDateTime, fmtDate } from '../utils/time';
+import { daysUntil, fmtDateTime } from '../utils/time';
 import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
@@ -122,7 +122,6 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [serverNotifs, setServerNotifs] = useState([]);
   const [activity, setActivity] = useState(null);
-  const [topUsers, setTopUsers] = useState(null);
   const [trafficSeries, setTrafficSeries] = useState({ conns: [], bytes: [] });
   const [probesDone, setProbesDone] = useState(false);
   const [refreshStale, setRefreshStale] = useState(false);
@@ -142,7 +141,6 @@ const ServerStats = () => {
         metrics: apiClient.get('/metrics/history?hours=24'),
       } : {}),
       users: apiClient.get('/users/'),
-      topUsers: apiClient.get('/users/traffic/top', { params: { days: 7, limit: 5 } }),
       notifs: apiClient.get('/notifications/'),
       activity: apiClient.get('/activity/?limit=8'),
     });
@@ -168,13 +166,6 @@ const ServerStats = () => {
         bytes: series.map((p) => Number(p.total_used || 0)),
       });
     } else if (res.metrics) nextErrors.metrics = res.metrics.error;
-
-    if (res.topUsers?.ok) {
-      const list = res.topUsers.data.data?.data ?? res.topUsers.data.data;
-      setTopUsers(Array.isArray(list) ? list : []);
-    } else if (res.topUsers) {
-      setTopUsers([]);
-    }
 
     if (res.notifs?.ok) {
       const items = res.notifs.data.data?.data ?? res.notifs.data.data ?? [];
@@ -272,19 +263,6 @@ const ServerStats = () => {
     return rows;
   }, [users]);
 
-  const expiringUsers = useMemo(() => (users || [])
-    .filter((u) => {
-      if (!u?.name) return false;
-      const d = daysUntil(u.expiry_date);
-      return d >= 0 && d <= 7;
-    })
-    .sort((a, b) => daysUntil(a.expiry_date) - daysUntil(b.expiry_date)), [users]);
-
-  const topMax = useMemo(
-    () => Math.max(...(topUsers || []).map((x) => Number(x.bytes || 0)), 1),
-    [topUsers],
-  );
-
   const nodeHealthRows = useMemo(() => (nodes || []).map((n) => {
     const st = nodeStatus[n.id] || {};
     const reachable = Boolean(n.status) && (st.reachable === true || (st.reachable === undefined && st.node_info !== undefined));
@@ -378,8 +356,6 @@ const ServerStats = () => {
     { id: 'attention', label: t('needsAttention', 'Needs attention'), count: attentionUsers.length },
   ], [t, onlineTotal, attentionUsers.length]);
 
-  const heroCards = isOwner ? 6 : 5;
-
   const allFailed = !loading
     && Boolean(errors.users && errors.activity)
     && (isOwner ? Boolean(errors.stats && errors.nodes && errors.metrics) : true);
@@ -418,69 +394,85 @@ const ServerStats = () => {
       />
 
       {heroLoading ? (
-        <div className="ds-hero" role="status" aria-live="polite" aria-label={t('loading', 'Loading…')}>
-          {Array.from({ length: heroCards }, (_, i) => (
-            <div className="ds-kpi ds-kpi--loading" key={i} aria-hidden="true" />
-          ))}
+        <div role="status" aria-live="polite" aria-label={t('loading', 'Loading…')}>
+          {isOwner && <div className="ds-hero-skeleton" aria-hidden="true" />}
+          <div className="ds-hero">
+            {Array.from({ length: isOwner ? 4 : 4 }, (_, i) => (
+              <div className="ds-kpi ds-kpi--loading" key={i} aria-hidden="true" />
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="ds-hero">
-          <KpiCard
-            icon={FiActivity}
-            label={t('activeConnections', 'Active Connections')}
-            value={probesPending ? '—' : activeConnections.toLocaleString()}
-            animate={probesPending ? undefined : activeConnections}
-            spark={trafficSeries.conns}
-            to="/users?view=online"
-            sub={t('heroConnsSub', '{{count}} sessions live', { count: probesPending ? 0 : activeConnections })}
-          />
-          <KpiCard
-            icon={FiUsers}
-            label={t('onlineUsers', 'Online Users')}
-            value={String(onlineTotal)}
-            animate={onlineTotal}
-            tone={onlineTotal ? 'ok' : null}
-            to="/users?view=online"
-            sub={attentionUsers.length ? t('heroUsersWarn', '{{count}} need attention', { count: attentionUsers.length }) : t('heroUsersOk', 'Nobody waiting')}
-          />
-          <KpiCard
-            icon={FiUsers}
-            label={t('activeUsers', 'Active Users')}
-            value={errors.users ? '—' : String(activeTotal)}
-            animate={errors.users ? undefined : activeTotal}
-            to="/users"
-            sub={t('activeUsersSub', 'Enabled accounts')}
-          />
-          <KpiCard
-            icon={FiUsers}
-            label={t('totalUsers', 'Total Users')}
-            value={errors.users ? '—' : String(totalUsers)}
-            animate={errors.users ? undefined : totalUsers}
-            to="/users"
-            sub={t('usersSummarySub', '{{active}} active · {{online}} online', { active: activeTotal, online: onlineTotal })}
-          />
-          <KpiCard
-            icon={FiBarChart2}
-            label={isOwner ? t('trafficToday', 'Traffic today') : t('totalTraffic', 'Total Traffic')}
-            value={isOwner
-              ? (trafficToday === null ? '—' : formatBytes(trafficToday))
-              : (errors.users ? '—' : formatBytes(totalUsed))}
-            animate={isOwner ? undefined : (errors.users ? undefined : totalUsed)}
-            format={isOwner ? undefined : formatBytes}
-            spark={trafficSeries.bytes}
-            sub={isOwner ? t('trafficTodaySub', 'Traffic in the last 24 hours') : t('heroTrafficSub', 'All users combined')}
-          />
-          {isOwner && (
+        <>
+          {isOwner ? (
+            <Card className="ds-hero-card">
+              <div className="ds-hero-now">
+                <span className="ds-hero-icon" aria-hidden="true"><FiActivity size={18} /></span>
+                <div className="ds-hero-figure">
+                  <span className="ds-hero-value" dir="ltr">
+                    {probesPending ? '—' : activeConnections.toLocaleString()}
+                  </span>
+                  <span className="ds-hero-label">
+                    {t('heroNowLabel', 'Live connections')}
+                    <span className="ds-live">
+                      <span className="ds-live-dot" aria-hidden="true" />
+                      {lastUpdated ? fmtUpdated(lastUpdated) : null}
+                      {refreshStale ? ` · ${t('staleData', 'Stale')}` : ''}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <StreamChart />
+            </Card>
+          ) : null}
+          <div className="ds-hero">
             <KpiCard
-              icon={FiServer}
-              label={t('onlineNodes', 'Online Nodes')}
-              value={probesPending ? '—' : `${onlineNodes}/${nodes?.length || 0}`}
-              tone={offlineNodes ? 'warn' : 'ok'}
-              to="/nodes"
-              sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
+              icon={FiUsers}
+              label={t('onlineUsers', 'Online Users')}
+              value={String(onlineTotal)}
+              animate={onlineTotal}
+              tone={onlineTotal ? 'ok' : null}
+              to="/users?view=online"
+              sub={attentionUsers.length ? t('heroUsersWarn', '{{count}} need attention', { count: attentionUsers.length }) : t('heroUsersOk', 'Nobody waiting')}
             />
-          )}
-        </div>
+            <KpiCard
+              icon={FiUsers}
+              label={t('totalUsers', 'Total Users')}
+              value={errors.users ? '—' : String(totalUsers)}
+              animate={errors.users ? undefined : totalUsers}
+              to="/users"
+              sub={t('usersSummarySub', '{{active}} active · {{online}} online', { active: activeTotal, online: onlineTotal })}
+            />
+            <KpiCard
+              icon={FiBarChart2}
+              label={isOwner ? t('trafficToday', 'Traffic 24h') : t('totalTraffic', 'Total Traffic')}
+              value={isOwner
+                ? (trafficToday === null ? '—' : formatBytes(trafficToday))
+                : (errors.users ? '—' : formatBytes(totalUsed))}
+              animate={isOwner ? undefined : (errors.users ? undefined : totalUsed)}
+              format={isOwner ? undefined : formatBytes}
+              spark={trafficSeries.bytes}
+              sub={isOwner ? t('trafficTodaySub', 'Growth in the last 24 hours') : t('heroTrafficSub', 'All users combined')}
+            />
+            {isOwner ? (
+              <KpiCard
+                icon={FiServer}
+                label={t('onlineNodes', 'Nodes online')}
+                value={probesPending ? '—' : `${onlineNodes}/${nodes?.length || 0}`}
+                tone={offlineNodes ? 'warn' : 'ok'}
+                to="/nodes"
+                sub={offlineNodes ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes }) : t('heroNodesOk', 'All reachable')}
+              />
+            ) : (
+              <KpiCard
+                icon={FiActivity}
+                label={t('activeConnections', 'Active Connections')}
+                value={activeConnections.toLocaleString()}
+                sub={t('heroConnsSub', '{{count}} sessions live', { count: activeConnections })}
+              />
+            )}
+          </div>
+        </>
       )}
 
       {!loading && <AlertStrip items={notifications} />}
@@ -496,139 +488,69 @@ const ServerStats = () => {
         </div>
       ) : (
         <>
-          {isOwner && <StreamChart period="24h" hours={24} />}
-
           {isOwner && (
-            <div className="ds-grid-1-2">
-              <ServerHealth
-                stats={stats}
-                traffic={trafficSeries}
-                error={errors.stats}
-                loading={loading}
-                onRetry={() => loadData()}
-                onlineNodes={onlineNodes}
-                totalNodes={nodes?.length || 0}
-              />
-              <Card
-                title={t('nodeHealthTitle', 'Node health')}
-                icon={<FiServer aria-hidden="true" />}
-                actions={(
-                  <Button variant="secondary" size="sm" onClick={() => navigate('/nodes')}>
-                    {t('viewAll', 'View all')}
-                  </Button>
-                )}
-              >
-                <div className="ds-node-summary">
-                  <Badge tone="success" dot>{t('statusOnline', 'Online')}: {onlineNodes}</Badge>
-                  <Badge tone={offlineNodes ? 'danger' : 'neutral'} dot>{t('statusDown', 'Down')}: {offlineNodes}</Badge>
-                  <span className="ds-node-summary-total">
-                    {t('nodesTotal', 'Total Nodes')}: {nodes?.length || 0}
-                  </span>
-                </div>
-                {loading ? (
-                  <SkeletonTable rows={4} cols={4} label={t('loading', 'Loading…')} />
-                ) : nodeHealthRows.length > 0 ? (
-                  <ul className="ds-node-list">
-                    {nodeHealthRows.slice(0, 6).map(({ node, status, live, latency, meta }) => (
-                      <li key={node.id} className="ds-node-row">
-                        <span className="ds-node-name">
-                          {meta.flagCode && <FlagIcon code={meta.flagCode} />}
-                          <span title={node.name}>{node.name}</span>
-                        </span>
-                        <StatusBadge
-                          status={status === 'online' ? 'online' : 'offline'}
-                          label={status === 'online' ? t('statusOnline', 'Online') : status === 'off' ? t('statusOff', 'Off') : t('statusDown', 'Down')}
-                        />
-                        <span className="ds-node-metric">{live} {t('th_sessions', 'Sessions')}</span>
-                        <span className="ds-node-metric">{latency > 0 ? `${latency} ms` : '—'}</span>
-                        <button
-                          type="button"
-                          className="ds-node-arrow"
-                          aria-label={`${t('clickToManageNode', 'Click to manage node')} ${node.name}`}
-                          onClick={() => navigate('/nodes')}
-                        >
-                          <FiArrowRight size={14} aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <EmptyState
-                    title={t('noNodes', 'No nodes')}
-                    description={t('noNodesDesc', 'Add a node to see its live status on the map and table.')}
-                    actionLabel={t('addNode', 'Add node')}
-                    onAction={() => navigate('/nodes')}
-                  />
-                )}
-              </Card>
-            </div>
-          )}
-
-          <div className="ds-grid-2">
             <Card
-              title={t('filterExpiring', 'Expiring soon')}
-              icon={<FiClock aria-hidden="true" />}
-              subtitle={t('expiringSoonDesc', 'Access ends in the next 7 days.')}
-              actions={(
-                <Button variant="secondary" size="sm" onClick={() => navigate('/users?view=expiring')}>
-                  {t('viewAll', 'View all')}
-                </Button>
-              )}
+              title={t('fleetHealthTitle', 'Fleet health')}
+              icon={<FiServer aria-hidden="true" />}
             >
-              {expiringUsers.length > 0 ? (
-                <ul className="ds-expiring-list">
-                  {expiringUsers.slice(0, 5).map((u) => {
-                    const d = daysUntil(u.expiry_date);
-                    return (
-                      <li key={u.uuid || u.name}>
-                        <button
-                          type="button"
-                          className="ds-expiring-row"
-                          onClick={() => navigate(`/users?user=${u.uuid}`)}
-                        >
-                          <span className="dt-avatar" aria-hidden="true">{String(u.name).slice(0, 1).toUpperCase()}</span>
-                          <span className="ds-expiring-name" title={u.name}>
-                            {`${u.name} · ${t('expiresIn', 'Expires in {{days}} days', { days: d })}`}
+              <div className="ds-fleet">
+                <ServerHealth
+                  stats={stats}
+                  traffic={trafficSeries}
+                  error={errors.stats}
+                  loading={loading}
+                  onRetry={() => loadData()}
+                  onlineNodes={onlineNodes}
+                  totalNodes={nodes?.length || 0}
+                  embedded
+                />
+                <div className="ds-fleet-nodes">
+                  <div className="ds-node-summary">
+                    <Badge tone="success" dot>{t('statusOnline', 'Online')}: {onlineNodes}</Badge>
+                    <Badge tone={offlineNodes ? 'danger' : 'neutral'} dot>{t('statusDown', 'Down')}: {offlineNodes}</Badge>
+                    <span className="ds-node-summary-total">
+                      {t('nodesTotal', 'Total Nodes')}: {nodes?.length || 0}
+                    </span>
+                  </div>
+                  {loading ? (
+                    <SkeletonTable rows={4} cols={4} label={t('loading', 'Loading…')} />
+                  ) : nodeHealthRows.length > 0 ? (
+                    <ul className="ds-node-list">
+                      {nodeHealthRows.slice(0, 6).map(({ node, status, live, latency, meta }) => (
+                        <li key={node.id} className="ds-node-row">
+                          <span className="ds-node-name">
+                            {meta.flagCode && <FlagIcon code={meta.flagCode} />}
+                            <span title={node.name}>{node.name}</span>
                           </span>
-                          <span className="ds-expiring-date">{fmtDate(u.expiry_date)}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <EmptyState
-                  title={t('allSystemsClear', 'All Clear')}
-                  description={t('noExpiringSoon', 'No users expire in the next 7 days.')}
-                />
-              )}
+                          <StatusBadge
+                            status={status === 'online' ? 'online' : 'offline'}
+                            label={status === 'online' ? t('statusOnline', 'Online') : status === 'off' ? t('statusOff', 'Off') : t('statusDown', 'Down')}
+                          />
+                          <span className="ds-node-metric">{live} {t('th_sessions', 'Sessions')}</span>
+                          <span className="ds-node-metric">{latency > 0 ? `${latency} ms` : '—'}</span>
+                          <button
+                            type="button"
+                            className="ds-node-arrow"
+                            aria-label={`${t('clickToManageNode', 'Click to manage node')} ${node.name}`}
+                            onClick={() => navigate('/nodes')}
+                          >
+                            <FiArrowRight size={14} aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyState
+                      title={t('noNodes', 'No nodes')}
+                      description={t('noNodesDesc', 'Add a node to see its live status on the map and table.')}
+                      actionLabel={t('addNode', 'Add node')}
+                      onAction={() => navigate('/nodes')}
+                    />
+                  )}
+                </div>
+              </div>
             </Card>
-
-            <Card
-              title={t('topTraffic7d', 'Top traffic, 7 days')}
-              icon={<FiBarChart2 aria-hidden="true" />}
-              subtitle={t('topTalkersDesc', 'Users with the most traffic this week.')}
-            >
-              {topUsers && topUsers.length > 0 ? (
-                <ul className="ds-top-list">
-                  {topUsers.map((r) => (
-                    <li key={r.name} className="ds-top-row">
-                      <span className="ds-top-name" title={r.name}>{r.name}</span>
-                      <span className="ds-top-bar" aria-hidden="true">
-                        <span style={{ width: `${Math.max(2, Math.round((Number(r.bytes || 0) / topMax) * 100))}%` }} />
-                      </span>
-                      <span className="ds-top-value">{formatBytes(r.bytes || 0)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState
-                  title={t('noData', 'No data')}
-                  description={t('topTalkersEmpty', 'No traffic recorded in the last 7 days.')}
-                />
-              )}
-            </Card>
-          </div>
+          )}
 
           <div className="ds-grid-2">
             <Card

@@ -88,11 +88,17 @@
   50% { box-shadow: 0 0 0 8px transparent; }
 }
 
-/* ── Stat strip — one tile per stat, wrapping on narrow screens ────── */
+/* ── Stat tiles — quiet: no card chrome, hairline separators do the ──
+   ── grouping so the numbers carry the row ───────────────────────── */
 .ds-hero {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 2px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
 }
 
 .ds-kpi {
@@ -101,10 +107,10 @@
   flex-direction: column;
   gap: 6px;
   padding: 16px 18px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   font: inherit;
   color: inherit;
   text-align: start;
@@ -113,18 +119,17 @@
 
 button.ds-kpi {
   cursor: pointer;
-  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+  transition: background-color var(--transition-fast);
 }
 
 button.ds-kpi:hover {
-  border-color: var(--border-strong);
   background: var(--surface-2);
 }
 
 .ds-kpi:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring-shadow);
-  border-color: var(--focus-ring);
+  z-index: 1;
 }
 
 .ds-kpi-head {
@@ -207,21 +212,23 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
   border: 1px solid var(--border);
-  background: var(--surface-1);
+  background: transparent;
   font-size: 0.85rem;
   flex-wrap: nowrap;
   overflow: hidden;
 }
 
 .ds-alerts--has-items {
-  border-color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface-1));
 }
 
 .ds-alerts--clear {
-  border-color: var(--success);
+  border-color: transparent;
+  color: var(--text-secondary);
 }
 
 .ds-alerts-icon {
@@ -357,14 +364,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   gap: 16px;
 }
 
-.ds-grid-1-2 {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 16px;
-}
-
-/* ── Meter (horizontal resource bar) ─────────────────────────────── */
-.ds-meter {
+/* ── Meter (horizontal resource bar) ─────────────────────────────── */.ds-meter {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -552,15 +552,15 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   filter: drop-shadow(0 3px 8px rgb(0 0 0 / 0.18));
 }
 
-.ds-chart-pulse {
-  fill: var(--info);
-  opacity: 0.3;
-  animation: ds-chart-pulse-anim 1.5s ease-out;
-}
-
-@keyframes ds-chart-pulse-anim {
-  0% { r: 2; opacity: 0.6; }
-  100% { r: 12; opacity: 0; }
+.ds-chart-live-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-color, var(--info));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color, var(--info)) 25%, transparent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .ds-chart-hover-line {
@@ -568,12 +568,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   stroke-width: 1;
   stroke-dasharray: 2 3;
   opacity: 0.5;
-}
-
-.ds-chart-hover-dot {
-  fill: var(--info);
-  stroke: var(--surface-1);
-  stroke-width: 2;
 }
 
 .ds-chart-tooltip {
@@ -632,44 +626,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   bottom: 0;
   inset-inline-start: 2px;
   font-size: 0.68rem;
-}
-
-.ds-chart-summary {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.ds-chart-summary > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 120px;
-  min-width: 110px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-
-.ds-chart-summary b {
-  direction: ltr;
-  unicode-bidi: isolate;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 1.1rem;
-  font-family: var(--font-display);
-}
-
-.ds-chart-summary span {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
 }
 
 .ds-chart-empty {
@@ -971,107 +927,115 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   box-shadow: var(--focus-ring-shadow);
 }
 
-/* ── Expiring soon ───────────────────────────────────────────────── */
-.ds-expiring-list {
+/* ── Hero — the one bold element: live connections + integrated chart ── */
+.ds-hero-card {
   display: flex;
   flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 4px;
+  padding: 18px 20px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 
-.ds-expiring-row {
+.ds-hero-now {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  padding: 10px 8px;
-  border: 0;
+  gap: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
 }
 
-.ds-expiring-row:hover { background: var(--surface-2); }
-
-.ds-expiring-row:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring-shadow);
-}
-
-.ds-expiring-list li:last-child .ds-expiring-row { border-bottom: none; }
-
-.ds-expiring-name {
-  unicode-bidi: plaintext;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
-}
-
-.ds-expiring-date {
+.ds-hero-icon {
+  display: inline-flex;
   flex: none;
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
-/* ── Top talkers ─────────────────────────────────────────────────── */
-.ds-top-list {
+.ds-hero-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-hero-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ds-hero-label .ds-live {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-hero-skeleton {
+  min-height: 300px;
+  border-radius: var(--radius-lg);
+  animation: ds-blink 1.2s ease-in-out infinite;
+}
+
+/* The chart renders bare inside the hero card. */
+.ds-chart-embed {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 4px;
 }
 
-.ds-top-row {
-  display: grid;
-  grid-template-columns: minmax(6ch, 1fr) 2fr auto;
+.ds-chart-head {
+  display: flex;
   align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-sm);
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0 2px;
 }
 
-.ds-top-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.ds-top-bar {
-  position: relative;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  overflow: hidden;
-}
-
-.ds-top-bar > span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  background: var(--accent);
-  transition: width var(--transition-normal);
-}
-
-[dir="rtl"] .ds-top-bar > span { inset: 0 0 0 auto; }
-
-.ds-top-value {
+.ds-chart-inline-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  white-space: nowrap;
+}
+
+.ds-chart-inline-stats b {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* ── Fleet health — panel meters beside the node list ───────────── */
+.ds-fleet {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) 3fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.ds-fleet-nodes {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ── Users panel (tabs inside a card) ────────────────────────────── */
@@ -1086,7 +1050,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .ds-grid-2 { grid-template-columns: 1fr; }
-  .ds-grid-1-2 { grid-template-columns: 1fr; }
+  .ds-fleet { grid-template-columns: 1fr; }
   .ds-health-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -1102,11 +1066,14 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   .ds-feed-item { padding: 10px 16px; }
   .ds-kpi-value { font-size: 1.5rem; }
   .ds-chart-wrap { height: 200px; }
+  .ds-hero-card { padding: 14px 14px 10px; }
+  .ds-hero-value { font-size: 2.1rem; }
+  .ds-hero-label { flex-direction: column; gap: 2px; align-items: flex-start; }
+  .ds-chart-inline-stats { gap: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ds-live-dot,
-  .ds-chart-pulse,
   .ds-kpi--loading,
   .ds-chart-status--live {
     animation: none;
@@ -1116,9 +1083,5 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   .ds-meter-fill {
     transition: none;
   }
-}/*tail*/
-/* On phones the Traffic card title just repeats the active tab label. */
-@media (max-width: 640px) {
-  .ds-chart-panel .ds-card-title { display: none; }
-  .ds-chart-panel .ds-card-head { justify-content: flex-end; }
 }
+/*tail*/
