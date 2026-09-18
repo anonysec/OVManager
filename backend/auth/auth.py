@@ -98,20 +98,28 @@ def _rate_key(ip: str, username: str) -> str:
 def authenticate_user(db: Session, username: str, password: str):
     """Authenticate against main admin or DB-stored admins.
 
-    Main admin password is compared with constant-time hmac to avoid
-    timing side-channels.
+    Main admin: a bcrypt hash (ADMIN_PASSWORD_HASH) is verified first; the
+    legacy plaintext ADMIN_PASSWORD is the fallback when no hash is set.
+    Both compare in constant time (bcrypt is inherently constant-time).
     """
     owner_username = config.ADMIN_USERNAME
+    owner_hash = config.ADMIN_PASSWORD_HASH
     owner_password = config.ADMIN_PASSWORD
 
     if username == owner_username:
-        # Constant-time comparison — even if lengths differ, hmac.compare_digest
-        # handles that safely by padding the shorter string.
-        if hmac.compare_digest(password.encode(), owner_password.encode()):
-            return {"username": username, "type": "owner"}
-        # Avoid leaking whether the *username* was correct: still check DB
-        # (main admin won't be in DB, so this returns None, but the timing
-        # path is identical for wrong-user vs wrong-pass).
+        if owner_hash:
+            try:
+                if verify_password(password, owner_hash):
+                    return {"username": username, "type": "owner"}
+            except ValueError:
+                logger.warning("ADMIN_PASSWORD_HASH is not a valid bcrypt hash")
+            # Avoid leaking whether the *username* was correct: still check
+            # DB below so the timing path matches wrong-user vs wrong-pass.
+        elif owner_password:
+            # Constant-time comparison — even if lengths differ, hmac.compare_digest
+            # handles that safely by padding the shorter string.
+            if hmac.compare_digest(password.encode(), owner_password.encode()):
+                return {"username": username, "type": "owner"}
 
     admin = crud.it_is_admin(db, username=username)
     if admin:

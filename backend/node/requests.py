@@ -30,10 +30,10 @@ _rpc_last_error: dict[tuple[str, str], str] = {}
 
 # Nodes whose TLS verification has been bypassed (self-signed fallback).
 # Keyed by node address; value is True once the loud one-time warning has
-# been emitted so poll loops don't spam it every tick. Bounded: node
-# addresses are operator-controlled (cardinality = node count), the cap is
-# only belt-and-braces against unbounded growth.
-_tls_fallback_warned: set[str] = set()
+# been emitted so poll loops don't spam it every tick. Bounded and FIFO
+# (insertion-ordered dict): the oldest node re-warns once when the cap is
+# hit, exactly the "belt-and-braces" case.
+_tls_fallback_warned: dict[str, bool] = {}
 _TLS_WARNED_CAP = 10_000
 
 
@@ -130,10 +130,9 @@ class NodeRequests:
         """
         if self.address not in _tls_fallback_warned:
             if len(_tls_fallback_warned) >= _TLS_WARNED_CAP:
-                # Arbitrary eviction; worst case the evicted node re-warns
-                # once. Keeps the set bounded no matter the caller.
-                _tls_fallback_warned.pop()
-            _tls_fallback_warned.add(self.address)
+                # Oldest entry re-warns once — keeps the map bounded.
+                _tls_fallback_warned.pop(next(iter(_tls_fallback_warned)))
+            _tls_fallback_warned[self.address] = True
             logger.warning(
                 "Node %s: TLS cert not publicly trusted (%s) — falling back "
                 "to UNVERIFIED TLS (self-signed?). API key is sent without "

@@ -19,7 +19,11 @@ def _validate_fernet_key(v: str) -> str:
 
 class Setting(BaseSettings):
     ADMIN_USERNAME: str = Field(min_length=1, max_length=64)
-    ADMIN_PASSWORD: str = Field(min_length=12, max_length=256)
+    # Owner credentials: either a bcrypt hash (preferred — the installer and
+    # the first-boot migration write ADMIN_PASSWORD_HASH and drop the
+    # plaintext) or the legacy plaintext ADMIN_PASSWORD as a fallback.
+    ADMIN_PASSWORD: str = ""
+    ADMIN_PASSWORD_HASH: str = ""
     URLPATH: str = ""  # Initial default for DB urlpath; runtime changes via web UI
     HOST: str = "0.0.0.0"
     PORT: int = Field(default=2095, ge=1, le=65535)
@@ -67,9 +71,16 @@ class Setting(BaseSettings):
             _validate_fernet_key(self.BOT_ENCRYPT_KEY)
         if self.NODE_ENCRYPT_KEY:
             _validate_fernet_key(self.NODE_ENCRYPT_KEY)
+        if not self.ADMIN_PASSWORD and not self.ADMIN_PASSWORD_HASH:
+            raise ValueError(
+                "No owner credentials — set ADMIN_PASSWORD_HASH (bcrypt, preferred) or "
+                "ADMIN_PASSWORD in .env"
+            )
+        if self.ADMIN_PASSWORD_HASH and not self.ADMIN_PASSWORD_HASH.startswith("$2"):
+            raise ValueError("ADMIN_PASSWORD_HASH must be a bcrypt hash ($2a/$2b/$2y…)")
         lowered = (self.ADMIN_PASSWORD or "").lower()
         placeholders = ("change-me", "changeme", "change_me", "password123", "admin123")
-        if any(p in lowered for p in placeholders):
+        if lowered and any(p in lowered for p in placeholders):
             raise ValueError(
                 "ADMIN_PASSWORD still looks like a placeholder — set a strong random password in .env "
                 "(installer and app require >=12 chars)"

@@ -16,22 +16,11 @@
     <title>OVManager</title>
 
     <!--
-      Fonts are loaded here (not via an @import inside index.css) because a CSS
-      @import is render-blocking and serialises: html -> css -> font css -> font.
-      preconnect warms the TLS handshake so first paint doesn't wait on fonts.
+      Fonts are self-hosted under /fonts/ (the woff2 files ship with the app,
+      no third-party origin). The stylesheet is linked here rather than via an
+      @import inside index.css so the CSS is parallel, not serialized.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
-    />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
-      />
-    </noscript>
+    <link rel="stylesheet" href="/fonts/fonts.css" />
 
     <!--
       Boot script. Runs before the bundle so the very first paint already has

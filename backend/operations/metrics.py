@@ -115,7 +115,6 @@ async def collect_metrics() -> None:
         # current online users still comes from /users which computes live counts.
         active_users = sum(1 for u in users if bool(u.is_active))
         inactive_users = len(users) - active_users
-        full_users = 0
         total_used = sum(float(u.used or 0) for u in users)
 
         # Update last_online for users with active connections.
