@@ -26,23 +26,33 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
   const dialogRef = useRef(null);
   // Store what had focus before the modal opened so we can restore it on close.
   const previousFocusRef = useRef(null);
-
-  // Escape key + focus management
+  // Keep the latest close handler without re-running the focus effect below:
+  // a fresh closure every render must not steal focus back to the header's
+  // close button while the user is typing.
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
-    if (!isOpen) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
-    // Save current focus target and move focus into the dialog
+  // Escape key + focus management — runs once per open, never per re-render.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    // Save current focus target and move focus into the dialog. Prefer the
+    // first input field (a form should open ready to type); fall back to the
+    // first focusable element or the dialog itself.
     previousFocusRef.current = document.activeElement;
     const dialog = dialogRef.current;
     if (dialog) {
-      const first = dialog.querySelectorAll(FOCUSABLE)[0];
-      if (first) first.focus();
+      const firstInput = dialog.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled])');
+      if (firstInput) firstInput.focus();
+      else if (dialog.querySelectorAll(FOCUSABLE)[0]) dialog.querySelectorAll(FOCUSABLE)[0].focus();
       else dialog.focus();
     }
 
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -71,7 +81,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
         previousFocusRef.current.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Prevent body scroll while modal is open
   useEffect(() => {
