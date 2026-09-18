@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 VERSION_TABLE = "schema_version"
 
@@ -446,6 +446,14 @@ def _add_notify_node_down(db: Session) -> None:
     db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_offsite_backup_target(db: Session) -> None:
+    """Add ``settings.offsite_backup_target`` for databases stamped before v10."""
+    if "settings" not in table_names(db) or "offsite_backup_target" in column_names(db, "settings"):
+        return
+    column = Base.metadata.tables["settings"].columns["offsite_backup_target"]
+    db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -455,6 +463,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (7, "add automatic backup settings", _add_auto_backup_settings),
     (8, "add user tag column", _add_user_tag),
     (9, "add node-down alert flag", _add_notify_node_down),
+    (10, "add offsite backup target", _add_offsite_backup_target),
 )
 
 

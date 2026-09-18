@@ -77,6 +77,8 @@ async def get_settings(
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
+    # Optional offsite copy target for scheduled backups (scp-style string).
+    data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
@@ -109,6 +111,8 @@ class BotConfigUpdate(BaseModel):
     auto_backup_enabled: bool | None = None
     auto_backup_time: str | None = None
     auto_backup_keep: int | None = None
+    # Optional offsite copy of the newest backup ("[user@]host:/path").
+    offsite_backup_target: str | None = None
 
 
 class URLPathUpdate(BaseModel):
@@ -183,6 +187,13 @@ async def update_bot_config(
             msg=f"auto_backup_keep must be between {_AUTO_BACKUP_KEEP_MIN} and {_AUTO_BACKUP_KEEP_MAX}",
             data=None,
         )
+    if payload.offsite_backup_target is not None and payload.offsite_backup_target.strip():
+        from backend.operations.offsite_backup import InvalidTarget, parse_target
+
+        try:
+            parse_target(payload.offsite_backup_target)
+        except InvalidTarget as exc:
+            return ResponseModel(success=False, msg=str(exc), data=None)
 
     kwargs = payload.model_dump(exclude_unset=True)
     try:
@@ -204,6 +215,7 @@ async def update_bot_config(
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
+    data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
 
     # Apply a new schedule immediately — no restart required. Imported lazily
     # because backend.app imports the routers (circular otherwise).
