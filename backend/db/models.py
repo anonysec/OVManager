@@ -103,6 +103,8 @@ class Settings(Base):
     # (the bot only polls; sending is an independent HTTPS call).
     notify_expiry: Mapped[bool] = mapped_column(default=True, nullable=False)
     notify_traffic: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # Telegram alert when a node stops answering the metrics probe.
+    notify_node_down: Mapped[bool] = mapped_column(default=True, nullable=False)
     # Subscription link settings — persisted to DB (was in-memory only).
     subscription_url_prefix: Mapped[str] = mapped_column(nullable=True)
     subscription_path: Mapped[str] = mapped_column(default="sub", nullable=False)

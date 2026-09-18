@@ -71,6 +71,7 @@ async def get_settings(
     data = settings.model_dump()
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
+    data["notify_node_down"] = bool(getattr(db_settings, "notify_node_down", True))
     # Scheduled automatic backup (off by default). Merged here for the same
     # backward-compatibility reason as the notification flags above.
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
@@ -102,6 +103,8 @@ class BotConfigUpdate(BaseModel):
     # Daily Telegram alert categories (panel-sent, independent of bot polling).
     notify_expiry: bool | None = None
     notify_traffic: bool | None = None
+    # Telegram alert when a node stops answering the metrics probe.
+    notify_node_down: bool | None = None
     # Scheduled automatic database backup (OFF by default).
     auto_backup_enabled: bool | None = None
     auto_backup_time: str | None = None
@@ -197,6 +200,7 @@ async def update_bot_config(
     db_settings = crud.get_settings(db)
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
+    data["notify_node_down"] = bool(getattr(db_settings, "notify_node_down", True))
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)

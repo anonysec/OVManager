@@ -15,6 +15,7 @@ from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.logger import logger
 from backend.node.requests import node_client
+from backend.operations.node_alerts import check_node_alerts
 
 # Set once the metrics tables are confirmed present, so the periodic collector
 # and every graph query stop re-running CREATE TABLE IF NOT EXISTS.
@@ -104,6 +105,20 @@ async def collect_metrics() -> None:
         probed = await asyncio.gather(*[_node_snapshot(node) for node in nodes], return_exceptions=True)
         clean = [p for p in probed if isinstance(p, tuple)]
         clean_rows = [row for row, _sessions in clean]
+
+        # Transition-based node-down alerts (one Telegram message per outage,
+        # one on recovery; in-memory state, cooldown against flapping).
+        try:
+            settings = crud.get_settings(db)
+            sent = await run_in_threadpool(
+                check_node_alerts,
+                clean_rows,
+                notify=bool(getattr(settings, "notify_node_down", True)),
+            )
+            if sent:
+                logger.info("metrics: node alerts sent: %s", sent)
+        except Exception as e:
+            logger.warning("metrics: node alert check failed: %s", e)
 
         active_connections = sum(int(r.get("live_count") or 0) for r in clean_rows)
         auth_errors = sum(int(r.get("auth_errors") or 0) for r in clean_rows)
