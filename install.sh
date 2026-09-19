@@ -819,7 +819,7 @@ validate_input() {
         [[ ${#ADMIN_PASS} -ge 12 ]] || die "Could not generate an admin password"
         warn "No password given — generated one (shown at the end)"
     fi
-    [[ ${#ADMIN_PASS} -ge 12 ]] || die "Admin password must be at least 12 characters (the panel requires >= 12)"
+    validate_admin_password "$ADMIN_PASS"
     if [[ -n "$PATHPREFIX" ]]; then
         [[ "$PATHPREFIX" =~ ^[A-Za-z0-9_-]{1,64}$ ]] || die "URL path: letters, digits, dash, underscore"
     fi
@@ -866,7 +866,10 @@ wizard() {
     esac
     ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
     if [[ -z "$ADMIN_PASS" ]]; then
-        ADMIN_PASS="$(ask "Admin pass" "" "h")"
+        ADMIN_PASS="$(ask "Admin pass (blank = generate)" "" "h")"
+        if [[ -n "$ADMIN_PASS" ]]; then
+            prompt_validate_admin_password
+        fi
     fi
     if [[ -z "$TLS_MODE" ]]; then
         line ""
@@ -1120,16 +1123,43 @@ PY
 
 # Mirrors the panel's boot-time validation (backend/config.py): >= 12 chars
 # and no placeholder-looking values.
-validate_admin_password() {
+# Empty output = acceptable; otherwise the human-readable reason.
+admin_password_problem() {
     local pass="$1" lowered
-    [[ -n "$pass" ]] || die "Admin password must not be empty"
-    [[ "$pass" != *$'\n'* && "$pass" != *$'\r'* ]] || die "Admin password must be a single line"
-    [[ ${#pass} -ge 12 ]] || die "Admin password must be at least 12 characters (the panel requires >= 12)"
+    [[ -n "$pass" ]] || { printf 'must not be empty'; return 0; }
+    [[ "$pass" != *$'\n'* && "$pass" != *$'\r'* ]] \
+        || { printf 'must be a single line'; return 0; }
+    [[ ${#pass} -ge 12 ]] \
+        || { printf 'must be at least 12 characters (the panel requires >= 12)'; return 0; }
     lowered="${pass,,}"
     case "$lowered" in
         *change-me*|*changeme*|*change_me*|*password123*|*admin123*)
-            die "Admin password looks like a placeholder — choose a strong password (the panel rejects change-me/changeme/change_me/password123/admin123)" ;;
+            printf 'looks like a placeholder — choose a strong password (the panel rejects change-me/changeme/change_me/password123/admin123)' ;;
     esac
+    return 0
+}
+
+validate_admin_password() {
+    local problem
+    problem="$(admin_password_problem "$1")"
+    [[ -z "$problem" ]] || die "Admin password $problem"
+}
+
+# Interactive re-prompt until the typed password passes the panel's rules
+# (max 3 tries, then fail fast — never install a password the panel rejects).
+prompt_validate_admin_password() {
+    local tries=0 problem
+    while (( tries < 3 )); do
+        problem="$(admin_password_problem "$ADMIN_PASS")"
+        if [[ -z "$problem" ]]; then
+            step "Password set (hidden while typing)"
+            return 0
+        fi
+        warn "Weak password: $problem"
+        tries=$((tries + 1))
+        [[ $tries -lt 3 ]] && ADMIN_PASS="$(ask "Admin password" "" "h")"
+    done
+    die "No acceptable password after 3 tries (need >= 12 characters, not a common word)"
 }
 
 # Recovery for a lost owner password: rewrite only ADMIN_PASSWORD= in the
@@ -1332,7 +1362,7 @@ panel_express_defaults() {
         if [[ -z "$ADMIN_PASS" ]]; then
             GENERATED_PASS=1
         else
-            step "Password set (hidden while typing)"
+            prompt_validate_admin_password
         fi
     fi
     # Explicit success: a trailing `[[ ... ]] && ...` returning non-zero would
