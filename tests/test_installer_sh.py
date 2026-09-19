@@ -99,6 +99,23 @@ def test_short_admin_password_rejected(tmp_path):
     assert "at least 12" in r.stderr or "root" in r.stderr
 
 
+def test_install_rejects_placeholder_password_fast(tmp_path):
+    """A 13-char password containing a placeholder must fail in the
+    installer — not install and then crash-loop at first boot."""
+    sb, _ = sandbox(tmp_path)
+    r = sh_sb(sb, "install", "-y", "--admin-pass", "my-admin12345")
+    assert r.returncode == 1
+    assert "placeholder" in r.stderr or "root" in r.stderr
+
+
+def test_interactive_prompts_validate_password_with_retries():
+    """Express and Custom re-prompt on weak passwords instead of dying."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert "prompt_validate_admin_password" in content
+    assert content.count("prompt_validate_admin_password") >= 3  # def + 2 callers
+
+
 def test_unknown_option_fails():
     r = sh("--nonsense-flag")
     assert r.returncode == 1
@@ -388,14 +405,20 @@ def test_express_password_path_does_not_exit_early():
     source = "\n".join(lines[start : end + 1])
 
     def harness(password: str, expect_generated: int) -> str:
+        helpers = _extract_function("admin_password_problem") + "\n" + _extract_function(
+            "prompt_validate_admin_password"
+        )
         return f"""set -Eeuo pipefail
     line() {{ :; }}
     step() {{ :; }}
+    warn() {{ :; }}
+    die() {{ echo "DIE: $1" >&2; exit 1; }}
     ask() {{ printf '%s' '{password}'; }}
     rand_path() {{ echo testpath; }}
     DEFAULT_PORT=2095; DEFAULT_USER=admin
     EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
     ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
+    {helpers}
     {source}
     panel_express_defaults
     [[ "$ADMIN_PASS" == '{password}' ]]
