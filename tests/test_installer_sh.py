@@ -497,3 +497,26 @@ def test_same_server_offer_adopts_existing_node():
     assert "env_get /opt/ovnode/.env API_KEY" in content
     assert 'register_node_in_panel "$node_name" "$node_key" "$node_port" "$node_tls"' in content
     assert 'node_tls="0"' in content
+
+
+def test_detect_os_preserves_app_version(tmp_path):
+    """Regression: sourcing /etc/os-release must not clobber the app
+    VERSION (os-release defines its own VERSION=...)."""
+    probe = tmp_path / "probe.sh"
+    fn = subprocess.run(
+        ["sed", "-n", "/^detect_os() {/,/^}/p", INSTALLER],
+        capture_output=True, text=True, timeout=30,
+    ).stdout
+    assert fn, "detect_os not found"
+    probe.write_text(
+        "set -u\n"
+        'VERSION="9.9.9-probe"\n'
+        'die() { echo "DIE: $1" >&2; exit 1; }\n'
+        + fn
+        + "\ndetect_os\n"
+        'echo "VERSION=$VERSION"\n',
+        encoding="utf-8",
+    )
+    r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert "VERSION=9.9.9-probe" in r.stdout
