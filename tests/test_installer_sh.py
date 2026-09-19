@@ -178,7 +178,7 @@ def test_dry_run_never_touches_live_flows():
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
     assert "Dry run — nothing changed (re-run without --dry-run to update/uninstall)" in content
-    assert "Dry run — nothing changed (would back up data, pull, rebuild)" in content
+    assert "Dry run — nothing changed (would back up data, fetch ${SRC}, rebuild if needed)" in content
     assert "Dry run — nothing changed (would stop the service" in content
 
 

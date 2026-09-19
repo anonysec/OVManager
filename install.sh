@@ -16,6 +16,10 @@ set -Eeuo pipefail
 # Forks: point source downloads (and update pulls) at your own repo.
 REPO="${OVM_REPO:-anonysec/OVManager}"
 BRANCH="main"
+# Where the code comes from: "release" (default) downloads the versioned
+# prebuilt tarball from GitHub Releases (no git/npm needed on the server);
+# "source" clones/pulls git and builds the frontend (developers).
+SRC="${OVM_SRC:-release}"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
@@ -179,7 +183,8 @@ USAGE
 
 COMMANDS
   install               Install (default)
-  update                Pull, rebuild, restart (backs up data first)
+  update                Fetch release (or pull), rebuild if needed, restart
+                        (backs up data first)
   status                Show panel URL, health and version
   start | stop | restart   Control the panel service
   logs [N|-f]           Last N log lines (default 100), or follow with -f
@@ -201,6 +206,11 @@ MODE
   --mode native         systemd + uv + Node on the host          [default]
   --mode docker         Docker Engine, image built from source
   --docker              Alias for --mode docker
+
+SOURCE
+  --from-release        Download the versioned release file      [default]
+                        (prebuilt frontend, verified checksum)
+  --from-source, --dev  Clone/pull git and build locally (developers)
 
 OPTIONS
   --port PORT           Panel port                               [2095]
@@ -227,6 +237,7 @@ OPTIONS
 
 ENVIRONMENT  (used when the matching flag is omitted)
   OVM_MODE          native | docker
+  OVM_SRC           release | source  (default: release)
   OVM_PORT          port
   OVM_PATH          url path ("root" for /)
   OVM_ADMIN_USER    admin username
@@ -269,6 +280,8 @@ parse_args() {
             --tls-none)    die "Plain HTTP is not allowed. Use --tls-self (default), --tls-le DOMAIN, --tls-ip or --tls-custom KEY CERT." ;;
             --mode)        [[ $# -ge 2 ]] || die "--mode needs native or docker"; MODE="$2"; shift 2 ;;
             --docker)      MODE="docker"; shift ;;
+            --from-release) SRC="release"; shift ;;
+            --from-source|--dev) SRC="source"; shift ;;
             --yes|-y|--non-interactive) YES=1; shift ;;
             --json)        JSON=1; shift ;;
             --dry-run)     DRY=1; shift ;;
@@ -608,7 +621,43 @@ setup_tls() {
 }
 
 # ── Source / env ───────────────────────────────────────────────────────
+release_base() { printf 'ovmanager-%s' "$VERSION"; }
+
+release_url() {
+    printf 'https://github.com/%s/releases/download/v%s/%s.tar.gz' \
+        "$REPO" "$VERSION" "$(release_base)"
+}
+
+# Download the versioned release file into $1 (an existing directory).
+# The tarball holds a repo snapshot plus the prebuilt frontend/dist, so no
+# git or npm is needed on the server. The .sha256 sidecar is verified when
+# published; a missing sidecar only warns (older releases).
+fetch_release() {
+    local dest="$1" work base
+    base="$(release_base)"
+    work="$(mktemp -d)"
+    run_step "Downloading release v${VERSION}" \
+        curl -fsSLo "$work/$base.tar.gz" "$(release_url)" \
+        || { rm -rf "$work"; die "No release file for v${VERSION} — try --from-source"; }
+    if curl -fsSLo "$work/$base.sha256" "$(release_url).sha256" 2>/dev/null; then
+        ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
+            || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
+        step "Checksum ok"
+    else
+        warn "No checksum file — skipping verification"
+    fi
+    mkdir -p "$dest"
+    tar -xzf "$work/$base.tar.gz" -C "$dest" \
+        || { rm -rf "$work"; die "Extract failed"; }
+    rm -rf "$work"
+    step "Release extracted"
+}
+
 fetch_source() {
+    if [[ "$SRC" == "release" ]]; then
+        fetch_release "$INSTALL_DIR"
+        return
+    fi
     if command -v git >/dev/null 2>&1; then
         run_step "Cloning ${REPO}@${BRANCH}" \
             git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$INSTALL_DIR"
@@ -919,7 +968,7 @@ do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed ($INSTALL_DIR). Use: $0 update"
     mkdir -p "$DATA_DIR"
 
-    hr; info "Downloading OVManager ($BRANCH)"
+    hr; info "Downloading OVManager (v${VERSION}, ${SRC})"
     fetch_source
 
     setup_tls
@@ -934,7 +983,11 @@ do_install() {
         info "Python dependencies (uv sync)…"
         cd "$INSTALL_DIR"
         run_step "Python packages" "$UV_BIN" sync --quiet
-        build_frontend
+        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
+            step "Frontend prebuilt"
+        else
+            build_frontend
+        fi
         write_systemd_unit
         run_step "Service started" systemctl_bounded restart
     fi
@@ -972,7 +1025,11 @@ do_update() {
     fi
     backup_dir "$DATA_DIR" "panel"
     cd "$INSTALL_DIR"
-    if [[ -d .git ]]; then
+    if [[ "$SRC" == "release" ]]; then
+        # .env is never in the tarball (uncommitted), so extracting over the
+        # install keeps it. Stale files from older trees are harmless.
+        fetch_release "$INSTALL_DIR"
+    elif [[ -d .git ]]; then
         git stash --quiet 2>/dev/null || true
         run_step "Pull ${BRANCH}" git pull --rebase origin "$BRANCH"
         git stash pop --quiet 2>/dev/null || true
@@ -990,7 +1047,11 @@ do_update() {
         compose_up
     else
         run_step "Python packages" "$UV_BIN" sync --quiet
-        build_frontend
+        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
+            step "Frontend prebuilt"
+        else
+            build_frontend
+        fi
         run_step "Service restarted" systemctl_bounded restart
     fi
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 60 \
@@ -1764,6 +1825,10 @@ remove_cli() {
 main() {
     parse_args "$@"
     apply_env
+    case "$SRC" in
+        release|source) ;;
+        *) die "Invalid source '$SRC' (use release or source)" ;;
+    esac
     if can_prompt && [[ "$JSON" -eq 0 ]]; then
         command clear >/dev/null 2>&1 || true
     fi
@@ -1793,7 +1858,7 @@ main() {
         update)
             detect_os
             if [[ "$DRY" -eq 1 ]]; then
-                info "Dry run — nothing changed (would back up data, pull, rebuild)."
+                info "Dry run — nothing changed (would back up data, fetch ${SRC}, rebuild if needed)."
                 exit 0
             fi
             check_root
