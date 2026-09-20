@@ -18,7 +18,7 @@ INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.4"
+VERSION="1.2.5"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 INSTALLER="$INSTALL_DIR/install.sh"
 # Installed command names (same as the installer used).
@@ -635,6 +635,7 @@ do_rollback() {
     local snap
     snap="$(latest_snapshot panel)"
     [[ -n "$snap" ]] || die "No code snapshot in /var/backups — nothing to roll back to"
+    check_root
     info "Rolling back to: $snap"
     [[ "$YES" -eq 1 ]] || confirm "Restore the pre-update tree and restart?" || die "Cancelled."
     read_env_port
@@ -819,7 +820,7 @@ main() {
             check_root; do_reset_password; exit 0 ;;
         reset-urlpath) check_root; reset_urlpath_now; exit 0 ;;
         doctor) do_doctor; exit 0 ;;
-        rollback) check_root; do_rollback; exit 0 ;;
+        rollback) do_rollback; exit 0 ;;
         update) delegate_update; exit 0 ;;
         uninstall) check_root; delegate_uninstall; exit 0 ;;
     esac
