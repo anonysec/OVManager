@@ -658,9 +658,13 @@ main() {
         auto-backup) check_root; auto_backup_cli "$AUTO_BACKUP_ACTION"; exit 0 ;;
         tls) check_root; do_tls_menu; exit 0 ;;
         recovery) check_root; do_recovery_menu; exit 0 ;;
-        reset-password) check_root; do_reset_password; exit 0 ;;
+        reset-password)
+            # Validate before the root gate so bad input fails the same
+            # way for root and non-root callers (CI runs non-root).
+            [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
+            check_root; do_reset_password; exit 0 ;;
         reset-urlpath) check_root; reset_urlpath_now; exit 0 ;;
-        update) check_root; delegate_update; exit 0 ;;
+        update) delegate_update; exit 0 ;;
         uninstall) [[ "$DRY" -eq 0 ]] && check_root; delegate_uninstall; exit 0 ;;
     esac
 }
