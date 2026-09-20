@@ -10,7 +10,7 @@ use and small teams.
    API key, for example:
 
    ```bash
-   curl -sSL https://anonysec.github.io/OVNode/install.sh \
+   curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh \
      | sudo bash -s -- install -y --name node-1 --tls selfsigned \
        --api-key 'PASTE-GENERATED-KEY'
    ```

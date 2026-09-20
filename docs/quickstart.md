@@ -6,7 +6,7 @@ You need: a Linux VPS (Debian/Ubuntu recommended), `sudo` access, and about
 ## 1. Install the panel
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
 The menu offers **Express** (recommended) or **Custom**. Express asks only
@@ -61,7 +61,7 @@ That is the whole flow. Details: [single-vps](single-vps.md),
 ## Unattended install (scripts / AI)
 
 ```bash
-curl -sSL https://anonysec.github.io/OVManager/install.sh \
+curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
   | sudo bash -s -- -y --mode native --admin-pass 'choose-a-long-password'
 ```
 
@@ -73,8 +73,8 @@ Omit `--admin-pass` under `-y` and a password is generated and printed.
 ## Update / uninstall / status
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) update
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) status
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall --purge  # also deletes data
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) update
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) status
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall --purge  # also deletes data
 ```

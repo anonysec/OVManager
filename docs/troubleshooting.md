@@ -24,7 +24,7 @@ read at startup. With shell access, the installer resets it — data is
 untouched and every other `.env` line is preserved:
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) reset-password
 ```
 
 It asks for the new password twice (hidden input, ≥ 12 characters), updates
@@ -32,7 +32,7 @@ only that line, keeps the file `0600`, restarts the panel and waits for
 `/health`. Scripts and AI skip the prompts:
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password --admin-pass 'new-long-password'
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) reset-password --admin-pass 'new-long-password'
 # or: OVM_ADMIN_PASS='new-long-password' bash install.sh reset-password
 ```
 
@@ -124,6 +124,7 @@ cloud SG) blocks forwarding.
 | `Port 80 is busy — Let's Encrypt standalone needs it` | Stop whatever listens on 80, or use `--tls-self` for now. |
 | `docker compose up failed` | `docker logs ovmanager` — usually a busy port or no disk space. |
 | `No answer on /health` | `journalctl -u ovmanager -f` (native) or `docker logs -f ovmanager`; then `install.sh status`. |
+| `Download … is not a release archive` / `Release checksum mismatch` | Your installer predates the redirect fix (≤1.2.5) — `ovm update` uses the installed copy. Re-bootstrap with the raw one-liner, then `update`; or `update --from-source`. |
 
 ## Starting over
 

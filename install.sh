@@ -31,7 +31,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.6"
+VERSION="1.2.7"
 # Terminal command installed by install_cli() (copy of the manager).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -413,6 +413,10 @@ release_checksum_url() {
         "$REPO" "$VERSION" "$(release_base)"
 }
 
+# A broken download (redirect stub, proxy block page) must fail here with
+# a clear message — never as a checksum mismatch further down.
+is_release_archive() { tar -tzf "$1" >/dev/null 2>&1; }
+
 # Download the versioned release file into $1 (an existing directory).
 # The tarball holds a repo snapshot plus the prebuilt frontend/dist, so no
 # git or npm is needed on the server. The .sha256 sidecar is verified when
@@ -424,6 +428,8 @@ fetch_release() {
     run_step "Downloading release v${VERSION}" \
         curl -fsSL -o "$work/$base.tar.gz" "$(release_url)" \
         || { rm -rf "$work"; die "No release file for v${VERSION} — try --from-source"; }
+    is_release_archive "$work/$base.tar.gz" \
+        || { rm -rf "$work"; die "Download for v${VERSION} is not a release archive (stale installer or blocked download?). Re-bootstrap with the latest installer:  bash <(curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh)  — or retry with --from-source"; }
     if curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null; then
         ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
             || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
@@ -810,9 +816,9 @@ panel_express_defaults() {
 
 wizard() {
     if [[ -z "$MODE" ]]; then
-        line "${B}Install mode${NC}"
-        line "  ${WH}1${NC}  Native     systemd service, uv + Node on this host"
-        line "  ${WH}2${NC}  Docker     container image, Docker Engine on this host"
+        line "${B}Step 1/5 — Install mode${NC}"
+        line "  ${WH}1${NC}  Native     systemd service on this host (recommended)"
+        line "  ${WH}2${NC}  Docker     containerized, needs Docker Engine"
         local m
         m="$(ask "Mode" "1")"
         case "${m:-1}" in
@@ -821,7 +827,7 @@ wizard() {
         esac
         line ""
     fi
-    line "${B}Panel port${NC}"
+    line "${B}Step 2/5 — Panel port${NC}"
     line "  ${WH}1${NC}  Default: ${DEFAULT_PORT}"
     line "  ${WH}2${NC}  Custom"
     line "  ${WH}3${NC}  Random (1024-62000)"
@@ -834,6 +840,9 @@ wizard() {
     esac
     is_port "$PORT" || die "Invalid port: '$PORT'"
     port_in_use "$PORT" && die "Port $PORT is already in use — free it or pick another"
+    line ""
+    line "${B}Step 3/5 — Panel URL path${NC}"
+    line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
     local path_default="random"
     [[ "$PATH_SET" -eq 1 ]] && path_default="${PATHPREFIX:-root}"
     local path_in
@@ -843,6 +852,8 @@ wizard() {
         random|"") PATHPREFIX="$(rand_path)" ;;
         *) PATHPREFIX="${path_in#/}"; PATHPREFIX="${PATHPREFIX%/}" ;;
     esac
+    line ""
+    line "${B}Step 4/5 — Owner login${NC}"
     ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
     if [[ -z "$ADMIN_PASS" ]]; then
         ADMIN_PASS="$(ask "Admin pass (blank = generate)" "" "h")"
@@ -852,11 +863,11 @@ wizard() {
     fi
     if [[ -z "$TLS_MODE" ]]; then
         line ""
-        line "${B}TLS — encrypts your login and the panel (always on)${NC}"
-        line "  ${WH}1${NC}  Self-signed (default)      encrypted; browser shows one warning to click through"
+        line "${B}Step 5/5 — Certificate (always encrypted)${NC}"
+        line "  ${WH}1${NC}  Self-signed (default)      encrypted; one browser warning to click through"
         line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
         line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
-        line "  ${WH}4${NC}  Custom key + cert          you already have PEM files"
+        line "  ${WH}4${NC}  Custom key + cert          bring your own PEM files"
         local tls
         tls="$(ask "TLS" "1")"
         case "${tls:-1}" in
@@ -922,10 +933,8 @@ success_card() {
         logs="journalctl -u ${SYSTEMD_SERVICE} -f"
     fi
     line ""
-    line "${GR}╭──────────────────────────────────────────────╮${NC}"
-    line "${GR}│${NC}  ${B}Ready — save this login${NC}                   ${GR}│${NC}"
-    line "${GR}╰──────────────────────────────────────────────╯${NC}"
-    line ""
+    line "  ${GR}Ready — save this login${NC}"
+    hr
     kv "Open"   "${WH}${url}${NC}"
     kv "Login"  "${GR}${ADMIN_USER}${NC}"
     if [[ "$GENERATED_PASS" -eq 1 ]]; then
@@ -947,20 +956,21 @@ do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed ($INSTALL_DIR). Use: $0 update"
     mkdir -p "$DATA_DIR"
     print_plan
-    hr; info "Downloading OVManager (v${VERSION}, ${SRC})"
+    hr; info "Step 1/4 — Download (v${VERSION}, ${SRC})"
     fetch_source
 
+    info "Step 2/4 — Certificate and configuration"
     setup_tls
     write_env
 
     local scheme; scheme="$(scheme_of)"
 
+    info "Step 3/4 — Runtime and service"
     if [[ "$MODE" == "docker" ]]; then
         compose_up
     else
         ensure_uv
         if [[ "$SRC" == "source" ]]; then ensure_node; fi
-        info "Python dependencies (uv sync)…"
         cd "$INSTALL_DIR"
         run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
         if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
@@ -972,10 +982,9 @@ do_install() {
         run_step "Service started" systemctl_bounded restart
     fi
 
+    info "Step 4/4 — Health check and finish"
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
         || warn "No answer on /health yet — check logs"
-
-    info "Finalizing first-boot…"
     if [[ "$MODE" == "docker" ]]; then
         docker restart ovmanager >/dev/null 2>&1 || true
     else
@@ -1109,10 +1118,10 @@ already_installed_menu() {
 }
 
 start_menu() {
-    line "  What do you want to do?"
+    line "  ${B}How do you want to install?${NC}"
     line ""
-    line "  ${GR}1${NC})  Express    Install with safe defaults (recommended)"
-    line "  ${WH}2${NC})  Custom     Choose every option yourself"
+    line "  ${GR}1${NC})  Express    Recommended — secure defaults, ready in minutes"
+    line "  ${WH}2${NC})  Custom     Answer a few questions (port, login, certificate)"
     line ""
     local choice
     choice="$(ask "Select" "1")"
@@ -1356,6 +1365,7 @@ run_wizard_install() {
 banner() {
     line ""
     line "  ${B}OVManager installer${NC}  ${GY}v${VERSION}${NC}"
+    line "  ${GY}Secure VPN panel — up and running in a few minutes${NC}"
     line ""
 }
 

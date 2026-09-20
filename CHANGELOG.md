@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.7 — 2026-09-20
+
+Checksum-mismatch follow-up: release downloads are archive-checked
+before the checksum (a redirect stub now fails with a re-bootstrap
+hint, never as a checksum mismatch); GitHub Pages bootstrap URL
+retired — every one-liner uses raw.githubusercontent.com; stranded
+≤1.2.5 boxes get a documented re-bootstrap path. Installer menus
+redone: one numbered dialect, wizard/install step counters, shorter
+professional copy, plain success card.
+
 ## 1.2.6 — 2026-09-20
 
 Follow-up fixes: release downloads follow redirects (`curl -L`),
