@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2.6-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.7-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
@@ -21,7 +21,7 @@ respect your provider's ToS and local law.
 ## Quickstart (beginners start here)
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
 Answer the menu — **Express** (safe defaults: native, port `2095`, random URL
@@ -44,18 +44,18 @@ never wait on a prompt.
 **Human** (keeps the terminal as stdin so the wizard can ask):
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
 **AI / CI / scripts** (`-y` skips every prompt; `--json` prints the result on stdout):
 
 ```bash
 # Native
-curl -sSL https://anonysec.github.io/OVManager/install.sh \
+curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
   | sudo bash -s -- -y --mode native --admin-pass 'choose-a-long-password'
 
 # Docker
-curl -sSL https://anonysec.github.io/OVManager/install.sh \
+curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
   | sudo bash -s -- -y --mode docker --admin-pass 'choose-a-long-password' --json
 ```
 
@@ -65,8 +65,8 @@ Useful flags: `--port 2095` `--path dash` (or `--path root` for `/`) `--tls-self
 `CI=true` implies `--yes`. Run the script with `--help` for the full list.
 
 Forks: `OVM_REPO=myorg/OVManager` points source downloads and update
-pulls at your own repo (the `anonysec.github.io` one-liner keeps working
-from your fork's Pages).
+pulls at your own repo (use your fork's raw `install.sh` URL to install
+from it).
 
 If `--admin-pass` is omitted under `-y`, a password is generated and printed
 (and included in `--json`).
@@ -74,13 +74,16 @@ If `--admin-pass` is omitted under `-y`, a password is generated and printed
 ## Update / Uninstall
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) update
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) update
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall
 # also drop data:
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) uninstall --purge
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall --purge
 # forgot the owner password (scripts: add --admin-pass 'new-password'):
-bash <(curl -sSL https://anonysec.github.io/OVManager/install.sh) reset-password
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) reset-password
 ```
+
+Stuck on ≤1.2.5 with a checksum error? Re-bootstrap with the one-liner
+above, then `update` (`ovm update` alone still uses the old installer).
 
 ## Terminal menu
 

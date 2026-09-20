@@ -7,7 +7,7 @@ or replace the panel without touching the nodes.
 ## 1. Install a node (on the VPN server)
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVNode/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)
 ```
 
 Wizard cheat-sheet:
@@ -37,7 +37,7 @@ API key   abc123...           <- copy this
 Unattended equivalent:
 
 ```bash
-curl -sSL https://anonysec.github.io/OVNode/install.sh \
+curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh \
   | sudo bash -s -- install -y --name eu-1 --tls selfsigned \
     --vpn-ports 1194,443 --api-key "$(openssl rand -hex 32)"
 ```
@@ -72,6 +72,6 @@ etc.), open these yourself:
 ## 4. Later: update / check / remove
 
 ```bash
-bash <(curl -sSL https://anonysec.github.io/OVNode/install.sh) status    # health + cert expiry
-bash <(curl -sSL https://anonysec.github.io/OVNode/install.sh) update    # backs up data first
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh) status    # health + cert expiry
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh) update    # backs up data first
 ```
