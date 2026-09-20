@@ -936,7 +936,7 @@ do_install() {
         has_systemd || die "systemd not found — native install needs it (use --mode docker)"
         info "Python dependencies (uv sync)…"
         cd "$INSTALL_DIR"
-        run_step "Python packages" "$UV_BIN" sync --quiet
+        run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
         if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
             step "Frontend prebuilt"
         else
@@ -1000,7 +1000,7 @@ do_update() {
     if [[ "$MODE" == "docker" ]]; then
         compose_up
     else
-        run_step "Python packages" "$UV_BIN" sync --quiet
+        run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
         if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
             step "Frontend prebuilt"
         else

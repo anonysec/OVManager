@@ -29,7 +29,7 @@ COPY main.py ./
 # Install uv then sync from the lock file for fully reproducible builds.
 # --frozen fails closed if pyproject.toml and uv.lock are out of sync.
 RUN pip install --no-cache-dir uv \
-    && uv sync --frozen
+    && uv sync --frozen --no-dev
 
 # Stage 3: Runtime — ships only the venv, sources and frontend build
 FROM python:3.12-slim AS runtime
