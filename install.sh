@@ -253,8 +253,9 @@ parse_args() {
             help)          usage ;;
             update)        ACTION="update"; shift ;;
             uninstall)     ACTION="uninstall"; shift ;;
-            status|start|stop|restart|logs|backup|auto-backup|tls|recovery|reset-password|reset-urlpath|menu|install)
+            status|start|stop|restart|logs|backup|auto-backup|tls|recovery|reset-password|reset-urlpath|menu)
                            die "'$1' moved to the manager — use: ovm $1" ;;
+            install)       die "'install' is the default — just drop the word" ;;
             *)             die "Unknown option: $1  (see --help)" ;;
         esac
     done
