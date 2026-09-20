@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.3 — 2026-09-19
+
+Concept-A split: the installer (`install.sh`) only installs, updates and
+uninstalls; day-to-day operations move to the manager (`manager.sh`,
+installed as `ovmanager`/`ovm`) with a numbered menu. Shared shell code
+lives in `lib/common.sh`. Updating auto-swaps the old installer-copy CLI
+for the manager. Install flags trimmed (`--tls 1-4`, wizard-first options);
+`status`/`logs`/`backup`/`tls`/`recovery` on `install.sh` now redirect to
+`ovm`. Prebuilt release tarballs continue (now including the manager).
+
 ## 1.2.2 — 2026-09-19
 
 Version reset: the `2.x` release line is retired and the project continues
