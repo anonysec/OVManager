@@ -1,13 +1,11 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-"""Behavioral tests for install.sh's beginner-facing contract (no root side-effects).
+"""Behavioral tests for install.sh: install / update / uninstall only.
 
-These exercise the paths newcomers and automation rely on: help text,
-validation errors, and dry-run safety. They never get past validation or
-the dry-run guard, so they cannot touch the system — with one exception
-(marked): the JSON dry-run shape test, which runs only on machines where
-OVManager is NOT installed.
+Day-to-day operations (status, logs, backup, TLS, recovery) live in
+manager.sh and are covered by tests/test_manager_sh.py. These tests never
+get past validation or the dry-run guard, so they cannot touch the system.
 """
 
 import json
@@ -15,8 +13,6 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-
-import pytest
 
 INSTALLER = os.path.join(os.path.dirname(__file__), "..", "install.sh")
 INSTALLER_PATH = Path(INSTALLER)
@@ -73,28 +69,31 @@ def test_installer_syntax():
     subprocess.run(["bash", "-n", INSTALLER], check=True)
 
 
-def test_help_documents_beginner_paths():
+def test_help_documents_installer_surface():
+    """install.sh only does install/update/uninstall; the rest is ovm."""
     r = sh("--help")
     assert r.returncode == 0
-    for token in ("status", "--with-node", "--dry-run", "OVM_WITH_NODE", "update", "uninstall", "--tls-self"):
-        assert token in r.stdout or token in r.stderr, f"help missing {token}"
+    output = r.stdout + r.stderr
+    for token in ("update", "uninstall", "--dry-run", "--admin-pass", "--tls 1", "ovm"):
+        assert token in output, f"help missing {token}"
+    for token in ("reset-password", "auto-backup", "reset-urlpath"):
+        assert token not in output, f"help should not document manager op {token}"
 
 
-def test_invalid_port_fails_before_any_change(tmp_path):
-    sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "install", "-y", "--port", "abc", "--admin-pass", "long-enough-password")
+def test_bad_tls_number_fails_fast():
+    r = sh("--tls", "9", "--dry-run")
     assert r.returncode == 1
-    assert "Invalid port" in r.stderr or "root" in r.stderr  # non-root CI dies at check_root first
+    assert "--tls needs 1, 2, 3 or 4" in r.stderr
 
 
 def test_short_admin_password_rejected(tmp_path):
     sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "install", "-y", "--admin-pass", "short")
+    r = sh_sb(sb, "-y", "--admin-pass", "short")
     assert r.returncode == 1
     assert "at least 12" in r.stderr or "root" in r.stderr
     # 8-char passwords passed the installer but 422ed at the panel; now they
     # fail fast with the same 12-char floor the API enforces.
-    r = sh_sb(sb, "install", "-y", "--admin-pass", "eight888")
+    r = sh_sb(sb, "-y", "--admin-pass", "eight888")
     assert r.returncode == 1
     assert "at least 12" in r.stderr or "root" in r.stderr
 
@@ -103,7 +102,7 @@ def test_install_rejects_placeholder_password_fast(tmp_path):
     """A 13-char password containing a placeholder must fail in the
     installer — not install and then crash-loop at first boot."""
     sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "install", "-y", "--admin-pass", "my-admin12345")
+    r = sh_sb(sb, "-y", "--admin-pass", "my-admin12345")
     assert r.returncode == 1
     assert "placeholder" in r.stderr or "root" in r.stderr
 
@@ -121,72 +120,13 @@ def test_unknown_option_fails():
     assert r.returncode == 1
 
 
-def test_help_documents_reset_password():
-    r = sh("--help")
-    assert r.returncode == 0
-    assert "reset-password" in r.stdout or "reset-password" in r.stderr
-
-
-def test_reset_password_rejects_weak_passwords(tmp_path):
-    """Same floor + placeholder block the panel applies at boot."""
-    sb, _ = sandbox(tmp_path)
-    for weak, hint in (("short", "at least 12"), ("change-me-please-123", "placeholder")):
-        r = sh_sb(sb, "reset-password", "--admin-pass", weak)
-        assert r.returncode == 1, r.stderr
-        assert hint in r.stderr or "root" in r.stderr, r.stderr
-
-
-@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password itself requires root")
-def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
-    """Only the ADMIN_PASSWORD line changes (0600 kept, other lines intact)
-    and a failed service restart is a warning, not a failed recovery."""
-    sb, fake_opt = sandbox(tmp_path)
-    install = Path(fake_opt)
-    install.mkdir(parents=True)
-    env = install / ".env"
-    env.write_text(
-        "HOST=0.0.0.0\n"
-        "PORT=2095\n"
-        "ADMIN_USERNAME=admin\n"
-        "ADMIN_PASSWORD=old-password-123\n"
-        "URLPATH=sekret\n"
-        "JWT_SECRET_KEY=keep-me\n",
-        encoding="utf-8",
-    )
-    env.chmod(0o600)
-
-    # curl succeeds so the /health wait is instant; systemctl fails on purpose.
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    for name, rc in (("curl", 0), ("systemctl", 1)):
-        tool = fake_bin / name
-        tool.write_text(f"#!/bin/sh\nexit {rc}\n", encoding="utf-8")
-        tool.chmod(0o755)
-
-    r = sh_sb(
-        sb,
-        "reset-password",
-        "--admin-pass",
-        "brand-new-password",
-        env={"PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"},
-    )
-    assert r.returncode == 0, r.stderr
-    text = env.read_text(encoding="utf-8")
-    assert "ADMIN_PASSWORD=brand-new-password\n" in text
-    assert "old-password-123" not in text
-    for kept in ("HOST=0.0.0.0", "PORT=2095", "ADMIN_USERNAME=admin", "URLPATH=sekret", "JWT_SECRET_KEY=keep-me"):
-        assert kept in text, f"lost {kept}"
-    assert (env.stat().st_mode & 0o777) == 0o600
-    # The new password never echoes back, and the restart failure is a warning.
-    assert "brand-new-password" not in r.stdout + r.stderr
-    assert "Could not restart" in r.stderr
-
-
-def test_bad_node_name_rejected(tmp_path):
-    sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "install", "-y", "--admin-pass", "long-enough-password", "--with-node", "bad name!")
-    assert r.returncode == 1
-    assert "Node name" in r.stderr or "root" in r.stderr
+def test_manager_ops_redirect_to_ovm():
+    """status/logs/etc. are no longer installer commands — point at ovm."""
+    for cmd in ("status", "logs", "backup", "tls", "recovery", "reset-password", "menu", "install"):
+        r = sh(cmd)
+        assert r.returncode == 1, cmd
+        assert "moved to the manager" in r.stderr, cmd
+        assert "ovm" in r.stderr, cmd
 
 
 def test_dry_run_never_touches_live_flows():
@@ -199,14 +139,16 @@ def test_dry_run_never_touches_live_flows():
     assert "Dry run — nothing changed (would stop the service" in content
 
 
-def test_already_installed_menu_never_auto_runs_destructive_actions():
-    """Enter/EOF/cancel must not start update or uninstall by default."""
+def test_already_installed_menu_is_installer_only():
+    """The installer's already-installed menu offers update/uninstall/quit —
+    day-to-day ops moved to ovm."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert 'tui_select "OVManager — panel"' in content
+    assert 'tui_select "OVManager — installer"' in content
     assert 'quit      "Quit")' in content
     # Unmatched/cancelled selections return to the caller (or quit) only.
     assert "*)         return 0 ;;" in content
+    assert "use ovm" in content or "Manage the panel with: ovm" in content
 
 
 def test_already_installed_menu_is_safe_by_default(tmp_path):
@@ -214,7 +156,7 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
     (exit 2) — never default into update/uninstall."""
     sb, fake_opt = sandbox(tmp_path)
     os.makedirs(fake_opt)
-    r = sh_sb(sb, "install", "-y", "--admin-pass", "long-enough-password")
+    r = sh_sb(sb, "-y", "--admin-pass", "long-enough-password")
     assert r.returncode == 2
     assert "Already installed" in r.stderr
 
@@ -222,7 +164,7 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
 def test_already_installed_dry_run_is_noop(tmp_path):
     sb, fake_opt = sandbox(tmp_path)
     os.makedirs(fake_opt)
-    r = sh_sb(sb, "install", "--dry-run", "-y", "--admin-pass", "long-enough-password")
+    r = sh_sb(sb, "--dry-run", "-y", "--admin-pass", "long-enough-password")
     assert r.returncode == 0
     assert "nothing changed" in r.stderr
 
@@ -232,25 +174,19 @@ def test_fresh_dry_run_json_shape(tmp_path):
     sb, _ = sandbox(tmp_path)
     r = sh_sb(
         sb,
-        "install",
         "--dry-run",
         "-y",
         "--mode",
         "native",
         "--admin-pass",
         "long-enough-password",
-        "--with-node",
-        "mynode",
         "--json",
     )
-    assert r.returncode == 0
+    assert r.returncode == 0, r.stderr
     data = json.loads(r.stdout)  # stdout is exactly one JSON object
     assert data["ok"] is True
     assert data["user"] == "admin"
     assert data["password"] == "long-enough-password"
-    assert data["node"]["name"] == "mynode"
-    assert len(data["node"]["api_key"]) >= 32
-    assert data["node"]["same_server"] is True
 
 
 def test_docker_data_dir_and_perms_are_container_safe():
@@ -276,22 +212,21 @@ def test_repo_override_for_forks():
     assert 'REPO="${OVM_REPO:-anonysec/OVManager}"' in content
 
 
-def test_plain_http_flag_is_rejected():
-    """--tls-none must fail fast: plain HTTP is no longer offered."""
+def test_plain_http_flag_is_gone():
+    """--tls-self/--tls-none are gone: --tls takes numbers 1-4 now."""
     r = sh("--tls-none", "--dry-run")
     assert r.returncode != 0
-    assert "Plain HTTP is not allowed" in r.stderr
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
     assert 'TLS_MODE="none"' not in content
+    assert "--tls-self" not in content
 
 
-def test_start_menu_and_express_defaults():
-    """A bare run offers Express/Custom/Update/Uninstall; Express asks only
-    for the admin password and picks TLS self-signed."""
+def test_start_menu_is_express_or_custom():
+    """A bare run offers Express/Custom only; update/uninstall are commands."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    for label in ("Express", "Custom", "Update", "Uninstall"):
+    for label in ("Express", "Custom"):
         assert label in content
     assert "panel_express_defaults()" in content
     assert 'tls="$(ask "TLS" "1")"' in content
@@ -313,14 +248,15 @@ def test_same_server_node_offer_auto_registers():
     assert "install.sh" in content and "install --json" in content
 
 
-def test_terminal_command_and_tui_are_installed():
-    """The installer copies itself to /usr/local/bin as ovmanager (+ ovm)."""
+def test_installer_deploys_the_manager():
+    """install.sh puts manager.sh on PATH as ovmanager (+ ovm) — never itself."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
     assert 'BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"' in content
     assert 'CLI_NAME="ovmanager"' in content
     assert 'CLI_ALIAS="ovm"' in content
-    # copied on install and update, removed on uninstall
+    assert 'local src="${INSTALL_DIR}/manager.sh"' in content
+    # refreshed on install and update, removed on uninstall
     assert content.count("install_cli") >= 3  # definition + do_install + do_update
     assert content.count("remove_cli") >= 2  # definition + do_uninstall
     # whiptail when present, colored fallback otherwise
@@ -328,33 +264,18 @@ def test_terminal_command_and_tui_are_installed():
     assert "tui_select" in content
 
 
-def test_tui_subcommands_documented():
-    r = sh("help")
-    assert r.returncode == 0
-    output = r.stdout + r.stderr
-    for token in (
-        "start | stop | restart",
-        "logs [N|-f]",
-        "backup",
-        "tls",
-        "recovery",
-        "reset-urlpath",
-        "menu",
-        "ovmanager (alias: ovm)",
-    ):
-        assert token in output, token
+def test_no_function_ends_with_a_failing_test():
+    """`set -e` trap: a function whose last statement is `[[ ... ]] && ...`
+    returns 1 when the test is false, which exits the whole installer. This
+    was the Express admin-password bug (typing a password exited silently)."""
+    import re
 
-
-def test_menu_without_terminal_is_usage_error():
-    """`menu` must not fall back to defaults and start installing."""
-    r = sh("menu")
-    assert r.returncode == 2
-    assert "No terminal available" in r.stderr
-
-
-def test_logs_command_never_crashes():
-    r = sh("logs", "5")
-    assert r.returncode == 0
+    offenders = [
+        (name, tail, line)
+        for name, tail, line in _function_tails(INSTALLER)
+        if re.match(r"^\[\[.*\]\]\s*&&", tail)
+    ]
+    assert not offenders, offenders
 
 
 def _function_tails(path):
@@ -379,20 +300,6 @@ def _function_tails(path):
         else:
             body.append(line)
     return out
-
-
-def test_no_function_ends_with_a_failing_test():
-    """`set -e` trap: a function whose last statement is `[[ ... ]] && ...`
-    returns 1 when the test is false, which exits the whole installer. This
-    was the Express admin-password bug (typing a password exited silently)."""
-    import re
-
-    offenders = [
-        (name, tail, line)
-        for name, tail, line in _function_tails(INSTALLER)
-        if re.match(r"^\[\[.*\]\]\s*&&", tail)
-    ]
-    assert not offenders, offenders
 
 
 def test_express_password_path_does_not_exit_early():
@@ -429,8 +336,6 @@ def test_express_password_path_does_not_exit_early():
     assert typed.returncode == 0, typed.stderr
     blank = subprocess.run(["bash", "-c", harness("", 1)], capture_output=True, text=True, timeout=30)
     assert blank.returncode == 0, blank.stderr
-
-
 
 
 def _extract_function(name: str) -> str:
@@ -481,18 +386,6 @@ def test_uninstall_asks_about_data():
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
     assert 'confirm_no "Also delete data and backups?" && PURGE=1' in content
-
-
-def test_auto_backup_host_timer_wiring():
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    assert "ovmanager-backup.timer" in content
-    assert "ovmanager-backup.service" in content
-    assert "backup --keep ${keep}" in content
-    assert "auto-backup on|off|status" in content
-    assert 'auto-backup) check_root; detect_os; auto_backup_cli "$AUTO_BACKUP_ACTION"' in content
-    # /var/backups is pruned, so a daily timer cannot fill the disk.
-    assert "prune_backups" in content
 
 
 def test_default_node_name_is_ovnode():
