@@ -11,13 +11,21 @@ from backend.app import api
 client = TestClient(api)
 
 
+def _owner():
+    """The configured owner name (tests must not hardcode it — CI uses a
+    dedicated ADMIN_USERNAME)."""
+    from backend.config import config
+
+    return config.ADMIN_USERNAME
+
+
 def _owner_headers():
     from backend.auth.sessions import create_session
     from backend.db.engine import SessionLocal
 
     db = SessionLocal()
     try:
-        token = create_session(db, "admin", "owner", user_agent="pytest", ip="127.0.0.1")
+        token = create_session(db, _owner(), "owner", user_agent="pytest", ip="127.0.0.1")
     finally:
         db.close()
     return {"Authorization": f"Bearer {token}"}
@@ -79,11 +87,11 @@ def test_tag_cannot_be_updated_without_ownership():
 
     r = _create("tag-owner-admin-1", tag="mine")
     uuid = r.json()["data"]["uuid"]
-    # The row belongs to owner "admin", so an admin session with the same
+    # The row belongs to the owner, so an admin session with the same
     # username works; a different admin must be rejected by access control.
     db = SessionLocal()
     try:
-        token = create_session(db, "other-admin", "admin", user_agent="pytest", ip="127.0.0.1")
+        token = create_session(db, f"{_owner()}-other", "admin", user_agent="pytest", ip="127.0.0.1")
     finally:
         db.close()
     r = client.put(

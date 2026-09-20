@@ -14,6 +14,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = os.path.join(os.path.dirname(__file__), "..", "manager.sh")
 MANAGER_PATH = Path(MANAGER)
@@ -149,6 +151,7 @@ def test_reset_password_rejects_weak_passwords(tmp_path):
         assert hint in r.stderr, r.stderr
 
 
+@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password restarts the service (root only)")
 def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
     """Only the ADMIN_PASSWORD line changes (0600 kept, other lines intact)
     and a failed service restart is a warning, not a failed recovery."""
