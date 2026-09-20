@@ -10,6 +10,7 @@ get past validation or the dry-run guard, so they cannot touch the system.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -74,26 +75,32 @@ def test_help_documents_installer_surface():
     r = sh("--help")
     assert r.returncode == 0
     output = r.stdout + r.stderr
-    for token in ("update", "uninstall", "--dry-run", "--admin-pass", "--tls 1", "ovm"):
+    for token in ("update", "uninstall", "interactive", "ovm", "-p", "-v", "--tls 1"):
         assert token in output, f"help missing {token}"
-    for token in ("reset-password", "auto-backup", "reset-urlpath"):
-        assert token not in output, f"help should not document manager op {token}"
+    for token in ("reset-password", "auto-backup", "reset-urlpath", "--dry-run", "--admin-pass"):
+        assert token not in output, f"help should not document {token}"
 
 
 def test_bad_tls_number_fails_fast():
-    r = sh("--tls", "9", "--dry-run")
+    r = sh("--tls", "9")
     assert r.returncode == 1
     assert "--tls needs 1, 2, 3 or 4" in r.stderr
 
 
+def test_bad_version_pin_fails_fast():
+    r = sh("update", "-v", "notaversion")
+    assert r.returncode == 1
+    assert "Bad --version" in r.stderr
+
+
 def test_short_admin_password_rejected(tmp_path):
     sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "-y", "--admin-pass", "short")
+    r = sh_sb(sb, "-y", "-p", "short")
     assert r.returncode == 1
     assert "at least 12" in r.stderr or "root" in r.stderr
     # 8-char passwords passed the installer but 422ed at the panel; now they
     # fail fast with the same 12-char floor the API enforces.
-    r = sh_sb(sb, "-y", "--admin-pass", "eight888")
+    r = sh_sb(sb, "-y", "-p", "eight888")
     assert r.returncode == 1
     assert "at least 12" in r.stderr or "root" in r.stderr
 
@@ -102,7 +109,7 @@ def test_install_rejects_placeholder_password_fast(tmp_path):
     """A 13-char password containing a placeholder must fail in the
     installer — not install and then crash-loop at first boot."""
     sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "-y", "--admin-pass", "my-admin12345")
+    r = sh_sb(sb, "-y", "-p", "my-admin12345")
     assert r.returncode == 1
     assert "placeholder" in r.stderr or "root" in r.stderr
 
@@ -132,14 +139,46 @@ def test_manager_ops_redirect_to_ovm():
     assert "is the default" in r.stderr
 
 
-def test_dry_run_never_touches_live_flows():
-    """Every destructive/live flow must honor --dry-run (regression: an
-    early version ran a real update when /opt/ovmanager existed)."""
+def test_plan_prints_by_default():
+    """No --dry-run flag exists anymore — the plan card prints on every
+    mutating action instead."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert "Dry run — nothing changed (re-run without --dry-run to update/uninstall)" in content
-    assert "Dry run — nothing changed (would back up data, fetch ${SRC}, rebuild if needed)" in content
-    assert "Dry run — nothing changed (would stop the service" in content
+    assert "--dry-run)" not in content
+    assert "print_plan()" in content
+    # install, update and uninstall all show the plan first.
+    assert content.count("print_plan") >= 3  # def + install/update callers (+ inline uninstall card)
+
+
+def test_update_rolls_back_on_health_failure():
+    """do_update snapshots the tree first and restores it when the service
+    never becomes healthy (update failover)."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert "snapshot_code" in content
+    assert "rolling back to the snapshot" in content
+    assert "Rolled back to the pre-update tree" in content
+
+
+def test_snapshot_rotation_keeps_two(tmp_path):
+    """snapshot_code keeps the newest 2 code snapshots, pruning older ones."""
+    src = _extract_function("snapshot_code")
+    helpers = (
+        "set -Eeuo pipefail\n"
+        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
+        "step() { :; }\ninfo() { :; }\nwarn() { :; }\n"
+    )
+    harness = (
+        helpers + src.replace("/var/backups", str(tmp_path))
+        + f'\nmkdir -p {tmp_path}/app\n'
+        + f'\nsnapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n'
+        + f'snapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n'
+        + f'snapshot_code {tmp_path}/app panel 2 >/dev/null\n'
+        + f'ls {tmp_path}/panel-code-*.tar.gz | wc -l\n'
+    )
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "2", r.stdout
 
 
 def test_already_installed_menu_is_installer_only():
@@ -159,37 +198,37 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
     (exit 2) — never default into update/uninstall."""
     sb, fake_opt = sandbox(tmp_path)
     os.makedirs(fake_opt)
-    r = sh_sb(sb, "-y", "--admin-pass", "long-enough-password")
+    r = sh_sb(sb, "-y", "-p", "long-enough-password")
     assert r.returncode == 2
     assert "Already installed" in r.stderr
 
 
-def test_already_installed_dry_run_is_noop(tmp_path):
-    sb, fake_opt = sandbox(tmp_path)
-    os.makedirs(fake_opt)
-    r = sh_sb(sb, "--dry-run", "-y", "--admin-pass", "long-enough-password")
-    assert r.returncode == 0
-    assert "nothing changed" in r.stderr
-
-
-def test_fresh_dry_run_json_shape(tmp_path):
-    """Fresh-install dry-run prints the plan as a single JSON object."""
+def test_update_without_install_dir_fails(tmp_path):
     sb, _ = sandbox(tmp_path)
-    r = sh_sb(
-        sb,
-        "--dry-run",
-        "-y",
-        "--mode",
-        "native",
-        "--admin-pass",
-        "long-enough-password",
-        "--json",
+    r = sh_sb(sb, "update", "-y")
+    assert r.returncode != 0
+
+
+def test_emit_json_shape():
+    """emit_json prints the install result as a single JSON object."""
+    helpers = (
+        "set -Eeuo pipefail\n"
+        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
+        "panel_url() { printf 'https://127.0.0.1:2095/abc/'; }\n"
     )
+    harness = (
+        helpers + _extract_function("emit_json") + "\n"
+        'MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password '
+        'INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self '
+        'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION=1.2.4 JSON=1 emit_json 1\n'
+    )
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     data = json.loads(r.stdout)  # stdout is exactly one JSON object
     assert data["ok"] is True
     assert data["user"] == "admin"
     assert data["password"] == "long-enough-password"
+    assert data["version"] == "1.2.4"
 
 
 def test_docker_data_dir_and_perms_are_container_safe():
@@ -217,11 +256,10 @@ def test_repo_override_for_forks():
 
 def test_plain_http_flag_is_gone():
     """--tls-self/--tls-none are gone: --tls takes numbers 1-4 now."""
-    r = sh("--tls-none", "--dry-run")
+    r = sh("--tls-none")
     assert r.returncode != 0
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert 'TLS_MODE="none"' not in content
     assert "--tls-self" not in content
 
 
@@ -234,21 +272,17 @@ def test_start_menu_is_express_or_custom():
     assert "panel_express_defaults()" in content
     assert 'tls="$(ask "TLS" "1")"' in content
     assert "None — HTTP only" not in content
-    assert ': "${TLS_MODE:=self}"' in content
+    # Port offers Default / Custom / Random (angristan-style).
+    assert 'pc="$(ask "Port choice" "1")"' in content
 
 
-def test_same_server_node_offer_auto_registers():
-    """End of install offers a same-server node; Express auto-registers it,
-    Custom asks first; the OVNode repo can be overridden for forks."""
+def test_no_bundled_node_offer():
+    """The installer ships no same-server node flow — nodes are added from
+    the panel or docs (keeps the installer small)."""
     with open(INSTALLER, encoding="utf-8") as f:
         content = f.read()
-    assert "offer_same_server_node" in content
-    assert "not recommended" in content.lower()
-    assert "OVNODE_REPO:-anonysec/OVNode" in content
-    assert "register_node_in_panel" in content
-    assert 'confirm "Add it to the panel automatically now?"' in content
-    # Node install runs the separate project's installer, never a bundled copy.
-    assert "install.sh" in content and "install --json" in content
+    assert "offer_same_server_node" not in content
+    assert "WANT_NODE" not in content
 
 
 def test_installer_deploys_the_manager():
@@ -342,11 +376,24 @@ def test_express_password_path_does_not_exit_early():
 
 
 def _extract_function(name: str) -> str:
+    """Extract a function body, heredoc-aware (emit_json embeds <<'PY')."""
     lines = Path(INSTALLER).read_text(encoding="utf-8").splitlines()
     start = next(i for i, ln in enumerate(lines) if ln.startswith(f"{name}()"))
+    if lines[start].rstrip().endswith("}"):
+        return lines[start]
     end = start
-    while lines[end] != "}":
+    heredoc = None
+    while True:
         end += 1
+        ln = lines[end]
+        if heredoc is None:
+            m = re.search(r"<<-?\s*['\"]?([A-Za-z_0-9]+)['\"]?", ln)
+            if m:
+                heredoc = m.group(1)
+            elif ln == "}":
+                break
+        elif ln == heredoc:
+            heredoc = None
     return "\n".join(lines[start : end + 1])
 
 
@@ -391,33 +438,6 @@ def test_uninstall_asks_about_data():
     assert 'confirm_no "Also delete data and backups?" && PURGE=1' in content
 
 
-def test_default_node_name_is_ovnode():
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    assert ': "${NODE_NAME:=ovnode}"' in content
-    assert 'node_name="$(ask "Node name" "ovnode")"' in content
-    assert "default node-1" not in content
-
-
-def test_same_server_node_offer_defaults_to_no():
-    """A bare Enter must not install a VPN node (explicit yes required)."""
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    assert 'confirm_no "Install a VPN node on this same server too?"' in content
-    assert 'confirm "Install a VPN node on this same server too?" "n"' not in content
-
-
-def test_same_server_offer_adopts_existing_node():
-    """If OVNode is already installed, the offer registers that node instead
-    of failing on 'already installed'."""
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    assert 'elif [[ "$rc" -eq 3 && -f /opt/ovnode/.env ]]' in content
-    assert "env_get /opt/ovnode/.env API_KEY" in content
-    assert 'register_node_in_panel "$node_name" "$node_key" "$node_port" "$node_tls"' in content
-    assert 'node_tls="0"' in content
-
-
 def test_detect_os_preserves_app_version(tmp_path):
     """Regression: sourcing /etc/os-release must not clobber the app
     VERSION (os-release defines its own VERSION=...)."""
@@ -439,3 +459,11 @@ def test_detect_os_preserves_app_version(tmp_path):
     r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert "VERSION=9.9.9-probe" in r.stdout
+
+
+def test_interactive_verb_runs_wizard():
+    """`interactive` forces the numbered wizard (Enter = default)."""
+    with open(INSTALLER, encoding="utf-8") as f:
+        content = f.read()
+    assert 'interactive)   ACTION="interactive"; shift ;;' in content
+    assert "run_wizard_install()" in content

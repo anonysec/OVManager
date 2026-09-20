@@ -16,16 +16,18 @@ LIB = REPO / "lib" / "common.sh"
 
 SHARED = [
     "line", "step", "info", "warn", "fail", "kv", "hr", "die",
-    "is_port", "rand_path", "rand_pass", "fernet_key",
+    "is_port", "rand_path", "rand_pass", "rand_hex", "fernet_key",
     "can_prompt", "has_tty", "_masked_read", "_read_reply",
     "ask", "confirm", "confirm_no", "run_step",
-    "backup_dir", "open_firewall_port", "wait_health",
+    "backup_dir", "snapshot_code", "latest_snapshot",
+    "open_firewall_port", "wait_health",
     "scheme_of", "panel_url",
     "secure_tls_files", "generate_self_signed", "ensure_acme",
     "issue_lets_encrypt", "port_in_use", "setup_tls",
     "env_get", "env_set", "systemctl_bounded",
     "admin_password_problem", "validate_admin_password",
     "prompt_validate_admin_password", "tui_select",
+    "release_base", "release_url", "release_checksum_url",
 ]
 
 

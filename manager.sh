@@ -18,7 +18,7 @@ INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.3"
+VERSION="1.2.4"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 INSTALLER="$INSTALL_DIR/install.sh"
 # Installed command names (same as the installer used).
@@ -40,10 +40,10 @@ else
 fi
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
-PORT="" ADMIN_PASS="" MODE=""
+PORT="" ADMIN_PASS="" MODE="" PIN=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 ACTION=""
-YES=0 PURGE=0 JSON=0 DRY=0
+YES=0 PURGE=0 JSON=0 FIX=0
 LOGS_ARG=""
 AUTO_BACKUP_ACTION="" BACKUP_TIME="" BACKUP_KEEP=""
 
@@ -209,11 +209,6 @@ do_reset_password() {
         validate_admin_password "$ADMIN_PASS"
     fi
 
-    if [[ "$DRY" -eq 1 ]]; then
-        info "Dry run — nothing changed (would update ADMIN_PASSWORD_HASH in $envfile and restart)."
-        exit 0
-    fi
-
     # Store the password as a bcrypt hash (ADMIN_PASSWORD_HASH) and drop the
     # legacy plaintext line. Falls back to plaintext mode only when the
     # panel's Python (bcrypt) is not available.
@@ -310,16 +305,15 @@ run_installer() {
 delegate_update() {
     local args=()
     [[ "$YES" -eq 1 ]] && args+=(-y)
-    [[ "$JSON" -eq 1 ]] && args+=(--json)
-    [[ "$DRY" -eq 1 ]] && args+=(--dry-run)
+    [[ "$JSON" -eq 1 ]] && args+=(-j)
+    [[ -n "$PIN" ]] && args+=(-v "$PIN")
     run_installer update "${args[@]}"
 }
 
 delegate_uninstall() {
     local args=()
     [[ "$YES" -eq 1 ]] && args+=(-y)
-    [[ "$JSON" -eq 1 ]] && args+=(--json)
-    [[ "$DRY" -eq 1 ]] && args+=(--dry-run)
+    [[ "$JSON" -eq 1 ]] && args+=(-j)
     [[ "$PURGE" -eq 1 ]] && args+=(--purge)
     run_installer uninstall "${args[@]}"
 }
@@ -534,9 +528,137 @@ do_recovery_menu() {
 }
 
 
-# Boxed menu when whiptail is already installed; colored menu otherwise.
+# ── Health check (doctor) ────────────────────────────────────────────
+# Read-only by default; --fix applies only safe automatic fixes
+# (restart a dead service, prune old backups).
+do_doctor() {
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local problems=0
+    hr
+    line "${B}Panel health${NC}"
+    # 1. Service.
+    local svc="unknown"
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ovmanager; then svc="running (docker)"; fi
+    elif has_systemd; then
+        svc="$(systemctl is-active "$SYSTEMD_SERVICE" 2>/dev/null || echo unknown)"
+    fi
+    if [[ "$svc" == *"running"* || "$svc" == "active" ]]; then
+        kv "Service" "${GR}$svc${NC}"
+    else
+        kv "Service" "${RD}$svc${NC}"
+        warn "Fix: ovm restart"
+        problems=$((problems + 1))
+        if [[ "$FIX" -eq 1 ]]; then
+            info "Restarting the service…"
+            restart_service && svc="active" && problems=$((problems - 1)) || true
+        fi
+    fi
+    # 2. Disk.
+    local disk
+    disk="$(df "$DATA_DIR" 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%' || echo 0)"
+    if (( disk < 80 )); then
+        kv "Disk" "${GR}${disk}% used${NC}"
+    else
+        kv "Disk" "${YL}${disk}% used${NC}"
+        warn "Fix: ovm backup --keep 7, then remove old tarballs in /var/backups"
+        problems=$((problems + 1))
+        if [[ "$FIX" -eq 1 ]]; then
+            prune_backups 7 && problems=$((problems - 1)) || true
+        fi
+    fi
+    # 3. Panel answers.
+    local scheme ver="?"
+    scheme="$(scheme_of)"
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 5; then
+        ver="$(curl -fskS --max-time 3 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null || echo "?")"
+        kv "Panel" "${GR}ok (v$ver)${NC}"
+    else
+        kv "Panel" "${RD}unreachable${NC}"
+        warn "Fix: ovm logs 50, then ovm restart"
+        problems=$((problems + 1))
+    fi
+    # 4. TLS certificate expiry.
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        local cert days_left
+        cert="$(env_get "$INSTALL_DIR/.env" SSL_CERTFILE)"
+        if [[ -n "$cert" && -f "$cert" ]]; then
+            days_left=$(( ($(date -d "$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2)" +%s 2>/dev/null || echo 0) - $(date +%s)) / 86400 ))
+            if (( days_left > 30 )); then
+                kv "Certificate" "${GR}expires in ${days_left}d${NC}"
+            elif (( days_left > 0 )); then
+                kv "Certificate" "${YL}expires in ${days_left}d${NC}"
+                warn "Fix: ovm tls"
+                problems=$((problems + 1))
+            else
+                kv "Certificate" "${RD}expired${NC}"
+                warn "Fix: ovm tls"
+                problems=$((problems + 1))
+            fi
+        else
+            kv "Certificate" "${YL}not found${NC}"
+            problems=$((problems + 1))
+        fi
+    fi
+    # 5. Backup age.
+    local newest age
+    newest="$(ls -t /var/backups/panel-*.tar.gz 2>/dev/null | head -1 || true)"
+    if [[ -n "$newest" ]]; then
+        age=$(( ($(date +%s) - $(stat -c %Y "$newest" 2>/dev/null || echo 0)) / 86400 ))
+        if (( age <= 7 )); then
+            kv "Backup" "${GR}${age}d old${NC}"
+        else
+            kv "Backup" "${YL}${age}d old${NC}"
+            warn "Fix: ovm backup"
+            problems=$((problems + 1))
+        fi
+    else
+        kv "Backup" "${YL}none yet${NC}"
+        warn "Fix: ovm backup"
+        problems=$((problems + 1))
+    fi
+    hr
+    if (( problems == 0 )); then
+        step "Healthy — nothing to fix"
+    else
+        warn "$problems problem(s) found"
+    fi
+    return 0
+}
 
-
+# Roll back to the newest pre-update code snapshot (update failover).
+do_rollback() {
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    local snap
+    snap="$(latest_snapshot panel)"
+    [[ -n "$snap" ]] || die "No code snapshot in /var/backups — nothing to roll back to"
+    info "Rolling back to: $snap"
+    [[ "$YES" -eq 1 ]] || confirm "Restore the pre-update tree and restart?" || die "Cancelled."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local scheme; scheme="$(scheme_of)"
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
+    else
+        systemctl_bounded stop >/dev/null 2>&1 || true
+    fi
+    tar -xzf "$snap" -C "$(dirname "$INSTALL_DIR")" \
+        || die "Rollback extract failed — snapshot kept at $snap"
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) >/dev/null 2>&1 \
+            || warn "Could not start the container — docker logs ovmanager"
+    else
+        run_step "Service restarted" systemctl_bounded restart
+    fi
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+        step "Rolled back and healthy"
+    else
+        die "Rollback did not restore health — snapshot at $snap, data backups in /var/backups. Check logs."
+    fi
+}
 
 # ── Usage / args / menu / main ─────────────────────────────────────────
 usage() {
@@ -553,20 +675,23 @@ usage() {
     ovm tls                     Show/replace the certificate
     ovm recovery                Login info, owner password, URL path
     ovm reset-password          Set a new owner password, then restart
+    ovm doctor [--fix]          Health check (service, disk, cert, backups)
+    ovm rollback                Restore the newest pre-update code snapshot
     ovm uninstall [--purge]     Remove the app (data kept unless --purge)
 
   OPTIONS
-    --admin-pass PASS   reset-password: new owner password (min 12)
-    --yes, -y           Never prompt
-    --json              Machine-readable result on stdout (logs on stderr)
-    --dry-run           Resolve config, print the plan, change nothing
+    -p, --pass PASS     reset-password: new owner password (min 12,
+                        not a common word)
+    -y, --yes           Never prompt
+    -j, --json          Machine-readable result on stdout (logs on stderr)
+    --fix               doctor: apply safe automatic fixes
     --purge             uninstall: also delete data + certs
-    --help, -h          This help
+    -h, --help          This help
 
   ENVIRONMENT
     OVM_APP_DIR   installed tree (default /opt/ovmanager, tests override)
-    OVM_ADMIN_PASS   same as --admin-pass
-    CI=true       implies --yes
+    OVM_PASS      same as --pass
+    CI=true       implies -y
 
   Update and uninstall are implemented in install.sh — this script
   delegates to \$INSTALL_DIR/install.sh so there is exactly one copy.
@@ -577,13 +702,15 @@ EOF
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --admin-pass)  [[ $# -ge 2 ]] || die "--admin-pass needs a value"; ADMIN_PASS="$2"; shift 2 ;;
-            --yes|-y) YES=1; shift ;;
-            --json) JSON=1; shift ;;
-            --dry-run) DRY=1; shift ;;
+            -p|--pass)    [[ $# -ge 2 ]] || die "-p needs a password"; ADMIN_PASS="$2"; shift 2 ;;
+            -y|--yes) YES=1; shift ;;
+            -j|--json) JSON=1; shift ;;
+            --fix) FIX=1; shift ;;
             --purge) PURGE=1; shift ;;
+            -v|--version) [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
             --keep) [[ $# -ge 2 ]] || die "--keep needs a number"; BACKUP_KEEP="$2"; shift 2 ;;
-            --help|-h) usage ;;
+            --time) [[ $# -ge 2 ]] || die "--time needs HH:MM"; BACKUP_TIME="$2"; shift 2 ;;
+            -h|--help) usage ;;
             help) usage ;;
             status) ACTION="status"; shift ;;
             start|stop|restart) ACTION="$1"; shift ;;
@@ -600,6 +727,8 @@ parse_args() {
             recovery) ACTION="recovery"; shift ;;
             reset-password) ACTION="reset-password"; shift ;;
             reset-urlpath) ACTION="reset-urlpath"; shift ;;
+            doctor) ACTION="doctor"; shift ;;
+            rollback) ACTION="rollback"; shift ;;
             update) ACTION="update"; shift ;;
             uninstall) ACTION="uninstall"; shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
@@ -607,7 +736,29 @@ parse_args() {
     done
 }
 
-# x-ui style numbered menu. Bare `ovm` with no terminal prints usage.
+backup_submenu() {
+    while true; do
+        line ""
+        line "${B}Backup${NC}"
+        line "  ${WH}1${NC}) Backup now"
+        line "  ${WH}2${NC}) Auto-backup status"
+        line "  ${WH}3${NC}) Enable daily auto-backup"
+        line "  ${WH}4${NC}) Disable auto-backup"
+        line "  ${WH}0${NC}) Back"
+        line ""
+        local c
+        c="$(ask "Select" "0")"
+        case "${c:-0}" in
+            1) check_root; backup_now ;;
+            2) auto_backup_cli status ;;
+            3) check_root; auto_backup_cli on ;;
+            4) check_root; auto_backup_cli off ;;
+            0|*) return 0 ;;
+        esac
+    done
+}
+
+# Grouped numbered menu: full power, one screen, nothing hidden.
 manager_menu() {
     while true; do
         line ""
@@ -615,12 +766,13 @@ manager_menu() {
         line "  ${WH}1${NC}) Status"
         line "  ${WH}2${NC}) Update panel"
         line "  ${WH}3${NC}) Restart service"
-        line "  ${WH}4${NC}) Login info"
-        line "  ${WH}5${NC}) Reset owner password"
-        line "  ${WH}6${NC}) Logs"
-        line "  ${WH}7${NC}) Backup now"
-        line "  ${WH}8${NC}) TLS certificate"
-        line "  ${WH}9${NC}) Uninstall panel"
+        line "  ${WH}4${NC}) Login & password"
+        line "  ${WH}5${NC}) Logs"
+        line "  ${WH}6${NC}) Backup"
+        line "  ${WH}7${NC}) TLS certificate"
+        line "  ${WH}8${NC}) Health check (doctor)"
+        line "  ${WH}9${NC}) Roll back update"
+        line "  ${WH}10${NC}) Uninstall panel"
         line "  ${WH}0${NC}) Exit"
         line ""
         local c
@@ -629,12 +781,13 @@ manager_menu() {
             1) do_status ;;
             2) delegate_update ;;
             3) check_root; service_action restart ;;
-            4) show_login_info ;;
-            5) check_root; do_reset_password ;;
-            6) show_logs "${LOGS_ARG:-100}" ;;
-            7) check_root; backup_now ;;
-            8) check_root; do_tls_menu ;;
-            9) delegate_uninstall ;;
+            4) check_root; do_recovery_menu ;;
+            5) show_logs "${LOGS_ARG:-100}" ;;
+            6) backup_submenu ;;
+            7) check_root; do_tls_menu ;;
+            8) do_doctor ;;
+            9) check_root; do_rollback ;;
+            10) delegate_uninstall ;;
             0|*) return 0 ;;
         esac
     done
@@ -642,7 +795,8 @@ manager_menu() {
 
 main() {
     parse_args "$@"
-    [[ -z "$ADMIN_PASS" && -n "${OVM_ADMIN_PASS:-}" ]] && ADMIN_PASS="$OVM_ADMIN_PASS"
+    [[ -z "$ADMIN_PASS" && -n "${OVM_PASS:-}" ]] && ADMIN_PASS="$OVM_PASS"
+    if [[ "$JSON" -eq 1 ]]; then YES=1; fi
     if [[ -z "$ACTION" ]]; then
         if can_prompt; then
             manager_menu
@@ -664,8 +818,10 @@ main() {
             [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
             check_root; do_reset_password; exit 0 ;;
         reset-urlpath) check_root; reset_urlpath_now; exit 0 ;;
+        doctor) do_doctor; exit 0 ;;
+        rollback) check_root; do_rollback; exit 0 ;;
         update) delegate_update; exit 0 ;;
-        uninstall) [[ "$DRY" -eq 0 ]] && check_root; delegate_uninstall; exit 0 ;;
+        uninstall) check_root; delegate_uninstall; exit 0 ;;
     esac
 }
 

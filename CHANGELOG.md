@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.4 — 2026-09-20
+
+Fresh rewrite of the shell layer (Concept A): tiny installer with
+zero-question defaults, numbered `interactive` wizard, `--version` pins,
+code snapshots with automatic update rollback, and plan output by default.
+New `ovm doctor` (service, disk, cert, backups) with `--fix`, and
+`ovm rollback`. Flags cut to `-y/-j/-h/-p/-v/--purge`; `--pass` replaces
+`--admin-pass` (`OVM_PASS`); `--tls` takes 1-4; Pages URLs retired in favor
+of raw.githubusercontent.com. Production venv diet (`--no-dev` everywhere,
+import/diet gates).
+
 ## 1.2.3 — 2026-09-19
 
 Concept-A split: the installer (`install.sh`) only installs, updates and
