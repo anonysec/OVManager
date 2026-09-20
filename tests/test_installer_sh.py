@@ -122,11 +122,14 @@ def test_unknown_option_fails():
 
 def test_manager_ops_redirect_to_ovm():
     """status/logs/etc. are no longer installer commands — point at ovm."""
-    for cmd in ("status", "logs", "backup", "tls", "recovery", "reset-password", "menu", "install"):
+    for cmd in ("status", "logs", "backup", "tls", "recovery", "reset-password", "menu"):
         r = sh(cmd)
         assert r.returncode == 1, cmd
         assert "moved to the manager" in r.stderr, cmd
         assert "ovm" in r.stderr, cmd
+    r = sh("install")
+    assert r.returncode == 1
+    assert "is the default" in r.stderr
 
 
 def test_dry_run_never_touches_live_flows():
