@@ -1056,6 +1056,7 @@ do_update() {
 
 do_uninstall() {
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    check_root
     hr
     kv "Remove" "$INSTALL_DIR"
     kv "Data"   "$DATA_DIR $( [[ "$PURGE" -eq 1 ]] && printf '(will be deleted)' || printf '(kept)' )"

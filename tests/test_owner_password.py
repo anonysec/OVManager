@@ -42,12 +42,13 @@ def test_authenticate_owner_with_hash(monkeypatch):
     prev_hash, prev_pass = auth_mod.config.ADMIN_PASSWORD_HASH, auth_mod.config.ADMIN_PASSWORD
     auth_mod.config.ADMIN_PASSWORD_HASH = hash_password("a-strong-password-123")
     auth_mod.config.ADMIN_PASSWORD = ""
+    owner = auth_mod.config.ADMIN_USERNAME
     try:
         db = SessionLocal()
         try:
-            assert auth_mod.authenticate_user(db, "admin", "a-strong-password-") is None
-            assert auth_mod.authenticate_user(db, "admin", "a-strong-password-1") is None
-            ok = auth_mod.authenticate_user(db, "admin", "a-strong-password-123")
+            assert auth_mod.authenticate_user(db, owner, "a-strong-password-") is None
+            assert auth_mod.authenticate_user(db, owner, "a-strong-password-1") is None
+            ok = auth_mod.authenticate_user(db, owner, "a-strong-password-123")
             assert ok and ok["type"] == "owner"
         finally:
             db.close()
@@ -61,10 +62,11 @@ def test_authenticate_owner_plaintext_fallback(monkeypatch):
 
     prev_hash = auth_mod.config.ADMIN_PASSWORD_HASH
     auth_mod.config.ADMIN_PASSWORD_HASH = ""
+    owner = auth_mod.config.ADMIN_USERNAME
     try:
         db = SessionLocal()
         try:
-            ok = auth_mod.authenticate_user(db, "admin", auth_mod.config.ADMIN_PASSWORD)
+            ok = auth_mod.authenticate_user(db, owner, auth_mod.config.ADMIN_PASSWORD)
             assert ok and ok["type"] == "owner"
         finally:
             db.close()

@@ -822,7 +822,7 @@ main() {
         doctor) do_doctor; exit 0 ;;
         rollback) do_rollback; exit 0 ;;
         update) delegate_update; exit 0 ;;
-        uninstall) check_root; delegate_uninstall; exit 0 ;;
+        uninstall) delegate_uninstall; exit 0 ;;
     esac
 }
 
