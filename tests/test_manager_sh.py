@@ -75,7 +75,11 @@ def test_help_documents_manager_surface():
     r = mgr("help")
     assert r.returncode == 0
     output = r.stdout + r.stderr
-    for token in ("status", "update", "restart", "logs", "backup", "tls", "recovery", "reset-password", "uninstall", "ovm"):
+    for token in (
+        "status", "update", "restart", "logs", "backup", "tls",
+        "recovery", "reset-password", "doctor", "rollback",
+        "uninstall", "ovm", "-p", "--fix",
+    ):
         assert token in output, f"help missing {token}"
 
 
@@ -92,32 +96,40 @@ def test_unknown_option_fails():
 
 
 def test_numbered_menu_lists_core_ops():
-    """x-ui style: numbered entries for every core op, 0 exits."""
+    """Grouped menu: full power on one screen, nothing hidden."""
     with open(MANAGER, encoding="utf-8") as f:
         content = f.read()
     assert "manager_menu()" in content
     for label in (
-        "Status", "Update panel", "Restart service", "Login info",
-        "Reset owner password", "Logs", "Backup now", "TLS certificate",
-        "Uninstall panel",
+        "Status", "Update panel", "Restart service", "Login & password",
+        "Logs", "Backup", "TLS certificate", "Health check (doctor)",
+        "Roll back update", "Uninstall panel",
     ):
         assert label in content, f"menu missing {label}"
+    assert "backup_submenu()" in content
     assert "0${NC}) Exit" in content or '0) Exit' in content
 
 
 def test_update_delegates_to_installer(tmp_path):
     """`ovm update` execs install.sh update (machine flags pass through)."""
     env, app = sandbox(tmp_path)
-    r = mgr_sb(env, app, "update", "--dry-run")
+    r = mgr_sb(env, app, "update", "-y")
     assert r.returncode == 0, r.stderr
-    assert "STUB-INSTALLER update --dry-run" in r.stdout
+    assert "STUB-INSTALLER update -y" in r.stdout
+
+
+def test_update_pin_passes_through(tmp_path):
+    env, app = sandbox(tmp_path)
+    r = mgr_sb(env, app, "update", "-y", "-v", "v9.9.9")
+    assert r.returncode == 0, r.stderr
+    assert "STUB-INSTALLER update -y -v v9.9.9" in r.stdout
 
 
 def test_uninstall_delegates_with_purge(tmp_path):
     env, app = sandbox(tmp_path)
-    r = mgr_sb(env, app, "uninstall", "-y", "--purge", "--dry-run")
+    r = mgr_sb(env, app, "uninstall", "-y", "--purge")
     assert r.returncode == 0, r.stderr
-    assert "STUB-INSTALLER uninstall -y --dry-run --purge" in r.stdout
+    assert "STUB-INSTALLER uninstall -y --purge" in r.stdout
 
 
 def test_update_requires_install_dir(tmp_path):
@@ -132,7 +144,7 @@ def test_reset_password_rejects_weak_passwords(tmp_path):
     """Same floor + placeholder block the panel applies at boot."""
     env, app = sandbox(tmp_path)
     for weak, hint in (("short", "at least 12"), ("change-me-please-123", "placeholder")):
-        r = mgr_sb(env, app, "reset-password", "--admin-pass", weak)
+        r = mgr_sb(env, app, "reset-password", "-p", weak)
         assert r.returncode == 1, r.stderr
         assert hint in r.stderr, r.stderr
 
@@ -164,7 +176,7 @@ def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
     r = mgr_sb(
         env, app,
         "reset-password",
-        "--admin-pass",
+        "-p",
         "brand-new-password",
         extra_env={"PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"},
     )
@@ -245,3 +257,24 @@ def test_status_json_contract(tmp_path):
     with open(MANAGER, encoding="utf-8") as f:
         content = f.read()
     assert "do_status()" in content
+
+
+def test_doctor_checks_service_disk_panel_cert_backups():
+    """doctor covers the beginner-critical checks, each with its fix hint."""
+    with open(MANAGER, encoding="utf-8") as f:
+        content = f.read()
+    assert "do_doctor()" in content
+    for token in ("Panel health", "Certificate", "Backup", "Disk", "Service"):
+        assert token in content, f"doctor missing {token}"
+    for fix in ("ovm restart", "ovm backup", "ovm tls", "ovm logs"):
+        assert fix in content, f"doctor missing fix hint {fix}"
+    assert '"$FIX" -eq 1' in content
+
+
+def test_rollback_restores_newest_snapshot():
+    """do_rollback restores the newest code snapshot and re-verifies health."""
+    with open(MANAGER, encoding="utf-8") as f:
+        content = f.read()
+    assert "do_rollback()" in content
+    assert "latest_snapshot panel" in content
+    assert "Rolled back and healthy" in content
