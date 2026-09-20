@@ -479,3 +479,11 @@ def test_release_downloads_follow_redirects():
         content = f.read()
     assert "curl -fsSL -o" in content
     assert "curl -fsSLo" not in content
+
+
+def test_entry_points_are_executable():
+    """install.sh/manager.sh must carry +x in git — tarballs preserve it,
+    and the manager execs $INSTALL_DIR/install.sh for update/uninstall."""
+    for name in ("install.sh", "manager.sh"):
+        path = INSTALLER_PATH.parent / name
+        assert os.access(path, os.X_OK), f"{name} lost its executable bit"
