@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6 — 2026-09-20
+
+Follow-up fixes: release downloads follow redirects (`curl -L`),
+entry-point executable bits pinned by tests, manager delegates
+update/uninstall before the root gate (non-root friendly), and owner/tag
+tests no longer assume the owner is named `admin` (fixes CI). CI shares
+the frontend build with backend tests; Pages auto-deploy off.
+
 ## 1.2.5 — 2026-09-20
 
 Critical fixes over 1.2.4: fresh installs work again (`do_install` ensures
