@@ -422,9 +422,9 @@ fetch_release() {
     base="$(release_base)"
     work="$(mktemp -d)"
     run_step "Downloading release v${VERSION}" \
-        curl -fsSLo "$work/$base.tar.gz" "$(release_url)" \
+        curl -fsSL -o "$work/$base.tar.gz" "$(release_url)" \
         || { rm -rf "$work"; die "No release file for v${VERSION} — try --from-source"; }
-    if curl -fsSLo "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null; then
+    if curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null; then
         ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
             || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
         step "Checksum ok"
@@ -450,7 +450,7 @@ fetch_source() {
         local tmp
         tmp="$(mktemp)"
         run_step "Downloading source tarball" \
-            curl -fsSLo "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+            curl -fsSL -o "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
         mkdir -p "$INSTALL_DIR"
         tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" \
             || { rm -f "$tmp"; die "Extract failed"; }
@@ -1020,7 +1020,7 @@ do_update() {
         local tmp
         tmp="$(mktemp)"
         run_step "Downloading source" \
-            curl -fsSLo "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
+            curl -fsSL -o "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
         tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" || { rm -f "$tmp"; die "Extract failed"; }
         rm -f "$tmp"
     fi
