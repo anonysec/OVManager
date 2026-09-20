@@ -211,6 +211,9 @@ def test_update_without_install_dir_fails(tmp_path):
 
 def test_emit_json_shape():
     """emit_json prints the install result as a single JSON object."""
+    import re
+
+    ver = re.search(r'^VERSION="([^"]+)"', Path(INSTALLER).read_text(encoding="utf-8"), re.M).group(1)
     helpers = (
         "set -Eeuo pipefail\n"
         "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
@@ -220,7 +223,7 @@ def test_emit_json_shape():
         helpers + _extract_function("emit_json") + "\n"
         'MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password '
         'INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self '
-        'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION=1.2.4 JSON=1 emit_json 1\n'
+        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} JSON=1 emit_json 1\n'
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -228,7 +231,7 @@ def test_emit_json_shape():
     assert data["ok"] is True
     assert data["user"] == "admin"
     assert data["password"] == "long-enough-password"
-    assert data["version"] == "1.2.4"
+    assert data["version"] == ver
 
 
 def test_docker_data_dir_and_perms_are_container_safe():

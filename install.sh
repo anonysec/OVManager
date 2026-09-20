@@ -31,7 +31,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.4"
+VERSION="1.2.5"
 # Terminal command installed by install_cli() (copy of the manager).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -958,6 +958,8 @@ do_install() {
     if [[ "$MODE" == "docker" ]]; then
         compose_up
     else
+        ensure_uv
+        if [[ "$SRC" == "source" ]]; then ensure_node; fi
         info "Python dependencies (uv sync)…"
         cd "$INSTALL_DIR"
         run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet

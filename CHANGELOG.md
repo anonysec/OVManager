@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5 — 2026-09-20
+
+Critical fixes over 1.2.4: fresh installs work again (`do_install` ensures
+`uv`; `apply_env` no longer trips `set -e` on its last line), and the
+`install` word points at the default action instead of a nonexistent
+manager command.
+
 ## 1.2.4 — 2026-09-20
 
 Fresh rewrite of the shell layer (Concept A): tiny installer with
