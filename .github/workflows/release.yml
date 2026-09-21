@@ -5,7 +5,7 @@ name: Release assets
 
 # Builds the versioned install tarball (repo snapshot + prebuilt
 # frontend/dist) and attaches it to the published GitHub Release, so
-# the production installer can deploy without git/npm or source builds.
+# install.sh --from-release (the default) can install without git/npm.
 on:
   release:
     types: [published]
