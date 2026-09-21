@@ -23,6 +23,36 @@ from backend.logger import logger
 from backend.node.requests import NodeRequests, node_client
 from backend.operations.geolocation import geolocate
 from backend.schema._input import NodeCreate
+from backend.version import __version__ as PANEL_VERSION
+
+
+def node_version_compat(agent_version: object) -> dict:
+    """Judge a node agent version against this panel.
+
+    Policy (documented in OVNode docs): same major release is compatible
+    (minor drift tolerated — both sides ignore unknown keys); a newer node
+    than the panel is unsupported (the panel may not understand it); a
+    different major is incompatible. Unparseable/missing versions are
+    unknown, never silently accepted as compatible.
+    """
+    def _parts(value: object) -> tuple[int, ...] | None:
+        try:
+            nums = str(value).strip().lstrip("v").split(".")
+            return tuple(int(p) for p in nums[:3])
+        except (ValueError, TypeError, AttributeError):
+            return None
+
+    agent = _parts(agent_version)
+    panel = _parts(PANEL_VERSION)
+    if not agent or not panel:
+        return {"verdict": "unknown", "agent_version": agent_version, "panel_version": PANEL_VERSION}
+    if agent[0] != panel[0]:
+        verdict = "incompatible"
+    elif agent > panel:
+        verdict = "node-newer"
+    else:
+        verdict = "compatible"
+    return {"verdict": verdict, "agent_version": agent_version, "panel_version": PANEL_VERSION}
 
 # Cap on concurrent per-node threadpool jobs for every fan-out below. A batch
 # of 300 users × N nodes would otherwise queue thousands of jobs and starve
@@ -214,6 +244,7 @@ async def get_node_status_handler(node_id: int, db: Session):
             "status": node.status,
         },
         "node_info": info,
+        "version_compat": node_version_compat(info.get("version")),
         "session_diagnostics": sessions,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         "reachable": bool(info),
