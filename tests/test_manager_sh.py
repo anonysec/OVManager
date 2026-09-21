@@ -302,3 +302,13 @@ def test_doctor_and_rollback_dispatch_past_parse(tmp_path):
         r = mgr(cmd, env=env)
         assert "Unknown option" not in r.stderr, cmd
         assert "Not installed" in r.stderr, (cmd, r.stderr)
+
+
+def test_doctor_covers_backup_format_and_permissions():
+    """doctor must recognize the .ovmbak format and enforce private state
+    permissions (defects: backup-age ignored bundles, world-readable db)."""
+    with open(MANAGER, encoding="utf-8") as f:
+        content = f.read()
+    assert ".ovmbak" in content
+    assert "Permissions" in content
+    assert 'chmod 700 "$DATA_DIR"' in content

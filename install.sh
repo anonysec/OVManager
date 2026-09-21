@@ -190,6 +190,20 @@ PY
 # version): the candidate migrated it, so failover must restore. When the
 # versions match the candidate never migrated and failover skips the
 # restore. A missing/unreadable live database also requests a restore.
+# Version reported by the candidate. Native: loopback /health discloses it.
+# Docker: host-side requests never see a version (loopback-only disclosure),
+# so read it from inside the container — its filesystem IS the staged image,
+# and wait_health already proved the process answers.
+candidate_version() {
+    if [[ "$MODE" == "docker" ]]; then
+        docker exec ovmanager /app/.venv/bin/python -c \
+            "from backend.version import __version__; print(__version__)" 2>/dev/null || true
+    else
+        curl -fskS --max-time 5 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true
+    fi
+}
+
 db_restore_needed() {
     python3 - "$1" "${DATA_DIR}/ovmanager.db" <<'PY'
 import os, sqlite3, sys, tarfile, tempfile
@@ -1237,8 +1251,7 @@ do_update() {
     update_state verifying "$from_version" "$VERSION" "$safety"
     if [[ "$start_ok" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
         local reported
-        reported="$(curl -fskS --max-time 5 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+        reported="$(candidate_version)"
         [[ "$reported" == "$VERSION" ]] || { warn "Candidate reported version '${reported:-unknown}', expected '$VERSION'"; start_ok=0; }
     else
         start_ok=0
@@ -1351,8 +1364,7 @@ PY
     [[ -f "$COMPOSE_FILE" ]] && MODE="docker" || MODE="native"
     read_env_port; : "${PORT:=$DEFAULT_PORT}"; : "${TLS_MODE:=none}"
     scheme="$(scheme_of)"
-    reported="$(curl -fskS --max-time 5 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
-        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+    reported="$(candidate_version)"
     if [[ -n "$reported" && "$reported" == "$target" ]]; then
         rm -f "$UPDATE_MARKER"
         update_state committed "$from" "$target" "$safety"

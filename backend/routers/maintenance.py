@@ -285,10 +285,12 @@ def _apply_migrations_after_restore() -> None:
 
 def _stage_restore_candidate(src_path: Path) -> Path:
     """Copy, migrate, and verify a restore candidate away from the live DB."""
-
     from backend.db.migrations import migrate, verify_schema
 
-    fd, raw_candidate = tempfile.mkstemp(prefix=".restore-candidate-", suffix=".db", dir=DB_DIR)
+    # Stage beside the live database, not DB_DIR: os.replace below is only
+    # atomic (and only legal) within one filesystem, and DB_PATH may be
+    # relocated (tests, bind mounts, split mounts).
+    fd, raw_candidate = tempfile.mkstemp(prefix=".restore-candidate-", suffix=".db", dir=DB_PATH.parent)
     os.close(fd)
     candidate = Path(raw_candidate)
     os.chmod(candidate, 0o600)

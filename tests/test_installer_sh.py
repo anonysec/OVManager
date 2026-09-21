@@ -609,3 +609,124 @@ def test_installer_menu_copy_uses_new_tui():
     assert "0.${NC} Exit" in source
     assert "How do you want to install?" not in source
     assert "Ready — save this login" in content
+
+
+def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
+    """Updates from releases predating backend.routers.maintenance must
+    still produce a verified .ovmbak (defect: Step 1/6 died on old trees)."""
+    import sqlite3
+
+    fake_install = tmp_path / "install"
+    fake_install.mkdir()
+    fake_data = tmp_path / "data"
+    fake_data.mkdir()
+    db = fake_data / "ovmanager.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE t (x)")
+    con.execute("PRAGMA user_version=10")
+    con.commit()
+    con.close()
+    harness = (
+        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
+        "warn() { echo \"WARN: $1\" >&2; }\nstep() { :; }\ninfo() { :; }\n"
+        + _extract_function("update_safety_backup")
+        + "\n" + _extract_function("legacy_safety_bundle")
+        + f'\nMODE=native INSTALL_DIR="{fake_install}" DATA_DIR="{fake_data}"\n'
+        + 'update_safety_backup 1.2.6\n'
+    )
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    bundles = sorted((fake_data / "backups").glob("ovmanager-pre-update-*.ovmbak"))
+    assert len(bundles) == 1, r.stdout
+    assert bundles[0].stat().st_mode & 0o777 == 0o600
+    # The fallback bundle must restore through the same verified path.
+    out_db = tmp_path / "restored.db"
+    restore = (
+        _extract_function("restore_update_database")
+        + f'\nDATA_DIR="{fake_data}"\nrestore_update_database "{bundles[0]}" "{out_db}"\n'
+    )
+    r2 = subprocess.run(["bash", "-c", restore], capture_output=True, text=True, timeout=60)
+    assert r2.returncode == 0, r2.stderr
+    con = sqlite3.connect(out_db)
+    try:
+        assert con.execute("PRAGMA user_version").fetchone()[0] == 10
+    finally:
+        con.close()
+
+
+def test_db_restore_needed_skips_untouched_database(tmp_path):
+    """Failover restores the database only when the candidate migrated it
+    (defect: unconditional restore rewrote a healthy database every time)."""
+    import sqlite3
+
+    fake_data = tmp_path / "data"
+    fake_data.mkdir()
+    db = fake_data / "ovmanager.db"
+    con = sqlite3.connect(db)
+    con.execute("PRAGMA user_version=11")
+    con.commit()
+    con.close()
+    helpers = (
+        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
+        "warn() { :; }\nstep() { :; }\ninfo() { :; }\n"
+    )
+    mk = (
+        helpers + _extract_function("legacy_safety_bundle")
+        + f'\nMODE=native DATA_DIR="{fake_data}"\nlegacy_safety_bundle 1.2.7 >/dev/null\n'
+    )
+    r = subprocess.run(["bash", "-c", mk], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    (bundle,) = sorted((fake_data / "backups").glob("*.ovmbak"))
+    check = (
+        _extract_function("db_restore_needed")
+        + f'\nDATA_DIR="{fake_data}"\nif db_restore_needed "{bundle}"; then echo NEEDS; else echo SKIP; fi\n'
+    )
+    r2 = subprocess.run(["bash", "-c", check], capture_output=True, text=True, timeout=30)
+    assert r2.returncode == 0, r2.stderr
+    assert "SKIP" in r2.stdout
+    con = sqlite3.connect(db)
+    con.execute("PRAGMA user_version=12")
+    con.commit()
+    con.close()
+    r3 = subprocess.run(["bash", "-c", check], capture_output=True, text=True, timeout=30)
+    assert r3.returncode == 0, r3.stderr
+    assert "NEEDS" in r3.stdout
+
+
+def test_write_env_skips_branch_only_keys_on_old_trees(tmp_path):
+    """Fresh installs of older releases must not get .env keys their
+    backend rejects (defect: BACKUP_ENCRYPT_KEY crash-looped v1.2.7)."""
+    fake_install = tmp_path / "install"
+    (fake_install / "backend").mkdir(parents=True)
+    (fake_install / "backend" / "config.py").write_text("class Setting: pass\n", encoding="utf-8")
+    harness = (
+        "die() { echo \"DIE: $1\" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\n"
+        + _extract_function("write_env") + "\n" + _extract_function("fernet_key")
+        + '\nMODE=native PORT=2095 PATHPREFIX=abc ADMIN_USER=admin ADMIN_PASS=long-enough-password\n'
+        + f'PUBLIC_URL="" TLS_KEY="" TLS_CERT="" DATA_DIR="{tmp_path}" INSTALL_DIR="{fake_install}"\n'
+        + "write_env >/dev/null\n"
+    )
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    env = (fake_install / ".env").read_text(encoding="utf-8")
+    assert "BACKUP_ENCRYPT_KEY" not in env
+    (fake_install / "backend" / "config.py").write_text("BACKUP_ENCRYPT_KEY = None\n", encoding="utf-8")
+    r2 = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r2.returncode == 0, r2.stderr
+    env2 = (fake_install / ".env").read_text(encoding="utf-8")
+    assert "BACKUP_ENCRYPT_KEY=" in env2
+
+
+def test_recover_update_restarts_never_activated_tree():
+    """A kill before the activation rename must restart the intact tree,
+    not die for a missing previous directory (defect, verified live)."""
+    source = _extract_function("do_recover_update")
+    assert "never activated" in source
+    assert '[[ -d "$UPDATE_PREVIOUS" ]] || {' in source
+
+
+def test_systemd_unit_reports_clean_stop():
+    """uv exits 143 on SIGTERM: the unit must map it to inactive, not
+    failed, so status and doctor report stopped panels truthfully."""
+    source = _extract_function("write_systemd_unit")
+    assert "SuccessExitStatus=143" in source
