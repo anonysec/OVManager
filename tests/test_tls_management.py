@@ -12,6 +12,7 @@ import json
 import os
 import stat
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from cryptography import x509
@@ -133,6 +134,13 @@ def _upload(client: TestClient, key_pem: bytes, cert_pem: bytes, headers: dict |
 # ── Status ─────────────────────────────────────────────────────────────────
 
 
+def test_https_namespace_is_primary_and_tls_remains_compatible(client):
+    https = client.get("/api/https/status", headers=_owner_headers())
+    legacy = client.get("/api/tls/status", headers=_owner_headers())
+    assert https.status_code == 200
+    assert https.json()["data"]["mode"] == legacy.json()["data"]["mode"]
+
+
 def test_tls_status_without_config_is_disabled(client):
     resp = client.get("/api/tls/status", headers=_owner_headers())
     assert resp.status_code == 200
@@ -197,7 +205,45 @@ def test_tls_upload_accepts_valid_pair_and_secures_files(client, _managed_tls_di
     assert status["issued_by"] == "self-signed"
     assert status["subject"] and "upload.test" in status["subject"]
     assert status["expires_days"] is not None and status["expires_days"] >= 29
+    assert status["names"] == ["upload.test"]
+    assert status["fingerprint_sha256"]
+    assert status["valid_from"] and status["expires_at"]
     assert status["restart_required"] is True
+
+
+def test_tls_activation_failure_restores_previous_pair(client, monkeypatch, _managed_tls_dir):
+    old_key, old_cert = _make_pair("old.test")
+    new_key, new_cert = _make_pair("new.test")
+    tls_mod._write_managed_files(old_key, old_cert, "custom")
+    real_write = tls_mod._atomic_write
+    failed = False
+
+    def fail_new_certificate_once(path, data, mode):
+        nonlocal failed
+        if path == tls_mod._cert_path() and data == new_cert and not failed:
+            failed = True
+            raise OSError("simulated disk failure")
+        return real_write(path, data, mode)
+
+    monkeypatch.setattr(tls_mod, "_atomic_write", fail_new_certificate_once)
+    resp = _upload(client, new_key, new_cert)
+    assert resp.json()["success"] is False
+    assert (_managed_tls_dir / "privkey.pem").read_bytes() == old_key
+    assert (_managed_tls_dir / "fullchain.pem").read_bytes() == old_cert
+    tls_mod._validate_pair(old_key, old_cert)
+
+
+def test_tls_rollback_restores_retained_pair(client, _managed_tls_dir):
+    old_key, old_cert = _make_pair("old.test")
+    new_key, new_cert = _make_pair("new.test")
+    tls_mod._write_managed_files(old_key, old_cert, "custom")
+    tls_mod._write_managed_files(new_key, new_cert, "custom")
+
+    resp = client.post("/api/tls/rollback", headers=_owner_headers())
+    assert resp.json()["success"] is True
+    assert resp.json()["data"]["rolled_back"] is True
+    assert (_managed_tls_dir / "privkey.pem").read_bytes() == old_key
+    assert (_managed_tls_dir / "fullchain.pem").read_bytes() == old_cert
 
 
 # ── Self-signed ────────────────────────────────────────────────────────────
@@ -247,10 +293,42 @@ def test_tls_renew_without_acme_returns_guidance(client, monkeypatch, tmp_path, 
     assert "get.acme.sh" in body["msg"]
     assert not (_managed_tls_dir / "privkey.pem").exists()
 
-    # The IP option hits the same guidance instead of failing hard.
+    # The IP option hits the same guidance after public-address eligibility.
+    monkeypatch.setattr(tls_mod, "_detect_primary_ip", lambda: "8.8.8.8")
     resp = client.post("/api/tls/renew", json={"use_ip": True}, headers=_owner_headers())
     assert resp.json()["success"] is False
     assert "acme.sh" in resp.json()["msg"]
+
+
+def test_automatic_certificate_stages_validates_and_activates(client, monkeypatch, tmp_path, _managed_tls_dir):
+    import subprocess
+
+    monkeypatch.setattr(tls_mod, "ACME_SH", tmp_path / "acme.sh")
+    tls_mod.ACME_SH.write_text("stub")
+    monkeypatch.setattr(tls_mod, "_port_80_busy", lambda: False)
+    key_pem, cert_pem = _make_pair("panel.example.com")
+    calls = []
+
+    def fake_acme(args, timeout):
+        calls.append(args)
+        if "--install-cert" in args:
+            key_path = Path(args[args.index("--key-file") + 1])
+            cert_path = Path(args[args.index("--fullchain-file") + 1])
+            key_path.write_bytes(key_pem)
+            cert_path.write_bytes(cert_pem)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(tls_mod, "_run_acme", fake_acme)
+    resp = client.post(
+        "/api/https/automatic",
+        json={"domain": "panel.example.com", "email": "ops@example.com"},
+        headers=_owner_headers(),
+    )
+    assert resp.json()["success"] is True, resp.json()
+    assert (_managed_tls_dir / "privkey.pem").read_bytes() == key_pem
+    assert (_managed_tls_dir / "fullchain.pem").read_bytes() == cert_pem
+    assert not list(_managed_tls_dir.glob(".acme-candidate-*"))
+    assert len(calls) == 2
 
 
 def test_tls_renew_rejects_invalid_domain(client, monkeypatch, tmp_path, _managed_tls_dir):
@@ -274,6 +352,7 @@ def test_tls_endpoints_require_owner(client, tmp_path):
         ("post", "/api/tls/upload", {"files": {"key": ("k.pem", key_pem), "cert": ("c.pem", cert_pem)}}),
         ("post", "/api/tls/self-signed", {}),
         ("post", "/api/tls/renew", {"json": {"domain": "panel.example.com"}}),
+        ("post", "/api/tls/rollback", {}),
         ("post", "/api/tls/restart", {}),
     ]
     for method, path, kwargs in calls:

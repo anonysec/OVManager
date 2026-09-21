@@ -14,6 +14,7 @@ from .node import router as node_router
 from .notifications import router as notifications_router
 from .security import router as security_router
 from .setting import router as setting_router
+from .tls import https_router
 from .tls import router as tls_router
 from .updater import router as updater_router
 from .users import router as user_router
@@ -32,6 +33,7 @@ all_routers = [
     metrics_router,
     maintenance_router,
     tls_router,
+    https_router,
     updater_router,
     live_router,
 ]

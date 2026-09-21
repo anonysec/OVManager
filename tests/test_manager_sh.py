@@ -103,13 +103,24 @@ def test_numbered_menu_lists_core_ops():
         content = f.read()
     assert "manager_menu()" in content
     for label in (
-        "Status", "Update panel", "Restart service", "Login & password",
-        "Logs", "Backup", "TLS certificate", "Health check (doctor)",
-        "Roll back update", "Uninstall panel",
+        "Status", "Service", "Logs", "Update", "Backups",
+        "HTTPS certificate", "Diagnostics and repair", "Recovery", "Uninstall",
     ):
         assert label in content, f"menu missing {label}"
     assert "backup_submenu()" in content
-    assert "0${NC}) Exit" in content or '0) Exit' in content
+    assert "service_submenu()" in content
+    assert "Enable automatic start" in content
+    assert "Disable automatic start" in content
+    assert "0.${NC} Exit" in content
+
+
+def test_service_autostart_commands_are_supported():
+    content = MANAGER_PATH.read_text(encoding="utf-8")
+    assert "start|stop|restart|enable|disable" in content
+    assert "systemctl \"$1\" \"$SYSTEMD_SERVICE\"" in content
+    assert "docker update --restart unless-stopped" in content
+    assert "docker update --restart no" in content
+    assert 'kv "Auto start"' in content
 
 
 def test_update_delegates_to_installer(tmp_path):
@@ -269,7 +280,7 @@ def test_doctor_checks_service_disk_panel_cert_backups():
     assert "do_doctor()" in content
     for token in ("Panel health", "Certificate", "Backup", "Disk", "Service"):
         assert token in content, f"doctor missing {token}"
-    for fix in ("ovm restart", "ovm backup", "ovm tls", "ovm logs"):
+    for fix in ("ovm restart", "ovm backup", "ovm https", "ovm logs"):
         assert fix in content, f"doctor missing fix hint {fix}"
     assert '"$FIX" -eq 1' in content
 
@@ -287,7 +298,7 @@ def test_doctor_and_rollback_dispatch_past_parse(tmp_path):
     """Regression: every main-branch verb must exist in parse_args too
     (doctor/rollback once died as 'Unknown option' in parse)."""
     env = {**os.environ, "OVM_APP_DIR": str(tmp_path / "missing")}
-    for cmd in ("doctor", "rollback"):
+    for cmd in ("doctor", "rollback", "recover-update"):
         r = mgr(cmd, env=env)
         assert "Unknown option" not in r.stderr, cmd
         assert "Not installed" in r.stderr, (cmd, r.stderr)

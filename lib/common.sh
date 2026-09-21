@@ -12,7 +12,7 @@ NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
 WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
 YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'
 OR=$'\033[38;5;208m'
-[[ -t 1 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+[[ -t 1 && -z "${NO_COLOR:-}" ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
 
 line()  { printf '  %b\n' "$*" >&2; }
 step()  { line "${GR}✓${NC}  $*"; }
@@ -22,7 +22,11 @@ fail()  { line "${RD}✗${NC}  $*"; }
 kv()    { printf '  %b%-14s%b %b\n' "$GY" "$1" "$NC" "$2" >&2; }
 hr()    { line "${GY}──────────────────────────────────────────────${NC}"; }
 
-die() { printf '\n  %bError:%b %s\n\n' "$RD" "$NC" "$1" >&2; exit 1; }
+die() {
+    local run_id="${OVM_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
+    printf '\n  %bError:%b %s\n  %bRun ID:%b %s\n\n' "$RD" "$NC" "$1" "$GY" "$NC" "$run_id" >&2
+    exit 1
+}
 trap 'printf "\n  %bInterrupted.%b\n" "$RD" "$NC" >&2; exit 130' INT TERM
 
 is_port() { [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }

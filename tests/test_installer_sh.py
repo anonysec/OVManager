@@ -75,9 +75,9 @@ def test_help_documents_installer_surface():
     r = sh("--help")
     assert r.returncode == 0
     output = r.stdout + r.stderr
-    for token in ("update", "uninstall", "interactive", "ovm", "-p", "-v", "--tls 1"):
+    for token in ("update", "uninstall", "Install with Docker", "ovm", "--docker", "-v", "--json"):
         assert token in output, f"help missing {token}"
-    for token in ("reset-password", "auto-backup", "reset-urlpath", "--dry-run", "--admin-pass"):
+    for token in ("reset-password", "auto-backup", "reset-urlpath", "--dry-run", "--admin-pass", "--from-source"):
         assert token not in output, f"help should not document {token}"
 
 
@@ -114,12 +114,15 @@ def test_install_rejects_placeholder_password_fast(tmp_path):
     assert "placeholder" in r.stderr or "root" in r.stderr
 
 
-def test_interactive_prompts_validate_password_with_retries():
-    """Express and Custom re-prompt on weak passwords instead of dying."""
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    assert "prompt_validate_admin_password" in content
-    assert content.count("prompt_validate_admin_password") >= 3  # def + 2 callers
+def test_default_install_generates_credentials_without_prompting():
+    """The recommended flow always generates the password and URL path."""
+    content = INSTALLER_PATH.read_text(encoding="utf-8")
+    source = _extract_function("panel_express_defaults")
+    assert 'ADMIN_PASS="$(rand_pass)"' in source
+    assert 'PATHPREFIX="$(rand_path)"' in source
+    assert "ask " not in source
+    assert "GENERATED_PASS=1" in source
+    assert "prompt_validate_admin_password" in content  # retained for recovery/legacy validation
 
 
 def test_unknown_option_fails():
@@ -150,14 +153,111 @@ def test_plan_prints_by_default():
     assert content.count("print_plan") >= 3  # def + install/update callers (+ inline uninstall card)
 
 
-def test_update_rolls_back_on_health_failure():
-    """do_update snapshots the tree first and restores it when the service
-    never becomes healthy (update failover)."""
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
+def test_installer_uses_release_artifacts_and_published_docker_image_only():
+    content = INSTALLER_PATH.read_text(encoding="utf-8")
+    compose = _extract_function("write_compose")
+    assert "git clone" not in content
+    assert "--from-source" not in content
+    assert "npm run build" not in content
+    assert "image: ${IMAGE_REPO}:${ACTIVE_IMAGE_VERSION}" in compose
+    assert "build:" not in compose
+    assert "docker compose -f \"$COMPOSE_FILE\" pull" in content
+    assert "Release checksum file is missing" in content
+
+
+def test_update_fails_over_on_health_failure():
+    """Updates stage first, block writes, and restore code plus verified data."""
+    content = INSTALLER_PATH.read_text(encoding="utf-8")
     assert "snapshot_code" in content
-    assert "rolling back to the snapshot" in content
-    assert "Rolled back to the pre-update tree" in content
+    assert "update_safety_backup" in content
+    assert "UPDATE_STAGE" in content and "UPDATE_PREVIOUS" in content
+    assert "Update verification in progress" in (Path(INSTALLER).parent / "backend/app.py").read_text()
+    assert "failing over" in content
+    assert "restore_update_database" in content
+    assert "failed_over" in content
+    assert "recovery_required" in content
+
+
+def test_recovery_handles_every_persisted_update_phase():
+    source = _extract_function("do_recover_update")
+    for phase in (
+        "preflight",
+        "staging",
+        "activating",
+        "verifying",
+        "failing_over",
+        "recovery_required",
+        "failed_over",
+        "committed",
+    ):
+        assert phase in source
+    assert "Re-created the missing update maintenance marker" in source
+    assert '"$reported" == "$target"' in source
+    assert '"$reported" == "$from"' in source
+
+
+def test_update_database_restore_verifies_bundle_and_preserves_mode(tmp_path):
+    import hashlib
+    import io
+    import tarfile
+
+    database = tmp_path / "ovmanager.db"
+    database.write_bytes(b"new candidate data")
+    database.chmod(0o640)
+    old_data = b"safe pre-update database"
+    digest = hashlib.sha256(old_data).hexdigest()
+    bundle = tmp_path / "safety.ovmbak"
+    members = {
+        "panel.db": old_data,
+        "manifest.json": json.dumps({"database_sha256": digest}).encode(),
+        "checksums.sha256": f"{digest}  panel.db\n".encode(),
+    }
+    with tarfile.open(bundle, "w:gz") as archive:
+        for name, payload in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+
+    harness = _extract_function("restore_update_database") + f'\nrestore_update_database "{bundle}" "{database}"\n'
+    result = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert database.read_bytes() == old_data
+    assert database.stat().st_mode & 0o777 == 0o640
+
+    # Tampering with either checksum source must make restoration fail.
+    bad_bundle = tmp_path / "bad.ovmbak"
+    members["checksums.sha256"] = b"0" * 64 + b"  panel.db\n"
+    with tarfile.open(bad_bundle, "w:gz") as archive:
+        for name, payload in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    bad = subprocess.run(
+        ["bash", "-c", _extract_function("restore_update_database") + f'\nrestore_update_database "{bad_bundle}" "{database}"\n'],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert bad.returncode != 0
+
+
+def test_update_journal_is_private_and_atomic(tmp_path):
+    source = _extract_function("update_state")
+    state = tmp_path / "update-state.json"
+    harness = (
+        "set -Eeuo pipefail\n"
+        f'UPDATE_STATE="{state}"; DATA_DIR="{tmp_path}"; VERSION=2.0.0\n'
+        + source
+        + '\nupdate_state verifying 1.2.7 2.0.0 /safe/pre-update.ovmbak\n'
+    )
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    data = json.loads(state.read_text())
+    assert data["phase"] == "verifying"
+    assert data["from_version"] == "1.2.7"
+    assert data["to_version"] == "2.0.0"
+    assert data["safety_backup"] == "/safe/pre-update.ovmbak"
+    assert state.stat().st_mode & 0o777 == 0o600
 
 
 def test_snapshot_rotation_keeps_two(tmp_path):
@@ -223,7 +323,7 @@ def test_emit_json_shape():
         helpers + _extract_function("emit_json") + "\n"
         'MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password '
         'INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self '
-        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} JSON=1 emit_json 1\n'
+        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} BACKUP_ENCRYPT_KEY=backup-key JSON=1 emit_json 1\n'
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -232,6 +332,7 @@ def test_emit_json_shape():
     assert data["user"] == "admin"
     assert data["password"] == "long-enough-password"
     assert data["version"] == ver
+    assert data["backup_recovery_key"] == "backup-key"
 
 
 def test_docker_data_dir_and_perms_are_container_safe():
@@ -266,17 +367,16 @@ def test_plain_http_flag_is_gone():
     assert "--tls-self" not in content
 
 
-def test_start_menu_is_express_or_custom():
-    """A bare run offers Express/Custom only; update/uninstall are commands."""
-    with open(INSTALLER, encoding="utf-8") as f:
-        content = f.read()
-    for label in ("Express", "Custom"):
-        assert label in content
-    assert "panel_express_defaults()" in content
-    assert 'tls="$(ask "TLS" "1")"' in content
-    assert "None — HTTP only" not in content
-    # Port offers Default / Custom / Random (angristan-style).
-    assert 'pc="$(ask "Port choice" "1")"' in content
+def test_start_menu_is_install_or_docker():
+    """The front door uses beginner wording and generates secure defaults."""
+    source = _extract_function("start_menu")
+    assert "Install              " in source
+    assert "Install with Docker" in source
+    assert "Express" not in source
+    assert "Custom" not in source
+    assert 'MODE="native"; panel_express_defaults' in source
+    assert 'MODE="docker"; panel_express_defaults' in source
+    assert "0.${NC} Exit" in source
 
 
 def test_no_bundled_node_offer():
@@ -342,62 +442,45 @@ def _function_tails(path):
     return out
 
 
-def test_express_password_path_does_not_exit_early():
-    """Entering a password must continue the installer, not return 1."""
-    lines = Path(INSTALLER).read_text(encoding="utf-8").splitlines()
-    start = next(i for i, ln in enumerate(lines) if ln.startswith("panel_express_defaults()"))
-    end = start
-    while lines[end] != "}":
-        end += 1
-    source = "\n".join(lines[start : end + 1])
-
-    def harness(password: str, expect_generated: int) -> str:
-        helpers = _extract_function("admin_password_problem") + "\n" + _extract_function(
-            "prompt_validate_admin_password"
-        )
-        return f"""set -Eeuo pipefail
-    line() {{ :; }}
-    step() {{ :; }}
-    warn() {{ :; }}
-    die() {{ echo "DIE: $1" >&2; exit 1; }}
-    ask() {{ printf '%s' '{password}'; }}
-    rand_path() {{ echo testpath; }}
-    DEFAULT_PORT=2095; DEFAULT_USER=admin
-    EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
-    ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
-    {helpers}
-    {source}
-    panel_express_defaults
-    [[ "$ADMIN_PASS" == '{password}' ]]
-    [[ "$GENERATED_PASS" -eq {expect_generated} ]]
-    """
-
-    typed = subprocess.run(["bash", "-c", harness("long-enough-password", 0)], capture_output=True, text=True, timeout=30)
-    assert typed.returncode == 0, typed.stderr
-    blank = subprocess.run(["bash", "-c", harness("", 1)], capture_output=True, text=True, timeout=30)
-    assert blank.returncode == 0, blank.stderr
-
-
 def _extract_function(name: str) -> str:
-    """Extract a function body, heredoc-aware (emit_json embeds <<'PY')."""
+    """Extract a shell function body, including heredocs."""
     lines = Path(INSTALLER).read_text(encoding="utf-8").splitlines()
-    start = next(i for i, ln in enumerate(lines) if ln.startswith(f"{name}()"))
-    if lines[start].rstrip().endswith("}"):
-        return lines[start]
+    start = next(i for i, line in enumerate(lines) if line.startswith(f"{name}()"))
     end = start
     heredoc = None
     while True:
         end += 1
-        ln = lines[end]
+        line = lines[end]
         if heredoc is None:
-            m = re.search(r"<<-?\s*['\"]?([A-Za-z_0-9]+)['\"]?", ln)
-            if m:
-                heredoc = m.group(1)
-            elif ln == "}":
+            match = re.search(r"<<-?\s*['\"]?([A-Za-z_0-9]+)['\"]?", line)
+            if match:
+                heredoc = match.group(1)
+            elif line == "}":
                 break
-        elif ln == heredoc:
+        elif line == heredoc:
             heredoc = None
     return "\n".join(lines[start : end + 1])
+
+
+def test_recommended_defaults_generate_password_and_path():
+    """Recommended installation never asks for credentials or path."""
+    source = _extract_function("panel_express_defaults")
+    harness = f"""set -Eeuo pipefail
+    rand_path() {{ echo generatedpath; }}
+    rand_pass() {{ echo generated-password-123; }}
+    DEFAULT_PORT=2095; DEFAULT_USER=admin
+    EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
+    ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
+    {source}
+    panel_express_defaults
+    [[ "$ADMIN_PASS" == generated-password-123 ]]
+    [[ "$PATHPREFIX" == generatedpath ]]
+    [[ "$ADMIN_USER" == admin ]]
+    [[ "$GENERATED_PASS" -eq 1 ]]
+    [[ "$PATH_SET" -eq 1 ]]
+    """
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
 
 
 def test_masked_password_echoes_stars_and_handles_backspace():
@@ -516,11 +599,13 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
     assert "STUB-BAD" in r.stdout and "REAL-OK" in r.stdout
 
 
-def test_installer_menu_copy_is_stepped():
-    """One menu dialect: step counters in wizard/install phases, a single
-    front-door question, a plain success header."""
+def test_installer_menu_copy_uses_new_tui():
+    """The front door has one numbered dialect and beginner-facing labels."""
     content = INSTALLER_PATH.read_text(encoding="utf-8")
-    assert "How do you want to install?" in content
-    for token in ("Step 1/5", "Step 5/5", "Step 1/4", "Step 4/4"):
-        assert token in content, token
+    source = _extract_function("start_menu")
+    assert "OVManager Setup" in source
+    assert "1.${NC} Install" in source
+    assert "2.${NC} Install with Docker" in source
+    assert "0.${NC} Exit" in source
+    assert "How do you want to install?" not in source
     assert "Ready — save this login" in content

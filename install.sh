@@ -22,16 +22,16 @@ set -Eeuo pipefail
 REPO="${OVM_REPO:-anonysec/OVManager}"
 APP_SLUG="ovmanager"
 BRANCH="main"
-# Where the code comes from: "release" (default) downloads the versioned
-# prebuilt tarball from GitHub Releases (no git/npm needed on the server);
-# "source" clones/pulls git and builds the frontend (developers).
-SRC="${OVM_SRC:-release}"
+# Production installs use only signed/checksummed release artifacts. Developers
+# who need a source checkout use git and the contributor documentation.
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 VERSION="1.2.7"
+IMAGE_REPO="ghcr.io/${REPO,,}"
+ACTIVE_IMAGE_VERSION="$VERSION"
 # Terminal command installed by install_cli() (copy of the manager).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -43,7 +43,7 @@ NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
 WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
 YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'
 OR=$'\033[38;5;208m'
-[[ -t 1 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+[[ -t 1 && -z "${NO_COLOR:-}" ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
 
 line()  { printf '  %b\n' "$*" >&2; }
 step()  { line "${GR}✓${NC}  $*"; }
@@ -53,15 +53,120 @@ fail()  { line "${RD}✗${NC}  $*"; }
 kv()    { printf '  %b%-14s%b %b\n' "$GY" "$1" "$NC" "$2" >&2; }
 hr()    { line "${GY}──────────────────────────────────────────────${NC}"; }
 
-die() { printf '\n  %bError:%b %s\n\n' "$RD" "$NC" "$1" >&2; exit 1; }
+die() {
+    local run_id="${OVM_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
+    printf '\n  %bError:%b %s\n  %bRun ID:%b %s\n\n' "$RD" "$NC" "$1" "$GY" "$NC" "$run_id" >&2
+    exit 1
+}
 trap 'printf "\n  %bInterrupted.%b\n" "$RD" "$NC" >&2; exit 130' INT TERM
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
-PUBLIC_URL="" MODE="" ACTION="install" PIN=""
+PUBLIC_URL="" MODE="" ACTION="install" PIN="" BACKUP_ENCRYPT_KEY=""
 YES=0 PURGE=0 JSON=0 DRY=0 GENERATED_PASS=0 PATH_SET=0
 CLI_GIVEN=0 EXPRESS=0
+OPERATION_LOCK="${DATA_DIR}/.operation.lock"
+OPERATION_LOCK_HELD=0
+UPDATE_STATE="${DATA_DIR}/update-state.json"
+UPDATE_MARKER="${DATA_DIR}/update-maintenance"
+UPDATE_STAGE="$(dirname "$INSTALL_DIR")/.${APP_SLUG}.staging"
+UPDATE_PREVIOUS="$(dirname "$INSTALL_DIR")/.${APP_SLUG}.previous"
+
+update_state() {
+    local phase="$1" from="${2:-unknown}" target="${3:-$VERSION}" backup="${4:-}"
+    mkdir -p "$DATA_DIR"
+    python3 - "$UPDATE_STATE" "$phase" "$from" "$target" "$backup" <<'PY'
+import json, os, sys, tempfile, time
+path, phase, old, target, backup = sys.argv[1:]
+data = {"phase": phase, "from_version": old, "to_version": target,
+        "safety_backup": backup or None, "updated_at": int(time.time()), "pid": os.getppid()}
+fd, tmp = tempfile.mkstemp(prefix=".update-state-", dir=os.path.dirname(path))
+try:
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=2); f.write("\n"); f.flush(); os.fsync(f.fileno())
+    os.chmod(tmp, 0o600); os.replace(tmp, path)
+finally:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+PY
+}
+
+update_safety_backup() {
+    local keep=10 path
+    if [[ "$MODE" == "docker" ]]; then
+        path="$(docker exec ovmanager /app/.venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')")" || return 1
+        # The backup is created through the /app/data bind mount. Journal the
+        # host path so reboot recovery can verify and restore it.
+        printf '%s\n' "${path/#\/app\/data/$DATA_DIR}"
+    else
+        ( cd "$INSTALL_DIR" && .venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')" )
+    fi
+}
+
+restore_update_database() {
+    local bundle="$1" db="${2:-${DATA_DIR}/ovmanager.db}"
+    [[ -f "$bundle" ]] || return 1
+    python3 - "$bundle" "$db" <<'PY'
+import hashlib, json, os, tarfile, tempfile, sys
+bundle, db = sys.argv[1:]
+with tarfile.open(bundle, "r:gz") as tf:
+    names = {m.name for m in tf.getmembers() if m.isfile()}
+    if names != {"panel.db", "manifest.json", "checksums.sha256"}:
+        raise SystemExit("unsafe update backup")
+    manifest = json.load(tf.extractfile("manifest.json"))
+    checksum_line = tf.extractfile("checksums.sha256").read().decode("ascii").strip()
+    data = tf.extractfile("panel.db").read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != manifest.get("database_sha256") or checksum_line != f"{digest}  panel.db":
+        raise SystemExit("update backup checksum mismatch")
+parent = os.path.dirname(db); fd, tmp = tempfile.mkstemp(prefix=".update-rollback-", dir=parent)
+try:
+    try:
+        current = os.stat(db); mode = current.st_mode & 0o777; owner = (current.st_uid, current.st_gid)
+    except FileNotFoundError:
+        mode = 0o600; owner = None
+    with os.fdopen(fd, "wb") as f: f.write(data); f.flush(); os.fsync(f.fileno())
+    os.chmod(tmp, mode)
+    if owner is not None: os.chown(tmp, *owner)
+    os.replace(tmp, db)
+    for suffix in ("-wal", "-shm"):
+        try: os.unlink(db + suffix)
+        except FileNotFoundError: pass
+finally:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+PY
+}
+
+operation_begin() {
+    local name="$1" owner=""
+    mkdir -p "$DATA_DIR"
+    if ! mkdir "$OPERATION_LOCK" 2>/dev/null; then
+        owner="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
+        if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+            warn "Removing stale operation lock from process $owner"
+            rm -rf "$OPERATION_LOCK"
+            mkdir "$OPERATION_LOCK" || die "Another maintenance operation is running"
+        else
+            die "Another maintenance operation is running${owner:+ (process $owner)}. Try again later."
+        fi
+    fi
+    printf '%s\n' "$$" > "$OPERATION_LOCK/pid"
+    printf '%s\n' "$name" > "$OPERATION_LOCK/action"
+    chmod 700 "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=1
+}
+
+operation_end() {
+    [[ "$OPERATION_LOCK_HELD" -eq 1 ]] || return 0
+    rm -rf "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=0
+}
+
+trap operation_end EXIT
 
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
@@ -337,29 +442,6 @@ ensure_uv() {
     step "uv  $UV_BIN"
 }
 
-ensure_node() {
-    if command -v node >/dev/null 2>&1; then
-        local maj; maj="$(node -v 2>/dev/null | sed 's/^v//;s/\..*//')"
-        if [[ -n "$maj" ]] && (( maj < 20 )); then
-            warn "Node.js $(node -v) — the frontend build wants >= 20.19; install Node 22 LTS"
-        fi
-        command -v npm >/dev/null 2>&1 || pkg_install npm
-        step "Node.js $(node -v)"
-        return
-    fi
-    info "Installing Node.js 22 LTS…"
-    case "$OS_ID" in
-        debian|ubuntu)
-            curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1 \
-                && pkg_install nodejs \
-                || die "Could not install Node.js from NodeSource"
-            ;;
-        *) pkg_install nodejs npm ;;
-    esac
-    command -v node >/dev/null 2>&1 || die "Node.js installation failed"
-    step "Node.js $(node -v)"
-}
-
 ensure_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         info "Installing Docker Engine…"
@@ -419,24 +501,22 @@ is_release_archive() { tar -tzf "$1" >/dev/null 2>&1; }
 
 # Download the versioned release file into $1 (an existing directory).
 # The tarball holds a repo snapshot plus the prebuilt frontend/dist, so no
-# git or npm is needed on the server. The .sha256 sidecar is verified when
-# published; a missing sidecar only warns (older releases).
+# git or npm is needed on the server. The mandatory .sha256 sidecar is
+# verified before extraction.
 fetch_release() {
     local dest="$1" work base
     base="$(release_base)"
     work="$(mktemp -d)"
     run_step "Downloading release v${VERSION}" \
         curl -fsSL -o "$work/$base.tar.gz" "$(release_url)" \
-        || { rm -rf "$work"; die "No release file for v${VERSION} — try --from-source"; }
+        || { rm -rf "$work"; die "No verified release file is available for v${VERSION}"; }
     is_release_archive "$work/$base.tar.gz" \
-        || { rm -rf "$work"; die "Download for v${VERSION} is not a release archive (stale installer or blocked download?). Re-bootstrap with the latest installer:  bash <(curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh)  — or retry with --from-source"; }
-    if curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null; then
-        ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
-            || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
-        step "Checksum ok"
-    else
-        warn "No checksum file — skipping verification"
-    fi
+        || { rm -rf "$work"; die "Download for v${VERSION} is not a release archive. Re-bootstrap with the latest installer: bash <(curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh)"; }
+    curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null \
+        || { rm -rf "$work"; die "Release checksum file is missing for v${VERSION}"; }
+    ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
+        || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
+    step "Checksum ok"
     mkdir -p "$dest"
     tar -xzf "$work/$base.tar.gz" -C "$dest" \
         || { rm -rf "$work"; die "Extract failed"; }
@@ -444,31 +524,11 @@ fetch_release() {
     step "Release extracted"
 }
 
-fetch_source() {
-    if [[ "$SRC" == "release" ]]; then
-        fetch_release "$INSTALL_DIR"
-        return
-    fi
-    if command -v git >/dev/null 2>&1; then
-        run_step "Cloning ${REPO}@${BRANCH}" \
-            git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$INSTALL_DIR"
-    else
-        local tmp
-        tmp="$(mktemp)"
-        run_step "Downloading source tarball" \
-            curl -fsSL -o "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
-        mkdir -p "$INSTALL_DIR"
-        tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" \
-            || { rm -f "$tmp"; die "Extract failed"; }
-        rm -f "$tmp"
-        step "Source extracted"
-    fi
-}
-
 write_env() {
     local jwt bot
     jwt="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
     bot="$(fernet_key)"
+    BACKUP_ENCRYPT_KEY="$(fernet_key)"
     # In Docker mode the .env is consumed INSIDE the container, where the
     # data dir is the /app/data mount — never the host path (writing the
     # host path here made fresh Docker installs crash-loop with
@@ -486,6 +546,7 @@ write_env() {
         printf 'DATA_DIR=%s\n' "$data_dir"
         [[ -n "$PUBLIC_URL" ]] && printf 'PUBLIC_URL=%s\n' "$PUBLIC_URL"
         [[ -n "$bot" ]] && printf 'BOT_ENCRYPT_KEY=%s\n' "$bot"
+        [[ -n "$BACKUP_ENCRYPT_KEY" ]] && printf 'BACKUP_ENCRYPT_KEY=%s\n' "$BACKUP_ENCRYPT_KEY"
         [[ -n "$TLS_KEY" ]] && printf 'SSL_KEYFILE=%s\n' "$TLS_KEY"
         [[ -n "$TLS_CERT" ]] && printf 'SSL_CERTFILE=%s\n' "$TLS_CERT"
     } > "$INSTALL_DIR/.env"
@@ -530,16 +591,6 @@ UNIT
     step "systemd  $SYSTEMD_SERVICE"
 }
 
-build_frontend() {
-    [[ -f "$INSTALL_DIR/frontend/package.json" ]] || return 0
-    # Subshell: the installer must keep its own working directory.
-    (
-        cd "$INSTALL_DIR/frontend" || exit 1
-        run_step "Node.js dependencies" npm ci --no-audit --no-fund
-        run_step "Frontend build" npm run build
-    )
-}
-
 # ── Docker ─────────────────────────────────────────────────────────────
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 
@@ -552,9 +603,7 @@ write_compose() {
     cat > "$COMPOSE_FILE" << COMPOSE
 services:
   ovmanager:
-    build:
-      context: ${INSTALL_DIR}
-      dockerfile: Dockerfile
+    image: ${IMAGE_REPO}:${ACTIVE_IMAGE_VERSION}
     container_name: ovmanager
     restart: unless-stopped
     ports:
@@ -577,15 +626,15 @@ COMPOSE
 
 compose_up() {
     write_compose
-    info "Building image (first run takes a few minutes)…"
-    # BuildKit progress goes to stdout — keep the --json contract (exactly
-    # one JSON object on stdout, logs on stderr) by sinking it otherwise.
+    info "Pulling published OVManager image…"
+    # Compose output goes to stdout — keep the --json contract (exactly one
+    # JSON object on stdout) by redirecting operational output to stderr.
     if [[ "$JSON" -eq 1 ]]; then
-        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build >/dev/stderr ) \
-            || die "docker compose up failed — docker logs ovmanager"
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" pull && docker compose -f "$COMPOSE_FILE" up -d ) >/dev/stderr \
+            || die "docker compose startup failed — docker logs ovmanager"
     else
-        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d --build ) \
-            || die "docker compose up failed — docker logs ovmanager"
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" pull && docker compose -f "$COMPOSE_FILE" up -d ) \
+            || die "docker compose startup failed — docker logs ovmanager"
     fi
     step "Container  ovmanager"
 }
@@ -792,25 +841,18 @@ validate_input() {
     fi
 }
 
-# Express preset: safe defaults, then the single admin-password question.
+# Recommended preset: credentials and the private panel path are always
+# generated. They can be changed safely after login in the web UI.
 panel_express_defaults() {
     EXPRESS=1
     : "${MODE:=native}"
     : "${PORT:=$DEFAULT_PORT}"
-    if [[ "$PATH_SET" -eq 0 ]]; then PATHPREFIX="$(rand_path)"; fi
-    : "${ADMIN_USER:=$DEFAULT_USER}"
-    [[ -n "$TLS_MODE" ]] || TLS_MODE="self"
-    if [[ -z "$ADMIN_PASS" ]]; then
-        line ""
-        ADMIN_PASS="$(ask "Admin password (blank = generate)" "" "h")"
-        if [[ -z "$ADMIN_PASS" ]]; then
-            GENERATED_PASS=1
-        else
-            prompt_validate_admin_password
-        fi
-    fi
-    # Explicit success: a trailing `[[ ... ]] && ...` returning non-zero would
-    # trip `set -e` and exit the whole installer right after the prompt.
+    PATHPREFIX="$(rand_path)"
+    PATH_SET=1
+    ADMIN_USER="$DEFAULT_USER"
+    TLS_MODE="self"
+    ADMIN_PASS="$(rand_pass)"
+    GENERATED_PASS=1
     return 0
 }
 
@@ -886,7 +928,7 @@ wizard() {
 print_plan() {
     hr
     kv "OS"      "$OS_NAME"
-    kv "Version" "v${VERSION} (${SRC})"
+    kv "Version" "v${VERSION} (verified release)"
     kv "Mode"    "${B}${MODE}${NC}"
     kv "Port"    "$PORT"
     kv "URL path" "$( [[ -n "$PATHPREFIX" ]] && printf '/%s/' "$PATHPREFIX" || printf '/' )"
@@ -900,10 +942,10 @@ print_plan() {
 emit_json() {
     local ok="$1" url
     url="$(panel_url)"
-    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" "$VERSION" <<'PY'
+    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" "$VERSION" "$BACKUP_ENCRYPT_KEY" <<'PY'
 import json, sys
 (ok, mode, url, user, password, install, data, tls, port,
- path, gen, version) = sys.argv[1:]
+ path, gen, version, backup_key) = sys.argv[1:]
 out = {
     "ok": ok == "1",
     "version": version,
@@ -912,6 +954,7 @@ out = {
     "user": user,
     "password": password,
     "password_generated": gen == "1",
+    "backup_recovery_key": backup_key,
     "port": int(port),
     "path": path,
     "tls": tls,
@@ -942,6 +985,9 @@ success_card() {
     else
         kv "Password" "${GY}(the one you set)${NC}"
     fi
+    if [[ -n "$BACKUP_ENCRYPT_KEY" ]]; then
+        kv "Backup key" "${YL}${BACKUP_ENCRYPT_KEY}${NC}  ${GY}(save outside this server)${NC}"
+    fi
     kv "Manage" "ovm  (status, logs, backup, TLS, recovery)"
     kv "Logs"   "$logs"
     kv "Data"   "$DATA_DIR"
@@ -956,8 +1002,8 @@ do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed ($INSTALL_DIR). Use: $0 update"
     mkdir -p "$DATA_DIR"
     print_plan
-    hr; info "Step 1/4 — Download (v${VERSION}, ${SRC})"
-    fetch_source
+    hr; info "Step 1/4 — Download verified release v${VERSION}"
+    fetch_release "$INSTALL_DIR"
 
     info "Step 2/4 — Certificate and configuration"
     setup_tls
@@ -970,14 +1016,10 @@ do_install() {
         compose_up
     else
         ensure_uv
-        if [[ "$SRC" == "source" ]]; then ensure_node; fi
         cd "$INSTALL_DIR"
         run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
-        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
-            step "Frontend prebuilt"
-        else
-            build_frontend
-        fi
+        [[ -d "$INSTALL_DIR/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
+        step "Frontend prebuilt"
         write_systemd_unit
         run_step "Service started" systemctl_bounded restart
     fi
@@ -999,71 +1041,227 @@ do_install() {
 }
 
 do_update() {
+    operation_begin update
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
     info "Updating OVManager to v${VERSION}…"
     [[ -f "$COMPOSE_FILE" ]] && MODE="docker"
     read_env_port
     : "${PORT:=$DEFAULT_PORT}"
     : "${TLS_MODE:=none}"
-    if [[ "$MODE" == "docker" ]]; then
-        ensure_docker
-    else
-        ensure_uv
-        ensure_node
-    fi
+    if [[ "$MODE" == "docker" ]]; then ensure_docker; else ensure_uv; fi
+
+    local from_version safety snapshot scheme activated=0
+    from_version="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' "$INSTALL_DIR/backend/version.py" 2>/dev/null | head -1)"
+    : "${from_version:=unknown}"
+    scheme="$(scheme_of)"
     print_plan
-    backup_dir "$DATA_DIR" "panel"
-    local snapshot
+    update_state preflight "$from_version" "$VERSION"
+
+    info "Step 1/6 — Verified safety backup"
+    safety="$(update_safety_backup)" || die "Could not create the mandatory pre-update backup"
+    [[ -n "$safety" && -f "$safety" ]] || die "The pre-update backup was not created"
     snapshot="$(snapshot_code "$INSTALL_DIR" "panel" 2)"
-    cd "$INSTALL_DIR"
-    if [[ "$SRC" == "release" ]]; then
-        # .env is never in the tarball (uncommitted), so extracting over the
-        # install keeps it. Stale files from older trees are harmless.
-        fetch_release "$INSTALL_DIR"
-    elif [[ -d .git ]]; then
-        git stash --quiet 2>/dev/null || true
-        run_step "Pull ${BRANCH}" git pull --rebase origin "$BRANCH"
-        git stash pop --quiet 2>/dev/null || true
-    else
-        warn "No git checkout — re-downloading source (.env + data kept)"
-        local tmp
-        tmp="$(mktemp)"
-        run_step "Downloading source" \
-            curl -fsSL -o "$tmp" "https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz"
-        tar -xzf "$tmp" --strip-components=1 -C "$INSTALL_DIR" || { rm -f "$tmp"; die "Extract failed"; }
-        rm -f "$tmp"
+    update_state staging "$from_version" "$VERSION" "$safety"
+
+    info "Step 2/6 — Stage verified release"
+    rm -rf "$UPDATE_STAGE"
+    mkdir -p "$UPDATE_STAGE"
+    fetch_release "$UPDATE_STAGE"
+    cp -p "$INSTALL_DIR/.env" "$UPDATE_STAGE/.env" || die "Could not preserve configuration"
+    chmod 600 "$UPDATE_STAGE/.env"
+    if [[ "$MODE" != "docker" ]]; then
+        ( cd "$UPDATE_STAGE" && run_step "Staged Python packages" "$UV_BIN" sync --frozen --no-dev --quiet ) \
+            || die "Could not prepare the staged release; current version is still running"
+        [[ -d "$UPDATE_STAGE/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
     fi
-    local scheme; scheme="$(scheme_of)"
+
+    info "Step 3/6 — Enter maintenance mode"
+    : > "$UPDATE_MARKER"
+    chmod 600 "$UPDATE_MARKER"
+    update_state activating "$from_version" "$VERSION" "$safety"
     if [[ "$MODE" == "docker" ]]; then
-        compose_up
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
     else
-        run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
-        if [[ -d "$INSTALL_DIR/frontend/dist" ]]; then
-            step "Frontend prebuilt"
-        else
-            build_frontend
+        systemctl_bounded stop
+    fi
+
+    info "Step 4/6 — Activate candidate"
+    rm -rf "$UPDATE_PREVIOUS"
+    if mv "$INSTALL_DIR" "$UPDATE_PREVIOUS" && mv "$UPDATE_STAGE" "$INSTALL_DIR"; then
+        activated=1
+    else
+        # If the first rename never happened, the active release is untouched.
+        # If it did, restore it before clearing maintenance mode. A failed
+        # restore deliberately leaves the marker in place to block writes.
+        if [[ -d "$INSTALL_DIR" ]] || { [[ -d "$UPDATE_PREVIOUS" ]] && mv "$UPDATE_PREVIOUS" "$INSTALL_DIR"; }; then
+            rm -f "$UPDATE_MARKER"
+            update_state failed_over "$from_version" "$VERSION" "$safety"
+            die "Could not activate the staged release; the previous release remains active and data was not changed"
         fi
-        run_step "Service restarted" systemctl_bounded restart
+        update_state recovery_required "$from_version" "$VERSION" "$safety"
+        die "Could not activate or restore release files. Writes remain blocked; run: ovm recover-update"
+    fi
+
+    local start_ok=0
+    if [[ "$MODE" == "docker" ]]; then
+        ( compose_up ) && start_ok=1 || true
+    else
+        run_step "Candidate service started" systemctl_bounded restart && start_ok=1 || true
+    fi
+
+    info "Step 5/6 — Verify candidate"
+    update_state verifying "$from_version" "$VERSION" "$safety"
+    if [[ "$start_ok" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+        local reported
+        reported="$(curl -fskS --max-time 5 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+        [[ "$reported" == "$VERSION" ]] || { warn "Candidate reported version '${reported:-unknown}', expected '$VERSION'"; start_ok=0; }
+    else
+        start_ok=0
+    fi
+
+    if [[ "$start_ok" -ne 1 ]]; then
+        fail "Candidate verification failed — failing over to v${from_version}"
+        update_state failing_over "$from_version" "$VERSION" "$safety"
+        if [[ "$MODE" == "docker" ]]; then
+            ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
+        else
+            systemctl_bounded stop >/dev/null 2>&1 || true
+        fi
+        rm -rf "$UPDATE_STAGE"
+        mv "$INSTALL_DIR" "$UPDATE_STAGE" || true
+        mv "$UPDATE_PREVIOUS" "$INSTALL_DIR" \
+            || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Automatic failover could not restore the previous release. Snapshot: $snapshot"; }
+        restore_update_database "$safety" \
+            || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Previous code was restored but the database safety backup could not be restored"; }
+
+        local rollback_started=0
+        if [[ "$MODE" == "docker" ]]; then
+            ACTIVE_IMAGE_VERSION="$from_version"
+            ( compose_up ) && rollback_started=1 || true
+        else
+            run_step "Previous service restarted" systemctl_bounded restart && rollback_started=1 || true
+        fi
+        if [[ "$rollback_started" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+            rm -f "$UPDATE_MARKER"
+            update_state failed_over "$from_version" "$VERSION" "$safety"
+            die "Update failed over safely to v${from_version}. Data was restored from $safety. Check logs before retrying."
+        fi
+        update_state recovery_required "$from_version" "$VERSION" "$safety"
+        die "Update recovery needs attention. Previous files: $INSTALL_DIR; safety backup: $safety; snapshot: $snapshot"
+    fi
+
+    info "Step 6/6 — Commit update"
+    install_cli
+    rm -f "$UPDATE_MARKER"
+    # Verification mode intentionally paused all background writers. Restart
+    # once without the marker so normal scheduling resumes, then require one
+    # final healthy response before committing the journal.
+    if [[ "$MODE" == "docker" ]]; then
+        docker restart ovmanager >/dev/null 2>&1 || true
+    else
+        systemctl_bounded restart >/dev/null 2>&1 || true
     fi
     if ! wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
-        fail "Update health check failed — rolling back to the snapshot"
-        systemctl_bounded stop >/dev/null 2>&1 || true
-        tar -xzf "$snapshot" -C "$(dirname "$INSTALL_DIR")" \
-            || die "Rollback extract failed — restore manually from $snapshot and /var/backups"
-        run_step "Service restarted" systemctl_bounded restart
-        if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
-            die "Rolled back to the pre-update tree (snapshot kept at $snapshot). Update aborted — check logs."
-        fi
-        die "Rollback did not restore health either — snapshot at $snapshot, data backups in /var/backups. Check logs."
+        : > "$UPDATE_MARKER"; chmod 600 "$UPDATE_MARKER"
+        update_state recovery_required "$from_version" "$VERSION" "$safety"
+        die "Candidate passed verification but failed its final restart. Writes are blocked; run: ovm recover-update"
     fi
-    install_cli
-    step "Update complete"
+    update_state committed "$from_version" "$VERSION" "$safety"
+    step "Update complete  v${from_version} → v${VERSION}"
+    step "Failover release kept at $UPDATE_PREVIOUS"
     line ""
     if [[ "$JSON" -eq 1 ]]; then emit_json 1; fi
     return 0
 }
 
+do_recover_update() {
+    if [[ ! -f "$UPDATE_STATE" ]]; then
+        [[ -f "$UPDATE_MARKER" ]] && die "Update maintenance marker exists but its state journal is missing"
+        step "No interrupted update needs recovery"
+        return 0
+    fi
+    local phase from target safety scheme reported
+    read -r phase from target safety < <(python3 - "$UPDATE_STATE" <<'PY'
+import json, sys
+x=json.load(open(sys.argv[1]))
+print(x.get("phase","unknown"), x.get("from_version","unknown"), x.get("to_version","unknown"), x.get("safety_backup") or "")
+PY
+) || die "Update state journal is unreadable"
+    case "$phase" in
+        committed|failed_over)
+            if [[ ! -f "$UPDATE_MARKER" ]]; then
+                step "No interrupted update needs recovery"
+                return 0
+            fi
+            ;;
+        preflight|staging)
+            # Activation had not begun, so the installed release and database
+            # are untouched. Stale staging content can be discarded safely.
+            check_root
+            rm -rf "$UPDATE_STAGE"
+            rm -f "$UPDATE_MARKER"
+            update_state failed_over "$from" "$target" "$safety"
+            step "Cleared an interrupted pre-activation update; v${from} remains active"
+            return 0
+            ;;
+        activating|verifying|failing_over|recovery_required) ;;
+        *) die "Update journal has unknown phase '$phase'; writes remain blocked" ;;
+    esac
+    check_root
+    if [[ ! -f "$UPDATE_MARKER" ]]; then
+        : > "$UPDATE_MARKER"
+        chmod 600 "$UPDATE_MARKER"
+        warn "Re-created the missing update maintenance marker"
+    fi
+    [[ -f "$COMPOSE_FILE" ]] && MODE="docker" || MODE="native"
+    read_env_port; : "${PORT:=$DEFAULT_PORT}"; : "${TLS_MODE:=none}"
+    scheme="$(scheme_of)"
+    reported="$(curl -fskS --max-time 5 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' 2>/dev/null || true)"
+    if [[ -n "$reported" && "$reported" == "$target" ]]; then
+        rm -f "$UPDATE_MARKER"
+        update_state committed "$from" "$target" "$safety"
+        step "Recovered update journal — v${target} is healthy"
+        return 0
+    fi
+    if [[ -n "$reported" && "$reported" == "$from" && ! -d "$UPDATE_PREVIOUS" ]]; then
+        rm -f "$UPDATE_MARKER"
+        update_state failed_over "$from" "$target" "$safety"
+        step "Recovered update journal — previous v${from} is healthy"
+        return 0
+    fi
+    [[ -d "$UPDATE_PREVIOUS" ]] || die "Candidate is not healthy and no previous release directory is available"
+    info "Interrupted candidate is unhealthy — failing over to v${from}"
+    if [[ "$MODE" == "docker" ]]; then
+        docker rm -f ovmanager >/dev/null 2>&1 || true
+    else
+        systemctl_bounded stop >/dev/null 2>&1 || true
+    fi
+    rm -rf "$UPDATE_STAGE"
+    [[ -d "$INSTALL_DIR" ]] && mv "$INSTALL_DIR" "$UPDATE_STAGE"
+    mv "$UPDATE_PREVIOUS" "$INSTALL_DIR" || die "Could not restore the previous release directory"
+    [[ -n "$safety" ]] && restore_update_database "$safety" \
+        || die "Previous release restored, but the database safety backup could not be restored"
+    if [[ "$MODE" == "docker" ]]; then
+        ACTIVE_IMAGE_VERSION="$from"
+        compose_up
+    else
+        systemctl_bounded restart
+    fi
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+        rm -f "$UPDATE_MARKER"
+        update_state failed_over "$from" "$target" "$safety"
+        step "Interrupted update failed over safely to v${from}"
+        return 0
+    fi
+    update_state recovery_required "$from" "$target" "$safety"
+    die "Previous release was restored but is not healthy. Run: ovm logs 100"
+}
+
+
 do_uninstall() {
+    operation_begin uninstall
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
     check_root
     hr
@@ -1118,17 +1316,21 @@ already_installed_menu() {
 }
 
 start_menu() {
-    line "  ${B}How do you want to install?${NC}"
+    line "  ${B}OVManager Setup${NC}"
+    hr
     line ""
-    line "  ${GR}1${NC})  Express    Recommended — secure defaults, ready in minutes"
-    line "  ${WH}2${NC})  Custom     Answer a few questions (port, login, certificate)"
+    line "  ${GR}1.${NC} Install              ${GY}Recommended${NC}"
+    line "  ${WH}2.${NC} Install with Docker"
+    line ""
+    line "  ${WH}0.${NC} Exit"
     line ""
     local choice
     choice="$(ask "Select" "1")"
     case "${choice:-1}" in
-        1) panel_express_defaults ;;
-        2) EXPRESS=0 ;;
-        *) panel_express_defaults ;;
+        1) MODE="native"; panel_express_defaults ;;
+        2) MODE="docker"; panel_express_defaults ;;
+        0) line "Cancelled. No changes were made."; exit 0 ;;
+        *) warn "Choose 0, 1, or 2."; start_menu ;;
     esac
     line ""
 }
@@ -1155,65 +1357,40 @@ remove_cli() {
 # ── Help / args / main ─────────────────────────────────────────────────
 usage() {
     cat <<EOF
-OVManager installer v${VERSION}
+OVManager Setup v${VERSION}
 
 USAGE
-  Human (zero questions — safe generated values):
+  Interactive:
     bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 
-  Human (numbered wizard):
-    bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) interactive
+  Unattended Install:
+    curl -sSL URL | sudo bash -s -- --yes --json
 
-  AI / script (no prompts; flags or env vars):
-    curl -sSL URL | sudo bash -s -- -y --mode native -p 'SECRET'
-    curl -sSL URL | sudo bash -s -- -y --mode docker -j
+  Unattended Install with Docker:
+    curl -sSL URL | sudo bash -s -- --docker --yes --json
 
-COMMANDS  (default: install)
-  update [-v vX.Y.Z]      Fetch release (or pull), rebuild if needed,
-                          restart (backs up data + code snapshot first,
-                          auto-rollback on health failure)
-  uninstall [--purge]     Remove the app (data kept unless --purge)
-  interactive, -i         Numbered install wizard (Enter = default)
-  help                    This help
-
-  Everything else (status, logs, backup, TLS, recovery) lives in the
-  manager: ovm  (installed as ovmanager/ovm).
-
-MODE
-  --mode native|docker  systemd + uv, or Docker Engine          [native]
-
-SOURCE
-  --from-release        Download the versioned release file      [default]
-                        (prebuilt frontend, verified checksum)
-  --from-source         Clone/pull git and build locally (developers)
-
-TLS  (numbers; wizard asks when omitted)
-  --tls 1               Self-signed certificate                  [default]
-  --tls 2 --tls-domain DOMAIN   Let's Encrypt for a domain (needs :80)
-  --tls 3               Let's Encrypt short-lived cert for this IP
-  --tls 4 --tls-key KEY --tls-cert CERT   Existing PEM key + cert
+COMMANDS
+  update [-v VERSION]       Staged update with backup and automatic failover
+  recover-update            Recover an update interrupted by reboot/power loss
+  uninstall [--purge]       Remove the app; keep data unless --purge
+  help                      Show this help
 
 OPTIONS
-  -p, --pass PASS       Admin password (min 12, not a common word).
-                        Generated if omitted under -y / non-interactive
-  -v, --version vX.Y.Z  Install/update this release instead of v${VERSION}
-  -y, --yes             Never prompt. Required for AI / CI / pipes
-  -j, --json            Machine-readable result on stdout (logs on stderr)
-  --purge               uninstall: also delete data + certs
-  -h, --help            This help
+  --docker                  Install with Docker
+  -v, --version VERSION     Install/update a specific release
+  -y, --yes                 Never prompt
+  -j, --json                Machine-readable result on stdout
+  --purge                   Uninstall: also delete data and certificates
+  -h, --help                Show this help
 
-ENVIRONMENT  (used when the matching flag is omitted)
-  OVM_MODE          native | docker
-  OVM_SRC           release | source  (default: release)
-  OVM_PASS          admin password
-  OVM_PORT / OVM_PATH / OVM_ADMIN_USER / OVM_TLS / OVM_TLS_DOMAIN /
-  OVM_PUBLIC_URL    advanced overrides (the wizard asks instead)
-  CI=true           implies -y
-  NONINTERACTIVE=1  implies -y
+Fresh installs generate the owner password and private panel URL. Save the
+Ready card; both values can be changed later in the web UI.
+
+After installation, use ovm (alias: ovmanager) for status, service controls,
+logs, backups, HTTPS, diagnostics, recovery, updates, and uninstall.
 
 EXIT
-  0 ok   1 error   2 already installed   130 interrupted
-
+  0 ok   1 error   2 already installed/cancelled   130 interrupted
 EOF
     exit 0
 }
@@ -1223,6 +1400,7 @@ parse_args() {
         CLI_GIVEN=1
         case "$1" in
             -p|--pass)    [[ $# -ge 2 ]] || die "-p needs a password"; ADMIN_PASS="$2"; shift 2 ;;
+            --docker)      MODE="docker"; shift ;;
             --mode)        [[ $# -ge 2 ]] || die "--mode needs native or docker"; MODE="$2"; shift 2 ;;
             --tls)         [[ $# -ge 2 ]] || die "--tls needs 1, 2, 3 or 4 (see --help)"
                            case "$2" in
@@ -1236,8 +1414,6 @@ parse_args() {
             --tls-domain)  [[ $# -ge 2 ]] || die "--tls-domain needs a domain"; TLS_DOMAIN="$2"; shift 2 ;;
             --tls-key)     [[ $# -ge 2 ]] || die "--tls-key needs a file"; TLS_KEY="$2"; shift 2 ;;
             --tls-cert)    [[ $# -ge 2 ]] || die "--tls-cert needs a file"; TLS_CERT="$2"; shift 2 ;;
-            --from-release) SRC="release"; shift ;;
-            --from-source) SRC="source"; shift ;;
             -v|--version)  [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
             -y|--yes) YES=1; shift ;;
             -j|--json) JSON=1; shift ;;
@@ -1246,6 +1422,7 @@ parse_args() {
             -h|--help)     usage ;;
             help)          usage ;;
             update)        ACTION="update"; shift ;;
+            recover-update) ACTION="recover-update"; shift ;;
             uninstall)     ACTION="uninstall"; shift ;;
             interactive)   ACTION="interactive"; shift ;;
             status|start|stop|restart|logs|backup|auto-backup|tls|recovery|reset-password|reset-urlpath|menu)
@@ -1277,10 +1454,6 @@ apply_env() {
 main() {
     parse_args "$@"
     apply_env
-    case "$SRC" in
-        release|source) ;;
-        *) die "Invalid source '$SRC' (use release or source)" ;;
-    esac
     if [[ -n "$PIN" ]]; then
         [[ "$PIN" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Bad --version '$PIN' (use vX.Y.Z)"
         VERSION="${PIN#v}"
@@ -1296,6 +1469,7 @@ main() {
     # including CI sandboxes and non-root operators.
     case "$ACTION" in
         uninstall) check_root; do_uninstall; exit 0 ;;
+        recover-update) do_recover_update; exit 0 ;;
         update)
             detect_os
             check_deps
@@ -1318,6 +1492,9 @@ main() {
     if [[ -d "$INSTALL_DIR" ]]; then
         already_installed_menu
         exit 0
+    fi
+    if [[ "$CLI_GIVEN" -eq 0 && "$YES" -eq 0 ]] && ! can_prompt; then
+        die "No interactive terminal. Use --yes to Install or --docker --yes to Install with Docker."
     fi
     check_root
 
