@@ -730,3 +730,12 @@ def test_systemd_unit_reports_clean_stop():
     failed, so status and doctor report stopped panels truthfully."""
     source = _extract_function("write_systemd_unit")
     assert "SuccessExitStatus=143" in source
+
+
+def test_candidate_version_reads_inside_container_for_docker():
+    """Host-side /health never discloses a version to Docker callers
+    (loopback-only), so every Docker update failed verification (defect:
+    Step 5/6 always failed over in docker mode)."""
+    source = _extract_function("candidate_version")
+    assert "docker exec ovmanager" in source
+    assert "backend.version" in source
