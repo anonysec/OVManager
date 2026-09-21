@@ -94,16 +94,127 @@ PY
 
 update_safety_backup() {
     local keep=10 path
+    # Try the installed tree's transactional backup first; any failure
+    # (missing module, older signature) falls back to a legacy bundle so
+    # updates from old releases are never blocked.
     if [[ "$MODE" == "docker" ]]; then
-        path="$(docker exec ovmanager /app/.venv/bin/python -c \
-            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')")" || return 1
-        # The backup is created through the /app/data bind mount. Journal the
-        # host path so reboot recovery can verify and restore it.
-        printf '%s\n' "${path/#\/app\/data/$DATA_DIR}"
+        if path="$(docker exec ovmanager /app/.venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')" 2>/dev/null)"; then
+            # The backup is created through the /app/data bind mount. Journal the
+            # host path so reboot recovery can verify and restore it.
+            printf '%s\n' "${path/#\/app\/data/$DATA_DIR}"
+            return 0
+        fi
     else
-        ( cd "$INSTALL_DIR" && .venv/bin/python -c \
-            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')" )
+        if path="$( ( cd "$INSTALL_DIR" && .venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')" 2>/dev/null) )"; then
+            printf '%s\n' "$path"
+            return 0
+        fi
     fi
+    warn "Installed release lacks transactional backups — legacy safety bundle"
+    # Installed release predates transactional backups: build an equivalent
+    # .ovmbak with stdlib python so updates from old releases are not
+    # blocked. restore_update_database consumes both variants unchanged.
+    legacy_safety_bundle "${1:-unknown}" || return 1
+}
+
+legacy_safety_bundle() {
+    local app_version="$1" backup_dir="${DATA_DIR}/backups"
+    [[ -f "${DATA_DIR}/ovmanager.db" ]] || return 0
+    mkdir -p "$backup_dir" && chmod 700 "$backup_dir"
+    python3 - "$DATA_DIR" "$backup_dir" "$app_version" <<'PY' || return 1
+import hashlib, json, os, sqlite3, sys, tarfile, tempfile
+from datetime import datetime, timezone
+data_dir, backup_dir, app_version = sys.argv[1], sys.argv[2], sys.argv[3]
+src = os.path.join(data_dir, "ovmanager.db")
+con = sqlite3.connect("file:%s?mode=ro" % src, uri=True)
+try:
+    row = con.execute("PRAGMA quick_check").fetchone()
+finally:
+    con.close()
+if not row or row[0] != "ok":
+    raise SystemExit("source database integrity failed")
+fd, snap = tempfile.mkstemp(prefix=".ovmanager-snapshot-", suffix=".db", dir=backup_dir)
+os.close(fd); os.chmod(snap, 0o600)
+s = sqlite3.connect("file:%s?mode=ro" % src, uri=True)
+d = sqlite3.connect(snap)
+try:
+    s.backup(d)
+finally:
+    d.close(); s.close()
+digest = hashlib.sha256()
+with open(snap, "rb") as f:
+    for chunk in iter(lambda: f.read(1048576), b""):
+        digest.update(chunk)
+digest = digest.hexdigest()
+now = datetime.now(timezone.utc)
+manifest = {"format": "ovmanager-backup", "format_version": 1,
+            "app_version": app_version, "created_at": now.isoformat(),
+            "database": "panel.db", "database_sha256": digest}
+stamp = now.strftime("%Y%m%d_%H%M%S")
+final = os.path.join(backup_dir, "ovmanager-pre-update-%s-v1.ovmbak" % stamp)
+fd, tmp = tempfile.mkstemp(prefix=".ovmanager-backup-", suffix=".part", dir=backup_dir)
+os.close(fd); os.chmod(tmp, 0o600)
+try:
+    with tempfile.TemporaryDirectory(prefix="ovmanager-bundle-") as stage:
+        with open(os.path.join(stage, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, sort_keys=True, indent=2); f.write("\n")
+        with open(os.path.join(stage, "checksums.sha256"), "w", encoding="ascii") as f:
+            f.write("%s  panel.db\n" % digest)
+        with tarfile.open(tmp, "w:gz", format=tarfile.PAX_FORMAT) as archive:
+            archive.add(snap, arcname="panel.db", recursive=False)
+            archive.add(os.path.join(stage, "manifest.json"), arcname="manifest.json", recursive=False)
+            archive.add(os.path.join(stage, "checksums.sha256"), arcname="checksums.sha256", recursive=False)
+    with tarfile.open(tmp, "r:gz") as archive:
+        names = {m.name for m in archive.getmembers() if m.isfile()}
+        if names != {"panel.db", "manifest.json", "checksums.sha256"}:
+            raise SystemExit("bundle verification failed")
+        data = archive.extractfile("panel.db").read()
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise SystemExit("bundle checksum mismatch")
+    os.replace(tmp, final); os.chmod(final, 0o600)
+finally:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+    try: os.unlink(snap)
+    except FileNotFoundError: pass
+print(final)
+PY
+    # Retention for legacy pre-update bundles (backend prunes only its own).
+    ls -t "$backup_dir"/ovmanager-pre-update-*.ovmbak 2>/dev/null | tail -n +11 | xargs -r rm -f
+    return 0
+}
+
+# True when the live database no longer matches the safety bundle (schema
+# version): the candidate migrated it, so failover must restore. When the
+# versions match the candidate never migrated and failover skips the
+# restore. A missing/unreadable live database also requests a restore.
+db_restore_needed() {
+    python3 - "$1" "${DATA_DIR}/ovmanager.db" <<'PY'
+import os, sqlite3, sys, tarfile, tempfile
+bundle, live = sys.argv[1], sys.argv[2]
+def version(path):
+    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
+    try:
+        return con.execute("PRAGMA user_version").fetchone()[0]
+    finally:
+        con.close()
+try:
+    live_version = version(live)
+except Exception:
+    raise SystemExit(0)
+with tarfile.open(bundle, "r:gz") as tf:
+    data = tf.extractfile("panel.db").read()
+fd, tmp = tempfile.mkstemp(prefix=".update-compare-")
+try:
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    bundle_version = version(tmp)
+finally:
+    os.unlink(tmp)
+raise SystemExit(0 if bundle_version != live_version else 1)
+PY
 }
 
 restore_update_database() {
@@ -528,7 +639,14 @@ write_env() {
     local jwt bot
     jwt="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
     bot="$(fernet_key)"
-    BACKUP_ENCRYPT_KEY="$(fernet_key)"
+    # Branch-only settings must not leak into .env when the installed
+    # release predates them: pydantic (extra=forbid) rejects unknown keys
+    # and the panel crash-loops. The key is generated once a release that
+    # understands it is installed (fresh installs of such releases).
+    BACKUP_ENCRYPT_KEY=""
+    if grep -q 'BACKUP_ENCRYPT_KEY' "$INSTALL_DIR/backend/config.py" 2>/dev/null; then
+        BACKUP_ENCRYPT_KEY="$(fernet_key)"
+    fi
     # In Docker mode the .env is consumed INSIDE the container, where the
     # data dir is the /app/data mount — never the host path (writing the
     # host path here made fresh Docker installs crash-loop with
@@ -579,6 +697,9 @@ WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
 ExecStart=${UV_BIN} run main.py
+# uv exits 143 on SIGTERM: a clean `ovm stop` must read as inactive,
+# not failed, so status and doctor report the truth.
+SuccessExitStatus=143
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65536
@@ -1001,6 +1122,9 @@ success_card() {
 do_install() {
     [[ -d "$INSTALL_DIR" ]] && die "Already installed ($INSTALL_DIR). Use: $0 update"
     mkdir -p "$DATA_DIR"
+    # Native panel state holds secrets — private from birth (Docker data
+    # belongs to uid 1000 instead; doctor --fix normalizes old installs).
+    [[ "$MODE" == "docker" ]] || chmod 700 "$DATA_DIR"
     print_plan
     hr; info "Step 1/4 — Download verified release v${VERSION}"
     fetch_release "$INSTALL_DIR"
@@ -1058,7 +1182,7 @@ do_update() {
     update_state preflight "$from_version" "$VERSION"
 
     info "Step 1/6 — Verified safety backup"
-    safety="$(update_safety_backup)" || die "Could not create the mandatory pre-update backup"
+    safety="$(update_safety_backup "$from_version")" || die "Could not create the mandatory pre-update backup"
     [[ -n "$safety" && -f "$safety" ]] || die "The pre-update backup was not created"
     snapshot="$(snapshot_code "$INSTALL_DIR" "panel" 2)"
     update_state staging "$from_version" "$VERSION" "$safety"
@@ -1132,8 +1256,14 @@ do_update() {
         mv "$INSTALL_DIR" "$UPDATE_STAGE" || true
         mv "$UPDATE_PREVIOUS" "$INSTALL_DIR" \
             || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Automatic failover could not restore the previous release. Snapshot: $snapshot"; }
-        restore_update_database "$safety" \
-            || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Previous code was restored but the database safety backup could not be restored"; }
+        local db_restored=0
+        if db_restore_needed "$safety"; then
+            restore_update_database "$safety" \
+                || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Previous code was restored but the database safety backup could not be restored"; }
+            db_restored=1
+        else
+            step "Database untouched by the candidate — restore skipped"
+        fi
 
         local rollback_started=0
         if [[ "$MODE" == "docker" ]]; then
@@ -1145,7 +1275,11 @@ do_update() {
         if [[ "$rollback_started" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
             rm -f "$UPDATE_MARKER"
             update_state failed_over "$from_version" "$VERSION" "$safety"
-            die "Update failed over safely to v${from_version}. Data was restored from $safety. Check logs before retrying."
+            if [[ "$db_restored" -eq 1 ]]; then
+                die "Update failed over safely to v${from_version}. Data was restored from $safety. Check logs before retrying."
+            else
+                die "Update failed over safely to v${from_version} (database was untouched — no restore needed). Check logs before retrying."
+            fi
         fi
         update_state recovery_required "$from_version" "$VERSION" "$safety"
         die "Update recovery needs attention. Previous files: $INSTALL_DIR; safety backup: $safety; snapshot: $snapshot"
@@ -1231,7 +1365,25 @@ PY
         step "Recovered update journal — previous v${from} is healthy"
         return 0
     fi
-    [[ -d "$UPDATE_PREVIOUS" ]] || die "Candidate is not healthy and no previous release directory is available"
+    [[ -d "$UPDATE_PREVIOUS" ]] || {
+        # Activation never swapped the trees (killed before/during the
+        # rename): the installed release IS the pre-update one, so discard
+        # staging and (re)start it. The database was never touched.
+        rm -rf "$UPDATE_STAGE"
+        if [[ "$MODE" == "docker" ]]; then
+            ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) >/dev/null 2>&1 || true
+        else
+            systemctl_bounded restart >/dev/null 2>&1 || systemctl start "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+        fi
+        if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+            rm -f "$UPDATE_MARKER"
+            update_state failed_over "$from" "$target" "$safety"
+            step "Interrupted update never activated — v${from} restarted, staging discarded"
+            return 0
+        fi
+        update_state recovery_required "$from" "$target" "$safety"
+        die "Interrupted update never activated and v${from} does not answer health. Run: ovm logs 100"
+    }
     info "Interrupted candidate is unhealthy — failing over to v${from}"
     if [[ "$MODE" == "docker" ]]; then
         docker rm -f ovmanager >/dev/null 2>&1 || true

@@ -709,9 +709,9 @@ PY
     else
         kv "Update" "${GR}no interrupted transaction${NC}"
     fi
-    # 7. Backup age.
+    # 7. Backup age (legacy tarballs and the transactional .ovmbak format).
     local newest age
-    newest="$(ls -t /var/backups/panel-*.tar.gz 2>/dev/null | head -1 || true)"
+    newest="$(ls -t /var/backups/panel-*.tar.gz "$DATA_DIR"/backups/*.ovmbak 2>/dev/null | head -1 || true)"
     if [[ -n "$newest" ]]; then
         age=$(( ($(date +%s) - $(stat -c %Y "$newest" 2>/dev/null || echo 0)) / 86400 ))
         if (( age <= 7 )); then
@@ -725,6 +725,35 @@ PY
         kv "Backup" "${YL}none yet${NC}"
         warn "Fix: ovm backup"
         problems=$((problems + 1))
+    fi
+    # 8. Private file permissions (native only — Docker data belongs to
+    # uid 1000 inside the container, so only report there).
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        local perm_bad=""
+        [[ "$(stat -c %a "$DATA_DIR" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="data dir"
+        [[ ! -d "$DATA_DIR/backups" ]] || [[ "$(stat -c %a "$DATA_DIR/backups" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="backups dir"
+        local pf
+        for pf in "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance; do
+            [[ ! -f "$pf" ]] || [[ "$(stat -c %a "$pf" 2>/dev/null || echo 0)" == "600" ]] || perm_bad="$pf"
+        done
+        if [[ -z "$perm_bad" ]]; then
+            kv "Permissions" "${GR}private${NC}"
+        else
+            kv "Permissions" "${YL}loose ($perm_bad)${NC}"
+            warn "Fix: ovm doctor --fix"
+            problems=$((problems + 1))
+            if [[ "$FIX" -eq 1 ]]; then
+                chmod 700 "$DATA_DIR" 2>/dev/null || true
+                [[ ! -d "$DATA_DIR/backups" ]] || chmod 700 "$DATA_DIR/backups" 2>/dev/null || true
+                chmod 600 "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance 2>/dev/null || true
+                perm_bad=""
+                [[ "$(stat -c %a "$DATA_DIR" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="data dir"
+                for pf in "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance; do
+                    [[ ! -f "$pf" ]] || [[ "$(stat -c %a "$pf" 2>/dev/null || echo 0)" == "600" ]] || perm_bad="$pf"
+                done
+                [[ -z "$perm_bad" ]] && problems=$((problems - 1)) || warn "Some permissions could not be tightened"
+            fi
+        fi
     fi
     hr
     if (( problems == 0 )); then
