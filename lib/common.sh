@@ -283,7 +283,10 @@ panel_url() {
     fi
 }
 
-port_in_use() { ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'; }
+port_in_use() {
+    command -v ss >/dev/null 2>&1 || return 1
+    ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'
+}
 
 # ── TLS (shared by installer setup and manager menu) ───────────────────
 # Private keys must never be world-readable. Native mode runs the panel as

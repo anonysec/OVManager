@@ -59,6 +59,9 @@ die() {
     exit 1
 }
 trap 'printf "\n  %bInterrupted.%b\n" "$RD" "$NC" >&2; exit 130' INT TERM
+# Pinpoint trap: any future failure (real or environmental) reports the exact
+# command and line instead of surfacing as a mystery message elsewhere.
+trap 'warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' ERR
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS=""
@@ -588,7 +591,7 @@ ensure_docker() {
 
 check_deps() {
     local missing=()
-    for cmd in curl tar openssl git python3; do
+    for cmd in curl tar openssl git python3 sha256sum; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     [[ ${#missing[@]} -eq 0 ]] || pkg_install "${missing[@]}"
@@ -876,7 +879,10 @@ issue_lets_encrypt() {
     step "Certificate  $outdir"
 }
 
-port_in_use() { ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'; }
+port_in_use() {
+    command -v ss >/dev/null 2>&1 || return 1
+    ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p {exit 0} END {exit 1}'
+}
 
 setup_tls() {
     case "$TLS_MODE" in
@@ -957,7 +963,7 @@ validate_input() {
         ADMIN_PASS="$(rand_pass)"
         GENERATED_PASS=1
         [[ ${#ADMIN_PASS} -ge 12 ]] || die "Could not generate an admin password"
-        warn "No password given — generated one (shown at the end)"
+        info "No password given — generated one (shown at the end)"
     fi
     validate_admin_password "$ADMIN_PASS"
     if [[ -n "$PATHPREFIX" ]]; then
@@ -1012,7 +1018,7 @@ wizard() {
     pc="$(ask "Port choice" "1")"
     case "${pc:-1}" in
         2) PORT="$(ask "Port" "${PORT:-$DEFAULT_PORT}")" ;;
-        3) PORT="$(shuf -i 1024-62000 -n 1 2>/dev/null || echo "$DEFAULT_PORT")" ;;
+        3) if command -v shuf >/dev/null 2>&1; then PORT="$(shuf -i 1024-62000 -n 1)"; else PORT="$DEFAULT_PORT"; fi ;;
         *) : "${PORT:=$DEFAULT_PORT}" ;;
     esac
     is_port "$PORT" || die "Invalid port: '$PORT'"

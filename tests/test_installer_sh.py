@@ -739,3 +739,27 @@ def test_candidate_version_reads_inside_container_for_docker():
     source = _extract_function("candidate_version")
     assert "docker exec ovmanager" in source
     assert "backend.version" in source
+
+
+def test_installer_design_language_matches_node():
+    """Anti-divergence: the panel installer shares the node's menu/card
+    language. The node suite pins the same list — update both together."""
+    content = INSTALLER_PATH.read_text(encoding="utf-8")
+    for token in (
+        "Setup${NC}",
+        "1.${NC} Install",
+        "2.${NC} Install with Docker",
+        "0.${NC} Exit",
+        "Cancelled. No changes were made.",
+        "installer${NC}",
+        "up and running in a few minutes",
+        "Step 1/4",
+        "verified release",
+        "Ready — save this login",
+    ):
+        assert token in content, f"design drift: {token}"
+    for retired in (
+        "How do you want to install?",
+        "Choose every option yourself",
+    ):
+        assert retired not in content, f"retired wording back: {retired}"
