@@ -128,7 +128,7 @@ const TlsSection = () => {
   const refreshStatus = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const res = await apiClient.get('/tls/status');
+      const res = await apiClient.get('/https/status');
       const env = res.data || {};
       setStatus(env.data || null);
       setSummary(env.msg || '');
@@ -185,7 +185,7 @@ const TlsSection = () => {
     setArea('restart', null);
     setRestarting(true);
     try {
-      const res = await apiClient.post('/tls/restart', {}, { timeout: 20000 });
+      const res = await apiClient.post('/https/restart', {}, { timeout: 20000 });
       const env = res.data || {};
       if (env.success === false) {
         setRestarting(false);
@@ -249,7 +249,7 @@ const TlsSection = () => {
       const form = new FormData();
       form.append('key', keyFile);
       form.append('cert', certFile);
-      const res = await apiClient.post('/tls/upload', form, { timeout: 60000 });
+      const res = await apiClient.post('/https/existing', form, { timeout: 60000 });
       const env = res.data || {};
       if (env.success === false) {
         setArea('upload', { tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
@@ -274,7 +274,7 @@ const TlsSection = () => {
     setArea('selfSigned', null);
     setArea('restart', null);
     try {
-      const res = await apiClient.post('/tls/self-signed', {}, { timeout: 60000 });
+      const res = await apiClient.post('/https/temporary', {}, { timeout: 60000 });
       const env = res.data || {};
       if (env.success === false) {
         setArea('selfSigned', { tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
@@ -293,7 +293,7 @@ const TlsSection = () => {
   const askSelfSigned = () => askConfirm(
     t('settingsTlsSelfSignedConfirmTitle', 'Replace the current certificate?'),
     t('settingsTlsSelfSignedConfirm', 'A new self-signed certificate will replace the current one. Browsers will warn that the connection is not trusted until you accept it manually. Continue?'),
-    t('settingsTlsSelfSignedButton', 'Generate self-signed certificate'),
+    t('settingsTlsSelfSignedButton', 'Generate temporary certificate'),
     doSelfSigned,
   );
 
@@ -303,7 +303,7 @@ const TlsSection = () => {
     setArea('restart', null);
     try {
       const payload = useIp ? { use_ip: true } : { domain: domain.trim(), email: email.trim() };
-      const res = await apiClient.post('/tls/renew', payload, { timeout: RENEW_TIMEOUT_MS });
+      const res = await apiClient.post('/https/automatic', payload, { timeout: RENEW_TIMEOUT_MS });
       const env = res.data || {};
       if (env.success === false) {
         setArea('renew', { tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
@@ -327,7 +327,7 @@ const TlsSection = () => {
     return (
       <ErrorState
         title={t('settingsLoadError', 'Failed to load settings')}
-        message={t('settingsTlsLoadError', 'Could not read the TLS status.')}
+        message={t('settingsTlsLoadError', 'Could not read the HTTPS certificate status.')}
         onRetry={() => refreshStatus()}
         retryLabel={t('retry', 'Retry')}
       />
@@ -352,7 +352,7 @@ const TlsSection = () => {
 
   return (
     <div className="sp-cards">
-      <Card title={t('settingsTlsCard', 'Panel Certificate (TLS)')} icon={<FiLock aria-hidden="true" />}>
+      <Card title={t('settingsTlsCard', 'HTTPS Certificate')} icon={<FiLock aria-hidden="true" />}>
         <div className="ts-status-row">
           <p className="ts-summary">
             {summary || t('settingsTlsStatusUnknown', 'Certificate status is not available.')}
@@ -445,7 +445,7 @@ const TlsSection = () => {
         )}
       </Card>
 
-      <Card title={t('settingsTlsUploadTitle', 'Upload Certificate')} icon={<FiUpload aria-hidden="true" />}>
+      <Card title={t('settingsTlsUploadTitle', 'Use Existing Certificate')} icon={<FiUpload aria-hidden="true" />}>
         <p className="ts-hint">
           {t('settingsTlsUploadHint', 'Upload the private key and its certificate as PEM files (.pem, .key, .crt or .cer, each under 1 MB). The key must match the certificate, and the certificate must not be expired.')}
         </p>
@@ -485,7 +485,7 @@ const TlsSection = () => {
         {feedback.upload?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
       </Card>
 
-      <Card title={t('settingsTlsSelfSignedTitle', 'Self-signed Certificate')} icon={<FiShield aria-hidden="true" />}>
+      <Card title={t('settingsTlsSelfSignedTitle', 'Temporary Certificate')} icon={<FiShield aria-hidden="true" />}>
         <p className="ts-hint">
           {t('settingsTlsSelfSignedHint', "Creates a new certificate valid for 10 years for this server's primary IP. Because no public authority signs it, browsers show a security warning until you accept it.")}
         </p>
@@ -498,14 +498,14 @@ const TlsSection = () => {
             disabled={restarting || (busy !== '' && busy !== 'selfSigned')}
             onClick={askSelfSigned}
           >
-            {t('settingsTlsSelfSignedButton', 'Generate self-signed certificate')}
+            {t('settingsTlsSelfSignedButton', 'Generate temporary certificate')}
           </Button>
         </div>
         {feedback.selfSigned && <Notice tone={feedback.selfSigned.tone}>{feedback.selfSigned.text}</Notice>}
         {feedback.selfSigned?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
       </Card>
 
-      <Card title={t('settingsTlsLetsEncryptTitle', "Let's Encrypt Certificate")} icon={<FiGlobe aria-hidden="true" />}>
+      <Card title={t('settingsTlsLetsEncryptTitle', "Automatic Certificate")} icon={<FiGlobe aria-hidden="true" />}>
         <p className="ts-hint">
           {t('settingsTlsLetsEncryptHint', 'Requests a free, trusted certificate. The domain must already point to this server, and port 80 must be reachable from the internet. This can take up to two minutes.')}
         </p>

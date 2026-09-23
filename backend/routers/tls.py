@@ -22,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -39,13 +40,17 @@ from backend.data_paths import DATA_DIR
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
-router = APIRouter(prefix="/tls", tags=["TLS"])
+# `/https` is the beginner-facing namespace. `/tls` remains a compatibility
+# surface for existing clients and installations.
+router = APIRouter(prefix="/tls", tags=["HTTPS"])
+https_router = APIRouter(prefix="/https", tags=["HTTPS"])
 
 ACME_SH = Path.home() / ".acme.sh" / "acme.sh"
 
 MAX_TLS_FILE_SIZE = 1024 * 1024  # 1 MB per uploaded file
 ACME_ISSUE_TIMEOUT = 180
 ACME_INSTALL_TIMEOUT = 60
+_CERTIFICATE_LOCK = threading.Lock()
 
 RESTART_HINT = (
     "Restart the panel to use the new certificate: "
@@ -119,11 +124,44 @@ def _write_meta(mode: str) -> None:
         pass
 
 
-def _write_managed_files(key_pem: bytes, cert_pem: bytes, mode: str) -> None:
-    _ensure_tls_dir()
-    _atomic_write(_key_path(), key_pem, 0o600)
-    _atomic_write(_cert_path(), cert_pem, 0o644)
-    _write_meta(mode)
+def _write_managed_files(key_pem: bytes, cert_pem: bytes, mode: str) -> x509.Certificate:
+    """Validate and transactionally activate a certificate pair.
+
+    The previous pair is retained and restored if either active-file write or
+    metadata update fails. The process keeps serving its already-loaded pair
+    until an explicit restart, so no request can observe a half-written pair.
+    """
+    _, parsed = _validate_pair(key_pem, cert_pem)
+    with _CERTIFICATE_LOCK:
+        _ensure_tls_dir()
+        old_key = _key_path().read_bytes() if _key_path().is_file() else None
+        old_cert = _cert_path().read_bytes() if _cert_path().is_file() else None
+        old_meta = _meta_path().read_bytes() if _meta_path().is_file() else None
+        try:
+            _atomic_write(_key_path(), key_pem, 0o600)
+            _atomic_write(_cert_path(), cert_pem, 0o644)
+            # Re-read the actual active files, not the caller's buffers.
+            _validate_pair(_key_path().read_bytes(), _cert_path().read_bytes())
+            _write_meta(mode)
+            if old_key:
+                _atomic_write(_tls_dir() / "previous-privkey.pem", old_key, 0o600)
+            if old_cert:
+                _atomic_write(_tls_dir() / "previous-fullchain.pem", old_cert, 0o644)
+        except Exception:
+            if old_key is None:
+                _key_path().unlink(missing_ok=True)
+            else:
+                _atomic_write(_key_path(), old_key, 0o600)
+            if old_cert is None:
+                _cert_path().unlink(missing_ok=True)
+            else:
+                _atomic_write(_cert_path(), old_cert, 0o644)
+            if old_meta is None:
+                _meta_path().unlink(missing_ok=True)
+            else:
+                _atomic_write(_meta_path(), old_meta, 0o644)
+            raise
+        return parsed
 
 
 def _load_certificate(path: Path) -> x509.Certificate | None:
@@ -170,18 +208,38 @@ def _status_payload(mode: str, source: str | None, cert_path: str | None, cert: 
     expires_days = None
     subject = None
     issued_by = None
+    names: list[str] = []
+    fingerprint = None
+    valid_from = None
+    expires_at = None
     if cert is not None:
         expires_days = (cert.not_valid_after_utc - datetime.now(UTC)).days
         subject = cert.subject.rfc4514_string()
         issued_by = _classify_issuer(cert)
+        valid_from = cert.not_valid_before_utc.isoformat()
+        expires_at = cert.not_valid_after_utc.isoformat()
+        fingerprint = cert.fingerprint(hashes.SHA256()).hex(":").upper()
+        try:
+            san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            names = [str(value) for value in san.get_values_for_type(x509.DNSName)]
+            names += [str(value) for value in san.get_values_for_type(x509.IPAddress)]
+        except x509.ExtensionNotFound:
+            common_names = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            names = [common_names[0].value] if common_names else []
     return {
         "mode": mode,
         "source": source,
         "cert_path": cert_path,
         "expires_days": expires_days,
+        "expires_at": expires_at,
+        "valid_from": valid_from,
         "subject": subject,
+        "names": names,
+        "fingerprint_sha256": fingerprint,
         "issued_by": issued_by,
         "restart_required": _restart_required(cert_path),
+        "previous_available": (_tls_dir() / "previous-privkey.pem").is_file()
+        and (_tls_dir() / "previous-fullchain.pem").is_file(),
     }
 
 
@@ -279,7 +337,11 @@ def _validate_pair(key_bytes: bytes, cert_bytes: bytes) -> tuple[Any, x509.Certi
     )
     if key_public != cert_public:
         raise ValueError("The private key does not match the certificate. Upload the key that belongs to this certificate.")
-    if cert.not_valid_after_utc <= datetime.now(UTC):
+    now = datetime.now(UTC)
+    if cert.not_valid_before_utc > now + timedelta(minutes=5):
+        starts_on = cert.not_valid_before_utc.isoformat()
+        raise ValueError(f"The certificate is not valid yet (starts {starts_on}). Check the server clock.")
+    if cert.not_valid_after_utc <= now:
         expired_on = cert.not_valid_after_utc.date().isoformat()
         raise ValueError(f"The certificate expired on {expired_on}. Upload a renewed certificate.")
     return private_key, cert
@@ -317,6 +379,22 @@ async def upload_certificate(
 
 
 # ── Self-signed ────────────────────────────────────────────────────────────
+
+
+def _certificate_matches_name(cert: x509.Certificate, expected: str) -> bool:
+    """Return whether SAN (or legacy CN fallback) covers a domain/IP exactly."""
+    try:
+        expected_ip = ipaddress.ip_address(expected)
+    except ValueError:
+        expected_ip = None
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        if expected_ip is not None:
+            return expected_ip in san.get_values_for_type(x509.IPAddress)
+        return expected.lower() in {name.lower() for name in san.get_values_for_type(x509.DNSName)}
+    except x509.ExtensionNotFound:
+        common_names = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        return bool(common_names and common_names[0].value.lower() == expected.lower())
 
 
 def _detect_primary_ip() -> str:
@@ -438,7 +516,18 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             msg="Add the domain name to request a Let's Encrypt certificate, or select the IP-address option.",
             data=None,
         )
-    if len(domain) > 253 or not _DOMAIN_RE.fullmatch(domain):
+    if use_ip:
+        try:
+            address = ipaddress.ip_address(domain)
+        except ValueError:
+            return ResponseModel(success=False, msg="Could not detect a valid server IP address.", data=None)
+        if not address.is_global:
+            return ResponseModel(
+                success=False,
+                msg="Automatic IP certificates require a publicly routable server IP.",
+                data=None,
+            )
+    elif len(domain) > 253 or not _DOMAIN_RE.fullmatch(domain):
         return ResponseModel(
             success=False,
             msg="That domain name is not valid. Use letters, digits, dots and hyphens only.",
@@ -505,10 +594,17 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             data={"restart_required": False},
         )
 
-    install_args = ["--install-cert", "-d", domain, "--key-file", str(_key_path()), "--fullchain-file", str(_cert_path())]
+    # acme.sh installs into private staging first. It never writes directly to
+    # the active pair; validation and transactional activation happen below.
+    _ensure_tls_dir()
+    staging = Path(tempfile.mkdtemp(prefix=".acme-candidate-", dir=_tls_dir()))
+    staged_key = staging / "privkey.pem"
+    staged_cert = staging / "fullchain.pem"
+    install_args = ["--install-cert", "-d", domain, "--key-file", str(staged_key), "--fullchain-file", str(staged_cert)]
     try:
         install = _run_acme(install_args, ACME_INSTALL_TIMEOUT)
     except subprocess.TimeoutExpired:
+        shutil.rmtree(staging, ignore_errors=True)
         log_event(None, "tls.renew", actor=actor, detail=f"timeout installing for {domain}")
         return ResponseModel(
             success=False,
@@ -516,9 +612,11 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             data={"restart_required": False},
         )
     except OSError as exc:
+        shutil.rmtree(staging, ignore_errors=True)
         return ResponseModel(success=False, msg=f"Could not run acme.sh: {exc}", data={"restart_required": False})
     if install.returncode != 0:
         reason = _last_output_line(install)
+        shutil.rmtree(staging, ignore_errors=True)
         log_event(None, "tls.renew", actor=actor, detail=f"install failed for {domain}: {reason}")
         return ResponseModel(
             success=False,
@@ -527,18 +625,21 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
         )
 
     try:
-        os.chmod(_key_path(), 0o600)
-        os.chmod(_cert_path(), 0o644)
-    except OSError:
-        pass
-    parsed = _load_certificate(_cert_path())
-    if parsed is None:
+        key_pem = staged_key.read_bytes()
+        cert_pem = staged_cert.read_bytes()
+        _, candidate_cert = _validate_pair(key_pem, cert_pem)
+        if not _certificate_matches_name(candidate_cert, domain):
+            raise ValueError(f"issued certificate does not cover {domain}")
+        parsed = _write_managed_files(key_pem, cert_pem, "lets-encrypt")
+    except Exception as exc:
+        log_event(None, "tls.renew", actor=actor, detail=f"candidate rejected for {domain}: {type(exc).__name__}")
         return ResponseModel(
             success=False,
-            msg="acme.sh reported success but the installed certificate could not be read. Try again or upload it manually.",
-            data={"restart_required": False},
+            msg=f"The issued certificate could not be activated; the previous certificate is still active: {exc}",
+            data={"restart_required": False, "rolled_back": True},
         )
-    _write_meta("lets-encrypt")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     log_event(None, "tls.renew", actor=actor, detail=f"Let's Encrypt certificate renewed for {domain}")
     return ResponseModel(
         success=True,
@@ -548,6 +649,30 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             "cert_path": str(_cert_path()),
             "key_path": str(_key_path()),
             "domain": domain,
+            "expires_days": (parsed.not_valid_after_utc - datetime.now(UTC)).days,
+        },
+    )
+
+
+@router.post("/rollback", response_model=ResponseModel)
+def rollback_certificate(user: dict = Depends(require_owner)):
+    """Restore the certificate pair retained before the last activation."""
+    previous_key = _tls_dir() / "previous-privkey.pem"
+    previous_cert = _tls_dir() / "previous-fullchain.pem"
+    if not previous_key.is_file() or not previous_cert.is_file():
+        return ResponseModel(success=False, msg="No previous HTTPS certificate is available.", data=None)
+    try:
+        parsed = _write_managed_files(previous_key.read_bytes(), previous_cert.read_bytes(), "rollback")
+    except Exception as exc:
+        log_event(None, "tls.rollback", actor=user.get("username"), detail=f"failed: {type(exc).__name__}")
+        return ResponseModel(success=False, msg=f"Could not restore the previous certificate: {exc}", data=None)
+    log_event(None, "tls.rollback", actor=user.get("username"), detail="previous certificate restored")
+    return ResponseModel(
+        success=True,
+        msg=f"Previous certificate restored. {RESTART_HINT}",
+        data={
+            "restart_required": True,
+            "rolled_back": True,
             "expires_days": (parsed.not_valid_after_utc - datetime.now(UTC)).days,
         },
     )
@@ -625,3 +750,12 @@ def restart_panel(user: dict = Depends(require_owner)):
         msg="Restarting the panel now. This page will disconnect and come back in a few seconds.",
         data={"restart_required": True, "restarted": True, "command": command},
     )
+
+# Beginner-facing HTTPS aliases. Keep the original /tls routes as a stable
+# compatibility surface while new UI and CLI use plain-language names.
+https_router.add_api_route("/status", tls_status, methods=["GET"], response_model=ResponseModel)
+https_router.add_api_route("/existing", upload_certificate, methods=["POST"], response_model=ResponseModel)
+https_router.add_api_route("/temporary", generate_self_signed, methods=["POST"], response_model=ResponseModel)
+https_router.add_api_route("/automatic", renew_certificate, methods=["POST"], response_model=ResponseModel)
+https_router.add_api_route("/rollback", rollback_certificate, methods=["POST"], response_model=ResponseModel)
+https_router.add_api_route("/restart", restart_panel, methods=["POST"], response_model=ResponseModel)

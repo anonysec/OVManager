@@ -148,6 +148,27 @@ def update_status(user: dict = Depends(require_owner)):
     return ResponseModel(success=True, msg=note or "Update status", data=data)
 
 
+@router.get("/operation", response_model=ResponseModel)
+def update_operation(user: dict = Depends(require_owner)):
+    """Return the persisted host-side update transaction state."""
+    state_path = DATA_DIR / "update-state.json"
+    if not state_path.is_file():
+        return ResponseModel(success=True, msg="No update transaction recorded", data=None)
+    try:
+        import json
+
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ResponseModel(success=False, msg="The update state file is unreadable", data=None)
+    allowed = {
+        key: data.get(key)
+        for key in ("phase", "from_version", "to_version", "safety_backup", "updated_at", "pid")
+    }
+    allowed["maintenance"] = (DATA_DIR / "update-maintenance").is_file()
+    allowed["finished"] = data.get("phase") in {"committed", "failed_over"}
+    return ResponseModel(success=True, msg="Update transaction state", data=allowed)
+
+
 def _start_native_update(install_sh: Path, user: dict) -> ResponseModel:
     """Detach ``bash <install_sh> update`` and return immediately."""
     log_path = DATA_DIR / _UPDATE_LOG_NAME

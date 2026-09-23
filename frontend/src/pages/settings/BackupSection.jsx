@@ -57,6 +57,8 @@ const BackupSection = () => {
   const [autoTime, setAutoTime] = useState(DEFAULT_TIME);
   const [autoKeep, setAutoKeep] = useState('50');
   const [offsiteTarget, setOffsiteTarget] = useState('');
+  const [telegramBackup, setTelegramBackup] = useState(false);
+  const [telegramBackupAvailable, setTelegramBackupAvailable] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMsg, setAutoMsg] = useState(null);
 
@@ -76,6 +78,8 @@ const BackupSection = () => {
         if (typeof d.offsite_backup_target === 'string') {
           setOffsiteTarget(d.offsite_backup_target);
         }
+        setTelegramBackup(d.telegram_backup_enabled === true);
+        setTelegramBackupAvailable(d.telegram_backup_available === true);
       })
       .catch(() => { /* keep the defaults; the card still renders */ });
     return () => { cancelled = true; };
@@ -91,12 +95,15 @@ const BackupSection = () => {
         auto_backup_time: autoTime || DEFAULT_TIME,
         auto_backup_keep: keep,
         offsite_backup_target: offsiteTarget.trim(),
+        telegram_backup_enabled: telegramBackup,
       });
       if (r?.data?.success === false) {
         setAutoMsg({ type: 'error', text: r.data?.msg || t('error', 'Failed') });
       } else {
         setAutoKeep(String(keep));
         setOffsiteTarget((r?.data?.data?.offsite_backup_target ?? offsiteTarget.trim()));
+        setTelegramBackup(r?.data?.data?.telegram_backup_enabled === true);
+        setTelegramBackupAvailable(r?.data?.data?.telegram_backup_available === true);
         setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
       }
     } catch (e) {
@@ -131,15 +138,15 @@ const BackupSection = () => {
     try {
       const r = await apiClient.get('/maintenance/backup/download', { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement('a'); a.href = url; a.download = backups[0]?.name || 'ovmanager-backup.db';
+      const a = document.createElement('a'); a.href = url; a.download = backups[0]?.name || 'ovmanager-backup.ovmbak';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } catch { addToast(t('error', 'Download failed'), 'error'); }
   };
 
   const doRestore = async () => {
     if (!restoreFile) return;
-    if (!restoreFile.name.endsWith('.db')) {
-      addToast(t('backupMustBeDb', 'Backup file must be a .db file.'), 'error');
+    if (!restoreFile.name.endsWith('.ovmbak') && !restoreFile.name.endsWith('.db')) {
+      addToast(t('backupMustBeDb', 'Backup file must be an .ovmbak bundle or legacy .db file.'), 'error');
       return;
     }
     setBusy('restore');
@@ -161,7 +168,7 @@ const BackupSection = () => {
     setConfirm({
       open: true,
       title: t('restoreButton', 'Restore'),
-      message: t('confirmRestoreFile', 'Restore from "{{name}}"? This will overwrite current data.', { name: restoreFile.name }),
+      message: t('confirmRestoreFile', 'Restore from "{{name}}"? OVManager will verify it and create a safety backup before replacing current data.', { name: restoreFile.name }),
       onConfirm: doRestore,
     });
   };
@@ -192,6 +199,8 @@ const BackupSection = () => {
               <div key={b.name} className="sp-backup-row">
                 <FiDatabase size={13} aria-hidden="true" />
                 <span className="sp-backup-name">{b.name}</span>
+                {b.verified === true && <span className="sp-backup-size">{t('backupVerified', 'Verified')}</span>}
+                {b.verified === false && <span className="sp-backup-size">{t('backupInvalid', 'Invalid')}</span>}
                 {b.size && <span className="sp-backup-size">{formatBytes(b.size)}</span>}
               </div>
             ))}
@@ -266,6 +275,26 @@ const BackupSection = () => {
           />
         </Field>
 
+        <Field
+          label={t('telegramBackup', 'Encrypted Telegram copy')}
+          hint={telegramBackupAvailable
+            ? t('telegramBackupHint', 'Send each scheduled backup to the configured owner chat after encrypting it on this server. Keep BACKUP_ENCRYPT_KEY somewhere outside this server for disaster recovery.')
+            : t('telegramBackupUnavailable', 'Add BACKUP_ENCRYPT_KEY to the server configuration before enabling Telegram backups.')}
+          horizontal
+          inputId="backup-telegram-enabled"
+        >
+          <label className="sp-toggle">
+            <input
+              id="backup-telegram-enabled"
+              type="checkbox"
+              checked={telegramBackup}
+              disabled={autoSaving || !telegramBackupAvailable}
+              onChange={(e) => setTelegramBackup(e.target.checked)}
+            />
+            <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
+          </label>
+        </Field>
+
         {newestAge && (
           <p className="sp-hint sp-mt-12">
             {t('backupAutoNewest', 'Newest backup: {{name}} ({{age}})', { name: newestBackup.name, age: newestAge })}
@@ -286,10 +315,10 @@ const BackupSection = () => {
       </Card>
 
       <Card title={t('restoreSection', 'Restore from File')} icon={FiArchive}>
-        <p className="sp-hint sp-mb-12">{t('restoreHint', 'Select a .db backup file to restore. This overwrites current data and asks for confirmation.')}</p>
+        <p className="sp-hint sp-mb-12">{t('restoreHint', 'Select an .ovmbak bundle or legacy .db backup. This overwrites current data and asks for confirmation.')}</p>
         <div className="sp-field">
           <label className="sr-only" htmlFor="sp-restore-file">{t('selectBackupFile', 'Select backup file')}</label>
-          <input id="sp-restore-file" type="file" accept=".db" onChange={e => setRestoreFile(e.target.files?.[0] || null)} className="sp-file-input" aria-label={t('selectBackupFile', 'Select backup file')} />
+          <input id="sp-restore-file" type="file" accept=".ovmbak,.db" onChange={e => setRestoreFile(e.target.files?.[0] || null)} className="sp-file-input" aria-label={t('selectBackupFile', 'Select backup file')} />
         </div>
         <button className="btn btn-sm" disabled={!restoreFile || !!busy} aria-busy={busy === 'restore'} onClick={askRestore}>
           {busy === 'restore' ? <span className="button-spinner" aria-hidden="true" /> : <><FiRefreshCw size={13} aria-hidden="true" /> {t('restoreButton', 'Restore')}</>}

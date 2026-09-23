@@ -4,6 +4,8 @@
 import logging
 import os
 import sqlite3
+import tempfile
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from shutil import copy2
@@ -11,8 +13,9 @@ from shutil import copy2
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
+from sqlalchemy import create_engine
 from sqlalchemy import text as _text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
@@ -24,6 +27,13 @@ from backend.node.task import (
     sync_all_user_limits,
 )
 from backend.operations.audit import log_event
+from backend.operations.backup_bundle import (
+    BUNDLE_SUFFIX,
+    BackupBundleError,
+    create_bundle,
+    extract_database,
+    verify_bundle,
+)
 from backend.schema.output import ResponseModel
 
 logger = logging.getLogger(__name__)
@@ -36,9 +46,16 @@ DB_DIR = DATA_DIR
 DB_PATH = DB_DIR / "ovmanager.db"
 BACKUP_DIR = DB_DIR / "backups"
 _MAX_BACKUPS = 50  # keep at most N backups to prevent unbounded growth
+_maintenance_lock = threading.RLock()
 
 
-def create_panel_backup(keep: int | None = None) -> Path | None:
+def create_panel_backup(keep: int | None = None, *, label: str = "backup") -> Path | None:
+    """Serialize backup creation with restore/update-sensitive data work."""
+    with _maintenance_lock:
+        return _create_panel_backup_unlocked(keep, label=label)
+
+
+def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "backup") -> Path | None:
     """Create a timestamped panel database backup and prune old ones.
 
     Shared by the owner-only POST route and the scheduled auto-backup job.
@@ -55,15 +72,27 @@ def create_panel_backup(keep: int | None = None) -> Path | None:
 
     max_backups = _MAX_BACKUPS if keep is None else max(1, int(keep))
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    backup_path = BACKUP_DIR / f"ovmanager_backup_{ts}.db"
     with engine.connect() as conn:
         conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
         conn.commit()
-    _sqlite_backup(str(DB_PATH), str(backup_path))
-    # Prune old backups — keep only the most recent ``max_backups``
+
+    # Snapshot SQLite first, then package and verify it. The .part database is
+    # never visible to listing/download/retention and is removed on every path.
+    fd, raw_snapshot = tempfile.mkstemp(prefix=".ovmanager-snapshot-", suffix=".db", dir=BACKUP_DIR)
+    os.close(fd)
+    snapshot = Path(raw_snapshot)
+    os.chmod(snapshot, 0o600)
+    try:
+        _sqlite_backup(str(DB_PATH), str(snapshot))
+        backup_path = create_bundle(snapshot, BACKUP_DIR, label=label)
+    finally:
+        snapshot.unlink(missing_ok=True)
+
+    # Prune only after the new bundle has passed full verification and was
+    # atomically published. Legacy .db files remain available for restore but
+    # are no longer created or counted by the new retention policy.
     all_backups = sorted(
-        BACKUP_DIR.glob("ovmanager_backup_*.db"),
+        BACKUP_DIR.glob(f"ovmanager-{label}-*{BUNDLE_SUFFIX}"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -103,18 +132,25 @@ def backup_database(user: dict = Depends(require_owner)):
         return ResponseModel(success=False, msg=f"Backup failed: {e}", data=None)
 
 
-@router.get("/backup/download", response_class=FileResponse)
-async def download_backup(user: dict = Depends(require_owner)):
-    """Download the latest backup as a .db file."""
-
+def _backup_files() -> list[Path]:
     if not BACKUP_DIR.exists():
-        raise HTTPException(status_code=404, detail="No backups found")
-
-    backups = sorted(
-        (p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"),
+        return []
+    return sorted(
+        (
+            p
+            for p in BACKUP_DIR.iterdir()
+            if p.is_file() and (p.name.endswith(BUNDLE_SUFFIX) or p.suffix == ".db") and not p.name.startswith("restore_")
+        ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
+
+
+@router.get("/backup/download", response_class=FileResponse)
+async def download_backup(user: dict = Depends(require_owner)):
+    """Download the latest versioned bundle (or a legacy .db backup)."""
+
+    backups = _backup_files()
     if not backups:
         raise HTTPException(status_code=404, detail="No backups found")
 
@@ -130,24 +166,64 @@ async def download_backup(user: dict = Depends(require_owner)):
 async def list_backups(user: dict = Depends(require_owner)):
     """List all available backups."""
 
-    if not BACKUP_DIR.exists():
+    backups = _backup_files()
+    if not backups:
         return ResponseModel(success=True, msg="No backups", data=[])
 
-    backups = sorted(
-        (p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
     files = []
     for b in backups:
-        files.append(
-            {
-                "name": b.name,
-                "size": b.stat().st_size,
-                "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=UTC).isoformat(),
-            }
-        )
+        item = {
+            "name": b.name,
+            "size": b.stat().st_size,
+            "modified": datetime.fromtimestamp(b.stat().st_mtime, tz=UTC).isoformat(),
+            "format": "bundle" if b.name.endswith(BUNDLE_SUFFIX) else "legacy-db",
+            "verified": None,
+        }
+        if b.name.endswith(BUNDLE_SUFFIX):
+            try:
+                manifest = await run_in_threadpool(verify_bundle, b)
+                item.update(
+                    verified=True,
+                    app_version=manifest.get("app_version"),
+                    created_at=manifest.get("created_at"),
+                    format_version=manifest.get("format_version"),
+                )
+            except BackupBundleError as exc:
+                item.update(verified=False, error=str(exc))
+        files.append(item)
     return ResponseModel(success=True, msg="Backups listed", data=files)
+
+
+@router.post("/backup/verify", response_model=ResponseModel)
+async def verify_server_backup(
+    filename: str = Form(...),
+    user: dict = Depends(require_owner),
+):
+    """Re-verify a stored bundle without modifying panel state."""
+
+    safe_name = _safe_filename(filename)
+    if not safe_name or safe_name != filename or not safe_name.endswith(BUNDLE_SUFFIX):
+        return ResponseModel(success=False, msg="Select a valid .ovmbak bundle", data=None)
+    path = (BACKUP_DIR / safe_name).resolve()
+    if not path.is_relative_to(BACKUP_DIR.resolve()) or not path.is_file():
+        return ResponseModel(success=False, msg="Backup file not found", data=None)
+    try:
+        manifest = await run_in_threadpool(verify_bundle, path)
+    except BackupBundleError as exc:
+        log_event(None, "maintenance.backup.verify", actor=user.get("username"), detail=f"Verification failed: {safe_name}")
+        return ResponseModel(success=False, msg=f"Backup verification failed: {exc}", data=None)
+    log_event(None, "maintenance.backup.verify", actor=user.get("username"), detail=f"Verified: {safe_name}")
+    return ResponseModel(
+        success=True,
+        msg="Backup verified",
+        data={
+            "filename": safe_name,
+            "verified": True,
+            "app_version": manifest.get("app_version"),
+            "created_at": manifest.get("created_at"),
+            "format_version": manifest.get("format_version"),
+        },
+    )
 
 
 def _safe_filename(name: str | None) -> str:
@@ -207,81 +283,144 @@ def _apply_migrations_after_restore() -> None:
         raise RuntimeError("restored database failed schema verification: " + "; ".join(problems))
 
 
-def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel:
-    """Atomically restore DB from src_path to DB_PATH using os.replace.
+def _stage_restore_candidate(src_path: Path) -> Path:
+    """Copy, migrate, and verify a restore candidate away from the live DB."""
+    from backend.db.migrations import migrate, verify_schema
 
-    Creates a backup of current DB first, rejects writes through the ASGI
-    middleware while swapping, cleans stale WAL/SHM files, and migrates the
-    restored database before reporting success.
-    """
-    from backend.db.engine import restore_lock
-
-    # Validate it's a SQLite DB
+    # Stage beside the live database, not DB_DIR: os.replace below is only
+    # atomic (and only legal) within one filesystem, and DB_PATH may be
+    # relocated (tests, bind mounts, split mounts).
+    fd, raw_candidate = tempfile.mkstemp(prefix=".restore-candidate-", suffix=".db", dir=DB_PATH.parent)
+    os.close(fd)
+    candidate = Path(raw_candidate)
+    os.chmod(candidate, 0o600)
     try:
-        conn = sqlite3.connect(str(src_path))
+        copy2(src_path, candidate)
+        conn = sqlite3.connect(str(candidate))
         try:
-            conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            check = conn.execute("PRAGMA quick_check").fetchone()
+            if not check or check[0] != "ok":
+                raise RuntimeError(f"candidate database integrity failed: {check[0] if check else 'no result'}")
         finally:
             conn.close()
-    except Exception as e:
-        return ResponseModel(success=False, msg=f"Invalid SQLite database: {e}", data=None)
 
-    # Create backup of current DB before restore (in case restore fails or needs rollback)
-    pre_restore_backup = None
-    if DB_PATH.exists():
-        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        pre_restore_backup = BACKUP_DIR / f"pre_restore_backup_{ts}.db"
+        candidate_engine = create_engine(f"sqlite:///{candidate}", connect_args={"check_same_thread": False, "timeout": 30})
+        maker = sessionmaker(bind=candidate_engine, autoflush=False, expire_on_commit=False)
+        session = maker()
         try:
-            # Checkpoint WAL first and verify it succeeded: a busy checkpoint
-            # leaves a non-empty WAL, which we never want to replay against a
-            # swapped database file.
-            with engine.connect() as conn:
-                row = conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()
-                conn.commit()
-            if row and int(row[0]) != 0:
-                logger.warning("Pre-restore WAL checkpoint returned %s (busy)", row[0])
-            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-            _sqlite_backup(str(DB_PATH), str(pre_restore_backup))
-        except Exception as e:
-            logger.warning("Failed to create pre-restore backup: %s", e)
-            pre_restore_backup = None
+            migrate(session)
+            problems = verify_schema(session)
+            if problems:
+                raise RuntimeError("candidate schema verification failed: " + "; ".join(problems))
+        finally:
+            session.close()
+            candidate_engine.dispose()
+        return candidate
+    except Exception:
+        candidate.unlink(missing_ok=True)
+        raise
 
-    restore_lock.set()
-    try:
-        # Close all connections and dispose engine
-        engine.dispose()
 
-        # Atomic replace: write to temp file next to target, then os.replace
-        # This is atomic on POSIX (single filesystem rename)
-        tmp_path = DB_PATH.with_suffix(".db.tmp")
-        copy2(str(src_path), str(tmp_path))
-        os.replace(str(tmp_path), str(DB_PATH))
-        _remove_sqlite_sidecars(DB_PATH)
-        _apply_migrations_after_restore()
+def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel:
+    """Transactionally stage, activate, verify, and roll back a database."""
+    from backend.db.engine import restore_lock
 
-        log_event(
-            None,
-            "maintenance.restore",
-            actor=user.get("username"),
-            detail=detail,
-        )
-        return ResponseModel(success=True, msg="Database restored successfully", data=None)
-    except Exception as e:
-        logger.exception("Restore failed; rolling back to the pre-restore backup")
-        # Try to restore pre-restore backup if it exists
-        if pre_restore_backup and pre_restore_backup.exists():
+    with _maintenance_lock:
+        candidate: Path | None = None
+        rollback_db: Path | None = None
+        safety_bundle: Path | None = None
+        activated = False
+        try:
+            # Migration and schema checks happen against a private candidate,
+            # before the live database or write state is touched.
+            candidate = _stage_restore_candidate(src_path)
+
+            # A verified safety bundle is mandatory. Never continue with a
+            # destructive swap after a warning-only backup failure.
+            safety_bundle = _create_panel_backup_unlocked(keep=10, label="pre-restore")
+            if safety_bundle is None:
+                raise RuntimeError("current database is missing; safety backup could not be created")
+            verify_bundle(safety_bundle)
+            fd, raw_rollback = tempfile.mkstemp(prefix=".restore-rollback-", suffix=".db", dir=DB_DIR)
+            os.close(fd)
+            rollback_db = Path(raw_rollback)
+            extract_database(safety_bundle, rollback_db)
+
+            restore_lock.set()
+            engine.dispose()
+            os.replace(candidate, DB_PATH)
+            candidate = None
+            activated = True
+            os.chmod(DB_PATH, 0o600)
+            _remove_sqlite_sidecars(DB_PATH)
+
+            # Verify through the application's normal migration/schema path as
+            # a final activation check. Writes remain blocked until it passes.
+            _apply_migrations_after_restore()
+            conn = sqlite3.connect(str(DB_PATH))
             try:
-                tmp_path = DB_PATH.with_suffix(".db.tmp")
-                copy2(str(pre_restore_backup), str(tmp_path))
-                os.replace(str(tmp_path), str(DB_PATH))
-                _remove_sqlite_sidecars(DB_PATH)
-                _apply_migrations_after_restore()
-            except Exception:
-                logger.exception("Rollback to the pre-restore backup also failed")
-        return ResponseModel(success=False, msg=f"Restore failed: {e}", data=None)
-    finally:
-        engine.dispose()
-        restore_lock.clear()
+                check = conn.execute("PRAGMA quick_check").fetchone()
+                if not check or check[0] != "ok":
+                    raise RuntimeError(f"activated database integrity failed: {check[0] if check else 'no result'}")
+            finally:
+                conn.close()
+
+            actor = user.get("username") if isinstance(user, dict) else str(user)
+            log_event(None, "maintenance.restore", actor=actor, detail=f"{detail}; safety={safety_bundle.name}")
+            return ResponseModel(
+                success=True,
+                msg="Database restored and verified successfully",
+                data={"safety_backup": safety_bundle.name, "rolled_back": False},
+            )
+        except Exception as exc:
+            logger.exception("Restore failed%s", " after activation; rolling back" if activated else " during staging")
+            rolled_back = False
+            if activated and rollback_db and rollback_db.exists():
+                try:
+                    engine.dispose()
+                    tmp_path = DB_PATH.with_suffix(".db.rollback")
+                    copy2(rollback_db, tmp_path)
+                    os.replace(tmp_path, DB_PATH)
+                    os.chmod(DB_PATH, 0o600)
+                    _remove_sqlite_sidecars(DB_PATH)
+                    _apply_migrations_after_restore()
+                    rolled_back = True
+                except Exception:
+                    logger.exception("Rollback to the verified safety backup also failed")
+            message = f"Invalid SQLite database: {exc}" if isinstance(exc, sqlite3.DatabaseError) else f"Restore failed: {exc}"
+            return ResponseModel(
+                success=False,
+                msg=message,
+                data={
+                    "safety_backup": safety_bundle.name if safety_bundle else None,
+                    "rolled_back": rolled_back,
+                    "data_safe": (not activated) or rolled_back,
+                },
+            )
+        finally:
+            if candidate:
+                candidate.unlink(missing_ok=True)
+            if rollback_db:
+                rollback_db.unlink(missing_ok=True)
+            engine.dispose()
+            restore_lock.clear()
+
+
+def _restore_artifact(src_path: Path, user: dict, detail: str) -> ResponseModel:
+    """Restore a verified bundle or a backward-compatible legacy SQLite file."""
+
+    if src_path.name.endswith(BUNDLE_SUFFIX):
+        fd, raw_db = tempfile.mkstemp(prefix=".ovmanager-restore-", suffix=".db", dir=BACKUP_DIR)
+        os.close(fd)
+        extracted = Path(raw_db)
+        try:
+            extract_database(src_path, extracted)
+            return _atomic_db_restore(extracted, user, detail)
+        except BackupBundleError as exc:
+            return ResponseModel(success=False, msg=f"Invalid backup bundle: {exc}", data=None)
+        finally:
+            extracted.unlink(missing_ok=True)
+    return _atomic_db_restore(src_path, user, detail)
 
 
 @router.post("/backup/restore", response_model=ResponseModel)
@@ -309,17 +448,19 @@ async def restore_backup(
                 return ResponseModel(success=False, msg="Invalid backup path", data=None)
             if not src_path.exists() or not src_path.is_file():
                 return ResponseModel(success=False, msg=f"Backup file '{restore_from_server}' not found", data=None)
-            if not restore_from_server.endswith(".db"):
-                return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
+            if not (restore_from_server.endswith(".db") or restore_from_server.endswith(BUNDLE_SUFFIX)):
+                return ResponseModel(success=False, msg="Backup file must be an .ovmbak bundle or legacy .db file", data=None)
             # Restore is blocking file I/O + engine dispose + migrations: run it
             # off the event loop so health checks and SSE keep flowing.
             return await run_in_threadpool(
-                _atomic_db_restore, src_path, user, f"Restored from server backup: {restore_from_server}"
+                _restore_artifact, src_path, user, f"Restored from server backup: {restore_from_server}"
             )
 
         # Original path: restore from uploaded file
-        if file is None or not file.filename or not file.filename.endswith(".db"):
-            return ResponseModel(success=False, msg="Backup file must be a .db file", data=None)
+        if file is None or not file.filename or not (
+            file.filename.endswith(".db") or file.filename.endswith(BUNDLE_SUFFIX)
+        ):
+            return ResponseModel(success=False, msg="Backup file must be an .ovmbak bundle or legacy .db file", data=None)
 
         # Sanitize filename to prevent path traversal
         safe_name = _safe_filename(file.filename)
@@ -371,7 +512,7 @@ async def restore_backup(
         os.replace(str(tmp_path), str(final_tmp))
         tmp_path = final_tmp
 
-        result = await run_in_threadpool(_atomic_db_restore, tmp_path, user, f"Restored from: {file.filename}")
+        result = await run_in_threadpool(_restore_artifact, tmp_path, user, f"Restored from: {file.filename}")
 
         # Clean up temp file
         tmp_path.unlink(missing_ok=True)
