@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import config
+from backend.data_paths import DATA_DIR
 from backend.db.engine import SessionLocal
 from backend.db.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.db.migrations import migrate
@@ -100,7 +101,10 @@ class SecurityHeadersMiddleware:
         # file. Reads stay available for the UI's progress polling.
         from backend.db.engine import restore_lock
 
-        if restore_lock.is_set() and scope.get("method", "GET") not in ("GET", "HEAD", "OPTIONS"):
+        maintenance_marker = DATA_DIR / "update-maintenance"
+        writes_blocked = restore_lock.is_set() or maintenance_marker.is_file()
+        if writes_blocked and scope.get("method", "GET") not in ("GET", "HEAD", "OPTIONS"):
+            reason = b"Database restore in progress" if restore_lock.is_set() else b"Update verification in progress"
             await send(
                 {
                     "type": "http.response.start",
@@ -111,7 +115,7 @@ class SecurityHeadersMiddleware:
                     ],
                 }
             )
-            await send({"type": "http.response.body", "body": b'{"success":false,"msg":"Database restore in progress"}'})
+            await send({"type": "http.response.body", "body": b'{"success":false,"msg":"' + reason + b'"}'})
             return
 
         # HSTS is meaningful only on HTTPS. Trust the forwarded proto only when
@@ -330,8 +334,15 @@ async def lifespan(app: FastAPI):
         ensure_metrics_tables(_db)
     finally:
         _db.close()
-    start_scheduler()
-    start_bot()
+    # Candidate verification runs with the update marker present. Migrations
+    # above are intentional and covered by the safety backup, but background
+    # jobs and the bot must not race writes into a database that may be rolled
+    # back moments later.
+    if not (DATA_DIR / "update-maintenance").is_file():
+        start_scheduler()
+        start_bot()
+    else:
+        logger.info("Update verification mode: scheduler and bot are paused")
     yield
     # ── Shutdown ─────────────────────────────────────────────────────
     global _scheduler, _bot_process
@@ -538,6 +549,7 @@ async def auto_backup_job():
             enabled = bool(getattr(settings, "auto_backup_enabled", False))
             keep = int(getattr(settings, "auto_backup_keep", 50) or 50)
             offsite_target = getattr(settings, "offsite_backup_target", None) or ""
+            telegram_backup_enabled = bool(getattr(settings, "telegram_backup_enabled", False))
         finally:
             db.close()
 
@@ -568,6 +580,35 @@ async def auto_backup_job():
                 log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy pushed: {backup_path.name}")
             else:
                 log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy failed for {backup_path.name}")
+
+        # Telegram is a separate opt-in destination. The bundle is encrypted
+        # locally with a key unrelated to the bot token before upload.
+        if telegram_backup_enabled:
+            from backend.config import config as panel_config
+            from backend.db import crud
+            from backend.operations.telegram_backup import send_backup_document
+
+            db = SessionLocal()
+            try:
+                settings = crud.get_settings(db)
+                key = panel_config.BACKUP_ENCRYPT_KEY or ""
+                result = await asyncio.to_thread(send_backup_document, backup_path, settings, key)
+            finally:
+                db.close()
+            if result.ok:
+                log_event(
+                    None,
+                    "maintenance.telegram_backup",
+                    actor="auto",
+                    detail=f"Encrypted Telegram copy delivered: {backup_path.name} message={result.message_id}",
+                )
+            else:
+                log_event(
+                    None,
+                    "maintenance.telegram_backup",
+                    actor="auto",
+                    detail=f"Encrypted Telegram copy failed for {backup_path.name}: {result.error}",
+                )
     except Exception:
         logger.exception("Scheduled auto backup job crashed")
 

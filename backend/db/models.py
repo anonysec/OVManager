@@ -122,3 +122,6 @@ class Settings(Base):
     # Optional offsite copy of the newest scheduled backup, pushed with
     # system rsync (fallback scp). Format: "[user@]host:/path".
     offsite_backup_target: Mapped[str] = mapped_column(nullable=True)
+    # Opt-in encrypted delivery of scheduled backup bundles to the configured
+    # Telegram owner chat. Requires BACKUP_ENCRYPT_KEY.
+    telegram_backup_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)

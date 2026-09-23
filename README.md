@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2.7-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.8-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
@@ -24,10 +24,10 @@ respect your provider's ToS and local law.
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
-Answer the menu — **Express** (safe defaults: native, port `2095`, random URL
-path, `admin`, blank password = generated, self-signed TLS) or **Custom** to
-choose everything. Save the green **Ready** card (panel URL + login), log in —
-then follow the built-in setup checklist (node → user → download `.ovpn`).
+Choose **Install** (recommended) or **Install with Docker**. OVManager uses port
+`2095` and generates both the owner password and private panel URL. Save the
+green **Ready** card, log in, then follow the built-in setup checklist (node →
+user → download `.ovpn`). Both generated values can be changed later in the web UI.
 
 Step-by-step with pictures-in-words: [docs/quickstart.md](docs/quickstart.md) ·
 under the hood: [docs/how-it-works.md](docs/how-it-works.md) ·
@@ -47,22 +47,21 @@ never wait on a prompt.
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
-**AI / CI / scripts** (`-y` skips every prompt; `--json` prints the result on stdout):
+**AI / CI / scripts** (`--yes` skips every prompt; `--json` prints the generated result on stdout):
 
 ```bash
-# Native
+# Install
 curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- -y --mode native --admin-pass 'choose-a-long-password'
+  | sudo bash -s -- --yes --json
 
-# Docker
+# Install with Docker
 curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- -y --mode docker --admin-pass 'choose-a-long-password' --json
+  | sudo bash -s -- --docker --yes --json
 ```
 
-Useful flags: `--port 2095` `--path dash` (or `--path root` for `/`) `--tls-self`
-`--tls-le example.com` `--dry-run`. Same values can be set with `OVM_MODE`,
-`OVM_PORT`, `OVM_PATH`, `OVM_ADMIN_USER`, `OVM_ADMIN_PASS`, `OVM_TLS`.
-`CI=true` implies `--yes`. Run the script with `--help` for the full list.
+The password and private URL path are always generated for a fresh recommended
+installation; they are not command-line inputs. `CI=true` implies `--yes`. Run
+the script with `--help` for compatibility and advanced options.
 
 Forks: `OVM_REPO=myorg/OVManager` points source downloads and update
 pulls at your own repo (use your fork's raw `install.sh` URL to install
@@ -173,6 +172,14 @@ What is done instead:
 - The built `index.html` is cached in memory and invalidated by mtime, so
   serving an SPA route is one `stat()` rather than a file read per navigation.
 
-## License
+## Free for personal and commercial use
 
-MIT. See [LICENSE](LICENSE).
+OVManager is licensed under the [MIT License](LICENSE). You may use, modify,
+distribute, host, and sell services built with it without paying this project
+a license fee. There is no license server, paid feature gate, node limit, or
+user limit. Keep the copyright and MIT license notice with copies or substantial
+portions of the software. Third-party infrastructure and components retain
+their own terms.
+
+See [Privacy](PRIVACY.md), [Acceptable use](ACCEPTABLE_USE.md), and
+[third-party licensing](THIRD_PARTY_LICENSES.md).
