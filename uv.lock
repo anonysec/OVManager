@@ -854,7 +854,7 @@ wheels = [
 
 [[package]]
 name = "ovmanager"
-version = "1.2.8"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },

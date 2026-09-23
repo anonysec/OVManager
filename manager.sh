@@ -18,7 +18,7 @@ INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.8"
+VERSION="1.0.0"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 INSTALLER="$INSTALL_DIR/install.sh"
 # Installed command names (same as the installer used).
