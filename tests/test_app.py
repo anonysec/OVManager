@@ -136,3 +136,32 @@ def test_urlpath_empty_serves_root():
         assert response.json()["status"] == "ok"
     finally:
         set_urlpath("")
+
+
+def test_background_jobs_pause_during_candidate_verification(monkeypatch, tmp_path):
+    """With the update-maintenance marker present, lifespan must not start
+    the scheduler or bot (defect class: background writes into a database
+    that may be rolled back moments later)."""
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+    (tmp_path / "update-maintenance").touch()
+    started = []
+    monkeypatch.setattr(app_module, "start_scheduler", lambda: started.append("scheduler"))
+    monkeypatch.setattr(app_module, "start_bot", lambda: started.append("bot"))
+    with TestClient(api):
+        pass
+    assert started == []
+
+
+def test_background_jobs_start_normally_without_marker(monkeypatch, tmp_path):
+    """Without the marker, lifespan starts the scheduler and bot."""
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+    started = []
+    monkeypatch.setattr(app_module, "start_scheduler", lambda: started.append("scheduler"))
+    monkeypatch.setattr(app_module, "start_bot", lambda: started.append("bot"))
+    with TestClient(api):
+        pass
+    assert started == ["scheduler", "bot"]

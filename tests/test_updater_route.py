@@ -302,9 +302,25 @@ def test_run_refuses_when_installer_missing(monkeypatch, tmp_path):
 # ── access control ─────────────────────────────────────────────────────────
 
 
+def test_update_operation_reports_persisted_phase(monkeypatch, tmp_path):
+    import json
+
+    monkeypatch.setattr(updater, "DATA_DIR", tmp_path)
+    (tmp_path / "update-state.json").write_text(
+        json.dumps({"phase": "verifying", "from_version": "1.2.7", "to_version": "1.2.8", "pid": 42})
+    )
+    (tmp_path / "update-maintenance").touch()
+    response = _client().get("/api/updater/operation", headers=_owner_headers())
+    assert response.status_code == 200
+    assert response.json()["data"]["phase"] == "verifying"
+    assert response.json()["data"]["maintenance"] is True
+    assert response.json()["data"]["finished"] is False
+
+
 def test_updater_endpoints_require_auth():
     client = _client()
     assert client.get("/api/updater/status").status_code == 401
+    assert client.get("/api/updater/operation").status_code == 401
     assert client.post("/api/updater/run").status_code == 401
 
 
@@ -315,6 +331,7 @@ def test_updater_endpoints_are_owner_only():
         client = _client()
         headers = _headers(admin, "admin")
         assert client.get("/api/updater/status", headers=headers).status_code == 403
+        assert client.get("/api/updater/operation", headers=headers).status_code == 403
         assert client.post("/api/updater/run", headers=headers).status_code == 403
     finally:
         _cleanup_admin(admin)

@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 VERSION_TABLE = "schema_version"
 
@@ -454,6 +454,14 @@ def _add_offsite_backup_target(db: Session) -> None:
     db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_telegram_backup_enabled(db: Session) -> None:
+    """Add the opt-in encrypted Telegram backup switch (v11)."""
+    if "settings" not in table_names(db) or "telegram_backup_enabled" in column_names(db, "settings"):
+        return
+    column = Base.metadata.tables["settings"].columns["telegram_backup_enabled"]
+    db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -464,6 +472,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (8, "add user tag column", _add_user_tag),
     (9, "add node-down alert flag", _add_notify_node_down),
     (10, "add offsite backup target", _add_offsite_backup_target),
+    (11, "add encrypted Telegram backup setting", _add_telegram_backup_enabled),
 )
 
 

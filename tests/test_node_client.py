@@ -77,3 +77,20 @@ def test_send_retries_once_on_429_then_succeeds(monkeypatch):
     req = NodeRequests(address="10.0.0.9", port=2083, api_key="k", use_tls=False)
     assert req._request("get", "/sync/status") == {"success": True, "data": {}}
     assert len(calls) == 2
+
+
+def test_node_version_compat_policy():
+    """Panel must distinguish node versions: same major is compatible,
+    newer nodes are flagged, other majors and garbage are not compatible."""
+    from backend.node.ops import node_version_compat
+    from backend.version import __version__
+
+    major = __version__.split(".")[0]
+    assert node_version_compat(__version__)["verdict"] == "compatible"
+    assert node_version_compat(f"{major}.0.0")["verdict"] == "compatible"
+    assert node_version_compat("v" + __version__)["verdict"] == "compatible"
+    newer = node_version_compat("9999.0.0")
+    assert newer["verdict"] in ("node-newer", "incompatible"), newer
+    assert node_version_compat("0.0.1")["verdict"] == "incompatible"
+    for bad in (None, "", "not-a-version", "1.x"):
+        assert node_version_compat(bad)["verdict"] == "unknown", bad

@@ -124,7 +124,7 @@ cloud SG) blocks forwarding.
 | `Port 80 is busy — Let's Encrypt standalone needs it` | Stop whatever listens on 80, or use `--tls-self` for now. |
 | `docker compose up failed` | `docker logs ovmanager` — usually a busy port or no disk space. |
 | `No answer on /health` | `journalctl -u ovmanager -f` (native) or `docker logs -f ovmanager`; then `install.sh status`. |
-| `Download … is not a release archive` / `Release checksum mismatch` | Your installer predates the redirect fix (≤1.2.5) — `ovm update` uses the installed copy. Re-bootstrap with the raw one-liner, then `update`; or `update --from-source`. |
+| `Download … is not a release archive` / `Release checksum mismatch` | Your installer predates the redirect fix (≤1.2.5) — `ovm update` uses the installed copy. Re-bootstrap with the raw one-liner, then run `ovm update` again. Production updates accept verified release artifacts only. |
 
 ## Starting over
 

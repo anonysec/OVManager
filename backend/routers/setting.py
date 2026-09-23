@@ -79,6 +79,8 @@ async def get_settings(
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
     # Optional offsite copy target for scheduled backups (scp-style string).
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
+    data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
+    data["telegram_backup_available"] = bool(config.BACKUP_ENCRYPT_KEY)
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
@@ -113,6 +115,8 @@ class BotConfigUpdate(BaseModel):
     auto_backup_keep: int | None = None
     # Optional offsite copy of the newest backup ("[user@]host:/path").
     offsite_backup_target: str | None = None
+    # Encrypted delivery to the configured owner Telegram chat.
+    telegram_backup_enabled: bool | None = None
 
 
 class URLPathUpdate(BaseModel):
@@ -195,6 +199,23 @@ async def update_bot_config(
         except InvalidTarget as exc:
             return ResponseModel(success=False, msg=str(exc), data=None)
 
+    if payload.telegram_backup_enabled:
+        current = crud.get_settings(db)
+        token = payload.bot_token or getattr(current, "bot_token", None)
+        owner_id = payload.owner_telegram_id or getattr(current, "owner_telegram_id", None)
+        if not config.BACKUP_ENCRYPT_KEY:
+            return ResponseModel(
+                success=False,
+                msg="BACKUP_ENCRYPT_KEY is required before Telegram backups can be enabled",
+                data=None,
+            )
+        if not token or not owner_id:
+            return ResponseModel(
+                success=False,
+                msg="Configure the Telegram bot token and owner chat before enabling Telegram backups",
+                data=None,
+            )
+
     kwargs = payload.model_dump(exclude_unset=True)
     try:
         crud.update_bot_config(db, **kwargs)
@@ -216,6 +237,8 @@ async def update_bot_config(
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
+    data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
+    data["telegram_backup_available"] = bool(config.BACKUP_ENCRYPT_KEY)
 
     # Apply a new schedule immediately — no restart required. Imported lazily
     # because backend.app imports the routers (circular otherwise).

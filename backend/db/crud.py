@@ -155,6 +155,19 @@ def get_admin_by_telegram_id(db: Session, tg_id: int):
     return db.query(Admin).filter(Admin.telegram_id == tg_id).first()
 
 
+def decrypt_bot_token(stored: str | None) -> str | None:
+    """Return a configured bot token without ever logging its value."""
+    if not stored:
+        return None
+    if _fernet is None:
+        return stored
+    try:
+        return _fernet.decrypt(stored.encode()).decode()
+    except Exception:
+        logger.warning("Stored Telegram bot token could not be decrypted")
+        return None
+
+
 def update_bot_config(db: Session, **kwargs):
     s = db.query(Settings).first()
     if not s:

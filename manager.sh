@@ -46,6 +46,35 @@ ACTION=""
 YES=0 PURGE=0 JSON=0 FIX=0
 LOGS_ARG=""
 AUTO_BACKUP_ACTION="" BACKUP_TIME="" BACKUP_KEEP=""
+OPERATION_LOCK="${DATA_DIR}/.operation.lock"
+OPERATION_LOCK_HELD=0
+
+operation_begin() {
+    local name="$1" owner=""
+    mkdir -p "$DATA_DIR"
+    if ! mkdir "$OPERATION_LOCK" 2>/dev/null; then
+        owner="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
+        if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+            warn "Removing stale operation lock from process $owner"
+            rm -rf "$OPERATION_LOCK"
+            mkdir "$OPERATION_LOCK" || die "Another maintenance operation is running"
+        else
+            die "Another maintenance operation is running${owner:+ (process $owner)}. Try again later."
+        fi
+    fi
+    printf '%s\n' "$$" > "$OPERATION_LOCK/pid"
+    printf '%s\n' "$name" > "$OPERATION_LOCK/action"
+    chmod 700 "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=1
+}
+
+operation_end() {
+    [[ "$OPERATION_LOCK_HELD" -eq 1 ]] || return 0
+    rm -rf "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=0
+}
+
+trap operation_end EXIT
 
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
@@ -331,22 +360,40 @@ is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
 STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
 
 
-service_action() {  # start|stop|restart
+service_autostart_status() {
+    if is_docker_mode; then
+        local policy
+        policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' ovmanager 2>/dev/null || true)"
+        [[ -n "$policy" && "$policy" != "no" ]] && printf 'enabled' || printf 'disabled'
+    else
+        systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null && printf 'enabled' || printf 'disabled'
+    fi
+}
+
+service_action() {  # start|stop|restart|enable|disable
     if is_docker_mode; then
         command -v docker >/dev/null 2>&1 || die "Docker not found on this host"
-        if [[ "$1" == "restart" ]]; then
-            docker restart -t 10 ovmanager >/dev/null || die "docker restart ovmanager failed"
-        else
-            docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed"
-        fi
+        case "$1" in
+            restart) docker restart -t 10 ovmanager >/dev/null || die "docker restart ovmanager failed" ;;
+            enable)  docker update --restart unless-stopped ovmanager >/dev/null || die "Could not enable automatic start" ;;
+            disable) docker update --restart no ovmanager >/dev/null || die "Could not disable automatic start" ;;
+            start|stop) docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed" ;;
+            *) die "Unknown service action: $1" ;;
+        esac
     else
-        if [[ "$1" == "restart" ]]; then
-            systemctl_bounded restart
-        else
-            systemctl_bounded "$1"
-        fi
+        case "$1" in
+            restart) systemctl_bounded restart ;;
+            enable|disable) systemctl "$1" "$SYSTEMD_SERVICE" >/dev/null || die "Could not $1 automatic start" ;;
+            stop) systemctl_bounded stop ;;
+            start) systemctl start "$SYSTEMD_SERVICE" >/dev/null || die "Could not start $SYSTEMD_SERVICE" ;;
+            *) die "Unknown service action: $1" ;;
+        esac
     fi
-    step "Panel $1: done"
+    case "$1" in
+        enable) step "Automatic start enabled" ;;
+        disable) step "Automatic start disabled (the running panel was not stopped)" ;;
+        *) step "Panel $1: done" ;;
+    esac
 }
 
 restart_service() {
@@ -381,9 +428,22 @@ prune_backups() {
 }
 
 backup_now() {
+    operation_begin backup
     mkdir -p "$DATA_DIR"
-    backup_dir "$DATA_DIR" "panel"
-    prune_backups "${BACKUP_KEEP:-14}"
+    local created="" keep="${BACKUP_KEEP:-14}"
+    if is_docker_mode; then
+        created="$(docker exec ovmanager /app/.venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}); print(p or '')" 2>/dev/null)" \
+            || { operation_end; die "Backup failed — check: docker logs ovmanager"; }
+    else
+        [[ -x "$INSTALL_DIR/.venv/bin/python" ]] || { operation_end; die "Panel Python environment not found"; }
+        created="$(cd "$INSTALL_DIR" && .venv/bin/python -c \
+            "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}); print(p or '')" 2>/dev/null)" \
+            || { operation_end; die "Backup failed — run: ovm doctor"; }
+    fi
+    operation_end
+    [[ -n "$created" ]] || die "Backup skipped because the panel database was not found"
+    step "Verified backup  $created"
 }
 
 # Host-level daily backup: a systemd timer that runs `ovmanager backup`.
@@ -481,7 +541,7 @@ do_tls_menu() {
     cert="$(env_get "$envfile" SSL_CERTFILE)"
     expiry="$(openssl x509 -enddate -noout -in "$cert" 2>/dev/null | cut -d= -f2 || true)"
     line ""
-    line "${B}TLS certificate${NC}"
+    line "${B}HTTPS certificate${NC}"
     kv "Key file"  "${key:-<none>}"
     kv "Cert file" "${cert:-<none>}"
     [[ -n "$expiry" ]] && kv "Expires" "$expiry"
@@ -501,11 +561,13 @@ do_tls_menu() {
            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || { warn "Key/cert files not found"; return 0; } ;;
         0|*) return 0 ;;
     esac
-    setup_tls || return 0
+    operation_begin https-certificate
+    if ! setup_tls; then operation_end; return 0; fi
     env_set "$envfile" SSL_KEYFILE "$TLS_KEY"
     env_set "$envfile" SSL_CERTFILE "$TLS_CERT"
     step "Certificate updated"
     restart_service
+    operation_end
     return 0
 }
 
@@ -533,6 +595,7 @@ do_recovery_menu() {
 # (restart a dead service, prune old backups).
 do_doctor() {
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    [[ "$FIX" -eq 1 ]] && operation_begin doctor-fix
     read_env_port
     : "${PORT:=$DEFAULT_PORT}"
     local problems=0
@@ -556,7 +619,24 @@ do_doctor() {
             restart_service && svc="active" && problems=$((problems - 1)) || true
         fi
     fi
-    # 2. Disk.
+    # 2. Automatic start.
+    local autostart
+    autostart="$(service_autostart_status)"
+    if [[ "$autostart" == "enabled" ]]; then
+        kv "Auto start" "${GR}enabled${NC}"
+    else
+        kv "Auto start" "${YL}disabled${NC}"
+        warn "Fix: ovm enable"
+        problems=$((problems + 1))
+        if [[ "$FIX" -eq 1 ]]; then
+            if [[ "$EUID" -eq 0 ]]; then
+                service_action enable && problems=$((problems - 1)) || true
+            else
+                warn "Automatic start needs root — rerun: sudo ovm doctor --fix"
+            fi
+        fi
+    fi
+    # 3. Disk.
     local disk
     disk="$(df "$DATA_DIR" 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%' || echo 0)"
     if (( disk < 80 )); then
@@ -591,11 +671,11 @@ do_doctor() {
                 kv "Certificate" "${GR}expires in ${days_left}d${NC}"
             elif (( days_left > 0 )); then
                 kv "Certificate" "${YL}expires in ${days_left}d${NC}"
-                warn "Fix: ovm tls"
+                warn "Fix: ovm https"
                 problems=$((problems + 1))
             else
                 kv "Certificate" "${RD}expired${NC}"
-                warn "Fix: ovm tls"
+                warn "Fix: ovm https"
                 problems=$((problems + 1))
             fi
         else
@@ -603,9 +683,35 @@ do_doctor() {
             problems=$((problems + 1))
         fi
     fi
-    # 5. Backup age.
+    # 6. Interrupted update journal / write-block marker. A non-terminal
+    # journal also counts when a crash happened before the marker was flushed.
+    local update_interrupted=0
+    [[ -f "$DATA_DIR/update-maintenance" ]] && update_interrupted=1
+    if [[ "$update_interrupted" -eq 0 && -f "$DATA_DIR/update-state.json" ]]; then
+        python3 - "$DATA_DIR/update-state.json" <<'PY' >/dev/null 2>&1 || update_interrupted=1
+import json, sys
+phase = json.load(open(sys.argv[1])).get("phase")
+raise SystemExit(0 if phase in {"committed", "failed_over"} else 1)
+PY
+    fi
+    if [[ "$update_interrupted" -eq 1 ]]; then
+        kv "Update" "${YL}recovery required${NC}"
+        warn "Fix: ovm recover-update"
+        problems=$((problems + 1))
+        if [[ "$FIX" -eq 1 ]]; then
+            info "Recovering the interrupted update…"
+            if "$INSTALLER" recover-update; then
+                problems=$((problems - 1))
+            else
+                warn "Update recovery needs manual attention"
+            fi
+        fi
+    else
+        kv "Update" "${GR}no interrupted transaction${NC}"
+    fi
+    # 7. Backup age (legacy tarballs and the transactional .ovmbak format).
     local newest age
-    newest="$(ls -t /var/backups/panel-*.tar.gz 2>/dev/null | head -1 || true)"
+    newest="$(ls -t /var/backups/panel-*.tar.gz "$DATA_DIR"/backups/*.ovmbak 2>/dev/null | head -1 || true)"
     if [[ -n "$newest" ]]; then
         age=$(( ($(date +%s) - $(stat -c %Y "$newest" 2>/dev/null || echo 0)) / 86400 ))
         if (( age <= 7 )); then
@@ -620,12 +726,42 @@ do_doctor() {
         warn "Fix: ovm backup"
         problems=$((problems + 1))
     fi
+    # 8. Private file permissions (native only — Docker data belongs to
+    # uid 1000 inside the container, so only report there).
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        local perm_bad=""
+        [[ "$(stat -c %a "$DATA_DIR" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="data dir"
+        [[ ! -d "$DATA_DIR/backups" ]] || [[ "$(stat -c %a "$DATA_DIR/backups" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="backups dir"
+        local pf
+        for pf in "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance; do
+            [[ ! -f "$pf" ]] || [[ "$(stat -c %a "$pf" 2>/dev/null || echo 0)" == "600" ]] || perm_bad="$pf"
+        done
+        if [[ -z "$perm_bad" ]]; then
+            kv "Permissions" "${GR}private${NC}"
+        else
+            kv "Permissions" "${YL}loose ($perm_bad)${NC}"
+            warn "Fix: ovm doctor --fix"
+            problems=$((problems + 1))
+            if [[ "$FIX" -eq 1 ]]; then
+                chmod 700 "$DATA_DIR" 2>/dev/null || true
+                [[ ! -d "$DATA_DIR/backups" ]] || chmod 700 "$DATA_DIR/backups" 2>/dev/null || true
+                chmod 600 "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance 2>/dev/null || true
+                perm_bad=""
+                [[ "$(stat -c %a "$DATA_DIR" 2>/dev/null || echo 0)" == "700" ]] || perm_bad="data dir"
+                for pf in "$DATA_DIR"/ovmanager.db "$DATA_DIR"/update-state.json "$DATA_DIR"/update-maintenance; do
+                    [[ ! -f "$pf" ]] || [[ "$(stat -c %a "$pf" 2>/dev/null || echo 0)" == "600" ]] || perm_bad="$pf"
+                done
+                [[ -z "$perm_bad" ]] && problems=$((problems - 1)) || warn "Some permissions could not be tightened"
+            fi
+        fi
+    fi
     hr
     if (( problems == 0 )); then
         step "Healthy — nothing to fix"
     else
         warn "$problems problem(s) found"
     fi
+    [[ "$FIX" -eq 1 ]] && operation_end
     return 0
 }
 
@@ -669,11 +805,14 @@ usage() {
   USAGE
     ovm                         Interactive numbered menu
     ovm status                  Show panel URL, health and version
-    ovm update                  Update via install.sh (backs up data first)
+    ovm update                  Staged update with automatic failover
+    ovm recover-update          Recover an interrupted update transaction
     ovm restart                 Restart the panel service
+    ovm enable|disable          Enable/disable automatic start
     ovm logs [N|-f]             Last N log lines (default 100), or follow
     ovm backup [--keep N]       Save a data backup now
-    ovm tls                     Show/replace the certificate
+    ovm https                   Show/replace the HTTPS certificate
+    ovm tls                     Compatibility alias for ovm https
     ovm recovery                Login info, owner password, URL path
     ovm reset-password          Set a new owner password, then restart
     ovm doctor [--fix]          Health check (service, disk, cert, backups)
@@ -714,7 +853,7 @@ parse_args() {
             -h|--help) usage ;;
             help) usage ;;
             status) ACTION="status"; shift ;;
-            start|stop|restart) ACTION="$1"; shift ;;
+            start|stop|restart|enable|disable) ACTION="$1"; shift ;;
             logs) ACTION="logs"
                 if [[ $# -ge 2 && ( "$2" == "-f" || "$2" =~ ^[0-9]+$ ) ]]; then
                     LOGS_ARG="$2"; shift 2
@@ -724,13 +863,14 @@ parse_args() {
             backup) ACTION="backup"; shift ;;
             auto-backup) ACTION="auto-backup"; shift
                 if [[ $# -ge 1 && "$1" != -* ]]; then AUTO_BACKUP_ACTION="$1"; shift; fi ;;
-            tls) ACTION="tls"; shift ;;
+            https|tls) ACTION="https"; shift ;;
             recovery) ACTION="recovery"; shift ;;
             reset-password) ACTION="reset-password"; shift ;;
             reset-urlpath) ACTION="reset-urlpath"; shift ;;
             doctor) ACTION="doctor"; shift ;;
             rollback) ACTION="rollback"; shift ;;
             update) ACTION="update"; shift ;;
+            recover-update) ACTION="recover-update"; shift ;;
             uninstall) ACTION="uninstall"; shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
@@ -759,37 +899,67 @@ backup_submenu() {
     done
 }
 
+service_submenu() {
+    while true; do
+        line ""
+        line "${B}Service${NC}"
+        hr
+        kv "Auto start" "$(service_autostart_status)"
+        line ""
+        line "  ${WH}1.${NC} Start"
+        line "  ${WH}2.${NC} Stop"
+        line "  ${WH}3.${NC} Restart"
+        line "  ${WH}4.${NC} Enable automatic start"
+        line "  ${WH}5.${NC} Disable automatic start"
+        line ""
+        line "  ${WH}0.${NC} Back"
+        line ""
+        local c; c="$(ask "Select" "0")"
+        case "${c:-0}" in
+            1) check_root; service_action start ;;
+            2) check_root; confirm_no "Stop OVManager?" && service_action stop ;;
+            3) check_root; service_action restart ;;
+            4) check_root; service_action enable ;;
+            5) check_root; service_action disable ;;
+            0) return 0 ;;
+            *) warn "Choose a number from 0 to 5." ;;
+        esac
+    done
+}
+
 # Grouped numbered menu: full power, one screen, nothing hidden.
 manager_menu() {
     while true; do
         line ""
-        line "${B}ovmanager — panel manager${NC}  ${GY}v${VERSION}${NC}"
-        line "  ${WH}1${NC}) Status"
-        line "  ${WH}2${NC}) Update panel"
-        line "  ${WH}3${NC}) Restart service"
-        line "  ${WH}4${NC}) Login & password"
-        line "  ${WH}5${NC}) Logs"
-        line "  ${WH}6${NC}) Backup"
-        line "  ${WH}7${NC}) TLS certificate"
-        line "  ${WH}8${NC}) Health check (doctor)"
-        line "  ${WH}9${NC}) Roll back update"
-        line "  ${WH}10${NC}) Uninstall panel"
-        line "  ${WH}0${NC}) Exit"
+        line "${B}OVManager${NC}  ${GY}v${VERSION}${NC}"
+        hr
+        line ""
+        line "  ${WH}1.${NC} Status"
+        line "  ${WH}2.${NC} Service"
+        line "  ${WH}3.${NC} Logs"
+        line "  ${WH}4.${NC} Update"
+        line "  ${WH}5.${NC} Backups"
+        line "  ${WH}6.${NC} HTTPS certificate"
+        line "  ${WH}7.${NC} Diagnostics and repair"
+        line "  ${WH}8.${NC} Recovery"
+        line "  ${WH}9.${NC} Uninstall"
+        line ""
+        line "  ${WH}0.${NC} Exit"
         line ""
         local c
         c="$(ask "Select" "0")"
         case "${c:-0}" in
             1) do_status ;;
-            2) delegate_update ;;
-            3) check_root; service_action restart ;;
-            4) check_root; do_recovery_menu ;;
-            5) show_logs "${LOGS_ARG:-100}" ;;
-            6) backup_submenu ;;
-            7) check_root; do_tls_menu ;;
-            8) do_doctor ;;
-            9) check_root; do_rollback ;;
-            10) delegate_uninstall ;;
-            0|*) return 0 ;;
+            2) service_submenu ;;
+            3) show_logs "${LOGS_ARG:-100}" ;;
+            4) delegate_update ;;
+            5) backup_submenu ;;
+            6) check_root; do_tls_menu ;;
+            7) do_doctor ;;
+            8) check_root; do_recovery_menu ;;
+            9) delegate_uninstall ;;
+            0) return 0 ;;
+            *) warn "Choose a number from 0 to 9." ;;
         esac
     done
 }
@@ -807,11 +977,11 @@ main() {
     fi
     case "$ACTION" in
         status) do_status; exit 0 ;;
-        start|stop|restart) check_root; service_action "$ACTION"; exit 0 ;;
+        start|stop|restart|enable|disable) check_root; service_action "$ACTION"; exit 0 ;;
         logs) show_logs "${LOGS_ARG:-100}"; exit 0 ;;
         backup) check_root; backup_now; exit 0 ;;
         auto-backup) check_root; auto_backup_cli "$AUTO_BACKUP_ACTION"; exit 0 ;;
-        tls) check_root; do_tls_menu; exit 0 ;;
+        https) check_root; do_tls_menu; exit 0 ;;
         recovery) check_root; do_recovery_menu; exit 0 ;;
         reset-password)
             # Validate before the root gate so bad input fails the same
@@ -822,6 +992,7 @@ main() {
         doctor) do_doctor; exit 0 ;;
         rollback) do_rollback; exit 0 ;;
         update) delegate_update; exit 0 ;;
+        recover-update) run_installer recover-update; exit 0 ;;
         uninstall) delegate_uninstall; exit 0 ;;
     esac
 }
