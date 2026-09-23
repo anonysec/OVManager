@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.8 — 2026-09-21
+
+Redesign release (squash of #14 + validated follow-ups from #15):
+beginner-first installer (Install / Install with Docker) and manager
+TUIs, transactional reboot-safe updates with journals and `recover-update`,
+verified `.ovmbak` bundles with optional encrypted Telegram delivery,
+unified HTTPS management with rollback, `doctor [--fix]`, operation
+locking, owner-only operation status APIs, and legal/privacy documentation.
+Validated live: fresh host + Docker installs, update commit + failover,
+kill -9 recovery, backup/restore, repair flows. Pairs with OVNode 1.1.6.
+
 ## 1.2.7 — 2026-09-20
 
 Checksum-mismatch follow-up: release downloads are archive-checked
