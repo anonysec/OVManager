@@ -156,7 +156,7 @@ def test_update_requires_install_dir(tmp_path):
 def test_reset_password_rejects_weak_passwords(tmp_path):
     """Same floor + placeholder block the panel applies at boot."""
     env, app = sandbox(tmp_path)
-    for weak, hint in (("short", "at least 12"), ("change-me-please-123", "placeholder")):
+    for weak, hint in (("short", "at least 8"), ("change-me-please-123", "placeholder")):
         r = mgr_sb(env, app, "reset-password", "-p", weak)
         assert r.returncode == 1, r.stderr
         assert hint in r.stderr, r.stderr

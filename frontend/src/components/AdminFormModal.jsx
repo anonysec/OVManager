@@ -83,7 +83,7 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }) => {
         </Field>
         <Field
           label={isEdit ? t('newPassword') : t('password')}
-          hint={t('minPasswordHint', 'Minimum 12 characters')}
+          hint={t('minPasswordHint', 'Minimum 8 characters')}
           required
         >
           <input

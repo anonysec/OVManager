@@ -36,7 +36,7 @@ rand_path() {
 }
 
 rand_pass() {
-    openssl rand -base64 16 2>/dev/null | tr -d '/+=\n' | head -c 16
+    openssl rand -base64 12 2>/dev/null | tr -d '/+=\n' | head -c 12
 }
 
 rand_hex() {
@@ -390,15 +390,15 @@ setup_tls() {
     esac
 }
 
-# Mirrors the panel's boot-time validation (backend/config.py): >= 12 chars
+# Mirrors the panel's boot-time validation (backend/config.py): >= 8 chars
 # and no placeholder-looking values. Empty output = acceptable.
 admin_password_problem() {
     local pass="$1" lowered
     [[ -n "$pass" ]] || { printf 'must not be empty'; return 0; }
     [[ "$pass" != *$'\n'* && "$pass" != *$'\r'* ]] \
         || { printf 'must be a single line'; return 0; }
-    [[ ${#pass} -ge 12 ]] \
-        || { printf 'must be at least 12 characters (the panel requires >= 12)'; return 0; }
+    [[ ${#pass} -ge 8 ]] \
+        || { printf 'must be at least 8 characters (the panel requires >= 8)'; return 0; }
     lowered="${pass,,}"
     case "$lowered" in
         *change-me*|*changeme*|*change_me*|*password123*|*admin123*)
@@ -427,7 +427,7 @@ prompt_validate_admin_password() {
         tries=$((tries + 1))
         [[ $tries -lt 3 ]] && ADMIN_PASS="$(ask "Admin password" "" "h")"
     done
-    die "No acceptable password after 3 tries (need >= 12 characters, not a common word)"
+    die "No acceptable password after 3 tries (need >= 8 characters, not a common word)"
 }
 
 # Release-file helpers: versioned prebuilt tarballs on GitHub Releases.
