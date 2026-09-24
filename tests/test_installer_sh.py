@@ -788,3 +788,13 @@ def test_no_command_substitution_in_unit_heredoc():
                     j += 1
                 i = j
             i += 1
+
+
+def test_native_unit_creates_private_files_by_default():
+    """Regression: a fresh native install started with a world-readable
+    database (0644) until `ovm doctor --fix` corrected it. The unit must
+    set a restrictive umask so data is private from the first byte."""
+    source = _extract_function("write_systemd_unit")
+    assert "UMask=0077" in source
+    # The data dir is still created private for native installs.
+    assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")

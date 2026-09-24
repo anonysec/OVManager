@@ -713,6 +713,10 @@ User=root
 WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
+# The panel owns every file it writes (db, wal, logs) and no other service
+# reads them, so the database must be private from its very first byte
+# instead of world-readable until 'ovm doctor --fix' notices.
+UMask=0077
 ExecStart=${UV_BIN} run main.py
 # uv exits 143 on SIGTERM: a clean 'ovm stop' must read as inactive,
 # not failed, so status and doctor report the truth.
