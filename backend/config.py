@@ -88,7 +88,7 @@ class Setting(BaseSettings):
         if lowered and any(p in lowered for p in placeholders):
             raise ValueError(
                 "ADMIN_PASSWORD still looks like a placeholder — set a strong random password in .env "
-                "(installer and app require >=12 chars)"
+                "(installer and app require >=8 chars)"
             )
 
 

@@ -217,7 +217,7 @@ PY
     fi
 }
 
-# Mirrors the panel's boot-time validation (backend/config.py): >= 12 chars
+# Mirrors the panel's boot-time validation (backend/config.py): >= 8 chars
 # and no placeholder-looking values.
 # Empty output = acceptable; otherwise the human-readable reason.
 

@@ -94,15 +94,17 @@ def test_bad_version_pin_fails_fast():
 
 
 def test_short_admin_password_rejected(tmp_path):
+    """Policy floor is 8 characters: below it fails, at it passes."""
     sb, _ = sandbox(tmp_path)
     r = sh_sb(sb, "-y", "-p", "short")
     assert r.returncode == 1
-    assert "at least 12" in r.stderr or "root" in r.stderr
-    # 8-char passwords passed the installer but 422ed at the panel; now they
-    # fail fast with the same 12-char floor the API enforces.
-    r = sh_sb(sb, "-y", "-p", "eight888")
+    assert "at least 8" in r.stderr or "root" in r.stderr
+    r = sh_sb(sb, "-y", "-p", "seven77")
     assert r.returncode == 1
-    assert "at least 12" in r.stderr or "root" in r.stderr
+    assert "at least 8" in r.stderr or "root" in r.stderr
+    # Exactly 8 characters satisfies the policy (fails later, on root/already-installed).
+    r = sh_sb(sb, "-y", "-p", "eight888")
+    assert "at least 8" not in r.stderr
 
 
 def test_install_rejects_placeholder_password_fast(tmp_path):
@@ -808,11 +810,23 @@ def test_banner_tagline_only_for_fresh_install():
     assert '*)      subtitle="Secure VPN panel"' in source
 
 
-def test_generated_password_is_sixteen_characters():
-    """20 characters was needlessly long to retype from a terminal."""
+def test_generated_password_is_twelve_characters():
+    """Generated passwords are 12 characters: short enough to retype, well
+    above the 8-character policy minimum."""
     src = _extract_function("rand_pass")
-    assert "head -c 16" in src
+    assert "head -c 12" in src
     assert "head -c 20" not in src
+
+
+def test_password_policy_minimum_is_eight():
+    """Owner password policy is >= 8 characters across installer, lib,
+    manager and the config message."""
+    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "lib" / "common.sh"):
+        content = path.read_text(encoding="utf-8")
+        assert '[[ ${#pass} -ge 8 ]]' in content, path.name
+        assert "at least 8 characters" in content, path.name
+    cfg = (INSTALLER_PATH.parent / "backend" / "config.py").read_text(encoding="utf-8")
+    assert ">=8 chars" in cfg
 
 
 def test_backup_key_not_printed_at_install():

@@ -798,7 +798,7 @@
   "tlsPlain": "Plain HTTP",
   "tlsUnverified": "Unverified TLS (self-signed) — no MITM protection. Switch the node to Let's Encrypt.",
   "tlsPlainDetail": "Plain HTTP — API key crosses the network in cleartext. Enable TLS on the node.",
-  "minPasswordHint": "Minimum 12 characters",
+  "minPasswordHint": "Minimum 8 characters",
   "usersSummarySub": "{{active}} active · {{online}} online",
   "activeUsersSub": "Enabled accounts",
   "trafficToday": "Traffic today",
