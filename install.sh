@@ -714,7 +714,7 @@ WorkingDirectory=${INSTALL_DIR}
 Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
 ExecStart=${UV_BIN} run main.py
-# uv exits 143 on SIGTERM: a clean `ovm stop` must read as inactive,
+# uv exits 143 on SIGTERM: a clean 'ovm stop' must read as inactive,
 # not failed, so status and doctor report the truth.
 SuccessExitStatus=143
 Restart=on-failure
