@@ -36,3 +36,10 @@ when the reason isn't obvious. Never commit secrets (`.env`, `*.db`,
 
 Use **Discussions** for "how do I…". Open an **issue** only for a bug with
 reproduction steps (version, logs, expected vs actual).
+
+## Release freeze
+
+`main` is frozen at **1.0.0** until explicit owner sign-off. No version
+bumps, features, or fixes land without owner review and approval — open a
+pull request and wait. The published `v1.0.0` release is a pre-release
+baseline, not a validated public release.
