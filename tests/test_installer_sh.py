@@ -763,3 +763,28 @@ def test_installer_design_language_matches_node():
         "Choose every option yourself",
     ):
         assert retired not in content, f"retired wording back: {retired}"
+
+
+def test_no_command_substitution_in_unit_heredoc():
+    """Regression: an unquoted heredoc executes backticks in its body. A
+    comment with `ovm stop` inside the UNIT heredoc ran the manager on
+    every fresh install (command not found). No unescaped backticks in
+    any unquoted heredoc body."""
+    import re
+
+    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "manager.sh", INSTALLER_PATH.parent / "lib" / "common.sh"):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        i = 0
+        while i < len(lines):
+            m = re.search(r"<<-?\s*([A-Z_][A-Z0-9_]*)\s*$", lines[i])
+            if m and not re.search(r"<<-?\s*'", lines[i]):
+                delim = m.group(1)
+                j = i + 1
+                while j < len(lines) and lines[j].strip() != delim:
+                    line = lines[j]
+                    assert not re.search(r"(?<!\\)`", line), (
+                        f"{path.name}:{j + 1} unescaped backtick in {delim} heredoc: {line.strip()}"
+                    )
+                    j += 1
+                i = j
+            i += 1
