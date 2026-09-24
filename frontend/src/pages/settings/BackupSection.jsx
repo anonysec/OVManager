@@ -59,6 +59,7 @@ const BackupSection = () => {
   const [offsiteTarget, setOffsiteTarget] = useState('');
   const [telegramBackup, setTelegramBackup] = useState(false);
   const [telegramBackupAvailable, setTelegramBackupAvailable] = useState(false);
+  const [backupEncryptKey, setBackupEncryptKey] = useState('');
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMsg, setAutoMsg] = useState(null);
 
@@ -80,6 +81,7 @@ const BackupSection = () => {
         }
         setTelegramBackup(d.telegram_backup_enabled === true);
         setTelegramBackupAvailable(d.telegram_backup_available === true);
+        setBackupEncryptKey(d.backup_encrypt_key || '');
       })
       .catch(() => { /* keep the defaults; the card still renders */ });
     return () => { cancelled = true; };
@@ -104,6 +106,7 @@ const BackupSection = () => {
         setOffsiteTarget((r?.data?.data?.offsite_backup_target ?? offsiteTarget.trim()));
         setTelegramBackup(r?.data?.data?.telegram_backup_enabled === true);
         setTelegramBackupAvailable(r?.data?.data?.telegram_backup_available === true);
+        setBackupEncryptKey(r?.data?.data?.backup_encrypt_key || '');
         setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
       }
     } catch (e) {
@@ -294,6 +297,31 @@ const BackupSection = () => {
             <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
           </label>
         </Field>
+
+        {telegramBackup && backupEncryptKey && (
+          <div className="sp-field sp-mt-12">
+            <label className="sp-label" htmlFor="sp-backup-key">{t('backupKeyLabel', 'Backup recovery key')}</label>
+            <p className="sp-hint">{t('backupKeyHint', 'Keep this key outside this server. Without it, encrypted copies cannot be restored.')}</p>
+            <div className="sp-input-row">
+              <input
+                id="sp-backup-key"
+                className="ui-input"
+                type="text"
+                readOnly
+                value={backupEncryptKey}
+                spellCheck="false"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => navigator.clipboard?.writeText(backupEncryptKey)}
+              >
+                {t('copy', 'Copy')}
+              </button>
+            </div>
+          </div>
+        )}
 
         {newestAge && (
           <p className="sp-hint sp-mt-12">

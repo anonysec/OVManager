@@ -36,7 +36,7 @@ rand_path() {
 }
 
 rand_pass() {
-    openssl rand -base64 18 2>/dev/null | tr -d '/+=\n' | head -c 20
+    openssl rand -base64 16 2>/dev/null | tr -d '/+=\n' | head -c 16
 }
 
 rand_hex() {

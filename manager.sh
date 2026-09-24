@@ -43,7 +43,7 @@ fi
 PORT="" ADMIN_PASS="" MODE="" PIN=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 ACTION=""
-YES=0 PURGE=0 JSON=0 FIX=0
+YES=0 PURGE=0 JSON=0 FIX=0 SHOW_ALL=0
 LOGS_ARG=""
 AUTO_BACKUP_ACTION="" BACKUP_TIME="" BACKUP_KEEP=""
 OPERATION_LOCK="${DATA_DIR}/.operation.lock"
@@ -180,13 +180,23 @@ do_status() {
     fi
     ver="$(curl -fskS --max-time 3 "${scheme}://127.0.0.1:${PORT}/health" 2>/dev/null \
         | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version","?"))' 2>/dev/null || echo "?")"
+    local service="unknown"
+    if [[ "$mode" == "docker" ]]; then
+        docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ovmanager && service="running" || service="stopped"
+    elif has_systemd; then
+        service="$(systemctl is-active "$SYSTEMD_SERVICE" 2>/dev/null || echo unknown)"
+    fi
     hr
-    kv "Installed" "yes ($INSTALL_DIR)"
-    kv "Mode"      "$mode"
-    kv "Open"      "$url"
+    kv "Service"   "$service"
     kv "Health"    "$health"
-    kv "Version"   "$ver"
-    kv "Data"      "$DATA_DIR"
+    kv "Version"   "v$ver"
+    kv "Open"      "$url"
+    if [[ "$SHOW_ALL" -eq 1 ]]; then
+        kv "Mode"      "$mode"
+        kv "Port"      "$PORT"
+        kv "Data"      "$DATA_DIR"
+        kv "Install"   "$INSTALL_DIR"
+    fi
     hr
     if [[ "$JSON" -eq 1 ]]; then
         python3 - "$mode" "$url" "$health" "$ver" "$INSTALL_DIR" "$DATA_DIR" "$PORT" <<'PY'
@@ -804,7 +814,8 @@ usage() {
 
   USAGE
     ovm                         Interactive numbered menu
-    ovm status                  Show panel URL, health and version
+    ovm status                  Service, health, version and URL
+    ovm status --all            Also show mode, port, data and install paths
     ovm update                  Staged update with automatic failover
     ovm recover-update          Recover an interrupted update transaction
     ovm restart                 Restart the panel service
@@ -825,6 +836,7 @@ usage() {
     -y, --yes           Never prompt
     -j, --json          Machine-readable result on stdout (logs on stderr)
     --fix               doctor: apply safe automatic fixes
+    -a, --all            status: include paths and mode
     --purge             uninstall: also delete data + certs
     -h, --help          This help
 
@@ -845,6 +857,7 @@ parse_args() {
             -p|--pass)    [[ $# -ge 2 ]] || die "-p needs a password"; ADMIN_PASS="$2"; shift 2 ;;
             -y|--yes) YES=1; shift ;;
             -j|--json) JSON=1; shift ;;
+            -a|--all) SHOW_ALL=1; shift ;;
             --fix) FIX=1; shift ;;
             --purge) PURGE=1; shift ;;
             -v|--version) [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
@@ -930,6 +943,9 @@ service_submenu() {
 # Grouped numbered menu: full power, one screen, nothing hidden.
 manager_menu() {
     while true; do
+        # Clear between menus so each screen is one clean view; never when
+        # output is piped or --json is in play.
+        if can_prompt && [[ "$JSON" -eq 0 ]]; then command clear >/dev/null 2>&1 || true; fi
         line ""
         line "${B}OVManager${NC}  ${GY}v${VERSION}${NC}"
         hr
