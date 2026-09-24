@@ -312,3 +312,19 @@ def test_doctor_covers_backup_format_and_permissions():
     assert ".ovmbak" in content
     assert "Permissions" in content
     assert 'chmod 700 "$DATA_DIR"' in content
+
+
+def test_status_is_concise_and_all_is_opt_in():
+    """status answers 'is it up?'; paths and mode need --all."""
+    content = MANAGER_PATH.read_text(encoding="utf-8")
+    src = content.split("do_status()")[1].split("\n}")[0]
+    assert '[[ "$SHOW_ALL" -eq 1 ]]' in src
+    assert "-a|--all" in content
+    # Service/health/version/url are the always-on rows.
+    for row in ('kv "Service"', 'kv "Health"', 'kv "Version"', 'kv "Open"'):
+        assert row in src, row
+
+
+def test_manager_menu_clears_between_screens():
+    content = MANAGER_PATH.read_text(encoding="utf-8")
+    assert "command clear" in content.split("manager_menu()")[1].split("\n}")[0]

@@ -305,7 +305,7 @@ rand_path() {
 }
 
 rand_pass() {
-    openssl rand -base64 18 2>/dev/null | tr -d '/+=\n' | head -c 20
+    openssl rand -base64 16 2>/dev/null | tr -d '/+=\n' | head -c 16
 }
 
 rand_hex() {
@@ -1130,9 +1130,6 @@ success_card() {
     else
         kv "Password" "${GY}(the one you set)${NC}"
     fi
-    if [[ -n "$BACKUP_ENCRYPT_KEY" ]]; then
-        kv "Backup key" "${YL}${BACKUP_ENCRYPT_KEY}${NC}  ${GY}(save outside this server)${NC}"
-    fi
     kv "Manage" "ovm  (status, logs, backup, TLS, recovery)"
     kv "Logs"   "$logs"
     kv "Data"   "$DATA_DIR"
@@ -1713,10 +1710,17 @@ run_wizard_install() {
     do_install
 }
 
+# Banner: the tagline advertises a fresh install, so it must not appear on
+# update/uninstall/repair where it reads as if work were about to start.
 banner() {
+    local subtitle
+    case "$ACTION" in
+        install) subtitle="Secure VPN panel — up and running in a few minutes" ;;
+        *)      subtitle="Secure VPN panel" ;;
+    esac
     line ""
     line "  ${B}OVManager installer${NC}  ${GY}v${VERSION}${NC}"
-    line "  ${GY}Secure VPN panel — up and running in a few minutes${NC}"
+    line "  ${GY}${subtitle}${NC}"
     line ""
 }
 

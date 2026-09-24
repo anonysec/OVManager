@@ -798,3 +798,26 @@ def test_native_unit_creates_private_files_by_default():
     assert "UMask=0077" in source
     # The data dir is still created private for native installs.
     assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")
+
+
+def test_banner_tagline_only_for_fresh_install():
+    """The tagline advertises a fresh install; on update/uninstall it reads
+    as if work were about to start."""
+    source = _extract_function("banner")
+    assert 'install) subtitle="Secure VPN panel — up and running in a few minutes"' in source
+    assert '*)      subtitle="Secure VPN panel"' in source
+
+
+def test_generated_password_is_sixteen_characters():
+    """20 characters was needlessly long to retype from a terminal."""
+    src = _extract_function("rand_pass")
+    assert "head -c 16" in src
+    assert "head -c 20" not in src
+
+
+def test_backup_key_not_printed_at_install():
+    """The recovery key is install noise; it belongs in Settings -> Backups
+    when the encrypted remote copy is switched on."""
+    content = INSTALLER_PATH.read_text(encoding="utf-8")
+    card = content.split("success_card()")[1].split("\n}")[0]
+    assert "Backup key" not in card

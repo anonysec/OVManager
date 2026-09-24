@@ -81,6 +81,9 @@ async def get_settings(
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
     data["telegram_backup_available"] = bool(config.BACKUP_ENCRYPT_KEY)
+    # Shown in Settings -> Backups (not at install): the owner needs it to
+    # restore off-server copies, and only when that feature is in use.
+    data["backup_encrypt_key"] = config.BACKUP_ENCRYPT_KEY or ""
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
