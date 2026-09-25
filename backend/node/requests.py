@@ -64,14 +64,24 @@ def _retry_after_s(value: object) -> float:
 
 
 def node_client(node, **kw) -> "NodeRequests":
-    """Build a NodeRequests for a Node row (single construction site)."""
-    return NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=node.key or "",
-        use_tls=node.use_tls,
-        **kw,
-    )
+    """Build a NodeRequests for a Node row (single construction site).
+
+    Reuses the per-node connection (backend.node.connection) so repeated
+    fan-outs don't pay transport setup per call. Extra kwargs pass through
+    to NodeRequests (used by tests to stub clients).
+    """
+    if kw:
+        # Non-default construction (test doubles) skips the cache.
+        return NodeRequests(
+            address=node.address,
+            port=node.port,
+            api_key=node.key or "",
+            use_tls=node.use_tls,
+            **kw,
+        )
+    from backend.node.connection import get_connection
+
+    return get_connection(node)
 
 
 class NodeRequests:
