@@ -60,10 +60,7 @@ class Setting(BaseSettings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.ADMIN_PASSWORD and not self.ADMIN_PASSWORD_HASH:
-            raise ValueError(
-                "No owner credentials — set ADMIN_PASSWORD_HASH (bcrypt, preferred) or "
-                "ADMIN_PASSWORD in .env"
-            )
+            raise ValueError("No owner credentials — set ADMIN_PASSWORD_HASH (bcrypt, preferred) or ADMIN_PASSWORD in .env")
         if self.ADMIN_PASSWORD_HASH and not self.ADMIN_PASSWORD_HASH.startswith("$2"):
             raise ValueError("ADMIN_PASSWORD_HASH must be a bcrypt hash ($2a/$2b/$2y…)")
         lowered = (self.ADMIN_PASSWORD or "").lower()

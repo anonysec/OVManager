@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Owner credential modes: bcrypt hash (preferred) and legacy plaintext."""
+
 import pytest
 
 from backend.auth.hash import hash_password, verify_password

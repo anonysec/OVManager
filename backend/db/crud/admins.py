@@ -65,4 +65,3 @@ def delete_admin(db: Session, admin: Admin):
 
 
 # nodes crud
-

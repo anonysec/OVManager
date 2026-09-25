@@ -103,4 +103,3 @@ def delete_node(db: Session, id: int):
 
 
 # settings crud
-

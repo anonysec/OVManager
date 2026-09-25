@@ -121,9 +121,7 @@ def test_spawn_detached_never_uses_a_shell(monkeypatch):
     class _DummyProc:
         pass
 
-    monkeypatch.setattr(
-        tls_router.subprocess, "Popen", lambda *a, **k: seen.append((a, k)) or _DummyProc()
-    )
+    monkeypatch.setattr(tls_router.subprocess, "Popen", lambda *a, **k: seen.append((a, k)) or _DummyProc())
 
     tls_router._spawn_detached(["systemctl", "restart", "ovmanager"])
     assert len(seen) == 1
@@ -141,9 +139,7 @@ def test_retired_backup_key_in_dotenv_still_boots(tmp_path):
 
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "ADMIN_USERNAME=admin\n"
-        "ADMIN_PASSWORD=long-enough-password-123\n"
-        "BACKUP_ENCRYPT_KEY=stale-key-from-an-older-release\n",
+        "ADMIN_USERNAME=admin\nADMIN_PASSWORD=long-enough-password-123\nBACKUP_ENCRYPT_KEY=stale-key-from-an-older-release\n",
         encoding="utf-8",
     )
     settings = Setting(_env_file=str(env_file))

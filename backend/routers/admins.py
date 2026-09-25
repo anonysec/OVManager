@@ -216,12 +216,7 @@ async def get_admin_sessions(
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
     now = time.time()
-    sessions = (
-        db.query(AuthSession)
-        .filter(AuthSession.username == username)
-        .order_by(AuthSession.id)
-        .all()
-    )
+    sessions = db.query(AuthSession).filter(AuthSession.username == username).order_by(AuthSession.id).all()
     # Never expose token_hash: the response is id + metadata only.
     data = [
         {

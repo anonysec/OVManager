@@ -37,26 +37,31 @@ def test_ob_parse_target_strips_whitespace():
 
 def test_ob_parse_target_dotted_hosts_and_paths():
     assert parse_target("ops@srv01.example.com:/mnt/disk1/ov-backups.d") == (
-        "ops", "srv01.example.com", "/mnt/disk1/ov-backups.d",
+        "ops",
+        "srv01.example.com",
+        "/mnt/disk1/ov-backups.d",
     )
 
 
-@pytest.mark.parametrize("bad", [
-    None,
-    "",
-    "   ",
-    "no-colon-at-all",
-    "host:relative/path",
-    "user@:/path",
-    "host:",
-    "user@host:/path with spaces",
-    "user@host:/path;rm -rf",
-    "user@host:/path$(boom)",
-    "user@host:/pa|th",
-    "user@host:/pa`th`",
-    "user@ho&st:/path",
-    "user@host:/path\n/evil",
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        None,
+        "",
+        "   ",
+        "no-colon-at-all",
+        "host:relative/path",
+        "user@:/path",
+        "host:",
+        "user@host:/path with spaces",
+        "user@host:/path;rm -rf",
+        "user@host:/path$(boom)",
+        "user@host:/pa|th",
+        "user@host:/pa`th`",
+        "user@ho&st:/path",
+        "user@host:/path\n/evil",
+    ],
+)
 def test_ob_parse_target_rejects_garbage(bad):
     with pytest.raises(InvalidTarget):
         parse_target(bad)

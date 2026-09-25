@@ -101,11 +101,7 @@ def test_notify_off_updates_state_silently(_clean_state):
 
 def test_multiple_nodes_are_independent(_clean_state):
     node_alerts.check_node_alerts([_row(1, "de-1", True), _row(2, "nl-1", True)], now=T0)
-    assert node_alerts.check_node_alerts(
-        [_row(1, "de-1", False), _row(2, "nl-1", True)], now=T0 + 300
-    ) == 1
+    assert node_alerts.check_node_alerts([_row(1, "de-1", False), _row(2, "nl-1", True)], now=T0 + 300) == 1
     assert _clean_state == ["🔴 Node de-1 is unreachable."]
-    assert node_alerts.check_node_alerts(
-        [_row(1, "de-1", False), _row(2, "nl-1", False)], now=T0 + 600
-    ) == 1
+    assert node_alerts.check_node_alerts([_row(1, "de-1", False), _row(2, "nl-1", False)], now=T0 + 600) == 1
     assert _clean_state[-1] == "🔴 Node nl-1 is unreachable."

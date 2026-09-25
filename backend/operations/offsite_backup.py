@@ -38,9 +38,12 @@ PUSH_TIMEOUT_SECONDS = 300
 
 _SSH_OPTS = (
     "ssh",
-    "-o", "BatchMode=yes",
-    "-o", "ConnectTimeout=10",
-    "-o", "StrictHostKeyChecking=accept-new",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
 )
 
 

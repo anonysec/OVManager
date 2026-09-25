@@ -163,7 +163,7 @@ class AssetCacheMiddleware:
                 accept = value.decode("latin-1")
                 break
 
-        rel = path[len("/assets/"):] if path.startswith("/assets/") else path[len("/fonts/"):]
+        rel = path[len("/assets/") :] if path.startswith("/assets/") else path[len("/fonts/") :]
         if not rel or ".." in rel:
             await self.app(scope, receive, send)
             return

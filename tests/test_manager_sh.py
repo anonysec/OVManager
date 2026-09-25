@@ -48,7 +48,7 @@ def sandbox(tmp_path):
     (app / "lib").mkdir(parents=True)
     shutil.copy(MANAGER_PATH, app / "manager.sh")
     shutil.copy(LIB, app / "lib" / "common.sh")
-    (app / "install.sh").write_text("#!/bin/sh\necho \"STUB-INSTALLER $@\"\n", encoding="utf-8")
+    (app / "install.sh").write_text('#!/bin/sh\necho "STUB-INSTALLER $@"\n', encoding="utf-8")
     (app / "install.sh").chmod(0o755)
     env = {**os.environ, "OVM_APP_DIR": str(app)}
     return env, app
@@ -78,9 +78,20 @@ def test_help_documents_manager_surface():
     assert r.returncode == 0
     output = r.stdout + r.stderr
     for token in (
-        "status", "update", "restart", "logs", "backup", "tls",
-        "recovery", "reset-password", "doctor", "rollback",
-        "uninstall", "ovm", "-p", "--fix",
+        "status",
+        "update",
+        "restart",
+        "logs",
+        "backup",
+        "tls",
+        "recovery",
+        "reset-password",
+        "doctor",
+        "rollback",
+        "uninstall",
+        "ovm",
+        "-p",
+        "--fix",
     ):
         assert token in output, f"help missing {token}"
 
@@ -103,8 +114,15 @@ def test_numbered_menu_lists_core_ops():
         content = f.read()
     assert "manager_menu()" in content
     for label in (
-        "Status", "Service", "Logs", "Update", "Backups",
-        "HTTPS certificate", "Diagnostics and repair", "Recovery", "Uninstall",
+        "Status",
+        "Service",
+        "Logs",
+        "Update",
+        "Backups",
+        "HTTPS certificate",
+        "Diagnostics and repair",
+        "Recovery",
+        "Uninstall",
     ):
         assert label in content, f"menu missing {label}"
     assert "backup_submenu()" in content
@@ -117,7 +135,7 @@ def test_numbered_menu_lists_core_ops():
 def test_service_autostart_commands_are_supported():
     content = MANAGER_PATH.read_text(encoding="utf-8")
     assert "start|stop|restart|enable|disable" in content
-    assert "systemctl \"$1\" \"$SYSTEMD_SERVICE\"" in content
+    assert 'systemctl "$1" "$SYSTEMD_SERVICE"' in content
     assert "docker update --restart unless-stopped" in content
     assert "docker update --restart no" in content
     assert 'kv "Auto start"' in content
@@ -188,7 +206,8 @@ def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
         tool.chmod(0o755)
 
     r = mgr_sb(
-        env, app,
+        env,
+        app,
         "reset-password",
         "-p",
         "brand-new-password",
@@ -229,9 +248,7 @@ def test_manager_version_matches_panel():
 
     manager_src = MANAGER_PATH.read_text(encoding="utf-8")
     mver = re.search(r'^VERSION="([^"]+)"', manager_src, re.M).group(1)
-    panel_ver = re.search(
-        r'__version__ = "([^"]+)"', (REPO / "backend" / "version.py").read_text(encoding="utf-8")
-    ).group(1)
+    panel_ver = re.search(r'__version__ = "([^"]+)"', (REPO / "backend" / "version.py").read_text(encoding="utf-8")).group(1)
     assert mver == panel_ver, f"manager {mver} != panel {panel_ver}"
 
 

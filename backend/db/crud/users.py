@@ -137,9 +137,7 @@ def create_user(db: Session, request: CreateUser, owner: str):
         name=username,
         expiry_date=expiry,
         total=request.total,
-        max_logins=(
-            defaults["max_users"] if request.max_logins is None else request.max_logins
-        ),
+        max_logins=(defaults["max_users"] if request.max_logins is None else request.max_logins),
         owner=owner,
         tag=tag,
         uuid=str(uuid4()),
@@ -339,4 +337,3 @@ def adjust_user(db: Session, uuid: str, days: int = 0, add_bytes: int = 0, owner
     db.commit()
     db.refresh(user)
     return user
-

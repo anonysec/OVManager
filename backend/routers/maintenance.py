@@ -457,9 +457,7 @@ async def restore_backup(
             )
 
         # Original path: restore from uploaded file
-        if file is None or not file.filename or not (
-            file.filename.endswith(".db") or file.filename.endswith(BUNDLE_SUFFIX)
-        ):
+        if file is None or not file.filename or not (file.filename.endswith(".db") or file.filename.endswith(BUNDLE_SUFFIX)):
             return ResponseModel(success=False, msg="Backup file must be an .ovmbak bundle or legacy .db file", data=None)
 
         # Sanitize filename to prevent path traversal
