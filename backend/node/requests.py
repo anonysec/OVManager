@@ -64,14 +64,31 @@ def _retry_after_s(value: object) -> float:
 
 
 def node_client(node, **kw) -> "NodeRequests":
-    """Build a NodeRequests for a Node row (single construction site)."""
-    return NodeRequests(
-        address=node.address,
-        port=node.port,
-        api_key=node.key or "",
-        use_tls=node.use_tls,
-        **kw,
-    )
+    """Build a NodeRequests for a Node row (single construction site).
+
+    Reuses the per-node connection (backend.node.connection) so repeated
+    fan-outs don't pay transport setup per call. Extra kwargs pass through
+    to NodeRequests (used by tests to stub clients).
+    """
+    if kw:
+        # Non-default construction (test doubles) skips the cache.
+        return NodeRequests(
+            address=node.address,
+            port=node.port,
+            api_key=node.key or "",
+            use_tls=node.use_tls,
+            **kw,
+        )
+    return _get_connection(node)
+
+
+# Imported at the bottom, after NodeRequests exists: connection imports this
+# module, so a top-level import would cycle. Importing HERE (not lazily in
+# the function) binds the REAL NodeRequests class into the connection
+# module before any test can monkeypatch backend.node.requests.NodeRequests —
+# a lazy first import during a patch window would snapshot the fake class
+# permanently and poison the cache for every later test (CI failure, #39).
+from backend.node.connection import get_connection as _get_connection  # noqa: E402
 
 
 class NodeRequests:

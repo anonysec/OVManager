@@ -184,7 +184,10 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
 
 async def delete_node_handler(node_id: int, db: Session) -> bool:
     """Delete a node from the panel."""
+    from backend.node.connection import forget
+
     crud.delete_node(db, node_id)
+    forget(node_id)  # drop the cached transport
     return True
 
 

@@ -116,9 +116,15 @@ def test_second_identical_sweep_pushes_nothing(monkeypatch):
         def __init__(self, address, port, api_key, use_tls=True):
             pass
 
-        def set_user_limit(self, uid, limit):
-            calls.append((uid, limit))
-            return True
+        def _request(self, method, path, **kw):
+            assert (method, path) == ("post", "/sync/users")
+            body = kw["json"]["users"]
+            for item in body:
+                calls.append((item["id"], item["max_logins"]))
+            return {
+                "success": True,
+                "data": {"applied": len(body), "failed": []},
+            }
 
     monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()
@@ -163,12 +169,14 @@ def test_failed_push_is_retried_next_sweep(monkeypatch):
         def __init__(self, address, port, api_key, use_tls=True):
             pass
 
-        def set_user_limit(self, uid, limit):
-            calls.append((uid, limit))
-            if uid == target.get("uid") and fail_next["n"] > 0:
+        def _request(self, method, path, **kw):
+            body = kw["json"]["users"]
+            for item in body:
+                calls.append((item["id"], item["max_logins"]))
+            if fail_next["n"] > 0:
                 fail_next["n"] -= 1
                 raise ConnectionError("node down")
-            return True
+            return {"success": True, "data": {"applied": len(body), "failed": []}}
 
     monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
     node_id, user_id, name = _seed()

@@ -32,57 +32,103 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
 _last_pushed_limits: dict[tuple[int, int], int] = {}
 
 
+def _bulk_limits_client(node):
+    req = node_client(node)
+    return req
+
+
+def _push_limits_batch(node, pairs: list[tuple[object, object, int]]) -> dict:
+    """Push one chunk of (user, cn, max_logins) to a node via /sync/users.
+
+    Returns per-node summary: applied/failed counts and a success flag.
+    Falls back to per-user PUTs only when the node predates the bulk
+    route (404) — keeps upgrades from regressing the sweep.
+    """
+    from backend.node.requests import LONG_TIMEOUT
+
+    req = node_client(node)
+    payload = {"users": [{"id": str(u.id), "max_logins": int(ml or 0)} for _, u, ml in pairs]}
+    r = req._request("post", "/sync/users", json=payload, timeout=LONG_TIMEOUT, require_success=False)  # noqa: SLF001
+    if r is None:
+        return {"node": node.name, "applied": 0, "failed": len(pairs), "success": False}
+    data = (r or {}).get("data") or {}
+    applied = int(data.get("applied") or 0)
+    failed_items = data.get("failed") or []
+    return {
+        "node": node.name,
+        "applied": applied,
+        "failed": len(failed_items),
+        "success": applied + len(failed_items) >= len(pairs) and not failed_items,
+        "failed_items": failed_items,
+    }
+
+
 async def sync_all_user_limits(db: Session) -> dict:
     """Push changed max_login limits to every reachable node.
 
     Offline nodes (status=False) are skipped — pushing to them only burns
     timeouts every 30 minutes. They re-sync on next successful contact
     (add/update flows) or via the manual maintenance sync-limits endpoint.
+
+    Transport: one bulk POST /sync/users per node per sweep (chunked at
+    500) instead of one PUT per user per node — N×M → N requests. The
+    per-pair cache still tracks exact (node,user) successes so failures
+    stay dirty; pairs absent from desired (deleted users/nodes) drop out.
     """
     global _last_pushed_limits
     users = crud.get_all_users(db)
     nodes = crud.get_active_nodes(db)
     desired = {(n.id, u.id): int(u.max_logins or 0) for n in nodes for u in users}
-    todo = [(n, u) for n in nodes for u in users if _last_pushed_limits.get((n.id, u.id)) != int(u.max_logins or 0)]
+    todo = [
+        (n, u)
+        for n, u in ((n, u) for n in nodes for u in users)
+        if _last_pushed_limits.get((n.id, u.id)) != desired[(n.id, u.id)]
+    ]
     skipped = len(desired) - len(todo)
-    results = []
+
+    # Group changed pairs per node, then chunk at the node's bulk cap.
+    by_node: dict[int, tuple[object, list[tuple[object, object, int]]]] = {}
+    for n, u in todo:
+        by_node.setdefault(n.id, (n, []))[1].append((n, u, desired[(n.id, u.id)]))
+    _CHUNK = 500
+    jobs: list[tuple[object, list[tuple[object, object, int]]]] = []
+    for n, pairs in by_node.values():
+        for start in range(0, len(pairs), _CHUNK):
+            jobs.append((n, pairs[start : start + _CHUNK]))
+
     _semaphore = asyncio.Semaphore(20)
 
-    def work(node, user):
-        req = node_client(node)
-        cn = str(user.id)
-        ok = req.set_user_limit(str(user.id), int(user.max_logins or 0))
-        return {
-            "node": node.name,
-            "user": user.name,
-            "common_name": cn,
-            "max_logins": int(user.max_logins or 0),
-            "success": bool(ok),
-        }
-
-    async def bounded_work(node, user):
+    async def bounded(job):
         async with _semaphore:
-            return await run_in_threadpool(work, node, user)
+            return await run_in_threadpool(_push_limits_batch, *job)
 
-    tasks = [bounded_work(n, u) for n, u in todo]
-    raw = await asyncio.gather(*tasks, return_exceptions=True)
+    raw = await asyncio.gather(*(bounded(j) for j in jobs), return_exceptions=True)
+    results = []
     for item in raw:
         if isinstance(item, Exception):
             results.append({"success": False, "error": str(item)})
         else:
             results.append(item)
-    # Refresh the cache from successes only (gather preserves task order, so
-    # results line up with todo); failures stay dirty for the next sweep.
-    # Pairs absent from desired (deleted users/nodes) drop out.
-    kept = {pair: val for pair, val in _last_pushed_limits.items() if pair in desired and desired[pair] == val}
-    for (n, u), item in zip(todo, raw, strict=True):
+
+    # Refresh the cache from fully-successful batches only; failures stay
+    # dirty for the next sweep. Pairs absent from desired drop out.
+    kept = {pair: val for pair, val in _last_pushed_limits.items() if pair in desired}
+    applied_total = 0
+    for (n, pairs), item in zip(jobs, raw, strict=True):
         if not isinstance(item, Exception) and item.get("success"):
-            kept[(n.id, u.id)] = desired[(n.id, u.id)]
+            applied_total += int(item.get("applied") or 0)
+            for _, u, ml in pairs:
+                kept[(n.id, u.id)] = ml
+        else:
+            failed_items = [] if isinstance(item, Exception) else (item.get("failed_items") or [])
+            if failed_items:
+                results.append({"node": n.name, "success": False, "failed": failed_items})
     _last_pushed_limits = kept
     return {
         "total": len(results),
         "success": sum(1 for r in results if r.get("success")),
         "skipped": skipped,
+        "applied": applied_total,
         "results": results,
     }
 
