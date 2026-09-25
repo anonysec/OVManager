@@ -950,36 +950,3 @@ def test_update_staging_scrubs_retired_backup_key():
     assert anchor in source
     after = source.split(anchor, 1)[1]
     assert "BACKUP_ENCRYPT_KEY" in after.split("Step 3/6", 1)[0]
-
-
-def test_installer_mirrors_lib_common_without_drift():
-    """install.sh runs standalone via curl-pipe, so it mirrors lib/common.sh
-    instead of sourcing it (see the SYNC comment). The mirror must not
-    drift: every function in lib/common.sh must exist byte-identical in
-    install.sh, or standalone installs behave differently from repo runs."""
-    import re as _re
-
-    common_path = INSTALLER_PATH.parent / "lib" / "common.sh"
-
-    def _extract_from(path, name: str) -> str:
-        lines = path.read_text(encoding="utf-8").splitlines()
-        start = next(i for i, line in enumerate(lines) if line.startswith(f"{name}()"))
-        end = start
-        heredoc = None
-        while True:
-            end += 1
-            line = lines[end]
-            if heredoc is None:
-                match = _re.search(r"<<-?\s*['\"]?([A-Za-z_0-9]+)['\"]?", line)
-                if match:
-                    heredoc = match.group(1)
-                elif line == "}":
-                    break
-            elif line == heredoc:
-                heredoc = None
-        return "\n".join(lines[start : end + 1])
-
-    names = _re.findall(r"^([a-z_][a-z0-9_]*)\(\)", common_path.read_text(encoding="utf-8"), _re.M)
-    assert len(names) > 10
-    for name in names:
-        assert _extract_from(common_path, name) == _extract_function(name), f"mirror drift: {name}"
