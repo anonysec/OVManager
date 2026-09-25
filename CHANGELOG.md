@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.6 — 2026-09-25
+
+Node sync wave (pairs with OVNode 1.0.2):
+
+- Per-node connection manager: persistent transports keyed by an
+  explicit signature (address/port/key/TLS), explicit
+  HEALTHY/BROKEN/UNKNOWN health, cache dropped on node delete. Fan-outs
+  stop paying transport setup per RPC.
+- Bulk limit sweep: `POST /sync/users` sends changed max-logins for a
+  whole node in one chunked request (cap 500) instead of one PUT per
+  user per node — N×M requests per sweep become N.
+- `tests/test_node_contract.py`: two-way drift guard pinning every
+  `NodeRequests` route to the node's `/sync` contract.
+- Import-cycle fix keeps the real client class pinned under test
+  patching (found by CI full-suite ordering).
+
 ## 1.0.5 — 2026-09-25
 
 Structure pass (no behavior change) plus one owner decision: secrets are
