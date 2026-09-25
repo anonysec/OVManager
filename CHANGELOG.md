@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.0.2 — 2026-09-25
+
+Owner-reviewed UX and behavior batch, validated live:
+
+- Fresh installs seed an owner row (Admins is never empty), one active
+  user, and a `panel.first_run` audit entry visible in Activity.
+- New-user defaults resolve per admin over the owner global
+  (Settings → Defaults): the Add User form, the API and the Telegram
+  bot's Standard plan all use the creating admin's effective plan.
+- Connection events are split by meaning: real TLS/auth failures
+  (danger) vs policy rejects like disabled users and device limits
+  (informational), each with node, user, timestamp and ongoing status.
+  The notification bell only raises danger for real failures.
+- Users page: debounced search, capped/collapsible label chips with
+  truncation, styled label input.
+- Settings is one flow (no Simple/Advanced split); dashboard polling
+  runs on a fixed cadence with no refresh setting; node creation is
+  always TLS; the setup wizard dismisses itself when done; the
+  Install-app hint links to TLS settings.
+- Test-hygiene fix: sandboxed installer tests can no longer overwrite
+  the live systemd unit (this bit the live panel once during validation).
+- Dead code removed across backend, bot and frontend (-1150 lines).
+
+Pairs with OVNode 1.0.0 (unchanged this round: +3 diagnostic fixes
+already live — reject classification, strict max-login line, observed
+TLS timestamps).
+
 ## 1.0.1 — 2026-09-24
 
 Fresh-install fixes found by validating the frozen 1.0.0 baseline on a
