@@ -59,7 +59,6 @@ const BackupSection = () => {
   const [offsiteTarget, setOffsiteTarget] = useState('');
   const [telegramBackup, setTelegramBackup] = useState(false);
   const [telegramBackupAvailable, setTelegramBackupAvailable] = useState(false);
-  const [backupEncryptKey, setBackupEncryptKey] = useState('');
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoMsg, setAutoMsg] = useState(null);
 
@@ -81,7 +80,6 @@ const BackupSection = () => {
         }
         setTelegramBackup(d.telegram_backup_enabled === true);
         setTelegramBackupAvailable(d.telegram_backup_available === true);
-        setBackupEncryptKey(d.backup_encrypt_key || '');
       })
       .catch(() => { /* keep the defaults; the card still renders */ });
     return () => { cancelled = true; };
@@ -106,7 +104,6 @@ const BackupSection = () => {
         setOffsiteTarget((r?.data?.data?.offsite_backup_target ?? offsiteTarget.trim()));
         setTelegramBackup(r?.data?.data?.telegram_backup_enabled === true);
         setTelegramBackupAvailable(r?.data?.data?.telegram_backup_available === true);
-        setBackupEncryptKey(r?.data?.data?.backup_encrypt_key || '');
         setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
       }
     } catch (e) {
@@ -279,10 +276,10 @@ const BackupSection = () => {
         </Field>
 
         <Field
-          label={t('telegramBackup', 'Encrypted Telegram copy')}
+          label={t('telegramBackup', 'Telegram copy')}
           hint={telegramBackupAvailable
-            ? t('telegramBackupHint', 'Send each scheduled backup to the configured owner chat after encrypting it on this server. Keep BACKUP_ENCRYPT_KEY somewhere outside this server for disaster recovery.')
-            : t('telegramBackupUnavailable', 'Add BACKUP_ENCRYPT_KEY to the server configuration before enabling Telegram backups.')}
+            ? t('telegramBackupHint', 'Send each scheduled backup to the configured owner chat.')
+            : t('telegramBackupUnavailable', 'Configure the Telegram bot token and owner chat before enabling Telegram backups.')}
           horizontal
           inputId="backup-telegram-enabled"
         >
@@ -297,31 +294,6 @@ const BackupSection = () => {
             <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
           </label>
         </Field>
-
-        {telegramBackup && backupEncryptKey && (
-          <div className="sp-field sp-mt-12">
-            <label className="sp-label" htmlFor="sp-backup-key">{t('backupKeyLabel', 'Backup recovery key')}</label>
-            <p className="sp-hint">{t('backupKeyHint', 'Keep this key outside this server. Without it, encrypted copies cannot be restored.')}</p>
-            <div className="sp-input-row">
-              <input
-                id="sp-backup-key"
-                className="ui-input"
-                type="text"
-                readOnly
-                value={backupEncryptKey}
-                spellCheck="false"
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => navigator.clipboard?.writeText(backupEncryptKey)}
-              >
-                {t('copy', 'Copy')}
-              </button>
-            </div>
-          </div>
-        )}
 
         {newestAge && (
           <p className="sp-hint sp-mt-12">

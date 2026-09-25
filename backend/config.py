@@ -59,9 +59,6 @@ class Setting(BaseSettings):
     # BOT_ENCRYPT_KEY when unset so existing installs get encryption
     # without a new secret to manage.
     NODE_ENCRYPT_KEY: str | None = None
-    # Separate key for client-side encryption of remote backup copies. It is
-    # intentionally not derived from the Telegram bot token.
-    BACKUP_ENCRYPT_KEY: str | None = None
     # Installer metadata (ignored by app, used by install.sh for state)
     DATA_DIR: str = ""
     PUBLIC_URL: str | None = None
@@ -74,8 +71,6 @@ class Setting(BaseSettings):
             _validate_fernet_key(self.BOT_ENCRYPT_KEY)
         if self.NODE_ENCRYPT_KEY:
             _validate_fernet_key(self.NODE_ENCRYPT_KEY)
-        if self.BACKUP_ENCRYPT_KEY:
-            _validate_fernet_key(self.BACKUP_ENCRYPT_KEY)
         if not self.ADMIN_PASSWORD and not self.ADMIN_PASSWORD_HASH:
             raise ValueError(
                 "No owner credentials — set ADMIN_PASSWORD_HASH (bcrypt, preferred) or "

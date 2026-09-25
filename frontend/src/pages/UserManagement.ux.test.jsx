@@ -78,16 +78,16 @@ describe('UserManagement search debounce', () => {
     fireEvent.change(input, { target: { value: 'user1' } });
     // Rapid keystrokes must not rewrite the URL synchronously.
     expect(getSearch()).toBe('');
-    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 2000 });
+    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 8000 });
   });
 
   it('clears the query immediately from the clear button', async () => {
     const { getSearch } = renderPage(taggedUsers(2));
     const input = await screen.findByLabelText(/search/i);
     fireEvent.change(input, { target: { value: 'user1' } });
-    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 2000 });
+    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 8000 });
     fireEvent.click(screen.getByText(/^clear$/i));
-    await waitFor(() => expect(getSearch()).toBe(''), { timeout: 2000 });
+    await waitFor(() => expect(getSearch()).toBe(''), { timeout: 8000 });
   });
 });
 

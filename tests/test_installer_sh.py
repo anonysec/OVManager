@@ -429,7 +429,7 @@ def test_emit_json_shape():
         helpers + _extract_function("emit_json") + "\n"
         'MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password '
         'INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self '
-        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} BACKUP_ENCRYPT_KEY=backup-key JSON=1 emit_json 1\n'
+        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} JSON=1 emit_json 1\n'
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -438,7 +438,7 @@ def test_emit_json_shape():
     assert data["user"] == "admin"
     assert data["password"] == "long-enough-password"
     assert data["version"] == ver
-    assert data["backup_recovery_key"] == "backup-key"
+    assert "backup_recovery_key" not in data
 
 
 def test_docker_data_dir_and_perms_are_container_safe():
@@ -799,9 +799,10 @@ def test_db_restore_needed_skips_untouched_database(tmp_path):
     assert "NEEDS" in r3.stdout
 
 
-def test_write_env_skips_branch_only_keys_on_old_trees(tmp_path):
-    """Fresh installs of older releases must not get .env keys their
-    backend rejects (defect: BACKUP_ENCRYPT_KEY crash-looped v1.2.7)."""
+def test_write_env_never_writes_a_backup_key(tmp_path):
+    """Retired secrets stay out of fresh installs: no BACKUP_ENCRYPT_KEY in
+    .env, and the staged update copy is scrubbed so the new backend (which
+    rejects unknown keys) boots cleanly on the first try."""
     fake_install = tmp_path / "install"
     (fake_install / "backend").mkdir(parents=True)
     (fake_install / "backend" / "config.py").write_text("class Setting: pass\n", encoding="utf-8")
@@ -816,11 +817,7 @@ def test_write_env_skips_branch_only_keys_on_old_trees(tmp_path):
     assert r.returncode == 0, r.stderr
     env = (fake_install / ".env").read_text(encoding="utf-8")
     assert "BACKUP_ENCRYPT_KEY" not in env
-    (fake_install / "backend" / "config.py").write_text("BACKUP_ENCRYPT_KEY = None\n", encoding="utf-8")
-    r2 = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
-    assert r2.returncode == 0, r2.stderr
-    env2 = (fake_install / ".env").read_text(encoding="utf-8")
-    assert "BACKUP_ENCRYPT_KEY=" in env2
+    assert "BOT_ENCRYPT_KEY=" in env
 
 
 def test_recover_update_restarts_never_activated_tree():
@@ -939,3 +936,13 @@ def test_backup_key_not_printed_at_install():
     content = INSTALLER_PATH.read_text(encoding="utf-8")
     card = content.split("success_card()")[1].split("\n}")[0]
     assert "Backup key" not in card
+
+
+def test_update_staging_scrubs_retired_backup_key():
+    """Upgrades from key-era installs must boot first try: the staged .env
+    copy is scrubbed of BACKUP_ENCRYPT_KEY, which the new backend rejects."""
+    source = _extract_function("do_update")
+    anchor = 'cp -p "$INSTALL_DIR/.env" "$UPDATE_STAGE/.env"'
+    assert anchor in source
+    after = source.split(anchor, 1)[1]
+    assert "BACKUP_ENCRYPT_KEY" in after.split("Step 3/6", 1)[0]
