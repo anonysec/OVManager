@@ -3,6 +3,7 @@
 
 """URLPATH hardening: route-table-derived reserved prefixes + CLI reset."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import api
@@ -77,3 +78,19 @@ def test_reset_urlpath_cli_flag():
         from backend.urlpath import invalidate_cache
 
         invalidate_cache()
+
+
+def test_set_urlpath_rejects_reserved_prefixes():
+    """The write path itself must refuse reserved prefixes: the settings
+    router validates user input, but main.py's CLI path and any future
+    writer would otherwise shadow live routes and lock the operator out."""
+    from backend.urlpath import reserved_prefixes, set_urlpath
+
+    for evil in ("api", "assets", "health", "doc", "openapi.json"):
+        with pytest.raises(ValueError, match="reserved"):
+            set_urlpath(evil)
+    # Case-insensitive guard; the reserved set is derived from live routes.
+    assert "api" in reserved_prefixes()
+    # A legal prefix still works (and clears again for other tests).
+    assert set_urlpath("mysecret") == "mysecret"
+    assert set_urlpath("") == ""

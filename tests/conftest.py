@@ -51,7 +51,7 @@ def _disable_urlpath_for_tests():
     Solution: we patch only the *first call* (before any explicit set_urlpath
     runs). Tests that call set_urlpath re-cache directly, so they bypass our
     short-circuit."""
-    import backend.urlpath as urlpath_mod
+    import backend.urlpath._core as urlpath_mod
 
     global _real_get_urlpath, _real_cache_value, _real_cache_ts
     if _real_get_urlpath is None:
@@ -83,7 +83,7 @@ def _reset_urlpath_cache_after_each_test():
     call set_urlpath() set _cache_value directly; this fixture clears the
     'explicit' marker back to base state so the next test isn't poisoned."""
     yield
-    import backend.urlpath as urlpath_mod
+    import backend.urlpath._core as urlpath_mod
 
     with urlpath_mod._lock:
         urlpath_mod._cache_value = ""

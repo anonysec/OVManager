@@ -85,9 +85,16 @@ def set_urlpath(value: str) -> str:
 
     Returns the normalized value that was persisted. Raises when persistence fails so
     callers cannot report a security-sensitive path change that will be lost on restart.
+    Reserved prefixes (api, assets, sub, …) raise here too: the settings router
+    validates user input, but main.py's CLI path and any future writer must not
+    be able to shadow live routes and lock the operator out.
     """
     global _cache_value, _cache_ts
     value = (value or "").strip("/")
+    if value and value.lower() in reserved_prefixes():
+        raise ValueError(
+            f"URLPATH {value!r} is reserved (it would shadow a panel route) — choose another path"
+        )
     # Persist to DB (best effort — may fail in test environments)
     try:
         db = SessionLocal()
