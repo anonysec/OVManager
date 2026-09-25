@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
-import { readPrefs } from '../../utils/notifPrefs';
+import { DATA_REFRESH_SEC } from '../../utils/notifPrefs';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
 
@@ -92,7 +92,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
           if (data.length) setSeries(data.slice(-MAX_POINTS));
         })
         .catch(() => { /* keep existing */ });
-    }, readPrefs().refreshSec * 1000);
+    }, DATA_REFRESH_SEC * 1000);
     return () => clearInterval(id);
   }, [hours]);
 

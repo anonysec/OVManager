@@ -17,7 +17,7 @@ import CommandPalette from '../components/CommandPalette';
 import ShortcutsHelp from '../components/ShortcutsHelp';
 import MobileNav from '../components/MobileNav';
 import RouteProgress from '../components/RouteProgress';
-import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { getDisplayTimezone, setDisplayTimezone } from '../utils/displayTimezone';
 import { settle } from '../hooks/useAsyncData';
 import './SetupWizard.css';
@@ -318,16 +318,14 @@ const DashboardLayout = () => {
     }
   }, [t, userRole]);
 
-  // Poll cadence comes from Settings → Alerts & Dashboard, and restarts
-  // immediately when the preference changes. The bell always loads once on
-  // mount so it isn't empty for the first interval period.
+  // Fixed cadence; toggling an alert type reloads immediately so the bell
+  // reflects the new filter without waiting for the next poll.
   useEffect(() => {
     let id = null;
     const start = (immediate = false) => {
       if (id) clearInterval(id);
       if (immediate) loadNotifications();
-      const sec = readPrefs().refreshSec;
-      id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, sec * 1000);
+      id = setInterval(() => { if (document.visibilityState === 'visible') loadNotifications(); }, DATA_REFRESH_SEC * 1000);
     };
     start(true);
     const onPrefs = () => start(true);

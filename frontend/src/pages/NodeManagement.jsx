@@ -10,7 +10,7 @@ import NodeFormModal from '../components/NodeFormModal';
 import ConfirmModal from '../components/ConfirmModal';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
-import { readPrefs } from '../utils/notifPrefs';
+import { DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo';
 import {
   Badge, Button, Card, EmptyState, ErrorState, PageHeader, StatCard, StatusBadge,
@@ -98,7 +98,7 @@ const NodeManagement = () => {
       if (!cancelled) setNodeInfo((prev) => ({ ...prev, ...fresh }));
     };
     fetchAllStatus();
-    const intervalId = setInterval(fetchAllStatus, readPrefs().refreshSec * 1000);
+    const intervalId = setInterval(fetchAllStatus, DATA_REFRESH_SEC * 1000);
     return () => { cancelled = true; clearInterval(intervalId); };
   }, [nodes]);
 

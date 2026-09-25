@@ -21,7 +21,7 @@ const parseBundle = (raw, t) => {
       address,
       port: port ? Number(port) : 2083,
       key,
-      use_tls: params.get('tls') === '1',
+      use_tls: params.get('tls') !== '0',
     },
   };
 };
@@ -115,6 +115,10 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
       protocol: formData.protocol || 'udp',
       ovpn_port: Number(formData.ovpn_port),
       port: Number(formData.port),
+      // TLS is not optional for new nodes: the API key must never travel in
+      // cleartext. Edits preserve the stored value so a working node is
+      // never flipped by a metadata change.
+      use_tls: isEdit ? formData.use_tls !== false : true,
       // Blank = auto-detect; the API rejects "" (pattern), so send null.
       country_code: (formData.country_code || '').trim() || null,
     };
@@ -259,7 +263,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
               autoComplete="off" spellCheck={false}
             />
           </Field>
-          {isEdit ? (
+          {isEdit && (
             <label className="nf-check">
               <input type="checkbox" name="set_new_setting" checked={formData.set_new_setting} onChange={handleChange} />
               <span>
@@ -267,14 +271,9 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }) => {
                 <small>{t('applyNodeSettingsHint', 'Re-writes OpenVPN protocol/port/tunnel on the node. Leave off to only update this panel record — works even when the node is offline.')}</small>
               </span>
             </label>
-          ) : (
-            <label className="nf-check">
-              <input type="checkbox" name="use_tls" checked={!!formData.use_tls} onChange={handleChange} />
-              <span>
-                {t('nodeUseTls', 'Use TLS (https)')}
-                <small>{t('nodeUseTlsHint', 'On for self-signed or Let’s Encrypt. Self-signed = encrypted but unverified (no MITM protection); Let’s Encrypt = fully verified. Off sends the API key in cleartext.')}</small>
-              </span>
-            </label>
+          )}
+          {!isEdit && (
+            <p className="nf-note">{t('nodeTlsAlways', 'Connection is always encrypted (TLS). Self-signed nodes verify with a fingerprint on first connect.')}</p>
           )}
         </fieldset>
 

@@ -2,25 +2,17 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * Settings — one page, two modes.
+ * Settings — one page, every section in a single flow.
  *
- * Simple   Everyday controls: General (panel URL path), Appearance/Theme,
- *          Defaults, Alerts, and the bot token basics.
- * Advanced Rarely touched or riskier sections: TLS status, Backup/restore,
- *          Security, Display, System maintenance.
- *
- * The Tabs primitive owns the Simple/Advanced switch. Sections still live in
- * ./settings/ (one file each) and are rendered unchanged — only regrouped and
- * restyled. Every section keeps its existing API calls.
- *
+ * Sections live in ./settings/ (one file each) and are rendered unchanged.
  * Owner gating is unchanged: normal admins only see the local-only sections
  * (Appearance, Alerts); everything server-backed stays owner-only.
  *
- * Deep links (`/settings#backup`) still work: the hash picks the tab that
- * contains the section and scrolls it into view.
+ * Deep links (`/settings#backup`) still work: the hash scrolls the section
+ * into view.
  */
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -28,9 +20,9 @@ import apiClient from '../services/api';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import {
   FiServer, FiShield, FiArchive, FiSend, FiLink, FiUserPlus,
-  FiClock, FiMonitor, FiBell, FiSliders, FiTool, FiLock,
+  FiClock, FiMonitor, FiBell, FiLock, FiSettings,
 } from 'react-icons/fi';
-import { Card, PageHeader, Tabs } from '../components/ui';
+import { Card, PageHeader } from '../components/ui';
 import { SectionHeader } from './settings/shared';
 import DefaultsSection from './settings/DefaultsSection';
 import BotSection from './settings/BotSection';
@@ -46,39 +38,30 @@ import MyActivitySection from './settings/MyActivitySection';
 import './Settings.css';
 import './SettingsPage.css';
 
-const TAB_KEY = 'ovmanager-settings-tab';
-
-// `group` decides which tab a section lives in; order is the render order.
+// Order is the render order.
 const SECTIONS = [
-  { id: 'general',    group: 'simple',   icon: FiLink,      labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
-  { id: 'appearance', group: 'simple',   icon: FiMonitor,   labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection },
-  { id: 'defaults',   group: 'simple',   icon: FiUserPlus,  labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, shared: true },
-  { id: 'alerts',     group: 'simple',   icon: FiBell,      labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },
-  { id: 'bot',        group: 'simple',   icon: FiSend,      labelKey: 'settingsBot',        label: 'Bot',        descKey: 'settingsBotDesc',        desc: 'Telegram bot token, enable state and owner ID', Component: BotSection, shared: true },
-  { id: 'tls',        group: 'advanced', icon: FiLock,      labelKey: 'settingsTls',        label: 'TLS',        descKey: 'settingsTlsDesc',        desc: 'Certificate status for the panel itself', Component: TlsSection },
-  { id: 'backup',     group: 'advanced', icon: FiArchive,   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection },
-  { id: 'security',   group: 'advanced', icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
-  { id: 'display',    group: 'advanced', icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
-  { id: 'system',     group: 'advanced', icon: FiServer,    labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
+  { id: 'general',    icon: FiLink,      labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
+  { id: 'appearance', icon: FiMonitor,   labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection },
+  { id: 'defaults',   icon: FiUserPlus,  labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, shared: true },
+  { id: 'alerts',     icon: FiBell,      labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },
+  { id: 'bot',        icon: FiSend,      labelKey: 'settingsBot',        label: 'Bot',        descKey: 'settingsBotDesc',        desc: 'Telegram bot token, enable state and owner ID', Component: BotSection, shared: true },
+  { id: 'tls',        icon: FiLock,      labelKey: 'settingsTls',        label: 'TLS',        descKey: 'settingsTlsDesc',        desc: 'Certificate status for the panel itself', Component: TlsSection },
+  { id: 'backup',     icon: FiArchive,   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection },
+  { id: 'security',   icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
+  { id: 'display',    icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
+  { id: 'system',     icon: FiServer,    labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
 ];
 
-const groupOf = (hash) => SECTIONS.find((s) => s.id === hash)?.group;
+const KNOWN_IDS = new Set(SECTIONS.map((s) => s.id));
 
 const Settings = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const navigate = useNavigate();
   const { refreshTick } = useLive();
   // Admins only get the local-only sections (appearance, alerts) — every
   // server-backed section PUTs to owner-only endpoints.
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
-
-  const [tab, setTab] = useState(() => {
-    const fromHash = groupOf(location.hash.replace(/^#/, ''));
-    if (fromHash) return fromHash;
-    return localStorage.getItem(TAB_KEY) === 'advanced' ? 'advanced' : 'simple';
-  });
 
   // Single shared load of /server/settings for the sections that need it
   // (General/Defaults/Bot/Display). Saves live requests; each section keeps
@@ -103,33 +86,15 @@ const Settings = () => {
   }, [reloadShared, refreshTick, isOwner]);
 
   // Owners see all sections; admins only the local-only ones (no server data).
-  const visible = useMemo(
+  const activeSections = useMemo(
     () => (isOwner ? SECTIONS : SECTIONS.filter((s) => s.id === 'alerts' || s.id === 'appearance')),
     [isOwner],
   );
-  const activeSections = useMemo(() => visible.filter((s) => s.group === tab), [visible, tab]);
 
-  const tabs = useMemo(() => ([
-    { id: 'simple', label: t('settingsSimpleTab', 'Simple'), icon: <FiSliders size={14} aria-hidden="true" />, count: visible.filter((s) => s.group === 'simple').length },
-    { id: 'advanced', label: t('settingsAdvancedTab', 'Advanced'), icon: <FiTool size={14} aria-hidden="true" />, count: visible.filter((s) => s.group === 'advanced').length },
-  ]), [t, visible]);
-
-  const changeTab = (next) => {
-    setTab(next);
-    localStorage.setItem(TAB_KEY, next);
-    // Drop a hash that belongs to the other tab so the URL matches what is shown.
-    if (location.hash && groupOf(location.hash.replace(/^#/, '')) !== next) {
-      navigate(location.pathname, { replace: true });
-    }
-  };
-
-  // Deep links (`#backup`) select the owning tab then scroll the section in.
+  // Deep links (`#backup`) scroll the section into view.
   useEffect(() => {
     const hash = location.hash.replace(/^#/, '');
-    if (!hash) return;
-    const group = groupOf(hash);
-    if (group && group !== tab) setTab(group);
-    if (group !== tab) return; // wait for a re-render with the right tab
+    if (!hash || !KNOWN_IDS.has(hash)) return;
     const el = document.getElementById(`sp-section-${hash}`);
     if (!el) return;
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -138,29 +103,15 @@ const Settings = () => {
       el.focus({ preventScroll: true });
     }, 0);
     return () => clearTimeout(id);
-  }, [location.hash, tab]);
+  }, [location.hash]);
 
   return (
     <div className="sp-page">
       <PageHeader
         title={t('navSettings', 'Settings')}
-        icon={<FiSliders aria-hidden="true" />}
-        subtitle={t('settingsSubtitle', 'Everyday options first. Advanced tools live one tab away.')}
+        icon={<FiSettings aria-hidden="true" />}
+        subtitle={t('settingsSubtitle', 'All panel settings in one place.')}
       />
-
-      <Tabs
-        tabs={tabs}
-        value={tab}
-        onChange={changeTab}
-        ariaLabel={t('settingsTabAria', 'Settings mode')}
-        className="sp-tabs"
-      />
-
-      <p className="sp-tab-note">
-        {tab === 'simple'
-          ? t('settingsSimpleIntro', 'Everyday settings most operators change.')
-          : t('settingsAdvancedIntro', 'Rarely changed or riskier settings. Handle with care.')}
-      </p>
 
       {activeSections.length === 0 ? (
         <Card className="sp-owner-note" tone="warning">
@@ -205,11 +156,9 @@ const Settings = () => {
                 </section>
               );
             })}
-            {tab === 'simple' && (
-              <section className="sp-section" id="sp-section-activity">
-                <MyActivitySection />
-              </section>
-            )}
+            <section className="sp-section" id="sp-section-activity">
+              <MyActivitySection />
+            </section>
           </div>
         </>
       )}
