@@ -214,15 +214,6 @@ def get_bot_config(db: Session):
     }
 
 
-def patch_admin_telegram_id(db: Session, username: str, tg_id: int | None):
-    admin = db.query(Admin).filter(Admin.username == username).first()
-    if not admin:
-        raise NotFoundError("Admin", username)
-    admin.telegram_id = tg_id
-    db.commit()
-    db.refresh(admin)
-    return admin
-
 
 def get_user_by_name(db: Session, name: str):
     user = db.query(User).filter(User.name == name).first()
@@ -452,10 +443,6 @@ def get_all_nodes(db: Session):
 def get_active_nodes(db: Session):
     """Return only nodes with status=True."""
     return db.query(Node).filter(Node.status == True).all()  # noqa: E712
-
-
-def get_node_by_address(db: Session, address: str):
-    return db.query(Node).filter(Node.address == address).first()
 
 
 def get_node_by_id(db: Session, id: int):

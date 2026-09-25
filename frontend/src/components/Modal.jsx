@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 
@@ -23,6 +24,7 @@ const FOCUSABLE = [
 ].join(', ');
 
 const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
+  const { t } = useTranslation();
   const dialogRef = useRef(null);
   // Store what had focus before the modal opened so we can restore it on close.
   const previousFocusRef = useRef(null);
@@ -114,7 +116,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
               type="button"
               onClick={onClose}
               className="modal-close"
-              aria-label="Close modal"
+              aria-label={t('closeModal', 'Close modal')}
             >
               <FiX size={20} />
             </button>

@@ -16,40 +16,11 @@
 .ds-page > .ui-page-header { margin-bottom: 0; }
 
 /* ── Header ──────────────────────────────────────────────────────── */
-.ds-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
-.ds-header-copy h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  line-height: 1.15;
-}
-
 .ds-live {
   display: flex;
   align-items: center;
   gap: 7px;
   margin: 6px 0 0;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-/* Keep the legacy eyebrow hook rendering identically to .ds-live in case
-   any consumer still uses it. */
-.ds-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -75,12 +46,6 @@
 .ds-updated-stale {
   color: var(--warning-text);
   font-weight: 600;
-}
-
-.ds-header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 @keyframes ds-pulse {
@@ -500,14 +465,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   cursor: not-allowed;
 }
 
-.ds-chart-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
 .ds-chart-status {
   display: inline-block;
   width: 6px;
@@ -660,58 +617,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   outline-offset: 2px;
 }
 
-/* ── Tabs (underline, not pills) ───────────────────────────────────── */
-.ds-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-  width: 100%;
-}
-
-.ds-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  margin-bottom: -1px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  border-radius: 0;
-  cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.ds-tab:hover { color: var(--text-primary); }
-
-.ds-tab.active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
-}
-
-.ds-tab:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.ds-tab-count {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--surface-3);
-  color: var(--text-secondary);
-}
-
-.ds-tab.active .ds-tab-count {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
 /* ── Reason badges (needs attention) ─────────────────────────────── */
 .ds-reasons {
   display: inline-flex;
@@ -856,22 +761,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 /* ── Node health summary ─────────────────────────────────────────── */
-.ds-node-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-
-.ds-node-summary-total {
-  direction: ltr;
-  unicode-bidi: isolate;
-  margin-inline-start: auto;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-muted);
-}
+.ds-node-list {
 
 .ds-node-list {
   display: flex;
@@ -988,8 +878,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 @media (max-width: 767.98px) {
   .ds-page { gap: 16px; padding-bottom: 32px; }
-  .ds-header { flex-direction: column; align-items: flex-start; }
-  .ds-header-copy h1 { font-size: 1.35rem; }
   .ds-node-row { grid-template-columns: minmax(0, 1fr) auto auto; }
   .ds-node-metric { display: none; }
   .ds-card-body { padding: 16px; }

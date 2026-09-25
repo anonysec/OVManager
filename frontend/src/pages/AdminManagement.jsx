@@ -207,13 +207,13 @@ const AdminManagement = () => {
       } else {
         setLoadError(true);
       }
-    } catch (error) {
-      console.error('Error fetching admins:', error);
+    } catch {
       setLoadError(true);
+      if (!background) addToast(t('loadError', 'Failed to load admins'), 'error');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t, addToast]);
 
   useEffect(() => { fetchAdmins(); }, [fetchAdmins]);
 

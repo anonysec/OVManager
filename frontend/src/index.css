@@ -83,38 +83,10 @@
   border: 0;
 }
 
-.login-box {
-  background: var(--background-secondary);
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: var(--shadow);
-  width: 100%;
-  max-width: 400px;
-  text-align: center;
-  border: 1px solid var(--border-color);
-  backdrop-filter: blur(10px);
-}
-
 @keyframes orbit {
   0% { transform: rotate(0deg) scale(1); opacity: 0.7; }
   50% { transform: rotate(180deg) scale(1.1); opacity: 0.5; }
   100% { transform: rotate(360deg) scale(1); opacity: 0.7; }
-}
-
-.login-box h2 {
-  margin-bottom: 25px;
-  font-size: 32px;
-  background: linear-gradient(90deg, var(--accent-color), var(--text-primary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.login-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 25px;
-  line-height: 1.6;
 }
 
 .input-group {
@@ -254,14 +226,6 @@
   animation: fadeIn 0.3s ease;
 }
 
-.success-message {
-  color: var(--success-color);
-  margin-top: 15px;
-  min-height: 1em;
-  font-size: 14px;
-  animation: fadeIn 0.3s ease;
-}
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -392,20 +356,6 @@
   }
 }
 
-.ops-nav-link.active {
-  color: var(--accent-color);
-  background: rgba(252, 122, 30, 0.15);
-}
-
-.ops-nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  inset-inline: 12px;
-  height: 3px;
-  background: var(--accent-color);
-  border-radius: 2px;
-}
 
 /* --- Icon Buttons (uniform size/style) --- */
 .icon-btn {
@@ -468,11 +418,6 @@
   margin-inline-start: auto;
 }
 
-.ops-profile.active {
-  color: var(--accent-color);
-  background: rgba(252, 122, 30, 0.15);
-}
-
 .avatar-xs {
   display: inline-flex;
   align-items: center;
@@ -487,37 +432,12 @@
   flex-shrink: 0;
 }
 
-.profile-dropdown-item.danger:hover {
-  background: rgba(166, 61, 42, 0.15);
-  color: var(--danger-color);
-}
-
-
-
-
 
 /* --- Notifications --- */
 .notification-wrap {
   position: relative;
 }
 
-.ops-bell.has-alerts {
-  color: var(--accent-color);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(252, 122, 30, 0.4); }
-  50% { box-shadow: 0 0 0 10px rgba(252, 122, 30, 0); }
-}
-
-.ops-bell .sr-only {
-  position: absolute;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
 
 .notification-popover {
   position: absolute;
@@ -638,31 +558,10 @@
 
 /* --- Tooltip (single implementation; see styles-premium.css .has-tip) --- */
 @media (max-width: 767.98px) {
-  .ops-topbar {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-  }
-
-
   .ops-userbar {
     flex-wrap: wrap;
     gap: 8px;
   }
-
-  .ops-profile {
-    display: none;
-  }
-  
-  .profile-wrap {
-    order: -1;
-  }
-
-  .ops-main {
-    padding: 16px;
-  }
-
-
 
   .toast-stack {
     inset-inline: 12px;
@@ -699,14 +598,8 @@
 
 /* --- Print Styles --- */
 @media print {
-  .ops-topbar,
-  .ops-userbar,
-  .ops-profile {
+  .ops-userbar {
     display: none;
-  }
-  
-  .ops-main {
-    padding: 0;
   }
   
 }
@@ -725,55 +618,6 @@
 .empty-state p { margin: 0 0 16px; font-size: var(--font-size-sm); line-height: 1.5; max-width: 360px; }
 .empty-state-action { margin-top: 4px; }
 
-.onboarding-steps li.is-done {
-  background: linear-gradient(90deg, rgba(1, 195, 168, 0.08) 0%, var(--surface-color) 100%);
-  border-color: rgba(1, 195, 168, 0.25);
-}
-
-.onboarding-steps li.is-next {
-  background: linear-gradient(90deg, rgba(252, 122, 30, 0.08) 0%, var(--surface-color) 100%);
-  border-color: rgba(252, 122, 30, 0.25);
-}
-
-.onboarding-steps li.is-done .onboarding-step-icon {
-  background: rgba(1, 195, 168, 0.16);
-  color: var(--success-color);
-}
-
-.onboarding-steps li.is-next .onboarding-step-icon {
-  background: rgba(252, 122, 30, 0.16);
-  color: var(--accent-color);
-}
-.expiry-chip.is-ok { background: rgba(1, 195, 168, 0.14); color: var(--success-color); }
-.expiry-chip.is-soon { background: rgba(252, 122, 30, 0.16); color: var(--accent-color); }
-.expiry-chip.is-expired { background: rgba(166, 61, 42, 0.16); color: var(--danger-color); }
-
-/* --- Usage bar --- */
-.usage-bar {
-  display: inline-block;
-  width: 60px;
-  height: 4px;
-  background: var(--surface-color);
-  border-radius: 999px;
-  vertical-align: middle;
-  margin-inline-start: 8px;
-  overflow: hidden;
-}
-.usage-bar-fill.warn { background: var(--accent-color); }
-.usage-bar-fill.bad { background: var(--danger-color); }
-
-/* --- QR code in detail modal --- */
-.udetail-qr {
-  margin: 12px 0;
-  padding: 12px;
-  background: var(--surface-color);
-  border-radius: 8px;
-  display: flex;
-  justify-content: center;
-}
-.udetail-qr img { display: block; image-rendering: pixelated; }
-
-/* --- Command palette --- */
 .palette-overlay {
   position: fixed;
   inset: 0;
@@ -1020,16 +864,6 @@
   align-items: center;
 }
 
-.ops-sidebar--collapsed .sidebar-logout {
-  justify-content: center;
-  margin: 4px;
-  padding: 10px;
-}
-
-.ops-sidebar--collapsed .sidebar-version {
-  display: none;
-}
-
 /* Mobile: full width */
 .ops-sidebar--mobile {
   transform: translateX(-100%);
@@ -1218,38 +1052,8 @@
   letter-spacing: -0.005em;
 }
 
-.sidebar-version {
-  padding: 8px 14px;
-  text-align: center;
-}
-
-.sidebar-logout {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted, var(--text-secondary));
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.sidebar-logout:hover {
-  background: rgba(220, 53, 69, 0.12);
-  color: #dc3545;
-}
-
 /* Mobile: show hamburger, hide sidebar by default */
 @media (max-width: 767.98px) {
-  .sidebar-mobile-trigger {
-    display: flex;
-  }
   .ops-sidebar:not(.ops-sidebar--mobile) {
     transform: translateX(-100%);
   }
@@ -1284,11 +1088,6 @@
   animation: pulse-warning 1.5s ease-in-out infinite;
 }
 
-.status-dot.purple {
-  background: #722ed1;
-  animation: pulse-purple 1.5s ease-in-out infinite;
-}
-
 @keyframes pulse-online {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.1); }
@@ -1302,11 +1101,6 @@
 @keyframes pulse-danger {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(1.15); }
-}
-
-@keyframes pulse-purple {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.1); }
 }
 
 @keyframes pulse-blink {

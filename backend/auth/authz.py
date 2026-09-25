@@ -25,16 +25,6 @@ def require_owner(user: dict = Depends(get_current_user)):
     return user
 
 
-def require_admin_or_main(user: dict = Depends(get_current_user)):
-    """Dependency: require the user to be at least an admin (or owner)."""
-    if user.get("type") not in ("admin", "owner"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires admin privileges",
-        )
-    return user
-
-
 def require_ownership(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dependency factory: returns a function that checks user ownership.
 
