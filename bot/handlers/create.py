@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-import re
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from backend.models.validators import validate_username
 from bot.api import Panel
 from bot.config import config
 from bot.formatters import esc, plan_label
@@ -18,8 +17,6 @@ from bot.identity import Actor
 from bot.keyboards import cancel_actions, confirm_create, main_menu, name_prompt, plan_picker
 from bot.states import clear_flow, get_flow, set_flow
 from bot.ui import answer, edit_or_reply
-
-_NAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
 
 
 def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict:
@@ -155,7 +152,7 @@ async def _reprompt(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
 async def _accept_name(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, raw: str) -> None:
     lang = lang_of(update, context)
     name = raw.strip().replace(" ", "_")
-    if not _NAME_RE.match(name):
+    if not validate_username(name):
         await edit_or_reply(update, t(lang, "create_bad_name"), reply_markup=cancel_actions(lang=lang))
         return
     existing = await Panel(actor.token).get_user(name=name)
