@@ -12,6 +12,12 @@ BROKEN nodes cheaply instead of paying full timeouts every tick.
 
 Single process + scheduler-driven access, so the registry lock only
 guards dict replacement, not RPCs.
+
+The client class is resolved lazily inside :func:`get_connection` via
+``backend.node.requests``: this module is imported from the bottom of
+``requests.py`` (after ``NodeRequests`` is defined) to break the import
+cycle, so a module-level from-import here would see a partially
+initialized module.
 """
 
 from __future__ import annotations
@@ -20,8 +26,10 @@ import threading
 import time
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from backend.node.requests import NodeRequests
+if TYPE_CHECKING:
+    from backend.node.requests import NodeRequests
 
 
 class NodeHealth(StrEnum):
@@ -71,6 +79,11 @@ def get_connection(node) -> NodeRequests:
     Nodes without an ``id`` (test doubles) construct fresh clients and are
     never cached.
     """
+    # Lazy attribute access (not a from-import): keeps the class identical
+    # to backend.node.requests.NodeRequests whatever test patching does,
+    # without a partially-initialized-module cycle at import time.
+    from backend.node.requests import NodeRequests
+
     node_id = getattr(node, "id", None)
     signature = ConnectionSignature.from_node(node)
     if node_id is None:

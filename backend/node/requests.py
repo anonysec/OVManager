@@ -79,9 +79,16 @@ def node_client(node, **kw) -> "NodeRequests":
             use_tls=node.use_tls,
             **kw,
         )
-    from backend.node.connection import get_connection
+    return _get_connection(node)
 
-    return get_connection(node)
+
+# Imported at the bottom, after NodeRequests exists: connection imports this
+# module, so a top-level import would cycle. Importing HERE (not lazily in
+# the function) binds the REAL NodeRequests class into the connection
+# module before any test can monkeypatch backend.node.requests.NodeRequests —
+# a lazy first import during a patch window would snapshot the fake class
+# permanently and poison the cache for every later test (CI failure, #39).
+from backend.node.connection import get_connection as _get_connection  # noqa: E402
 
 
 class NodeRequests:
