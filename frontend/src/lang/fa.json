@@ -798,7 +798,7 @@
   "tlsPlain": "HTTP ساده",
   "tlsUnverified": "TLS تأییدنشده (خودامضا) — بدون محافظت در برابر شنود. نود را به Let's Encrypt منتقل کنید.",
   "tlsPlainDetail": "HTTP ساده — کلید API به‌صورت متن ساده در شبکه منتقل می‌شود. روی نود TLS را فعال کنید.",
-  "minPasswordHint": "حداقل ۱۲ نویسه",
+  "minPasswordHint": "حداقل ۸ نویسه",
   "usersSummarySub": "{{active}} فعال · {{online}} آنلاین",
   "activeUsersSub": "حساب‌های فعال",
   "trafficToday": "ترافیک امروز",
@@ -830,5 +830,7 @@
   "userTag": "برچسب",
   "userTagHint": "اختیاری — مثلاً monthly، vip، reseller-a. روی ردیف کاربر به‌صورت چیپ نمایش داده می‌شود.",
   "userTagPlaceholder": "monthly، vip، reseller-a…",
-  "userUpdated": "کاربر به‌روزرسانی شد"
+  "userUpdated": "کاربر به‌روزرسانی شد",
+  "adminDefaultsHint": "مقادیر پیش‌فرض ساخت کاربر برای این مدیر. خالی بگذارید تا از مقادیر پیش‌فرض کلی در تنظیمات ← پیش‌فرض‌ها استفاده شود.",
+  "adminDefaultsEffective": "مقدار فعلی: {{days}} روز · {{traffic}} گیگابایت · {{devices}} دستگاه"
 }

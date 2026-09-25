@@ -29,6 +29,26 @@ def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict:
     return flow
 
 
+async def _effective_plan(actor: Actor) -> tuple[int, int, int]:
+    """(days, traffic_gb, logins) for the acting admin.
+
+    Prefers the panel's per-admin override (owner global as fallback) and only
+    drops to the bot's local config when the panel cannot be reached, so the
+    Standard plan is the same whether it is picked here or in the web UI.
+    """
+    effective = await Panel(actor.token).user_defaults()
+    if effective:
+        try:
+            return (
+                int(effective.get("days") or 0),
+                int(effective.get("traffic_gb") or 0),
+                int(effective.get("max_users") or 0),
+            )
+        except (TypeError, ValueError):
+            pass
+    return (config.default_days, config.default_traffic_gb, config.default_max_users)
+
+
 async def start_create(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
     """Plan first: the operator only types a name (and custom values)."""
     lang = lang_of(update, context)
@@ -86,9 +106,11 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
         flow["plan"] = plan
         flow["step"] = "name"
         if plan != "custom":
-            spec = config.plans.get(plan) or config.plans.get("standard")
-            if not spec:
-                spec = (config.default_days, config.default_traffic_gb, config.default_max_users)
+            if plan == "standard":
+                # Standard is the caller's own new-user plan, not one fixed set.
+                spec = await _effective_plan(actor)
+            else:
+                spec = config.plans.get(plan) or await _effective_plan(actor)
             flow["days"], flow["traffic"], flow["logins"] = spec
         await _prompt_name(update, context, actor)
         return True

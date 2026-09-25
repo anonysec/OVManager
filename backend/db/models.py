@@ -44,6 +44,11 @@ class Admin(Base):
     telegram_id: Mapped[int] = mapped_column(nullable=True, unique=True)
     username_prefix: Mapped[str] = mapped_column(nullable=True)
     disabled: Mapped[bool] = mapped_column(default=False, server_default="0")
+    # Per-admin new-user defaults. NULL = inherit the owner's global plan
+    # from Settings (the Telegram bot block).
+    default_days: Mapped[int | None] = mapped_column(nullable=True)
+    default_traffic_gb: Mapped[int | None] = mapped_column(nullable=True)
+    default_max_users: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class AuthSession(Base):

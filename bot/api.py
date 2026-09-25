@@ -151,6 +151,15 @@ class Panel:
         data = result.get("data") or {}
         return data.get("username")
 
+    async def user_defaults(self) -> dict | None:
+        """The caller's effective new-user plan (their override, else owner's)."""
+        result = await self.request("GET", "/admin/me/defaults")
+        if not result.get("success"):
+            return None
+        data = result.get("data") or {}
+        effective = data.get("effective")
+        return effective if isinstance(effective, dict) else None
+
     async def create_user(self, name: str, days: int, traffic_gb: int, max_logins: int) -> dict:
         exp = date(2099, 12, 31) if days == 0 else date.today() + timedelta(days=days)
         payload = {

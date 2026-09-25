@@ -257,6 +257,9 @@ async def test_create_plan_then_name_then_confirm(monkeypatch):
     created = []
 
     class CreatePanel(FakePanel):
+        async def user_defaults(self):
+            return {"days": 7, "traffic_gb": 5, "max_users": 2}
+
         async def get_user(self, *, uuid=None, name=None):
             if uuid == "u-9":
                 return {"uuid": "u-9", "name": "bob", "is_active": True, "expiry_date": "2099-12-31"}
@@ -278,7 +281,12 @@ async def test_create_plan_then_name_then_confirm(monkeypatch):
     update2 = make_update(callback_data="plan:standard")
     await create_mod.handle_create_callback(update2, context, actor, "plan:standard")
     assert context.user_data["flow"]["step"] == "name"
-    assert (context.user_data["flow"]["days"], context.user_data["flow"]["traffic"]) == (30, 100)
+    # Standard = the acting admin's effective plan, not the fixed env default.
+    assert (
+        context.user_data["flow"]["days"],
+        context.user_data["flow"]["traffic"],
+        context.user_data["flow"]["logins"],
+    ) == (7, 5, 2)
     assert "auto" in callbacks(all_markups(update2)[-1])
 
     update3 = make_update(text="bob")
@@ -288,9 +296,30 @@ async def test_create_plan_then_name_then_confirm(monkeypatch):
 
     update4 = make_update(callback_data="okc")
     await create_mod.handle_create_callback(update4, context, actor, "okc")
-    assert created == [("bob", 30, 100, 1)]
+    assert created == [("bob", 7, 5, 2)]
     assert "flow" not in context.user_data
     assert any(t("en", "create_ok", name="bob") in text for text in all_texts(update4))
+
+
+@pytest.mark.asyncio
+async def test_standard_plan_falls_back_to_local_config_when_panel_has_no_defaults(monkeypatch):
+    from bot.handlers import create as create_mod
+
+    class NoDefaultsPanel(FakePanel):
+        async def user_defaults(self):
+            return None
+
+    monkeypatch.setattr(create_mod, "Panel", NoDefaultsPanel)
+    actor = make_actor()
+    update = make_update(callback_data="plan:standard")
+    context = make_context()
+    context.user_data["flow"] = {"kind": "create", "step": "plan"}
+    await create_mod.handle_create_callback(update, context, actor, "plan:standard")
+    flow = context.user_data["flow"]
+    assert (flow["days"], flow["traffic"]) == (
+        create_mod.config.default_days,
+        create_mod.config.default_traffic_gb,
+    )
 
 
 @pytest.mark.asyncio

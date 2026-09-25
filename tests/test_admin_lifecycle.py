@@ -291,3 +291,171 @@ def test_admin_lifecycle_actions_are_audited():
     assert ("admin.disable", name) in got
     assert ("admin.enable", name) in got
     assert ("admin.sessions_revoke", name) in got
+
+
+# ── Per-admin new-user defaults ─────────────────────────────────────────────
+
+
+def _set_global_defaults(days: int, traffic_gb: int, max_users: int) -> None:
+    from backend.db.engine import SessionLocal
+    from backend.db.models import Settings
+
+    db = SessionLocal()
+    try:
+        row = db.query(Settings).first()
+        row.default_days = days
+        row.default_traffic_gb = traffic_gb
+        row.default_max_users = max_users
+        db.commit()
+    finally:
+        db.close()
+
+
+def _clear_overrides(username: str) -> None:
+    from backend.db.engine import SessionLocal
+    from backend.db.models import Admin
+
+    db = SessionLocal()
+    try:
+        row = db.query(Admin).filter(Admin.username == username).first()
+        if row is not None:
+            row.default_days = None
+            row.default_traffic_gb = None
+            row.default_max_users = None
+            db.commit()
+    finally:
+        db.close()
+
+
+def test_admin_defaults_inherit_owner_global_until_overridden():
+    _ensure_schema()
+    name = "al_defaults"
+    _ensure_admin(name)
+    _clear_overrides(name)
+    _set_global_defaults(45, 55, 2)
+    client = TestClient(api)
+
+    try:
+        # No override -> the owner's global plan applies.
+        resp = client.get("/api/admin/me/defaults", headers=_auth(name, "admin"))
+        assert resp.status_code == 200, resp.text
+        body = resp.json()["data"]
+        assert body["source"] == "owner"
+        assert body["effective"] == {"days": 45, "traffic_gb": 55, "max_users": 2}
+
+        # The owner sets a per-admin override on this admin only.
+        resp = client.put(
+            "/api/admin/",
+            json={"username": name, "default_days": 7, "default_max_users": 5},
+            headers=_owner_headers(),
+        )
+        assert resp.json()["success"] is True, resp.text
+
+        resp = client.get("/api/admin/me/defaults", headers=_auth(name, "admin"))
+        body = resp.json()["data"]
+        assert body["source"] == "admin"
+        # Untouched fields still inherit; the overridden ones do not.
+        assert body["effective"] == {"days": 7, "traffic_gb": 55, "max_users": 5}
+
+        # An explicit null clears the override back to the global plan.
+        resp = client.put(
+            "/api/admin/",
+            json={"username": name, "default_days": None, "default_max_users": None},
+            headers=_owner_headers(),
+        )
+        assert resp.json()["success"] is True, resp.text
+        resp = client.get("/api/admin/me/defaults", headers=_auth(name, "admin"))
+        assert resp.json()["data"]["effective"] == {"days": 45, "traffic_gb": 55, "max_users": 2}
+    finally:
+        _clear_overrides(name)
+
+
+def test_new_user_uses_creating_admins_effective_defaults():
+    _ensure_schema()
+    name = "al_defcreate"
+    _ensure_admin(name)
+    _clear_overrides(name)
+    _set_global_defaults(11, 22, 3)
+    client = TestClient(api)
+
+    try:
+        resp = client.put(
+            "/api/admin/",
+            json={"username": name, "default_days": 9, "default_traffic_gb": 4},
+            headers=_owner_headers(),
+        )
+        assert resp.json()["success"] is True, resp.text
+
+        # Omit expiry/traffic/devices: the plan comes from the creating admin.
+        resp = client.post(
+            "/api/users/",
+            json={"name": "al_defcreate_u1", "total": None, "max_logins": None},
+            headers=_auth(name, "admin"),
+        )
+        assert resp.json()["success"] is True, resp.text
+        user = resp.json()["data"]
+
+        from datetime import date, timedelta
+
+        assert user["expiry_date"] == (date.today() + timedelta(days=9)).isoformat()
+        # total stayed unlimited (explicit None) and devices came from the
+        # untouched global (3) rather than the admin's traffic override.
+        assert user["max_logins"] == 3
+    finally:
+        from backend.db import crud
+        from backend.db.engine import SessionLocal
+
+        db = SessionLocal()
+        try:
+            crud.delete_user(db, "al_defcreate_u1")
+        finally:
+            db.close()
+        _clear_overrides(name)
+
+
+def test_create_admin_persists_telegram_prefix_and_defaults():
+    """The create form sends all of these; they used to be dropped on the floor."""
+    _ensure_schema()
+    name = "al_createfull"
+    client = TestClient(api)
+
+    from backend.db import crud
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        if crud.get_admin_by_username(db, name):
+            crud.delete_admin(db, crud.get_admin_by_username(db, name))
+    finally:
+        db.close()
+
+    resp = client.post(
+        "/api/admin/",
+        json={
+            "username": name,
+            "password": "short-pass-8",  # 8 chars: the documented floor
+            "telegram_id": 4242,
+            "username_prefix": "90",
+            "default_days": 3,
+            "default_max_users": 0,
+        },
+        headers=_owner_headers(),
+    )
+    assert resp.json()["success"] is True, resp.text
+    data = resp.json()["data"]
+    assert data["telegram_id"] == 4242
+    assert data["username_prefix"] == "90"
+    assert data["default_days"] == 3
+    assert data["default_max_users"] == 0
+    # Unset traffic override keeps inheriting the owner global.
+    assert data["effective_defaults"]["traffic_gb"] > 0
+
+    db = SessionLocal()
+    try:
+        row = crud.get_admin_by_username(db, name)
+        assert row.telegram_id == 4242
+        assert row.username_prefix == "90"
+        assert row.default_days == 3
+        assert row.default_traffic_gb is None
+    finally:
+        db.close()

@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 VERSION_TABLE = "schema_version"
 
@@ -324,6 +324,18 @@ def _seed_settings(db: Session) -> None:
         settings.urlpath = initial
 
 
+def _add_admin_user_defaults(db: Session) -> None:
+    """Per-admin new-user defaults (v13).
+
+    The owner sets the global plan in Settings (the Telegram bot block).
+    An admin may override it for the users they create; NULL means inherit.
+    """
+    for name in ("default_days", "default_traffic_gb", "default_max_users"):
+        if "admins" not in table_names(db) or name in column_names(db, "admins"):
+            continue
+        db.execute(text(_add_column_sql("admins", Base.metadata.tables["admins"].columns[name])))
+
+
 def _seed_summary() -> str:
     return "owner row and first user provisioned on a fresh install"
 
@@ -542,6 +554,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (10, "add offsite backup target", _add_offsite_backup_target),
     (11, "add encrypted Telegram backup setting", _add_telegram_backup_enabled),
     (12, "seed owner row and first user", _seed_owner_and_first_user),
+    (13, "add per-admin user defaults", _add_admin_user_defaults),
 )
 
 

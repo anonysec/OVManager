@@ -134,7 +134,15 @@ def get_admin_by_username(db: Session, username: str):
 
 def create_admin(db: Session, admin: AdminCreate):
     hashed_password = hash_password(admin.password)
-    new_admin = Admin(username=admin.username, password=hashed_password)
+    new_admin = Admin(
+        username=admin.username,
+        password=hashed_password,
+        telegram_id=admin.telegram_id,
+        username_prefix=admin.username_prefix,
+        default_days=admin.default_days,
+        default_traffic_gb=admin.default_traffic_gb,
+        default_max_users=admin.default_max_users,
+    )
     db.add(new_admin)
     db.commit()
     db.refresh(new_admin)
@@ -230,30 +238,67 @@ def get_user_by_uuid(db: Session, uuid: str):
     return None
 
 
+def effective_user_defaults(db: Session, admin_username: str | None = None) -> dict:
+    """New-user defaults for one admin: their override, else the owner's global.
+
+    The owner sets the global plan in Settings (the Telegram bot block); an
+    admin may override days/traffic/devices for the users they create. NULL
+    override always inherits.
+
+    ``traffic_gb`` is a prefill hint, not a server-side cap: ``CreateUser.total``
+    is None-or-bytes (None means unlimited, which the bot sends for "0 GB"), so
+    create_user cannot distinguish "no cap" from "unset" and must not invent one.
+    """
+    global_defaults = {"days": 30, "traffic_gb": 100, "max_users": 1}
+    try:
+        settings = get_settings(db)
+        if settings is not None:
+            global_defaults = {
+                "days": int(getattr(settings, "default_days", 30) or 30),
+                "traffic_gb": int(getattr(settings, "default_traffic_gb", 100) or 100),
+                "max_users": int(getattr(settings, "default_max_users", 1) or 1),
+            }
+    except Exception:
+        pass
+
+    resolved = dict(global_defaults)
+    if admin_username:
+        admin = it_is_admin(db, admin_username)
+        if admin is not None:
+            for key, attr in (
+                ("days", "default_days"),
+                ("traffic_gb", "default_traffic_gb"),
+                ("max_users", "default_max_users"),
+            ):
+                value = getattr(admin, attr, None)
+                if value is not None:
+                    resolved[key] = int(value)
+    return resolved
+
+
 def create_user(db: Session, request: CreateUser, owner: str):
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
     username = request.name.replace(" ", "_")
 
-    # Omitted expiry falls back to the panel defaults (Settings → default_days):
-    # raw API consumers shouldn't have to replicate the UI/bot plan logic.
-    # total=None deliberately stays unlimited (bot sends None for 0 GB).
+    # Omitted values fall back to the creating admin's effective defaults
+    # (their override, else the owner's global bot plan), so raw API and bot
+    # callers do not have to replicate the plan logic.
+    # total=None explicitly means unlimited (the bot sends None for 0 GB).
+    defaults = effective_user_defaults(db, owner)
     expiry = request.expiry_date
     if expiry is None:
-        try:
-            settings = get_settings(db)
-            days = int(getattr(settings, "default_days", 30) or 30)
-        except Exception:
-            days = 30
-        expiry = _date.today() + _timedelta(days=days)
+        expiry = _date.today() + _timedelta(days=defaults["days"])
 
     tag = (request.tag or "").strip() or None
     new_user = User(
         name=username,
         expiry_date=expiry,
         total=request.total,
-        max_logins=request.max_logins,
+        max_logins=(
+            defaults["max_users"] if request.max_logins is None else request.max_logins
+        ),
         owner=owner,
         tag=tag,
         uuid=str(uuid4()),

@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner
 from backend.auth.hash import hash_password
 from backend.config import config
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import AuthSession
+from backend.db.models import User as _User
 from backend.operations.audit import log_event
 from backend.schema._input import AdminCreate, AdminStatusUpdate, AdminUpdate
 from backend.schema.output import Admins, ResponseModel
@@ -20,10 +22,37 @@ from backend.schema.output import Admins, ResponseModel
 router = APIRouter(prefix="/admin", tags=["Admins"])
 
 
+@router.get("/me/defaults", response_model=ResponseModel)
+async def get_my_defaults(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+    """Effective new-user plan for the caller: their override, else the owner's.
+
+    Readable by any signed-in admin (unlike ``GET /server/settings``), so the
+    Add User form and the Telegram bot can pre-fill the plan that will actually
+    apply instead of the owner-only global.
+    """
+    username = user.get("username")
+    defaults = crud.effective_user_defaults(db, username)
+    admin = crud.it_is_admin(db, username) if username else None
+    overrides = {
+        "days": getattr(admin, "default_days", None) if admin else None,
+        "traffic_gb": getattr(admin, "default_traffic_gb", None) if admin else None,
+        "max_users": getattr(admin, "default_max_users", None) if admin else None,
+    }
+    return ResponseModel(
+        success=True,
+        msg="Effective new-user defaults",
+        data={
+            "admin": username,
+            "role": user.get("type"),
+            "effective": defaults,
+            "overrides": overrides,
+            "source": "admin" if any(v is not None for v in overrides.values()) else "owner",
+        },
+    )
+
+
 @router.get("/", response_model=ResponseModel)
 async def get_all_admins(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    from backend.db.models import User as _User
-
     # Single GROUP BY query instead of O(n×m) Python loop
     counts = dict(db.query(_User.owner, func.count(_User.id)).group_by(_User.owner).all())
     result = crud.get_all_admins(db)
@@ -31,6 +60,7 @@ async def get_all_admins(db: Session = Depends(get_db), user: dict = Depends(req
     for admin in result:
         admin_data = Admins.model_validate(admin)
         admin_data.users_count = counts.get(admin.username, 0)
+        admin_data.effective_defaults = crud.effective_user_defaults(db, admin.username)
         admin_list.append(admin_data)
 
     return ResponseModel(
@@ -52,10 +82,13 @@ async def create_admin(
 
     new_admin = crud.create_admin(db, admin)
     log_event(db, "admin.create", actor=user.get("username"), target=new_admin.username)
+    data = Admins.model_validate(new_admin)
+    data.users_count = 0
+    data.effective_defaults = crud.effective_user_defaults(db, new_admin.username)
     return ResponseModel(
         success=True,
         msg="Admin created successfully",
-        data=Admins.model_validate(new_admin),
+        data=data,
     )
 
 
@@ -75,6 +108,12 @@ async def update_admin(
         existing_admin.telegram_id = admin.telegram_id
     elif "telegram_id" in admin.model_dump(exclude_unset=True) and admin.telegram_id is None:
         existing_admin.telegram_id = None
+    # Per-admin new-user defaults: an explicit null clears the override.
+    provided = admin.model_dump(exclude_unset=True)
+    for attr in ("default_days", "default_traffic_gb", "default_max_users"):
+        if attr in provided:
+            setattr(existing_admin, attr, getattr(admin, attr))
+
     if admin.username_prefix is not None:
         existing_admin.username_prefix = admin.username_prefix
     elif "username_prefix" in admin.model_dump(exclude_unset=True) and admin.username_prefix is None:
@@ -91,10 +130,14 @@ async def update_admin(
         revoke_user_sessions(db, existing_admin.username)
 
     log_event(db, "admin.update", actor=user.get("username"), target=existing_admin.username)
+    data = Admins.model_validate(existing_admin)
+    counts = db.query(_User.id).filter(_User.owner == existing_admin.username).count()
+    data.users_count = counts
+    data.effective_defaults = crud.effective_user_defaults(db, existing_admin.username)
     return ResponseModel(
         success=True,
         msg="Admin updated successfully",
-        data=Admins.model_validate(existing_admin),
+        data=data,
     )
 
 

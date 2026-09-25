@@ -830,5 +830,7 @@
   "userTag": "Label",
   "userTagHint": "Optional — e.g. monthly, vip, reseller-a. Shown as a chip on the user row.",
   "userTagPlaceholder": "monthly, vip, reseller-a…",
-  "userUpdated": "User updated"
+  "userUpdated": "User updated",
+  "adminDefaultsHint": "New user defaults for this admin. Leave empty to inherit the global defaults from Settings → Defaults.",
+  "adminDefaultsEffective": "Currently in effect: {{days}} days · {{traffic}} GB · {{devices}} devices"
 }

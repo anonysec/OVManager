@@ -56,6 +56,7 @@ const UserManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
   const [subSettings, setSubSettings] = useState(null);
+  const [myDefaults, setMyDefaults] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
@@ -112,6 +113,16 @@ const UserManagement = () => {
     } catch { /* subscription links degrade to hidden, table still works */ }
   }, []);
 
+  // The plan that will actually apply: this admin's override, else the owner
+  // global. /server/settings is owner-only, so admins read their own here.
+  const fetchMyDefaults = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/admin/me/defaults');
+      const data = res.data?.data || null;
+      if (data?.effective) setMyDefaults(data.effective);
+    } catch { /* fall back to the global defaults below */ }
+  }, []);
+
   const { subscribe } = useLive();
   useEffect(() => {
     const u1 = subscribe('users.changed', () => fetchUsers({ background: true }));
@@ -121,7 +132,7 @@ const UserManagement = () => {
     return () => { u1(); u2(); u3(); u4(); };
   }, [subscribe, fetchUsers]);
 
-  useEffect(() => { fetchUsers(); fetchSubSettings(); }, [fetchUsers, fetchSubSettings]);
+  useEffect(() => { fetchUsers(); fetchSubSettings(); fetchMyDefaults(); }, [fetchUsers, fetchSubSettings, fetchMyDefaults]);
 
   useEffect(() => {
     if (!lastDeleted) return undefined;
@@ -656,9 +667,9 @@ const UserManagement = () => {
           fetchUsers();
         }}
         defaults={{
-          days: subSettings?.default_days || 30,
-          trafficGb: subSettings?.default_traffic_gb ?? '',
-          maxLogins: subSettings?.default_max_users ?? 1,
+          days: myDefaults?.days ?? subSettings?.default_days ?? 30,
+          trafficGb: myDefaults?.traffic_gb ?? subSettings?.default_traffic_gb ?? '',
+          maxLogins: myDefaults?.max_users ?? subSettings?.default_max_users ?? 1,
         }}
         linkForUser={getSubscriptionLink}
         onDownloadUser={handleOpenDownloadModal}
