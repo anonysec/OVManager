@@ -114,9 +114,7 @@ def _make_pair(cn: str = "panel.test", days: int = 30) -> tuple[bytes, bytes]:
         .not_valid_after(now + timedelta(days=days))
         .sign(key, hashes.SHA256())
     )
-    key_pem = key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-    )
+    key_pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
     return key_pem, cert.public_bytes(serialization.Encoding.PEM)
 
 

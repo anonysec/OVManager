@@ -57,6 +57,7 @@ RESTART_HINT = (
     "'systemctl restart ovmanager' on a native install, or 'docker restart ovmanager' for Docker."
 )
 
+
 class RenewRequest(BaseModel):
     domain: str | None = None
     email: str | None = None
@@ -256,9 +257,7 @@ def tls_status(user: dict = Depends(require_owner)):
             return ResponseModel(
                 success=True,
                 msg="The panel-managed TLS files are incomplete (key and certificate are both required).",
-                data=_status_payload(
-                    "misconfigured", "panel-managed", str(managed_cert) if managed_cert.is_file() else None
-                ),
+                data=_status_payload("misconfigured", "panel-managed", str(managed_cert) if managed_cert.is_file() else None),
             )
         cert = _load_certificate(managed_cert)
         if cert is None:
@@ -328,9 +327,7 @@ def _validate_pair(key_bytes: bytes, cert_bytes: bytes) -> tuple[Any, x509.Certi
     key_public = private_key.public_key().public_bytes(
         serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    cert_public = cert.public_key().public_bytes(
-        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
-    )
+    cert_public = cert.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     if key_public != cert_public:
         raise ValueError("The private key does not match the certificate. Upload the key that belongs to this certificate.")
     now = datetime.now(UTC)
@@ -713,7 +710,7 @@ def _spawn_detached(argv: list[str]) -> None:
     so there is no injection surface even if a caller ever passes variables.
     """
     subprocess.Popen(
-        ["sh", "-c", "sleep 1; exec \"$@\"", "ovmanager-restart", *argv],
+        ["sh", "-c", 'sleep 1; exec "$@"', "ovmanager-restart", *argv],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -747,6 +744,7 @@ def restart_panel(user: dict = Depends(require_owner)):
         msg="Restarting the panel now. This page will disconnect and come back in a few seconds.",
         data={"restart_required": True, "restarted": True, "command": command},
     )
+
 
 # Beginner-facing HTTPS aliases. Keep the original /tls routes as a stable
 # compatibility surface while new UI and CLI use plain-language names.

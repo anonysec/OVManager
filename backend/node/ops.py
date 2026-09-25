@@ -35,6 +35,7 @@ def node_version_compat(agent_version: object) -> dict:
     different major is incompatible. Unparseable/missing versions are
     unknown, never silently accepted as compatible.
     """
+
     def _parts(value: object) -> tuple[int, ...] | None:
         try:
             nums = str(value).strip().lstrip("v").split(".")
@@ -53,6 +54,7 @@ def node_version_compat(agent_version: object) -> dict:
     else:
         verdict = "compatible"
     return {"verdict": verdict, "agent_version": agent_version, "panel_version": PANEL_VERSION}
+
 
 # Cap on concurrent per-node threadpool jobs for every fan-out below. A batch
 # of 300 users × N nodes would otherwise queue thousands of jobs and starve

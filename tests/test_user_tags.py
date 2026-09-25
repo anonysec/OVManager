@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """User tags: free-form labels for organizing customers (pure bookkeeping)."""
+
 import uuid as uuidlib
 
 from fastapi.testclient import TestClient

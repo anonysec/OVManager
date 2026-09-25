@@ -142,7 +142,6 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     """
     from cryptography.fernet import Fernet
 
-
     session.execute(
         text(
             "CREATE TABLE users ("
@@ -189,9 +188,7 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
 def test_orphan_daily_traffic_rows_are_cleaned(session):
     """History rows for a deleted user id must be removed (ids get reused)."""
     migrations.migrate(session)
-    session.execute(
-        text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (99999, '2030-01-01', 12345)")
-    )
+    session.execute(text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (99999, '2030-01-01', 12345)"))
     session.commit()
 
     migrations._cleanup_orphan_daily_rows(session)

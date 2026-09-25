@@ -210,9 +210,7 @@ def test_legacy_node_reports_fail_closed_as_danger(monkeypatch):
             "rejects": 2,
             "stale_marker_count": 0,
             "live_count": 0,
-            "last_error": {
-                "8": "CN=8 USERS_DIR missing or not a directory — fail-closed; REJECT"
-            },
+            "last_error": {"8": "CN=8 USERS_DIR missing or not a directory — fail-closed; REJECT"},
         },
         node.id,
     )
@@ -333,9 +331,7 @@ def test_strict_max_login_line_is_policy_not_unclassified(monkeypatch):
             "rejects": 7,
             "stale_marker_count": 0,
             "live_count": 0,
-            "last_error": {
-                "3": "CN=3 ip=1.2.3.4:5000 pool=10.8.0.3 limit=2 active=2 status=2; REJECT"
-            },
+            "last_error": {"3": "CN=3 ip=1.2.3.4:5000 pool=10.8.0.3 limit=2 active=2 status=2; REJECT"},
         },
         node.id,
     )

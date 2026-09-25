@@ -267,7 +267,7 @@ def test_installer_uses_release_artifacts_and_published_docker_image_only():
     assert "npm run build" not in content
     assert "image: ${IMAGE_REPO}:${ACTIVE_IMAGE_VERSION}" in compose
     assert "build:" not in compose
-    assert "docker compose -f \"$COMPOSE_FILE\" pull" in content
+    assert 'docker compose -f "$COMPOSE_FILE" pull' in content
     assert "Release checksum file is missing" in content
 
 
@@ -356,7 +356,7 @@ def test_update_journal_is_private_and_atomic(tmp_path):
         "set -Eeuo pipefail\n"
         f'UPDATE_STATE="{state}"; DATA_DIR="{tmp_path}"; VERSION=2.0.0\n'
         + source
-        + '\nupdate_state verifying 1.2.7 2.0.0 /safe/pre-update.ovmbak\n'
+        + "\nupdate_state verifying 1.2.7 2.0.0 /safe/pre-update.ovmbak\n"
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -371,18 +371,15 @@ def test_update_journal_is_private_and_atomic(tmp_path):
 def test_snapshot_rotation_keeps_two(tmp_path):
     """snapshot_code keeps the newest 2 code snapshots, pruning older ones."""
     src = _extract_function("snapshot_code")
-    helpers = (
-        "set -Eeuo pipefail\n"
-        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
-        "step() { :; }\ninfo() { :; }\nwarn() { :; }\n"
-    )
+    helpers = 'set -Eeuo pipefail\ndie() { echo "DIE: $1" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\nwarn() { :; }\n'
     harness = (
-        helpers + src.replace("/var/backups", str(tmp_path))
-        + f'\nmkdir -p {tmp_path}/app\n'
-        + f'\nsnapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n'
-        + f'snapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n'
-        + f'snapshot_code {tmp_path}/app panel 2 >/dev/null\n'
-        + f'ls {tmp_path}/panel-code-*.tar.gz | wc -l\n'
+        helpers
+        + src.replace("/var/backups", str(tmp_path))
+        + f"\nmkdir -p {tmp_path}/app\n"
+        + f"\nsnapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n"
+        + f"snapshot_code {tmp_path}/app panel 2 >/dev/null\nsleep 1.1\n"
+        + f"snapshot_code {tmp_path}/app panel 2 >/dev/null\n"
+        + f"ls {tmp_path}/panel-code-*.tar.gz | wc -l\n"
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -423,15 +420,13 @@ def test_emit_json_shape():
 
     ver = re.search(r'^VERSION="([^"]+)"', Path(INSTALLER).read_text(encoding="utf-8"), re.M).group(1)
     helpers = (
-        "set -Eeuo pipefail\n"
-        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
-        "panel_url() { printf 'https://127.0.0.1:2095/abc/'; }\n"
+        "set -Eeuo pipefail\ndie() { echo \"DIE: $1\" >&2; exit 1; }\npanel_url() { printf 'https://127.0.0.1:2095/abc/'; }\n"
     )
     harness = (
         helpers + _extract_function("emit_json") + "\n"
-        'MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password '
-        'INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self '
-        f'PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} JSON=1 emit_json 1\n'
+        "MODE=native ADMIN_USER=admin ADMIN_PASS=long-enough-password "
+        "INSTALL_DIR=/opt/ovmanager DATA_DIR=/var/lib/ovmanager TLS_MODE=self "
+        f"PORT=2095 PATHPREFIX=abc GENERATED_PASS=0 VERSION={ver} JSON=1 emit_json 1\n"
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -518,11 +513,7 @@ def test_no_function_ends_with_a_failing_test():
     was the Express admin-password bug (typing a password exited silently)."""
     import re
 
-    offenders = [
-        (name, tail, line)
-        for name, tail, line in _function_tails(INSTALLER)
-        if re.match(r"^\[\[.*\]\]\s*&&", tail)
-    ]
+    offenders = [(name, tail, line) for name, tail, line in _function_tails(INSTALLER) if re.match(r"^\[\[.*\]\]\s*&&", tail)]
     assert not offenders, offenders
 
 
@@ -638,16 +629,13 @@ def test_detect_os_preserves_app_version(tmp_path):
     probe = tmp_path / "probe.sh"
     fn = subprocess.run(
         ["sed", "-n", "/^detect_os() {/,/^}/p", INSTALLER],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     ).stdout
     assert fn, "detect_os not found"
     probe.write_text(
-        "set -u\n"
-        'VERSION="9.9.9-probe"\n'
-        'die() { echo "DIE: $1" >&2; exit 1; }\n'
-        + fn
-        + "\ndetect_os\n"
-        'echo "VERSION=$VERSION"\n',
+        'set -u\nVERSION="9.9.9-probe"\ndie() { echo "DIE: $1" >&2; exit 1; }\n' + fn + '\ndetect_os\necho "VERSION=$VERSION"\n',
         encoding="utf-8",
     )
     r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=30)
@@ -735,12 +723,13 @@ def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
     con.commit()
     con.close()
     harness = (
-        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
-        "warn() { echo \"WARN: $1\" >&2; }\nstep() { :; }\ninfo() { :; }\n"
+        'die() { echo "DIE: $1" >&2; exit 1; }\n'
+        'warn() { echo "WARN: $1" >&2; }\nstep() { :; }\ninfo() { :; }\n'
         + _extract_function("update_safety_backup")
-        + "\n" + _extract_function("legacy_safety_bundle")
+        + "\n"
+        + _extract_function("legacy_safety_bundle")
         + f'\nMODE=native INSTALL_DIR="{fake_install}" DATA_DIR="{fake_data}"\n'
-        + 'update_safety_backup 1.2.6\n'
+        + "update_safety_backup 1.2.6\n"
     )
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
@@ -774,12 +763,10 @@ def test_db_restore_needed_skips_untouched_database(tmp_path):
     con.execute("PRAGMA user_version=11")
     con.commit()
     con.close()
-    helpers = (
-        "die() { echo \"DIE: $1\" >&2; exit 1; }\n"
-        "warn() { :; }\nstep() { :; }\ninfo() { :; }\n"
-    )
+    helpers = 'die() { echo "DIE: $1" >&2; exit 1; }\nwarn() { :; }\nstep() { :; }\ninfo() { :; }\n'
     mk = (
-        helpers + _extract_function("legacy_safety_bundle")
+        helpers
+        + _extract_function("legacy_safety_bundle")
         + f'\nMODE=native DATA_DIR="{fake_data}"\nlegacy_safety_bundle 1.2.7 >/dev/null\n'
     )
     r = subprocess.run(["bash", "-c", mk], capture_output=True, text=True, timeout=60)
@@ -809,9 +796,9 @@ def test_write_env_never_writes_a_backup_key(tmp_path):
     (fake_install / "backend").mkdir(parents=True)
     (fake_install / "backend" / "config.py").write_text("class Setting: pass\n", encoding="utf-8")
     harness = (
-        "die() { echo \"DIE: $1\" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\n"
+        'die() { echo "DIE: $1" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\n'
         + _extract_function("write_env")
-        + '\nMODE=native PORT=2095 PATHPREFIX=abc ADMIN_USER=admin ADMIN_PASS=long-enough-password\n'
+        + "\nMODE=native PORT=2095 PATHPREFIX=abc ADMIN_USER=admin ADMIN_PASS=long-enough-password\n"
         + f'PUBLIC_URL="" TLS_KEY="" TLS_CERT="" DATA_DIR="{tmp_path}" INSTALL_DIR="{fake_install}"\n'
         + "write_env >/dev/null\n"
     )
@@ -928,7 +915,7 @@ def test_password_policy_minimum_is_eight():
     manager and the config message."""
     for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "lib" / "common.sh"):
         content = path.read_text(encoding="utf-8")
-        assert '[[ ${#pass} -ge 8 ]]' in content, path.name
+        assert "[[ ${#pass} -ge 8 ]]" in content, path.name
         assert "at least 8 characters" in content, path.name
     cfg = (INSTALLER_PATH.parent / "backend" / "config.py").read_text(encoding="utf-8")
     assert ">=8 chars" in cfg

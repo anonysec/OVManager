@@ -160,10 +160,7 @@ def update_operation(user: dict = Depends(require_owner)):
         data = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return ResponseModel(success=False, msg="The update state file is unreadable", data=None)
-    allowed = {
-        key: data.get(key)
-        for key in ("phase", "from_version", "to_version", "safety_backup", "updated_at", "pid")
-    }
+    allowed = {key: data.get(key) for key in ("phase", "from_version", "to_version", "safety_backup", "updated_at", "pid")}
     allowed["maintenance"] = (DATA_DIR / "update-maintenance").is_file()
     allowed["finished"] = data.get("phase") in {"committed", "failed_over"}
     return ResponseModel(success=True, msg="Update transaction state", data=allowed)

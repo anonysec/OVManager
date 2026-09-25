@@ -15,19 +15,49 @@ INSTALLER = REPO / "install.sh"
 LIB = REPO / "lib" / "common.sh"
 
 SHARED = [
-    "line", "step", "info", "warn", "fail", "kv", "hr", "die",
-    "is_port", "rand_path", "rand_pass", "rand_hex",
-    "can_prompt", "has_tty", "_masked_read", "_read_reply",
-    "ask", "confirm", "confirm_no", "run_step",
-    "backup_dir", "snapshot_code", "latest_snapshot",
-    "open_firewall_port", "wait_health",
-    "scheme_of", "panel_url",
-    "secure_tls_files", "generate_self_signed", "ensure_acme",
-    "issue_lets_encrypt", "port_in_use", "setup_tls",
-    "env_get", "env_set", "systemctl_bounded",
-    "admin_password_problem", "validate_admin_password",
-    "prompt_validate_admin_password", "tui_select",
-    "release_base", "release_url", "release_checksum_url",
+    "line",
+    "step",
+    "info",
+    "warn",
+    "fail",
+    "kv",
+    "hr",
+    "die",
+    "is_port",
+    "rand_path",
+    "rand_pass",
+    "rand_hex",
+    "can_prompt",
+    "has_tty",
+    "_masked_read",
+    "_read_reply",
+    "ask",
+    "confirm",
+    "confirm_no",
+    "run_step",
+    "backup_dir",
+    "snapshot_code",
+    "latest_snapshot",
+    "open_firewall_port",
+    "wait_health",
+    "scheme_of",
+    "panel_url",
+    "secure_tls_files",
+    "generate_self_signed",
+    "ensure_acme",
+    "issue_lets_encrypt",
+    "port_in_use",
+    "setup_tls",
+    "env_get",
+    "env_set",
+    "systemctl_bounded",
+    "admin_password_problem",
+    "validate_admin_password",
+    "prompt_validate_admin_password",
+    "tui_select",
+    "release_base",
+    "release_url",
+    "release_checksum_url",
 ]
 
 
@@ -57,6 +87,4 @@ def test_manager_sources_lib_not_copies():
     manager = (REPO / "manager.sh").read_text(encoding="utf-8")
     assert "lib/common.sh" in manager
     for name in SHARED:
-        assert not re.search(rf"^{re.escape(name)}\(\)", manager, re.M), (
-            f"manager.sh duplicates lib function: {name}"
-        )
+        assert not re.search(rf"^{re.escape(name)}\(\)", manager, re.M), f"manager.sh duplicates lib function: {name}"

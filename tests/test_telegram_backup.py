@@ -22,8 +22,9 @@ def test_scheduled_backup_delivers_plain_telegram_copy(monkeypatch, tmp_path):
     monkeypatch.setattr(
         tb,
         "send_backup_document",
-        lambda path, settings: delivered.append((path, settings.owner_telegram_id))
-        or tb.TelegramBackupResult(True, message_id=99, file_id="f"),
+        lambda path, settings: (
+            delivered.append((path, settings.owner_telegram_id)) or tb.TelegramBackupResult(True, message_id=99, file_id="f")
+        ),
     )
 
     db = SessionLocal()
@@ -43,7 +44,6 @@ def test_scheduled_backup_delivers_plain_telegram_copy(monkeypatch, tmp_path):
         row.auto_backup_enabled, row.telegram_backup_enabled, row.owner_telegram_id, row.offsite_backup_target = previous
         db.commit()
         db.close()
-
 
 
 class _Response:

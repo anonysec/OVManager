@@ -92,9 +92,7 @@ def set_urlpath(value: str) -> str:
     global _cache_value, _cache_ts
     value = (value or "").strip("/")
     if value and value.lower() in reserved_prefixes():
-        raise ValueError(
-            f"URLPATH {value!r} is reserved (it would shadow a panel route) — choose another path"
-        )
+        raise ValueError(f"URLPATH {value!r} is reserved (it would shadow a panel route) — choose another path")
     # Persist to DB (best effort — may fail in test environments)
     try:
         db = SessionLocal()

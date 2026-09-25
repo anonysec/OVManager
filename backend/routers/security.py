@@ -170,11 +170,7 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
         peer = str(ev.get("peer") or "")
         ts = float(ev.get("ts") or 0)
         known_user = id_to_name.get(cn) if cn else None
-        local_time = (
-            datetime.fromtimestamp(ts, UTC).astimezone(panel_tz).strftime("%Y-%m-%d %H:%M:%S")
-            if ts
-            else None
-        )
+        local_time = datetime.fromtimestamp(ts, UTC).astimezone(panel_tz).strftime("%Y-%m-%d %H:%M:%S") if ts else None
         rows.append(
             {
                 "node": node_name,
@@ -192,11 +188,7 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
                 "time_local": local_time,
                 # The node knows better for log-derived events (it compares
                 # consecutive polls); otherwise "seen within the last hour".
-                "ongoing": (
-                    bool(ev["ongoing"])
-                    if ev.get("ongoing") is not None
-                    else bool(ts and now - ts <= _ONGOING_WINDOW_S)
-                ),
+                "ongoing": (bool(ev["ongoing"]) if ev.get("ongoing") is not None else bool(ts and now - ts <= _ONGOING_WINDOW_S)),
                 "classified": True,
             }
         )
