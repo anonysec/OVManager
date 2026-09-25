@@ -59,7 +59,7 @@ def _ensure_admin(username: str) -> None:
     """Create the admin if missing and always reset it to enabled."""
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import AdminCreate
+    from backend.schema import AdminCreate
 
     db = SessionLocal()
     try:

@@ -20,7 +20,7 @@ from backend.config import config
 from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.routers import security as security_router
-from backend.schema._input import CreateUser, NodeCreate
+from backend.schema import CreateUser, NodeCreate
 
 
 def _owner():

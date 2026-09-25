@@ -18,7 +18,7 @@ from backend.config import config
 from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.node.requests import LONG_TIMEOUT, NodeRequests
-from backend.schema._input import NodeCreate
+from backend.schema import NodeCreate
 
 
 def _owner():

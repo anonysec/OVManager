@@ -55,7 +55,7 @@ def _owner() -> dict:
 def _ensure_admin(username: str) -> None:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import AdminCreate
+    from backend.schema import AdminCreate
 
     db = SessionLocal()
     try:
@@ -68,7 +68,7 @@ def _ensure_admin(username: str) -> None:
 def _make_user(name: str, **kw) -> str:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import CreateUser
+    from backend.schema import CreateUser
 
     db = SessionLocal()
     try:

@@ -38,7 +38,7 @@ from backend.config import config
 from backend.data_paths import DATA_DIR
 from backend.models.validators import validate_domain, validate_email
 from backend.operations.audit import log_event
-from backend.schema.output import ResponseModel
+from backend.schema import ResponseModel
 
 # `/https` is the beginner-facing namespace. `/tls` remains a compatibility
 # surface for existing clients and installations.

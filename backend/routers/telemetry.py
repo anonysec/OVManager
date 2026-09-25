@@ -25,7 +25,7 @@ from backend.db.engine import get_db
 from backend.operations.audit import recent_events
 from backend.operations.live import bus
 from backend.operations.metrics import collect_metrics, history
-from backend.schema.output import ResponseModel
+from backend.schema import ResponseModel
 
 activity_router = APIRouter(prefix="/activity", tags=["Activity"])
 

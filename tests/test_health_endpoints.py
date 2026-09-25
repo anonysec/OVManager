@@ -68,7 +68,7 @@ def _owner_headers() -> dict:
 def _create_admin(username: str) -> None:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import AdminCreate
+    from backend.schema import AdminCreate
 
     db = SessionLocal()
     try:
@@ -81,7 +81,7 @@ def _create_admin(username: str) -> None:
 def _create_user(name: str, owner: str) -> None:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import CreateUser
+    from backend.schema import CreateUser
 
     db = SessionLocal()
     try:
@@ -95,7 +95,7 @@ def _create_user(name: str, owner: str) -> None:
 def _create_node(name: str) -> None:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import NodeCreate
+    from backend.schema import NodeCreate
 
     db = SessionLocal()
     try:

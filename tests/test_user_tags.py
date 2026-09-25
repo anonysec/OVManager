@@ -58,7 +58,7 @@ def test_update_tag_set_and_clear():
     crud-level set / clear / omit semantics."""
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import CreateUser, UpdateUser
+    from backend.schema import CreateUser, UpdateUser
 
     db = SessionLocal()
     try:

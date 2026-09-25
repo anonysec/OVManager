@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.db.exceptions import NotFoundError
 from backend.db.models import Node
-from backend.schema._input import NodeCreate
+from backend.schema import NodeCreate
 
 
 def get_all_nodes(db: Session):

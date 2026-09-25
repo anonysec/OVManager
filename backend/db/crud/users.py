@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from backend.db.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.db.models import User
 from backend.logger import logger
-from backend.schema._input import CreateUser, UpdateUser
+from backend.schema import CreateUser, UpdateUser
 
 from .admins import it_is_admin
 from .settings import get_settings

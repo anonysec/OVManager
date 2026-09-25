@@ -22,7 +22,7 @@ from backend.db import crud
 from backend.logger import logger
 from backend.node.requests import NodeRequests, node_client
 from backend.operations.geolocation import geolocate
-from backend.schema._input import NodeCreate
+from backend.schema import NodeCreate
 from backend.version import __version__ as PANEL_VERSION
 
 

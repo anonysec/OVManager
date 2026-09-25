@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth.hash import hash_password
 from backend.db.models import Admin
-from backend.schema._input import AdminCreate
+from backend.schema import AdminCreate
 
 
 def get_admin_by_username(db: Session, username: str):
