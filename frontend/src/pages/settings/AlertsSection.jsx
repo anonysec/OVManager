@@ -3,11 +3,11 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { readPrefs, writePref, REFRESH_OPTIONS } from '../../utils/notifPrefs';
+import { readPrefs, writePref } from '../../utils/notifPrefs';
 import apiClient from '../../services/api';
 import { useToast } from '../../context/ToastContext';
-import { FiBell, FiRefreshCw, FiAlertTriangle, FiSend } from 'react-icons/fi';
-import { Card, Field } from './shared';
+import { FiBell, FiAlertTriangle, FiSend } from 'react-icons/fi';
+import { Card } from './shared';
 
 /* ═══════════════════════════════════════════════════════
    ALERTS & DASHBOARD — which alerts to surface + refresh
@@ -105,16 +105,6 @@ const AlertsSection = () => {
             </label>
           ))}
         </div>
-      </Card>
-
-      <Card title={t('refreshCard', 'Refresh Interval')} icon={FiRefreshCw}>
-        <Field label={t('refreshInterval', 'Dashboard refresh (seconds)')} hint={t('refreshDesc', 'How often the dashboard and notification bell poll for fresh data.')} inputId="alerts-refresh">
-          <select id="alerts-refresh" className="sp-select" value={prefs.refreshSec} onChange={(e) => toggle('refreshSec', Number(e.target.value))}>
-            {REFRESH_OPTIONS.map((sec) => (
-              <option key={sec} value={sec}>{sec} {t('secondsUnit', 's')}</option>
-            ))}
-          </select>
-        </Field>
       </Card>
     </div>
   );

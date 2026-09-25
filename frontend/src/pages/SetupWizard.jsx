@@ -8,8 +8,9 @@
  * Steps 1 and 2 check themselves off from GET /health/setup; step 3 is a
  * manual "Mark as done" (a download cannot be observed by the panel).
  *
- * Nothing auto-redirects here. "Skip" stores a dismissal so the small Home
- * banner stops asking; the page itself stays reachable at /setup.
+ * When all three are done the wizard congratulates briefly, stores the
+ * dismissal and leaves for Home. "Skip" does the same without the wait.
+ * The page itself stays reachable at /setup (a completed visit bounces).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -86,6 +87,18 @@ const SetupWizard = () => {
     addToast(t('setupSkipped', 'Setup wizard hidden. Open /setup any time to return.'), 'info');
     navigate('/');
   };
+
+  // Everything done: congratulate briefly, then get out of the way. The
+  // dismissal is stored so the Home banner stops asking too.
+  useEffect(() => {
+    if (loading || !allDone) return undefined;
+    const id = setTimeout(() => {
+      localStorage.setItem(DISMISS_KEY, '1');
+      addToast(t('setupComplete', 'Setup complete — your panel is ready.'), 'success');
+      navigate('/');
+    }, 2500);
+    return () => clearTimeout(id);
+  }, [loading, allDone, addToast, navigate, t]);
 
   if (loading && !setup) {
     return (

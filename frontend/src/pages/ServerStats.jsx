@@ -9,7 +9,7 @@ import { asList } from '../utils/apiData';
 import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight, FiCpu, FiDatabase, FiHardDrive, FiClock } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDateTime } from '../utils/time';
-import { readPrefs, alertPrefKey } from '../utils/notifPrefs';
+import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo.js';
 import FlagIcon from '../utils/geo.jsx';
 import { settle } from '../hooks/useAsyncData';
@@ -231,8 +231,7 @@ const ServerStats = () => {
     const start = (immediate = false) => {
       if (id) clearInterval(id);
       if (immediate) loadData(true);
-      const sec = readPrefs().refreshSec;
-      id = setInterval(() => { if (document.visibilityState === 'visible') loadData(true); }, sec * 1000);
+      id = setInterval(() => { if (document.visibilityState === 'visible') loadData(true); }, DATA_REFRESH_SEC * 1000);
     };
     start();
     const onPrefs = () => start(true);

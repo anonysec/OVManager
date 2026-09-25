@@ -16,7 +16,6 @@ const KEYS = {
   authErrors: 'ovmanager-pref-alert-auth',
   rejects: 'ovmanager-pref-alert-reject',
   quota: 'ovmanager-pref-alert-quota',
-  refreshSec: 'ovmanager-pref-refresh',
 };
 
 const DEFAULTS = {
@@ -25,10 +24,13 @@ const DEFAULTS = {
   authErrors: true,
   rejects: true,
   quota: true,
-  refreshSec: 30,
 };
 
-export const REFRESH_OPTIONS = [15, 30, 60, 300];
+// Single polling cadence for dashboard, bell and node lists. There is no
+// user-facing refresh setting: the live stream (or its tick fallback)
+// already pushes immediacy, and every poll below is a background refresh
+// that never flashes loading states.
+export const DATA_REFRESH_SEC = 30;
 
 export const readPrefs = () => {
   const out = { ...DEFAULTS };
@@ -36,11 +38,7 @@ export const readPrefs = () => {
     for (const [key, storageKey] of Object.entries(KEYS)) {
       const raw = localStorage.getItem(storageKey);
       if (raw === null) continue;
-      if (key === 'refreshSec') {
-        out[key] = REFRESH_OPTIONS.includes(Number(raw)) ? Number(raw) : DEFAULTS.refreshSec;
-      } else {
-        out[key] = raw === 'true';
-      }
+      out[key] = raw === 'true';
     }
   } catch { /* storage unavailable — use defaults */ }
   return out;

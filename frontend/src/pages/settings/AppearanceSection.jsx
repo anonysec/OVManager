@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getUiPref, setUiPref } from '../../utils/uiPrefs';
@@ -182,7 +183,8 @@ const AppearanceSection = () => {
             </p>
           ) : installHint === false ? (
             <p className="sp-hint" style={{ margin: 0 }}>
-              {t('pwaCertRequired', "Install needs a trusted certificate — switch to Let's Encrypt, then reload.")}
+              {t('pwaCertRequired', "Install needs a trusted certificate — switch to Let's Encrypt, then reload.")}{' '}
+              <Link to="/settings#tls">{t('pwaOpenTls', 'Open TLS settings')}</Link>
             </p>
           ) : (
             <>
