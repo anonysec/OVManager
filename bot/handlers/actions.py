@@ -9,8 +9,9 @@ from telegram import InputFile, Update
 from telegram.ext import ContextTypes
 
 from bot.api import Panel
+from bot.callbacks import action, parse_callback
 from bot.formatters import esc
-from bot.handlers.access import ensure_panel_ok
+from bot.handlers.access import ensure_panel_ok, fetch_user
 from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
@@ -21,62 +22,42 @@ GB = 1073741824
 
 
 async def dispatch_action(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, data: str) -> bool:
-    if data.startswith("ext:"):
-        lang = lang_of(update, context)
-        await answer(update)
-        uuid = data[4:]
-        panel = Panel(actor.token)
-        user = await panel.get_user(uuid=uuid)
-        if not user:
-            if panel.last_status == 0:
-                await edit_or_reply(update, t(lang, "panel_unreachable"))
-            else:
-                await edit_or_reply(update, t(lang, "user_not_found"))
-            return True
-        name = user.get("name") or t(lang, "this_user")
-        await edit_or_reply(update, t(lang, "extend_title", name=esc(name)), reply_markup=extend_actions(uuid, lang=lang))
+    """Route ``"<prefix>:<arg>"`` callbacks via the action registry.
+
+    Returns False when no prefix matches so the caller falls through to
+    the next dispatcher (edit flow, user view, …).
+    """
+    fn, kwargs, arg = parse_callback(data)
+    if fn is None:
+        return False
+    return await fn(update, context, actor, arg, **kwargs)
+
+
+@action("ext")
+async def _show_extend(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
+    lang = lang_of(update, context)
+    await answer(update)
+    panel = Panel(actor.token)
+    user = await fetch_user(update, panel, uuid, lang)
+    if not user:
         return True
-    if data.startswith("e30:"):
-        return await _extend(update, context, actor, data[4:], days=30)
-    if data.startswith("e90:"):
-        return await _extend(update, context, actor, data[4:], days=90)
-    if data.startswith("eb10:"):
-        return await _extend(update, context, actor, data[5:], bytes_=10 * GB)
-    if data.startswith("eb100:"):
-        return await _extend(update, context, actor, data[6:], bytes_=100 * GB)
-    if data.startswith("rst:"):
-        return await _reset(update, context, actor, data[4:])
-    if data.startswith("tog:"):
-        return await _toggle(update, context, actor, data[4:])
-    if data.startswith("dis:"):
-        return await _disconnect(update, context, actor, data[4:])
-    if data.startswith("del:"):
-        return await _ask_delete(update, context, actor, data[4:])
-    if data.startswith("okd:"):
-        return await _delete(update, context, actor, data[4:])
-    if data.startswith("undo:"):
-        return await _undo_delete(update, context, actor, data[5:])
-    if data.startswith("sub:"):
-        return await _sub(update, context, actor, data[4:])
-    if data.startswith("cfg:"):
-        return await _cfg(update, context, actor, data[4:])
-    if data.startswith("dl:"):
-        return await _download(update, context, actor, data[3:])
-    return False
+    name = user.get("name") or t(lang, "this_user")
+    await edit_or_reply(update, t(lang, "extend_title", name=esc(name)), reply_markup=extend_actions(uuid, lang=lang))
+    return True
 
 
+@action("e30", days=30)
+@action("e90", days=90)
+@action("eb10", bytes_=10 * GB)
+@action("eb100", bytes_=100 * GB)
 async def _extend(
     update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str, *, days: int = 0, bytes_: int = 0
 ) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "updating"))
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
         return True
     result = await panel.extend_user(uuid, days=days, bytes_=bytes_)
     if not await ensure_panel_ok(update, context, actor, result):
@@ -93,16 +74,13 @@ async def _extend(
     return True
 
 
+@action("rst")
 async def _reset(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "resetting"))
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
         return True
     result = await panel.reset_usage(uuid)
     if not await ensure_panel_ok(update, context, actor, result):
@@ -112,16 +90,13 @@ async def _reset(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Acto
     return True
 
 
+@action("tog")
 async def _toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update)
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"))
         return True
     new_status = not bool(user.get("is_active"))
     result = await panel.set_status(uuid, user.get("name") or "", new_status)
@@ -138,16 +113,13 @@ async def _toggle(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     return True
 
 
+@action("dis")
 async def _disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "disconnecting"))
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
         return True
     result = await panel.disconnect(uuid)
     if not await ensure_panel_ok(update, context, actor, result):
@@ -157,16 +129,13 @@ async def _disconnect(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
     return True
 
 
+@action("del")
 async def _ask_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update)
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"))
         return True
     name = user.get("name") or t(lang, "this_user")
     await edit_or_reply(
@@ -177,6 +146,7 @@ async def _ask_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor:
     return True
 
 
+@action("okd")
 async def _delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "deleting"))
@@ -201,6 +171,7 @@ async def _delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     return True
 
 
+@action("undo")
 async def _undo_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "restoring"))
@@ -222,6 +193,7 @@ async def _undo_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, actor
     return True
 
 
+@action("sub")
 async def _sub(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update)
@@ -243,6 +215,7 @@ async def _sub(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
     return True
 
 
+@action("cfg")
 async def _cfg(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, uuid: str) -> bool:
     lang = lang_of(update, context)
     await answer(update)
@@ -264,6 +237,7 @@ async def _cfg(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
     return True
 
 
+@action("dl")
 async def _download(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, rest: str) -> bool:
     lang = lang_of(update, context)
     await answer(update, t(lang, "preparing"))

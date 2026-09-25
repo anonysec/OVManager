@@ -74,6 +74,27 @@ async def _reply(update: Update, text: str) -> None:
         await message.reply_text(text)
 
 
+async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
+    """Fetch one user; send the right notice and return None on failure.
+
+    Unreachable panel and missing user used to produce four different
+    notice/markup combinations across the action handlers. All of them know
+    the uuid, so both cases offer back-to-user uniformly.
+    """
+    from bot.i18n import t
+    from bot.keyboards import back_to_user
+    from bot.ui import edit_or_reply
+
+    user = await panel.get_user(uuid=uuid)
+    if user:
+        return user
+    if panel.last_status == 0:
+        await edit_or_reply(update, t(lang, "panel_unreachable"), reply_markup=back_to_user(uuid, lang=lang))
+    else:
+        await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
+    return None
+
+
 async def ensure_panel_ok(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, result: dict) -> bool:
     """Central transport/auth guard for panel results.
 

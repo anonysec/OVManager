@@ -11,6 +11,7 @@ from bot.handlers.access import require_actor
 from bot.i18n import LANG_NAMES, LANG_PROMPT, has_lang, lang_of, set_lang, t
 from bot.identity import Actor
 from bot.keyboards import home_actions, language_menu, language_picker, main_menu
+from bot.states import clear_flow
 from bot.ui import answer, edit_or_reply
 
 
@@ -26,7 +27,7 @@ async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
             return
     lang = lang_of(update, context)
     is_owner = actor.role == "owner"
-    context.user_data.pop("flow", None)
+    clear_flow(context)
     text = _welcome(actor, lang)
     markup = home_actions(lang=lang, is_owner=is_owner)
     query = update.callback_query
@@ -64,7 +65,7 @@ async def show_languages(update: Update, context: ContextTypes.DEFAULT_TYPE, *, 
 
 async def apply_language(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str) -> None:
     lang = set_lang(context, code, update)
-    context.user_data.pop("flow", None)
+    clear_flow(context)
     await answer(update)
     actor = await require_actor(update, context)
     if actor is None:

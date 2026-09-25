@@ -1,85 +1,23 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
+"""User CRUD: lookup, pagination, create/update, lifecycle."""
+
+from __future__ import annotations
+
 from datetime import UTC, datetime
-from functools import lru_cache
 from uuid import uuid4
 
-from cryptography.fernet import Fernet
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.auth.hash import hash_password
 from backend.db.exceptions import ConflictError, NotFoundError, ValidationError
+from backend.db.models import User
 from backend.logger import logger
-from backend.schema._input import AdminCreate, CreateUser, NodeCreate, UpdateUser
+from backend.schema._input import CreateUser, UpdateUser
 
-from .models import Admin, Node, Settings, User
-
-try:
-    from backend.config import config as panel_config
-
-    _fernet = Fernet(panel_config.BOT_ENCRYPT_KEY.encode()) if panel_config.BOT_ENCRYPT_KEY else None
-    _node_key_raw = panel_config.NODE_ENCRYPT_KEY or panel_config.BOT_ENCRYPT_KEY
-    _node_fernet = Fernet(_node_key_raw.encode()) if _node_key_raw else None
-except Exception:
-    _fernet = None
-    _node_fernet = None
-
-if _fernet is None:
-    import logging
-
-    logging.getLogger(__name__).warning(
-        "BOT_ENCRYPT_KEY not set — bot tokens stored in plaintext at rest. "
-        "Set BOT_ENCRYPT_KEY in .env for encryption: "
-        'python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
-    )
-
-if _node_fernet is None:
-    import logging
-
-    logging.getLogger(__name__).warning(
-        "NODE_ENCRYPT_KEY (or BOT_ENCRYPT_KEY fallback) not set — node API keys stored in plaintext. "
-        "Set NODE_ENCRYPT_KEY in .env for encryption."
-    )
-
-
-def encrypt_node_key(plain: str) -> str:
-    """Encrypt a node API key for storage. Prefix marks ciphertext."""
-    if _node_fernet is None:
-        return plain
-    return "enc:" + _node_fernet.encrypt(plain.encode()).decode()
-
-
-@lru_cache(maxsize=4096)
-def decrypt_node_key(stored: str | None) -> str:
-    """Decrypt a stored node key; legacy plaintext passes through.
-
-    Pure in (stored, process key) — cached so per-tick fan-outs over N
-    nodes don't pay a Fernet decrypt per node per RPC.
-
-    Fail-closed: an ``enc:`` value that cannot be decrypted (wrong or
-    rotated key, corrupt row) yields ``""`` instead of leaking the
-    ciphertext as a bearer key. Callers then get a clean 401 from the
-    node, and the operator knows to re-enter the key.
-    """
-    if not stored:
-        return ""
-    if stored.startswith("enc:"):
-        if _node_fernet is None:
-            logger.error("Node key is encrypted but no NODE/BOT_ENCRYPT_KEY is configured — refusing to use it")
-            return ""
-        try:
-            return _node_fernet.decrypt(stored[4:].encode()).decode()
-        except Exception:
-            logger.error("Stored node key failed to decrypt (wrong key or corrupt row) — refusing to use it")
-            return ""
-    return stored
-
-
-def node_api_key(node) -> str:
-    """Plaintext API key for a Node row (decrypts when encrypted)."""
-    return decrypt_node_key(getattr(node, "key", ""))
+from .admins import it_is_admin
+from .settings import get_settings
 
 
 def get_all_users(db: Session):
@@ -125,94 +63,6 @@ def get_users_page(
     page_size = max(1, min(int(page_size or 100), 500))
     items = query.order_by(User.id).offset((page - 1) * page_size).limit(page_size).all()
     return items, total
-
-
-def get_admin_by_username(db: Session, username: str):
-    admin = db.query(Admin).filter(Admin.username == username).first()
-    return admin
-
-
-def create_admin(db: Session, admin: AdminCreate):
-    hashed_password = hash_password(admin.password)
-    new_admin = Admin(
-        username=admin.username,
-        password=hashed_password,
-        telegram_id=admin.telegram_id,
-        username_prefix=admin.username_prefix,
-        default_days=admin.default_days,
-        default_traffic_gb=admin.default_traffic_gb,
-        default_max_users=admin.default_max_users,
-    )
-    db.add(new_admin)
-    db.commit()
-    db.refresh(new_admin)
-    return new_admin
-
-
-def update_admin(db: Session, existing_admin: Admin, admin: AdminCreate):
-    existing_admin.password = hash_password(admin.password)
-    existing_admin.telegram_id = admin.telegram_id
-    existing_admin.username_prefix = admin.username_prefix
-
-    db.commit()
-    db.refresh(existing_admin)
-    return existing_admin
-
-
-def get_admin_by_telegram_id(db: Session, tg_id: int):
-    return db.query(Admin).filter(Admin.telegram_id == tg_id).first()
-
-
-def decrypt_bot_token(stored: str | None) -> str | None:
-    """Return a configured bot token without ever logging its value."""
-    if not stored:
-        return None
-    if _fernet is None:
-        return stored
-    try:
-        return _fernet.decrypt(stored.encode()).decode()
-    except Exception:
-        logger.warning("Stored Telegram bot token could not be decrypted")
-        return None
-
-
-def update_bot_config(db: Session, **kwargs):
-    s = db.query(Settings).first()
-    if not s:
-        s = Settings(port=1194, protocol="tcp")
-        db.add(s)
-        db.flush()
-    for k, v in kwargs.items():
-        if v is None:
-            continue
-        if k == "bot_token":
-            if not v:
-                v = None  # clear token → NULL in DB
-            elif _fernet is None:
-                raise RuntimeError("BOT_ENCRYPT_KEY is required before saving a bot token")
-            else:
-                v = _fernet.encrypt(v.encode()).decode()
-        if hasattr(s, k):
-            setattr(s, k, v)
-    db.commit()
-    db.refresh(s)
-    return s
-
-
-def get_bot_config(db: Session):
-    s = db.query(Settings).first()
-    if not s:
-        return {"bot_configured": False, "bot_enabled": False}
-    return {
-        # Never return plaintext or ciphertext token material to the browser.
-        "bot_configured": bool(s.bot_token),
-        "bot_enabled": s.bot_enabled,
-        "default_days": s.default_days,
-        "default_traffic_gb": s.default_traffic_gb,
-        "default_max_users": s.default_max_users,
-        "owner_telegram_id": s.owner_telegram_id,
-    }
-
 
 
 def get_user_by_name(db: Session, name: str):
@@ -418,137 +268,6 @@ def delete_user(db: Session, name: str):
 
 
 # admins crud
-def get_all_admins(db: Session):
-    admins = db.query(Admin).all()
-    return admins
-
-
-def it_is_admin(db: Session, username: str):
-    """Return the Admin object if found, else None."""
-    return db.query(Admin).filter(Admin.username == username).first()
-
-
-def delete_admin(db: Session, admin: Admin):
-    db.delete(admin)
-    db.commit()
-    return True
-
-
-# nodes crud
-def get_all_nodes(db: Session):
-    nodes = db.query(Node).all()
-    return nodes
-
-
-def get_active_nodes(db: Session):
-    """Return only nodes with status=True."""
-    return db.query(Node).filter(Node.status == True).all()  # noqa: E712
-
-
-def get_node_by_id(db: Session, id: int):
-    return db.query(Node).filter(Node.id == id).first()
-
-
-def get_node_by_name(db: Session, name: str):
-    return db.query(Node).filter(Node.name == name).first()
-
-
-def _manual_country(request: NodeCreate) -> str | None:
-    """Manual country override from the form, normalized — or None for auto."""
-    raw = (request.country_code or "").strip().upper()
-    return raw or None
-
-
-def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
-    manual = _manual_country(request)
-    new_node = Node(
-        name=request.name,
-        address=request.address,
-        tunnel_address=request.tunnel_address,
-        ovpn_port=request.ovpn_port,
-        protocol=request.protocol,
-        port=request.port,
-        key=encrypt_node_key(request.key),
-        status=request.status,
-        use_tls=request.use_tls,
-        country_code=manual or (geolocation.get("country_code") if geolocation else None),
-        latitude=None if manual else (geolocation.get("latitude") if geolocation else None),
-        longitude=None if manual else (geolocation.get("longitude") if geolocation else None),
-    )
-
-    db.add(new_node)
-    db.commit()
-    db.refresh(new_node)
-    return new_node
-
-
-def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dict = None):
-    node = db.query(Node).filter(Node.id == node_id).first()
-    if not node:
-        raise NotFoundError("Node", str(node_id)) from None
-
-    node.name = request.name
-    node.address = request.address
-    node.tunnel_address = request.tunnel_address
-    node.ovpn_port = request.ovpn_port
-    node.protocol = request.protocol
-    node.port = request.port
-    manual = _manual_country(request)
-    if manual:
-        # Operator override wins; stale auto coords are cleared so the UI
-        # never mixes a manual country with coordinates from another one.
-        node.country_code = manual
-        node.latitude = None
-        node.longitude = None
-    elif geolocation:
-        node.country_code = geolocation.get("country_code")
-        node.latitude = geolocation.get("latitude")
-        node.longitude = geolocation.get("longitude")
-    node.status = request.status
-    node.use_tls = request.use_tls
-
-    # Only overwrite API key if a non-empty value is provided
-    if request.key and request.key.strip():
-        node.key = encrypt_node_key(request.key.strip())
-
-    db.commit()
-    db.refresh(node)
-    return node
-
-
-def delete_node(db: Session, id: int):
-    node = db.query(Node).filter(Node.id == id).first()
-    if not node:
-        raise NotFoundError("Node", str(id))
-    db.delete(node)
-    db.commit()
-    return {"detail": "Node deleted successfully"}
-
-
-# settings crud
-def get_settings(db: Session):
-    settings = db.query(Settings).first()
-    if not settings:
-        settings = Settings(port=1194)
-        settings.protocol = "tcp"
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-
-    return settings
-
-
-def update_setting_timezone(db: Session, timezone: str):
-    settings = db.query(Settings).first()
-    if not settings:
-        settings = Settings(port=1194)
-        settings.protocol = "tcp"
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    settings.timezone = timezone
-    db.commit()
-    return settings
 
 
 def restore_user(db: Session, snapshot: dict):
@@ -620,3 +339,4 @@ def adjust_user(db: Session, uuid: str, days: int = 0, add_bytes: int = 0, owner
     db.commit()
     db.refresh(user)
     return user
+

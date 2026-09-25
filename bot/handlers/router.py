@@ -17,6 +17,7 @@ from bot.handlers.settings import show_settings
 from bot.handlers.status import show_node_detail, show_nodes, show_status
 from bot.handlers.users import prompt_search, search_users, show_user, show_users
 from bot.i18n import has_lang, lang_of, menu_action, t
+from bot.states import clear_flow, get_flow
 from bot.ui import answer, edit_or_reply
 
 log = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ async def on_unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         actor = await require_actor(update, context)
         if actor is None:
             return
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_home(update, context, actor)
     except Exception:
         log.exception("Unknown-command handler failed")
@@ -64,7 +65,7 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await apply_language(update, context, action.split(":", 1)[1])
         return
     if action == "language":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_languages(update, context)
         return
     if not has_lang(update, context):
@@ -74,29 +75,29 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     actor = await require_actor(update, context)
     if actor is None:
         return
-    flow = context.user_data.get("flow") if isinstance(context.user_data.get("flow"), dict) else None
+    flow = get_flow(context)
 
     if action == "cancel":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_home(update, context, actor)
         return
     if action == "users":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_users(update, context, actor)
         return
     if action == "new":
         await start_create(update, context, actor)
         return
     if action == "status":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_status(update, context, actor)
         return
     if action == "nodes":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_nodes(update, context, actor)
         return
     if action == "settings":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_settings(update, context, actor)
         return
 
@@ -107,7 +108,7 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await handle_edit_text(update, context, actor, text)
         return
     if flow and flow.get("kind") == "search":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await search_users(update, context, actor, text)
         return
 
@@ -142,7 +143,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         if data in {"home", "cancel"}:
             await answer(update)
-            context.user_data.pop("flow", None)
+            clear_flow(context)
             await show_home(update, context, actor)
             return
         if data == "new":
@@ -159,7 +160,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         if data == "settings":
             await answer(update)
-            context.user_data.pop("flow", None)
+            clear_flow(context)
             await show_settings(update, context, actor)
             return
         if data == "search":

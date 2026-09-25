@@ -18,11 +18,12 @@ from telegram.ext import ContextTypes
 
 from bot.api import Panel
 from bot.formatters import esc
-from bot.handlers.access import ensure_panel_ok
+from bot.handlers.access import ensure_panel_ok, fetch_user
 from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
 from bot.keyboards import back_to_user, confirm_edit, edit_fields
+from bot.states import clear_flow, get_flow, set_flow
 from bot.ui import answer, edit_or_reply
 
 GB = 1073741824
@@ -35,8 +36,8 @@ _FIELDS = {
 
 
 def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict | None:
-    flow = context.user_data.get("flow")
-    if not isinstance(flow, dict) or flow.get("kind") != "edit":
+    flow = get_flow(context)
+    if flow is None or flow.get("kind") != "edit":
         return None
     return flow
 
@@ -47,14 +48,10 @@ async def start_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: 
         await edit_or_reply(update, t(lang, "edit_owner_only"))
         return
     panel = Panel(actor.token)
-    user = await panel.get_user(uuid=uuid)
+    user = await fetch_user(update, panel, uuid, lang)
     if not user:
-        if panel.last_status == 0:
-            await edit_or_reply(update, t(lang, "panel_unreachable"))
-        else:
-            await edit_or_reply(update, t(lang, "user_not_found"), reply_markup=back_to_user(uuid, lang=lang))
         return
-    context.user_data["flow"] = {"kind": "edit", "step": "field", "uuid": uuid, "name": user.get("name") or ""}
+    set_flow(context, "edit", step="field", uuid=uuid, name=user.get("name") or "")
     await edit_or_reply(
         update,
         t(lang, "edit_title", name=esc(user.get("name") or t(lang, "this_user"))),
@@ -87,7 +84,7 @@ async def handle_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return True
     if data == "edc":
         await answer(update)
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await show_user(update, context, actor, flow.get("uuid") or "")
         return True
     return False
@@ -101,7 +98,7 @@ async def handle_edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE, a
         return
     spec = _FIELDS.get(flow.get("field") or "")
     if spec is None:
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         return
     try:
         value = int(text.strip())
@@ -136,7 +133,7 @@ async def _commit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     if flow is None or flow.get("step") != "confirm":
         return
     if actor.role != "owner":
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         await edit_or_reply(update, t(lang, "edit_owner_only"))
         return
     uuid = flow.get("uuid") or ""
@@ -151,11 +148,11 @@ async def _commit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
     elif field == "devices":
         payload["max_logins"] = value
     else:
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         return
     panel = Panel(actor.token)
     result = await panel.update_user(uuid, name, **payload)
-    context.user_data.pop("flow", None)
+    clear_flow(context)
     if not await ensure_panel_ok(update, context, actor, result):
         return
     if result.get("success"):

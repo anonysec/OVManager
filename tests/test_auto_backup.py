@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 import backend.app as app_module
 import backend.routers.maintenance as maintenance
+import backend.scheduler as sched_module
 from backend.db import migrations
 from backend.db.engine import SessionLocal
 from backend.db.migrations import SCHEMA_VERSION
@@ -299,15 +300,15 @@ def test_ab_job_never_raises_when_backup_fails(monkeypatch):
 
 def test_ab_reschedule_registers_and_removes_job(monkeypatch):
     fake = ab_FakeScheduler()
-    monkeypatch.setattr(app_module, "_scheduler", fake)
+    monkeypatch.setattr(sched_module, "_scheduler", fake)
 
     ab_set_settings(enabled=False)
-    app_module.reschedule_auto_backup()
+    sched_module.reschedule_auto_backup()
     assert fake.removed == ["auto_backup"]
     assert fake.added == []
 
     ab_set_settings(enabled=True, time="04:45")
-    app_module.reschedule_auto_backup()
+    sched_module.reschedule_auto_backup()
     assert fake.removed == ["auto_backup", "auto_backup"]
     assert len(fake.added) == 1
 
@@ -320,5 +321,5 @@ def test_ab_reschedule_registers_and_removes_job(monkeypatch):
 
 
 def test_ab_reschedule_is_noop_without_scheduler(monkeypatch):
-    monkeypatch.setattr(app_module, "_scheduler", None)
-    app_module.reschedule_auto_backup()  # must not raise
+    monkeypatch.setattr(sched_module, "_scheduler", None)
+    sched_module.reschedule_auto_backup()  # must not raise
