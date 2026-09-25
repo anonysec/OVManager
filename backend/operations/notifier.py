@@ -50,17 +50,18 @@ def _decrypt_bot_token(stored: str | None) -> str | None:
 
     Mirrors ``bot/config.py``: when no BOT_ENCRYPT_KEY is configured the
     stored value is legacy plaintext and is used as-is; otherwise it is
-    decrypted with ``crud._fernet``. A rotated/foreign key or a corrupt row
+    decrypted with the CRUD fernet key. A rotated/foreign key or a corrupt row
     yields ``None`` so ciphertext is never sent to Telegram as a token.
     """
     if not stored:
         return None
-    fernet = getattr(crud, "_fernet", None)
-    if fernet is None:
+    from backend.db.crud.crypto import _fernet
+
+    if _fernet is None:
         # No BOT_ENCRYPT_KEY configured: older installs store plaintext.
         return stored
     try:
-        return fernet.decrypt(stored.encode()).decode()
+        return _fernet.decrypt(stored.encode()).decode()
     except Exception:
         logger.warning("Telegram alert token could not be decrypted — skipping alert until the token is re-saved")
         return None

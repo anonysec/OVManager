@@ -162,7 +162,10 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (1, 0, 'pre-step')"))
     session.commit()
 
-    monkeypatch.setattr(crud, "_node_fernet", Fernet(Fernet.generate_key()))
+    # encrypt_node_key reads the fernet singleton from its module (crud.crypto),
+    # not the package namespace — patching the wrong home is the 1.0.3
+    # patch-target bug class: the test passes while the real key is used.
+    monkeypatch.setattr(crud.crypto, "_node_fernet", Fernet(Fernet.generate_key()))
     migrations.migrate(session)
 
     stored = session.execute(text("SELECT key FROM nodes WHERE name = 'legacy-node'")).scalar()

@@ -277,7 +277,9 @@ def test_update_fails_over_on_health_failure():
     assert "snapshot_code" in content
     assert "update_safety_backup" in content
     assert "UPDATE_STAGE" in content and "UPDATE_PREVIOUS" in content
-    assert "Update verification in progress" in (Path(INSTALLER).parent / "backend/app.py").read_text()
+    # The marker string moved with its code (backend/middlewares.py owns the
+    # 503 write-block path); only assert where it actually lives.
+    assert "Update verification in progress" in (Path(INSTALLER).parent / "backend/middlewares.py").read_text()
     assert "failing over" in content
     assert "restore_update_database" in content
     assert "failed_over" in content

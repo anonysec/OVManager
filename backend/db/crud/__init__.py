@@ -8,6 +8,7 @@
 """
 
 from backend.db.crud.admins import (
+    Admin,
     create_admin,
     delete_admin,
     get_admin_by_telegram_id,
@@ -24,6 +25,7 @@ from backend.db.crud.crypto import (
     node_api_key,
 )
 from backend.db.crud.nodes import (
+    Node,
     _manual_country,
     create_node,
     delete_node,
@@ -34,6 +36,7 @@ from backend.db.crud.nodes import (
     update_node,
 )
 from backend.db.crud.settings import (
+    Settings,
     decrypt_bot_token,
     get_bot_config,
     get_settings,
@@ -41,6 +44,7 @@ from backend.db.crud.settings import (
     update_setting_timezone,
 )
 from backend.db.crud.users import (
+    User,
     activation_blocked,
     adjust_user,
     change_user_status,
@@ -61,6 +65,10 @@ from backend.db.crud.users import (
 )
 
 __all__ = [
+    "Admin",
+    "Node",
+    "Settings",
+    "User",
     "_fernet",
     "_manual_country",
     "_node_fernet",
