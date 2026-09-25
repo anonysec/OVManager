@@ -422,3 +422,41 @@ def test_tls_event_without_identity_shows_its_peer(monkeypatch):
     # No identity to label: null, not "no such user" (that is for a CN the
     # panel used to know).
     assert ev["user_known"] is None
+
+
+def test_node_ongoing_flag_wins_over_the_panel_clock(monkeypatch):
+    """Log-derived events carry a node-computed ongoing flag: the panel must
+    not override it with its own timestamp heuristic."""
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "policy_rejects": 0,
+            "warn_rejects": 0,
+            "rejects": 0,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    # Two hours old, so the panel rule would say "not ongoing".
+                    "ts": time.time() - 7200,
+                    "cn": "",
+                    "action": "tls",
+                    "severity": "failure",
+                    "reason": "tls-crypt unwrapping failed",
+                    "peer": "10.0.0.9:1194",
+                    "ongoing": True,
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    assert data["events"][0]["ongoing"] is True
+    assert data["ongoing_users"] == ["10.0.0.9:1194"]

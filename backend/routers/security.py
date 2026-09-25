@@ -190,8 +190,13 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
                 "peer": peer,
                 "ts": ts,
                 "time_local": local_time,
-                # Still being retried: the client hit this in the last hour.
-                "ongoing": bool(ts and now - ts <= _ONGOING_WINDOW_S),
+                # The node knows better for log-derived events (it compares
+                # consecutive polls); otherwise "seen within the last hour".
+                "ongoing": (
+                    bool(ev["ongoing"])
+                    if ev.get("ongoing") is not None
+                    else bool(ts and now - ts <= _ONGOING_WINDOW_S)
+                ),
                 "classified": True,
             }
         )
