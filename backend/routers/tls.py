@@ -709,14 +709,15 @@ def _docker_container_running(name: str = "ovmanager") -> bool:
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
-def _spawn_detached(command: str) -> None:
+def _spawn_detached(argv: list[str]) -> None:
     """Run a fixed restart command after a short delay, detached from this process.
 
     The delay gives the HTTP response time to leave the socket before the
-    panel (and this process) is restarted.
+    panel (and this process) is restarted. argv only: no shell is involved,
+    so there is no injection surface even if a caller ever passes variables.
     """
     subprocess.Popen(
-        ["sh", "-c", f"sleep 1; {command}"],
+        ["sh", "-c", "sleep 1; exec \"$@\"", "ovmanager-restart", *argv],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -730,9 +731,9 @@ def restart_panel(user: dict = Depends(require_owner)):
     """Best-effort panel restart so freshly installed certificates take effect."""
     command = None
     if _systemd_unit_exists():
-        command = "systemctl restart ovmanager"
+        command = ["systemctl", "restart", "ovmanager"]
     elif _docker_container_running():
-        command = "docker restart ovmanager"
+        command = ["docker", "restart", "ovmanager"]
     if command is None:
         log_event(None, "tls.restart", actor=user.get("username"), detail="no automatic restart target found")
         return ResponseModel(
@@ -743,7 +744,7 @@ def restart_panel(user: dict = Depends(require_owner)):
             ),
             data={"restart_required": True, "restarted": False, "command": "systemctl restart ovmanager"},
         )
-    log_event(None, "tls.restart", actor=user.get("username"), detail=command)
+    log_event(None, "tls.restart", actor=user.get("username"), detail=" ".join(command))
     _spawn_detached(command)
     return ResponseModel(
         success=True,

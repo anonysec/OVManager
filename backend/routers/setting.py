@@ -80,10 +80,8 @@ async def get_settings(
     # Optional offsite copy target for scheduled backups (scp-style string).
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
-    data["telegram_backup_available"] = bool(config.BACKUP_ENCRYPT_KEY)
-    # Shown in Settings -> Backups (not at install): the owner needs it to
-    # restore off-server copies, and only when that feature is in use.
-    data["backup_encrypt_key"] = config.BACKUP_ENCRYPT_KEY or ""
+    # No key involved anymore: delivery needs only a configured bot + owner chat.
+    data["telegram_backup_available"] = bool(getattr(db_settings, "bot_token", None))
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",
@@ -206,12 +204,6 @@ async def update_bot_config(
         current = crud.get_settings(db)
         token = payload.bot_token or getattr(current, "bot_token", None)
         owner_id = payload.owner_telegram_id or getattr(current, "owner_telegram_id", None)
-        if not config.BACKUP_ENCRYPT_KEY:
-            return ResponseModel(
-                success=False,
-                msg="BACKUP_ENCRYPT_KEY is required before Telegram backups can be enabled",
-                data=None,
-            )
         if not token or not owner_id:
             return ResponseModel(
                 success=False,
@@ -241,7 +233,7 @@ async def update_bot_config(
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
-    data["telegram_backup_available"] = bool(config.BACKUP_ENCRYPT_KEY)
+    data["telegram_backup_available"] = bool(getattr(db_settings, "bot_token", None))
 
     # Apply a new schedule immediately — no restart required. Imported lazily
     # because backend.app imports the routers (circular otherwise).

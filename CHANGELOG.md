@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.3 — 2026-09-25
+
+Backup key removed; backups go plain. The server itself is the trust
+boundary (owner-only API, SSH for terminal), so there is no second
+secret to manage:
+
+- No `BACKUP_ENCRYPT_KEY` generation, storage, validation or display.
+  Telegram copies are the verified bundle as-is.
+- Updates scrub the retired key from the staged `.env` so the new
+  backend (which rejects unknown keys) boots first try.
+- `tls.restart` no longer builds a shell string; fixed argv only.
+- Abuse-surface regression tests: offsite-target metacharacters,
+  restore-upload traversal, malicious TLS domains (never executed),
+  bundle member allowlist, shell-free spawn.
+
+Owner note: copies sent encrypted by earlier releases can no longer be
+read back by this build — keep the old key only if such copies exist.
+
 ## 1.0.2 — 2026-09-25
 
 Owner-reviewed UX and behavior batch, validated live:

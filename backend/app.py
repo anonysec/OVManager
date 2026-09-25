@@ -581,18 +581,17 @@ async def auto_backup_job():
             else:
                 log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy failed for {backup_path.name}")
 
-        # Telegram is a separate opt-in destination. The bundle is encrypted
-        # locally with a key unrelated to the bot token before upload.
+        # Telegram is a separate opt-in destination. The bundle goes as-is:
+        # delivery is owner-only (bot + private chat) and the server itself
+        # is the trust boundary.
         if telegram_backup_enabled:
-            from backend.config import config as panel_config
             from backend.db import crud
             from backend.operations.telegram_backup import send_backup_document
 
             db = SessionLocal()
             try:
                 settings = crud.get_settings(db)
-                key = panel_config.BACKUP_ENCRYPT_KEY or ""
-                result = await asyncio.to_thread(send_backup_document, backup_path, settings, key)
+                result = await asyncio.to_thread(send_backup_document, backup_path, settings)
             finally:
                 db.close()
             if result.ok:
@@ -600,14 +599,14 @@ async def auto_backup_job():
                     None,
                     "maintenance.telegram_backup",
                     actor="auto",
-                    detail=f"Encrypted Telegram copy delivered: {backup_path.name} message={result.message_id}",
+                    detail=f"Telegram copy delivered: {backup_path.name} message={result.message_id}",
                 )
             else:
                 log_event(
                     None,
                     "maintenance.telegram_backup",
                     actor="auto",
-                    detail=f"Encrypted Telegram copy failed for {backup_path.name}: {result.error}",
+                    detail=f"Telegram copy failed for {backup_path.name}: {result.error}",
                 )
     except Exception:
         logger.exception("Scheduled auto backup job crashed")

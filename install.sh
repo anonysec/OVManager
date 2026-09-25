@@ -29,7 +29,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.2"
+VERSION="1.0.3"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 # Terminal command installed by install_cli() (copy of the manager).
@@ -66,7 +66,7 @@ trap 'warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' E
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" PATHPREFIX="" ADMIN_USER="" ADMIN_PASS=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
-PUBLIC_URL="" MODE="" ACTION="install" PIN="" BACKUP_ENCRYPT_KEY=""
+PUBLIC_URL="" MODE="" ACTION="install" PIN=""
 YES=0 PURGE=0 JSON=0 DRY=0 GENERATED_PASS=0 PATH_SET=0
 CLI_GIVEN=0 EXPRESS=0
 OPERATION_LOCK="${DATA_DIR}/.operation.lock"
@@ -656,14 +656,6 @@ write_env() {
     local jwt bot
     jwt="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
     bot="$(fernet_key)"
-    # Branch-only settings must not leak into .env when the installed
-    # release predates them: pydantic (extra=forbid) rejects unknown keys
-    # and the panel crash-loops. The key is generated once a release that
-    # understands it is installed (fresh installs of such releases).
-    BACKUP_ENCRYPT_KEY=""
-    if grep -q 'BACKUP_ENCRYPT_KEY' "$INSTALL_DIR/backend/config.py" 2>/dev/null; then
-        BACKUP_ENCRYPT_KEY="$(fernet_key)"
-    fi
     # In Docker mode the .env is consumed INSIDE the container, where the
     # data dir is the /app/data mount — never the host path (writing the
     # host path here made fresh Docker installs crash-loop with
@@ -681,7 +673,6 @@ write_env() {
         printf 'DATA_DIR=%s\n' "$data_dir"
         [[ -n "$PUBLIC_URL" ]] && printf 'PUBLIC_URL=%s\n' "$PUBLIC_URL"
         [[ -n "$bot" ]] && printf 'BOT_ENCRYPT_KEY=%s\n' "$bot"
-        [[ -n "$BACKUP_ENCRYPT_KEY" ]] && printf 'BACKUP_ENCRYPT_KEY=%s\n' "$BACKUP_ENCRYPT_KEY"
         [[ -n "$TLS_KEY" ]] && printf 'SSL_KEYFILE=%s\n' "$TLS_KEY"
         [[ -n "$TLS_CERT" ]] && printf 'SSL_CERTFILE=%s\n' "$TLS_CERT"
     } > "$INSTALL_DIR/.env"
@@ -1087,10 +1078,10 @@ print_plan() {
 emit_json() {
     local ok="$1" url
     url="$(panel_url)"
-    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" "$VERSION" "$BACKUP_ENCRYPT_KEY" <<'PY'
+    python3 - "$ok" "$MODE" "$url" "$ADMIN_USER" "$ADMIN_PASS" "$INSTALL_DIR" "$DATA_DIR" "$TLS_MODE" "$PORT" "$PATHPREFIX" "$GENERATED_PASS" "$VERSION" <<'PY'
 import json, sys
 (ok, mode, url, user, password, install, data, tls, port,
- path, gen, version, backup_key) = sys.argv[1:]
+ path, gen, version) = sys.argv[1:]
 out = {
     "ok": ok == "1",
     "version": version,
@@ -1099,7 +1090,6 @@ out = {
     "user": user,
     "password": password,
     "password_generated": gen == "1",
-    "backup_recovery_key": backup_key,
     "port": int(port),
     "path": path,
     "tls": tls,
@@ -1214,6 +1204,9 @@ do_update() {
     fetch_release "$UPDATE_STAGE"
     cp -p "$INSTALL_DIR/.env" "$UPDATE_STAGE/.env" || die "Could not preserve configuration"
     chmod 600 "$UPDATE_STAGE/.env"
+    # Retired secrets must not reach the candidate: the new backend rejects
+    # unknown .env keys and would crash-loop on first boot.
+    sed -i '/^BACKUP_ENCRYPT_KEY=/d' "$UPDATE_STAGE/.env"
     if [[ "$MODE" != "docker" ]]; then
         ( cd "$UPDATE_STAGE" && run_step "Staged Python packages" "$UV_BIN" sync --frozen --no-dev --quiet ) \
             || die "Could not prepare the staged release; current version is still running"
