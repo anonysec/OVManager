@@ -419,4 +419,6 @@ def test_tls_event_without_identity_shows_its_peer(monkeypatch):
     ev = resp.json()["data"]["events"][0]
     assert ev["user"] == "185.200.116.40:45929"
     assert ev["peer"] == "185.200.116.40:45929"
-    assert ev["user_known"] is False
+    # No identity to label: null, not "no such user" (that is for a CN the
+    # panel used to know).
+    assert ev["user_known"] is None
