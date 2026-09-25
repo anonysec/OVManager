@@ -167,7 +167,9 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
         if not isinstance(ev, dict):
             continue
         cn = str(ev.get("cn") or "")
+        peer = str(ev.get("peer") or "")
         ts = float(ev.get("ts") or 0)
+        known_user = id_to_name.get(cn) if cn else None
         local_time = (
             datetime.fromtimestamp(ts, UTC).astimezone(panel_tz).strftime("%Y-%m-%d %H:%M:%S")
             if ts
@@ -177,15 +179,19 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
             {
                 "node": node_name,
                 "cn": cn,
-                "user": id_to_name.get(cn) or ("(tls)" if not cn and ev.get("peer") else ""),
+                # A CN with no matching user is a client reconnecting with a
+                # certificate the panel dropped; the UI labels it as such.
+                "user": known_user or cn or peer,
+                "user_known": bool(known_user),
                 "action": ev.get("action") or "event",
                 "severity": ev.get("severity") or "warn",
                 "reason": ev.get("reason") or "connection event",
-                "peer": ev.get("peer") or "",
+                "peer": peer,
                 "ts": ts,
                 "time_local": local_time,
                 # Still being retried: the client hit this in the last hour.
                 "ongoing": bool(ts and now - ts <= _ONGOING_WINDOW_S),
+                "classified": True,
             }
         )
     return rows
