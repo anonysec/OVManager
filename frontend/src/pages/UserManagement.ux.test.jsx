@@ -5,7 +5,7 @@
  * UserManagement UX: debounced search, capped tag chips, styled label input.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import '../i18n';
 
@@ -69,23 +69,33 @@ const renderPage = (users) => {
 
 describe('UserManagement search debounce', () => {
   beforeEach(() => { vi.clearAllMocks(); stubStorage(); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
   it('waits for a pause before pushing the query to the URL', async () => {
     const { getSearch } = renderPage(taggedUsers(2));
     const input = await screen.findByLabelText(/search/i);
+    // Deterministic debounce: real timers for render/findBy, then fake
+    // timers so the 275ms pause fires synchronously (parallel workers
+    // starve real timers — the historical flake).
+    vi.useFakeTimers();
     fireEvent.change(input, { target: { value: 'user' } });
     fireEvent.change(input, { target: { value: 'user1' } });
     // Rapid keystrokes must not rewrite the URL synchronously.
     expect(getSearch()).toBe('');
-    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 8000 });
+    // Advance past the 275ms debounce and flush React's effect cycle.
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(getSearch()).toContain('q=user1');
+    vi.useRealTimers();
   });
 
   it('clears the query immediately from the clear button', async () => {
     const { getSearch } = renderPage(taggedUsers(2));
     const input = await screen.findByLabelText(/search/i);
+    vi.useFakeTimers();
     fireEvent.change(input, { target: { value: 'user1' } });
-    await waitFor(() => expect(getSearch()).toContain('q=user1'), { timeout: 8000 });
+    await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    expect(getSearch()).toContain('q=user1');
+    vi.useRealTimers();
     fireEvent.click(screen.getByText(/^clear$/i));
     await waitFor(() => expect(getSearch()).toBe(''), { timeout: 8000 });
   });
