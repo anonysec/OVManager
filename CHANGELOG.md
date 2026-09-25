@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+Structure pass (no behavior change) plus one owner decision: secrets are
+no longer encrypted at rest. The server itself — owner login and the
+0600 database file — is the trust boundary, so there is no second secret
+to keep or rotate (same model as PasarGuard):
+
+- New migration decrypts legacy `enc:` bot tokens and node keys once on
+  first boot, using the retired `BOT/NODE_ENCRYPT_KEY` values still in
+  `.env` on upgrade. Rows that cannot be decrypted are left as-is with a
+  warning (re-save the token/key). Schema version 13 → 14.
+- `BOT_ENCRYPT_KEY`, `NODE_ENCRYPT_KEY` and `BACKUP_ENCRYPT_KEY` are
+  deprecated no-ops — safe to delete from `.env`. The installer no
+  longer generates any of them.
+- Code organization: `backend/app.py` split into middlewares, scheduler
+  and bot-supervisor modules; `backend/db/crud.py` split per entity;
+  telemetry routers merged; shared input validators (username, urlpath,
+  domain, email) defined once and used by both API and bot; Telegram bot
+  gained a callback registry and conversation-flow helpers. All import
+  paths keep working.
+
 ## 1.0.4 — 2026-09-25
 
 Fixes the 1.0.3 upgrade path: updates are staged by the *old*
