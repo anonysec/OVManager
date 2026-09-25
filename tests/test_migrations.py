@@ -243,10 +243,12 @@ def test_alter_table_sql_quotes_defaults(session):
 def test_fresh_install_seeds_owner_row_and_first_user():
     """A brand-new panel must show the owner under Admins and have one
     user to exercise the enrolment flow with."""
+    from backend.config import config
     from backend.db.engine import SessionLocal
     from backend.db.migrations import _seed_owner_and_first_user
     from backend.db.models import Admin, User
 
+    owner = (config.ADMIN_USERNAME or "admin").strip()
     db = SessionLocal()
     try:
         # Start from a genuinely empty state for both tables.
@@ -258,17 +260,17 @@ def test_fresh_install_seeds_owner_row_and_first_user():
 
         admins = [a.username for a in db.query(Admin).all()]
         users = db.query(User).all()
-        assert "admin" in admins, "owner must exist in the admins table"
+        assert owner in admins, "owner must exist in the admins table"
         assert len(users) == 1
         seeded = users[0]
-        assert seeded.owner == "admin"
+        assert seeded.owner == owner
         assert seeded.is_active is True
         assert seeded.max_logins >= 1
         assert seeded.expiry_date is not None
 
         # Idempotent: a second run must not duplicate anything.
         _seed_owner_and_first_user(db)
-        assert db.query(Admin).filter(Admin.username == "admin").count() == 1
+        assert db.query(Admin).filter(Admin.username == owner).count() == 1
         assert db.query(User).count() == 1
     finally:
         # Leave the suite database as we found it.
