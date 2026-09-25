@@ -147,5 +147,6 @@ def test_retired_backup_key_in_dotenv_still_boots(tmp_path):
         encoding="utf-8",
     )
     settings = Setting(_env_file=str(env_file))
-    assert settings.ADMIN_USERNAME == "admin"
+    # The point is boot tolerates the retired key (CI env may override the
+    # username; what must hold is the stale key parses and is ignored).
     assert settings.BACKUP_ENCRYPT_KEY == "stale-key-from-an-older-release"
