@@ -134,12 +134,14 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     """Adopted databases must still run numbered steps.
 
     Regression: adoption used to stamp straight at HEAD, skipping every step
-    forever — plaintext node API keys stayed plaintext and future data fixes
-    never ran.
+    forever — future data fixes never ran.
+
+    v2 is a retired no-op (at-rest encryption removed in 1.0.5); the step
+    that must run on adopted databases is v14, which decrypts ``enc:``
+    secrets once with the legacy keys still present in .env.
     """
     from cryptography.fernet import Fernet
 
-    from backend.db import crud
 
     session.execute(
         text(
@@ -151,7 +153,6 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     session.commit()
     migrations.migrate(session)  # adoption creates the mapped tables
 
-    # Simulate a database stamped before the encryption step with a plaintext key.
     session.execute(
         text(
             "INSERT INTO nodes (name, address, protocol, ovpn_port, port, key, status, use_tls) "
@@ -162,11 +163,26 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (1, 0, 'pre-step')"))
     session.commit()
 
-    monkeypatch.setattr(crud, "_node_fernet", Fernet(Fernet.generate_key()))
+    # The retired env keys (still present in .env on upgrade boot) must be
+    # honored during the one-time decrypt (v14). Patch config, the source
+    # the step actually reads — patching import-time copies is the 1.0.3
+    # patch-target bug class.
+    import backend.config as config_module
+
+    # Fernet.generate_key() returns base64-encoded bytes — exactly the .env format.
+    monkeypatch.setattr(config_module.config, "BOT_ENCRYPT_KEY", Fernet.generate_key().decode())
+    monkeypatch.setattr(config_module.config, "NODE_ENCRYPT_KEY", Fernet.generate_key().decode())
+    node_fernet = Fernet(config_module.config.NODE_ENCRYPT_KEY.encode())
+    node_fernet = Fernet(config_module.config.NODE_ENCRYPT_KEY.encode())
+    session.execute(
+        text("UPDATE nodes SET key = :k WHERE name = 'legacy-node'"),
+        {"k": "enc:" + node_fernet.encrypt(b"plaintext-key-123456").decode()},
+    )
+    session.commit()
     migrations.migrate(session)
 
     stored = session.execute(text("SELECT key FROM nodes WHERE name = 'legacy-node'")).scalar()
-    assert stored.startswith("enc:"), "the v2 encryption step must run on adopted databases"
+    assert stored == "plaintext-key-123456", "v14 must decrypt enc: rows on adopted databases"
     assert migrations.current_version(session) == SCHEMA_VERSION
 
 

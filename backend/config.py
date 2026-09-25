@@ -3,18 +3,8 @@
 
 import os
 
-from cryptography.fernet import Fernet
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
-
-
-def _validate_fernet_key(v: str) -> str:
-    """Validate Fernet key format (32 url-safe base64-encoded bytes)."""
-    try:
-        Fernet(v.encode())
-    except Exception:
-        raise ValueError("BOT_ENCRYPT_KEY must be a valid 32-byte URL-safe base64-encoded key") from None
-    return v
 
 
 class Setting(BaseSettings):
@@ -53,16 +43,13 @@ class Setting(BaseSettings):
     SUBSCRIPTION_URL_PREFIX: str | None = None
     SUBSCRIPTION_PATH: str = Field(default="sub", min_length=1, max_length=64)
     TRUSTED_PROXY: bool = False  # Set true behind nginx/caddy to trust X-Forwarded-For
-    # Encryption key for bot token at rest (Fernet)
+    # Retired in 1.0.5 (secrets are no longer encrypted at rest). Kept as
+    # deprecated no-ops so upgrades from key-era installs boot first try:
+    # their .env still carries the lines, the old installer stages it
+    # verbatim, and unknown keys are rejected at startup. Never read.
     BOT_ENCRYPT_KEY: str | None = None
-    # Encryption key for node API keys at rest (Fernet). Falls back to
-    # BOT_ENCRYPT_KEY when unset so existing installs get encryption
-    # without a new secret to manage.
     NODE_ENCRYPT_KEY: str | None = None
-    # Retired in 1.0.3 (backups go plain). Kept as a deprecated no-op so
-    # upgrades from key-era installs boot first try: their .env still
-    # carries the line, the old installer stages it verbatim, and unknown
-    # keys are rejected at startup. Never read; safe to delete from .env.
+    # Retired in 1.0.3 (backups go plain). Same deprecation pattern.
     BACKUP_ENCRYPT_KEY: str | None = None
     # Installer metadata (ignored by app, used by install.sh for state)
     DATA_DIR: str = ""
@@ -72,10 +59,6 @@ class Setting(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if self.BOT_ENCRYPT_KEY:
-            _validate_fernet_key(self.BOT_ENCRYPT_KEY)
-        if self.NODE_ENCRYPT_KEY:
-            _validate_fernet_key(self.NODE_ENCRYPT_KEY)
         if not self.ADMIN_PASSWORD and not self.ADMIN_PASSWORD_HASH:
             raise ValueError(
                 "No owner credentials — set ADMIN_PASSWORD_HASH (bcrypt, preferred) or "

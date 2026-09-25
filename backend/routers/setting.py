@@ -266,23 +266,16 @@ async def update_urlpath(
 
     Only owner can change this.
     """
-    import re
+    from backend.models.validators import validate_urlpath
 
     value = (payload.urlpath or "").strip("/")
 
-    # Validate: only allow safe characters (alphanumeric, dash, underscore)
-    if value and not re.match(r"^[A-Za-z0-9_-]+$", value):
+    # Validate: only allow safe characters (alphanumeric, dash, underscore),
+    # max 64 (both enforced by validate_urlpath; empty = serve at /).
+    if not validate_urlpath(value):
         return ResponseModel(
             success=False,
             msg="URL path must contain only letters, numbers, dashes, and underscores",
-            data=None,
-        )
-
-    # Max length to prevent abuse
-    if len(value) > 64:
-        return ResponseModel(
-            success=False,
-            msg="URL path must be 64 characters or less",
             data=None,
         )
 

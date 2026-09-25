@@ -16,7 +16,6 @@ temp-file + ``os.replace`` inside ``DATA_DIR/tls/`` only.
 import ipaddress
 import json
 import os
-import re
 import secrets
 import shutil
 import socket
@@ -37,6 +36,7 @@ from pydantic import BaseModel
 from backend.auth.authz import require_owner
 from backend.config import config
 from backend.data_paths import DATA_DIR
+from backend.models.validators import validate_domain, validate_email
 from backend.operations.audit import log_event
 from backend.schema.output import ResponseModel
 
@@ -56,10 +56,6 @@ RESTART_HINT = (
     "Restart the panel to use the new certificate: "
     "'systemctl restart ovmanager' on a native install, or 'docker restart ovmanager' for Docker."
 )
-
-_DOMAIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
 
 class RenewRequest(BaseModel):
     domain: str | None = None
@@ -527,14 +523,14 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
                 msg="Automatic IP certificates require a publicly routable server IP.",
                 data=None,
             )
-    elif len(domain) > 253 or not _DOMAIN_RE.fullmatch(domain):
+    elif not validate_domain(domain):
         return ResponseModel(
             success=False,
             msg="That domain name is not valid. Use letters, digits, dots and hyphens only.",
             data=None,
         )
     email = (payload.email or "").strip()
-    if email and not _EMAIL_RE.fullmatch(email):
+    if email and not validate_email(email):
         return ResponseModel(
             success=False,
             msg="That email address is not valid. Use a real address so expiry notices can reach you.",

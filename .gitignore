@@ -18,6 +18,9 @@ env/
 
 # OS
 .DS_Store
+
+# Generated (recreate with `make openapi`)
+scripts/openapi.json
 Thumbs.db
 
 # Environment

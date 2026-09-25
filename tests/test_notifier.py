@@ -153,11 +153,9 @@ def test_nt_send_skips_without_owner(nt_session, nt_settings, monkeypatch):
     assert notifier.send_telegram("hello", db=nt_session) is False
 
 
-def test_nt_send_skips_undecryptable_token(nt_session, nt_settings, monkeypatch):
-    from cryptography.fernet import Fernet
-
+def test_nt_send_skips_encrypted_token(nt_session, nt_settings, monkeypatch):
+    """Legacy ``enc:`` rows are refused fail-closed: never sent as a token."""
     monkeypatch.setattr(notifier.requests, "post", nt_forbidden_post)
-    monkeypatch.setattr(crud, "_fernet", Fernet(Fernet.generate_key()))
     nt_settings.bot_enabled = True
     nt_settings.bot_token = "enc:not-valid-ciphertext"
     nt_settings.owner_telegram_id = 123
@@ -167,14 +165,10 @@ def test_nt_send_skips_undecryptable_token(nt_session, nt_settings, monkeypatch)
 
 
 def test_nt_send_posts_escaped_html(nt_session, nt_settings, monkeypatch):
-    from cryptography.fernet import Fernet
-
-    fernet = Fernet(Fernet.generate_key())
     nt_settings.bot_enabled = True
-    nt_settings.bot_token = fernet.encrypt(b"123456:token").decode()
+    nt_settings.bot_token = "123456:token"
     nt_settings.owner_telegram_id = 555
     nt_session.commit()
-    monkeypatch.setattr(crud, "_fernet", fernet)
 
     captured = {}
 
@@ -197,14 +191,10 @@ def test_nt_send_posts_escaped_html(nt_session, nt_settings, monkeypatch):
 
 
 def test_nt_send_returns_false_on_http_error(nt_session, nt_settings, monkeypatch):
-    from cryptography.fernet import Fernet
-
-    fernet = Fernet(Fernet.generate_key())
     nt_settings.bot_enabled = True
-    nt_settings.bot_token = fernet.encrypt(b"123456:token").decode()
+    nt_settings.bot_token = "123456:token"
     nt_settings.owner_telegram_id = 555
     nt_session.commit()
-    monkeypatch.setattr(crud, "_fernet", fernet)
 
     class NtBadResponse:
         ok = False

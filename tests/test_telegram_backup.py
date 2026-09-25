@@ -58,10 +58,8 @@ class _Response:
 def test_send_document_uploads_bundle_as_is(monkeypatch, tmp_path):
     backup = tmp_path / "panel.ovmbak"
     backup.write_bytes(b"verified bundle")
-    settings = SimpleNamespace(owner_telegram_id=1234, bot_token="stored")
+    settings = SimpleNamespace(owner_telegram_id=1234, bot_token="123:secret")
     seen = {}
-
-    monkeypatch.setattr(tb.crud, "decrypt_bot_token", lambda value: "123:secret")
 
     def fake_post(url, **kwargs):
         assert "123:secret" in url
@@ -84,7 +82,6 @@ def test_send_document_uploads_bundle_as_is(monkeypatch, tmp_path):
 def test_send_document_requires_configuration(monkeypatch, tmp_path):
     backup = tmp_path / "panel.ovmbak"
     backup.write_bytes(b"bundle")
-    monkeypatch.setattr(tb.crud, "decrypt_bot_token", lambda value: None)
     result = tb.send_backup_document(
         backup,
         SimpleNamespace(owner_telegram_id=None, bot_token=None),

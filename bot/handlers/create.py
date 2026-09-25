@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-import re
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from backend.models.validators import validate_username
 from bot.api import Panel
 from bot.config import config
 from bot.formatters import esc, plan_label
@@ -16,16 +15,14 @@ from bot.handlers.users import show_user
 from bot.i18n import lang_of, t
 from bot.identity import Actor
 from bot.keyboards import cancel_actions, confirm_create, main_menu, name_prompt, plan_picker
+from bot.states import clear_flow, get_flow, set_flow
 from bot.ui import answer, edit_or_reply
-
-_NAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
 
 
 def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict:
-    flow = context.user_data.get("flow")
-    if not isinstance(flow, dict) or flow.get("kind") != "create":
-        flow = {"kind": "create", "step": "name"}
-        context.user_data["flow"] = flow
+    flow = get_flow(context)
+    if flow is None or flow.get("kind") != "create":
+        flow = set_flow(context, "create", step="name")
     return flow
 
 
@@ -52,7 +49,7 @@ async def _effective_plan(actor: Actor) -> tuple[int, int, int]:
 async def start_create(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:
     """Plan first: the operator only types a name (and custom values)."""
     lang = lang_of(update, context)
-    context.user_data["flow"] = {"kind": "create", "step": "plan"}
+    set_flow(context, "create", step="plan")
     message = update.effective_message
     if message and not update.callback_query:
         await message.reply_text(
@@ -89,8 +86,8 @@ async def handle_create_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, data: str) -> bool:
     lang = lang_of(update, context)
-    flow = context.user_data.get("flow")
-    if not isinstance(flow, dict) or flow.get("kind") != "create":
+    flow = get_flow(context)
+    if flow is None or flow.get("kind") != "create":
         return False
     if data == "auto":
         await answer(update)
@@ -120,7 +117,7 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
         return True
     if data == "cancel":
         await answer(update)
-        context.user_data.pop("flow", None)
+        clear_flow(context)
         from bot.handlers.home import show_home
 
         await show_home(update, context, actor)
@@ -155,7 +152,7 @@ async def _reprompt(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: A
 async def _accept_name(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, raw: str) -> None:
     lang = lang_of(update, context)
     name = raw.strip().replace(" ", "_")
-    if not _NAME_RE.match(name):
+    if not validate_username(name):
         await edit_or_reply(update, t(lang, "create_bad_name"), reply_markup=cancel_actions(lang=lang))
         return
     existing = await Panel(actor.token).get_user(name=name)
@@ -226,7 +223,7 @@ async def _commit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Act
         int(flow.get("traffic") or 0),
         int(flow.get("logins") or 0),
     )
-    context.user_data.pop("flow", None)
+    clear_flow(context)
     if not await ensure_panel_ok(update, context, actor, result):
         return
     if not result.get("success"):

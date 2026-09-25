@@ -11,6 +11,7 @@ from bot.formatters import esc, expiry_label, status_label, status_rank, user_ca
 from bot.i18n import lang_of, t
 from bot.identity import Actor
 from bot.keyboards import user_actions, users_nav
+from bot.states import set_flow
 from bot.ui import edit_or_reply
 
 PAGE_SIZE = 8
@@ -122,5 +123,5 @@ async def search_users(update: Update, context: ContextTypes.DEFAULT_TYPE, actor
 
 async def prompt_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     lang = lang_of(update, context)
-    context.user_data["flow"] = {"kind": "search"}
+    set_flow(context, "search")
     await edit_or_reply(update, t(lang, "search_prompt"))

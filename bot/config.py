@@ -74,7 +74,7 @@ class BotConfig:
                 if not settings:
                     return
                 if settings.bot_token:
-                    self.token = _decrypt_bot_token(settings.bot_token)
+                    self.token = settings.bot_token
                 self.bot_enabled = bool(settings.bot_enabled)
                 self.owner_telegram_id = settings.owner_telegram_id
                 self.default_days = settings.default_days or self.default_days
@@ -105,21 +105,6 @@ class BotConfig:
             host = "127.0.0.1"
         self.api_url = f"http://{host}:{port}"
         return self.api_url
-
-
-def _decrypt_bot_token(stored: str) -> str:
-    """Decrypt a Fernet-wrapped token; fall back to plaintext (legacy rows)."""
-    try:
-        from backend.db.crud import _fernet
-
-        if _fernet:
-            try:
-                return _fernet.decrypt(stored.encode()).decode()
-            except Exception:
-                return stored
-    except Exception:
-        pass
-    return stored
 
 
 config = BotConfig()

@@ -16,7 +16,7 @@ LIB = REPO / "lib" / "common.sh"
 
 SHARED = [
     "line", "step", "info", "warn", "fail", "kv", "hr", "die",
-    "is_port", "rand_path", "rand_pass", "rand_hex", "fernet_key",
+    "is_port", "rand_path", "rand_pass", "rand_hex",
     "can_prompt", "has_tty", "_masked_read", "_read_reply",
     "ask", "confirm", "confirm_no", "run_step",
     "backup_dir", "snapshot_code", "latest_snapshot",

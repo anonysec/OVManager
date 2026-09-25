@@ -140,7 +140,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         return False, "Node not found"
 
     geo = await run_in_threadpool(geolocate, request.address)
-    api_key = request.key or crud.decrypt_node_key(existing.key)
+    api_key = request.key or existing.key
 
     # Persist first — this is the source of truth for the panel.
     crud.update_node(db, node_id, request, geo)
