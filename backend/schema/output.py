@@ -76,5 +76,11 @@ class Admins(BaseModel):
     telegram_id: int | None = None
     username_prefix: str | None = None
     disabled: bool = False
+    # Per-admin overrides (null = inherit the owner global) and the plan
+    # that actually applies to users this admin creates.
+    default_days: int | None = None
+    default_traffic_gb: int | None = None
+    default_max_users: int | None = None
+    effective_defaults: dict = {}
 
     model_config = ConfigDict(from_attributes=True)

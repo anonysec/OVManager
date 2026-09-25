@@ -798,7 +798,7 @@
   "tlsPlain": "Обычный HTTP",
   "tlsUnverified": "Непроверенный TLS (самоподписанный) — нет защиты от MITM. Переведите узел на Let's Encrypt.",
   "tlsPlainDetail": "Обычный HTTP — ключ API идёт открытым текстом. Включите TLS на узле.",
-  "minPasswordHint": "Минимум 12 символов",
+  "minPasswordHint": "Минимум 8 символов",
   "usersSummarySub": "{{active}} активных · {{online}} онлайн",
   "activeUsersSub": "Включённые аккаунты",
   "trafficToday": "Трафик сегодня",
@@ -830,5 +830,7 @@
   "userTag": "Метка",
   "userTagHint": "Необязательно — например monthly, vip, reseller-a. Показывается меткой в строке.",
   "userTagPlaceholder": "monthly, vip, reseller-a…",
-  "userUpdated": "Пользователь обновлён"
+  "userUpdated": "Пользователь обновлён",
+  "adminDefaultsHint": "Значения по умолчанию для новых пользователей этого администратора. Оставьте пустым, чтобы унаследовать глобальные значения из Настроек → По умолчанию.",
+  "adminDefaultsEffective": "Действует сейчас: {{days}} дн. · {{traffic}} ГБ · {{devices}} устройств"
 }

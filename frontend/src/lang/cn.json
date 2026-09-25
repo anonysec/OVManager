@@ -798,7 +798,7 @@
   "tlsPlain": "明文 HTTP",
   "tlsUnverified": "未验证的 TLS（自签名）——无中间人防护。请将节点切换到 Let's Encrypt。",
   "tlsPlainDetail": "明文 HTTP——API 密钥以明文传输。请在节点上启用 TLS。",
-  "minPasswordHint": "至少 12 个字符",
+  "minPasswordHint": "至少 8 个字符",
   "usersSummarySub": "{{active}} 活跃 · {{online}} 在线",
   "activeUsersSub": "已启用的账号",
   "trafficToday": "今日流量",
@@ -830,5 +830,7 @@
   "userTag": "标签",
   "userTagHint": "可选——例如 monthly、vip、reseller-a。会显示在用户行的标签中。",
   "userTagPlaceholder": "monthly、vip、reseller-a…",
-  "userUpdated": "用户已更新"
+  "userUpdated": "用户已更新",
+  "adminDefaultsHint": "此管理员的新用户默认值。留空则继承“设置 → 默认值”中的全局默认。",
+  "adminDefaultsEffective": "当前生效：{{days}} 天 · {{traffic}} GB · {{devices}} 台设备"
 }

@@ -11,7 +11,9 @@ class CreateUser(BaseModel):
     total: int | None = Field(default=None, ge=0, le=2**60)
     used: int | None = Field(default=None, ge=0, le=2**60)
     # Max simultaneous logins/devices per config. 1 = single login, 0 = unlimited.
-    max_logins: int = Field(default=1, ge=0, le=1000)
+    # None = not provided -> use the creating admin's effective default.
+    # 0 stays meaningful: unlimited.
+    max_logins: int | None = Field(default=None, ge=0, le=1000)
     # Optional: omitted → today + Settings.default_days (crud.create_user).
     # total=None stays unlimited; only expiry gets a default.
     expiry_date: date | None = None
@@ -65,16 +67,24 @@ class NodeCreate(BaseModel):
 
 class AdminCreate(BaseModel):
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
+    # Optional at creation; unset = inherit the owner's global plan.
+    default_days: int | None = Field(default=None, ge=1, le=3650)
+    default_traffic_gb: int | None = Field(default=None, ge=0, le=1000000)
+    default_max_users: int | None = Field(default=None, ge=0, le=1000)
 
 
 class AdminUpdate(BaseModel):
     username: str
-    password: str | None = Field(default=None, min_length=12, max_length=128)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
+    # Per-admin new-user defaults. null = inherit the owner's global plan.
+    default_days: int | None = Field(default=None, ge=1, le=3650)
+    default_traffic_gb: int | None = Field(default=None, ge=0, le=1000000)
+    default_max_users: int | None = Field(default=None, ge=0, le=1000)
 
 
 class StatusToggle(BaseModel):
