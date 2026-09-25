@@ -349,3 +349,74 @@ def test_strict_max_login_line_is_policy_not_unclassified(monkeypatch):
     assert data["warn_events"] == 0
     assert data["policy_rejects"] == 7
     assert data["events"][0]["action"] == "max_logins"
+
+
+def test_classified_event_keeps_unknown_identity_visible(monkeypatch):
+    """A node that still reports CNs for dropped users must not render blank."""
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "policy_rejects": 0,
+            "warn_rejects": 0,
+            "rejects": 1,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": time.time() - 30,
+                    "cn": "u1",
+                    "action": "disabled",
+                    "severity": "policy",
+                    "reason": "user disabled in the panel",
+                    "peer": "",
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    ev = resp.json()["data"]["events"][0]
+    assert ev["user"] == "u1"
+    assert ev["user_known"] is False
+    assert ev["classified"] is True
+
+
+def test_tls_event_without_identity_shows_its_peer(monkeypatch):
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "policy_rejects": 0,
+            "warn_rejects": 0,
+            "rejects": 0,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": time.time() - 30,
+                    "cn": "",
+                    "action": "tls",
+                    "severity": "failure",
+                    "reason": "tls-crypt unwrapping failed",
+                    "peer": "185.200.116.40:45929",
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    ev = resp.json()["data"]["events"][0]
+    assert ev["user"] == "185.200.116.40:45929"
+    assert ev["peer"] == "185.200.116.40:45929"
+    assert ev["user_known"] is False
