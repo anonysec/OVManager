@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.5 — 2026-09-25
 
 Structure pass (no behavior change) plus one owner decision: secrets are
 no longer encrypted at rest. The server itself — owner login and the
