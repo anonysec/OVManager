@@ -10,12 +10,6 @@
   animation: fadeUp .2s ease both;
 }
 
-.sp-mode-toggle button.active {
-  background: var(--accent-color-transparent, rgba(252,122,30,.14));
-  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border, var(--line)));
-  color: var(--accent-color, var(--orange));
-}
-
 /* ── Jump navigation bar ─────────────────── */
 .sp-jumpnav {
   display: flex;

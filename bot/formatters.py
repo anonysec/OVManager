@@ -71,11 +71,6 @@ def is_expired(user: dict) -> bool:
     return exp < date.today()
 
 
-def is_unlimited_expiry(value) -> bool:
-    exp = parse_expiry(value)
-    return exp is None or exp.year >= 2099
-
-
 def status_rank(user: dict) -> int:
     if is_expired(user):
         return 3
