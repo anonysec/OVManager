@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 VERSION_TABLE = "schema_version"
 
@@ -324,6 +324,74 @@ def _seed_settings(db: Session) -> None:
         settings.urlpath = initial
 
 
+def _seed_summary() -> str:
+    return "owner row and first user provisioned on a fresh install"
+
+
+def _seed_owner_and_first_user(db: Session) -> None:
+    """Give a fresh install a usable starting point (v12).
+
+    Two gaps on a brand-new panel:
+    * the Admins page was empty because the owner authenticates from ``.env``
+      and nothing ever inserted the matching ``admins`` row;
+    * there was no user at all, so the panel looked unfinished and the
+      enrolment/download flow had nothing to exercise.
+
+    Additive and idempotent: existing rows are never touched, and the audit
+    entry is written only when this step actually created something.
+    """
+    import uuid as uuid_mod
+    from datetime import date, timedelta
+
+    from backend.config import config
+    from backend.db.models import Admin, Settings, User
+
+    seeded = False
+    owner = (config.ADMIN_USERNAME or "admin").strip()
+    if owner and db.query(Admin).filter(Admin.username == owner).first() is None:
+        db.add(
+            Admin(
+                username=owner,
+                # Owner auth is verified against ADMIN_PASSWORD_HASH in .env;
+                # this column is never the authentication source for the owner.
+                password="",
+                disabled=False,
+            )
+        )
+        db.flush()
+        seeded = True
+
+    if db.query(User).count() == 0:
+        settings = db.query(Settings).first()
+        days = int(getattr(settings, "default_days", 30) or 30) if settings else 30
+        name = (getattr(config, "DEFAULT_USER", "") or "user1").strip() or "user1"
+        if db.query(User).filter(User.name == name).first() is None:
+            db.add(
+                User(
+                    uuid=str(uuid_mod.uuid4()),
+                    name=name,
+                    owner=owner or "admin",
+                    max_logins=1,
+                    expiry_date=date.today() + timedelta(days=days),
+                    is_active=True,
+                    used=0,
+                )
+            )
+            db.flush()
+            seeded = True
+
+    if not seeded:
+        return
+    # Record first-run provisioning so the install step is visible in
+    # Activity, without inventing history on panels that already had data.
+    try:
+        from backend.operations.audit import log_event
+
+        log_event(db, "panel.first_run", actor=owner or "system", detail=_seed_summary())
+    except Exception:
+        logger.debug("migration: first-run audit entry skipped")
+
+
 # Numbered steps. Version N means "after this step the database is at N".
 # Existing installations are adopted to HEAD directly (see ``migrate``), so
 # these only ever run for databases stamped at an older version.
@@ -473,6 +541,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (9, "add node-down alert flag", _add_notify_node_down),
     (10, "add offsite backup target", _add_offsite_backup_target),
     (11, "add encrypted Telegram backup setting", _add_telegram_backup_enabled),
+    (12, "seed owner row and first user", _seed_owner_and_first_user),
 )
 
 
@@ -499,6 +568,9 @@ def migrate(db: Session | None = None) -> int:
                 _create_extra_tables(session)
                 _reconcile_columns(session)
                 _seed_settings(session)
+                # A brand-new database jumps straight to HEAD and never runs
+                # the numbered steps, so first-run provisioning happens here.
+                _seed_owner_and_first_user(session)
                 _stamp(session, SCHEMA_VERSION, "initial schema")
                 session.commit()
                 logger.info("migrations: created fresh schema at version %s", SCHEMA_VERSION)
