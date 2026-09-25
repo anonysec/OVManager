@@ -804,5 +804,7 @@
   "secNoSuchUser": "چنین کاربری نیست",
   "secUnclassifiedNodes": "دلیل‌ها برای {{nodes}} تخمینی است (نسخه قدیمی نود). برای دلیل دقیق هر رویداد، نود را به‌روزرسانی کنید.",
   "closeModal": "بستن پنجره",
-  "appLogo": "OVManager"
+  "appLogo": "OVManager",
+  "showMoreTags": "+{{count}} مورد بیشتر",
+  "showLess": "نمایش کمتر"
 }

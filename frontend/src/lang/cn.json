@@ -804,5 +804,7 @@
   "secNoSuchUser": "用户不存在",
   "secUnclassifiedNodes": "{{nodes}} 的原因划分为估算值（节点版本较旧）。更新节点可获得每个事件的准确原因。",
   "closeModal": "关闭窗口",
-  "appLogo": "OVManager"
+  "appLogo": "OVManager",
+  "showMoreTags": "还有 {{count}} 个",
+  "showLess": "收起"
 }

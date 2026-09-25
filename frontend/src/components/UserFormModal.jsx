@@ -280,6 +280,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
           >
             <input
               type="text"
+              className="ui-input"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               maxLength={64}
