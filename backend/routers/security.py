@@ -180,9 +180,10 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
                 "node": node_name,
                 "cn": cn,
                 # A CN with no matching user is a client reconnecting with a
-                # certificate the panel dropped; the UI labels it as such.
+                # certificate the panel dropped; the UI labels it as such. A
+                # CN-less TLS failure has no identity to label — it is a peer.
                 "user": known_user or cn or peer,
-                "user_known": bool(known_user),
+                "user_known": bool(known_user) if cn else None,
                 "action": ev.get("action") or "event",
                 "severity": ev.get("severity") or "warn",
                 "reason": ev.get("reason") or "connection event",

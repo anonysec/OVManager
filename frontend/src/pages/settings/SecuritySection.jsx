@@ -30,6 +30,8 @@ const reasonLabel = (t, ev) => {
 
 const EventRow = ({ ev, t }) => {
   const when = ev.time_local || (ev.ts ? new Date(ev.ts * 1000).toLocaleString() : t('secTimeUnknown', 'time unknown'));
+  // user_known === false means the identity exists in the log but not in the
+  // panel; a TLS failure from a bare peer has no identity to label.
   const who = ev.user_known === false
     ? `${ev.user || ev.cn || '—'} (${t('secNoSuchUser', 'no such user')})`
     : (ev.user || ev.cn || ev.peer || '—');
