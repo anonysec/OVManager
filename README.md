@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
