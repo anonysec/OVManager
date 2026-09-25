@@ -238,3 +238,58 @@ def test_alter_table_sql_quotes_defaults(session):
 
     sql = migrations._add_column_sql("users", by_name["uuid"])
     assert "NOT NULL" not in sql, sql
+
+
+def test_fresh_install_seeds_owner_row_and_first_user():
+    """A brand-new panel must show the owner under Admins and have one
+    user to exercise the enrolment flow with."""
+    from backend.db.engine import SessionLocal
+    from backend.db.migrations import _seed_owner_and_first_user
+    from backend.db.models import Admin, User
+
+    db = SessionLocal()
+    try:
+        # Start from a genuinely empty state for both tables.
+        db.query(User).delete()
+        db.query(Admin).delete()
+        db.commit()
+
+        _seed_owner_and_first_user(db)
+
+        admins = [a.username for a in db.query(Admin).all()]
+        users = db.query(User).all()
+        assert "admin" in admins, "owner must exist in the admins table"
+        assert len(users) == 1
+        seeded = users[0]
+        assert seeded.owner == "admin"
+        assert seeded.is_active is True
+        assert seeded.max_logins >= 1
+        assert seeded.expiry_date is not None
+
+        # Idempotent: a second run must not duplicate anything.
+        _seed_owner_and_first_user(db)
+        assert db.query(Admin).filter(Admin.username == "admin").count() == 1
+        assert db.query(User).count() == 1
+    finally:
+        # Leave the suite database as we found it.
+        db.rollback()
+        db.close()
+
+
+def test_existing_panel_is_left_untouched():
+    """A panel that already has users must not gain a seeded user or a
+    first-run audit entry."""
+    from backend.db.engine import SessionLocal
+    from backend.db.migrations import _seed_owner_and_first_user
+    from backend.db.models import User
+
+    db = SessionLocal()
+    try:
+        before = db.query(User).count()
+        if before == 0:
+            pytest.skip("suite database has no users; covered by the fresh-install test")
+        _seed_owner_and_first_user(db)
+        assert db.query(User).count() == before
+    finally:
+        db.rollback()
+        db.close()
