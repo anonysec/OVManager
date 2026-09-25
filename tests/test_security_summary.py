@@ -170,14 +170,16 @@ def test_tls_failure_is_the_only_danger_bucket(monkeypatch):
     assert data["ongoing_users"] == []
 
 
-def test_legacy_node_without_events_stays_informational(monkeypatch):
-    """A 1.0.0 node reports no structured events; it must not invent danger."""
+def test_legacy_node_without_events_is_classified_by_the_panel(monkeypatch):
+    """A 1.0.0 node counts every reject as an auth error. The panel re-reads
+    the text so a disabled user does not raise the danger counter."""
     node = _make_node()
     _patch_node(
         monkeypatch,
         {
-            "auth_errors": 4,
-            "rejects": 4,
+            # What the old node reports: 143 rejects, all counted as errors.
+            "auth_errors": 143,
+            "rejects": 143,
             "stale_marker_count": 0,
             "live_count": 0,
             "last_error": {"1": "CN=1 ip=1.2.3.4:5000 limit=1 active=2; REJECT"},
@@ -190,10 +192,63 @@ def test_legacy_node_without_events_stays_informational(monkeypatch):
         headers={"Authorization": f"Bearer {_owner()}"},
     )
     data = resp.json()["data"]
-    assert data["events"][0]["severity"] == "policy"
-    assert data["events"][0]["node"]
-    # auth_failures only reflects what the node itself reported.
-    assert data["auth_failures"] == 4
+    assert data["auth_failures"] == 0
+    assert data["policy_rejects"] == 143
+    assert node.name in data["unclassified_nodes"]
+    ev = data["events"][0]
+    assert ev["severity"] == "policy"
+    assert ev["node"] == node.name
+    assert ev["classified"] is False
+
+
+def test_legacy_node_reports_fail_closed_as_danger(monkeypatch):
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 2,
+            "rejects": 2,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "last_error": {
+                "8": "CN=8 USERS_DIR missing or not a directory — fail-closed; REJECT"
+            },
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    assert data["auth_failures"] == 1
+    assert data["policy_rejects"] == 1
+    assert data["events"][0]["severity"] == "failure"
+
+
+def test_legacy_event_marks_unknown_identity(monkeypatch):
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "rejects": 1,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            # u1 was my deleted integration-test identity, not a panel user.
+            "last_error": {"u1": "CN=u1 ip=9.9.9.9:1194 limit=1 active=2; REJECT"},
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    ev = resp.json()["data"]["events"][0]
+    assert ev["user"] == "u1"
+    assert ev["user_known"] is False
 
 
 def test_undated_event_is_not_marked_ongoing(monkeypatch):
@@ -266,3 +321,31 @@ def test_event_time_is_rendered_in_the_panel_timezone(monkeypatch):
     ev = data["events"][0]
     assert ev["time_local"]
     assert ev["time_local"].startswith(datetime.fromtimestamp(ts, UTC).astimezone().strftime("%Y-%m-%d"))
+
+
+def test_strict_max_login_line_is_policy_not_unclassified(monkeypatch):
+    """The hook's strict-reject line says "limit=2", not "max login reached"."""
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 7,
+            "rejects": 7,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "last_error": {
+                "3": "CN=3 ip=1.2.3.4:5000 pool=10.8.0.3 limit=2 active=2 status=2; REJECT"
+            },
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    assert data["auth_failures"] == 0
+    assert data["warn_events"] == 0
+    assert data["policy_rejects"] == 7
+    assert data["events"][0]["action"] == "max_logins"

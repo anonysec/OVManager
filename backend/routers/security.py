@@ -43,6 +43,37 @@ def _cn_to_username(db: Session) -> dict[str, str]:
         return {}
 
 
+def _classify_line(message: str) -> tuple[str, str, str]:
+    """Same severity split the node applies (core/openvpn/sessions.py).
+
+    Kept here so a node that predates the classification release is still
+    reported honestly: a disabled user's reconnect must not read as a security
+    failure just because the node is old.
+    """
+    table = (
+        ("is disabled", "disabled", "policy", "user disabled in the panel"),
+        ("disabled;", "disabled", "policy", "user disabled in the panel"),
+        ("USERS_DIR missing", "fail_closed", "failure", "node user state missing"),
+        ("could not verify", "takeover_failed", "failure", "old session not terminated"),
+        ("management unavailable", "mgmt_degraded", "warn", "management unavailable"),
+        ("GLOBAL_CHECK_FAILED", "global_check", "policy", "panel policy check failed"),
+        ("GLOBAL_REJECT", "global_policy", "policy", "panel rejected the connection"),
+        ("max login reached", "max_logins", "policy", "max logins reached"),
+    )
+    for needle, action, severity, reason in table:
+        if needle in message:
+            return action, severity, reason
+    # The strict max-login hook line carries the limit, not the words
+    # "max login reached": "CN=1 ... limit=2 active=2 status=2; REJECT".
+    if "REJECT" in message and re.search(r"\blimit=", message):
+        return "max_logins", "policy", "max logins reached"
+    if "REJECT" in message:
+        return "other", "warn", "unclassified reject"
+    if "FAILED" in message:
+        return "check_failed", "warn", "policy check failed"
+    return "event", "policy", "session event"
+
+
 def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None) -> dict:
     """Convert a raw ovnode-mlogin line to a clean event object.
 
@@ -55,13 +86,7 @@ def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None)
     m_cn = re.search(r"CN=([^\s]+)", line)
     if m_cn:
         cn = m_cn.group(1)
-    action = "reject" if "REJECT" in line else ("check_failed" if "FAILED" in line else "event")
-    if "GLOBAL_REJECT" in line:
-        scope = "global"
-    elif "LOCAL_REJECT" in line or " REJECT" in line:
-        scope = "local"
-    else:
-        scope = "global" if "GLOBAL" in line else "local"
+    action, severity, reason = _classify_line(line)
     limit = re.search(r"(?:limit|global_limit)=([^\s;]+)", line)
     active = re.search(r"(?:global_active|active_files)=([^\s;]+)", line)
     msg = re.search(r"msg=([^\n]+)$", line)
@@ -79,17 +104,15 @@ def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None)
         except Exception:
             local_time = None
             ts = 0.0
-    username = cn.rsplit("-", 1)[0] if "-" in cn else cn
     return {
         "ts": ts,
         "time_local": local_time,
-        "username": username,
         "common_name": cn,
-        "scope": scope,
         "action": action,
+        "severity": severity,
         "active": active.group(1) if active else None,
         "limit": limit.group(1) if limit else None,
-        "reason": (msg.group(1).strip() if msg else ("max login reached" if "REJECT" in line else "global check failed")),
+        "reason": (msg.group(1).strip() if msg else reason),
         "line": line,
     }
 
@@ -97,8 +120,10 @@ def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None)
 def _legacy_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dict[str, str]) -> list[dict]:
     """Events from a node that predates structured diagnostics.
 
-    Every reject is a policy event by assumption: the old node did not report
-    TLS failures at all, so showing them as auth errors would be a guess.
+    The old node counts every reject as an "auth error" and only returns the
+    last line per identity, so the panel re-applies the same classification to
+    the text it can see and treats the rest as policy. The node is flagged as
+    unclassified so the UI can say the exact numbers arrive after an update.
     """
     le = data.get("last_error")
     rows: list[dict] = []
@@ -112,18 +137,23 @@ def _legacy_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: d
     for ev in raw:
         cn = ev.get("common_name") or ""
         ts = float(ev.get("ts") or 0)
+        known = id_to_name.get(cn)
         rows.append(
             {
                 "node": node_name,
                 "cn": cn,
-                "user": id_to_name.get(cn, ev.get("username") or cn or "(unknown)"),
+                "user": known or cn,
+                # False = this identity no longer exists in the panel, so the
+                # client is reconnecting with a certificate the panel dropped.
+                "user_known": bool(known),
                 "action": ev.get("action") or "event",
-                "severity": "policy",
+                "severity": ev.get("severity") or "warn",
                 "reason": ev.get("reason") or "connection rejected",
                 "peer": "",
                 "ts": ts,
                 "time_local": ev.get("time_local"),
                 "ongoing": bool(ts and now - ts <= _ONGOING_WINDOW_S),
+                "classified": False,
             }
         )
     return rows
@@ -176,27 +206,43 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
     results = await asyncio.gather(*[node_diag(n) for n in nodes], return_exceptions=True)
     per_node = []
     events: list[dict] = []
+    unclassified_nodes: list[str] = []
     totals = {"auth_failures": 0, "policy_rejects": 0, "warn_events": 0, "stale_markers": 0, "rejects": 0}
     for item in results:
         if isinstance(item, Exception):
             continue
         node_name, data = item
-        auth_failures = int(data.get("auth_errors") or 0)
-        policy_rejects = int(data.get("policy_rejects") or 0)
-        warn_events = int(data.get("warn_rejects") or 0)
         stale = int(data.get("stale_marker_count") or 0)
         rejects = int(data.get("rejects") or 0)
-        totals["auth_failures"] += auth_failures
-        totals["policy_rejects"] += policy_rejects
-        totals["warn_events"] += warn_events
-        totals["stale_markers"] += stale
-        totals["rejects"] += rejects
-
         node_events = (
             _node_events(data, node_name, panel_tz, id_to_name)
             if data.get("events")
             else _legacy_events(data, node_name, panel_tz, id_to_name)
         )
+        if data.get("events"):
+            auth_failures = int(data.get("auth_errors") or 0)
+            policy_rejects = int(data.get("policy_rejects") or 0)
+            warn_events = int(data.get("warn_rejects") or 0)
+            classified = True
+        else:
+            # Old node: it counts every reject as an auth error and only
+            # exposes the last line per identity. Re-classify the text we can
+            # see and treat the remainder as policy, which is what a reject on
+            # a 1.0.x node practically always is.
+            seen_failures = sum(1 for e in node_events if e["severity"] == "failure")
+            seen_warns = sum(1 for e in node_events if e["severity"] == "warn")
+            auth_failures = seen_failures
+            warn_events = seen_warns
+            policy_rejects = max(0, rejects - seen_failures - seen_warns)
+            classified = False
+        totals["auth_failures"] += auth_failures
+        totals["policy_rejects"] += policy_rejects
+        totals["warn_events"] += warn_events
+        totals["stale_markers"] += stale
+        totals["rejects"] += rejects
+        if not classified:
+            unclassified_nodes.append(node_name)
+
         events.extend(node_events)
         per_node.append(
             {
@@ -210,6 +256,7 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
                 "stale_markers": stale,
                 "live": int(data.get("live_count") or 0),
                 "ongoing": sum(1 for e in node_events if e["ongoing"]),
+                "classified": classified,
             }
         )
 
@@ -233,6 +280,9 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
             "per_node": per_node,
             "events": events[:100],
             "ongoing_users": ongoing_users,
+            # Nodes older than the classification release: their rejects are
+            # split by the panel, not reported by the node.
+            "unclassified_nodes": unclassified_nodes,
             "last_errors": events[:50],
             "top_common_names": top.most_common(20),
         },

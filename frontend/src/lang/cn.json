@@ -854,5 +854,7 @@
   "secReasonMgmt": "管理接口不可用",
   "secReasonTls": "TLS 握手失败",
   "secReasonTlsAuth": "证书被拒绝",
-  "secReasonOther": "未分类的拒绝"
+  "secReasonOther": "未分类的拒绝",
+  "secNoSuchUser": "用户不存在",
+  "secUnclassifiedNodes": "{{nodes}} 的原因划分为估算值（节点版本较旧）。更新节点可获得每个事件的准确原因。"
 }

@@ -30,7 +30,9 @@ const reasonLabel = (t, ev) => {
 
 const EventRow = ({ ev, t }) => {
   const when = ev.time_local || (ev.ts ? new Date(ev.ts * 1000).toLocaleString() : t('secTimeUnknown', 'time unknown'));
-  const who = ev.user || ev.cn || ev.peer || '—';
+  const who = ev.user_known === false
+    ? `${ev.user || ev.cn || '—'} (${t('secNoSuchUser', 'no such user')})`
+    : (ev.user || ev.cn || ev.peer || '—');
   return (
     <div className={`sp-node-row sp-err-row sp-ev sp-ev--${ev.severity || 'warn'}`}>
       <span className="sp-node-name">{who}</span>
@@ -91,6 +93,11 @@ const SecuritySection = () => {
         {!loading && !error && sec && authFailures === 0 && (
           <p className="sp-hint sp-mt-12">
             {t('secNoFailures', 'No authentication or TLS failures in this window. Blocked connections below are expected policy decisions (disabled user, device limit, panel rules).')}
+          </p>
+        )}
+        {Array.isArray(sec?.unclassified_nodes) && sec.unclassified_nodes.length > 0 && (
+          <p className="sp-hint sp-mt-12">
+            {t('secUnclassifiedNodes', 'Reason split is estimated for {{nodes}} (older node version). Update the node for exact per-event reasons.', { nodes: sec.unclassified_nodes.join(', ') })}
           </p>
         )}
         {sec?.per_node?.length > 0 && (

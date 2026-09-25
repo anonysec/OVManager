@@ -854,5 +854,7 @@
   "secReasonMgmt": "Management unavailable",
   "secReasonTls": "TLS handshake failed",
   "secReasonTlsAuth": "Certificate rejected",
-  "secReasonOther": "Unclassified reject"
+  "secReasonOther": "Unclassified reject",
+  "secNoSuchUser": "no such user",
+  "secUnclassifiedNodes": "Reason split is estimated for {{nodes}} (older node version). Update the node for exact per-event reasons."
 }
