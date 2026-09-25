@@ -301,8 +301,12 @@ const DashboardLayout = () => {
           }
         }
       });
-      if (Number(security.auth_errors || 0) > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: security.auth_errors }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
-      if (Number(security.rejects || 0) > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: security.rejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null, action_path: null });
+      // Only real authentication/TLS failures are a danger. Policy rejects
+      // (disabled user, device limit) are information, not an incident.
+      const authFailures = Number(security.auth_failures ?? security.auth_errors ?? 0);
+      const policyRejects = Number(security.policy_rejects ?? 0);
+      if (authFailures > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: authFailures }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
+      if (policyRejects > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: policyRejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null, action_path: null });
       // Respect the "Alerts & Dashboard" preferences from Settings.
       const prefs = readPrefs();
       setNotifications(out.filter((n) => {
