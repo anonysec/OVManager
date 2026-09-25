@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.4 — 2026-09-25
+
+Fixes the 1.0.3 upgrade path: updates are staged by the *old*
+installer, so its `.env` copy still carries `BACKUP_ENCRYPT_KEY` and
+the new backend refused to boot (failover worked, nothing updated).
+The retired key is now a deprecated no-op field, pinned by a
+regression test that boots with a key-era `.env`. v1.0.3 remains
+valid for fresh installs.
+
 ## 1.0.3 — 2026-09-25
 
 Backup key removed; backups go plain. The server itself is the trust

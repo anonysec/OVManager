@@ -59,6 +59,11 @@ class Setting(BaseSettings):
     # BOT_ENCRYPT_KEY when unset so existing installs get encryption
     # without a new secret to manage.
     NODE_ENCRYPT_KEY: str | None = None
+    # Retired in 1.0.3 (backups go plain). Kept as a deprecated no-op so
+    # upgrades from key-era installs boot first try: their .env still
+    # carries the line, the old installer stages it verbatim, and unknown
+    # keys are rejected at startup. Never read; safe to delete from .env.
+    BACKUP_ENCRYPT_KEY: str | None = None
     # Installer metadata (ignored by app, used by install.sh for state)
     DATA_DIR: str = ""
     PUBLIC_URL: str | None = None

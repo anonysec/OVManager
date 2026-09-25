@@ -131,3 +131,21 @@ def test_spawn_detached_never_uses_a_shell(monkeypatch):
     assert kwargs.get("shell", False) is not True
     joined = " ".join(args[0])
     assert "systemctl" in joined and "restart" in joined and "ovmanager" in joined
+
+
+def test_retired_backup_key_in_dotenv_still_boots(tmp_path):
+    """Upgrades from key-era installs carry BACKUP_ENCRYPT_KEY in .env while
+    the old installer stages it verbatim. Boot must tolerate the retired
+    key (defect: 1.0.3 failed over on every key-era box)."""
+    from backend.config import Setting
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "ADMIN_USERNAME=admin\n"
+        "ADMIN_PASSWORD=long-enough-password-123\n"
+        "BACKUP_ENCRYPT_KEY=stale-key-from-an-older-release\n",
+        encoding="utf-8",
+    )
+    settings = Setting(_env_file=str(env_file))
+    assert settings.ADMIN_USERNAME == "admin"
+    assert settings.BACKUP_ENCRYPT_KEY == "stale-key-from-an-older-release"
