@@ -854,5 +854,7 @@
   "secReasonMgmt": "رابط مدیریت در دسترس نیست",
   "secReasonTls": "دست‌دادن TLS ناموفق",
   "secReasonTlsAuth": "گواهی رد شد",
-  "secReasonOther": "رد نامشخص"
+  "secReasonOther": "رد نامشخص",
+  "secNoSuchUser": "چنین کاربری نیست",
+  "secUnclassifiedNodes": "دلیل‌ها برای {{nodes}} تخمینی است (نسخه قدیمی نود). برای دلیل دقیق هر رویداد، نود را به‌روزرسانی کنید."
 }
