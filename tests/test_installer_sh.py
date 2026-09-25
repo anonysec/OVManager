@@ -15,6 +15,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 INSTALLER = os.path.join(os.path.dirname(__file__), "..", "install.sh")
 INSTALLER_PATH = Path(INSTALLER)
 INSTALL_DIR = "/opt/ovmanager"
@@ -41,18 +43,76 @@ def sandbox(tmp_path):
 
     Makes validation/menu tests hermetic: they behave the same whether or
     not /opt/ovmanager exists on the test machine.
+
+    Every system location the installer writes is redirected — a full install
+    also writes the systemd unit and the CLI symlink, and calling the real
+    systemctl against them overwrites a live panel on this VPS. systemctl and
+    the firewall tools are shimmed for the same reason.
     """
     fake_opt = tmp_path / "opt"
     fake_data = tmp_path / "data"
+    fake_etc = tmp_path / "etc"
+    fake_bin = tmp_path / "usr" / "local" / "bin"
+    shim = tmp_path / "bin"
+    # fake_opt / fake_data are left for the installer (and the tests) to create.
+    for d in (fake_etc / "systemd" / "system", fake_bin, shim):
+        d.mkdir(parents=True, exist_ok=True)
     src = INSTALLER_PATH.read_text(encoding="utf-8")
-    src = src.replace("/opt/ovmanager", str(fake_opt)).replace("/var/lib/ovmanager", str(fake_data))
+    src = (
+        src.replace("/opt/ovmanager", str(fake_opt))
+        .replace("/var/lib/ovmanager", str(fake_data))
+        .replace("/etc/systemd/system", str(fake_etc / "systemd" / "system"))
+        .replace("/etc/ssl", str(fake_etc / "ssl"))
+        .replace("/etc/letsencrypt", str(fake_etc / "letsencrypt"))
+        .replace('BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"', f'BIN_DIR="{fake_bin}"')
+    )
+    for tool in ("systemctl", "ufw", "firewall-cmd"):
+        _write_shim(shim / tool, _SHIMS[tool])
     path = tmp_path / "install.sh"
     path.write_text(src, encoding="utf-8")
     return str(path), str(fake_opt)
 
 
+def _write_shim(path: Path, body: str) -> None:
+    path.write_text(f"#!/usr/bin/env bash\n{body}\n", encoding="utf-8")
+    path.chmod(0o755)
+
+
+# A machine that has systemd but no OVManager service: is-active/is-enabled
+# report "not installed" so the installer takes its normal fresh-install path,
+# and every mutating call is recorded instead of executed.
+_SHIMS = {
+    "systemctl": """
+printf 'systemctl %s\\n' "$*" >> "${SYSTEMCTL_LOG:-/dev/null}"
+case "${1:-}" in
+  is-active|is-enabled|is-failed) exit 3 ;;
+  show) exit 0 ;;
+  status) exit 3 ;;
+  *) exit 0 ;;
+esac
+""",
+    "ufw": """
+printf 'ufw %s\\n' "$*" >> "${SYSTEMCTL_LOG:-/dev/null}"
+[[ "${1:-}" == "status" ]] && echo "Status: inactive" && exit 0
+exit 0
+""",
+    "firewall-cmd": """
+printf 'firewall-cmd %s\\n' "$*" >> "${SYSTEMCTL_LOG:-/dev/null}"
+exit 1
+""",
+}
+
+
 def sh_sb(sandbox_installer, *args: str, env: dict | None = None):
-    full_env = {**os.environ, **(env or {})}
+    sandbox_env = {}
+    root = Path(sandbox_installer).parent
+    if root.name.startswith("tmp"):
+        # Hermetic mode: no systemctl, no /usr/local/bin, no firewall changes.
+        sandbox_env = {
+            "OVM_BIN_DIR": str(root / "usr" / "local" / "bin"),
+            "PATH": f"{root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+        }
+    full_env = {**os.environ, **sandbox_env, **(env or {})}
     cmd = ["bash", sandbox_installer, *args]
     if SETSID:
         cmd = [SETSID, *cmd]
@@ -66,8 +126,52 @@ def sh_sb(sandbox_installer, *args: str, env: dict | None = None):
     )
 
 
+# Real system locations a full install would rewrite. Snapshotting them around
+# every installer test turns "the test suite broke the live panel" into a loud,
+# immediate failure instead of a service that starts from a tmp dir.
+_PROTECTED_PATHS = (
+    Path("/etc/systemd/system/ovmanager.service"),
+    Path("/usr/local/bin/ovm"),
+    Path("/usr/local/bin/ovmanager"),
+)
+
+
+@pytest.fixture(autouse=True)
+def _system_paths_untouched():
+    before = {p: (p.read_bytes() if p.exists() else None) for p in _PROTECTED_PATHS}
+    yield
+    for path, snapshot in before.items():
+        current = path.read_bytes() if path.exists() else None
+        assert current == snapshot, f"installer test modified the real {path}"
+
+
 def test_installer_syntax():
     subprocess.run(["bash", "-n", INSTALLER], check=True)
+
+
+def test_sandbox_install_never_touches_the_real_system(tmp_path):
+    """Full-install path, hermetic: sandboxed unit + shimmed systemctl."""
+    sb, fake_opt = sandbox(tmp_path)
+    log = tmp_path / "systemctl.log"
+    r = sh_sb(
+        sb,
+        "-y",
+        "-p",
+        "eight888",
+        env={"SYSTEMCTL_LOG": str(log), "OVM_TLS": "none"},
+    )
+    unit = tmp_path / "etc" / "systemd" / "system" / "ovmanager.service"
+    if unit.exists():
+        body = unit.read_text(encoding="utf-8")
+        assert str(fake_opt) in body
+        assert str(tmp_path / "data") in body
+        assert "/opt/ovmanager" not in body
+    real_unit = Path("/etc/systemd/system/ovmanager.service")
+    if real_unit.exists():
+        assert str(fake_opt) not in real_unit.read_text(encoding="utf-8")
+    if log.exists():
+        assert "daemon-reload" in log.read_text(encoding="utf-8")
+    assert r.returncode in (0, 1)
 
 
 def test_help_documents_installer_surface():
