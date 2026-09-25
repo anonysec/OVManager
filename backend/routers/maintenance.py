@@ -34,7 +34,7 @@ from backend.operations.backup_bundle import (
     extract_database,
     verify_bundle,
 )
-from backend.schema.output import ResponseModel
+from backend.schema import ResponseModel
 
 logger = logging.getLogger(__name__)
 

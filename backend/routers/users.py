@@ -2,17 +2,22 @@
 # SPDX-License-Identifier: MIT
 
 
+import hmac
+import os
 import time as _time
+from collections.abc import Iterable
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.auth.auth import get_current_user
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.db.models import User
+from backend.db.models import Node, User
 from backend.logger import logger
+from backend.node.requests import node_client
 from backend.node.task import (
     change_user_status_on_all_nodes,
     delete_user_on_all_nodes,
@@ -24,8 +29,7 @@ from backend.node.task import (
 )
 from backend.operations import live as live_ops
 from backend.operations.audit import log_event
-from backend.schema._input import CreateUser, StatusToggle, UpdateUser
-from backend.schema.output import ResponseModel, Users
+from backend.schema import CreateUser, ResponseModel, StatusToggle, UpdateUser, Users
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -433,3 +437,130 @@ async def extend_user(
     )
     live_ops.publish("users", {"op": "extend"})
     return ResponseModel(success=True, msg="User updated", data=Users.model_validate(updated))
+
+
+# ── Global multi-login status (/mlogin) ─────────────────────────────────
+# Moved from routers/mlogin.py: same /mlogin prefix and wire shape, one
+# user-session domain file. Two caller types: OVNode hook (X-Node-Name +
+# key headers) and the panel UI (owner bearer).
+mlogin_router = APIRouter(prefix="/mlogin", tags=["Global Multi-login"])
+
+
+def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node:
+    """Authenticate a node request using constant-time key comparison."""
+    if not node_name or not key:
+        raise HTTPException(status_code=401, detail="Missing node name/key")
+    node = db.query(Node).filter(Node.name == node_name).first()
+    # Use hmac.compare_digest to prevent timing side-channel leaking key bytes.
+    if not node:
+        raise HTTPException(status_code=401, detail="Invalid node key")
+    if not hmac.compare_digest((node.key or "").encode("utf-8"), key.encode("utf-8", "ignore")):
+        raise HTTPException(status_code=401, detail="Invalid node key")
+    return node
+
+
+def _split_addr(addr: str) -> tuple[str, str]:
+    if ":" in addr:
+        ip, port = addr.rsplit(":", 1)
+        return ip.strip("[]"), port
+    return addr, ""
+
+
+def _fetch_node_usage(node) -> dict | None:
+    """Blocking usage fetch for one node (run in threadpool).
+
+    Goes through :class:`NodeRequests` so the mlogin path shares the main
+    client's address sanitising, self-signed TLS fallback and flap-aware
+    logging — the previous bare ``requests.get`` failed every self-signed
+    node and silently undercounted global sessions.
+    """
+    try:
+        req = node_client(node)
+        # `or None` preserves the old contract: transport failure → None
+        # (caller skips the node), while a live-but-idle node returns its
+        # (truthy) payload dict. Without it every dead node would count as
+        # "reachable with zero sessions".
+        return req.get_usage(timeout=float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))) or None
+    except Exception:
+        return None
+
+
+async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[str]]:
+    """Query all active nodes for live sessions of this user (async, non-blocking)."""
+    import asyncio
+
+    live: set[tuple] = set()
+    reachable: set[str] = set()
+    nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
+
+    # Build id→name map once for all nodes (pairs only — no User objects).
+    from backend.db.crud import get_user_id_name_pairs
+
+    id_to_name = dict(get_user_id_name_pairs(db))
+
+    async def check_node(node):
+        data = await run_in_threadpool(_fetch_node_usage, node)
+        return node, data
+
+    results = await asyncio.gather(*[check_node(n) for n in nodes], return_exceptions=True)
+
+    for item in results:
+        if isinstance(item, Exception):
+            continue
+        node, data = item
+        if data is None:
+            continue
+        reachable.add(node.name)
+        for cn, sessions in data.get("sessions", {}).items():
+            name = id_to_name.get(cn)
+            if not name or name != username:
+                continue
+            if isinstance(sessions, dict) and sessions:
+                for addr in sessions:
+                    ip, port = _split_addr(str(addr))
+                    live.add((node.name, cn, ip, port))
+            else:
+                live.add((node.name, cn, "", ""))
+
+    return live, reachable
+
+
+@mlogin_router.get("/status/{username}", response_model=ResponseModel)
+async def global_mlogin_status(
+    username: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    key: str | None = Header(default=None),
+    x_node_name: str | None = Header(default=None, alias="X-Node-Name"),
+):
+    """Global session count for a user across all reachable nodes.
+
+    Accepts two caller types:
+    1. OVNode hook: authenticates with X-Node-Name + key headers.
+    2. Panel UI (owner only): authenticates with a Bearer session token in Authorization header.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        # Panel-user path: validate session token and require owner role.
+        from backend.auth.auth import role_is_current, verify_session_token
+
+        user = verify_session_token(auth_header[7:], db)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        # Re-check role currency: a session minted while this username was the
+        # owner must stop working after ADMIN_USERNAME changes.
+        if user.get("type") != "owner" or not role_is_current(db, user.get("username", ""), "owner"):
+            raise HTTPException(status_code=403, detail="Owner privileges required")
+    else:
+        # OVNode hook path: authenticate by node name + API key
+        _authorize_node(db, x_node_name, key)
+    live, _ = await _live_sessions(username, db)
+    # NOTE: the panel-side global_mlogin_sessions registry is retired — nothing
+    # ever wrote to it, so the live poll is the whole answer. Response shape
+    # (global_active + sessions list) is unchanged for existing consumers.
+    sessions = sorted(live)
+    return ResponseModel(
+        success=True,
+        msg="global multi-login status",
+        data={"username": username, "global_active": len(sessions), "sessions": sessions},
+    )

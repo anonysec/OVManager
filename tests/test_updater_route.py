@@ -61,7 +61,7 @@ def _owner_headers() -> dict:
 def _create_admin(username: str) -> None:
     from backend.db import crud
     from backend.db.engine import SessionLocal
-    from backend.schema._input import AdminCreate
+    from backend.schema import AdminCreate
 
     db = SessionLocal()
     try:

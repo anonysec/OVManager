@@ -25,8 +25,7 @@ from backend.node.task import (
 )
 from backend.operations import live
 from backend.operations.audit import log_event
-from backend.schema._input import NodeCreate
-from backend.schema.output import ResponseModel
+from backend.schema import NodeCreate, ResponseModel
 
 router = APIRouter(prefix="/nodes", tags=["Nodes"])
 

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from backend.app import api
 from backend.db import crud
 from backend.operations import geolocation as geo_mod
-from backend.schema._input import NodeCreate
+from backend.schema import NodeCreate
 
 
 def _node_payload(**overrides):

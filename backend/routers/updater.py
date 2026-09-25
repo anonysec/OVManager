@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends
 from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
 from backend.operations.audit import log_event
-from backend.schema.output import ResponseModel
+from backend.schema import ResponseModel
 from backend.version import __version__
 
 logger = logging.getLogger(__name__)

@@ -16,8 +16,7 @@ from backend.db.engine import get_db
 from backend.db.models import AuthSession
 from backend.db.models import User as _User
 from backend.operations.audit import log_event
-from backend.schema._input import AdminCreate, AdminStatusUpdate, AdminUpdate
-from backend.schema.output import Admins, ResponseModel
+from backend.schema import AdminCreate, Admins, AdminStatusUpdate, AdminUpdate, ResponseModel
 
 router = APIRouter(prefix="/admin", tags=["Admins"])
 

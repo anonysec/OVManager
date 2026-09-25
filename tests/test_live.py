@@ -144,7 +144,7 @@ def test_users_list_uses_live_connection_cache(monkeypatch):
 
     from backend.db.crud import create_user, get_user_by_name
     from backend.db.engine import SessionLocal
-    from backend.schema._input import CreateUser
+    from backend.schema import CreateUser
 
     db = SessionLocal()
     try:

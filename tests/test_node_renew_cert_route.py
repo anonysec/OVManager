@@ -18,7 +18,7 @@ from backend.config import config
 from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.routers import node as node_router
-from backend.schema._input import AdminCreate, NodeCreate
+from backend.schema import AdminCreate, NodeCreate
 
 
 def _owner():

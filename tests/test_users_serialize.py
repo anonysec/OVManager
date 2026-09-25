@@ -11,7 +11,7 @@ for everyone. The Users schema now coerces datetime -> ISO string.
 
 import datetime as dt
 
-from backend.schema.output import Users
+from backend.schema import Users
 
 
 def _row(**kw):
@@ -46,7 +46,7 @@ def test_last_online_string_passthrough():
 
 
 def test_users_schema_exposes_id_for_newest_first_sort():
-    from backend.schema.output import Admins, Users
+    from backend.schema import Admins, Users
 
     assert Users.model_validate(_row()).id == 44
     assert Admins.model_validate({"id": 7, "username": "a"}).id == 7

@@ -16,7 +16,7 @@ from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import User
 from backend.node.requests import node_client
-from backend.schema.output import ResponseModel
+from backend.schema import ResponseModel
 
 router = APIRouter(prefix="/security", tags=["Security"])
 
