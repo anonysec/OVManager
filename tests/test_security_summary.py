@@ -1,0 +1,268 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+"""Security summary: policy rejects must not be presented as auth failures.
+
+The owner saw a scary "13 auth errors" that were really a disabled test user
+reconnecting. These tests pin the split, the per-event context (node, user,
+timestamp, ongoing) and the old-node fallback.
+"""
+
+import time
+import uuid as _uuid
+from datetime import UTC, datetime
+
+from fastapi.testclient import TestClient
+
+from backend.app import _run_migrations, api
+from backend.auth.sessions import create_session
+from backend.config import config
+from backend.db import crud
+from backend.db.engine import SessionLocal
+from backend.routers import security as security_router
+from backend.schema._input import CreateUser, NodeCreate
+
+
+def _owner():
+    _run_migrations()
+    db = SessionLocal()
+    try:
+        return create_session(db, config.ADMIN_USERNAME, "owner")
+    finally:
+        db.close()
+
+
+def _make_node():
+    db = SessionLocal()
+    try:
+        return crud.create_node(
+            db,
+            NodeCreate(
+                name=f"secnode_{_uuid.uuid4().hex[:8]}",
+                address="203.0.113.91",
+                key="test-api-key-12345678",
+            ),
+            None,
+        )
+    finally:
+        db.close()
+
+
+def _make_user(name: str):
+    db = SessionLocal()
+    try:
+        return crud.create_user(db, CreateUser(name=name), config.ADMIN_USERNAME)
+    finally:
+        db.close()
+
+
+class _FakeSessions:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get_sessions(self, common_name, hours=8):
+        return self.payload
+
+
+def _patch_node(monkeypatch, payload, node_id):
+    """Answer only for the node under test; other suite nodes stay quiet."""
+    sessions = _FakeSessions(payload)
+
+    def _client_for(node, **kw):
+        if getattr(node, "id", None) == node_id:
+            return sessions
+        return _FakeSessions({})
+
+    monkeypatch.setattr(security_router, "node_client", _client_for)
+
+
+def _client():
+    return TestClient(api)
+
+
+def test_disabled_user_rejects_are_informational_not_danger(monkeypatch):
+    node = _make_node()
+    user = _make_user(f"secpol_{_uuid.uuid4().hex[:6]}")
+    now = time.time()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 0,
+            "policy_rejects": 3,
+            "warn_rejects": 0,
+            "rejects": 3,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": now - 120,
+                    "cn": str(user.id),
+                    "action": "disabled",
+                    "severity": "policy",
+                    "reason": "user disabled in the panel",
+                    "peer": "",
+                }
+            ]
+            * 3,
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["auth_failures"] == 0
+    assert data["policy_rejects"] == 3
+    assert data["ongoing_users"] == [user.name]
+    ev = data["events"][0]
+    assert ev["node"] == node.name
+    assert ev["user"] == user.name
+    assert ev["severity"] == "policy"
+    assert ev["ongoing"] is True
+    assert ev["time_local"]
+    row = next(r for r in data["per_node"] if r["node"] == node.name)
+    assert row["ongoing"] == 3
+    assert row["policy_rejects"] == 3
+    assert row["auth_failures"] == 0
+
+
+def test_tls_failure_is_the_only_danger_bucket(monkeypatch):
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 2,
+            "policy_rejects": 1,
+            "warn_rejects": 0,
+            "rejects": 1,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": time.time() - 7200,
+                    "cn": "",
+                    "action": "tls",
+                    "severity": "failure",
+                    "reason": "incoming packet authentication failed",
+                    "peer": "9.9.9.9:1194",
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    assert data["auth_failures"] == 2
+    assert data["auth_errors"] == 2  # back-compat alias
+    assert data["policy_rejects"] == 1
+    ev = data["events"][0]
+    assert ev["severity"] == "failure"
+    assert ev["peer"] == "9.9.9.9:1194"
+    # Two hours old: not being retried right now.
+    assert ev["ongoing"] is False
+    assert data["ongoing_users"] == []
+
+
+def test_legacy_node_without_events_stays_informational(monkeypatch):
+    """A 1.0.0 node reports no structured events; it must not invent danger."""
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 4,
+            "rejects": 4,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "last_error": {"1": "CN=1 ip=1.2.3.4:5000 limit=1 active=2; REJECT"},
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    assert data["events"][0]["severity"] == "policy"
+    assert data["events"][0]["node"]
+    # auth_failures only reflects what the node itself reported.
+    assert data["auth_failures"] == 4
+
+
+def test_undated_event_is_not_marked_ongoing(monkeypatch):
+    node = _make_node()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "policy_rejects": 0,
+            "warn_rejects": 0,
+            "rejects": 0,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": 0,
+                    "cn": "9",
+                    "action": "disabled",
+                    "severity": "policy",
+                    "reason": "user disabled in the panel",
+                    "peer": "",
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    ev = data["events"][0]
+    assert ev["ts"] == 0
+    assert ev["time_local"] is None
+    assert ev["ongoing"] is False
+
+
+def test_event_time_is_rendered_in_the_panel_timezone(monkeypatch):
+    node = _make_node()
+    ts = datetime(2026, 9, 25, 12, 0, tzinfo=UTC).timestamp()
+    _patch_node(
+        monkeypatch,
+        {
+            "auth_errors": 1,
+            "policy_rejects": 0,
+            "warn_rejects": 0,
+            "rejects": 0,
+            "stale_marker_count": 0,
+            "live_count": 0,
+            "events": [
+                {
+                    "ts": ts,
+                    "cn": "",
+                    "action": "tls",
+                    "severity": "failure",
+                    "reason": "TLS Error",
+                    "peer": "1.1.1.1:1194",
+                }
+            ],
+        },
+        node.id,
+    )
+
+    resp = _client().get(
+        "/api/security/summary?hours=8",
+        headers={"Authorization": f"Bearer {_owner()}"},
+    )
+    data = resp.json()["data"]
+    ev = data["events"][0]
+    assert ev["time_local"]
+    assert ev["time_local"].startswith(datetime.fromtimestamp(ts, UTC).astimezone().strftime("%Y-%m-%d"))

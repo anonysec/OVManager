@@ -3191,6 +3191,34 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
   color: var(--text-secondary);
 }
 
+.sp-ev-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sp-badge--ongoing {
+  background: var(--warning-soft);
+  border-color: var(--warning);
+  color: var(--warning-text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sp-ev--failure {
+  border-inline-start: 3px solid var(--danger);
+}
+
+.sp-ev--warn {
+  border-inline-start: 3px solid var(--warning);
+}
+
+.sp-ev--policy {
+  border-inline-start: 3px solid var(--border);
+}
+
 .sp-backup-list {
   display: flex;
   flex-direction: column;
