@@ -110,6 +110,20 @@
   color: var(--text-secondary);
   font-size: var(--font-size-2xs);
   font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+/* Long labels truncate instead of stretching the filter row. The full
+   label stays available via the title attribute on the button. */
+.um-chip-tag {
+  max-width: 220px;
+}
+
+.um-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .um-chip.is-active .um-chip-count {

@@ -804,5 +804,7 @@
   "secNoSuchUser": "пользователя нет",
   "secUnclassifiedNodes": "Причины для {{nodes}} определены приблизительно (старая версия ноды). Обновите ноду для точных причин по каждому событию.",
   "closeModal": "Закрыть окно",
-  "appLogo": "OVManager"
+  "appLogo": "OVManager",
+  "showMoreTags": "ещё {{count}}",
+  "showLess": "Скрыть"
 }

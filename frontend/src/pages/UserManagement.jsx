@@ -25,6 +25,8 @@ import { Button, DataTable, EmptyState, ErrorState, PageHeader, StatusBadge } fr
 import './UserManagement.css';
 
 const PAGE_SIZE_KEY = 'ovmanager-ui-users-pagesize';
+// A label per chip would overflow the filter row once labels pile up.
+const MAX_VISIBLE_TAGS = 8;
 // Bumped to v2 to roll out the newest-first default to browsers that cached
 // the old name-asc preference under v1.
 const SORT_KEY = 'ovmanager-ui-users-sort-v2';
@@ -163,6 +165,17 @@ const UserManagement = () => {
     () => [...new Set(users.map((u) => u.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [users],
   );
+  const tagCounts = useMemo(() => {
+    const counts = new Map();
+    for (const u of users) {
+      if (!u.tag) continue;
+      counts.set(u.tag, (counts.get(u.tag) || 0) + 1);
+    }
+    return counts;
+  }, [users]);
+  // One chip per label would overflow the row once labels pile up.
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const visibleTags = tagsExpanded ? userTags : userTags.slice(0, MAX_VISIBLE_TAGS);
 
   const searchTerm = searchParams.get('q') || '';
   const view = searchParams.get('view') || 'all';
@@ -171,7 +184,27 @@ const UserManagement = () => {
     mutate(next);
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-  const setSearchTerm = (value) => { setPage(1); patchParams((p) => { if (value) p.set('q', value); else p.delete('q'); }); };
+  // The input stays responsive while the URL (and the filtering it drives)
+  // only updates after the user pauses typing.
+  const [draft, setDraft] = useState(searchTerm);
+  useEffect(() => { setDraft(searchTerm); }, [searchTerm]);
+  useEffect(() => {
+    if (draft === searchTerm) return undefined;
+    const id = setTimeout(() => {
+      setPage(1);
+      patchParams((p) => { if (draft) p.set('q', draft); else p.delete('q'); });
+    }, 275);
+    return () => clearTimeout(id);
+  }, [draft, searchTerm, patchParams]);
+  const setSearchTerm = (value) => { setDraft(value); };
+  // Button clicks clear instantly; typing debounces through the effect above.
+  // One patchParams call: two in the same tick would rebuild from the same
+  // stale params and the last write would clobber the first.
+  const clearFilters = useCallback(() => {
+    setDraft('');
+    setPage(1);
+    patchParams((p) => { p.delete('q'); p.delete('view'); });
+  }, [patchParams]);
   const setView = (value) => { setPage(1); patchParams((p) => { if (value && value !== 'all') p.set('view', value); else p.delete('view'); }); };
 
   const filteredUsers = useMemo(() => {
@@ -543,7 +576,7 @@ const UserManagement = () => {
             type="search"
             className="ui-input um-search-input"
             placeholder={t('searchByUsername')}
-            value={searchTerm}
+            value={draft}
             onChange={(e) => setSearchTerm(e.target.value)}
             aria-label={t('searchByUsername')}
           />
@@ -561,19 +594,32 @@ const UserManagement = () => {
               {f.label} <span className="um-chip-count">{filterCounts[f.id] ?? 0}</span>
             </button>
           ))}
-          {userTags.map((tag) => (
+          {visibleTags.map((tag) => (
             <button
               key={tag}
               type="button"
               className={`um-chip um-chip-tag${view === `tag:${tag}` ? ' is-active' : ''}`}
               aria-pressed={view === `tag:${tag}`}
               onClick={() => setView(`tag:${tag}`)}
+              title={tag}
             >
-              {tag} <span className="um-chip-count">{users.filter((u) => u.tag === tag).length}</span>
+              <span className="um-chip-label">{tag}</span> <span className="um-chip-count">{tagCounts.get(tag) ?? 0}</span>
             </button>
           ))}
+          {userTags.length > MAX_VISIBLE_TAGS && (
+            <button
+              type="button"
+              className="um-chip um-chip-more"
+              aria-expanded={tagsExpanded}
+              onClick={() => setTagsExpanded((v) => !v)}
+            >
+              {tagsExpanded
+                ? t('showLess', 'Show less')
+                : t('showMoreTags', '+{{count}} more', { count: userTags.length - MAX_VISIBLE_TAGS })}
+            </button>
+          )}
           {(searchTerm || view !== 'all') && (
-            <button type="button" className="um-clear" onClick={() => { setSearchTerm(''); setView('all'); }}>
+            <button type="button" className="um-clear" onClick={clearFilters}>
               {t('clear', 'Clear')}
             </button>
           )}
@@ -611,7 +657,7 @@ const UserManagement = () => {
           title={t('noMatchesTitle', 'No matching users')}
           description={t('noMatchesBody', 'Try a different search term or clear the active filter.')}
           actionLabel={t('clearFilters', 'Clear filters')}
-          onAction={() => { setSearchTerm(''); setView('all'); }}
+          onAction={clearFilters}
         />
       ) : (
         <DataTable
