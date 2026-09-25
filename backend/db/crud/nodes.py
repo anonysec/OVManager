@@ -11,8 +11,6 @@ from backend.db.exceptions import NotFoundError
 from backend.db.models import Node
 from backend.schema._input import NodeCreate
 
-from .crypto import encrypt_node_key
-
 
 def get_all_nodes(db: Session):
     nodes = db.query(Node).all()
@@ -47,7 +45,7 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
         ovpn_port=request.ovpn_port,
         protocol=request.protocol,
         port=request.port,
-        key=encrypt_node_key(request.key),
+        key=request.key,
         status=request.status,
         use_tls=request.use_tls,
         country_code=manual or (geolocation.get("country_code") if geolocation else None),
@@ -88,7 +86,7 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
 
     # Only overwrite API key if a non-empty value is provided
     if request.key and request.key.strip():
-        node.key = encrypt_node_key(request.key.strip())
+        node.key = request.key.strip()
 
     db.commit()
     db.refresh(node)

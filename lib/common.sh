@@ -43,11 +43,6 @@ rand_hex() {
     openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
 }
 
-fernet_key() {
-    python3 -c 'import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null \
-        || openssl rand -base64 32 | tr -d '\n'
-}
-
 # Interactive if the operator did not pass -y AND we can talk to a terminal.
 # `curl | bash` has no stdin TTY; humans still work via /dev/tty.
 # AI / CI must pass -y (or CI=true) so this never blocks on a prompt.

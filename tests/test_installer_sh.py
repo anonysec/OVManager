@@ -810,7 +810,7 @@ def test_write_env_never_writes_a_backup_key(tmp_path):
     (fake_install / "backend" / "config.py").write_text("class Setting: pass\n", encoding="utf-8")
     harness = (
         "die() { echo \"DIE: $1\" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\n"
-        + _extract_function("write_env") + "\n" + _extract_function("fernet_key")
+        + _extract_function("write_env")
         + '\nMODE=native PORT=2095 PATHPREFIX=abc ADMIN_USER=admin ADMIN_PASS=long-enough-password\n'
         + f'PUBLIC_URL="" TLS_KEY="" TLS_CERT="" DATA_DIR="{tmp_path}" INSTALL_DIR="{fake_install}"\n'
         + "write_env >/dev/null\n"
@@ -819,7 +819,9 @@ def test_write_env_never_writes_a_backup_key(tmp_path):
     assert r.returncode == 0, r.stderr
     env = (fake_install / ".env").read_text(encoding="utf-8")
     assert "BACKUP_ENCRYPT_KEY" not in env
-    assert "BOT_ENCRYPT_KEY=" in env
+    assert "BOT_ENCRYPT_KEY" not in env
+    assert "NODE_ENCRYPT_KEY" not in env
+    assert "JWT_SECRET_KEY=" in env
 
 
 def test_recover_update_restarts_never_activated_tree():

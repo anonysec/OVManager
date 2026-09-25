@@ -312,11 +312,6 @@ rand_hex() {
     openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
 }
 
-fernet_key() {
-    python3 -c 'import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null \
-        || openssl rand -base64 32 | tr -d '\n'
-}
-
 # Interactive if the operator did not pass -y AND we can talk to a terminal.
 # `curl | bash` has no stdin TTY; humans still work via /dev/tty.
 # AI / CI must pass -y (or CI=true) so this never blocks on a prompt.
@@ -653,9 +648,8 @@ fetch_release() {
 }
 
 write_env() {
-    local jwt bot
+    local jwt
     jwt="$(openssl rand -base64 48 2>/dev/null | tr -d '\n')"
-    bot="$(fernet_key)"
     # In Docker mode the .env is consumed INSIDE the container, where the
     # data dir is the /app/data mount — never the host path (writing the
     # host path here made fresh Docker installs crash-loop with
@@ -672,7 +666,6 @@ write_env() {
         printf 'JWT_SECRET_KEY=%s\n' "$jwt"
         printf 'DATA_DIR=%s\n' "$data_dir"
         [[ -n "$PUBLIC_URL" ]] && printf 'PUBLIC_URL=%s\n' "$PUBLIC_URL"
-        [[ -n "$bot" ]] && printf 'BOT_ENCRYPT_KEY=%s\n' "$bot"
         [[ -n "$TLS_KEY" ]] && printf 'SSL_KEYFILE=%s\n' "$TLS_KEY"
         [[ -n "$TLS_CERT" ]] && printf 'SSL_CERTFILE=%s\n' "$TLS_CERT"
     } > "$INSTALL_DIR/.env"

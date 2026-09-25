@@ -64,17 +64,11 @@ def _retry_after_s(value: object) -> float:
 
 
 def node_client(node, **kw) -> "NodeRequests":
-    """Build a NodeRequests for a Node row.
-
-    Single construction site: decrypts the stored key (cached) and maps
-    the row fields. Extra kwargs pass through to NodeRequests.
-    """
-    from backend.db import crud
-
+    """Build a NodeRequests for a Node row (single construction site)."""
     return NodeRequests(
         address=node.address,
         port=node.port,
-        api_key=crud.node_api_key(node),
+        api_key=node.key or "",
         use_tls=node.use_tls,
         **kw,
     )

@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 VERSION_TABLE = "schema_version"
 
@@ -408,29 +408,73 @@ def _seed_owner_and_first_user(db: Session) -> None:
 # Existing installations are adopted to HEAD directly (see ``migrate``), so
 # these only ever run for databases stamped at an older version.
 def _encrypt_node_keys(db: Session) -> None:
-    """Encrypt plaintext node API keys at rest (v2).
+    """Retired no-op (was: encrypt node API keys at rest, v2).
 
-    Rows already prefixed with ``enc:`` are skipped. When no encryption key
-    is configured the step is a no-op so installs without
-    NODE/BOT_ENCRYPT_KEY keep working on plaintext (with a warning from crud).
+    1.0.5 removes at-rest encryption entirely (owner decision: the DB file
+    behind 0600 perms + owner-held server is the trust boundary, same as
+    PasarGuard). Databases stamped below v2 pass through this step unchanged.
     """
-    try:
-        from backend.db.crud import _node_fernet, encrypt_node_key
-    except Exception:
-        return
-    if _node_fernet is None:
-        logger.info("migrations v2: no node encryption key — leaving keys as-is")
-        return
-    rows = db.execute(text("SELECT id, key FROM nodes")).fetchall()
-    updated = 0
-    for row in rows:
-        node_id, stored = row[0], row[1]
-        if not stored or str(stored).startswith("enc:"):
-            continue
-        enc = encrypt_node_key(str(stored))
-        db.execute(text("UPDATE nodes SET key = :k WHERE id = :i"), {"k": enc, "i": node_id})
-        updated += 1
-    logger.info("migrations v2: encrypted %s node key(s)", updated)
+    logger.info("migrations v2: at-rest key encryption is retired — no-op")
+
+
+def _decrypt_stored_secrets(db: Session) -> None:
+    """Decrypt ``enc:`` rows once (v14): at-rest encryption is retired.
+
+    Uses the retired ``BOT/NODE_ENCRYPT_KEY`` values still present in .env on
+    the first 1.0.5 boot (the old installer stages the .env verbatim) — they
+    are deprecated no-ops to the app but remain available to this migration.
+    Rows that fail to decrypt are left untouched and reported — fail-closed,
+    never truncated. A no-op when the values are absent (fresh installs,
+    already-plaintext databases).
+    """
+    from cryptography.fernet import Fernet
+
+    from backend.config import config
+
+    bot_fernet = None
+    if config.BOT_ENCRYPT_KEY:
+        try:
+            bot_fernet = Fernet(config.BOT_ENCRYPT_KEY.encode())
+        except Exception:
+            logger.warning("migrations v14: BOT_ENCRYPT_KEY is not a valid key — legacy token left as-is")
+    if bot_fernet:
+        row = db.execute(text("SELECT bot_token FROM settings LIMIT 1")).fetchone()
+        stored = (row[0] if row else None) or ""
+        if stored.startswith("enc:"):
+            try:
+                plain = bot_fernet.decrypt(stored[4:].encode()).decode()
+                db.execute(text("UPDATE settings SET bot_token = :t"), {"t": plain})
+                logger.info("migrations v14: decrypted stored bot token")
+            except Exception:
+                logger.warning(
+                    "migrations v14: stored bot token could not be decrypted — leaving as-is; "
+                    "re-save the token in Settings → Bot to clear it"
+                )
+
+    node_fernet = None
+    raw_node_key = config.NODE_ENCRYPT_KEY or config.BOT_ENCRYPT_KEY
+    if raw_node_key:
+        try:
+            node_fernet = Fernet(raw_node_key.encode())
+        except Exception:
+            logger.warning("migrations v14: node key value is not a valid Fernet key — legacy keys left as-is")
+    if node_fernet:
+        rows = db.execute(text("SELECT id, key FROM nodes")).fetchall()
+        decrypted = 0
+        for node_id, stored in rows:
+            if not stored or not str(stored).startswith("enc:"):
+                continue
+            try:
+                plain = node_fernet.decrypt(str(stored)[4:].encode()).decode()
+                db.execute(text("UPDATE nodes SET key = :k WHERE id = :i"), {"k": plain, "i": node_id})
+                decrypted += 1
+            except Exception:
+                logger.warning(
+                    "migrations v14: node %s key could not be decrypted — left as-is; re-enter the key",
+                    node_id,
+                )
+        if decrypted:
+            logger.info("migrations v14: decrypted %s node key(s)", decrypted)
 
 
 def _cleanup_orphan_daily_rows(db: Session) -> None:
@@ -555,6 +599,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (11, "add encrypted Telegram backup setting", _add_telegram_backup_enabled),
     (12, "seed owner row and first user", _seed_owner_and_first_user),
     (13, "add per-admin user defaults", _add_admin_user_defaults),
+    (14, "decrypt stored secrets (at-rest encryption retired)", _decrypt_stored_secrets),
 )
 
 

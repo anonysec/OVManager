@@ -46,25 +46,18 @@ _last_sent_day: date | None = None
 
 
 def _decrypt_bot_token(stored: str | None) -> str | None:
-    """Return the plaintext bot token, or ``None`` when unusable.
+    """Return the bot token as stored, or ``None`` when unusable.
 
-    Mirrors ``bot/config.py``: when no BOT_ENCRYPT_KEY is configured the
-    stored value is legacy plaintext and is used as-is; otherwise it is
-    decrypted with the CRUD fernet key. A rotated/foreign key or a corrupt row
-    yields ``None`` so ciphertext is never sent to Telegram as a token.
+    At-rest encryption was removed in 1.0.5. A legacy ``enc:`` row cannot be
+    read back without the retired key, so it is refused: ciphertext is never
+    sent to Telegram as a token. Same fail-closed rule as crud.decrypt_bot_token.
     """
     if not stored:
         return None
-    from backend.db.crud.crypto import _fernet
-
-    if _fernet is None:
-        # No BOT_ENCRYPT_KEY configured: older installs store plaintext.
-        return stored
-    try:
-        return _fernet.decrypt(stored.encode()).decode()
-    except Exception:
-        logger.warning("Telegram alert token could not be decrypted — skipping alert until the token is re-saved")
+    if str(stored).startswith("enc:"):
+        logger.warning("Bot token is still encrypted (re-save it in Settings → Bot) — skipping alert")
         return None
+    return stored
 
 
 def send_telegram(text: str, db=None) -> bool:

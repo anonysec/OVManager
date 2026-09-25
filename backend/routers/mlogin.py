@@ -31,12 +31,9 @@ def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node
         raise HTTPException(status_code=401, detail="Missing node name/key")
     node = db.query(Node).filter(Node.name == node_name).first()
     # Use hmac.compare_digest to prevent timing side-channel leaking key bytes.
-    # node.key is Fernet-encrypted at rest — compare against the plaintext.
     if not node:
         raise HTTPException(status_code=401, detail="Invalid node key")
-    from backend.db.crud import decrypt_node_key
-
-    if not hmac.compare_digest(decrypt_node_key(node.key).encode("utf-8"), key.encode("utf-8", "ignore")):
+    if not hmac.compare_digest((node.key or "").encode("utf-8"), key.encode("utf-8", "ignore")):
         raise HTTPException(status_code=401, detail="Invalid node key")
     return node
 
