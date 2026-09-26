@@ -164,24 +164,26 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await prompt_search(update, context)
             return
         if data.startswith("users:"):
+            from bot.callbacks import int_arg
+
             await answer(update)
-            try:
-                page = int(data.split(":", 1)[1])
-            except ValueError:
-                page = 0
-            await show_users(update, context, actor, page)
+            await show_users(update, context, actor, int_arg(data.split(":", 1)[1]))
             return
         if data.startswith("u:"):
+            from bot.callbacks import uuid_arg
+
             await answer(update)
-            await show_user(update, context, actor, data[2:])
+            uuid = uuid_arg(data[2:])
+            if uuid is None:
+                await edit_or_reply(update, t(lang, "user_not_found"))
+                return
+            await show_user(update, context, actor, uuid)
             return
         if data.startswith("ns:"):
+            from bot.callbacks import int_arg
+
             await answer(update)
-            try:
-                node_id = int(data.split(":", 1)[1])
-            except ValueError:
-                node_id = 0
-            await show_node_detail(update, context, actor, node_id)
+            await show_node_detail(update, context, actor, int_arg(data.split(":", 1)[1]))
             return
         if await dispatch_action(update, context, actor, data):
             return
