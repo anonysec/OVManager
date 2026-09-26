@@ -236,14 +236,15 @@ async def _cfg(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
 
 @action("dl")
 async def _download(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, rest: str) -> bool:
+    from bot.callbacks import node_ref_arg
+
     lang = lang_of(update, context)
     await answer(update, t(lang, "preparing"))
-    try:
-        uuid, node_id_s = rest.rsplit(":", 1)
-        node_id = int(node_id_s)
-    except ValueError:
+    parsed = node_ref_arg(rest)
+    if parsed is None:
         await edit_or_reply(update, t(lang, "dl_invalid"))
         return True
+    uuid, node_id = parsed
     panel = Panel(actor.token)
     user = await panel.get_user(uuid=uuid)
     nodes = await panel.get_nodes()

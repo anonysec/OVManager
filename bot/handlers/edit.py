@@ -57,10 +57,16 @@ async def start_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: 
 
 
 async def handle_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, data: str) -> bool:
+    from bot.callbacks import uuid_arg
+
     flow = _flow(context)
     if data.startswith("edt:"):
         await answer(update)
-        await start_edit(update, context, actor, data[4:])
+        uuid = uuid_arg(data[4:])
+        if uuid is None:
+            await edit_or_reply(update, t(lang_of(update, context), "user_not_found"))
+            return True
+        await start_edit(update, context, actor, uuid)
         return True
     if flow is None:
         return False
