@@ -38,7 +38,7 @@ CLI_NAME="ovmanager"
 CLI_ALIAS="ovm"
 
 # ── Colour / TTY ───────────────────────────────────────────────────────
-# SYNC: mirrors lib/common.sh (curl-pipe installs run standalone).
+# SYNC: mirrors scripts/lib/*.sh (curl-pipe installs run standalone).
 NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
 WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
 YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'

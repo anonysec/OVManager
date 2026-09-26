@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 INSTALLER = REPO / "install.sh"
-LIB = REPO / "lib" / "common.sh"
+LIB_DIR = REPO / "scripts" / "lib"
 
 SHARED = [
     "line",
@@ -70,18 +70,40 @@ def extract(text: str, name: str) -> str:
 
 
 def test_lib_exists():
-    assert LIB.is_file(), "lib/common.sh missing"
+    expected = {"common.sh", "prompt.sh", "env.sh", "system.sh", "backup.sh", "tls.sh", "policy.sh"}
+    found = {p.name for p in LIB_DIR.glob("*.sh")}
+    assert found == expected, f"scripts/lib layout changed: {sorted(found)}"
 
 
 def test_shared_helpers_in_sync():
     installer = INSTALLER.read_text(encoding="utf-8")
-    lib = LIB.read_text(encoding="utf-8")
-    drifted = [n for n in SHARED if extract(installer, n) != extract(lib, n)]
-    assert not drifted, f"lib/common.sh out of sync with install.sh: {drifted}"
+    drifted = []
+    for lib_file in sorted(LIB_DIR.glob("*.sh")):
+        lib = lib_file.read_text(encoding="utf-8")
+        names = re.findall(r"^([a-z_][a-z0-9_]*)\(\)", lib, re.M)
+        assert names, f"{lib_file.name} defines no functions"
+        for name in names:
+            if extract(installer, name) != extract(lib_file.read_text(), name):
+                drifted.append(f"{lib_file.name}:{name}")
+    assert not drifted, f"scripts/lib out of sync with install.sh: {drifted}"
 
 
 def test_manager_sources_lib_not_copies():
     manager = (REPO / "manager.sh").read_text(encoding="utf-8")
-    assert "lib/common.sh" in manager
+    assert "scripts/lib" in manager
     for name in SHARED:
         assert not re.search(rf"^{re.escape(name)}\(\)", manager, re.M), f"manager.sh duplicates lib function: {name}"
+
+
+def test_lib_has_no_panel_imports():
+    """One-way boundary: scripts/lib is pure shell + system tools. Any
+    reference to panel code (backend/bot/frontend/cli Python) means the
+    simulated installer repo leaks into the app — the split is void."""
+    import re as _re
+
+    offenders = []
+    for lib_file in sorted(LIB_DIR.glob("*.sh")):
+        for i, line in enumerate(lib_file.read_text(encoding="utf-8").splitlines(), 1):
+            if _re.search(r"backend\.|bot\.|frontend/|from cli|import cli|cli\.main", line):
+                offenders.append(f"{lib_file.name}:{i}: {line.strip()}")
+    assert not offenders, f"scripts/lib references panel code: {offenders}"

@@ -845,7 +845,7 @@ def test_no_command_substitution_in_unit_heredoc():
     any unquoted heredoc body."""
     import re
 
-    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "manager.sh", INSTALLER_PATH.parent / "lib" / "common.sh"):
+    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "manager.sh", *(INSTALLER_PATH.parent / "scripts" / "lib").glob("*.sh")):
         lines = path.read_text(encoding="utf-8").splitlines()
         i = 0
         while i < len(lines):
@@ -891,7 +891,8 @@ def test_generated_password_is_twelve_characters():
 def test_password_policy_minimum_is_eight():
     """Owner password policy is >= 8 characters across installer, lib,
     manager and the config message."""
-    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "lib" / "common.sh"):
+    lib_policy = INSTALLER_PATH.parent / "scripts" / "lib" / "policy.sh"
+    for path in (INSTALLER_PATH, lib_policy):
         content = path.read_text(encoding="utf-8")
         assert "[[ ${#pass} -ge 8 ]]" in content, path.name
         assert "at least 8 characters" in content, path.name
