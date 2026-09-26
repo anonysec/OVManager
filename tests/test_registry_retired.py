@@ -95,7 +95,7 @@ def test_login_diagnostics_registry_empty():
         db.close()
     try:
         with TestClient(api) as client:
-            r = client.get(f"/api/maintenance/login-diagnostics/{name}", headers=_owner_headers())
+            r = client.get(f"/api/health/login-diagnostics/{name}", headers=_owner_headers())
             assert r.status_code == 200
             assert r.json()["data"]["global_registry"] == []
     finally:

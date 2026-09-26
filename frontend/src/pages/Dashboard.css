@@ -903,3 +903,53 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   }
 }
 /*tail*/
+
+/* ── Top users (traffic leaders) ─────────────────────────────────── */
+.ds-topusers {
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-topusers-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.ds-topusers-row:last-child {
+  border-bottom: none;
+}
+
+.ds-topusers-name {
+  flex: none;
+  width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ds-topusers-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.ds-topusers-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.ds-topusers-bytes {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
