@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Versioned schema migrations for OVManager (SQLite).
 
 Why this module exists
@@ -48,27 +45,17 @@ from sqlalchemy import inspect, text
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.orm import Session
 
-# Importing the models registers every mapped table on ``Base.metadata``.
-# Without this the metadata is empty unless some other module happened to
-# import ``backend.db.models`` first, and ``create_all()`` silently creates
-# nothing — so the import is load-bearing, not incidental.
 from backend.db import models as _models  # noqa: F401
 from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
-#: Bump this and append a step to :data:`STEPS` for every schema change.
 SCHEMA_VERSION = 15
 
 VERSION_TABLE = "schema_version"
 
 _sqlite = sqlite_dialect.dialect()
-# SQLAlchemy's own DDL compiler: used so defaults added by ALTER TABLE are
-# quoted exactly the way CREATE TABLE would quote them.
 _ddl_compiler = _sqlite.ddl_compiler(_sqlite, None)
 
-# DDL for tables that are owned by operations modules rather than the ORM.
-# Kept here so one module owns all schema creation and the CREATE statements
-# run once per process instead of on every write.
 _EXTRA_DDL: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -142,9 +129,6 @@ _EXTRA_DDL: tuple[str, ...] = (
 _lock = threading.Lock()
 
 
-# ── Introspection helpers ────────────────────────────────────────────────────
-
-
 def table_names(db: Session) -> set[str]:
     return set(inspect(db.bind).get_table_names())
 
@@ -181,9 +165,6 @@ def _stamp(db: Session, version: int, note: str) -> None:
         text(f"INSERT OR REPLACE INTO {VERSION_TABLE} (version, applied_at, note) VALUES (:v, :ts, :n)"),
         {"v": version, "ts": time.time(), "n": note},
     )
-
-
-# ── DDL synthesis ────────────────────────────────────────────────────────────
 
 
 def _sql_type(column) -> str:
@@ -226,7 +207,6 @@ def _default_literal(column) -> str | None:
     default = column.default
     if default is not None and getattr(default, "is_scalar", False):
         value = default.arg
-        # bool must be tested before int: bool is a subclass of int.
         if isinstance(value, bool):
             return "1" if value else "0"
         if isinstance(value, (int, float)):
@@ -251,9 +231,6 @@ def _add_column_sql(table: str, column) -> str:
     if column.nullable is False:
         parts.append("NOT NULL")
     return f"ALTER TABLE {table} ADD COLUMN {column.name} " + " ".join(parts)
-
-
-# ── Migration steps ──────────────────────────────────────────────────────────
 
 
 def _create_mapped_tables(db: Session) -> None:
@@ -364,8 +341,6 @@ def _seed_owner_and_first_user(db: Session) -> None:
         db.add(
             Admin(
                 username=owner,
-                # Owner auth is verified against ADMIN_PASSWORD_HASH in .env;
-                # this column is never the authentication source for the owner.
                 password="",
                 disabled=False,
             )
@@ -394,8 +369,6 @@ def _seed_owner_and_first_user(db: Session) -> None:
 
     if not seeded:
         return
-    # Record first-run provisioning so the install step is visible in
-    # Activity, without inventing history on panels that already had data.
     try:
         from backend.operations.audit import log_event
 
@@ -404,9 +377,6 @@ def _seed_owner_and_first_user(db: Session) -> None:
         logger.debug("migration: first-run audit entry skipped")
 
 
-# Numbered steps. Version N means "after this step the database is at N".
-# Existing installations are adopted to HEAD directly (see ``migrate``), so
-# these only ever run for databases stamped at an older version.
 def _encrypt_node_keys(db: Session) -> None:
     """Retired no-op (was: encrypt node API keys at rest, v2).
 
@@ -618,9 +588,6 @@ STEPS: tuple[tuple[int, str, object], ...] = (
 )
 
 
-# ── Public API ───────────────────────────────────────────────────────────────
-
-
 def migrate(db: Session | None = None) -> int:
     """Bring the database up to :data:`SCHEMA_VERSION`. Idempotent.
 
@@ -641,8 +608,6 @@ def migrate(db: Session | None = None) -> int:
                 _create_extra_tables(session)
                 _reconcile_columns(session)
                 _seed_settings(session)
-                # A brand-new database jumps straight to HEAD and never runs
-                # the numbered steps, so first-run provisioning happens here.
                 _seed_owner_and_first_user(session)
                 _stamp(session, SCHEMA_VERSION, "initial schema")
                 session.commit()
@@ -650,17 +615,10 @@ def migrate(db: Session | None = None) -> int:
                 return SCHEMA_VERSION
 
             if before == 0:
-                # Pre-runner database (created by create_all + ad-hoc ALTERs,
-                # or by any older release). Adopt whatever is there.
                 _create_mapped_tables(session)
                 _create_extra_tables(session)
                 added = _reconcile_columns(session)
                 _seed_settings(session)
-                # Stamp at the pre-step baseline (1) and let the numbered STEPS
-                # below bring the database to HEAD. Stamping straight at HEAD
-                # used to skip every step on adopted databases — node API keys
-                # could stay in plaintext forever and future data fixes would
-                # never run.
                 _stamp(session, 1, f"adopted legacy database (+{len(added)} columns)")
                 session.commit()
                 before = 1
@@ -670,8 +628,6 @@ def migrate(db: Session | None = None) -> int:
                 )
 
             if before > SCHEMA_VERSION:
-                # Database written by a newer OVManager than this binary.
-                # Refuse to run rather than silently downgrading the schema.
                 logger.error(
                     "migrations: database is at version %s but this build supports %s — refusing to run",
                     before,
@@ -732,9 +688,6 @@ def verify_schema(db: Session | None = None) -> list[str]:
             session.close()
 
 
-# ── Command line ─────────────────────────────────────────────────────────────
-
-
 def _self_check() -> int:
     """Build, downgrade, then re-upgrade a throwaway database and check it.
 
@@ -765,7 +718,6 @@ def _self_check() -> int:
             print(f"fresh database built at version {version}")
             problems += verify_schema(db)
 
-            # Fake an install from before those columns existed.
             db.execute(text("ALTER TABLE users DROP COLUMN max_logins"))
             db.execute(text("ALTER TABLE settings DROP COLUMN timezone"))
             db.execute(text("DROP TABLE schema_version"))

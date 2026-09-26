@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Access-control regression tests: cross-tenant isolation, reserved URL
 paths, audit-feed scoping, and revocation on the mlogin JWT path."""
 
@@ -83,9 +80,6 @@ def _expiry_of(uuid: str) -> dt.date:
         db.close()
 
 
-# ── Single-user extend respects tenancy ────────────────────────────────────
-
-
 def test_extend_admin_cannot_touch_other_tenants_users():
     _ensure_schema()
     _ensure_admin("ac_admin_extend")
@@ -95,7 +89,6 @@ def test_extend_admin_cannot_touch_other_tenants_users():
     before_admin, before_other = _expiry_of(admin_uuid), _expiry_of(other_uuid)
 
     client = TestClient(api)
-    # Own user: allowed.
     resp = client.post(
         f"/api/users/{admin_uuid}/extend",
         json={"days": 10},
@@ -105,7 +98,6 @@ def test_extend_admin_cannot_touch_other_tenants_users():
     assert resp.json()["success"] is True
     assert _expiry_of(admin_uuid) == before_admin + dt.timedelta(days=10)
 
-    # Other tenant: 404 (no existence leak).
     resp = client.post(
         f"/api/users/{other_uuid}/extend",
         json={"days": 10},
@@ -153,30 +145,21 @@ def test_list_users_returns_full_set_by_default():
     assert data["total"] >= 3
 
 
-# ── Restore (undo delete) respects tenancy ─────────────────────────────────
-
-
 def test_restore_rejects_cross_tenant_and_allows_owner():
     _ensure_schema()
     _ensure_admin("ac_admin_restore")
     uuid = _ensure_user("ac_restore_user", config.ADMIN_USERNAME)
 
     client = TestClient(api)
-    # Owner deletes → snapshot lands in the process-global undo buffer.
     resp = client.delete(f"/api/users/{uuid}", headers=_owner_headers())
     assert resp.status_code == 200 and resp.json()["success"]
 
-    # A different admin knows the UUID but must not resurrect it.
     resp = client.post(f"/api/users/{uuid}/restore", headers=_token("ac_admin_restore", "admin"))
     assert resp.status_code == 200
     assert resp.json()["success"] is False
 
-    # The failed attempt must not consume the buffer entry — owner can still restore.
     resp = client.post(f"/api/users/{uuid}/restore", headers=_owner_headers())
     assert resp.status_code == 200 and resp.json()["success"]
-
-
-# ── Reserved URL paths ─────────────────────────────────────────────────────
 
 
 def test_urlpath_rejects_reserved_prefixes():
@@ -189,14 +172,10 @@ def test_urlpath_rejects_reserved_prefixes():
             resp = client.put("/api/server/settings/urlpath", json={"urlpath": reserved}, headers=_owner_headers())
             assert resp.status_code == 200
             assert resp.json()["success"] is False, f"reserved prefix '{reserved}' was accepted"
-        # And a sane value still works.
         resp = client.put("/api/server/settings/urlpath", json={"urlpath": "panel42"}, headers=_owner_headers())
         assert resp.json()["success"] is True
     finally:
         set_urlpath("")
-
-
-# ── Audit feed scoping ─────────────────────────────────────────────────────
 
 
 def test_activity_feed_scopes_admin_to_own_events():
@@ -244,7 +223,6 @@ def test_activity_action_prefix_filter():
     actions = [e["action"] for e in resp.json()["data"]]
     assert actions and all(a.startswith("flt.user") for a in actions)
 
-    # Admin scoping still applies on top of the filter.
     _ensure_admin("ac_admin_flt")
     resp = client.get("/api/activity/", params={"action": "flt"}, headers=_token("ac_admin_flt", "admin"))
     assert resp.status_code == 200
@@ -299,9 +277,6 @@ def test_admin_lifecycle_is_audited():
         db.close()
 
 
-# ── Owner-only read surface (nodes / settings / info / security / metrics) ──
-
-
 def test_owner_only_reads_reject_admin():
     """Normal admins get 403 on node list, settings, server info,
     security summary and metrics history; owner keeps 200."""
@@ -336,9 +311,6 @@ def test_security_summary_owner_still_works():
     resp = client.get("/api/security/summary", headers=_owner_headers())
     assert resp.status_code == 200
     assert resp.json()["success"] is True
-
-
-# ── mlogin JWT path honors revocation ──────────────────────────────────────
 
 
 def test_mlogin_status_rejects_revoked_owner_token():

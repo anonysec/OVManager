@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import asyncio
 import re
 from collections import Counter
@@ -31,7 +28,6 @@ def _get_panel_tz(db: Session) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
-# An event this recent means the client is still retrying right now.
 _ONGOING_WINDOW_S = 3600
 
 
@@ -63,8 +59,6 @@ def _classify_line(message: str) -> tuple[str, str, str]:
     for needle, action, severity, reason in table:
         if needle in message:
             return action, severity, reason
-    # The strict max-login hook line carries the limit, not the words
-    # "max login reached": "CN=1 ... limit=2 active=2 status=2; REJECT".
     if "REJECT" in message and re.search(r"\blimit=", message):
         return "max_logins", "policy", "max logins reached"
     if "REJECT" in message:
@@ -90,7 +84,6 @@ def _parse_log_line(line: str, common_name: str = "", panel_tz: ZoneInfo = None)
     limit = re.search(r"(?:limit|global_limit)=([^\s;]+)", line)
     active = re.search(r"(?:global_active|active_files)=([^\s;]+)", line)
     msg = re.search(r"msg=([^\n]+)$", line)
-    # journal line format: Jul 03 06:20:02 host tag: ... (server timezone is UTC)
     local_time = None
     ts = 0.0
     m_time = re.match(r"([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})", line)
@@ -143,8 +136,6 @@ def _legacy_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: d
                 "node": node_name,
                 "cn": cn,
                 "user": known or cn,
-                # False = this identity no longer exists in the panel, so the
-                # client is reconnecting with a certificate the panel dropped.
                 "user_known": bool(known),
                 "action": ev.get("action") or "event",
                 "severity": ev.get("severity") or "warn",
@@ -175,9 +166,6 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
             {
                 "node": node_name,
                 "cn": cn,
-                # A CN with no matching user is a client reconnecting with a
-                # certificate the panel dropped; the UI labels it as such. A
-                # CN-less TLS failure has no identity to label — it is a peer.
                 "user": known_user or cn or peer,
                 "user_known": bool(known_user) if cn else None,
                 "action": ev.get("action") or "event",
@@ -186,8 +174,6 @@ def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dic
                 "peer": peer,
                 "ts": ts,
                 "time_local": local_time,
-                # The node knows better for log-derived events (it compares
-                # consecutive polls); otherwise "seen within the last hour".
                 "ongoing": (bool(ev["ongoing"]) if ev.get("ongoing") is not None else bool(ts and now - ts <= _ONGOING_WINDOW_S)),
                 "classified": True,
             }
@@ -229,10 +215,6 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
             warn_events = int(data.get("warn_rejects") or 0)
             classified = True
         else:
-            # Old node: it counts every reject as an auth error and only
-            # exposes the last line per identity. Re-classify the text we can
-            # see and treat the remainder as policy, which is what a reject on
-            # a 1.0.x node practically always is.
             seen_failures = sum(1 for e in node_events if e["severity"] == "failure")
             seen_warns = sum(1 for e in node_events if e["severity"] == "warn")
             auth_failures = seen_failures
@@ -251,7 +233,6 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
         per_node.append(
             {
                 "node": node_name,
-                # Kept for older frontends; the split below is what the UI uses.
                 "auth_errors": auth_failures,
                 "auth_failures": auth_failures,
                 "policy_rejects": policy_rejects,
@@ -273,10 +254,8 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
         data={
             "hours": hours,
             "timezone": tz_name,
-            # Danger bucket: real TLS/auth failures and node-side breakage.
             "auth_errors": totals["auth_failures"],
             "auth_failures": totals["auth_failures"],
-            # Informational: disabled users, max logins, panel policy.
             "policy_rejects": totals["policy_rejects"],
             "warn_events": totals["warn_events"],
             "rejects": totals["rejects"],
@@ -284,8 +263,6 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
             "per_node": per_node,
             "events": events[:100],
             "ongoing_users": ongoing_users,
-            # Nodes older than the classification release: their rejects are
-            # split by the panel, not reported by the node.
             "unclassified_nodes": unclassified_nodes,
             "last_errors": events[:50],
             "top_common_names": top.most_common(20),

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Node-down / node-recovery Telegram alerts.
 
 Fed by the 5-minute metrics collector: every tick passes its node snapshot
@@ -29,14 +26,10 @@ import time
 from backend.logger import logger
 from backend.operations.notifier import send_telegram
 
-#: At most one DOWN alert per node per this many seconds.
 DOWN_ALERT_COOLDOWN_SECONDS = 30 * 60
 
-#: node_id -> reachable flag seen on the previous tick.
 _node_state: dict[int, bool] = {}
-#: node_id -> time of the last DOWN alert actually sent.
 _last_down_alert: dict[int, float] = {}
-#: node_ids whose outage was announced and not yet recovered.
 _alerted_down: set[int] = set()
 
 

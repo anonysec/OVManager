@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Per-user daily traffic history (raw-SQL table, like audit_logs).
 
 The collector attributes each billed delta to today's UTC row, so the

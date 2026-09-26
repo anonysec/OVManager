@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 #!/usr/bin/env python3
 """
 Start OVManager panel.
@@ -14,7 +11,6 @@ import uvicorn
 
 from backend.config import config
 
-# Use script's directory for native installs, /app for Docker
 APP_DIR = "/app" if Path("/app").is_dir() else str(Path(__file__).resolve().parent)
 os.chdir(APP_DIR)
 sys.path.insert(0, APP_DIR)
@@ -80,8 +76,6 @@ def _resolve_ssl_paths() -> tuple[str | None, str | None]:
 def main():
     """Run OVManager panel."""
     if any(a == "--reset-urlpath" for a in sys.argv[1:]):
-        # Emergency recovery: operator forgot the panel path. Clears it in the
-        # DB (panel returns to root) without touching anything else.
         from backend.urlpath import reset_urlpath
 
         if reset_urlpath():
@@ -110,9 +104,6 @@ def main():
         date_header=False,
         ssl_keyfile=key or None,
         ssl_certfile=cert or None,
-        # Bounded graceful shutdown: without this, an open live/SSE stream
-        # keeps uvicorn waiting and `systemctl stop` hangs until systemd's
-        # 90-second timeout (observed on uninstall).
         timeout_graceful_shutdown=5,
     )
 

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Typed callback registry for inline-button actions.
 
 Replaces the linear prefix if-chain: each ``prefix:`` maps to exactly one
@@ -12,7 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-# Telegram rejects callback_data longer than 64 bytes.
 MAX_CALLBACK_BYTES = 64
 
 
@@ -24,7 +20,6 @@ def build_callback(prefix: str, arg: str | int) -> str:
     return data
 
 
-# Handler signature: (update, context, actor, arg) -> bool (True = handled).
 ActionHandler = Callable[..., Awaitable[bool]]
 
 _registry: list[tuple[str, ActionHandler, dict]] = []

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Reply and inline keyboards. Labels are the primary interface."""
 
 from __future__ import annotations

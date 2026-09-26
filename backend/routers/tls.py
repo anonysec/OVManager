@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Panel-side TLS certificate management.
 
 The panel can own its HTTPS certificate instead of relying on the
@@ -40,8 +37,6 @@ from backend.models.validators import validate_domain, validate_email
 from backend.operations.audit import log_event
 from backend.schema import ResponseModel
 
-# `/https` is the beginner-facing namespace. `/tls` remains a compatibility
-# surface for existing clients and installations.
 router = APIRouter(prefix="/tls", tags=["HTTPS"])
 https_router = APIRouter(prefix="/https", tags=["HTTPS"])
 
@@ -62,9 +57,6 @@ class RenewRequest(BaseModel):
     domain: str | None = None
     email: str | None = None
     use_ip: bool = False
-
-
-# ── Shared helpers ─────────────────────────────────────────────────────────
 
 
 def _tls_dir() -> Path:
@@ -137,7 +129,6 @@ def _write_managed_files(key_pem: bytes, cert_pem: bytes, mode: str) -> x509.Cer
         try:
             _atomic_write(_key_path(), key_pem, 0o600)
             _atomic_write(_cert_path(), cert_pem, 0o644)
-            # Re-read the actual active files, not the caller's buffers.
             _validate_pair(_key_path().read_bytes(), _cert_path().read_bytes())
             _write_meta(mode)
             if old_key:
@@ -240,9 +231,6 @@ def _status_payload(mode: str, source: str | None, cert_path: str | None, cert: 
     }
 
 
-# ── Status ─────────────────────────────────────────────────────────────────
-
-
 @router.get("/status", response_model=ResponseModel)
 def tls_status(user: dict = Depends(require_owner)):
     """Report which certificate the panel will use on its next start.
@@ -306,9 +294,6 @@ def tls_status(user: dict = Depends(require_owner)):
     )
 
 
-# ── Upload ─────────────────────────────────────────────────────────────────
-
-
 def _validate_pair(key_bytes: bytes, cert_bytes: bytes) -> tuple[Any, x509.Certificate]:
     if not key_bytes or not cert_bytes:
         raise ValueError("Both the private key and the certificate are required.")
@@ -369,9 +354,6 @@ async def upload_certificate(
         msg=f"Certificate installed. {RESTART_HINT}",
         data={"restart_required": True, "cert_path": str(_cert_path()), "key_path": str(_key_path())},
     )
-
-
-# ── Self-signed ────────────────────────────────────────────────────────────
 
 
 def _certificate_matches_name(cert: x509.Certificate, expected: str) -> bool:
@@ -470,9 +452,6 @@ def generate_self_signed(user: dict = Depends(require_owner)):
             "common_name": common_name,
         },
     )
-
-
-# ── Renew (acme.sh) ────────────────────────────────────────────────────────
 
 
 def _port_80_busy() -> bool:
@@ -574,7 +553,6 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
         )
     except OSError as exc:
         return ResponseModel(success=False, msg=f"Could not run acme.sh: {exc}", data={"restart_required": False})
-    # acme.sh exits 2 when the existing certificate is still fresh ("skip").
     if issue.returncode not in (0, 2):
         reason = _last_output_line(issue)
         log_event(None, "tls.renew", actor=actor, detail=f"issue failed for {domain}: {reason}")
@@ -587,8 +565,6 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             data={"restart_required": False},
         )
 
-    # acme.sh installs into private staging first. It never writes directly to
-    # the active pair; validation and transactional activation happen below.
     _ensure_tls_dir()
     staging = Path(tempfile.mkdtemp(prefix=".acme-candidate-", dir=_tls_dir()))
     staged_key = staging / "privkey.pem"
@@ -671,9 +647,6 @@ def rollback_certificate(user: dict = Depends(require_owner)):
     )
 
 
-# ── Restart ────────────────────────────────────────────────────────────────
-
-
 def _systemd_unit_exists(unit: str = "ovmanager") -> bool:
     systemctl = shutil.which("systemctl")
     if not systemctl:
@@ -746,8 +719,6 @@ def restart_panel(user: dict = Depends(require_owner)):
     )
 
 
-# Beginner-facing HTTPS aliases. Keep the original /tls routes as a stable
-# compatibility surface while new UI and CLI use plain-language names.
 https_router.add_api_route("/status", tls_status, methods=["GET"], response_model=ResponseModel)
 https_router.add_api_route("/existing", upload_certificate, methods=["POST"], response_model=ResponseModel)
 https_router.add_api_route("/temporary", generate_self_signed, methods=["POST"], response_model=ResponseModel)

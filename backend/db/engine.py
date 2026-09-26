@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import threading
 from pathlib import Path
 
@@ -13,17 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent
 
 DATABASE_URL = f"sqlite:///{DATA_DIR / 'ovmanager.db'}"
 
-#: Set while a database restore swaps the file on disk. The ASGI middleware
-#: rejects writes during that window so in-flight sessions cannot commit to
-#: the unlinked old file (split-brain) or race the restored database.
 restore_lock = threading.Event()
 
-# OVManager uses SQLite by default. The panel performs scheduled writes while
-# admins may also be using the UI, so the default SQLite settings can raise
-# transient "database is locked" errors under normal concurrent activity.
-#
-# WAL allows readers and one writer to coexist, and busy_timeout makes SQLite
-# wait briefly for a writer instead of immediately failing the request/job.
 engine = create_engine(
     url=DATABASE_URL,
     connect_args={"check_same_thread": False, "timeout": 30},

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner-only per-node DNS + software-update routes.
 
 The node client seam (``node_client`` in backend.routers.node) is

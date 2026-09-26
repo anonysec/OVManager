@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Panel settings + bot-token storage.
 
 Secrets are stored as written (no at-rest encryption — removed in 1.0.5;
@@ -78,7 +75,6 @@ def get_bot_config(db: Session):
     if not s:
         return {"bot_configured": False, "bot_enabled": False}
     return {
-        # Never return the token value itself to the browser.
         "bot_configured": bool(s.bot_token),
         "bot_enabled": s.bot_enabled,
         "default_days": s.default_days,

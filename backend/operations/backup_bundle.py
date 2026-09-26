@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Versioned, verifiable OVManager backup bundles.
 
 A bundle is a gzip-compressed tar archive with an ``.ovmbak`` suffix.  The
@@ -112,8 +109,6 @@ def create_bundle(
                 archive.add(snapshot, arcname=_DB_MEMBER, recursive=False)
                 archive.add(manifest_path, arcname=_MANIFEST_MEMBER, recursive=False)
                 archive.add(checksums_path, arcname=_CHECKSUM_MEMBER, recursive=False)
-        # Verify the completed artifact before making it visible to retention,
-        # downloads, or remote-copy jobs.
         verify_bundle(tmp)
         os.replace(tmp, final)
         os.chmod(final, 0o600)

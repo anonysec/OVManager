@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Centralized authorization dependencies for the OVManager panel.
 
 Provides reusable FastAPI dependencies for role-based and ownership-based
@@ -44,7 +41,6 @@ def require_ownership(user: dict = Depends(get_current_user), db: Session = Depe
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permission to access this resource",
                 )
-            # If user_name not provided, look up by uuid
             if user_name is None:
                 db_user = crud.get_user_by_uuid(db, uuid)
                 if db_user and db_user.owner != user.get("username"):

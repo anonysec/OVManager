@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """HTTP middlewares: security headers, asset caching, CSRF guard.
 
 Plain ASGI (not Starlette ``BaseHTTPMiddleware``): these only inspect the
@@ -13,14 +10,6 @@ from __future__ import annotations
 import mimetypes
 import os
 
-# ── Security Headers ────────────────────────────────────────────────
-# CSP: strict-by-default. The SPA loads only same-origin scripts/styles;
-# images may come from data: URIs (QR codes, inline flag SVGs). Fonts are
-# self-hosted under /fonts/ (no third-party origin needed anymore). Inline
-# styles are needed for React style props. The single inline boot script in
-# index.html (theme/dir pre-paint, no network access) is allowlisted by hash;
-# everything else must be same-origin (the subscription page's script was
-# extracted to /sub/static/subscription.js).
 CSP_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'sha256-DfXw4dmojGxppeSGQd3gY5VwJccQpen/20YT8l+VMDQ='; "
@@ -35,8 +24,6 @@ CSP_POLICY = (
 )
 
 
-# Header names the middleware owns: any value set further down the stack is
-# replaced rather than duplicated.
 _OVERRIDDEN_HEADERS = frozenset(
     {
         b"x-content-type-options",
@@ -68,9 +55,6 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # During a database restore the file on disk is being swapped: reject
-        # writes (503) so in-flight sessions cannot commit to the unlinked old
-        # file. Reads stay available for the UI's progress polling.
         from backend.data_paths import DATA_DIR
         from backend.db.engine import restore_lock
 
@@ -91,9 +75,6 @@ class SecurityHeadersMiddleware:
             await send({"type": "http.response.body", "body": b'{"success":false,"msg":"' + reason + b'"}'})
             return
 
-        # HSTS is meaningful only on HTTPS. Trust the forwarded proto only when
-        # the deployment explicitly trusts its reverse proxy — and only the
-        # rightmost hop (the one the proxy appended; earlier ones are spoofable).
         from backend.config import config
 
         is_https = scope.get("scheme") == "https"
@@ -123,11 +104,6 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_with_headers)
 
 
-# ── Simple CSRF Protection ────────────────────────────────────────
-# For state-changing endpoints (POST/PUT/DELETE/PATCH) that use cookie auth.
-# Since this panel uses Bearer tokens in Authorization header, CSRF risk is low,
-# but we add a middleware that requires a custom header for non-GET requests
-# to defend against accidental cross-origin form submissions.
 class AssetCacheMiddleware:
     """Immutable caching + pre-compressed responses for build assets.
 
@@ -233,12 +209,10 @@ class CSRFProtectionMiddleware:
             elif key == b"x-requested-with":
                 requested_with = True
 
-        # Bearer-token callers (the SPA, nodes, the bot) are not browser forms.
         if auth.startswith(b"Bearer "):
             await self.app(scope, receive, send)
             return
 
-        # Public endpoints: login and the user-facing subscription routes.
         from backend.urlpath import get_urlpath as _get_urlpath
 
         path = scope.get("path", "")

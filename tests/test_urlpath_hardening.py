@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """URLPATH hardening: route-table-derived reserved prefixes + CLI reset."""
 
 import pytest
@@ -26,11 +23,8 @@ def _owner_headers() -> dict:
 def test_reserved_prefixes_derived_from_routes():
     """The reserved set comes from the live route table, not a hardcoded list."""
     reserved = reserved_prefixes()
-    # Core routes/mounts that must stay reachable
     assert {"api", "assets", "health"} <= reserved
-    # Subscription path (config-driven) is covered too
     assert config.SUBSCRIPTION_PATH.strip("/").lower() in reserved
-    # No path-parameter segments leaked in from the SPA catch-all
     assert not any(seg.startswith("{") for seg in reserved)
 
 
@@ -74,7 +68,6 @@ def test_reset_urlpath_cli_flag():
         assert proc.returncode == 0
         assert "root" in proc.stdout
     finally:
-        # The CLI ran in a separate process; align this process's cache too.
         from backend.urlpath import invalidate_cache
 
         invalidate_cache()
@@ -89,8 +82,6 @@ def test_set_urlpath_rejects_reserved_prefixes():
     for evil in ("api", "assets", "health", "doc", "openapi.json"):
         with pytest.raises(ValueError, match="reserved"):
             set_urlpath(evil)
-    # Case-insensitive guard; the reserved set is derived from live routes.
     assert "api" in reserved_prefixes()
-    # A legal prefix still works (and clears again for other tests).
     assert set_urlpath("mysecret") == "mysecret"
     assert set_urlpath("") == ""

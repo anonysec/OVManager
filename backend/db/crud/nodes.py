@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Node CRUD."""
 
 from __future__ import annotations
@@ -72,8 +69,6 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
     node.port = request.port
     manual = _manual_country(request)
     if manual:
-        # Operator override wins; stale auto coords are cleared so the UI
-        # never mixes a manual country with coordinates from another one.
         node.country_code = manual
         node.latitude = None
         node.longitude = None
@@ -84,7 +79,6 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
     node.status = request.status
     node.use_tls = request.use_tls
 
-    # Only overwrite API key if a non-empty value is provided
     if request.key and request.key.strip():
         node.key = request.key.strip()
 
@@ -100,6 +94,3 @@ def delete_node(db: Session, id: int):
     db.delete(node)
     db.commit()
     return {"detail": "Node deleted successfully"}
-
-
-# settings crud

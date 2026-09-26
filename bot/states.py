@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Conversation-flow helpers: one dict in ``context.user_data["flow"]``.
 
 Replaces ad-hoc ``user_data.get("flow")`` / ``["flow"] = {...}`` /

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for backend/routers/updater.py (owner-only update check + one-click update).
 
 The router is not registered in backend/routers/__init__.py yet (the
@@ -114,9 +111,6 @@ def _fake_github(monkeypatch, *, release=None, tags=None, error=None):
     return calls
 
 
-# ── /status ────────────────────────────────────────────────────────────────
-
-
 def test_status_available_reports_newer_tag(monkeypatch):
     monkeypatch.setenv("OVM_REPO", "upd-owner/upd-repo")
     calls = _fake_github(monkeypatch, release=(200, {"tag_name": "v9.9.9"}), tags=(200, [{"name": "v9.9.9"}]))
@@ -132,7 +126,6 @@ def test_status_available_reports_newer_tag(monkeypatch):
     assert data["update_available"] is True
     assert data["source"] == "github"
     assert isinstance(data["checked_at"], int) and data["checked_at"] > 0
-    # The OVM_REPO override must reach the URL, and the request must be bounded.
     assert "upd-owner/upd-repo" in calls[0]["url"]
     assert calls[0]["timeout"] == 5.0
 
@@ -186,9 +179,6 @@ def test_status_caches_result_for_one_hour(monkeypatch):
     assert first.json()["data"]["checked_at"] == second.json()["data"]["checked_at"]
 
 
-# ── version comparison ─────────────────────────────────────────────────────
-
-
 def test_version_compare_handles_v_prefix_and_components():
     assert updater._is_newer("v2.1.0", "2.0.2") is True
     assert updater._is_newer("2.1.0", "v2.0.2") is True
@@ -198,9 +188,6 @@ def test_version_compare_handles_v_prefix_and_components():
     assert updater._is_newer("v2.0.2-rc1", "2.0.2") is False
     assert updater._is_newer(None, "2.0.2") is False
     assert updater._is_newer("nightly", "2.0.2") is False
-
-
-# ── /run ───────────────────────────────────────────────────────────────────
 
 
 class _PopenRecorder:
@@ -297,9 +284,6 @@ def test_run_refuses_when_installer_missing(monkeypatch, tmp_path):
     assert body["success"] is False
     assert updater._HOST_COMPOSE_CMD in body["msg"]
     assert updater._HOST_RESTART_CMD in body["msg"]
-
-
-# ── access control ─────────────────────────────────────────────────────────
 
 
 def test_update_operation_reports_persisted_phase(monkeypatch, tmp_path):

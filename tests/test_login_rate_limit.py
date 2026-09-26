@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Login rate limiting: 5 bad attempts lock out, isolation, expiry, reset.
 
 The limiter is intentionally in-memory only (see backend/auth/auth.py), so
@@ -59,7 +56,6 @@ def test_lockout_is_per_username():
         for _ in range(5):
             _try_login(client, "lockout_iso_a")
         assert _try_login(client, "lockout_iso_a") == 429
-        # Same IP, different user: unaffected.
         assert _try_login(client, "lockout_iso_b") == 401
 
 
@@ -71,7 +67,6 @@ def test_expired_attempts_stop_counting():
         for _ in range(5):
             _try_login(client, "lockout_exp")
         assert _try_login(client, "lockout_exp") == 429
-        # Backdate the bucket past the window: attempts no longer count.
         old = time.time() - auth._LOCKOUT_SECONDS - 1
         for k in list(auth._login_attempts):
             auth._login_attempts[k] = [old]
@@ -90,5 +85,4 @@ def test_successful_login_clears_bucket():
             data={"username": config.ADMIN_USERNAME, "password": config.ADMIN_PASSWORD},
         )
         assert r.status_code == 200
-        # Counter restarted: next failure is strike one, not a lockout.
         assert _try_login(client, config.ADMIN_USERNAME) == 401

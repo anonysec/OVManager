@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Daily Telegram alerts for users who are expiring or out of traffic.
 
 The panel process sends these messages itself over the Telegram HTTPS API
@@ -34,14 +31,10 @@ from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.logger import logger
 
-#: Telegram sendMessage endpoint; ``{token}`` is filled in locally and never logged.
 TELEGRAM_API_TEMPLATE = "https://api.telegram.org/bot{token}/sendMessage"
-#: How many days ahead an expiry starts being reported.
 EXPIRY_WINDOW_DAYS = 3
-#: Keep the scheduler quiet: a hung Telegram call must not pile up.
 HTTP_TIMEOUT_SECONDS = 10
 
-#: Last calendar day (UTC) a summary was sent. ``None`` means "not yet today".
 _last_sent_day: date | None = None
 
 
@@ -93,7 +86,6 @@ def send_telegram(text: str, db=None) -> bool:
                 timeout=HTTP_TIMEOUT_SECONDS,
             )
         except Exception as exc:
-            # Exception text can embed the URL (and therefore the token).
             logger.error("Telegram sendMessage request failed (%s)", type(exc).__name__)
             return False
 

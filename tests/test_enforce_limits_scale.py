@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Scale guard for the expiry sweep.
 
 300 expired users on 8 nodes is small for production but large enough to
@@ -49,7 +46,6 @@ def _seed(seed_id: str) -> None:
                 )
             )
         expired = dt.date.today() - dt.timedelta(days=1)
-        # Bulk insert: 300 individual flushes would dominate the runtime.
         db.add_all(
             [
                 User(
@@ -94,8 +90,6 @@ def test_enforce_scale_is_bounded_and_queries_nodes_once(monkeypatch):
     seed_id = _uuid.uuid4().hex[:8]
     _seed(seed_id)
 
-    # The fake node call runs in the AnyIO threadpool, so all bookkeeping
-    # must assume concurrent access.
     lock = threading.Lock()
     state = {"in_flight": 0, "max_in_flight": 0, "calls": 0}
     pushed: set[str] = set()

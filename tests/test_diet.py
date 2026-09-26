@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Production diet: the server venv must stay lean.
 
 Background: a 140 MB Playwright install once landed in a production venv.
@@ -17,7 +14,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Modules that must never be imported outside tests/ (heavy or dev-only).
 BANNED_RUNTIME_IMPORTS = {
     "pytest",
     "playwright",
@@ -75,7 +71,6 @@ def test_venv_budget_documents_expectation():
     for dep in declared:
         name = re.split(r"[<>=!;\s\[]", dep, maxsplit=1)[0].replace("-", "_").lower()
         declared_mods.add(name)
-    # Known import-name mismatches (distribution → module).
     aliases = {
         "python_dotenv": {"dotenv"},
         "python_multipart": {"multipart"},
@@ -83,11 +78,6 @@ def test_venv_budget_documents_expectation():
         "pydantic_settings": {"pydantic_settings"},
         "uvicorn": {"uvicorn"},
     }
-    # Required at runtime without a direct import in our code:
-    # - python_multipart: Starlette needs it for UploadFile/Form (tls.py,
-    #   maintenance.py) — the app 500s without it.
-    # - jinja2: imported by fastapi.templating (routers/sub.py).
-    # - python_dotenv: imported by pydantic-settings' env/file sources.
     framework_required = {"python_multipart", "jinja2", "python_dotenv"}
     used = set()
     for base in RUNTIME_DIRS:

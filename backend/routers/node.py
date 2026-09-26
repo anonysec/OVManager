@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import inspect
 from datetime import UTC
 
@@ -69,9 +66,6 @@ async def add_node(
     user: dict = Depends(require_owner),
 ):
 
-    # Names must stay unique: they key per-user traffic baselines and appear
-    # in subscription output, so two "eu-1" nodes would cross-bill and be
-    # indistinguishable.
     if crud.get_node_by_name(db, request.name) is not None:
         return ResponseModel(
             success=False,
@@ -135,7 +129,6 @@ async def update_node(
     user: dict = Depends(require_owner),
 ):
 
-    # Renaming onto another node's name would merge their traffic baselines.
     clash = crud.get_node_by_name(db, request.name)
     if clash is not None and clash.id != node_id:
         return ResponseModel(success=False, msg=f"Another node is already named '{request.name}'.")

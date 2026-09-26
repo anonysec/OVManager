@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Multi-node failure: the panel degrades gracefully with a dead node.
 
 Uses a REAL node row pointed at a closed port (fast refused, no mocks
@@ -101,8 +98,6 @@ def test_list_users_survives_dead_node(dead_node_and_user):
 
 def test_delete_names_unreachable_node_but_succeeds(dead_node_and_user, monkeypatch):
     node_name, _, uuid = dead_node_and_user
-    # Isolate the fan-out from other node rows in the shared dev DB: the test
-    # asserts the exact failed-node list.
     from backend.db.engine import SessionLocal
     from backend.db.models import Node
 

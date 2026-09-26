@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """HTTP client for OVNode API.
 
 Every method follows the same pattern: build URL, send request, check response.
@@ -19,20 +16,10 @@ from backend.logger import logger
 TIMEOUT = 10
 LONG_TIMEOUT = 30
 
-# Cap for single-flight 429 retries (honors the node's Retry-After).
 _MAX_429_WAIT = 60.0
 
-# Flap-aware RPC logging. Poll loops hit every endpoint every few seconds,
-# so a dead node would spam one ERROR per tick. The first failure (or a
-# changed message) logs at warning; identical repeats go to debug; recovery
-# logs once at warning. State transitions stay visible, spam doesn't.
 _rpc_last_error: dict[tuple[str, str], str] = {}
 
-# Nodes whose TLS verification has been bypassed (self-signed fallback).
-# Keyed by node address; value is True once the loud one-time warning has
-# been emitted so poll loops don't spam it every tick. Bounded and FIFO
-# (insertion-ordered dict): the oldest node re-warns once when the cap is
-# hit, exactly the "belt-and-braces" case.
 _tls_fallback_warned: dict[str, bool] = {}
 _TLS_WARNED_CAP = 10_000
 
@@ -71,7 +58,6 @@ def node_client(node, **kw) -> "NodeRequests":
     to NodeRequests (used by tests to stub clients).
     """
     if kw:
-        # Non-default construction (test doubles) skips the cache.
         return NodeRequests(
             address=node.address,
             port=node.port,
@@ -83,12 +69,6 @@ def node_client(node, **kw) -> "NodeRequests":
     return _get_connection(node)
 
 
-# Imported at the bottom, after NodeRequests exists: connection imports this
-# module, so a top-level import would cycle. Importing HERE (not lazily in
-# the function) binds the REAL NodeRequests class into the connection
-# module before any test can monkeypatch backend.node.requests.NodeRequests —
-# a lazy first import during a patch window would snapshot the fake class
-# permanently and poison the cache for every later test (CI failure, #39).
 from backend.node.connection import get_connection as _get_connection  # noqa: E402
 
 
@@ -110,9 +90,6 @@ class NodeRequests:
         self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
         self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
-        # TLS verify policy: with a pinned certificate, HTTPS is verified
-        # against exactly that CA (no unverified fallback — a MITM between
-        # panel and node fails closed). None = default policy.
         self._verify = "pinned"
         if self.scheme == "https" and server_ca:
             from backend.operations.node_pki import ca_file_for
@@ -120,13 +97,7 @@ class NodeRequests:
             node_id = _.get("node_id")
             self._verify = ca_file_for(node_id, server_ca) if node_id is not None else None
             if self._verify is None:
-                # Pin exists but unusable (not a certificate): fail closed
-                # rather than silently sending the key unverified.
                 raise ValueError("Node has a pinned certificate but it is not a PEM certificate")
-        # Set by the TLS policy on each request: True after a VERIFIED
-        # handshake, False once the self-signed fallback has been used.
-        # None until the first request (or for plain HTTP). Lets callers
-        # (node status, UI) surface "unverified TLS" instead of hiding it.
         self.tls_verified: bool | None = None
 
     @property
@@ -155,7 +126,6 @@ class NodeRequests:
         """
         if self.address not in _tls_fallback_warned:
             if len(_tls_fallback_warned) >= _TLS_WARNED_CAP:
-                # Oldest entry re-warns once — keeps the map bounded.
                 _tls_fallback_warned.pop(next(iter(_tls_fallback_warned)))
             _tls_fallback_warned[self.address] = True
             logger.warning(
@@ -199,14 +169,11 @@ class NodeRequests:
         if self.scheme != "https":
             return self._send_plain(method, path, require_success=require_success, **kw)
         if isinstance(self._verify, str) and self._verify != "pinned":
-            # Pinned CA: verify against that exact certificate, no fallback.
             try:
                 result = self._send(method, path, verify=self._verify, require_success=require_success, **kw)
                 self.tls_verified = True
                 return result
             except _req.exceptions.SSLError as e:
-                # The served cert no longer matches the pin: the node was
-                # reinstalled or is being impersonated. Never fall back.
                 logger.error(
                     "Node %s %s: TLS cert does not match the pinned certificate (%s) — refusing to connect. "
                     "Re-add or re-pin the node if the certificate was rotated.",
@@ -273,8 +240,6 @@ class NodeRequests:
             return None
         _rpc_ok(self.address, path)
         return data
-
-    # ── Node management ──────────────────────────────────────────
 
     def check_node(self, **settings) -> bool:
         r = self._request("get", "/sync/status", json=settings)
@@ -360,8 +325,6 @@ class NodeRequests:
         """
         return self._request("post", "/sync/update", timeout=LONG_TIMEOUT, require_success=False)
 
-    # ── User operations ──────────────────────────────────────────
-
     def create_user(self, name: str, max_logins: int = 1, uid: str = None) -> bool:
         data = {"name": name, "max_logins": max_logins}
         if uid:
@@ -377,9 +340,6 @@ class NodeRequests:
         return self._request("put", "/sync/user", json=data, timeout=LONG_TIMEOUT) is not None
 
     def delete_user(self, uid: str) -> bool:
-        # Revoke + CRL regen fork easyrsa twice (up to 120s each on slow
-        # disks) — the 10s default timed out while the node later succeeded,
-        # leaving the DB row present but the cert revoked.
         return self._request("delete", f"/sync/user/{uid}", timeout=120) is not None
 
     def set_user_limit(self, uid: str, max_logins: int) -> bool:
@@ -388,8 +348,6 @@ class NodeRequests:
         )
 
     def disconnect_user(self, uid: str, only_stale: bool = False) -> dict:
-        # First call runs two full diagnostics (journal + mgmt probes).
-        # only_stale cleans dead markers without touching live sessions.
         kw = {"params": {"only_stale": "true"}} if only_stale else {}
         r = self._request("post", f"/sync/user/{uid}/disconnect", timeout=LONG_TIMEOUT, **kw)
         return (r or {}).get("data", {})
@@ -401,8 +359,6 @@ class NodeRequests:
         r = self._request("post", f"/sync/user/{uid}/reset-usage", timeout=LONG_TIMEOUT)
         return bool((r or {}).get("success"))
 
-    # ── OVPN download ────────────────────────────────────────────
-
     def _get_raw(self, path: str, **kw) -> bytes | None:
         """GET raw bytes with the same TLS policy as _request.
 
@@ -411,7 +367,6 @@ class NodeRequests:
         """
         url = self._url(path)
         headers = kw.pop("headers", self.headers)
-        # Plain-HTTP nodes: no TLS policy involved.
         if self.scheme != "https":
             try:
                 r = _req.get(url, headers=headers, **kw)
@@ -419,7 +374,6 @@ class NodeRequests:
                 logger.error("Node %s %s: %s", self.address, path, e)
                 return None
         elif isinstance(self._verify, str) and self._verify != "pinned":
-            # Pinned CA: verify against that exact certificate, no fallback.
             kw.setdefault("verify", self._verify)
             try:
                 r = _req.get(url, headers=headers, **kw)
@@ -474,8 +428,6 @@ class NodeRequests:
             media_type="application/x-openvpn-profile",
             headers={"Content-Disposition": f'attachment; filename="{uid}.ovpn"'},
         )
-
-    # ── Sessions & usage ─────────────────────────────────────────
 
     def get_sessions(self, common_name: str = None, hours: int = 8) -> dict:
         params = {"hours": hours}

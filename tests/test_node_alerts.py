@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for transition-based node-down Telegram alerts."""
 
 from __future__ import annotations
@@ -46,7 +43,6 @@ def test_down_transition_alerts_once(_clean_state):
     assert node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0) == 0
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 300) == 1
     assert _clean_state == ["🔴 Node de-1 is unreachable."]
-    # Still down on later ticks: quiet.
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 600) == 0
     assert len(_clean_state) == 1
 
@@ -56,7 +52,6 @@ def test_recovery_alerts_after_announced_outage(_clean_state):
     node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 300)
     assert node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0 + 900) == 1
     assert _clean_state[-1] == "🟢 Node de-1 is back online."
-    # A second outage after the cooldown pages again (fresh outage).
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 2400) == 1
     assert node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0 + 2700) == 1
     assert len(_clean_state) == 4
@@ -66,10 +61,8 @@ def test_flapping_within_cooldown_is_suppressed(_clean_state):
     node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0)
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 300) == 1
     assert node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0 + 600) == 1  # recovery
-    # Down again within the 30-min cooldown: suppressed.
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 900) == 0
     assert len(_clean_state) == 2
-    # And after the cooldown a fresh outage pages again.
     assert node_alerts.check_node_alerts([_row(1, "de-1", True)], now=T0 + 1200) == 0
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 2100) == 1
     assert len(_clean_state) == 3
@@ -83,7 +76,6 @@ def test_failed_send_is_retried_next_tick(_clean_state, monkeypatch):
         return flaky.pop(0)
 
     monkeypatch.setattr(node_alerts, "send_telegram", flaky_send)
-    # First attempt fails → not marked as announced → retried next tick.
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 300) == 0
     assert node_alerts._alerted_down == set()
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 600) == 1
@@ -95,7 +87,6 @@ def test_notify_off_updates_state_silently(_clean_state):
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 300, notify=False) == 0
     assert node_alerts._node_state == {1: False}
     assert node_alerts._alerted_down == set()
-    # Re-enabled later while still down: the ongoing outage is announced once.
     assert node_alerts.check_node_alerts([_row(1, "de-1", False)], now=T0 + 600) == 1
 
 

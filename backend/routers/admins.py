@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import time
 
 from fastapi import APIRouter, Depends
@@ -52,7 +49,6 @@ async def get_my_defaults(db: Session = Depends(get_db), user: dict = Depends(ge
 
 @router.get("/", response_model=ResponseModel)
 async def get_all_admins(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    # Single GROUP BY query instead of O(n×m) Python loop
     counts = dict(db.query(_User.owner, func.count(_User.id)).group_by(_User.owner).all())
     result = crud.get_all_admins(db)
     admin_list = []
@@ -107,7 +103,6 @@ async def update_admin(
         existing_admin.telegram_id = admin.telegram_id
     elif "telegram_id" in admin.model_dump(exclude_unset=True) and admin.telegram_id is None:
         existing_admin.telegram_id = None
-    # Per-admin new-user defaults: an explicit null clears the override.
     provided = admin.model_dump(exclude_unset=True)
     for attr in ("default_days", "default_traffic_gb", "default_max_users"):
         if attr in provided:
@@ -121,8 +116,6 @@ async def update_admin(
     db.commit()
     db.refresh(existing_admin)
 
-    # A password change must end the admin's live sessions: a stolen bearer
-    # token would otherwise keep working until idle expiry.
     if admin.password:
         from backend.auth.sessions import revoke_user_sessions
 
@@ -150,8 +143,6 @@ async def delete_admin(
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
-    # Kill the admin's live sessions immediately — deleting the row alone
-    # would leave their bearer tokens valid until idle expiry.
     from backend.auth.sessions import revoke_user_sessions
 
     revoke_user_sessions(db, username)
@@ -171,8 +162,6 @@ async def set_admin_status(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
-    # The owner lives in .env, not the admins table, and must never be
-    # lockable through this surface.
     if username == config.ADMIN_USERNAME:
         return ResponseModel(success=False, msg="The owner account status cannot be changed", data=None)
 
@@ -184,8 +173,6 @@ async def set_admin_status(
     db.commit()
     db.refresh(existing_admin)
 
-    # Disabling must kill every live bearer token at once; enabling does not
-    # need to because disabled admins cannot authenticate in the first place.
     revoked = 0
     if existing_admin.disabled:
         from backend.auth.sessions import revoke_user_sessions
@@ -217,7 +204,6 @@ async def get_admin_sessions(
 
     now = time.time()
     sessions = db.query(AuthSession).filter(AuthSession.username == username).order_by(AuthSession.id).all()
-    # Never expose token_hash: the response is id + metadata only.
     data = [
         {
             "id": session.id,

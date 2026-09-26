@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for the scheduled automatic database backup (v7 schema + scheduler).
 
 Every test/fixture is named ``ab_*`` so this module cannot collide with another
@@ -26,9 +23,6 @@ from backend.db.migrations import SCHEMA_VERSION
 from backend.db.models import Settings
 
 AUTO_BACKUP_COLUMNS = {"auto_backup_enabled", "auto_backup_time", "auto_backup_keep"}
-
-
-# ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -116,9 +110,6 @@ class ab_FakeScheduler:
         self.removed.append(job_id)
 
 
-# ── Migration v7 ─────────────────────────────────────────────────────────────
-
-
 def test_ab_migration_adds_auto_backup_columns(ab_session):
     assert migrations.migrate(ab_session) == SCHEMA_VERSION
     assert SCHEMA_VERSION >= 7
@@ -150,13 +141,8 @@ def test_ab_migration_v7_upgrades_database_stamped_at_v6(ab_session):
     assert migrations.verify_schema(ab_session) == []
 
 
-# ── Settings API roundtrip ───────────────────────────────────────────────────
-
-
 def test_ab_settings_defaults_roundtrip_and_validation(ab_client):
     csrf = {"X-Requested-With": "XMLHttpRequest"}
-    # Start from the documented defaults so the assertions are deterministic
-    # even if a previous run left the shared row modified.
     res = ab_client.put(
         "/api/server/settings/bot",
         json={"auto_backup_enabled": False, "auto_backup_time": "03:30", "auto_backup_keep": 50},
@@ -169,7 +155,6 @@ def test_ab_settings_defaults_roundtrip_and_validation(ab_client):
     assert data["auto_backup_time"] == "03:30"
     assert data["auto_backup_keep"] == 50
 
-    # Valid update is persisted and echoed back.
     res = ab_client.put(
         "/api/server/settings/bot",
         json={"auto_backup_enabled": True, "auto_backup_time": "04:45", "auto_backup_keep": 12},
@@ -187,7 +172,6 @@ def test_ab_settings_defaults_roundtrip_and_validation(ab_client):
     assert data["auto_backup_time"] == "04:45"
     assert data["auto_backup_keep"] == 12
 
-    # Invalid values are rejected with success=false and change nothing.
     for bad_time in ("24:00", "3:30", "03:60", "abc", "03:30:00", ""):
         res = ab_client.put("/api/server/settings/bot", json={"auto_backup_time": bad_time}, headers=csrf)
         assert res.status_code == 200, res.text
@@ -204,9 +188,6 @@ def test_ab_settings_defaults_roundtrip_and_validation(ab_client):
     assert data["auto_backup_enabled"] is True
     assert data["auto_backup_time"] == "04:45"
     assert data["auto_backup_keep"] == 12
-
-
-# ── Scheduled job ────────────────────────────────────────────────────────────
 
 
 def test_ab_job_does_nothing_when_disabled(monkeypatch):
@@ -257,7 +238,6 @@ def test_ab_job_creates_one_backup_and_audit_row_when_enabled(monkeypatch):
         assert row[1] == "auto"
         assert "ab_fake_backup.db" in row[2]
     finally:
-        # Keep the shared audit log clean: drop only rows this test created.
         db = SessionLocal()
         try:
             db.execute(text("DELETE FROM audit_logs WHERE actor = 'auto' AND id > :i"), {"i": before_id})
@@ -293,9 +273,6 @@ def test_ab_job_never_raises_when_backup_fails(monkeypatch):
             db.commit()
         finally:
             db.close()
-
-
-# ── Rescheduling ─────────────────────────────────────────────────────────────
 
 
 def test_ab_reschedule_registers_and_removes_job(monkeypatch):

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Backward-compatible re-exports for node operations.
 
 Split into: node/ops.py, node/sync.py, node/diagnostics.py.

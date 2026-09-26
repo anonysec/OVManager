@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Client-IP resolution behind a trusted reverse proxy.
 
 The regression this guards against: trusting the *leftmost* X-Forwarded-For

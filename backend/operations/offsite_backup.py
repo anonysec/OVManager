@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Offsite copy of the newest scheduled backup.
 
 After each scheduled backup the panel can push the fresh ``.db`` file to an
@@ -29,11 +26,8 @@ from shutil import which
 
 from backend.logger import logger
 
-#: scp/rsync style target: optional user, host (letters/digits/dots/dashes),
-#: then an absolute POSIX path. No shell metacharacters survive this pattern.
 TARGET_RE = re.compile(r"^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]+):(/[\w./-]+)$")
 
-#: One transfer attempt must finish within this many seconds.
 PUSH_TIMEOUT_SECONDS = 300
 
 _SSH_OPTS = (
@@ -113,8 +107,6 @@ def push_offsite(backup_path: Path, target: str) -> bool:
         if result.returncode == 0:
             logger.info("Offsite backup pushed via %s to %s", tool, host)
             return True
-        # stderr may name the remote host — operator data, safe to log;
-        # never log full argv (it embeds nothing secret, but stay terse).
         detail = (result.stderr or "").strip().splitlines()
         last_error = f"{tool} exit {result.returncode}: {detail[0][:200]}" if detail else f"{tool} exit {result.returncode}"
         logger.warning("Offsite backup via %s failed: %s", tool, last_error)

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for panel-managed TLS certificates (backend/routers/tls.py).
 
 The router is not yet registered in backend/routers/__init__.py (owned by the
@@ -129,9 +126,6 @@ def _upload(client: TestClient, key_pem: bytes, cert_pem: bytes, headers: dict |
     )
 
 
-# ── Status ─────────────────────────────────────────────────────────────────
-
-
 def test_https_namespace_is_primary_and_tls_remains_compatible(client):
     https = client.get("/api/https/status", headers=_owner_headers())
     legacy = client.get("/api/tls/status", headers=_owner_headers())
@@ -153,9 +147,6 @@ def test_tls_status_without_config_is_disabled(client):
         assert data["subject"] is None
         assert data["issued_by"] is None
         assert data["restart_required"] is False
-
-
-# ── Upload ─────────────────────────────────────────────────────────────────
 
 
 def test_tls_upload_rejects_mismatched_pair(client, _managed_tls_dir):
@@ -244,9 +235,6 @@ def test_tls_rollback_restores_retained_pair(client, _managed_tls_dir):
     assert (_managed_tls_dir / "fullchain.pem").read_bytes() == old_cert
 
 
-# ── Self-signed ────────────────────────────────────────────────────────────
-
-
 def test_tls_self_signed_generates_readable_certificate(client, _managed_tls_dir):
     resp = client.post("/api/tls/self-signed", headers=_owner_headers())
     assert resp.status_code == 200
@@ -266,9 +254,6 @@ def test_tls_self_signed_generates_readable_certificate(client, _managed_tls_dir
     status = client.get("/api/tls/status", headers=_owner_headers()).json()["data"]
     assert status["mode"] == "managed"
     assert status["issued_by"] == "self-signed"
-
-
-# ── Renew (no acme.sh) ─────────────────────────────────────────────────────
 
 
 def test_tls_renew_without_acme_returns_guidance(client, monkeypatch, tmp_path, _managed_tls_dir):
@@ -291,7 +276,6 @@ def test_tls_renew_without_acme_returns_guidance(client, monkeypatch, tmp_path, 
     assert "get.acme.sh" in body["msg"]
     assert not (_managed_tls_dir / "privkey.pem").exists()
 
-    # The IP option hits the same guidance after public-address eligibility.
     monkeypatch.setattr(tls_mod, "_detect_primary_ip", lambda: "8.8.8.8")
     resp = client.post("/api/tls/renew", json={"use_ip": True}, headers=_owner_headers())
     assert resp.json()["success"] is False
@@ -338,9 +322,6 @@ def test_tls_renew_rejects_invalid_domain(client, monkeypatch, tmp_path, _manage
     assert resp.json()["success"] is False
 
 
-# ── Owner-only access ──────────────────────────────────────────────────────
-
-
 def test_tls_endpoints_require_owner(client, tmp_path):
     _ensure_admin("tls_admin_gate")
     admin = _token("tls_admin_gate", "admin")
@@ -354,8 +335,6 @@ def test_tls_endpoints_require_owner(client, tmp_path):
         ("post", "/api/tls/restart", {}),
     ]
     for method, path, kwargs in calls:
-        # The CSRF middleware rejects bearer-less POSTs before auth runs, so
-        # send the header real browser clients would send to reach 401.
         anon_headers = {"X-Requested-With": "XMLHttpRequest"}
         anon = getattr(client, method)(path, headers=anon_headers, **kwargs)
         assert anon.status_code == 401, f"{path} anonymous got {anon.status_code}"

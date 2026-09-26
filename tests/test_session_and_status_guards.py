@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Step-1 reliability guards: session revocation and activation rules."""
 
 import datetime as dt

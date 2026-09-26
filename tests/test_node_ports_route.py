@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner-only per-node extra VPN ports route.
 
 The node client seam (``node_client`` in backend.routers.node) is
@@ -280,9 +277,6 @@ def test_ports_route_404_without_node():
     assert resp.status_code == 404
 
 
-# ── client payloads ──────────────────────────────────────────────────
-
-
 def test_update_config_payload_includes_extra_ports_only_when_provided(monkeypatch):
     seen = {}
 
@@ -299,7 +293,6 @@ def test_update_config_payload_includes_extra_ports_only_when_provided(monkeypat
     assert nr.update_config(tunnel_address="vpn.example.com", protocol="tcp", ovpn_port=1194, extra_ports="443,8443") is True
     assert seen["json"]["extra_ports"] == "443,8443"
 
-    # Empty string is a real value (clear), not "omitted".
     assert nr.update_config(tunnel_address="vpn.example.com", protocol="tcp", ovpn_port=1194, extra_ports="") is True
     assert seen["json"]["extra_ports"] == ""
     assert seen["path"] == "/sync/config"

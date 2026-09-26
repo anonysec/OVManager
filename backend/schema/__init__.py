@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Schema package: one module for request + response models.
 
 ``from backend.schema import CreateUser, ResponseModel`` replaces the old

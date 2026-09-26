@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +14,6 @@ from backend.logger import logger
 from backend.node.requests import node_client
 from backend.operations.node_alerts import check_node_alerts
 
-# Set once the metrics tables are confirmed present, so the periodic collector
-# and every graph query stop re-running CREATE TABLE IF NOT EXISTS.
 _tables_ready: bool = False
 
 
@@ -46,8 +41,6 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     start = time.perf_counter()
     try:
-        # One client per concurrent threadpool call: a shared NodeRequests
-        # instance races on its per-request tls_verified state.
         info, sessions = await asyncio.gather(
             run_in_threadpool(node_client(node).get_node_info),
             run_in_threadpool(node_client(node).get_sessions, None, 8),
@@ -73,8 +66,6 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
         }
         return row, sessions
     except Exception as e:
-        # Debug: per-snapshot RPC failures are already flap-logged once by
-        # the RPC layer; warning here would repeat them every 5 minutes.
         logger.debug("metrics: node snapshot failed for %s: %s", node.name, e)
         row = {
             "node_id": node.id,
@@ -106,8 +97,6 @@ async def collect_metrics() -> None:
         clean = [p for p in probed if isinstance(p, tuple)]
         clean_rows = [row for row, _sessions in clean]
 
-        # Transition-based node-down alerts (one Telegram message per outage,
-        # one on recovery; in-memory state, cooldown against flapping).
         try:
             settings = crud.get_settings(db)
             sent = await run_in_threadpool(
@@ -126,17 +115,10 @@ async def collect_metrics() -> None:
         stale_markers = sum(int(r.get("stale_markers") or 0) for r in clean_rows)
         offline_nodes = sum(1 for r in clean_rows if not r.get("reachable"))
         online_users = active_connections
-        # Historical `online_users` is approximated by active connection count;
-        # current online users still comes from /users which computes live counts.
         active_users = sum(1 for u in users if bool(u.is_active))
         inactive_users = len(users) - active_users
         total_used = sum(float(u.used or 0) for u in users)
 
-        # Update last_online for users with active connections.
-        # This was previously done in the GET /users handler (a side effect).
-        # Moved here to the background job where writes belong.
-        # Counts are derived from this tick's sessions payloads — no second
-        # fan-out to every node (get_active_connection_counts re-polled them).
         try:
             id_to_name = dict(crud.get_user_id_name_pairs(db))
             active_counts: dict[str, int] = {}
@@ -203,7 +185,6 @@ async def collect_metrics() -> None:
             },
         )
 
-        # Keep roughly 30 days at 5-minute interval.
         cutoff = now - 30 * 24 * 3600
         _SNAPSHOT_TABLES = ("node_health_snapshots", "traffic_snapshots", "security_snapshots")
         for table in _SNAPSHOT_TABLES:

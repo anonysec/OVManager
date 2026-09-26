@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner-only settings overview: bot state and new-user defaults.
 
 Read-only by design — the panel owns the values; the bot only surfaces what

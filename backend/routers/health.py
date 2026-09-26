@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Read-only health surface for the panel.
 
 Two views:
@@ -42,8 +39,6 @@ router = APIRouter(prefix="/health", tags=["Health"])
 DB_PATH = DATA_DIR / "ovmanager.db"
 BACKUP_DIR = DATA_DIR / "backups"
 
-#: Imported once at panel start, so this works as a lightweight process
-#: uptime clock without needing a new dependency or scheduler hook.
 _STARTED_AT = time.time()
 
 _SEVEN_DAYS = 7 * 24 * 60 * 60
@@ -140,9 +135,6 @@ def _check_nodes(db: Session) -> dict:
             {
                 "name": node.name,
                 "reachable": is_up,
-                # The live snapshot only caches reachability; latency and
-                # version would require a per-node fan-out, which this
-                # endpoint deliberately avoids.
                 "latency_ms": None,
                 "version": None,
             }
@@ -339,7 +331,6 @@ def _check_backups(db: Session) -> dict:
     )
 
 
-#: Order is part of the API contract (the frontend renders this list as-is).
 _CHECK_BUILDERS = (
     ("panel", _check_panel),
     ("database", _check_database),

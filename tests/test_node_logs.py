@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Node log viewer plumbing: client validation + proxy route passthrough."""
 
 import uuid as _uuid

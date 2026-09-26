@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Background sync operations — traffic collection, limit pushing, cleanup.
 
 These functions are called by the APScheduler background jobs and by
@@ -24,11 +21,6 @@ async def get_users_used_traffic(node: Node, db: Session) -> dict:
     return await run_in_threadpool(nr.get_usage) or {}
 
 
-# Last successfully pushed (node_id, user_id) -> max_logins. The 30-minute
-# sweep then skips pairs that already hold the value instead of pushing
-# nodes×users limits every tick. Failures stay dirty and are retried; only
-# successful pushes update the cache. Single process + one scheduler slot,
-# so no locking is needed.
 _last_pushed_limits: dict[tuple[int, int], int] = {}
 
 
@@ -86,7 +78,6 @@ async def sync_all_user_limits(db: Session) -> dict:
     ]
     skipped = len(desired) - len(todo)
 
-    # Group changed pairs per node, then chunk at the node's bulk cap.
     by_node: dict[int, tuple[object, list[tuple[object, object, int]]]] = {}
     for n, u in todo:
         by_node.setdefault(n.id, (n, []))[1].append((n, u, desired[(n.id, u.id)]))
@@ -110,8 +101,6 @@ async def sync_all_user_limits(db: Session) -> dict:
         else:
             results.append(item)
 
-    # Refresh the cache from fully-successful batches only; failures stay
-    # dirty for the next sweep. Pairs absent from desired drop out.
     kept = {pair: val for pair, val in _last_pushed_limits.items() if pair in desired}
     applied_total = 0
     for (n, pairs), item in zip(jobs, raw, strict=True):
@@ -150,7 +139,6 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
         stale_cns = sorted({m.get("common_name") for m in (data.get("stale_markers") or []) if m.get("common_name")})
         removed = []
         for cn in stale_cns:
-            # Dead markers beside a live session: selective cleanup only.
             res = req.disconnect_user(cn, only_stale=(cn in live_cns))
             if isinstance(res, dict):
                 removed.extend(res.get("removed_markers") or [])

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """install.sh and lib/common.sh must carry identical copies of shared helpers.
 
 install.sh runs standalone (curl-pipe installs), so it duplicates the

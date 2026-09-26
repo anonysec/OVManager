@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """User tags: free-form labels for organizing customers (pure bookkeeping)."""
 
 import uuid as uuidlib
@@ -68,13 +65,10 @@ def test_update_tag_set_and_clear():
         user = crud.create_user(db, request, owner="admin")
         assert user.tag == "vip"
 
-        # Explicit set
         crud.update_user(db, user.uuid, UpdateUser(name=name, tag="reseller-a"))
         assert db.query(crud.User).filter(crud.User.uuid == user.uuid).first().tag == "reseller-a"
-        # Empty string clears
         crud.update_user(db, user.uuid, UpdateUser(name=name, tag=""))
         assert db.query(crud.User).filter(crud.User.uuid == user.uuid).first().tag is None
-        # Omitted tag leaves the value alone
         crud.update_user(db, user.uuid, UpdateUser(name=name, tag=None))
         assert db.query(crud.User).filter(crud.User.uuid == user.uuid).first().tag is None
     finally:
@@ -88,8 +82,6 @@ def test_tag_cannot_be_updated_without_ownership():
 
     r = _create("tag-owner-admin-1", tag="mine")
     uuid = r.json()["data"]["uuid"]
-    # The row belongs to the owner, so an admin session with the same
-    # username works; a different admin must be rejected by access control.
     db = SessionLocal()
     try:
         token = create_session(db, f"{_owner()}-other", "admin", user_agent="pytest", ip="127.0.0.1")

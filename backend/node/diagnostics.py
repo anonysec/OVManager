@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Session diagnostics and login health monitoring.
 
 Provides detailed visibility into user sessions, active connections,
@@ -27,8 +24,6 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     nodes = crud.get_active_nodes(db)
     counts: dict[str, int] = {}
 
-    # Build id→username map for fast lookup (lightweight pairs query —
-    # only (id, name) is needed to translate numeric CNs).
     id_to_name = dict(crud.get_user_id_name_pairs(db))
 
     def work(node):
@@ -44,7 +39,6 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
             continue
         for sess in data.get("live_sessions") or []:
             cn = sess.get("common_name", "")
-            # CN is the numeric user ID — direct map to username
             username = id_to_name.get(cn, cn)
             counts[username] = counts.get(username, 0) + 1
 
@@ -131,15 +125,10 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
     users = crud.get_all_users(db)
     nodes = crud.get_active_nodes(db)
 
-    # Build id→username map (CN is numeric ID)
     id_to_name = {str(u.id): u.name for u in users}
 
-    # Active counts are derived from this call's own sessions fan-out below —
-    # no second poll of every node (get_active_connection_counts re-fetched
-    # the same live_sessions; hours only affects journal auth errors).
     active_counts: dict[str, int] = {}
 
-    # Collect per-user stale and auth data
     stale_counts: dict[str, int] = {}
     auth_counts: dict[str, int] = {}
     node_rows = []
@@ -158,7 +147,6 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
             node_rows.append({"node": node_data.name, "reachable": False})
             continue
 
-        # Map CNs (numeric IDs) back to usernames
         for sess in data.get("live_sessions") or []:
             cn = sess.get("common_name", "")
             username = id_to_name.get(cn, cn)
@@ -170,8 +158,6 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
             username = id_to_name.get(cn, cn)
             stale_counts[username] = stale_counts.get(username, 0) + 1
 
-        # Auth errors from journal — map CNs to usernames like the other
-        # counters, or the per-user "auth_events" column is always 0.
         for cn, count in (data.get("auth_errors_by_cn") or {}).items():
             if isinstance(count, int):
                 username = id_to_name.get(str(cn), str(cn))
@@ -246,8 +232,6 @@ async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
     health = await login_health_summary(db, hours=hours)
     health_row = next((u for u in health.get("users", []) if u.get("name") == name), None)
 
-    # Retired: global_mlogin_sessions was never written to, so the registry
-    # read always returned []. Kept as an empty list for response shape.
     registry: list = []
 
     used = user.used or 0

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """TLS pinning for node connections (PasarGuard's server_ca idea).
 
 The panel stores the node's certificate (PEM) the first time it sees it

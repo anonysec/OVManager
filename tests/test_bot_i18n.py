@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from bot.formatters import expiry_label, fmt_bytes, status_label, status_rank
 from bot.i18n import LOCALES, _catalog, has_lang, lang_of, menu_action, normalize, set_lang, t
 

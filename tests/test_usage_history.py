@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Per-user daily traffic history: record/upsert, series, top, prune."""
 
 import datetime as dt
@@ -102,7 +99,6 @@ def test_top_users_sums_and_orders():
         a = next(t for t in top if t["name"].startswith("tt_top_a"))
         assert a["bytes"] == 100
         assert top.index(b) < top.index(a), "ordered desc"
-        # owner scoping excludes others' users
         assert uh.top_users(db, days=7, limit=5, owner="nobody") == []
     finally:
         for uid in ids:

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """The self-signed TLS fallback writes one audit event per node address.
 
 ``_note_tls_fallback()`` warns loudly once per address; on that same first
@@ -18,8 +15,6 @@ from backend.operations.audit import recent_events
 
 
 def _node(host: str) -> NodeRequests:
-    # Unique address per run so the one-time guard starts clean and rows
-    # from earlier runs can never be mistaken for this run's.
     address = f"tlsa_{uuid.uuid4().hex[:8]}.{host}"
     return NodeRequests(address=address, port=2083, api_key="tlsa-key", use_tls=True)
 

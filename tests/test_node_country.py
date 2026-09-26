@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Node country: manual override wins, auto-lookup is validated, and the
 frontend never invents a country from the node name.
 
@@ -43,9 +40,6 @@ def _db():
     return SessionLocal()
 
 
-# --- geolocate payload validation (no network; httpx2 is stubbed) ---
-
-
 def _fake_get(payload):
     def _get(*args, **kwargs):
         class _Resp:
@@ -81,9 +75,6 @@ def test_geolocate_accepts_good_payload(monkeypatch):
     ],
 )
 def test_geolocate_rejects_junk_payloads(monkeypatch, ip_suffix, payload):
-    # Deterministic per-case IP: the module caches by host for an hour, so a
-    # hash()-derived address could collide with the good-payload test's IP
-    # under a different PYTHONHASHSEED and serve the cached result.
     geo_mod._geo_cache.clear()
     monkeypatch.setattr(geo_mod.httpx2, "get", _fake_get(payload))
     assert geo_mod.geolocate(f"203.0.113.{ip_suffix}") is None
@@ -99,9 +90,6 @@ def test_geolocate_retries_then_gives_up(monkeypatch):
     monkeypatch.setattr(geo_mod.httpx2, "get", _flaky)
     assert geo_mod.geolocate("203.0.113.10") is None
     assert len(calls) == 2  # initial + one retry, failures never cached
-
-
-# --- crud precedence: manual > auto > keep ---
 
 
 def test_create_node_manual_country_wins_over_geo():
@@ -192,15 +180,11 @@ def test_update_node_rejects_bad_country_code():
         )
 
 
-# --- API: PUT /nodes/{id} persists the override (handler level) ---
-
-
 def test_api_update_node_manual_country_wins(monkeypatch):
     import backend.node.ops as ops_mod
     from backend.auth.sessions import create_session
     from backend.config import config
 
-    # Auto-lookup claims FR; the form says DE — DE must win, no node contact.
     monkeypatch.setattr(ops_mod, "geolocate", lambda address: {"country_code": "FR", "latitude": 1.0, "longitude": 2.0})
     db = _db()
     try:

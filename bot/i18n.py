@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Bot translations — same four languages as the panel (en/fa/ru/cn).
 
 Language is never taken from the Telegram app. The operator picks it from
@@ -26,7 +23,6 @@ LANG_NAMES = {
     "cn": "中文",
 }
 
-# First-run prompt is not locale-specific — no language has been chosen yet.
 LANG_PROMPT = "<b>Language</b> · زبان · Язык · 语言"
 
 _MENU_KEYS = {

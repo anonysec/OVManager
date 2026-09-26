@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Security summary: policy rejects must not be presented as auth failures.
 
 The owner saw a scary "13 auth errors" that were really a disabled test user
@@ -165,7 +162,6 @@ def test_tls_failure_is_the_only_danger_bucket(monkeypatch):
     ev = data["events"][0]
     assert ev["severity"] == "failure"
     assert ev["peer"] == "9.9.9.9:1194"
-    # Two hours old: not being retried right now.
     assert ev["ongoing"] is False
     assert data["ongoing_users"] == []
 
@@ -177,7 +173,6 @@ def test_legacy_node_without_events_is_classified_by_the_panel(monkeypatch):
     _patch_node(
         monkeypatch,
         {
-            # What the old node reports: 143 rejects, all counted as errors.
             "auth_errors": 143,
             "rejects": 143,
             "stale_marker_count": 0,
@@ -234,7 +229,6 @@ def test_legacy_event_marks_unknown_identity(monkeypatch):
             "rejects": 1,
             "stale_marker_count": 0,
             "live_count": 0,
-            # u1 was my deleted integration-test identity, not a panel user.
             "last_error": {"u1": "CN=u1 ip=9.9.9.9:1194 limit=1 active=2; REJECT"},
         },
         node.id,
@@ -415,8 +409,6 @@ def test_tls_event_without_identity_shows_its_peer(monkeypatch):
     ev = resp.json()["data"]["events"][0]
     assert ev["user"] == "185.200.116.40:45929"
     assert ev["peer"] == "185.200.116.40:45929"
-    # No identity to label: null, not "no such user" (that is for a CN the
-    # panel used to know).
     assert ev["user_known"] is None
 
 
@@ -435,7 +427,6 @@ def test_node_ongoing_flag_wins_over_the_panel_clock(monkeypatch):
             "live_count": 0,
             "events": [
                 {
-                    # Two hours old, so the panel rule would say "not ongoing".
                     "ts": time.time() - 7200,
                     "cn": "",
                     "action": "tls",

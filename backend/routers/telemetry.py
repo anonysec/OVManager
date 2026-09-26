@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Telemetry routers: activity feed, metrics, notifications, live SSE stream.
 
 Four single-endpoint routers live here instead of four files: each is one
@@ -37,8 +34,6 @@ async def get_activity(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    # Owner sees everything; admins only their own actions (events name-drop
-    # targets that may belong to other tenants).
     actor = None if user.get("type") == "owner" else user.get("username")
     return ResponseModel(success=True, msg="Activity retrieved", data=recent_events(db, limit=limit, actor=actor, action=action))
 
@@ -67,8 +62,6 @@ async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_
     for n in nodes:
         if not n.status:
             items.append({"level": "danger", "type": "node_offline", "title": f"Node {n.name} is offline", "target": n.name})
-    # Do not notify for inactive users; that is expected administrative state.
-    # Full/max-login and stale-login issues are surfaced in Max-login Health.
     return ResponseModel(success=True, msg="Notifications", data=items[:100])
 
 
@@ -102,8 +95,6 @@ async def live_stream(user: dict = Depends(get_current_user)):
 
     async def generate():
         try:
-            # Immediate ready frame so clients can distinguish "connected"
-            # from "stuck behind a buffering proxy".
             yield _format_event("ready", {"ts": time.time()})
             while True:
                 try:

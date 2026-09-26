@@ -1,7 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
-
 import hmac
 import os
 import time as _time
@@ -33,10 +29,6 @@ from backend.schema import CreateUser, ResponseModel, StatusToggle, UpdateUser, 
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-# ── Undo-delete buffer ────────────────────────────────────────────
-# Snapshot recently deleted users in-memory (bounded + TTL) so the UI can
-# offer "Undo" for a few seconds after a delete. Restoring re-inserts the
-# row with its original UUID; node-side certs regenerate on next download.
 
 _DELETED_TTL = 120  # seconds
 _DELETED_MAX = 50
@@ -61,7 +53,6 @@ def _snapshot_user(u: User) -> dict:
 def _remember_deleted(u: User) -> None:
     now = _time.monotonic()
     _deleted_users[u.uuid] = (now, _snapshot_user(u))
-    # Evict expired + overflow
     for k in [k for k, (ts, _) in _deleted_users.items() if now - ts > _DELETED_TTL]:
         _deleted_users.pop(k, None)
     while len(_deleted_users) > _DELETED_MAX:
@@ -84,10 +75,6 @@ async def get_next_username(
     if not prefix:
         return ResponseModel(success=False, msg="No username prefix configured for this admin")
 
-    # Fetch only names that start with the prefix and end with digits.
-    # Limit to 100_000 to bound memory; in practice admins have far fewer users.
-    # Escape LIKE wildcards: a prefix like "50%" must be a literal prefix, not
-    # "every username starting with 50".
     escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     existing = db.query(User.name).filter(User.name.like(f"{escaped}%", escape="\\")).limit(100_000).all()
     taken = {n[0] for n in existing}
@@ -146,20 +133,12 @@ async def get_all_users(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    # The panel filters, sorts and paginates client-side, so the default is
-    # the full set. Passing page/page_size/search opts into DB-level
-    # filtering for API consumers (notably the Telegram bot, which used to
-    # pull the whole table on every keystroke).
     paginate = page is not None or page_size is not None
     server_filter = paginate or bool(search and search.strip())
     page = page or 1
     page_size = page_size or 100
     needle = search.strip() if search and search.strip() else None
 
-    # Connection counts come from the live collector's in-memory cache, so a
-    # page load never fans out to every node (a dead node used to stall this
-    # endpoint for up to 30s). Only on cold start — before the collector's
-    # first poll completes — do we fall back to querying nodes directly.
     if live_ops.last_poll_ts() > 0:
         active_counts = live_ops.get_connection_counts()
     else:
@@ -169,8 +148,6 @@ async def get_all_users(
         item = Users.model_validate(db_user).model_dump()
         item["active_connections"] = int(active_counts.get(db_user.name, 0) or 0)
         item["online"] = item["active_connections"] > 0
-        # last_online is updated by the background metrics job, not here.
-        # GET endpoints must not modify data.
         item["last_online"] = db_user.last_online.isoformat() if db_user.last_online else None
         return item
 
@@ -211,10 +188,6 @@ async def reset_user_usage(uuid: str, db: Session = Depends(get_db), user: dict 
     reset = crud.reset_user_usage(db, uuid)
     if not reset:
         raise HTTPException(status_code=404, detail="User not found")
-    # Fan out to nodes (best-effort): node banked files must go too, or the
-    # totals-based collector would resurrect pre-reset bytes as "growth".
-    # An offline node is fine — the cleared panel baselines make its return
-    # rebaseline instead of rebill.
     fanout = await reset_user_usage_on_all_nodes(db_user.id, db)
     if fanout.get("failed"):
         logger.warning("reset-usage node fan-out failed on: %s", fanout["failed"])
@@ -228,21 +201,14 @@ async def create_user(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    # Normalize exactly as the DB layer does before checking duplicates and
-    # before using the name to create node-side CNs.
     normalized_name = request.name.replace(" ", "_")
     check_user = crud.get_user_by_name(db, normalized_name)
     if check_user is not None:
         return ResponseModel(success=False, msg="User with this name already exists", data=None)
 
-    # Use the actual username as the owner so users created by the panel owner
-    # are associated with a real identity, not the generic sentinel "owner".
     owner = user["username"]
     new_user = crud.create_user(db, request, owner)
 
-    # Do NOT synchronously create the user on every node here. The OpenVPN client
-    # generation script is slow and can make the Add User popup look stuck.
-    # The node-side client/config is created lazily when Download is clicked.
     log_event(db, "user.create", actor=user.get("username"), target=new_user.name, detail="User created")
     live_ops.publish("users", {"op": "create"})
     return ResponseModel(
@@ -275,8 +241,6 @@ async def update_user(
             msg="User saved locally but one or more nodes failed to synchronize",
             data={"status_synced": status_synced, "limit_synced": limit_synced},
         )
-    # enforce_user_limits runs as a daily background job in app.py;
-    # calling it per user update is O(n²) — each call queries all expired/exceeded users.
     log_event(db, "user.update", actor=user.get("username"), target=request.name, detail="User updated")
     live_ops.publish("users", {"op": "update"})
     return ResponseModel(success=True, msg="User updated successfully")
@@ -294,9 +258,6 @@ async def change_user_status(
         raise HTTPException(status_code=404, detail="User not found")
     _require_user_access(db_user, user)
     if request.status:
-        # Same rule as the edit form: an expired or out-of-traffic account
-        # must not be switched on, or it would stay online until the next
-        # enforce sweep.
         blocked = crud.activation_blocked(db_user)
         if blocked:
             return ResponseModel(success=False, msg=f"Cannot activate: user is {blocked}", data=None)
@@ -352,10 +313,6 @@ async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Dep
         return ResponseModel(success=False, msg="User not found", data=None)
     _require_user_access(db_user, user)
 
-    # Best-effort: the DB row is the source of truth and always goes away —
-    # one dead node must not wedge the whole delete. Unreachable nodes are
-    # named in the response + audit log so the operator can follow up
-    # (their certs stop working the moment the node is replaced/re-synced).
     result = await delete_user_on_all_nodes(db_user.name, db_user.id, db)
     failed = result.get("failed", [])
     name = db_user.name
@@ -380,9 +337,6 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
         return ResponseModel(success=False, msg="Undo window expired — user can no longer be restored", data=None)
     snap = entry[1]
-    # The undo buffer is process-global, keyed by UUID. Enforce the same
-    # ownership rule as every other user operation: an admin must not
-    # resurrect a user that belonged to someone else.
     if user.get("type") != "owner" and snap.get("owner") != user.get("username"):
         return ResponseModel(success=False, msg="You do not have permission to restore this user", data=None)
     if crud.get_user_by_uuid(db, uuid) is not None:
@@ -393,7 +347,6 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     except Exception as exc:
         return ResponseModel(success=False, msg=f"Restore failed: {exc}", data=None)
     _deleted_users.pop(uuid, None)
-    # Re-push the login limit to nodes (best-effort; certs regenerate on download).
     await set_user_limit_on_all_nodes(restored.name, restored.max_logins, db, restored.id)
     log_event(db, "user.restore", actor=user.get("username"), target=restored.name, detail="User restored (undo)")
     live_ops.publish("users", {"op": "restore"})
@@ -406,7 +359,6 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
 
 class _UserAdjust(BaseModel):
     days: int = Field(default=0, ge=0, le=3650)
-    # Bounded so the SQLite 64-bit INTEGER column cannot overflow.
     bytes: int = Field(default=0, ge=0, le=2**60)
 
 
@@ -439,10 +391,6 @@ async def extend_user(
     return ResponseModel(success=True, msg="User updated", data=Users.model_validate(updated))
 
 
-# ── Global multi-login status (/mlogin) ─────────────────────────────────
-# Moved from routers/mlogin.py: same /mlogin prefix and wire shape, one
-# user-session domain file. Two caller types: OVNode hook (X-Node-Name +
-# key headers) and the panel UI (owner bearer).
 mlogin_router = APIRouter(prefix="/mlogin", tags=["Global Multi-login"])
 
 
@@ -451,7 +399,6 @@ def _authorize_node(db: Session, node_name: str | None, key: str | None) -> Node
     if not node_name or not key:
         raise HTTPException(status_code=401, detail="Missing node name/key")
     node = db.query(Node).filter(Node.name == node_name).first()
-    # Use hmac.compare_digest to prevent timing side-channel leaking key bytes.
     if not node:
         raise HTTPException(status_code=401, detail="Invalid node key")
     if not hmac.compare_digest((node.key or "").encode("utf-8"), key.encode("utf-8", "ignore")):
@@ -476,10 +423,6 @@ def _fetch_node_usage(node) -> dict | None:
     """
     try:
         req = node_client(node)
-        # `or None` preserves the old contract: transport failure → None
-        # (caller skips the node), while a live-but-idle node returns its
-        # (truthy) payload dict. Without it every dead node would count as
-        # "reachable with zero sessions".
         return req.get_usage(timeout=float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))) or None
     except Exception:
         return None
@@ -493,7 +436,6 @@ async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[st
     reachable: set[str] = set()
     nodes: Iterable[Node] = db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
-    # Build id→name map once for all nodes (pairs only — no User objects).
     from backend.db.crud import get_user_id_name_pairs
 
     id_to_name = dict(get_user_id_name_pairs(db))
@@ -541,23 +483,16 @@ async def global_mlogin_status(
     """
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        # Panel-user path: validate session token and require owner role.
         from backend.auth.auth import role_is_current, verify_session_token
 
         user = verify_session_token(auth_header[7:], db)
         if user is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        # Re-check role currency: a session minted while this username was the
-        # owner must stop working after ADMIN_USERNAME changes.
         if user.get("type") != "owner" or not role_is_current(db, user.get("username", ""), "owner"):
             raise HTTPException(status_code=403, detail="Owner privileges required")
     else:
-        # OVNode hook path: authenticate by node name + API key
         _authorize_node(db, x_node_name, key)
     live, _ = await _live_sessions(username, db)
-    # NOTE: the panel-side global_mlogin_sessions registry is retired — nothing
-    # ever wrote to it, so the live poll is the whole answer. Response shape
-    # (global_active + sessions list) is unchanged for existing consumers.
     sessions = sorted(live)
     return ResponseModel(
         success=True,

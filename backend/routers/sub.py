@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import os
 import time
 from datetime import date
@@ -19,8 +16,6 @@ from backend.operations import live as live_ops
 templates = Jinja2Templates(directory="frontend/templates")
 router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
 
-# Lightweight public-endpoint rate limit: 30 req/min/IP. In-memory is fine
-# for a single-process panel; prevents trivial scraping/amplification.
 _SUB_ATTEMPTS: dict[str, list[float]] = {}
 _SUB_MAX = 30
 _SUB_WINDOW = 60
@@ -47,7 +42,6 @@ def _sub_rate_limited(request: Request) -> bool:
     import hashlib
 
     ip = _sub_client_ip(request)
-    # Hash the address: rate limiting does not need the raw IP in memory.
     key = hashlib.sha256(ip.encode()).hexdigest()[:16]
     now = time.monotonic()
     _sub_purge_stale(now)
@@ -112,8 +106,6 @@ def _fmt_date(value) -> str:
         return str(value)[:10]
 
 
-# Render a clean, on-brand HTML error page instead of a raw JSON
-# {"detail": "..."} body (which is what clients/users see otherwise).
 def sub_error_page(status_code: int, title: str, message: str) -> HTMLResponse:
     from html import escape as _esc
 
@@ -169,9 +161,6 @@ async def get_subscription(
             "This subscription link is invalid or the user no longer exists.",
         )
     used = user.used or 0
-    # Evaluate expiry BEFORE active state: when a user's subscription expires
-    # the daily cron flips is_active to False, so we must surface "Expired"
-    # distinctly from a manually disabled account ("Account Disabled").
     if user.expiry_date and user.expiry_date < date.today():
         return sub_error_page(
             403,
@@ -193,10 +182,6 @@ async def get_subscription(
     nodes = crud.get_active_nodes(db)
     ovpn_download_links = {}
 
-    # Node health comes from the live collector's in-memory snapshot — this is
-    # a PUBLIC, unauthenticated endpoint, so per-view node checks would let any
-    # visitor amplify traffic against every node. On cold start (no poll yet)
-    # serve with no links rather than fanning out to all nodes.
     up_nodes: set[str] = set()
     if live_ops.last_poll_ts() > 0:
         online = live_ops.get_node_online()
@@ -235,9 +220,6 @@ async def download_ovpn(
     if not user:
         return sub_error_page(404, "Not Found", "This subscription link is invalid or the user no longer exists.")
     used = user.used or 0
-    # Evaluate expiry BEFORE active state: when a user's subscription expires
-    # the daily cron flips is_active to False, so we must surface "Expired"
-    # distinctly from a manually disabled account ("Account Disabled").
     if user.expiry_date and user.expiry_date < date.today():
         return sub_error_page(403, "Expired", "This subscription has expired. Contact your administrator to extend it.")
     if not bool(user.is_active):

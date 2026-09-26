@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import io
 import json
 import sqlite3
@@ -50,8 +47,6 @@ def test_bundle_checksum_corruption_is_rejected(tmp_path):
     _database(source)
     bundle = create_bundle(source, tmp_path / "backups")
 
-    # Rebuild a structurally valid archive with a modified database while
-    # retaining the original manifest/checksum files.
     corrupt = tmp_path / "corrupt.ovmbak"
     with tarfile.open(bundle, "r:gz") as original, tarfile.open(corrupt, "w:gz") as output:
         for member in original.getmembers():

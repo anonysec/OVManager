@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Behavioral tests for manager.sh (ovmanager/ovm): day-to-day operations.
 
 The manager runs against an installed tree ($INSTALL_DIR, overridable via
@@ -197,7 +194,6 @@ def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
     )
     envfile.chmod(0o600)
 
-    # curl succeeds so the /health wait is instant; systemctl fails on purpose.
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     for name, rc in (("curl", 0), ("systemctl", 1)):
@@ -220,7 +216,6 @@ def test_reset_password_updates_env_and_survives_restart_failure(tmp_path):
     for kept in ("HOST=0.0.0.0", "PORT=2095", "ADMIN_USERNAME=admin", "URLPATH=sekret", "JWT_SECRET_KEY=keep-me"):
         assert kept in text, f"lost {kept}"
     assert (envfile.stat().st_mode & 0o777) == 0o600
-    # The new password never echoes back, and the restart failure is a warning.
     assert "brand-new-password" not in r.stdout + r.stderr
     assert "Could not restart" in r.stderr
 
@@ -238,7 +233,6 @@ def test_auto_backup_host_timer_wiring():
     assert "ovmanager-backup.service" in content
     assert "backup --keep ${keep}" in content
     assert "auto-backup on" in content
-    # /var/backups is pruned, so a daily timer cannot fill the disk.
     assert "prune_backups" in content
 
 
@@ -337,7 +331,6 @@ def test_status_is_concise_and_all_is_opt_in():
     src = content.split("do_status()")[1].split("\n}")[0]
     assert '[[ "$SHOW_ALL" -eq 1 ]]' in src
     assert "-a|--all" in content
-    # Service/health/version/url are the always-on rows.
     for row in ('kv "Service"', 'kv "Health"', 'kv "Version"', 'kv "Open"'):
         assert row in src, row
 

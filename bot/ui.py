@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Shared Telegram send/edit helpers."""
 
 from __future__ import annotations

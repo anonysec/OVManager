@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Behavioral tests for install.sh: install / update / uninstall only.
 
 Day-to-day operations (status, logs, backup, TLS, recovery) live in
@@ -54,7 +51,6 @@ def sandbox(tmp_path):
     fake_etc = tmp_path / "etc"
     fake_bin = tmp_path / "usr" / "local" / "bin"
     shim = tmp_path / "bin"
-    # fake_opt / fake_data are left for the installer (and the tests) to create.
     for d in (fake_etc / "systemd" / "system", fake_bin, shim):
         d.mkdir(parents=True, exist_ok=True)
     src = INSTALLER_PATH.read_text(encoding="utf-8")
@@ -78,9 +74,6 @@ def _write_shim(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-# A machine that has systemd but no OVManager service: is-active/is-enabled
-# report "not installed" so the installer takes its normal fresh-install path,
-# and every mutating call is recorded instead of executed.
 _SHIMS = {
     "systemctl": """
 printf 'systemctl %s\\n' "$*" >> "${SYSTEMCTL_LOG:-/dev/null}"
@@ -107,7 +100,6 @@ def sh_sb(sandbox_installer, *args: str, env: dict | None = None):
     sandbox_env = {}
     root = Path(sandbox_installer).parent
     if root.name.startswith("tmp"):
-        # Hermetic mode: no systemctl, no /usr/local/bin, no firewall changes.
         sandbox_env = {
             "OVM_BIN_DIR": str(root / "usr" / "local" / "bin"),
             "PATH": f"{root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
@@ -126,9 +118,6 @@ def sh_sb(sandbox_installer, *args: str, env: dict | None = None):
     )
 
 
-# Real system locations a full install would rewrite. Snapshotting them around
-# every installer test turns "the test suite broke the live panel" into a loud,
-# immediate failure instead of a service that starts from a tmp dir.
 _PROTECTED_PATHS = (
     Path("/etc/systemd/system/ovmanager.service"),
     Path("/usr/local/bin/ovm"),
@@ -206,7 +195,6 @@ def test_short_admin_password_rejected(tmp_path):
     r = sh_sb(sb, "-y", "-p", "seven77")
     assert r.returncode == 1
     assert "at least 8" in r.stderr or "root" in r.stderr
-    # Exactly 8 characters satisfies the policy (fails later, on root/already-installed).
     r = sh_sb(sb, "-y", "-p", "eight888")
     assert "at least 8" not in r.stderr
 
@@ -255,7 +243,6 @@ def test_plan_prints_by_default():
         content = f.read()
     assert "--dry-run)" not in content
     assert "print_plan()" in content
-    # install, update and uninstall all show the plan first.
     assert content.count("print_plan") >= 3  # def + install/update callers (+ inline uninstall card)
 
 
@@ -277,8 +264,6 @@ def test_update_fails_over_on_health_failure():
     assert "snapshot_code" in content
     assert "update_safety_backup" in content
     assert "UPDATE_STAGE" in content and "UPDATE_PREVIOUS" in content
-    # The marker string moved with its code (backend/middlewares.py owns the
-    # 503 write-block path); only assert where it actually lives.
     assert "Update verification in progress" in (Path(INSTALLER).parent / "backend/middlewares.py").read_text()
     assert "failing over" in content
     assert "restore_update_database" in content
@@ -332,7 +317,6 @@ def test_update_database_restore_verifies_bundle_and_preserves_mode(tmp_path):
     assert database.read_bytes() == old_data
     assert database.stat().st_mode & 0o777 == 0o640
 
-    # Tampering with either checksum source must make restoration fail.
     bad_bundle = tmp_path / "bad.ovmbak"
     members["checksums.sha256"] = b"0" * 64 + b"  panel.db\n"
     with tarfile.open(bad_bundle, "w:gz") as archive:
@@ -393,7 +377,6 @@ def test_already_installed_menu_is_installer_only():
         content = f.read()
     assert 'tui_select "OVManager — installer"' in content
     assert 'quit      "Quit")' in content
-    # Unmatched/cancelled selections return to the caller (or quit) only.
     assert "*)         return 0 ;;" in content
     assert "use ovm" in content or "Manage the panel with: ovm" in content
 
@@ -447,7 +430,6 @@ def test_docker_data_dir_and_perms_are_container_safe():
         content = f.read()
     assert '[[ "$MODE" == "docker" ]] && data_dir="/app/data"' in content
     assert 'chown -R 1000:1000 "$DATA_DIR"' in content
-    # Keys stay private (600, owned by the container uid); only the cert is 644.
     assert "secure_tls_files" in content
     assert "chmod 600" in content
     assert "chmod 644 /etc/ssl/self-signed/privkey.pem" not in content
@@ -499,10 +481,8 @@ def test_installer_deploys_the_manager():
     assert 'CLI_NAME="ovmanager"' in content
     assert 'CLI_ALIAS="ovm"' in content
     assert 'local src="${INSTALL_DIR}/manager.sh"' in content
-    # refreshed on install and update, removed on uninstall
     assert content.count("install_cli") >= 3  # definition + do_install + do_update
     assert content.count("remove_cli") >= 2  # definition + do_uninstall
-    # whiptail when present, colored fallback otherwise
     assert "command -v whiptail" in content
     assert "tui_select" in content
 
@@ -736,7 +716,6 @@ def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
     bundles = sorted((fake_data / "backups").glob("ovmanager-pre-update-*.ovmbak"))
     assert len(bundles) == 1, r.stdout
     assert bundles[0].stat().st_mode & 0o777 == 0o600
-    # The fallback bundle must restore through the same verified path.
     out_db = tmp_path / "restored.db"
     restore = (
         _extract_function("restore_update_database")
@@ -890,7 +869,6 @@ def test_native_unit_creates_private_files_by_default():
     set a restrictive umask so data is private from the first byte."""
     source = _extract_function("write_systemd_unit")
     assert "UMask=0077" in source
-    # The data dir is still created private for native installs.
     assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")
 
 

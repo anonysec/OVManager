@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Runtime configuration for the Telegram operator bot."""
 
 from __future__ import annotations
@@ -31,7 +28,6 @@ class BotConfig:
     owner_telegram_id: int | None = None
     bot_enabled: bool = False
     plans: dict[str, tuple[int, int, int]] = field(default_factory=_default_plans)
-    # Standalone (Docker) login, used when the bot cannot mint a local session.
     api_username: str = ""
     api_password: str = ""
     api_token: str = ""
