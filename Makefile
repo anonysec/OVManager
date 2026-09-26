@@ -13,7 +13,7 @@ test:
 lint:
 	.venv/bin/ruff check backend bot main.py tests
 	.venv/bin/ruff format --check backend bot main.py tests
-	bash -n install.sh manager.sh lib/common.sh
+	bash -n install.sh manager.sh scripts/lib/*.sh
 	git diff --check
 	cd frontend && npx eslint src/
 

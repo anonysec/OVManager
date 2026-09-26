@@ -1,7 +1,7 @@
 """Behavioral tests for manager.sh (ovmanager/ovm): day-to-day operations.
 
 The manager runs against an installed tree ($INSTALL_DIR, overridable via
-OVM_APP_DIR for hermetic tests) and sources $INSTALL_DIR/lib/common.sh.
+OVM_APP_DIR for hermetic tests) and sources $INSTALL_DIR/scripts/lib/*.sh.
 Update/uninstall delegate to install.sh. Tests never touch the live system:
 sandbox trees plus stub tools stand in for systemd/curl/docker.
 """
@@ -16,7 +16,7 @@ import pytest
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = os.path.join(os.path.dirname(__file__), "..", "manager.sh")
 MANAGER_PATH = Path(MANAGER)
-LIB = REPO / "lib" / "common.sh"
+LIB_DIR = REPO / "scripts" / "lib"
 SETSID = shutil.which("setsid")
 
 
@@ -38,13 +38,14 @@ def mgr(*args: str, env: dict | None = None):
 def sandbox(tmp_path):
     """A fake installed tree: manager.sh runs with OVM_APP_DIR pointed here.
 
-    Layout: <tmp>/opt/{manager.sh,install.sh-stub,lib/common.sh}.
+    Layout: <tmp>/opt/{manager.sh,install.sh-stub,scripts/lib/*.sh}.
     Returns (env, app_dir).
     """
     app = tmp_path / "opt"
-    (app / "lib").mkdir(parents=True)
+    (app / "scripts" / "lib").mkdir(parents=True)
     shutil.copy(MANAGER_PATH, app / "manager.sh")
-    shutil.copy(LIB, app / "lib" / "common.sh")
+    for lib in LIB_DIR.glob("*.sh"):
+        shutil.copy(lib, app / "scripts" / "lib" / lib.name)
     (app / "install.sh").write_text('#!/bin/sh\necho "STUB-INSTALLER $@"\n', encoding="utf-8")
     (app / "install.sh").chmod(0o755)
     env = {**os.environ, "OVM_APP_DIR": str(app)}
@@ -270,7 +271,7 @@ def test_no_function_ends_with_a_failing_test():
 
     offenders = [
         (str(path), name, tail, line)
-        for path in (MANAGER_PATH, LIB)
+        for path in (MANAGER_PATH, *sorted(LIB_DIR.glob("*.sh")))
         for name, tail, line in tails(path)
         if re.match(r"^\[\[.*\]\]\s*&&", tail)
     ]

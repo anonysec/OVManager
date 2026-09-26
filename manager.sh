@@ -28,16 +28,22 @@ CLI_ALIAS="ovm"
 
 # Shared helpers (output, prompts, TLS, menus). REPO fallback lets this
 # script run straight from a checkout (./manager.sh) as well as installed.
-if [[ -f "$INSTALL_DIR/lib/common.sh" ]]; then
-    # shellcheck disable=SC1091
-    . "$INSTALL_DIR/lib/common.sh"
-elif [[ -f "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh" ]]; then
-    # shellcheck disable=SC1091
-    . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
-else
-    printf '\n  Error: lib/common.sh not found (looked in %s/lib and ./lib)\n\n' "$INSTALL_DIR" >&2
+# scripts/lib is the simulated installer repo: one file per concern.
+for _cand in "$INSTALL_DIR/scripts/lib" "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/scripts/lib"; do
+    if [[ -d "$_cand" ]]; then
+        for _lib in "$_cand"/common.sh "$_cand"/prompt.sh "$_cand"/env.sh "$_cand"/system.sh "$_cand"/backup.sh "$_cand"/tls.sh "$_cand"/policy.sh; do
+            # shellcheck disable=SC1090
+            . "$_lib"
+        done
+        _lib_found=1
+        break
+    fi
+done
+if [[ "${_lib_found:-0}" -ne 1 ]]; then
+    printf '\n  Error: scripts/lib not found (looked in %s/scripts/lib and ./scripts/lib)\n\n' "$INSTALL_DIR" >&2
     exit 1
 fi
+unset _cand _lib _lib_found
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" ADMIN_PASS="" MODE="" PIN=""
