@@ -21,6 +21,7 @@ import {
 import KpiCard from '../components/dashboard/KpiCard';
 import AlertStrip from '../components/dashboard/AlertStrip';
 import ActivityFeed from '../components/dashboard/ActivityFeed';
+import TopUsers from '../components/dashboard/TopUsers';
 import StreamChart from '../components/dashboard/StreamChart';
 import './Dashboard.css';
 
@@ -133,6 +134,7 @@ const ServerStats = () => {
   const [nodeStatus, setNodeStatus] = useState({});
   const [serverNotifs, setServerNotifs] = useState([]);
   const [activity, setActivity] = useState(null);
+  const [topUsers, setTopUsers] = useState(null);
   const [trafficSeries, setTrafficSeries] = useState({ conns: [], bytes: [] });
   const [probesDone, setProbesDone] = useState(false);
   const [refreshStale, setRefreshStale] = useState(false);
@@ -154,6 +156,7 @@ const ServerStats = () => {
       users: apiClient.get('/users/'),
       notifs: apiClient.get('/notifications/'),
       activity: apiClient.get('/activity/?limit=8'),
+      ...(isOwner ? { topUsers: apiClient.get('/users/traffic/top') } : {}),
     });
 
     const nextErrors = {};
@@ -189,6 +192,14 @@ const ServerStats = () => {
     } else {
       nextErrors.activity = res.activity?.error;
       setActivity(null);
+    }
+
+    if (res.topUsers?.ok) {
+      const items = res.topUsers.data.data?.data ?? res.topUsers.data.data ?? [];
+      setTopUsers(Array.isArray(items) ? items : []);
+    } else {
+      nextErrors.topUsers = res.topUsers?.error;
+      setTopUsers(null);
     }
 
     setErrors(nextErrors);
@@ -635,6 +646,13 @@ const ServerStats = () => {
               onRetry={() => loadData()}
             />
           </div>
+
+          <TopUsers
+            items={topUsers}
+            error={errors.topUsers}
+            loading={loading}
+            onRetry={() => loadData()}
+          />
 
         </>
       )}

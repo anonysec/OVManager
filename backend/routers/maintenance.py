@@ -22,8 +22,6 @@ from backend.data_paths import DATA_DIR
 from backend.db.engine import engine, get_db
 from backend.node.task import (
     clean_stale_sessions_all_nodes,
-    login_diagnostics,
-    login_health_summary,
     sync_all_user_limits,
 )
 from backend.operations.audit import log_event
@@ -519,12 +517,6 @@ async def restore_backup(
         return ResponseModel(success=False, msg=f"Restore failed: {e}", data=None)
 
 
-@router.get("/login-health", response_model=ResponseModel)
-async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    data = await login_health_summary(db, hours=hours)
-    return ResponseModel(success=True, msg="Login health", data=data)
-
-
 @router.post("/sync-limits", response_model=ResponseModel)
 async def sync_limits(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     data = await sync_all_user_limits(db)
@@ -544,9 +536,3 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
 
 
-@router.get("/login-diagnostics/{username}", response_model=ResponseModel)
-async def user_login_diagnostics(
-    username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)
-):
-    data = await login_diagnostics(username, db, hours=hours)
-    return ResponseModel(success=True, msg="Login diagnostics", data=data)

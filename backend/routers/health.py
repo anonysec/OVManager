@@ -34,6 +34,7 @@ from backend.db.engine import get_db
 from backend.db.models import Node, User
 from backend.operations.live import get_node_online, last_poll_ts
 from backend.routers.tls import _cert_path, _classify_issuer, _key_path, _load_certificate
+from backend.schema import ResponseModel
 from backend.version import __version__
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -367,6 +368,31 @@ async def health_overview(db: Session = Depends(get_db), user: dict = Depends(re
         checks.append({key: entry[key] for key in ("id", "status", "summary", "hint")})
         details[check_id] = entry.get("detail") or {}
     return {"checks": checks, "details": details}
+
+
+@router.get("/login-health", response_model=ResponseModel)
+async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Aggregate max-login/auth-failure health across users and nodes.
+
+    Read-only aggregate (owner only). Lives in the health router — it is a
+    read alongside /overview and /setup, not a maintenance write; it moved
+    here from /maintenance/login-health (same response shape).
+    """
+    from backend.node.diagnostics import login_health_summary
+
+    data = await login_health_summary(db, hours=hours)
+    return ResponseModel(success=True, msg="Login health", data=data)
+
+
+@router.get("/login-diagnostics/{username}", response_model=ResponseModel)
+async def user_login_diagnostics(
+    username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)
+):
+    """Per-user drill-down (moved from /maintenance/login-diagnostics)."""
+    from backend.node.diagnostics import login_diagnostics
+
+    data = await login_diagnostics(username, db, hours=hours)
+    return ResponseModel(success=True, msg="Login diagnostics", data=data)
 
 
 @router.get("/setup")
