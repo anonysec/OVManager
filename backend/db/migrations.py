@@ -483,8 +483,10 @@ def _add_node_server_ca(db: Session) -> None:
     PasarGuard-style: the panel stores the node's certificate (PEM) and
     verifies HTTPS against it, so a self-signed node is as safe as an
     LE one — no unverified fallback. Adoption (before==0) already
-    reconciles the column; this step covers databases stamped 5..14.
+    reconciles the column; guard here so that path never re-adds it.
     """
+    if "nodes" not in table_names(db) or "server_ca" in column_names(db, "nodes"):
+        return
     column = Base.metadata.tables["nodes"].columns["server_ca"]
     db.execute(text(_add_column_sql("nodes", column)))
 
