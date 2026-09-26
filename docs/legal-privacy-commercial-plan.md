@@ -73,7 +73,7 @@ Release archives, container images, and source distributions must include `LICEN
 - review optional tools installed or invoked by setup, including Docker/base images, OpenVPN, ACME clients, and system packages;
 - record exceptions with maintainer and legal approval.
 
-A permissive project license does not relicense third-party components. `THIRD_PARTY_LICENSES.md` and the SBOM explain their separate terms.
+A permissive project license does not relicense third-party components. `docs/legal/THIRD_PARTY_LICENSES.md` and the SBOM explain their separate terms.
 
 Add CI checks using an approved-license allowlist plus a deny/review list. Tool output assists review but is not a legal conclusion.
 
@@ -125,7 +125,7 @@ Avoid asserting a universal legal role; terminology varies by jurisdiction.
 
 ### Data inventory
 
-Create a maintained table in `PRIVACY.md`:
+Create a maintained table in `docs/legal/PRIVACY.md`:
 
 | Data | Purpose | Default location | Default retention | External transfer |
 |---|---|---|---|---|
@@ -197,7 +197,7 @@ Do not guarantee that every IP, network, domain, or jurisdiction can receive an 
 
 ## Acceptable use and operator responsibility
 
-Expand the existing acceptable-use statement into `ACCEPTABLE_USE.md` without imposing a new software-license restriction unless maintainers intentionally change licensing with legal review.
+Expand the existing acceptable-use statement into `docs/legal/ACCEPTABLE_USE.md` without imposing a new software-license restriction unless maintainers intentionally change licensing with legal review.
 
 Clarify:
 
@@ -300,7 +300,7 @@ Before each release:
 2. Run dependency-license allowlist/review checks.
 3. Run vulnerability scans and resolve/review findings.
 4. Verify release archive/image contains license and notices.
-5. Compare actual network destinations and stored data against `PRIVACY.md`.
+5. Compare actual network destinations and stored data against `docs/legal/PRIVACY.md`.
 6. Verify opt-in for Telegram, remote backup, and external lookups.
 7. Test export, deletion, retention, and uninstall behavior.
 8. Review new dependencies/assets/code provenance.

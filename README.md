@@ -181,5 +181,5 @@ user limit. Keep the copyright and MIT license notice with copies or substantial
 portions of the software. Third-party infrastructure and components retain
 their own terms.
 
-See [Privacy](PRIVACY.md), [Acceptable use](ACCEPTABLE_USE.md), and
-[third-party licensing](THIRD_PARTY_LICENSES.md).
+See [Privacy](docs/legal/PRIVACY.md), [Acceptable use](docs/legal/ACCEPTABLE_USE.md), and
+[third-party licensing](docs/legal/THIRD_PARTY_LICENSES.md).
