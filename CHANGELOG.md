@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.9 — 2026-09-26
+
+Live fix for TLS pinning (#46): the node's self-signed cert names
+127.0.0.1 while the panel dials the public IP, so chain verification
+failed on the name with the exact cert pinned. Pinned sessions now use
+a custom adapter (chain required against exactly the pinned CA,
+hostname unchecked at both the SSL context and urllib3) — proven live
+both ways (exact cert handshakes, wrong cert refuses). The 429 retry
+rides the same transport so it can never bypass the pin.
+
 ## 1.0.8 — 2026-09-26
 
 Operator surface + repo hygiene (one behavior addition: TLS pinning):
