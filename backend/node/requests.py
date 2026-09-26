@@ -16,6 +16,48 @@ from backend.logger import logger
 TIMEOUT = 10
 LONG_TIMEOUT = 30
 
+
+# Pinned-CA senders, one session per CA file: hostname checking is OFF but
+# chain verification is REQUIRED against exactly the pinned certificate.
+# That is the whole point of TOFU pinning — the node's self-signed cert
+# names 127.0.0.1 while the panel reaches it over its public IP, so the
+# name can never match; the identity proof is the exact cert, not its
+# subject. A MITM presenting any other cert still fails closed
+# (SSLError → None, no unverified retry).
+_pinned_sessions: dict[str, _req.Session] = {}
+
+
+class _PinnedAdapter(_req.adapters.HTTPAdapter):
+    def __init__(self, cafile: str, *args, **kwargs):
+        import ssl
+
+        context = ssl.create_default_context(cafile=cafile)
+        context.check_hostname = False
+        self._pinned_context = context
+        super().__init__(*args, **kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = self._pinned_context
+        # urllib3 verifies hostnames itself on top of the context; the pin
+        # is the identity proof, not the subject name.
+        kwargs["assert_hostname"] = False
+        return super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, *args, **kwargs):
+        kwargs["ssl_context"] = self._pinned_context
+        kwargs["assert_hostname"] = False
+        return super().proxy_manager_for(*args, **kwargs)
+
+
+def _pinned_sender(cafile: str):
+    """Request sender verifying against exactly ``cafile`` (no fallback)."""
+    session = _pinned_sessions.get(cafile)
+    if session is None:
+        session = _req.Session()
+        session.mount("https://", _PinnedAdapter(cafile))
+        _pinned_sessions[cafile] = session
+    return session.request
+
 _MAX_429_WAIT = 60.0
 
 _rpc_last_error: dict[tuple[str, str], str] = {}
@@ -169,8 +211,14 @@ class NodeRequests:
         if self.scheme != "https":
             return self._send_plain(method, path, require_success=require_success, **kw)
         if isinstance(self._verify, str) and self._verify != "pinned":
+            # Pinned CA: verify against that exact certificate via a session
+            # whose context requires the chain but skips the hostname (the
+            # cert names localhost while we dial the public IP). No fallback:
+            # a non-matching cert fails closed here.
             try:
-                result = self._send(method, path, verify=self._verify, require_success=require_success, **kw)
+                result = self._send(
+                    method, path, require_success=require_success, sender=_pinned_sender(self._verify), **kw
+                )
                 self.tls_verified = True
                 return result
             except _req.exceptions.SSLError as e:
@@ -212,15 +260,22 @@ class NodeRequests:
             _rpc_failed(self.address, path, e)
             return None
 
-    def _send(self, method: str, path: str, require_success: bool = True, **kw) -> dict | None:
+    def _send(self, method: str, path: str, require_success: bool = True, sender=None, **kw) -> dict | None:
         """Send request, return parsed JSON or None on failure.
 
         A single Retry-After-aware retry on 429 keeps bulk fan-outs (create
         100 users → 100 cert ops) from hard-failing when they brush the
         node's cert-op bucket: slow down once instead of reporting failure.
         Runs in a threadpool worker, so the sleep never blocks the loop.
+
+        ``sender`` overrides the transport: pinned-CA sessions pass
+        ``session.request`` here so verification rides the pinned context.
         """
-        r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
+        transport = sender or getattr(_req, method)
+        if sender is not None:
+            r = transport(method, self._url(path), headers=self.headers, **kw)
+        else:
+            r = transport(self._url(path), headers=self.headers, **kw)
         if r.status_code == 429:
             wait = _retry_after_s(r.headers.get("Retry-After"))
             logger.warning(
@@ -230,7 +285,10 @@ class NodeRequests:
                 wait,
             )
             _time.sleep(wait)
-            r = getattr(_req, method)(self._url(path), headers=self.headers, **kw)
+            if sender is not None:
+                r = transport(method, self._url(path), headers=self.headers, **kw)
+            else:
+                r = transport(self._url(path), headers=self.headers, **kw)
         if r.status_code != 200:
             _rpc_failed(self.address, path, f"HTTP {r.status_code}")
             return None
@@ -374,9 +432,10 @@ class NodeRequests:
                 logger.error("Node %s %s: %s", self.address, path, e)
                 return None
         elif isinstance(self._verify, str) and self._verify != "pinned":
-            kw.setdefault("verify", self._verify)
+            # Pinned CA via the pinned session (chain required, hostname
+            # unchecked — same policy as _request). No fallback.
             try:
-                r = _req.get(url, headers=headers, **kw)
+                r = _pinned_sender(self._verify)("get", url, headers=headers, **kw)
                 self.tls_verified = True
             except _req.exceptions.SSLError as e:
                 logger.error(

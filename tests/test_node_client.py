@@ -79,17 +79,43 @@ def test_node_version_compat_policy():
         assert node_version_compat(bad)["verdict"] == "unknown", bad
 
 
+def _self_signed_pem() -> str:
+    """Real self-signed cert for the pinned-context test (a fake PEM cannot
+    load into an SSLContext)."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=30))
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
 def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
     """With server_ca, HTTPS verifies against exactly that file — and an
     SSL failure must NOT fall back to unverified (the API key would cross
     to a possible MITM)."""
-    from backend.data_paths import DATA_DIR as _unused  # noqa: F401  (import shape check)
+    import ssl
+
     from backend.operations import node_pki
 
     real_dir = node_pki._CERT_DIR
     node_pki._CERT_DIR = tmp_path / "node-certs"
     try:
-        pem = "-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----\n"
+        pem = _self_signed_pem()
         req = NodeRequests(
             address="10.0.0.9",
             port=2083,
@@ -104,16 +130,25 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
 
         from backend.node import requests as nr_mod
 
+        # The pinned session requires the chain but skips the hostname: the
+        # node cert names localhost while the panel dials the public IP, so
+        # the exact cert (not its subject) is the identity proof.
+        sender = nr_mod._pinned_sender(str(ca_path))
+        adapter = sender.__self__.get_adapter("https://x")
+        assert adapter._pinned_context.check_hostname is False
+        assert adapter._pinned_context.verify_mode == ssl.CERT_REQUIRED
+
         captured = {}
 
         def fake_send(self, method, path, **kw):
-            captured["verify"] = kw.get("verify")
+            captured["sender"] = kw.get("sender")
+            assert kw.get("verify", None) is None, "pinned path must not pass verify= (hostname would fail)"
             return {"success": True}
 
         monkeypatch.setattr(NodeRequests, "_send", fake_send)
         out = req._request("get", "/sync/status")
         assert out == {"success": True}
-        assert captured["verify"] == str(ca_path)
+        assert captured["sender"] is not None
         assert req.tls_verified is True
 
         def ssl_send(self, method, path, **kw):
