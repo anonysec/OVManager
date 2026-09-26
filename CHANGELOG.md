@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.8 — 2026-09-26
+
+Operator surface + repo hygiene (one behavior addition: TLS pinning):
+
+- Health reads out of the maintenance router (`/health/login-health`,
+  `/health/login-diagnostics`); dashboard gains a Top-traffic panel.
+- Node TLS pinning (`nodes.server_ca`, schema v15): TOFU pin at
+  add/update, fail-closed verification. Re-save the node once to pin.
+- Read-only operator CLI (`cli/`: status/logs/doctor); installer libs
+  split into `scripts/lib/` (simulated installer repo); legal docs to
+  `docs/legal/`; comments trimmed; `ruff format` gated in `make lint`.
+
 ## 1.0.7 — 2026-09-26
 
 Internal cleanup release (no behavior change):

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.7-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.8-blue)](CHANGELOG.md)
 
 OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
 
@@ -181,5 +181,5 @@ user limit. Keep the copyright and MIT license notice with copies or substantial
 portions of the software. Third-party infrastructure and components retain
 their own terms.
 
-See [Privacy](PRIVACY.md), [Acceptable use](ACCEPTABLE_USE.md), and
-[third-party licensing](THIRD_PARTY_LICENSES.md).
+See [Privacy](docs/legal/PRIVACY.md), [Acceptable use](docs/legal/ACCEPTABLE_USE.md), and
+[third-party licensing](docs/legal/THIRD_PARTY_LICENSES.md).

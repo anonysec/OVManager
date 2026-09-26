@@ -80,9 +80,29 @@ def test_every_emitted_callback_fits_and_matches():
     """Scan keyboards/handlers for emitted callback literals: each must fit
     in 64 bytes at construction size and carry a known prefix."""
     known = {
-        "ext", "e30", "e90", "eb10", "eb100", "rst", "tog", "dis", "del",
-        "okd", "undo", "sub", "cfg", "dl", "edt", "edf", "edo", "edc",
-        "u", "users", "ns", "lang", "plan",
+        "ext",
+        "e30",
+        "e90",
+        "eb10",
+        "eb100",
+        "rst",
+        "tog",
+        "dis",
+        "del",
+        "okd",
+        "undo",
+        "sub",
+        "cfg",
+        "dl",
+        "edt",
+        "edf",
+        "edo",
+        "edc",
+        "u",
+        "users",
+        "ns",
+        "lang",
+        "plan",
     }
     text = (REPO / "bot" / "keyboards.py").read_text(encoding="utf-8")
     for mod in ("actions", "create", "edit", "users", "status", "settings", "home", "router"):
