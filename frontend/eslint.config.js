@@ -5,6 +5,7 @@ import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
@@ -42,6 +43,26 @@ export default defineConfig([
       // other rule in the preset stays on, and the six it flagged that were
       // real (impure Date.now() during render, refs read during render, two
       // handlers used before declaration, a dropped error cause) are fixed.
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    // TypeScript files: same hooks discipline; type-aware rules off during
+    // the .jsx -> .tsx migration (implicit-any churn, not defects).
+    // `tsc --noEmit` (strict, at the end) owns type safety, not the linter.
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommended,
+      reactHooks.configs.flat['recommended-latest'],
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      globals: globals.browser,
+    },
+    rules: {
+      'no-unused-vars': 'off',
+      'react-hooks/exhaustive-deps': 'error',
       'react-hooks/set-state-in-effect': 'off',
     },
   },

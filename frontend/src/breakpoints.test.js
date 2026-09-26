@@ -21,14 +21,14 @@ const PHONE_MAX = 767.98; // must equal the JS threshold minus a subpixel
 
 describe('responsive breakpoints', () => {
   it('DashboardLayout switches to mobile at the documented threshold', () => {
-    const src = read('pages/DashboardLayout.jsx');
+    const src = read('pages/DashboardLayout.tsx');
     const m = /window\.innerWidth\s*<\s*(\d+)/.exec(src);
     expect(m, 'expected an `innerWidth < N` mobile test').toBeTruthy();
     expect(Number(m[1])).toBe(Math.ceil(PHONE_MAX));
   });
 
   it('Sidebar closes its drawer at the same threshold', () => {
-    const src = read('components/Sidebar.jsx');
+    const src = read('components/Sidebar.tsx');
     const m = /window\.innerWidth\s*>=\s*(\d+)/.exec(src);
     expect(m, 'expected an `innerWidth >= N` reset').toBeTruthy();
     expect(Number(m[1])).toBe(Math.ceil(PHONE_MAX));

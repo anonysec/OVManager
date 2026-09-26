@@ -11,7 +11,7 @@ import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDateTime } from '../utils/time';
 import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo.js';
-import FlagIcon from '../utils/geo.jsx';
+import FlagIcon from '../utils/FlagIcon';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
