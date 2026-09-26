@@ -71,18 +71,22 @@ def test_geolocate_accepts_good_payload(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "payload",
+    "ip_suffix,payload",
     [
-        {"status": "fail", "message": "private range"},
-        {"status": "success", "countryCode": "", "lat": 1.0, "lon": 1.0},
-        {"status": "success", "countryCode": "XX1", "lat": 1.0, "lon": 1.0},
-        {"status": "success", "countryCode": "DE", "lat": 91.0, "lon": 1.0},
-        {"status": "success", "countryCode": "DE", "lat": "x", "lon": 1.0},
+        (11, {"status": "fail", "message": "private range"}),
+        (12, {"status": "success", "countryCode": "", "lat": 1.0, "lon": 1.0}),
+        (13, {"status": "success", "countryCode": "XX1", "lat": 1.0, "lon": 1.0}),
+        (14, {"status": "success", "countryCode": "DE", "lat": 91.0, "lon": 1.0}),
+        (15, {"status": "success", "countryCode": "DE", "lat": "x", "lon": 1.0}),
     ],
 )
-def test_geolocate_rejects_junk_payloads(monkeypatch, payload):
+def test_geolocate_rejects_junk_payloads(monkeypatch, ip_suffix, payload):
+    # Deterministic per-case IP: the module caches by host for an hour, so a
+    # hash()-derived address could collide with the good-payload test's IP
+    # under a different PYTHONHASHSEED and serve the cached result.
+    geo_mod._geo_cache.clear()
     monkeypatch.setattr(geo_mod.httpx2, "get", _fake_get(payload))
-    assert geo_mod.geolocate(f"203.0.113.{abs(hash(str(payload))) % 250 + 1}") is None
+    assert geo_mod.geolocate(f"203.0.113.{ip_suffix}") is None
 
 
 def test_geolocate_retries_then_gives_up(monkeypatch):

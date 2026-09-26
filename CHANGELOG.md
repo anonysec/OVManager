@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.7 — 2026-09-26
+
+Internal cleanup release (no behavior change):
+
+- `backend/urlpath/` package; `set_urlpath` refuses reserved prefixes at
+  the write path (CLI path could previously shadow live routes).
+- Schema merged: one `backend.schema` import surface (the
+  `_input`/`output` underscore files are gone); `mlogin` router folded
+  into `users.py` with the `/mlogin` wire shape unchanged.
+- Decision records moved to `docs/adr/`; one dedicated `ruff format`
+  commit, now gated in `make lint` so formatting cannot drift again.
+
 ## 1.0.6 — 2026-09-25
 
 Node sync wave (pairs with OVNode 1.0.2):
