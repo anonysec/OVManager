@@ -46,6 +46,7 @@ class ConnectionSignature:
     port: int
     api_key: str
     use_tls: bool
+    server_ca: str | None = None
 
     @classmethod
     def from_node(cls, node) -> ConnectionSignature:
@@ -54,6 +55,7 @@ class ConnectionSignature:
             port=int(getattr(node, "port", 0) or 0),
             api_key=str(getattr(node, "key", "") or ""),
             use_tls=bool(getattr(node, "use_tls", False)),
+            server_ca=str(getattr(node, "server_ca", "") or "") or None,
         )
 
 
@@ -104,6 +106,8 @@ def get_connection(node) -> NodeRequests:
         port=signature.port,
         api_key=signature.api_key,
         use_tls=signature.use_tls,
+        server_ca=signature.server_ca,
+        node_id=node_id,
     )
     with _lock:
         conn = _connections.get(node_id)

@@ -57,7 +57,7 @@ from backend.db.engine import Base, SessionLocal
 from backend.logger import logger
 
 #: Bump this and append a step to :data:`STEPS` for every schema change.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 VERSION_TABLE = "schema_version"
 
@@ -477,6 +477,20 @@ def _decrypt_stored_secrets(db: Session) -> None:
             logger.info("migrations v14: decrypted %s node key(s)", decrypted)
 
 
+def _add_node_server_ca(db: Session) -> None:
+    """Add ``nodes.server_ca`` (v15): TLS-pinned node certificates.
+
+    PasarGuard-style: the panel stores the node's certificate (PEM) and
+    verifies HTTPS against it, so a self-signed node is as safe as an
+    LE one — no unverified fallback. Adoption (before==0) already
+    reconciles the column; guard here so that path never re-adds it.
+    """
+    if "nodes" not in table_names(db) or "server_ca" in column_names(db, "nodes"):
+        return
+    column = Base.metadata.tables["nodes"].columns["server_ca"]
+    db.execute(text(_add_column_sql("nodes", column)))
+
+
 def _cleanup_orphan_daily_rows(db: Session) -> None:
     """Delete per-day history rows whose user no longer exists.
 
@@ -600,6 +614,7 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (12, "seed owner row and first user", _seed_owner_and_first_user),
     (13, "add per-admin user defaults", _add_admin_user_defaults),
     (14, "decrypt stored secrets (at-rest encryption retired)", _decrypt_stored_secrets),
+    (15, "add node server_ca (TLS pinning)", _add_node_server_ca),
 )
 
 

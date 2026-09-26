@@ -80,3 +80,57 @@ def test_node_version_compat_policy():
     assert node_version_compat("0.0.1")["verdict"] == "incompatible"
     for bad in (None, "", "not-a-version", "1.x"):
         assert node_version_compat(bad)["verdict"] == "unknown", bad
+
+
+def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
+    """With server_ca, HTTPS verifies against exactly that file — and an
+    SSL failure must NOT fall back to unverified (the API key would cross
+    to a possible MITM)."""
+    from backend.data_paths import DATA_DIR as _unused  # noqa: F401  (import shape check)
+    from backend.operations import node_pki
+
+    real_dir = node_pki._CERT_DIR
+    node_pki._CERT_DIR = tmp_path / "node-certs"
+    try:
+        pem = (
+            "-----BEGIN CERTIFICATE-----\n"
+            "MIIBfake\n"
+            "-----END CERTIFICATE-----\n"
+        )
+        req = NodeRequests(
+            address="10.0.0.9",
+            port=2083,
+            api_key="k",
+            use_tls=True,
+            server_ca=pem,
+            node_id=7,
+        )
+        assert req.scheme == "https"
+        ca_path = node_pki._CERT_DIR / "7.pem"
+        assert ca_path.exists() and pem in ca_path.read_text()
+
+        from backend.node import requests as nr_mod
+
+        captured = {}
+
+        def fake_send(self, method, path, **kw):
+            captured["verify"] = kw.get("verify")
+            return {"success": True}
+        monkeypatch.setattr(NodeRequests, "_send", fake_send)
+        out = req._request("get", "/sync/status")
+        assert out == {"success": True}
+        assert captured["verify"] == str(ca_path)
+        assert req.tls_verified is True
+
+        # Mismatch must fail closed: SSL error -> None, no unverified retry.
+        def ssl_send(self, method, path, **kw):
+            raise nr_mod._req.exceptions.SSLError("cert mismatch")
+
+        monkeypatch.setattr(NodeRequests, "_send", ssl_send)
+        assert req._request("get", "/sync/status") is None
+    finally:
+        node_pki._CERT_DIR = real_dir
+        # drop the cached transport so later tests don't inherit the pin
+        from backend.node import connection as _conn
+
+        _conn._reset_for_tests()
