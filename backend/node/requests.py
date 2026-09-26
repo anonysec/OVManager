@@ -77,6 +77,7 @@ def node_client(node, **kw) -> "NodeRequests":
             port=node.port,
             api_key=node.key or "",
             use_tls=node.use_tls,
+            server_ca=getattr(node, "server_ca", None),
             **kw,
         )
     return _get_connection(node)
@@ -92,9 +93,9 @@ from backend.node.connection import get_connection as _get_connection  # noqa: E
 
 
 class NodeRequests:
-    __slots__ = ("address", "headers", "scheme", "tls_verified")
+    __slots__ = ("address", "headers", "scheme", "tls_verified", "_verify")
 
-    def __init__(self, address: str, port: int, api_key: str, use_tls: bool = False, **_):
+    def __init__(self, address: str, port: int, api_key: str, use_tls: bool = False, server_ca: str | None = None, **_):
         raw = str(address or "").strip()
         parsed = urlsplit(raw if "://" in raw else f"//{raw}")
         host = parsed.hostname
@@ -109,6 +110,19 @@ class NodeRequests:
         self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
         self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
+        # TLS verify policy: with a pinned certificate, HTTPS is verified
+        # against exactly that CA (no unverified fallback — a MITM between
+        # panel and node fails closed). None = default policy.
+        self._verify = "pinned"
+        if self.scheme == "https" and server_ca:
+            from backend.operations.node_pki import ca_file_for
+
+            node_id = _.get("node_id")
+            self._verify = ca_file_for(node_id, server_ca) if node_id is not None else None
+            if self._verify is None:
+                # Pin exists but unusable (not a certificate): fail closed
+                # rather than silently sending the key unverified.
+                raise ValueError("Node has a pinned certificate but it is not a PEM certificate")
         # Set by the TLS policy on each request: True after a VERIFIED
         # handshake, False once the self-signed fallback has been used.
         # None until the first request (or for plain HTTP). Lets callers
@@ -169,11 +183,12 @@ class NodeRequests:
     def _request(self, method: str, path: str, **kw) -> dict | None:
         """Send request, return parsed JSON or None on failure.
 
-        TLS is verified strictly first (Let's Encrypt nodes). A node with a
-        self-signed cert (installer default) fails verification — retry once
-        unverified with a ONE-TIME loud warning per node address instead of
-        bricking TLS nodes. ``tls_verified`` records which path was used so
-        the UI can show "unverified (self-signed)" rather than hiding it.
+        TLS policy: with a pinned ``server_ca``, HTTPS is verified against
+        exactly that certificate and an SSL failure fails closed (a MITM
+        between panel and node must not get the API key). Without a pin
+        (legacy self-signed node not yet pinned), verified-first with one
+        unverified retry and a ONE-TIME loud warning. ``tls_verified``
+        records which path was used so the UI can show it.
 
         ``require_success=False`` returns the node's envelope even when it
         answers ``success: false`` (e.g. an update refusal), so callers can
@@ -183,6 +198,26 @@ class NodeRequests:
         kw.setdefault("timeout", TIMEOUT)
         if self.scheme != "https":
             return self._send_plain(method, path, require_success=require_success, **kw)
+        if isinstance(self._verify, str) and self._verify != "pinned":
+            # Pinned CA: verify against that exact certificate, no fallback.
+            try:
+                result = self._send(method, path, verify=self._verify, require_success=require_success, **kw)
+                self.tls_verified = True
+                return result
+            except _req.exceptions.SSLError as e:
+                # The served cert no longer matches the pin: the node was
+                # reinstalled or is being impersonated. Never fall back.
+                logger.error(
+                    "Node %s %s: TLS cert does not match the pinned certificate (%s) — refusing to connect. "
+                    "Re-add or re-pin the node if the certificate was rotated.",
+                    self.address,
+                    path,
+                    e,
+                )
+                return None
+            except Exception as e:
+                _rpc_failed(self.address, path, e)
+                return None
         try:
             result = self._send(method, path, verify=True, require_success=require_success, **kw)
             self.tls_verified = True
@@ -380,6 +415,23 @@ class NodeRequests:
         if self.scheme != "https":
             try:
                 r = _req.get(url, headers=headers, **kw)
+            except Exception as e:
+                logger.error("Node %s %s: %s", self.address, path, e)
+                return None
+        elif isinstance(self._verify, str) and self._verify != "pinned":
+            # Pinned CA: verify against that exact certificate, no fallback.
+            kw.setdefault("verify", self._verify)
+            try:
+                r = _req.get(url, headers=headers, **kw)
+                self.tls_verified = True
+            except _req.exceptions.SSLError as e:
+                logger.error(
+                    "Node %s %s: TLS cert does not match the pinned certificate (%s) — refusing to connect.",
+                    self.address,
+                    path,
+                    e,
+                )
+                return None
             except Exception as e:
                 logger.error("Node %s %s: %s", self.address, path, e)
                 return None

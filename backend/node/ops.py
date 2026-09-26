@@ -123,7 +123,37 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
             return False
 
     crud.create_node(db, request, geo)
+
+    # TLS pin (PasarGuard's server_ca idea): fetch the node's certificate
+    # once at add time and store it. From then on HTTPS is verified against
+    # exactly this cert — self-signed nodes stop needing the unverified
+    # fallback. Best-effort: an unreachable fetch leaves the node unpinned
+    # (the sweep/next update pins later).
+    if request.use_tls:
+        await _pin_node_certificate(request.address, request.port)
+
     return True
+
+
+async def _pin_node_certificate(address: str, port: int) -> str | None:
+    """Fetch the node's TLS cert (TOFU) for storage on the node row.
+
+    The address may be a bare IP/hostname or carry a scheme; the cert fetch
+    uses the host:port pair only.
+    """
+    from urllib.parse import urlsplit
+
+    raw = str(address or "").strip()
+    parsed = urlsplit(raw if "://" in raw else f"//{raw}")
+    host = parsed.hostname or raw
+    try:
+        port = int(parsed.port or port)
+    except (TypeError, ValueError):
+        return None
+
+    from backend.operations.node_pki import fetch_server_cert
+
+    return await run_in_threadpool(fetch_server_cert, host, port)
 
 
 async def update_node_handler(node_id: int, request: NodeCreate, db: Session) -> tuple[bool, str]:
@@ -152,6 +182,16 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     # offline. Only when the operator asks to apply VPN settings on the node
     # do we contact it — and even then a failure only downgrades the message.
     if not request.set_new_setting:
+        # TLS pin refresh on metadata edits: when TLS is on and the operator
+        # is saving the node, refresh the pinned certificate (TOFU per edit)
+        # so address moves get re-pinned on the next successful update.
+        if request.use_tls:
+            fetched = await _pin_node_certificate(request.address, request.port)
+            if fetched:
+                refreshed = crud.get_node_by_id(db, node_id)
+                if refreshed is not None:
+                    refreshed.server_ca = fetched
+                    db.commit()
         return True, "Node updated successfully"
 
     nr = NodeRequests(

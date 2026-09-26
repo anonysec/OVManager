@@ -80,6 +80,11 @@ class Node(Base):
     key: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[bool] = mapped_column(default=True)
     use_tls: Mapped[bool] = mapped_column(default=False)
+    # PasarGuard-style TLS pinning: the node's certificate (PEM) as seen by
+    # the panel at pin time. When set with use_tls, HTTPS is verified against
+    # exactly this certificate — a self-signed node loses the unverified
+    # fallback. NULL = not pinned (legacy node or plain HTTP).
+    server_ca: Mapped[str | None] = mapped_column(nullable=True, default=None)
     country_code: Mapped[str] = mapped_column(nullable=True)
     latitude: Mapped[float] = mapped_column(nullable=True)
     longitude: Mapped[float] = mapped_column(nullable=True)
