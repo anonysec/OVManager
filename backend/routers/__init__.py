@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from backend.auth.auth import router as login_router
 
 from .admins import router as admin_router

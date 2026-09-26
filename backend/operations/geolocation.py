@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """IP-based geolocation using ip-api.com (free, no key needed)."""
 
 from __future__ import annotations
@@ -15,7 +12,6 @@ import httpx2
 
 logger = logging.getLogger(__name__)
 
-# Cache: IP → {country_code, lat, lon}
 _geo_cache: dict[str, dict] = {}
 _GEO_CACHE_TTL = 3600  # 1 hour
 _GEO_CACHE_MAX = 10_000
@@ -23,11 +19,8 @@ _GEO_CACHE_HITS = 0
 _GEO_CACHE_MISSES = 0
 
 
-# Timeout for geolocation requests
 _TIMEOUT = 5.0
 
-# One silent retry — ip-api.com free tier rate-limits (429) and the node
-# add/edit path must not persist a failure as if it were a location.
 _MAX_ATTEMPTS = 2
 
 
@@ -85,24 +78,20 @@ def geolocate(address: str) -> dict | None:
     Returns dict with keys: country_code, latitude, longitude
     or None if lookup fails.
     """
-    # Extract hostname/IP safely; splitting on ':' breaks IPv6 and URLs.
     host = _extract_host(address)
     if not host:
         return None
 
-    # Check cache (TTL + size bound)
     if host in _geo_cache:
         entry = _geo_cache[host]
         if entry.get("_ts", 0) > _time.time() - _GEO_CACHE_TTL:
             return entry["data"]
         del _geo_cache[host]
 
-    # Bound cache size: evict oldest entries when over max
     if len(_geo_cache) >= _GEO_CACHE_MAX:
         for k in sorted(_geo_cache, key=lambda k: _geo_cache[k].get("_ts", 0))[:1000]:
             del _geo_cache[k]
 
-    # Resolve hostname to IP
     ip = resolve_ip(host)
     if not ip:
         return None
@@ -110,9 +99,6 @@ def geolocate(address: str) -> dict | None:
     last_error = None
     for _ in range(_MAX_ATTEMPTS):
         try:
-            # NOTE: plain HTTP on purpose — ip-api.com's free tier answers
-            # 403 "SSL unavailable" on HTTPS. No secret crosses the wire
-            # (just the public server IP being asked about).
             resp = httpx2.get(
                 f"http://ip-api.com/json/{ip}",
                 timeout=_TIMEOUT,

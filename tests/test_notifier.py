@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for backend/operations/notifier.py and the v6 notification columns.
 
 Every test is named ``test_nt_*`` (selectable with ``-k test_nt_``) and every
@@ -57,9 +54,6 @@ def nt_user(name, *, expiry=None, total=None, used=0, active=True):
     )
 
 
-# ── collect_alerts ───────────────────────────────────────────────────────────
-
-
 def test_nt_collect_alerts_groups_users(nt_session):
     today = dt.datetime.now(dt.UTC).date()
     nt_session.add_all(
@@ -83,9 +77,6 @@ def test_nt_collect_alerts_groups_users(nt_session):
     assert alerts["out_of_traffic"] == ["over_quota"]
     assert alerts["disabled_expiry"] == ["disabled_expired"]
     assert alerts["disabled_traffic"] == ["disabled_quota"]
-
-
-# ── build_summary ────────────────────────────────────────────────────────────
 
 
 def test_nt_summary_compact_format():
@@ -114,9 +105,6 @@ def test_nt_summary_respects_category_flags():
     assert "alice" not in traffic_only and "carol" not in traffic_only
 
     assert notifier.build_summary(alerts, notify_expiry=False, notify_traffic=False) == ""
-
-
-# ── send_telegram ────────────────────────────────────────────────────────────
 
 
 def nt_forbidden_post(*args, **kwargs):
@@ -205,9 +193,6 @@ def test_nt_send_returns_false_on_http_error(nt_session, nt_settings, monkeypatc
     assert notifier.send_telegram("hello", db=nt_session) is False
 
 
-# ── run_daily_alerts ─────────────────────────────────────────────────────────
-
-
 def nt_alerts():
     return {"expiring": ["alice"], "out_of_traffic": [], "disabled_expiry": [], "disabled_traffic": []}
 
@@ -256,9 +241,6 @@ def test_nt_daily_never_raises(nt_session, monkeypatch):
     assert notifier.run_daily_alerts() is False
 
 
-# ── Settings endpoint roundtrip ──────────────────────────────────────────────
-
-
 def test_nt_settings_endpoint_roundtrip():
     from fastapi.testclient import TestClient
 
@@ -292,15 +274,11 @@ def test_nt_settings_endpoint_roundtrip():
         db.close()
 
 
-# ── Migration v6 ─────────────────────────────────────────────────────────────
-
-
 def test_nt_migration_v6_adds_notification_flags(nt_session):
     migrations.migrate(nt_session)
     settings_columns = {c["name"] for c in inspect(nt_session.bind).get_columns("settings")}
     assert {"notify_expiry", "notify_traffic"} <= settings_columns
 
-    # Pretend the database was stamped before v6, as an existing install would be.
     nt_session.execute(text("ALTER TABLE settings DROP COLUMN notify_expiry"))
     nt_session.execute(text("ALTER TABLE settings DROP COLUMN notify_traffic"))
     nt_session.execute(text("DELETE FROM schema_version"))

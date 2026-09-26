@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for the offsite backup copy (rsync/scp push of scheduled backups).
 
 Every test/fixture is named ``ob_*`` so this module cannot collide with
@@ -19,8 +16,6 @@ from backend.db.engine import SessionLocal
 from backend.db.models import Settings
 from backend.operations import offsite_backup as ob
 from backend.operations.offsite_backup import InvalidTarget, parse_target, push_offsite
-
-# ── Target parsing ───────────────────────────────────────────────────────────
 
 
 def test_ob_parse_target_accepts_user_host_path():
@@ -65,9 +60,6 @@ def test_ob_parse_target_dotted_hosts_and_paths():
 def test_ob_parse_target_rejects_garbage(bad):
     with pytest.raises(InvalidTarget):
         parse_target(bad)
-
-
-# ── Push (subprocess mocked) ────────────────────────────────────────────────
 
 
 @pytest.fixture()
@@ -177,9 +169,6 @@ def test_ob_push_uses_batch_mode_ssh(ob_backup, monkeypatch):
     assert fake.calls[0]["capture_output"] is True
 
 
-# ── Settings API roundtrip ───────────────────────────────────────────────────
-
-
 @pytest.fixture()
 def ob_client():
     from backend.auth.authz import require_owner
@@ -227,7 +216,6 @@ def test_ob_settings_roundtrip_and_validation(ob_client):
         data = ob_client.get("/api/server/settings").json()["data"]
         assert data["offsite_backup_target"] == "backup@server.example:/backups/panel"
 
-        # Empty string clears the target.
         res = ob_client.put("/api/server/settings/bot", json={"offsite_backup_target": ""}, headers=csrf)
         assert res.json()["success"] is True
         assert res.json()["data"]["offsite_backup_target"] == ""
@@ -265,7 +253,6 @@ def test_ob_scheduled_job_pushes_newest_backup(monkeypatch, tmp_path):
         return True
 
     monkeypatch.setattr(app_module, "create_panel_backup", ob_spy_create, raising=False)
-    # The job imports create_panel_backup lazily from the routers module.
     import backend.routers.maintenance as maintenance
 
     monkeypatch.setattr(maintenance, "create_panel_backup", ob_spy_create)

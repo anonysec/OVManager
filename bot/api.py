@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Authenticated HTTP client for the panel API."""
 
 from __future__ import annotations
@@ -64,9 +61,6 @@ async def login(username: str, password: str) -> str | None:
 class Panel:
     def __init__(self, token: str):
         self.token = token
-        # Last HTTP status of request()/download_ovpn (None = no call yet).
-        # Handlers use it to tell "panel unreachable" (0) apart from an
-        # empty-but-healthy response — get_users() returns [] in both cases.
         self.last_status: int | None = None
 
     def _headers(self) -> dict[str, str]:
@@ -101,8 +95,6 @@ class Panel:
         log.warning("API %s %s → %s %s", method, path, resp.status_code, detail)
         return {"success": False, "msg": detail or f"HTTP {resp.status_code}", "status": resp.status_code}
 
-    # ── Users ────────────────────────────────────────────────────────
-
     async def get_users(self, search: str | None = None) -> list[dict]:
         path = "/users/"
         if search and search.strip():
@@ -117,7 +109,6 @@ class Panel:
 
     async def get_user(self, *, uuid: str | None = None, name: str | None = None) -> dict | None:
         if name and not uuid:
-            # Server-side exact match first (one small query, not the table).
             for user in await self.get_users(search=name):
                 if (user.get("name") or "").lower() == name.lower():
                     return user
@@ -191,8 +182,6 @@ class Panel:
     async def restore_user(self, uuid: str) -> dict:
         """Undo a recent delete (panel keeps a ≤120s undo window)."""
         return await self.request("POST", f"/users/{uuid}/restore")
-
-    # ── Nodes / system ───────────────────────────────────────────────
 
     async def get_nodes(self) -> list[dict]:
         result = await self.request("GET", "/nodes/")

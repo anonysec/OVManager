@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Opaque, DB-backed session tokens (replaces JWT auth).
 
 Design:

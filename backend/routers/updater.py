@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Panel update checker and one-click updater.
 
 The panel itself never downloads or installs anything: ``/status`` only reads
@@ -33,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/updater", tags=["Updater"])
 
-#: Same defaults the installer uses; both are overridable for tests/odd installs.
 _DEFAULT_APP_DIR = "/opt/ovmanager"
 _DEFAULT_REPO = "anonysec/OVManager"
 
@@ -44,7 +40,6 @@ _UPDATE_LOG_NAME = "update.log"
 _HOST_COMPOSE_CMD = "docker compose up -d --build"
 _HOST_RESTART_CMD = "docker restart ovmanager"
 
-# In-process cache shared by every request; ``ts`` stays 0 until the first check.
 _cache: dict = {"ts": 0.0, "latest": None, "source": "unknown", "note": ""}
 
 

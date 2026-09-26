@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Central input validators: one regex per concept, shared by API and bot.
 
 The panel username rule, the URLPATH rule, and the domain/email rules each
@@ -13,14 +10,11 @@ from __future__ import annotations
 
 import re
 
-# Panel/bot usernames: 3–64 chars, letters/digits/underscore.
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{3,64}$")
 
-# URLPATH prefix: letters/digits/dash/underscore, max 64 (empty = root).
 URLPATH_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 URLPATH_MAX_LENGTH = 64
 
-# DNS names for TLS issuance (length-checked separately, max 253).
 _DOMAIN_RE = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"

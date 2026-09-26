@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Abuse-surface regression tests: the API must never become a file reader
 or a shell. Only the owner reaches sensitive endpoints (over SSH for the
 terminal); every byte the API touches is validated before use."""
@@ -73,8 +70,6 @@ def test_restore_upload_traversal_writes_nothing_outside(monkeypatch, tmp_path):
             files={"file": (filename, b"not a database", "application/octet-stream")},
             headers=owner,
         )
-        # Rejected as invalid, or fails later as a non-bundle — but never as
-        # a file written outside the backup dir.
         assert resp.status_code in (200, 400, 422), resp.text
     assert list(tmp_path.rglob("evil.db")) == []
     assert (tmp_path / "abs").exists() is False
@@ -143,6 +138,4 @@ def test_retired_backup_key_in_dotenv_still_boots(tmp_path):
         encoding="utf-8",
     )
     settings = Setting(_env_file=str(env_file))
-    # The point is boot tolerates the retired key (CI env may override the
-    # username; what must hold is the stale key parses and is ignored).
     assert settings.BACKUP_ENCRYPT_KEY == "stale-key-from-an-older-release"

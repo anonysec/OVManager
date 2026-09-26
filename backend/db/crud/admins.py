@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Admin CRUD."""
 
 from __future__ import annotations
@@ -62,6 +59,3 @@ def delete_admin(db: Session, admin: Admin):
     db.delete(admin)
     db.commit()
     return True
-
-
-# nodes crud

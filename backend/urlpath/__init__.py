@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Dynamic URL path prefix (URLPATH) package.
 
 Same import surface as the old single module — everything is re-exported

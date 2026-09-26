@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from datetime import date, datetime
 
 from sqlalchemy import BigInteger, DateTime
@@ -18,20 +15,12 @@ class User(Base):
     total: Mapped[int] = mapped_column(BigInteger, nullable=True)
     used: Mapped[int] = mapped_column(BigInteger, nullable=True)
     last_node_usage: Mapped[int] = mapped_column(BigInteger, default=0)
-    # JSON map {node_name: last_seen_cumulative_bytes}. Lets traffic deltas be
-    # computed correctly per node when a user is connected to several nodes.
     node_usage: Mapped[str] = mapped_column(default="{}", server_default="{}")
-    # Max simultaneous logins/devices allowed per config.
-    # 1 = single login (OpenVPN default), 0 = unlimited.
     max_logins: Mapped[int] = mapped_column(default=1, nullable=False)
     expiry_date: Mapped[date] = mapped_column()
     is_active: Mapped[bool] = mapped_column(default=True)
     owner: Mapped[str] = mapped_column(nullable=False)
-    # Last time the user had at least one live connection (set whenever
-    # active_connections > 0). Used by the UI "Last Online" column.
     last_online: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    # Free-form label for organizing customers ("monthly", "reseller-a").
-    # Pure bookkeeping: never sent to nodes, never affects connectivity.
     tag: Mapped[str] = mapped_column(nullable=True, default=None)
 
 
@@ -44,8 +33,6 @@ class Admin(Base):
     telegram_id: Mapped[int] = mapped_column(nullable=True, unique=True)
     username_prefix: Mapped[str] = mapped_column(nullable=True)
     disabled: Mapped[bool] = mapped_column(default=False, server_default="0")
-    # Per-admin new-user defaults. NULL = inherit the owner's global plan
-    # from Settings (the Telegram bot block).
     default_days: Mapped[int | None] = mapped_column(nullable=True)
     default_traffic_gb: Mapped[int | None] = mapped_column(nullable=True)
     default_max_users: Mapped[int | None] = mapped_column(nullable=True)
@@ -80,10 +67,6 @@ class Node(Base):
     key: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[bool] = mapped_column(default=True)
     use_tls: Mapped[bool] = mapped_column(default=False)
-    # PasarGuard-style TLS pinning: the node's certificate (PEM) as seen by
-    # the panel at pin time. When set with use_tls, HTTPS is verified against
-    # exactly this certificate — a self-signed node loses the unverified
-    # fallback. NULL = not pinned (legacy node or plain HTTP).
     server_ca: Mapped[str | None] = mapped_column(nullable=True, default=None)
     country_code: Mapped[str] = mapped_column(nullable=True)
     latitude: Mapped[float] = mapped_column(nullable=True)
@@ -97,41 +80,21 @@ class Settings(Base):
     tunnel_address: Mapped[str] = mapped_column(nullable=True)
     port: Mapped[int] = mapped_column(default=1194, nullable=False)
     protocol: Mapped[str] = mapped_column(default="tcp", nullable=False)
-    # Operator-configured display timezone (IANA name, e.g. "Asia/Tehran").
-    # Used by the UI to render "last online", logs, and expiry times.
     timezone: Mapped[str] = mapped_column(default="UTC", nullable=False)
-    # Prefix for auto-generated usernames (e.g. "420" → 4201, 4202...).
-    # Null/empty = manual naming only.
-    # Telegram bot config
     bot_token: Mapped[str] = mapped_column(nullable=True)
     bot_enabled: Mapped[bool] = mapped_column(default=False)
     default_days: Mapped[int] = mapped_column(default=30)
     default_traffic_gb: Mapped[int] = mapped_column(default=100)
     default_max_users: Mapped[int] = mapped_column(default=1)
     owner_telegram_id: Mapped[int] = mapped_column(nullable=True)
-    # Daily Telegram alerts: which categories the panel should push itself
-    # (the bot only polls; sending is an independent HTTPS call).
     notify_expiry: Mapped[bool] = mapped_column(default=True, nullable=False)
     notify_traffic: Mapped[bool] = mapped_column(default=True, nullable=False)
-    # Telegram alert when a node stops answering the metrics probe.
     notify_node_down: Mapped[bool] = mapped_column(default=True, nullable=False)
-    # Subscription link settings — persisted to DB (was in-memory only).
     subscription_url_prefix: Mapped[str] = mapped_column(nullable=True)
     subscription_path: Mapped[str] = mapped_column(default="sub", nullable=False)
-    # Dynamic URL path prefix for the panel (like 3x-ui's "panel path" feature).
-    # Empty = serve at root (/). Non-empty = serve at /<urlpath>/... only.
-    # When set, requests to root or other paths get an empty response (no 404).
-    # Changeable at runtime via the web UI — no restart required.
     urlpath: Mapped[str] = mapped_column(default="", nullable=False)
-    # Scheduled automatic database backup (OFF by default). `auto_backup_time`
-    # is HH:MM in 24-hour server-local time; `auto_backup_keep` caps how many
-    # timestamped backups are retained.
     auto_backup_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)
     auto_backup_time: Mapped[str] = mapped_column(default="03:30", nullable=False)
     auto_backup_keep: Mapped[int] = mapped_column(default=50, nullable=False)
-    # Optional offsite copy of the newest scheduled backup, pushed with
-    # system rsync (fallback scp). Format: "[user@]host:/path".
     offsite_backup_target: Mapped[str] = mapped_column(nullable=True)
-    # Opt-in encrypted delivery of scheduled backup bundles to the configured
-    # Telegram owner chat. Requires BACKUP_ENCRYPT_KEY.
     telegram_backup_enabled: Mapped[bool] = mapped_column(default=False, nullable=False)

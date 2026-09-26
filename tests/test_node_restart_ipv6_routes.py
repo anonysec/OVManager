@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner-only node restart + per-node IPv6 routes.
 
 The node client seam (``node_client`` in backend.routers.node) is
@@ -81,9 +78,6 @@ class _FakeNR:
         return self.restart_answer
 
 
-# ── restart route ────────────────────────────────────────────────────
-
-
 def test_restart_route_returns_node_result(monkeypatch):
     from backend.routers import node as node_router
 
@@ -161,9 +155,6 @@ def test_restart_route_404_without_node():
     client = TestClient(api)
     resp = client.post("/api/nodes/424242/restart", headers=_headers(_owner()))
     assert resp.status_code == 404
-
-
-# ── IPv6 route ───────────────────────────────────────────────────────
 
 
 def test_ipv6_route_forwards_node_settings(monkeypatch):
@@ -261,9 +252,6 @@ def test_ipv6_route_404_without_node():
         json={"enable_ipv6": True},
     )
     assert resp.status_code == 404
-
-
-# ── client payloads ──────────────────────────────────────────────────
 
 
 def test_update_config_payload_includes_ipv6_only_when_provided(monkeypatch):

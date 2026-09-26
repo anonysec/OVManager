@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Dynamic URL path prefix manager for OVManager.
 
 Reads the current URLPATH from the DB Settings table with a short cache TTL.
@@ -25,7 +22,6 @@ from backend.db.engine import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# Thread-safe cache for the current URLPATH
 _lock = threading.Lock()
 _cache_value: str = ""
 _cache_ts: float = 0.0
@@ -59,15 +55,11 @@ def get_urlpath() -> str:
     if now - _cache_ts < _CACHE_TTL:
         return _cache_value
     with _lock:
-        # Double-check after acquiring lock
         if now - _cache_ts < _CACHE_TTL:
             return _cache_value
         try:
             _cache_value = _load_from_db()
         except Exception:
-            # Never replace a known protected path with root because the DB is
-            # temporarily locked/unavailable. On first boot, use the validated
-            # environment fallback until migrations create the Settings row.
             if _cache_ts > 0:
                 return _cache_value
             try:
@@ -93,7 +85,6 @@ def set_urlpath(value: str) -> str:
     value = (value or "").strip("/")
     if value and value.lower() in reserved_prefixes():
         raise ValueError(f"URLPATH {value!r} is reserved (it would shadow a panel route) — choose another path")
-    # Persist to DB (best effort — may fail in test environments)
     try:
         db = SessionLocal()
         try:
@@ -105,9 +96,6 @@ def set_urlpath(value: str) -> str:
         finally:
             db.close()
     except Exception as exc:
-        # A fresh in-process test/first-boot can reach this before migrations
-        # create Settings. Keep the requested value in memory in that narrow
-        # case; all real persistence/locking errors remain failures.
         if "no such table" in str(exc).lower():
             logger.warning("URLPATH table is not ready; using in-memory value until migration")
             with _lock:
@@ -142,9 +130,6 @@ def reserved_prefixes() -> set[str]:
         if _reserved_cache is not None:
             return set(_reserved_cache)
 
-    # Static base: middleware exemptions (URLPathMiddleware._ALWAYS_ALLOWED_
-    # PREFIXES) plus conditional routes that only exist with DOC=true
-    # (/doc, /openapi.json) — reserving them keeps a later DOC enable safe.
     reserved = {"api", "assets", "health", "static", "doc", "openapi.json"}
     try:
         from backend.config import config
@@ -153,7 +138,6 @@ def reserved_prefixes() -> set[str]:
     except Exception:
         pass
     try:
-        # Local import: backend.app imports this module for the middleware.
         from backend.app import api
 
         for route in api.routes:
@@ -217,7 +201,6 @@ class URLPathMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] not in ("http", "websocket"):
-            # Let non-HTTP (lifespan, etc.) pass through
             await self.app(scope, receive, send)
             return
 
@@ -225,16 +208,10 @@ class URLPathMiddleware:
         path = scope.get("path", "")
 
         if not urlpath:
-            # No prefix configured — serve everything at root
             await self.app(scope, receive, send)
             return
 
-        # Always allow these paths through regardless of URLPATH
         path = scope.get("path", "")
-        # Static assets and public subscription links intentionally remain
-        # reachable without the panel prefix. API/docs must not bypass it.
-        # SUBSCRIPTION_PATH is restart-required (routers/sub.py binds it at
-        # import), so read it live to avoid drift when customized.
         try:
             from backend.config import config as _panel_config
 
@@ -246,7 +223,6 @@ class URLPathMiddleware:
             "/fonts/",
             _sub_prefix,
             "/health",
-            # PWA files are requested by the browser at root paths.
             "/manifest.webmanifest",
             "/sw.js",
             "/icons/",
@@ -258,22 +234,17 @@ class URLPathMiddleware:
         prefix = f"/{urlpath}"
 
         if path == prefix:
-            # Exact match: /mysecret → /
             scope = dict(scope)
             scope["path"] = "/"
             await self.app(scope, receive, send)
             return
 
         if path.startswith(prefix + "/"):
-            # Strip prefix: /mysecret/api/users → /api/users
             scope = dict(scope)
             scope["path"] = path[len(prefix) :]
             await self.app(scope, receive, send)
             return
 
-        # Path doesn't match the prefix → return an empty 404 so the panel
-        # looks like an ordinary empty website (a blank 200 read as "broken").
-        # No body, no redirect, no headers that reveal the server exists.
         await self._send_empty(send)
 
     @staticmethod

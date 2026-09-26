@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner-only user edit flow: fix quota, expiry or device limit in place.
 
 The panel's PUT /users/{uuid} supports full edits, but the bot previously

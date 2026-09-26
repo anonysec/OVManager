@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import logging
 import re
 
@@ -22,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/server", tags=["Panel Settings"])
 
-# 24-hour HH:MM as persisted in Settings.auto_backup_time.
 _AUTO_BACKUP_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _AUTO_BACKUP_KEEP_MIN = 1
 _AUTO_BACKUP_KEEP_MAX = 500
@@ -39,7 +35,6 @@ async def get_settings(
     db_settings = crud.get_settings(db)
     urlpath = _get_urlpath()
 
-    # Subscription prefix: DB-persisted > env config > request base URL
     db_prefix = getattr(db_settings, "subscription_url_prefix", None)
     sub_prefix_source = db_prefix if db_prefix else config.SUBSCRIPTION_URL_PREFIX
     public_base = (config.PUBLIC_URL or str(request.base_url)).rstrip("/")
@@ -47,7 +42,6 @@ async def get_settings(
         sub_prefix_source.rstrip("/") + "/" if sub_prefix_source else public_base + (f"/{urlpath}/" if urlpath else "/")
     )
 
-    # Subscription path: DB-persisted > env config
     db_sub_path = getattr(db_settings, "subscription_path", None) or "sub"
     sub_path = db_sub_path if db_sub_path else config.SUBSCRIPTION_PATH
 
@@ -65,22 +59,15 @@ async def get_settings(
         owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
         urlpath=urlpath,
     )
-    # Daily Telegram alert prefs. Kept out of the shared output schema (owned
-    # by another module) and merged here so the response stays backwards
-    # compatible: every previous field is unchanged, two are added.
     data = settings.model_dump()
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
     data["notify_node_down"] = bool(getattr(db_settings, "notify_node_down", True))
-    # Scheduled automatic backup (off by default). Merged here for the same
-    # backward-compatibility reason as the notification flags above.
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
-    # Optional offsite copy target for scheduled backups (scp-style string).
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
-    # No key involved anymore: delivery needs only a configured bot + owner chat.
     data["telegram_backup_available"] = bool(getattr(db_settings, "bot_token", None))
     return ResponseModel(
         success=True,
@@ -105,18 +92,13 @@ class BotConfigUpdate(BaseModel):
     default_traffic_gb: int | None = None
     default_max_users: int | None = None
     owner_telegram_id: int | None = None
-    # Daily Telegram alert categories (panel-sent, independent of bot polling).
     notify_expiry: bool | None = None
     notify_traffic: bool | None = None
-    # Telegram alert when a node stops answering the metrics probe.
     notify_node_down: bool | None = None
-    # Scheduled automatic database backup (OFF by default).
     auto_backup_enabled: bool | None = None
     auto_backup_time: str | None = None
     auto_backup_keep: int | None = None
-    # Optional offsite copy of the newest backup ("[user@]host:/path").
     offsite_backup_target: str | None = None
-    # Encrypted delivery to the configured owner Telegram chat.
     telegram_backup_enabled: bool | None = None
 
 
@@ -131,7 +113,6 @@ async def update_timezone(
     user: dict = Depends(require_owner),
 ):
     tz = (payload.timezone or "UTC").strip() or "UTC"
-    # Validate IANA timezone name
     from zoneinfo import available_timezones
 
     if tz != "UTC" and tz not in available_timezones():
@@ -146,10 +127,6 @@ async def update_subscription(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
-    # Persist to DB so settings survive restarts.
-    # Do NOT mutate the in-memory config object — it is a pydantic-settings
-    # singleton and changes are not atomic, not thread-safe, and are lost on
-    # restart anyway. The DB is the single source of truth.
     db_settings = crud.get_settings(db)
     if payload.subscription_url_prefix is not None:
         db_settings.subscription_url_prefix = payload.subscription_url_prefix.strip()
@@ -179,7 +156,6 @@ async def update_bot_config(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
-    # Scheduled-backup fields are validated before anything is persisted.
     if payload.auto_backup_time is not None and not _AUTO_BACKUP_TIME_RE.match(payload.auto_backup_time):
         return ResponseModel(
             success=False,
@@ -215,15 +191,12 @@ async def update_bot_config(
     try:
         crud.update_bot_config(db, **kwargs)
     except RuntimeError as exc:
-        # BOT_ENCRYPT_KEY is not set — surface as a clear 400, not a 500
         return ResponseModel(
             success=False,
             msg=str(exc) + ". Set BOT_ENCRYPT_KEY in your .env file before saving a bot token.",
             data=None,
         )
     data = crud.get_bot_config(db)
-    # The alert prefs live on the same Settings row; add them to the payload
-    # so the UI can confirm the new values without a second request.
     db_settings = crud.get_settings(db)
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
@@ -235,8 +208,6 @@ async def update_bot_config(
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
     data["telegram_backup_available"] = bool(getattr(db_settings, "bot_token", None))
 
-    # Apply a new schedule immediately — no restart required. Imported lazily
-    # because backend.app imports the routers (circular otherwise).
     if _AUTO_BACKUP_FIELDS & payload.model_fields_set:
         try:
             from backend.app import reschedule_auto_backup
@@ -270,8 +241,6 @@ async def update_urlpath(
 
     value = (payload.urlpath or "").strip("/")
 
-    # Validate: only allow safe characters (alphanumeric, dash, underscore),
-    # max 64 (both enforced by validate_urlpath; empty = serve at /).
     if not validate_urlpath(value):
         return ResponseModel(
             success=False,
@@ -279,10 +248,6 @@ async def update_urlpath(
             data=None,
         )
 
-    # Reserved prefixes would shadow real routes and (worst case) lock the
-    # operator out: e.g. urlpath="api" swallows every API call, "sub" steals
-    # public subscription links, "assets" breaks the SPA bundle. The set is
-    # derived from the live route table, so it can't drift as routes change.
     from backend.urlpath import reserved_prefixes
 
     if value and value.lower() in reserved_prefixes():

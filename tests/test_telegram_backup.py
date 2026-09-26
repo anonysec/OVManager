@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from types import SimpleNamespace
 
 from backend.operations import telegram_backup as tb

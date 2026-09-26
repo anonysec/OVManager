@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Per-node connection manager: persistent NodeRequests + health tracking.
 
 Replaces per-call ``node_client(node)`` construction, which rebuilt TLS
@@ -68,7 +65,6 @@ class Connection:
     last_failure: float = 0.0
 
 
-# Healthy results are trusted for this long without a fresh probe.
 _HEALTH_TTL = 300.0
 
 _lock = threading.Lock()
@@ -81,9 +77,6 @@ def get_connection(node) -> NodeRequests:
     Nodes without an ``id`` (test doubles) construct fresh clients and are
     never cached.
     """
-    # Lazy attribute access (not a from-import): keeps the class identical
-    # to backend.node.requests.NodeRequests whatever test patching does,
-    # without a partially-initialized-module cycle at import time.
     from backend.node.requests import NodeRequests
 
     node_id = getattr(node, "id", None)
@@ -112,7 +105,6 @@ def get_connection(node) -> NodeRequests:
     with _lock:
         conn = _connections.get(node_id)
         if conn is not None and conn.signature == signature:
-            # Lost a construction race: the existing client wins.
             return conn.client
         conn = Connection(client=client, signature=signature, health=NodeHealth.UNKNOWN)
         _connections[node_id] = conn

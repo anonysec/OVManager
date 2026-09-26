@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from __future__ import annotations
 
 from telegram import Update
@@ -73,14 +70,10 @@ async def handle_create_text(update: Update, context: ContextTypes.DEFAULT_TYPE,
         return
     if step == "logins":
         await _accept_int(update, context, actor, text, "logins", 0, 1000, "confirm", None)
-        # _accept_int leaves the step unchanged when validation fails — only
-        # advance to confirm on actual success, not on stale values.
         if _flow(context).get("step") != "confirm":
             return
         await _show_confirm(update, context)
         return
-    # A button step (plan/confirm) received free text — re-show its buttons
-    # instead of dead-ending or silently treating the text as a name.
     await _reprompt(update, context, actor)
 
 
@@ -104,7 +97,6 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
         flow["step"] = "name"
         if plan != "custom":
             if plan == "standard":
-                # Standard is the caller's own new-user plan, not one fixed set.
                 spec = await _effective_plan(actor)
             else:
                 spec = config.plans.get(plan) or await _effective_plan(actor)

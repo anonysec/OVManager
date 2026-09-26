@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Traffic accounting: totals-based billing never double-counts, enforce works.
 
 Covers backend/operations/daily_checks.py:
@@ -56,8 +53,6 @@ def _drop(name: str):
     try:
         row = db.query(User).filter(User.name == name).first()
         if row is not None:
-            # Daily rows key by id; SQLite may reuse the id for a later row,
-            # so orphaned bytes would leak into an unrelated user's history.
             db.execute(text("DELETE FROM user_traffic_daily WHERE user_id = :uid"), {"uid": row.id})
             db.query(User).filter(User.name == name).delete()
             db.commit()
@@ -76,9 +71,6 @@ def _used(name: str):
         db.close()
 
 
-# ── delta unit tests ──────────────────────────────────────────────
-
-
 def test_delta_accurate_path_diffs_per_session():
     delta, state = dc._compute_session_delta({"s1": 1000, "s2": 500}, {"s1": 800, "s2": 500}, 1500)
     assert delta == 200
@@ -86,7 +78,6 @@ def test_delta_accurate_path_diffs_per_session():
 
 
 def test_delta_counts_reset_counters_as_new_bytes():
-    # Node rebooted / counter wrapped: cur < last → count cur, never negative.
     delta, _ = dc._compute_session_delta({"s1": 50}, {"s1": 9000}, 50)
     assert delta == 50
 
@@ -109,13 +100,8 @@ def test_extract_username_keeps_dashes():
 
 
 def test_extract_username_exact_match_wins():
-    # Bare usernames (what nodes actually send) match exactly — even dashed.
     assert dc._extract_username("john-doe", "node-1", {"john-doe"}) == "john-doe"
-    # Unknown keys pass through unmangled so warnings name the real key.
     assert dc._extract_username("ghost-9", "node-1", {"alice"}) == "ghost-9"
-
-
-# ── collector integration (stubbed node fetch) ────────────────────
 
 
 def _run(coro):
@@ -131,9 +117,7 @@ def test_collect_never_double_counts(monkeypatch):
     payloads = [
         {"users": {f"{name}-tnode": 1000}, "sessions": {f"{name}-tnode": {"s1": 1000}}},
         {"users": {f"{name}-tnode": 1000}, "sessions": {f"{name}-tnode": {"s1": 1000}}},
-        # Reconnect: old session gone, new one carries 300 fresh bytes.
         {"users": {f"{name}-tnode": 1300}, "sessions": {f"{name}-tnode": {"s2": 300}}},
-        # Unknown users in the payload must not crash the run.
         {"users": {"ghost-tnode": 5}, "sessions": {"ghost-tnode": {"g": 5}}},
     ]
 
@@ -155,7 +139,6 @@ def test_collect_never_double_counts(monkeypatch):
             assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
             assert _used(name) == 1300  # only the new session counted
             db.expire_all()
-            # Unknown users in the payload: run completes, our user untouched.
             assert _run(dc._collect_node_traffic(node, {name: db.query(User).filter(User.name == name).first()}, db)) is True
             assert _used(name) == 1300
         finally:

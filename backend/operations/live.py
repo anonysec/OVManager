@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Server-side live data: in-process event bus + node snapshot collector.
 
 Architecture (step 1 of the realtime plan):
@@ -25,14 +22,8 @@ from dataclasses import dataclass, field
 
 from backend.logger import logger
 
-# How often the collector polls nodes. 10s feels live in the UI while being
-# far gentler than the old per-page-load fan-out.
 POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_POLL_SECONDS", "10"))
 
-# How often to poll when nobody has the live stream open. The snapshot also
-# feeds the public subscription page (/sub/...), which has no SSE channel of
-# its own, so it must never go permanently stale — but there is no reason to
-# hit every node every 10 seconds for an audience of nobody.
 IDLE_POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_IDLE_POLL_SECONDS", "300"))
 
 
@@ -93,8 +84,6 @@ class LiveBus:
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
-                # Slow consumer: drop the oldest event. Live UI events are
-                # invalidation hints — freshness matters more than history.
                 try:
                     q.get_nowait()
                     q.put_nowait(event)
@@ -141,7 +130,6 @@ class LiveSnapshot:
 snapshot = LiveSnapshot()
 
 
-# Module-level accessors (used by request handlers).
 def get_connection_counts() -> dict[str, int]:
     return snapshot.get_connections()
 
@@ -174,9 +162,6 @@ async def collect_live_snapshot() -> None:
     from backend.db.engine import SessionLocal
     from backend.node.requests import node_client
 
-    # Nothing is watching and the snapshot is still fresh enough for the
-    # non-SSE consumers: skip the fan-out entirely. With no browser open this
-    # turns a node probe every 10s into one every IDLE_POLL_SECONDS.
     if not bus.has_subscribers():
         last = snapshot.last_poll_ts
         if last > 0 and (time.monotonic() - last) < IDLE_POLL_SECONDS:
@@ -185,9 +170,6 @@ async def collect_live_snapshot() -> None:
     db = SessionLocal()
     try:
         nodes = crud.get_active_nodes(db)
-        # Only (id, name) is needed to map a node's common_name back to a
-        # username; loading full ORM objects here every 10s for a panel with
-        # thousands of users was a needless allocation.
         id_to_name = dict(crud.get_user_id_name_pairs(db))
     except Exception as exc:
         logger.error("live collector: DB read failed: %s", exc)
@@ -203,8 +185,6 @@ async def collect_live_snapshot() -> None:
         return
 
     def probe(node) -> tuple[object, dict]:
-        # The sessions summary is a superset of the health check: a node that
-        # answers with any payload is up; an unreachable node returns {}.
         req = node_client(node)
         return node, req.get_sessions(hours=1)
 
@@ -217,8 +197,6 @@ async def collect_live_snapshot() -> None:
     online: dict[str, bool] = {}
     for item in results:
         if isinstance(item, Exception):
-            # Debug: the RPC layer already warned once + on recovery; this
-            # fires per failed probe per tick and would spam just as loudly.
             logger.debug("live collector: node probe failed: %s", item)
             continue
         node, data = item

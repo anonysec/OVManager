@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """TLS configuration for OVManager.
 
 Cert paths follow the convention set by the installer:
@@ -19,13 +16,11 @@ class TLSConfig:
     @classmethod
     def get_ssl_config(cls) -> dict:
         """Return cert/key paths. Empty strings mean no TLS."""
-        # 1. Explicit env vars (set by installer or Docker)
         cert_file = os.getenv("SSL_CERTFILE", "")
         key_file = os.getenv("SSL_KEYFILE", "")
         if cert_file and key_file:
             return {"cert_file": cert_file, "key_file": key_file}
 
-        # 2. Auto-detect from PANEL_DOMAIN (Let's Encrypt)
         domain = os.getenv("PANEL_DOMAIN", "")
         if domain:
             le_cert = f"/etc/letsencrypt/{domain}/fullchain.pem"
@@ -33,11 +28,9 @@ class TLSConfig:
             if os.path.isfile(le_cert) and os.path.isfile(le_key):
                 return {"cert_file": le_cert, "key_file": le_key}
 
-        # 3. Auto-detect self-signed fallback
         ss_cert = "/etc/ssl/self-signed/cert.pem"
         ss_key = "/etc/ssl/self-signed/key.pem"
         if os.path.isfile(ss_cert) and os.path.isfile(ss_key):
             return {"cert_file": ss_cert, "key_file": ss_key}
 
-        # 4. No TLS
         return {"cert_file": "", "key_file": ""}

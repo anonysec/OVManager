@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """CRUD package: per-entity modules re-exported for a stable import path.
 
 ``from backend.db import crud; crud.create_user(...)`` and

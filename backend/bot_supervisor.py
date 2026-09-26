@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Telegram bot supervision: one subprocess, restarted on crash.
 
 A clean exit (rc=0) means disabled (no token / toggled off) and is not
@@ -15,9 +12,6 @@ import os
 from backend.logger import logger
 
 _bot_process = None
-# Monotonic deadline while a clean (rc=0 = disabled, no token / toggled off)
-# bot exit suppresses restart attempts. Prevents a per-minute fork+WARNING
-# loop on installs without a bot token; real crashes (rc!=0) still restart.
 _bot_disabled_until: float | None = None
 _BOT_DISABLED_RETRY_SECONDS = 3600
 
@@ -59,8 +53,6 @@ def _watchdog_bot():
         _bot_disabled_until = None
         return
     if rc == 0:
-        # Clean exit = disabled (no token or turned off in Settings).
-        # Don't hot-loop: retry at most once per hour, at INFO level.
         import time
 
         now = time.monotonic()

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Traffic collector vs. concurrent panel actions.
 
 The collector loads users, awaits node HTTP (seconds), then persists. A
@@ -70,7 +67,6 @@ def test_reset_during_node_fetch_is_not_overwritten(monkeypatch):
     node = SimpleNamespace(name="tnode", address="127.0.0.1")
 
     async def fake_fetch(node, db=None):
-        # Simulate the admin resetting usage while the node fetch was in flight.
         other = SessionLocal()
         try:
             row = other.query(User).filter(User.id == user_id).first()

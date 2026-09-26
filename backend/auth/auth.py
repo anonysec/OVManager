@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Panel authentication: login rate-limiting + opaque session tokens.
 
 Auth model: ``/login`` exchanges credentials for a random opaque bearer token
@@ -30,16 +27,6 @@ from backend.db.engine import SessionLocal, get_db
 
 logger = logging.getLogger("auth")
 
-# ── Rate limiter ──────────────────────────────────────────────────
-# In-memory only, keyed by (IP, username) so one user's failures behind a
-# shared NAT/proxy don't lock out everyone else. A coarser per-IP bucket
-# still caps credential-stuffing across usernames.
-#
-# Deliberately NOT persisted: the panel is a single process, a lockout lasts
-# 5 minutes, and a restart clearing lockouts is acceptable (fail-open on
-# restart beats fail-closed against the operator). This removes two DB
-# round-trips from every login attempt and the whole login_attempts table
-# dance (the dormant table is left in place by migrations — harmless).
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
@@ -73,7 +60,6 @@ def _purge_stale_attempts() -> None:
         _login_attempts.pop(k, None)
 
 
-# ── Router ───────────────────────────────────────────────────────
 router = APIRouter(tags=["Login"])
 
 
@@ -113,11 +99,7 @@ def authenticate_user(db: Session, username: str, password: str):
                     return {"username": username, "type": "owner"}
             except ValueError:
                 logger.warning("ADMIN_PASSWORD_HASH is not a valid bcrypt hash")
-            # Avoid leaking whether the *username* was correct: still check
-            # DB below so the timing path matches wrong-user vs wrong-pass.
         elif owner_password:
-            # Constant-time comparison — even if lengths differ, hmac.compare_digest
-            # handles that safely by padding the shorter string.
             if hmac.compare_digest(password.encode(), owner_password.encode()):
                 return {"username": username, "type": "owner"}
 
@@ -126,8 +108,6 @@ def authenticate_user(db: Session, username: str, password: str):
         if admin.disabled:
             return None
         if verify_password(password, admin.password):
-            # Opportunistic upgrade: legacy $2a$/low-cost hashes get
-            # re-hashed to the current policy on next successful login.
             try:
                 if needs_rehash(admin.password):
                     admin.password = hash_password(password)
@@ -198,12 +178,6 @@ async def login(
         user_agent=request.headers.get("user-agent"),
         ip=ip,
     )
-    # Contract: frontend stores access_token and uses it as a Bearer token.
-    # refresh_token is null — sessions slide on activity instead of rotating.
-    #
-    # username/role are returned explicitly because the token is an opaque
-    # random string, not a JWT: there is nothing in it for the client to
-    # decode. Callers must read identity from here, never from the token.
     from fastapi.responses import JSONResponse as _JSONResponse
 
     secure = request.url.scheme == "https"
@@ -218,9 +192,6 @@ async def login(
             "role": admin["type"],
         }
     )
-    # httpOnly cookie alongside the Bearer body (backward compat): browsers
-    # automatically send it, JS/XSS cannot read it. Max-Age mirrors the
-    # absolute session cap; sliding expiry is still enforced server-side.
     resp.set_cookie(
         key="ovm_session",
         value=raw_token,
@@ -255,8 +226,6 @@ async def logout(request: Request):
     return resp
 
 
-# OAuth2 scheme — tokenUrl is relative; works regardless of URLPATH prefix.
-# auto_error=False so get_current_user can fall back to the httpOnly cookie.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
 
 

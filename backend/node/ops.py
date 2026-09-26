@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Node CRUD operations — add/update/delete nodes and users.
 
 Handles all direct interactions with OVNode instances for user management:
@@ -56,12 +53,6 @@ def node_version_compat(agent_version: object) -> dict:
     return {"verdict": verdict, "agent_version": agent_version, "panel_version": PANEL_VERSION}
 
 
-# Cap on concurrent per-node threadpool jobs for every fan-out below. A batch
-# of 300 users × N nodes would otherwise queue thousands of jobs and starve
-# unrelated requests on the AnyIO threadpool; 20 matches the sync.py sweep.
-# asyncio primitives bind to the loop that first contends on them, so
-# _fanout_semaphore() swaps in a fresh instance for a new loop (tests run one
-# loop per case via asyncio.run).
 NODE_FANOUT_LIMIT = 20
 _node_fanout_semaphore = asyncio.Semaphore(NODE_FANOUT_LIMIT)
 _node_fanout_loop: asyncio.AbstractEventLoop | None = None
@@ -85,8 +76,6 @@ async def _run_bounded(fn, *args):
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     """Add a new node: validate connectivity, geolocate, persist to DB."""
-    # Geolocation does blocking DNS + HTTP (up to ~10s): run it in the
-    # threadpool so a slow lookup cannot stall every other request.
     geo = await run_in_threadpool(geolocate, request.address)
     if not request.use_tls:
         logger.warning(
@@ -124,11 +113,6 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
 
     crud.create_node(db, request, geo)
 
-    # TLS pin (PasarGuard's server_ca idea): fetch the node's certificate
-    # once at add time and store it. From then on HTTPS is verified against
-    # exactly this cert — self-signed nodes stop needing the unverified
-    # fallback. Best-effort: an unreachable fetch leaves the node unpinned
-    # (the sweep/next update pins later).
     if request.use_tls:
         await _pin_node_certificate(request.address, request.port)
 
@@ -174,17 +158,9 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or existing.key
 
-    # Persist first — this is the source of truth for the panel.
     crud.update_node(db, node_id, request, geo)
 
-    # Metadata-only edits (rename, address/port change, status toggle) never
-    # need to reach the node, so they return instantly even when the node is
-    # offline. Only when the operator asks to apply VPN settings on the node
-    # do we contact it — and even then a failure only downgrades the message.
     if not request.set_new_setting:
-        # TLS pin refresh on metadata edits: when TLS is on and the operator
-        # is saving the node, refresh the pinned certificate (TOFU per edit)
-        # so address moves get re-pinned on the next successful update.
         if request.use_tls:
             fetched = await _pin_node_certificate(request.address, request.port)
             if fetched:
@@ -266,8 +242,6 @@ async def get_node_status_handler(node_id: int, db: Session):
     nr = node_client(node)
 
     started = time.perf_counter()
-    # Separate clients per concurrent call: tls_verified is per-instance
-    # mutable state, so sharing one NodeRequests across two threads races.
     nr_sessions = node_client(node)
     info, sessions = await asyncio.gather(
         run_in_threadpool(nr.get_node_info),
@@ -276,8 +250,6 @@ async def get_node_status_handler(node_id: int, db: Session):
     info = info if isinstance(info, dict) else {}
     sessions = sessions if isinstance(sessions, dict) else {}
 
-    # Either call proves the TLS path (same node, same cert); prefer the
-    # verified result if they ever disagree.
     tls_verified = nr.tls_verified if nr.tls_verified is True else nr_sessions.tls_verified
     tls_mode = nr.tls_mode if nr.tls_verified is True else nr_sessions.tls_mode
 
@@ -293,8 +265,6 @@ async def get_node_status_handler(node_id: int, db: Session):
         "session_diagnostics": sessions,
         "latency_ms": round((time.perf_counter() - started) * 1000, 1),
         "reachable": bool(info),
-        # True = verified TLS; False = self-signed fallback (API key without
-        # MITM protection); None = plain HTTP or never connected (unknown).
         "tls_verified": tls_verified,
         "tls_mode": tls_mode,
     }
@@ -374,13 +344,9 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
     users = crud.get_all_users(db)
     nr = node_client(node)
 
-    # Spool to disk past 8 MB so a node with thousands of users cannot pin
-    # the whole archive in memory on a small VPS.
     buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
         for user in users:
-            # Use download_ovpn_bytes() which returns raw bytes — avoids
-            # depending on the internal .body attribute of starlette Response.
             content = await run_in_threadpool(nr.download_ovpn_bytes, str(user.id))
             if content:
                 zf.writestr(f"{user.name}.ovpn", content)

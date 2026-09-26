@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for backend/routers/health.py (owner overview + setup checklist).
 
 This router is not registered in backend/routers/__init__.py yet (the
@@ -22,8 +19,6 @@ from backend.config import config
 from backend.routers.health import router as health_router
 from backend.version import __version__
 
-#: Local app so this file is runnable before the router is wired into the
-#: main app; the prefix matches backend/app.py's registration (``/api``).
 _app = FastAPI()
 _app.include_router(health_router, prefix="/api")
 
@@ -154,9 +149,6 @@ def _cleanup_admin(username: str) -> None:
         db.close()
 
 
-# ── /overview ──────────────────────────────────────────────────────────────
-
-
 def test_overview_requires_auth():
     client = _client()
     assert client.get("/api/health/overview").status_code == 401
@@ -197,9 +189,6 @@ def test_overview_missing_tls_file_does_not_500(monkeypatch):
     assert tls["hint"]
 
 
-# ── /setup ─────────────────────────────────────────────────────────────────
-
-
 def test_setup_counts_reflect_created_rows_and_scope_admin():
     suffix = uuid.uuid4().hex[:8]
     admin = f"hh_admin_{suffix}"
@@ -225,9 +214,7 @@ def test_setup_counts_reflect_created_rows_and_scope_admin():
         scoped = client.get("/api/health/setup", headers=_headers(admin, "admin"))
         assert scoped.status_code == 200
         scoped_body = scoped.json()
-        # The admin owns only the single user created above.
         assert scoped_body["user_count"] == 1
-        # Nodes have no per-admin owner, so both roles see the same count.
         assert scoped_body["node_count"] == owner_body["node_count"]
     finally:
         _cleanup_user(user)

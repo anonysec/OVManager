@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Regression tests for partial PUT /api/users/{uuid} updates.
 
 `crud.update_user` used to assign `expiry_date` and `total` unconditionally,

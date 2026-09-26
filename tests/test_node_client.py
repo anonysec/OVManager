@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for the node_client() construction seam.
 
 node_client() is the single place a Node row becomes a NodeRequests.
@@ -92,11 +89,7 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
     real_dir = node_pki._CERT_DIR
     node_pki._CERT_DIR = tmp_path / "node-certs"
     try:
-        pem = (
-            "-----BEGIN CERTIFICATE-----\n"
-            "MIIBfake\n"
-            "-----END CERTIFICATE-----\n"
-        )
+        pem = "-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----\n"
         req = NodeRequests(
             address="10.0.0.9",
             port=2083,
@@ -116,13 +109,13 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
         def fake_send(self, method, path, **kw):
             captured["verify"] = kw.get("verify")
             return {"success": True}
+
         monkeypatch.setattr(NodeRequests, "_send", fake_send)
         out = req._request("get", "/sync/status")
         assert out == {"success": True}
         assert captured["verify"] == str(ca_path)
         assert req.tls_verified is True
 
-        # Mismatch must fail closed: SSL error -> None, no unverified retry.
         def ssl_send(self, method, path, **kw):
             raise nr_mod._req.exceptions.SSLError("cert mismatch")
 
@@ -130,7 +123,6 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
         assert req._request("get", "/sync/status") is None
     finally:
         node_pki._CERT_DIR = real_dir
-        # drop the cached transport so later tests don't inherit the pin
         from backend.node import connection as _conn
 
         _conn._reset_for_tests()

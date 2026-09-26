@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Background scheduler: periodic jobs and their registration.
 
 Owns the ``_scheduler`` singleton, the per-tick job functions, and the
@@ -28,7 +25,6 @@ from backend.operations.metrics import collect_metrics
 _scheduler = None
 
 
-# ── Background jobs ───────────────────────────────────────────────
 async def auto_sync_limits_job():
     db = SessionLocal()
     try:
@@ -49,8 +45,6 @@ async def auto_daily_alerts_job():
     """Push the daily expiring/out-of-traffic summary to the owner once a day."""
     from backend.operations.notifier import run_daily_alerts
 
-    # Sync job: run off the event loop so the blocking HTTPS call cannot
-    # stall request handling (same pattern as the audit prune below).
     await asyncio.to_thread(run_daily_alerts)
 
 
@@ -110,7 +104,6 @@ async def auto_backup_job():
         logger.info("Scheduled auto backup created: %s", backup_path.name)
         log_event(None, "maintenance.backup", actor="auto", detail=f"Backup created: {backup_path.name}")
 
-        # Optional offsite copy of the fresh backup (rsync, fallback scp).
         if offsite_target.strip():
             from backend.operations.offsite_backup import push_offsite
 
@@ -120,9 +113,6 @@ async def auto_backup_job():
             else:
                 log_event(None, "maintenance.offsite_backup", actor="auto", detail=f"Offsite copy failed for {backup_path.name}")
 
-        # Telegram is a separate opt-in destination. The bundle goes as-is:
-        # delivery is owner-only (bot + private chat) and the server itself
-        # is the trust boundary.
         if telegram_backup_enabled:
             from backend.db import crud
             from backend.operations.telegram_backup import send_backup_document
@@ -164,8 +154,6 @@ def reschedule_auto_backup():
     try:
         scheduler.remove_job("auto_backup")
     except Exception:
-        # JobLookupError (nothing registered) is the common case; a stopped
-        # scheduler is equally harmless here.
         pass
 
     try:
@@ -261,9 +249,6 @@ def start_scheduler():
         replace_existing=True,
         misfire_grace_time=3600,
     )
-    # Live collector: single poller for all nodes. Request handlers and SSE
-    # subscribers use its in-memory snapshot instead of fanning out to nodes.
-    # First run is immediate so the cache is warm before the first page load.
     scheduler.add_job(
         collect_live_snapshot,
         IntervalTrigger(seconds=POLL_SECONDS),
@@ -281,6 +266,5 @@ def start_scheduler():
     )
     scheduler.start()
     _scheduler = scheduler
-    # Auto backup is OFF by default; only registered when enabled in settings.
     reschedule_auto_backup()
     return scheduler

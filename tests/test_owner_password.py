@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Owner credential modes: bcrypt hash (preferred) and legacy plaintext."""
 
 import pytest

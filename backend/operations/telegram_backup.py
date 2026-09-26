@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Plain Telegram delivery for verified backup bundles."""
 
 from __future__ import annotations

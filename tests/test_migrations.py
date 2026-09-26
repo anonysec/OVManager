@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for the versioned migration runner (backend/db/migrations.py).
 
 Each test builds its own throwaway SQLite file so the real panel database is
@@ -30,9 +27,6 @@ def session(tmp_path):
         engine.dispose()
 
 
-# ── Fresh database ───────────────────────────────────────────────────────────
-
-
 def test_fresh_database_is_created_at_head_and_stamped(session):
     assert migrations.current_version(session) == 0
 
@@ -44,7 +38,6 @@ def test_fresh_database_is_created_at_head_and_stamped(session):
     tables = set(inspect(session.bind).get_table_names())
     for mapped in Base.metadata.sorted_tables:
         assert mapped.name in tables, f"mapped table {mapped.name} was not created"
-    # Non-ORM tables owned by the operations modules.
     assert {"audit_logs", "node_health_snapshots", "traffic_snapshots", "security_snapshots"} <= tables
     assert migrations.verify_schema(session) == []
 
@@ -63,9 +56,6 @@ def test_migrate_is_idempotent(session):
     third = migrations.migrate(session)
     assert first == second == third == SCHEMA_VERSION
     assert migrations.verify_schema(session) == []
-
-
-# ── Adopting a database that predates the runner ─────────────────────────────
 
 
 def test_legacy_database_gains_missing_columns(session):
@@ -87,7 +77,6 @@ def test_legacy_database_gains_missing_columns(session):
         )
     """)
     )
-    # A pre-existing row that must survive the upgrade.
     session.execute(
         text(
             "INSERT INTO users (name, total, used, expiry_date, is_active, owner) "
@@ -103,7 +92,6 @@ def test_legacy_database_gains_missing_columns(session):
     for expected in ("uuid", "node_usage", "max_logins", "last_node_usage", "last_online"):
         assert expected in columns, f"adoption did not add users.{expected}"
 
-    # The pre-existing row survives and picked up the model's defaults.
     row = session.execute(
         text("SELECT name, max_logins, node_usage, last_node_usage FROM users WHERE name = 'legacy_user'")
     ).fetchone()
@@ -162,13 +150,8 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
     session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (1, 0, 'pre-step')"))
     session.commit()
 
-    # The retired env keys (still present in .env on upgrade boot) must be
-    # honored during the one-time decrypt (v14). Patch config, the source
-    # the step actually reads — patching import-time copies is the 1.0.3
-    # patch-target bug class.
     import backend.config as config_module
 
-    # Fernet.generate_key() returns base64-encoded bytes — exactly the .env format.
     monkeypatch.setattr(config_module.config, "BOT_ENCRYPT_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(config_module.config, "NODE_ENCRYPT_KEY", Fernet.generate_key().decode())
     node_fernet = Fernet(config_module.config.NODE_ENCRYPT_KEY.encode())
@@ -198,9 +181,6 @@ def test_orphan_daily_traffic_rows_are_cleaned(session):
     assert remaining == 0
 
 
-# ── Refusing to downgrade ────────────────────────────────────────────────────
-
-
 def test_newer_database_is_refused(session):
     """A database written by a newer build must stop the panel, not be clobbered."""
     session.execute(
@@ -216,15 +196,11 @@ def test_newer_database_is_refused(session):
         text("INSERT INTO schema_version (version, applied_at, note) VALUES (:v, 0, 'from the future')"),
         {"v": SCHEMA_VERSION + 1},
     )
-    # One mapped table must exist so the database is not treated as fresh.
     session.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT)"))
     session.commit()
 
     with pytest.raises(RuntimeError, match="newer than this build supports"):
         migrations.migrate(session)
-
-
-# ── Schema drift detection ───────────────────────────────────────────────────
 
 
 def test_verify_schema_reports_missing_column(session):
@@ -246,7 +222,6 @@ def test_alter_table_sql_quotes_defaults(session):
     assert "NOT NULL" in sql
 
     sql = migrations._add_column_sql("users", by_name["max_logins"])
-    # Numeric defaults stay unquoted so SQLite stores an integer, not text.
     assert "DEFAULT 1" in sql, sql
 
     sql = migrations._add_column_sql("users", by_name["uuid"])
@@ -264,7 +239,6 @@ def test_fresh_install_seeds_owner_row_and_first_user():
     owner = (config.ADMIN_USERNAME or "admin").strip()
     db = SessionLocal()
     try:
-        # Start from a genuinely empty state for both tables.
         db.query(User).delete()
         db.query(Admin).delete()
         db.commit()
@@ -281,12 +255,10 @@ def test_fresh_install_seeds_owner_row_and_first_user():
         assert seeded.max_logins >= 1
         assert seeded.expiry_date is not None
 
-        # Idempotent: a second run must not duplicate anything.
         _seed_owner_and_first_user(db)
         assert db.query(Admin).filter(Admin.username == owner).count() == 1
         assert db.query(User).count() == 1
     finally:
-        # Leave the suite database as we found it.
         db.rollback()
         db.close()
 

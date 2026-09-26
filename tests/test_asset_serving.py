@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Asset serving: immutable caching + precompressed .gz fast path."""
 
 import asyncio

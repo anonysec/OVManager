@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Domain exceptions for the database/CRUD layer.
 
 These are raised by CRUD operations and translated to HTTP responses by the

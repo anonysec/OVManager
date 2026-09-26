@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from __future__ import annotations
 
 import logging
@@ -11,8 +8,6 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# Set to True once the table has been confirmed to exist, so log_event()
-# does not call CREATE TABLE IF NOT EXISTS on every write.
 _table_ready: bool = False
 
 
@@ -40,8 +35,6 @@ def log_event(db, action, actor=None, target=None, detail=None):
     else:
         created = False
     try:
-        # Only create the table if startup didn't do it yet (e.g. first boot
-        # before migrations, or tests that skip startup).
         if not _table_ready:
             ensure_audit_table(db)
         db.execute(
@@ -50,9 +43,6 @@ def log_event(db, action, actor=None, target=None, detail=None):
         )
         db.commit()
     except Exception:
-        # Audit is best-effort: a failed insert must never turn an action that
-        # already succeeded into a 500 for the client, and must not leave the
-        # caller's transaction poisoned.
         logger.exception("Could not write audit event %s", action)
         try:
             db.rollback()

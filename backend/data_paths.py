@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Centralized persistent-data paths for native and container deployments."""
 
 from pathlib import Path

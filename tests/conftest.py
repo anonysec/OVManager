@@ -1,13 +1,5 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Shared pytest fixtures."""
 
-# anyio 4.15 moved BlockingPortal to anyio.from_thread and emits a
-# DeprecationWarning on the old anyio.abc alias — which starlette's
-# TestClient still reads at import (annotations evaluated eagerly). Both
-# packages are at latest; pre-binding the new location keeps the suite
-# warning-free (filterwarnings = error) until starlette catches up.
 import anyio.abc
 import anyio.from_thread
 
@@ -18,20 +10,10 @@ import os
 
 import pytest
 
-# Deterministic owner credentials for the API tests. The workspace .env may
-# have been migrated to ADMIN_PASSWORD_HASH by a real panel boot (the
-# startup migration), so tests must not rely on a plaintext line existing
-# there. Env vars beat .env values in pydantic-settings.
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ["ADMIN_PASSWORD"] = "test-owner-password-123"
 os.environ["ADMIN_PASSWORD_HASH"] = ""
 
-# This dict holds the pre-test reference to the real get_urlpath() so the
-# autouse fixture below can restore it for tests that actually exercise
-# the URLPathMiddleware (test_urlpath_hardening, test_app::test_urlpath_*).
-# Without this, our short-circuit closure would shadow the real function and
-# break tests that intentionally call set_urlpath() and then expect the
-# middleware to read the new value.
 _real_get_urlpath = None
 _real_cache_value = None
 _real_cache_ts = None
@@ -60,18 +42,12 @@ def _disable_urlpath_for_tests():
         _real_cache_ts = urlpath_mod._cache_ts
 
     def _test_get_urlpath() -> str:
-        # If a test has explicitly cached a value (via set_urlpath), respect
-        # that — those tests are exercising the middleware, not fighting it.
         with urlpath_mod._lock:
             if urlpath_mod._cache_ts != _real_cache_ts and urlpath_mod._cache_value:
                 return urlpath_mod._cache_value
-        # Default: pretend URLPATH is empty so the test client works.
         return ""
 
     urlpath_mod.get_urlpath = _test_get_urlpath  # type: ignore[assignment]
-    # Reset the cache so _test_get_urlpath's "explicit" branch never fires
-    # before the first set_urlpath call. Tests that call set_urlpath update
-    # _cache_value/_cache_ts directly, which the helper above detects.
     urlpath_mod._cache_value = ""
     urlpath_mod._cache_ts = 0.0
 

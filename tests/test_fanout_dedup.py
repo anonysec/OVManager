@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Fan-out dedup: login_health_summary must poll /sync/sessions once per node.
 
 It used to fan out itself AND call get_active_connection_counts() (which
@@ -92,8 +89,6 @@ def test_health_summary_polls_each_node_once(monkeypatch):
             }
 
     monkeypatch.setattr(diag, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
-    # Isolate from other node rows in the shared dev DB: the assertion below
-    # counts polls, so a leftover active node would double the count.
     from backend.db.engine import SessionLocal as _SL
     from backend.db.models import Node as _Node
 
@@ -112,14 +107,11 @@ def test_health_summary_polls_each_node_once(monkeypatch):
         out = asyncio.run(diag.login_health_summary(db, hours=8))
     finally:
         db.close()
-    # One sessions poll for the single active node (was two before dedup).
     assert len(calls) == 1
     assert out["totals"]["online"] == 1
     row = next(u for u in out["users"] if u["name"] == "dup_user")
     assert row["active_connections"] == 1
     assert row["status"] == "online"
-    # Leave no active node rows behind: the dev DB is shared across test
-    # files and an active 127.0.0.1 row would add probes to other tests.
     db = SessionLocal()
     try:
         from backend.db.models import Node

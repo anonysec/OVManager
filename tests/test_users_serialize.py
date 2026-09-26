@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Regression: a user with a metrics-written last_online must not 500 the list.
 
 The metrics job stores a datetime on User.last_online while the API contract

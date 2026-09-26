@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Map a Telegram account onto a panel owner/admin and mint an API session."""
 
 from __future__ import annotations
@@ -125,7 +122,6 @@ async def _resolve_remote(telegram_id: int) -> Actor | None:
     if int(settings.get("owner_telegram_id") or 0) == telegram_id:
         username = config.api_username or "owner"
         return Actor(telegram_id, username, "owner", token)
-    # Admin list is owner-only; if we are logged in as owner we can see it.
     for admin in await panel.get_admins():
         if int(admin.get("telegram_id") or 0) == telegram_id:
             return Actor(telegram_id, admin.get("username") or "admin", "admin", token)
@@ -139,7 +135,6 @@ async def service_token() -> str | None:
         from bot.api import login
 
         return await login(config.api_username, config.api_password)
-    # Last resort when running next to the panel: owner session.
     try:
         from backend.config import config as panel
 

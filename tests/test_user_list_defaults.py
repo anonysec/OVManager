@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Regression tests for Phase 2 user-list work.
 
 - GET /users/?search= filters server-side (bot no longer pulls the table).

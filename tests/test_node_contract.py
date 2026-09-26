@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Contract tests: panel's NodeRequests client ↔ OVNode's /sync routes.
 
 Every method of ``NodeRequests`` must map 1:1 to a route the node
@@ -16,9 +13,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Client method → (HTTP verb, node route). "{uid}" marks an f-string
-# path: the client interpolates the uid, and the test pins the template
-# prefix ("/sync/user/") rather than the f-string internals.
 CONTRACT = {
     "check_node": ("get", "/sync/status"),
     "get_node_info": ("get", "/sync/status"),
@@ -59,7 +53,6 @@ def _calls(tree: ast.AST) -> dict[str, list[tuple[str, str]]]:
                     verb = child.args[0].value
                     path = child.args[1].value if len(child.args) > 1 and isinstance(child.args[1], ast.Constant) else None
                     if path is None and len(child.args) > 1 and isinstance(child.args[1], ast.JoinedStr):
-                        # f-string path (e.g. f"/sync/user/{uid}") — use the constant prefix.
                         parts = [v.value for v in child.args[1].values if isinstance(v, ast.Constant)]
                         path = "".join(parts)
                     if path is not None:
@@ -81,15 +74,10 @@ def test_contract_calls_match_the_table():
     calls = _calls(tree)
     for name, (verb, path) in CONTRACT.items():
         found = calls.get(name, [])
-        # download_ovpn_client goes through _get_raw (raw bytes, not the
-        # JSON envelope); assert the path via the whole-module literal scan
-        # done in test_no_undocumented_sync_routes instead.
         if not found and name.startswith("download_ovpn"):
             continue
         assert found, f"{name} makes no _request call"
         assert any(v == verb for v, _ in found), f"{name}: expected a {verb} call, has {found}"
-        # f-string routes interpolate the uid, so "/sync/user/" is a prefix
-        # of "/sync/user/<uid>" and "/sync/user/<uid>/disconnect" alike.
         assert any(p.startswith(path) for _, p in found), f"{name}: expected path {path}, has {found}"
 
 
@@ -114,7 +102,6 @@ def test_no_undocumented_sync_routes():
         for v, p in calls.get(name, []):
             if v == verb and p.startswith(path):
                 covered.add(p)
-    # Raw-bytes routes bypass _request: collect their _get_raw literals too.
     for child in ast.walk(tree):
         if isinstance(child, ast.Call):
             fn = child.func

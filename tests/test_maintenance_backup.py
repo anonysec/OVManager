@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Backup/restore coverage for backend/routers/maintenance.py.
 
 - Create/list/download hit the real BACKUP_DIR (files only, DB untouched).
@@ -69,12 +66,9 @@ def test_backup_create_list_download_roundtrip():
             r = client.get("/api/maintenance/backup/download", headers=_owner_headers())
             assert r.status_code == 200
             assert len(r.content) > 0
-            # A gzip-compressed, versioned backup bundle, not an error page.
             assert created.endswith(".ovmbak")
             assert r.content[:2] == b"\x1f\x8b"
     finally:
-        # Never leave test artifacts in the dev backup dir (it is gitignored,
-        # but a stray .db must not linger or get committed by `git add -A`).
         if created:
             (m.BACKUP_DIR / created).unlink(missing_ok=True)
 
@@ -125,7 +119,6 @@ def test_backup_restore_roundtrip_on_scratch_db(monkeypatch, tmp_path):
             assert r.json()["success"] is True
             snap = r.json()["data"]["filename"]
 
-            # Mutate after the snapshot, then restore and verify rollback.
             conn = sqlite3.connect(str(scratch))
             conn.execute("INSERT INTO probe (v) VALUES ('after')")
             conn.commit()
@@ -140,7 +133,6 @@ def test_backup_restore_roundtrip_on_scratch_db(monkeypatch, tmp_path):
             finally:
                 conn.close()
             assert rows == ["before"]
-            # Mandatory verified safety bundle is retained after restore.
             assert any(p.name.startswith("ovmanager-pre-restore-") for p in fake_backups.glob("*.ovmbak"))
     finally:
         fake_engine.dispose()
@@ -176,7 +168,6 @@ def test_writes_are_rejected_while_restore_lock_is_set():
             r = client.post("/api/maintenance/backup", headers=_owner_headers())
             assert r.status_code == 503
             assert r.json()["success"] is False
-            # Reads stay available.
             assert client.get("/health").status_code == 200
     finally:
         restore_lock.clear()
@@ -210,7 +201,6 @@ def test_failed_post_restore_migration_rolls_back(monkeypatch, tmp_path):
 
             conn = sqlite3.connect(str(scratch))
             conn.execute("INSERT INTO probe (v) VALUES ('after')")
-            # Stale WAL/SHM from the old database must be cleaned on rollback.
             scratch.with_name(scratch.name + "-wal").write_bytes(b"stale")
             scratch.with_name(scratch.name + "-shm").write_bytes(b"stale")
             conn.commit()

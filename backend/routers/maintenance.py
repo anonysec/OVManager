@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import logging
 import os
 import sqlite3
@@ -74,8 +71,6 @@ def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "back
         conn.execute(_text("PRAGMA wal_checkpoint(TRUNCATE)"))
         conn.commit()
 
-    # Snapshot SQLite first, then package and verify it. The .part database is
-    # never visible to listing/download/retention and is removed on every path.
     fd, raw_snapshot = tempfile.mkstemp(prefix=".ovmanager-snapshot-", suffix=".db", dir=BACKUP_DIR)
     os.close(fd)
     snapshot = Path(raw_snapshot)
@@ -86,9 +81,6 @@ def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "back
     finally:
         snapshot.unlink(missing_ok=True)
 
-    # Prune only after the new bundle has passed full verification and was
-    # atomically published. Legacy .db files remain available for restore but
-    # are no longer created or counted by the new retention policy.
     all_backups = sorted(
         BACKUP_DIR.glob(f"ovmanager-{label}-*{BUNDLE_SUFFIX}"),
         key=lambda p: p.stat().st_mtime,
@@ -285,9 +277,6 @@ def _stage_restore_candidate(src_path: Path) -> Path:
     """Copy, migrate, and verify a restore candidate away from the live DB."""
     from backend.db.migrations import migrate, verify_schema
 
-    # Stage beside the live database, not DB_DIR: os.replace below is only
-    # atomic (and only legal) within one filesystem, and DB_PATH may be
-    # relocated (tests, bind mounts, split mounts).
     fd, raw_candidate = tempfile.mkstemp(prefix=".restore-candidate-", suffix=".db", dir=DB_PATH.parent)
     os.close(fd)
     candidate = Path(raw_candidate)
@@ -329,12 +318,8 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
         safety_bundle: Path | None = None
         activated = False
         try:
-            # Migration and schema checks happen against a private candidate,
-            # before the live database or write state is touched.
             candidate = _stage_restore_candidate(src_path)
 
-            # A verified safety bundle is mandatory. Never continue with a
-            # destructive swap after a warning-only backup failure.
             safety_bundle = _create_panel_backup_unlocked(keep=10, label="pre-restore")
             if safety_bundle is None:
                 raise RuntimeError("current database is missing; safety backup could not be created")
@@ -352,8 +337,6 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
             os.chmod(DB_PATH, 0o600)
             _remove_sqlite_sidecars(DB_PATH)
 
-            # Verify through the application's normal migration/schema path as
-            # a final activation check. Writes remain blocked until it passes.
             _apply_migrations_after_restore()
             conn = sqlite3.connect(str(DB_PATH))
             try:
@@ -438,8 +421,6 @@ async def restore_backup(
 
     try:
         if restore_from_server:
-            # Restore from a backup file already on the server
-            # Security: resolve and verify the path stays within BACKUP_DIR
             src_path = (BACKUP_DIR / restore_from_server).resolve()
             backup_dir_resolved = BACKUP_DIR.resolve()
             if not src_path.is_relative_to(backup_dir_resolved):
@@ -448,26 +429,19 @@ async def restore_backup(
                 return ResponseModel(success=False, msg=f"Backup file '{restore_from_server}' not found", data=None)
             if not (restore_from_server.endswith(".db") or restore_from_server.endswith(BUNDLE_SUFFIX)):
                 return ResponseModel(success=False, msg="Backup file must be an .ovmbak bundle or legacy .db file", data=None)
-            # Restore is blocking file I/O + engine dispose + migrations: run it
-            # off the event loop so health checks and SSE keep flowing.
             return await run_in_threadpool(
                 _restore_artifact, src_path, user, f"Restored from server backup: {restore_from_server}"
             )
 
-        # Original path: restore from uploaded file
         if file is None or not file.filename or not (file.filename.endswith(".db") or file.filename.endswith(BUNDLE_SUFFIX)):
             return ResponseModel(success=False, msg="Backup file must be an .ovmbak bundle or legacy .db file", data=None)
 
-        # Sanitize filename to prevent path traversal
         safe_name = _safe_filename(file.filename)
         if not safe_name:
             return ResponseModel(success=False, msg="Invalid filename", data=None)
 
-        # Stream to disk with an enforced size cap — never buffer the whole
-        # upload in memory (previous code did await file.read() first).
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         tmp_path = BACKUP_DIR / f"restore_{safe_name}.part"
-        # Ensure tmp_path stays inside BACKUP_DIR
         try:
             tmp_path.resolve().relative_to(BACKUP_DIR.resolve())
         except ValueError:
@@ -510,7 +484,6 @@ async def restore_backup(
 
         result = await run_in_threadpool(_restore_artifact, tmp_path, user, f"Restored from: {file.filename}")
 
-        # Clean up temp file
         tmp_path.unlink(missing_ok=True)
         return result
     except Exception as e:
@@ -534,5 +507,3 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
     data = await clean_stale_sessions_all_nodes(db)
     log_event(db, "maintenance.clean_stale", actor=user.get("username"), detail=f"removed={data.get('removed_total')}")
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
-
-

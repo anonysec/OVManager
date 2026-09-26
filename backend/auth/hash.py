@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Password hashing with bcrypt.
 
 ``passlib`` was dropped as a dependency: its last release was in 2020, it is
@@ -25,7 +22,6 @@ from __future__ import annotations
 
 import bcrypt
 
-# bcrypt only considers the first 72 bytes of the input.
 _MAX_BYTES = 72
 
 
@@ -34,8 +30,6 @@ def _prepare(password: str) -> bytes:
     raw = (password or "").encode("utf-8")
     if len(raw) <= _MAX_BYTES:
         return raw
-    # Drop the trailing partial sequence rather than feeding bcrypt invalid
-    # UTF-8, then re-encode to land on a boundary.
     truncated = raw[:_MAX_BYTES].decode("utf-8", errors="ignore")
     return truncated.encode("utf-8")[:_MAX_BYTES]
 
@@ -69,7 +63,6 @@ def needs_rehash(hashed_password: str) -> bool:
     if not hashed_password:
         return True
     parts = hashed_password.split("$")
-    # Expected shape: ['', '2b', '12', '<22 chars salt><31 chars digest>']
     if len(parts) < 4 or parts[1] not in ("2b", "2a", "2y", "2x"):
         return True
     try:

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 from __future__ import annotations
 
 import logging
@@ -112,7 +109,6 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await search_users(update, context, actor, text)
         return
 
-    # Anything else is a username search — the everyday operator habit.
     await search_users(update, context, actor, text)
 
 

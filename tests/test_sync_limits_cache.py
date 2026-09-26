@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """sync_all_user_limits pushes only changed pairs (hash-cache dedup).
 
 First sweep pushes everything; an identical second sweep pushes nothing
@@ -143,7 +140,6 @@ def test_second_identical_sweep_pushes_nothing(monkeypatch):
         assert ours() == []  # unchanged pair skipped
         assert quiet["skipped"] >= 1
 
-        # One limit change re-pushes exactly that pair.
         from backend.db.engine import SessionLocal
         from backend.db.models import User
 

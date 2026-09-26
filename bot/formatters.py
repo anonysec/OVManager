@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Pure text helpers — no Telegram or HTTP imports."""
 
 from __future__ import annotations
@@ -51,7 +48,6 @@ def expiry_label(value, *, lang: str = DEFAULT_LANG) -> str:
     exp = parse_expiry(value)
     if exp is None:
         return t(lang, "no_expiry")
-    # Far-future sentinel used by the panel for "unlimited".
     if exp.year >= 2099:
         return t(lang, "no_expiry")
     delta = (exp - date.today()).days

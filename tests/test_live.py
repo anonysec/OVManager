@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Tests for the live layer: event bus, snapshot cache, and the SSE endpoint."""
 
 import asyncio
@@ -22,9 +19,6 @@ def _owner_headers() -> dict:
     finally:
         db.close()
     return {"Authorization": f"Bearer {raw}"}
-
-
-# ── LiveBus ────────────────────────────────────────────────────────────────
 
 
 def test_bus_publish_without_subscribers_is_noop():
@@ -53,9 +47,6 @@ async def test_bus_evicts_oldest_for_slow_consumer():
         live.bus.unsubscribe(q)
 
 
-# ── LiveSnapshot ───────────────────────────────────────────────────────────
-
-
 def test_snapshot_reports_changes():
     snap = live.LiveSnapshot()
     assert snap.last_poll_ts == 0.0
@@ -66,9 +57,6 @@ def test_snapshot_reports_changes():
     assert snap.get_connections() == {"a": 2}
     assert snap.get_nodes() == {"n1": False}
     assert snap.last_poll_ts > 0
-
-
-# ── SSE endpoint ───────────────────────────────────────────────────────────
 
 
 def test_live_stream_requires_auth():
@@ -111,7 +99,6 @@ async def test_live_stream_sends_ready_event():
     messages: list = []
 
     async def receive():
-        # Give the app room to emit response start + the ready chunk, then hang up.
         await asyncio.sleep(0.5)
         return {"type": "http.disconnect"}
 
@@ -134,9 +121,6 @@ async def test_live_stream_sends_ready_event():
     assert b"event: ready" in body
 
 
-# ── User list reads the connection cache ───────────────────────────────────
-
-
 def test_users_list_uses_live_connection_cache(monkeypatch):
     from backend.app import _run_migrations
 
@@ -156,7 +140,6 @@ def test_users_list_uses_live_connection_cache(monkeypatch):
     finally:
         db.close()
 
-    # The collector is not running in tests; simulate one successful poll.
     monkeypatch.setattr(live, "get_connection_counts", lambda: {"livecache_qa_user": 3})
     monkeypatch.setattr(live, "last_poll_ts", lambda: 1.0)
 
@@ -168,9 +151,6 @@ def test_users_list_uses_live_connection_cache(monkeypatch):
     assert match, "seeded user missing from list"
     assert match[0]["active_connections"] == 3
     assert match[0]["online"] is True
-
-
-# ── Idle-aware collector ─────────────────────────────────────────────────────
 
 
 class _FakeNode:
@@ -213,11 +193,9 @@ async def test_collector_skips_node_probe_when_idle(monkeypatch):
     _reset_snapshot()
     _install_fake_probes(monkeypatch, calls)
 
-    # First run warms the cache.
     await live.collect_live_snapshot()
     assert len(calls) == 1
 
-    # Immediately afterwards, with nobody connected, it must back off.
     await live.collect_live_snapshot()
     assert len(calls) == 1, "collector probed nodes while idle"
 
@@ -247,7 +225,6 @@ async def test_collector_re_polls_after_the_idle_window(monkeypatch):
     await live.collect_live_snapshot()
     assert len(calls) == 1
 
-    # Pretend the last poll happened longer ago than the idle window.
     live.snapshot._last_poll_ts = 0.0
     await live.collect_live_snapshot()
     assert len(calls) == 2

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Button-first bot flows: persistent section menu, inline user actions,
 plan-first creation, stats/settings routing and text fallbacks.
 
@@ -281,7 +278,6 @@ async def test_create_plan_then_name_then_confirm(monkeypatch):
     update2 = make_update(callback_data="plan:standard")
     await create_mod.handle_create_callback(update2, context, actor, "plan:standard")
     assert context.user_data["flow"]["step"] == "name"
-    # Standard = the acting admin's effective plan, not the fixed env default.
     assert (
         context.user_data["flow"]["days"],
         context.user_data["flow"]["traffic"],

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Basic tests for OVManager panel.
 
 Routes are registered at /api/... (no prefix). The URLPathMiddleware handles
@@ -102,22 +99,18 @@ def test_urlpath_middleware_blocks_non_matching():
     client = TestClient(api)
     try:
         set_urlpath("mysecret")
-        # Matching path: should be handled
         response = client.get("/mysecret/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-        # Non-matching path: empty 404 (looks like an ordinary empty site)
         response = client.get("/other-path")
         assert response.status_code == 404
         assert response.content == b""
 
-        # The exact root is also a wrong address while a prefix is set.
         response = client.get("/")
         assert response.status_code == 404
         assert response.content == b""
 
-        # /health without prefix is now allowed through (not blocked)
         response = client.get("/health")
         assert response.status_code == 200
     finally:

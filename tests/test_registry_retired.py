@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Retired global registry: live poll is authoritative, shapes unchanged.
 
 The panel-side global_mlogin_sessions table was never written to, so its

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import logging
 import logging.handlers
 import os
@@ -21,8 +18,6 @@ level_map = {
 }
 log_level = level_map.get(str(config.DEBUG).upper(), logging.WARNING)
 
-# Rotating file (was: unbounded append) + stderr (was: file-only, invisible
-# to `docker logs`) + second/module/line in the format (was: minute only).
 _file_handler = logging.handlers.RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
 _stream_handler = logging.StreamHandler(sys.stderr)
 _formatter = logging.Formatter(

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Client address resolution behind an optional reverse proxy.
 
 When ``TRUSTED_PROXY`` is enabled the proxy is the only hop we trust, so the

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Telegram operator bot entrypoint.
 
 The panel starts this as ``python -m bot.main``. A standalone container can
@@ -31,8 +28,6 @@ async def build_app() -> Application | None:
     if not config.token:
         log.error("No bot token — set it in Settings → Bot, or BOT_TOKEN.")
         return None
-    # Honour the Settings toggle when we can see the panel database.
-    # A standalone container (token in env, no local DB) is treated as enabled.
     if not config.bot_enabled:
         try:
             from backend.db.engine import SessionLocal
@@ -45,12 +40,9 @@ async def build_app() -> Application | None:
             return None
 
     app = Application.builder().token(config.token).build()
-    # /start is the only command. Everything else is the menu or typed search.
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("help", handle_start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    # Unknown /commands would otherwise vanish silently (the TEXT filter
-    # above skips commands) — point back at the menu instead.
     app.add_handler(MessageHandler(filters.COMMAND, on_unknown_command))
     app.add_handler(CallbackQueryHandler(on_callback))
     app.add_error_handler(on_error)

@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 import asyncio
 import json
 
@@ -24,17 +21,10 @@ async def enforce_user_limits():
 
         users_to_disable = list({u.id: u for u in expired_users + exceeded_users}.values())
 
-        # Disable all users in the DB first, then push to nodes concurrently.
-        # Eliminates the per-user asyncio.sleep(0.5) that could run for minutes
-        # on large user counts and exceed the 10-minute cron interval.
         for user in users_to_disable:
             user.is_active = False
         db.commit()
 
-        # Push status to all nodes concurrently (gather all at once). The
-        # active-node list is loaded once for the whole sweep and passed down;
-        # per-user calls would otherwise re-query it (N+1) and, with the
-        # fan-out semaphore in node/ops.py, still queue thousands of jobs.
         if users_to_disable:
             nodes = crud.get_active_nodes(db)
             await asyncio.gather(
@@ -44,7 +34,6 @@ async def enforce_user_limits():
                 ],
                 return_exceptions=True,
             )
-            # Let live subscribers (admin dashboards) see the flips immediately.
             live.publish("users", {"op": "enforce", "disabled": len(users_to_disable)})
 
     except Exception as e:
@@ -53,9 +42,6 @@ async def enforce_user_limits():
 
     finally:
         db.close()
-
-
-# ── Traffic delta computation ────────────────────────────────────
 
 
 def _compute_session_delta(
@@ -74,7 +60,6 @@ def _compute_session_delta(
     3. Legacy fallback — no per-session data from the node
     """
     if isinstance(sessions, dict) and isinstance(prev_state, dict):
-        # Per-session diff (accurate path).
         delta = 0
         for skey, cur in sessions.items():
             last = int(prev_state.get(skey, 0) or 0)
@@ -83,14 +68,12 @@ def _compute_session_delta(
         return delta, new_state
 
     if isinstance(sessions, dict):
-        # First time we see sessions for this node.
         prev_int = int(prev_state or 0) if not isinstance(prev_state, dict) else 0
         cur_total = int(sum(sessions.values()))
         delta = cur_total - prev_int if cur_total >= prev_int else cur_total
         new_state = {k: int(v) for k, v in sessions.items()}
         return delta, new_state
 
-    # Legacy fallback: node didn't send per-session data.
     prev_int = int(prev_state or 0) if not isinstance(prev_state, dict) else 0
     cur_total = int(legacy_total)
     delta = cur_total - prev_int if cur_total >= prev_int else cur_total
@@ -122,9 +105,6 @@ def _load_node_usage(user) -> dict:
         return parsed if isinstance(parsed, dict) else {}
     except (ValueError, TypeError):
         return {}
-
-
-# ── Main traffic collection loop ─────────────────────────────────
 
 
 def _apply_user_traffic(db, user_id: int, expected_used, expected_state: str, new_used: int, new_state: str, delta: int) -> bool:
@@ -179,16 +159,11 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
 
     id_to_name = id_to_name or {}
     known = set(all_users)
-    # Build every user's update first: a payload can key the same user by CN
-    # *and* by username (legacy nodes), and both deltas must land in one
-    # conditional write. The write happens after the loop, so a reset or
-    # delete that lands in between simply makes it a no-op.
     pending: dict[int, dict] = {}
     for client_key in set(per_user_total) | set(totals_map):
         username = _extract_username(client_key, node.name, known)
         user = all_users.get(username)
         if user is None and str(client_key).isdigit():
-            # Unmapped numeric CN (name not yet pushed): resolve via id map.
             username = id_to_name.get(str(client_key), username)
             user = all_users.get(username)
         if user is None:
@@ -213,9 +188,6 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
         else:
             sessions = per_user_sessions.get(client_key) or per_user_sessions.get(username)
             if isinstance(state, dict) and "total" in state:
-                # Totals vanished mid-stream (node hiccup): keep the baseline
-                # and bill nothing this poll rather than re-billing live bytes
-                # against a wrong-shaped state. Next totals poll resumes.
                 delta, new_state = 0, state
             else:
                 delta, new_state = _compute_session_delta(sessions, state, per_user_total.get(client_key, 0))
@@ -284,12 +256,8 @@ async def check_user_used_traffic():
                     exc_info=True,
                 )
 
-        # Usage numbers changed → nudge live dashboards to refetch.
         if any_updated:
             live.publish("usage", {"op": "sync"})
-            # Enforce immediately: quota crossings disable within this 5-min
-            # tick instead of waiting for the 10-min enforce sweep.
-            # (The sweep stays as the backstop for expiry-only crossings.)
             await enforce_user_limits()
 
     except Exception as e:

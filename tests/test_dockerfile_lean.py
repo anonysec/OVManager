@@ -1,6 +1,3 @@
-# Copyright (c) 2026 anonysec
-# SPDX-License-Identifier: MIT
-
 """Structural guards for the panel image (no Docker daemon in the test env).
 
 The runtime stage must stay lean: deps are resolved once in a builder stage,
