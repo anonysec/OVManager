@@ -6,4 +6,4 @@ Operators should prohibit and respond to abuse including spam, unauthorized scan
 
 Operators should maintain their own end-user terms, privacy notice, abuse contact, incident process, and lawful-request procedure appropriate to their jurisdiction and service.
 
-This guidance does not add a field-of-use restriction to the MIT software license. The license grant remains in [LICENSE](LICENSE).
+This guidance does not add a field-of-use restriction to the MIT software license. The license grant remains in [LICENSE](../../LICENSE).

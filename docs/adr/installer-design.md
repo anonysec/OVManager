@@ -1,9 +1,13 @@
 # Installer and CLI design — decided
 
-> Status: **decision 1 is implemented in OVManager; the rest is design, not
-> implemented.** Supersedes the earlier proposal of the same
-> name (which hedged between two structures) and the five ADR proposals deleted on
-> 2026-09-29. Line numbers are from a working-tree read on 2026-09-29 and will drift.
+> Status: **shipped in OVManager 1.0.0, except where noted below.** Decisions 1 to
+> 4 and the CLI work (bare invocation prints the list, `restore`, `completion`,
+> `version-script`) are in the code. Still open: the command-name convergence with
+> OVNode (`ovm recovery` versus `ovn credentials`), and OVNode's read-only commands
+> reporting a default instead of an error when `.env` is unreadable. Supersedes the
+> earlier proposal of the same name (which hedged between two structures) and the
+> five ADR proposals deleted on 2026-09-29. Line numbers are from a working-tree
+> read on 2026-09-29 and will drift.
 
 ## Constraints
 

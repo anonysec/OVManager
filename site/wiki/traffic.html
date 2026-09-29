@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic limits — OVManager wiki</title>
+<meta name="description" content="How OVManager measures OpenVPN usage every five minutes, why it never double-counts, and what happens when a user reaches their quota.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html" aria-current="page">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>Traffic limits</h1>
+    <p class="lede">
+      Quotas are in GB per user, the panel counts them once every five minutes,
+      and the numbers are designed so a restart or a dropped session can never
+      bill anyone twice.
+    </p>
+
+    <h2 id="set">Setting a limit</h2>
+    <ul>
+      <li>
+        <strong>Traffic quota (GB)</strong> on the user &mdash; empty means
+        unlimited.
+      </li>
+      <li>
+        <strong>Default traffic (GB)</strong> under
+        <strong>Settings &rarr; Defaults</strong> &mdash; what a new user gets
+        when you do not override it.
+      </li>
+      <li>
+        <strong>Add traffic (GB)</strong> on an existing user &mdash; added to
+        their current quota. Leave it at 0 to keep the quota unchanged.
+      </li>
+    </ul>
+
+    <h2 id="collect">How usage is collected</h2>
+    <p>
+      Every five minutes the panel asks each node for <code>/sync/usage</code>.
+      The node answers with a <strong>lifetime total per user</strong>: bytes
+      banked when sessions ended, plus bytes still flowing in live sessions.
+    </p>
+    <p>
+      The panel remembers the last number it saw per node and adds only the
+      <em>increase</em> to that user's <code>used</code> counter. That single
+      design choice is what makes the accounting survive real life:
+    </p>
+    <ul>
+      <li>A short session that starts and ends between two polls is still counted, because the node's total only ever grows.</li>
+      <li>A disconnect, a node restart or a reconnect does not re-count bytes already banked.</li>
+      <li>A total that <em>shrinks</em> &mdash; a node rebuilt, or counters lost &mdash; bills zero instead of a negative or an absurd number.</li>
+    </ul>
+
+    <h3>One commit per tick</h3>
+    <p>
+      A node's whole payload is processed and then stored with a single database
+      commit per tick. Each individual user write is conditional &mdash; it only
+      applies if the row still holds the value the panel read. If you reset or
+      delete that user in the browser at the same moment, the stale update
+      becomes a no-op instead of overwriting your change.
+    </p>
+
+    <h2 id="enforce">What enforcement does</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">When</th><th scope="col">What happens</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Quota crossed</td>
+            <td>Enforced immediately after that five-minute tick &mdash; not at the next sweep.</td>
+          </tr>
+          <tr>
+            <td>Expiry date passed</td>
+            <td>Caught by a separate ten-minute sweep, which covers the expiry-only case.</td>
+          </tr>
+          <tr>
+            <td>80% of quota or more</td>
+            <td>Shows as a warning, and feeds the owner's Telegram summary if that notification is on.</td>
+          </tr>
+          <tr>
+            <td>Over quota</td>
+            <td>The user is disabled on the next check.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="devices">Device limits are enforced on the node</h2>
+    <p>
+      The device limit is not policed by the panel asking politely. The panel
+      pushes <code>max_logins</code> to every node and the node enforces it at
+      connect time:
+    </p>
+    <ul>
+      <li><code>1</code> &mdash; a new connection takes over the existing one.</li>
+      <li><code>N</code> &mdash; the N+1th simultaneous connection is rejected.</li>
+      <li><code>0</code> &mdash; unlimited.</li>
+    </ul>
+    <p>
+      Enforcing at connect time is what makes the limit real: the panel only
+      aggregates session counts, and can disconnect sessions it can see.
+    </p>
+
+    <h2 id="live">The live view, and why it does not hammer your nodes</h2>
+    <p>
+      The dashboard has a live view. A background collector polls the nodes
+      every 10 seconds <em>while a browser has the stream open</em>, and backs
+      off to every 5 minutes when nobody is watching. Request handlers read that
+      in-memory snapshot rather than fanning out to every node per request, so
+      one dead node can never stall the user list.
+    </p>
+    <p>
+      Traffic history is charted over the last 14 days, which is a good place to
+      spot the user who is about to hit their quota.
+    </p>
+
+    <h2 id="alerts">Notifications</h2>
+    <p>
+      With the Telegram bot configured, the owner gets a daily summary covering
+      users expiring within three days and users out of traffic, plus quota
+      warnings from 80% up. Each of those is a separate toggle under
+      <strong>Settings &rarr; Alerts</strong>, so you can keep the quota warnings
+      and drop the rest.
+    </p>
+
+    <h2 id="next">Next</h2>
+    <p><a href="tls.html">TLS certificates</a>.</p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

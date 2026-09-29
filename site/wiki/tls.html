@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLS certificates — OVManager wiki</title>
+<meta name="description" content="Self-signed and Let's Encrypt certificates for the OVManager panel, renewing them, and the separate certificate story on the node side.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html" aria-current="page">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>TLS certificates</h1>
+    <p class="lede">
+      There are two certificates in this system and they are not the same thing:
+      one protects the panel in your browser, and one protects the panel's
+      connection to each node.
+    </p>
+
+    <h2 id="panel">The panel's certificate</h2>
+    <p>
+      A fresh install uses a <strong>self-signed</strong> certificate. The
+      connection is genuinely encrypted; the browser just cannot tell who issued
+      the certificate, so it warns once. Click Advanced, then Proceed. There is
+      no plain-HTTP option to fall back to.
+    </p>
+    <p>
+      The installer's certificate carries the server's public IP as its common
+      name and has no subject alternative names. That is deliberate &mdash; it
+      is the reason the panel's own health check pins the certificate file
+      rather than checking the hostname, and the reason a healthy panel is never
+      reported as unreachable.
+    </p>
+
+    <h2 id="switch">Switch to Let's Encrypt</h2>
+    <p>
+      Once a domain points at the server, issuance needs port 80 free for the
+      challenge. Two ways to do it:
+    </p>
+    <figure class="cmd">
+      <figcaption>From the server</figcaption>
+      <pre><code>sudo ovm https --domain panel.example.com   # Let's Encrypt for a domain
+sudo ovm https --ip                         # Let's Encrypt for this host's IP
+sudo ovm https --self                       # new self-signed certificate
+sudo ovm https --key F --cert F             # use your own key and certificate
+ovm tls-status                              # what is installed, and when it expires</code></pre>
+    </figure>
+    <p>
+      Or from the panel: <strong>Settings &rarr; TLS</strong> shows the current
+      mode, the source, who issued it and how long it has left, and offers the
+      same options &mdash; upload a key and certificate, generate a temporary
+      self-signed one, or request a renewal for a domain. A certificate change
+      needs a restart, and the panel offers to restart itself and reconnect the
+      page.
+    </p>
+    <div class="note">
+      <p>
+        Let's Encrypt issuance runs through <code>acme.sh</code> and needs port
+        80 reachable for the standalone challenge. If something else is already
+        listening on 80, stop it or stay on a self-signed certificate for now.
+      </p>
+    </div>
+
+    <h2 id="node-cert">The node's certificate</h2>
+    <p>
+      Each node serves its sync API over TLS too. The node installer never
+      offers plain HTTP, because the API key travels in a header on every
+      request &mdash; in cleartext that would be handing out the node.
+    </p>
+    <p>What the panel does about it:</p>
+    <ul>
+      <li>
+        TLS is verified <strong>strictly first</strong>. A node using a
+        self-signed certificate fails that check.
+      </li>
+      <li>
+        On that failure the panel retries once <em>without</em> verification and
+        warns loudly &mdash; once per node, not once per request &mdash; as a
+        standing reminder to move that node to Let's Encrypt.
+      </li>
+      <li>
+        The <strong>TLS</strong> switch on the node entry in the panel must
+        match what the node is actually doing. A mismatch produces a silent
+        connection failure, which is one of the usual causes of a
+        <a href="troubleshooting.html#node-red">node that stays red</a>.
+      </li>
+    </ul>
+    <p>
+      The node's own OpenVPN server certificate is a separate thing again, and
+      the panel can ask a node to renew it and reports the new expiry. Nodes
+      also show their certificate expiry in <code>ovn status</code>.
+    </p>
+
+    <h2 id="expiry">Watching for expiry</h2>
+    <ul>
+      <li><code>ovm tls-status</code> on the panel &mdash; read-only, no restart.</li>
+      <li><code>ovn status</code> on each VPN server &mdash; health plus certificate expiry.</li>
+      <li><strong>Settings &rarr; TLS</strong> in the panel &mdash; the same panel information with the renewal buttons next to it.</li>
+    </ul>
+
+    <h2 id="next">Next</h2>
+    <p><a href="backup.html">Backups &amp; restore</a>.</p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

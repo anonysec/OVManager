@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki — OVManager</title>
+<meta name="description" content="Guides for OVManager: install and first login, nodes, users and subscriptions, traffic limits, TLS, backups, troubleshooting and the ovm CLI.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html" aria-current="page">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>OVManager wiki</h1>
+    <p class="lede">
+      Everything from the first install to the day a certificate expires.
+      Started from the panel itself? Go straight to
+      <a href="install.html#claim">first login</a>.
+    </p>
+
+    <h2>How the pieces fit</h2>
+    <p>
+      OVManager is two programs on two kinds of machine:
+    </p>
+    <ul>
+      <li>
+        <strong>The panel</strong> &mdash; the website you log into. It keeps
+        the user list, quotas, expiry dates, settings and the audit log, in one
+        SQLite database. A web process serves requests; a supervised child
+        process runs the periodic jobs (traffic accounting, limit enforcement,
+        backups, pruning, alerts).
+      </li>
+      <li>
+        <strong>OVNode</strong> &mdash; a small agent on every VPN server. It
+        owns OpenVPN, the certificates and the per-user files.
+      </li>
+    </ul>
+    <p>
+      The panel always calls the node. <strong>Nodes never call the panel</strong>,
+      so you can move or replace the panel at any time without touching the VPN
+      servers. Each request carries the node's API key in a header, and the
+      panel verifies the node's TLS certificate strictly.
+    </p>
+
+    <h2>Guides</h2>
+    <ul class="grid">
+      <li class="card">
+        <h3><a href="install.html">Install &amp; first login</a></h3>
+        <p>Requirements, the one-line installer, native vs Docker, the claim-key flow, update and uninstall, from-source install.</p>
+      </li>
+      <li class="card">
+        <h3><a href="nodes.html">Adding nodes</a></h3>
+        <p>Install the agent on a VPN server, register it in the panel, and get the firewall right.</p>
+      </li>
+      <li class="card">
+        <h3><a href="users.html">Users &amp; subscriptions</a></h3>
+        <p>Create a user, choose quota and expiry, hand out a <code>.ovpn</code> or a subscription link.</p>
+      </li>
+      <li class="card">
+        <h3><a href="traffic.html">Traffic limits</a></h3>
+        <p>How usage is measured every five minutes, why it never double-counts, and what enforcement does.</p>
+      </li>
+      <li class="card">
+        <h3><a href="tls.html">TLS certificates</a></h3>
+        <p>Self-signed vs Let's Encrypt, renewing, and the separate certificate story on the node side.</p>
+      </li>
+      <li class="card">
+        <h3><a href="backup.html">Backups &amp; restore</a></h3>
+        <p>Backup bundles, the daily timer, offsite copies, and restoring without taking the panel down.</p>
+      </li>
+      <li class="card">
+        <h3><a href="troubleshooting.html">Troubleshooting</a></h3>
+        <p>The symptoms people actually hit, in the order worth checking.</p>
+      </li>
+      <li class="card">
+        <h3><a href="cli.html">CLI reference</a></h3>
+        <p>Every <code>ovm</code> command, the installer's flags, and the <code>OVM_*</code> settings.</p>
+      </li>
+    </ul>
+
+    <h2>Defaults worth knowing</h2>
+    <div class="table-scroll">
+      <table>
+        <caption>What a fresh install uses unless you say otherwise.</caption>
+        <thead>
+          <tr><th scope="col">What</th><th scope="col">Default</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Panel port</td><td><code>2095</code></td></tr>
+          <tr><td>Panel URL path</td><td>random secret prefix, e.g. <code>/a1b2c3d4/</code></td></tr>
+          <tr><td>Install mode</td><td>native (systemd unit + virtualenv on the host)</td></tr>
+          <tr><td>Admin user</td><td><code>admin</code></td></tr>
+          <tr><td>Owner credential</td><td>none at install time &mdash; a one-time claim key instead</td></tr>
+          <tr><td>TLS</td><td>self-signed certificate</td></tr>
+          <tr><td>Data directory</td><td><code>/var/lib/ovmanager</code></td></tr>
+          <tr><td>Install directory</td><td><code>/opt/ovmanager</code></td></tr>
+          <tr><td>Service</td><td><code>ovmanager.service</code></td></tr>
+          <tr><td>CLI</td><td><code>ovm</code>, alias <code>ovmanager</code></td></tr>
+          <tr><td>New-user defaults</td><td>30 days, 100 GB, 1 device</td></tr>
+          <tr><td>Node service port</td><td><code>2083</code></td></tr>
+          <tr><td>OpenVPN port</td><td><code>1194</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Related</h2>
+    <p>
+      <a href="https://github.com/anonysec/OVManager">OVManager source</a> ·
+      <a href="https://github.com/anonysec/OVNode">OVNode source</a> ·
+      <a href="https://github.com/anonysec/OVManager/blob/main/README.md">README</a>
+    </p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>OVManager is MIT-licensed. The panel pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that runs OpenVPN on each VPN server.</p>
+    <p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+  </div>
+</footer>
+</body>
+</html>

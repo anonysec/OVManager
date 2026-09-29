@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adding nodes — OVManager wiki</title>
+<meta name="description" content="Install the OVNode agent on a VPN server, register it in the OVManager panel, and open the right ports.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html" aria-current="page">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>Adding nodes</h1>
+    <p class="lede">
+      The panel is the control plane; each OVNode is a VPN server. Nodes never
+      call the panel &mdash; the panel connects out to them.
+    </p>
+
+    <h2 id="topology">Pick a topology</h2>
+    <ul>
+      <li>
+        <strong>One box</strong> &mdash; panel and node on the same VPS. The
+        easiest option, and plenty for personal use and small teams. The panel's
+        Ready card prints a ready-to-paste command with the API key already
+        filled in.
+      </li>
+      <li>
+        <strong>Panel here, VPN servers there</strong> &mdash; install a node on
+        each VPN server and register them all in the one panel. Adding a node
+        never changes the panel install.
+      </li>
+    </ul>
+    <p>
+      Because the direction of travel is always panel &rarr; node, you can move
+      or replace the panel at any time without touching the VPN servers.
+    </p>
+
+    <h2 id="install-node">1. Install the node agent</h2>
+    <p>On the VPN server (not the panel server, unless you are doing the all-in-one setup):</p>
+    <figure class="cmd">
+      <figcaption>On the VPN server</figcaption>
+      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)</code></pre>
+    </figure>
+    <p class="section-note">
+      OVNode is a separate project:
+      <a href="https://github.com/anonysec/OVNode">github.com/anonysec/OVNode</a>.
+    </p>
+
+    <h3>The wizard's questions</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Question</th><th scope="col">Answer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Node name</td>
+            <td>A short id like <code>eu-1</code>. This must match the name you type in the panel <strong>exactly</strong>. Renaming later orphans the old data folder, so pick once.</td>
+          </tr>
+          <tr><td>Service port</td><td>Enter (<code>2083</code>).</td></tr>
+          <tr>
+            <td>OpenVPN ports</td>
+            <td>Enter (<code>1194</code>). Add <code>443,8443</code> if your users are on networks that block VPN ports &mdash; clients fail over automatically.</td>
+          </tr>
+          <tr>
+            <td>API key</td>
+            <td>Leave blank to auto-generate a strong one. <strong>Copy it from the summary.</strong></td>
+          </tr>
+          <tr><td>Mode</td><td>Native on a normal VPS; Docker if you prefer containers.</td></tr>
+          <tr>
+            <td>TLS</td>
+            <td>Self-signed for the first node (then turn TLS <em>on</em> in the panel). Let's Encrypt once you have a domain pointed here. Plain HTTP is not offered &mdash; the API key would travel in cleartext.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The summary the panel needs</h3>
+    <pre><code>Node      eu-1
+Address   203.0.113.10        &lt;- the server's PUBLIC IP
+Service   https://203.0.113.10:2083
+API key   abc123...           &lt;- copy this</code></pre>
+    <div class="note">
+      <p>
+        <strong>Private vs public IP.</strong> If the summary shows a
+        <code>10.x</code> or <code>192.168.x</code> address, the server is behind
+        NAT (common on some clouds). Use the server's <strong>public</strong> IP
+        in the panel instead.
+      </p>
+    </div>
+
+    <h3>Unattended</h3>
+    <figure class="cmd">
+      <figcaption>OVNode, no prompts</figcaption>
+      <pre><code>curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh \
+  | sudo bash -s -- -y --name eu-1 --tls selfsigned \
+    --vpn-ports 1194,443 -p "$(openssl rand -hex 32)"</code></pre>
+    </figure>
+    <p>Keep the key it prints (or the one you passed) &mdash; the panel needs it next.</p>
+
+    <h2 id="register">2. Register it in the panel</h2>
+    <p>
+      Go to <strong>Nodes &rarr; Add Node</strong> and fill the form, or paste
+      the <code>ovnode://</code> bundle the node installer printed &mdash; the
+      bundle fills every field at once. It looks like:
+    </p>
+    <pre><code>ovnode://eu-1@203.0.113.10:2083?key=...&amp;tls=1</code></pre>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Field</th><th scope="col">Value from the node summary</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Name</td><td><code>eu-1</code> &mdash; an exact match, not a similar name</td></tr>
+          <tr><td>Address</td><td>Public IP or hostname</td></tr>
+          <tr><td>Port</td><td><code>2083</code> &mdash; the sync API port, not the OpenVPN port</td></tr>
+          <tr><td>API key</td><td>The generated key, pasted exactly, with no stray spaces</td></tr>
+          <tr><td>TLS</td><td>on &mdash; the node installer always encrypts (self-signed or Let's Encrypt)</td></tr>
+          <tr><td>OVPN port / protocol</td><td><code>1194</code> / whatever the node summary says</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Use <strong>Test connection</strong> before saving if you want an
+      immediate answer. Once saved, the row turns green within seconds and shows
+      the node's version and user count.
+    </p>
+
+    <h2 id="single-vps">All-in-one: panel and node on one box</h2>
+    <p>
+      Same two steps, with a shorter second one. Install the node on the panel
+      server, then in <strong>Nodes &rarr; Add Node</strong> use:
+    </p>
+    <ul>
+      <li><strong>Address</strong>: <code>127.0.0.1</code> &mdash; same machine, so no firewall work is needed</li>
+      <li><strong>Name</strong>: exactly the <code>--name</code> you passed to the node installer</li>
+      <li><strong>Port</strong>: <code>2083</code>, <strong>API key</strong>: the key from the node install</li>
+      <li><strong>TLS</strong>: whatever the node uses</li>
+    </ul>
+
+    <h2 id="firewall">Ports</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Port</th><th scope="col">What</th><th scope="col">Reachable from</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>2095</code> (or yours)</td><td>Panel web UI</td><td>Only you &mdash; your browser</td></tr>
+          <tr><td><code>2083</code></td><td>Node sync API</td><td>Only the panel's IP</td></tr>
+          <tr><td><code>1194</code> (plus any extra VPN ports)</td><td>OpenVPN clients</td><td>Everyone</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The node installer opens <code>ufw</code>/<code>firewalld</code>
+      automatically. If your provider has its own firewall (security groups,
+      cloud firewalls), open them yourself. Open <code>1194</code> on both UDP
+      and TCP, plus any additional VPN ports you configured.
+    </p>
+
+    <h2 id="health">Keep the node healthy</h2>
+    <p>
+      The panel probes every node on a five-minute cycle. On the transition it
+      can message the owner on Telegram &mdash; one message when a node goes
+      down and one when it answers again, throttled so a flapping node cannot
+      page you every five minutes. The toggle is
+      <strong>Settings &rarr; Alerts &rarr; "Node goes down or comes back"</strong>,
+      and it needs the bot token and owner ID from the Bot section.
+    </p>
+    <p>On the node itself:</p>
+    <figure class="cmd">
+      <figcaption>On the VPN server</figcaption>
+      <pre><code>ovn status     # health + certificate expiry
+ovn update     # staged update, backs up data first</code></pre>
+    </figure>
+    <p>
+      Node data in <code>/var/lib/ovnode</code> and <code>/etc/openvpn</code>
+      survives a reinstall, but only if you keep the same <code>--name</code>.
+    </p>
+
+    <h2 id="next">Next</h2>
+    <p>
+      A green node is the prerequisite for everything else. Continue with
+      <a href="users.html">users and subscriptions</a>.
+    </p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

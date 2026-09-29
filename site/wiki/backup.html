@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backups &amp; restore — OVManager wiki</title>
+<meta name="description" content="OVManager backup bundles, the daily timer, offsite copies over SSH, and how a restore happens without taking the panel down.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html" aria-current="page">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>Backups &amp; restore</h1>
+    <p class="lede">
+      A backup is a copy of the panel's database: users, nodes, settings, the
+      audit log and the secrets in it.
+    </p>
+
+    <div class="note">
+      <h3>Treat a backup bundle as secret material</h3>
+      <p>
+        The database holds node API keys and the Telegram bot token as written
+        &mdash; there is no at-rest encryption, by design, because encrypting
+        them would only move the key to another file on the same host. What
+        protects them is the filesystem: the data and backup directories are
+        <code>0700</code>, and the database and every <code>.ovmbak</code>
+        bundle are <code>0600</code>. Move any off-site copy over an encrypted
+        channel.
+      </p>
+    </div>
+
+    <h2 id="now">Take a backup now</h2>
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>sudo ovm backup                # write a verified bundle now
+sudo ovm backup --keep 30      # how many to keep (1-500, default 14)
+sudo ovm restore               # list what is available
+sudo ovm restore NAME.ovmbak   # restore one by name</code></pre>
+    </figure>
+    <p>
+      Bundles land in <code>/var/lib/ovmanager/backups</code>, and the newest 14
+      are kept unless you change that. Reaching for the panel's web UI is not
+      required at any point &mdash; which matters, because the usual moment you
+      want a backup is the moment the panel is unhappy.
+    </p>
+    <p>
+      A bundle is a gzipped tar with a <code>.ovmbak</code> suffix, holding a
+      consistent SQLite snapshot of the database, a manifest, and a checksum
+      file. It is verified as it is written and again as it is read, so a
+      truncated or edited bundle is refused rather than restored over your live
+      data.
+    </p>
+
+    <h2 id="schedule">A daily backup</h2>
+    <figure class="cmd">
+      <figcaption>systemd timer, outside the panel</figcaption>
+      <pre><code>sudo ovm auto-backup on --time 03:30 --keep 30
+sudo ovm auto-backup status
+sudo ovm auto-backup off</code></pre>
+    </figure>
+    <p>
+      This is a systemd timer, so it keeps running even if the panel is stopped.
+      The panel has its own scheduler too, under
+      <strong>Settings &rarr; Backup</strong> &mdash; off by default, with its
+      own time and retention. Using both is redundant; pick the one that matches
+      how you operate, and remember that only the timer survives a stopped
+      panel.
+    </p>
+
+    <h2 id="offsite">Off-site copies</h2>
+    <p>
+      A daily backup on the same disk is not a backup. The scheduled backup can
+      push the newest bundle to another machine: fill in a target like
+      <code>backup@server:/backups/panel</code> and, after each automatic
+      backup, the newest file is copied there with <code>rsync</code> (or
+      <code>scp</code> when <code>rsync</code> is not installed).
+    </p>
+    <ul>
+      <li>The transfer uses plain SSH with key-based login and <code>BatchMode</code> &mdash; no password prompts, ever.</li>
+      <li>The target machine must already accept your key, and the target folder must already exist.</li>
+      <li>Success or failure is written to the Audit Log. Nothing else on the remote side is created, rotated or cleaned up &mdash; retention is yours to manage there.</li>
+    </ul>
+
+    <h2 id="restore">Restoring</h2>
+    <h3>From the CLI</h3>
+    <p>
+      <code>ovm restore</code> with no name lists what is available and changes
+      nothing. Naming a bundle restores it, with the service stopped and
+      restarted around the swap.
+    </p>
+
+    <h3>From the panel</h3>
+    <p>
+      <strong>Settings &rarr; Backup</strong> accepts an uploaded bundle and
+      restores it <em>atomically</em>:
+    </p>
+    <ul>
+      <li>Writes are refused &mdash; HTTP <code>503</code> &mdash; until the swap has finished, so nothing is half-written against a database being replaced.</li>
+      <li>The database being replaced is kept as a fallback.</li>
+      <li>The restored database is migrated on the spot, so an older bundle comes back at the current schema version rather than needing a manual step.</li>
+    </ul>
+
+    <h2 id="what">What is in a backup, and what is not</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Item</th><th scope="col">Backed up by <code>ovm backup</code></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Users, expiry, quotas, tags</td><td>Yes &mdash; in the database</td></tr>
+          <tr><td>Nodes and their API keys</td><td>Yes &mdash; in the database</td></tr>
+          <tr><td>Settings, admin accounts, audit log</td><td>Yes &mdash; in the database</td></tr>
+          <tr><td>Panel TLS key and certificate</td><td>No &mdash; they live outside the database</td></tr>
+          <tr><td>VPN users, certificates and configs</td><td>No &mdash; those live on each node, under <code>/var/lib/ovnode</code> and <code>/etc/openvpn</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      So a complete disaster-recovery plan has two halves: the panel database
+      here, and each node's own state. Back both up, and remember that node data
+      is only rename-safe if you keep the same <code>--name</code>.
+    </p>
+
+    <h2 id="next">Next</h2>
+    <p><a href="troubleshooting.html">Troubleshooting</a>.</p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

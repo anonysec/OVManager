@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OVManager — self-hosted OpenVPN admin panel</title>
+<meta name="description" content="OVManager is a self-hosted OpenVPN management panel: users, traffic quotas, multiple VPN nodes, TLS certificates and backups, with a one-line installer and an ovm CLI.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="index.html" aria-current="page">Home</a>
+      <a href="wiki/index.html">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <section class="hero">
+      <ul class="badges">
+        <li class="badge">v1.0.0</li>
+        <li class="badge">MIT</li>
+        <li class="badge">FastAPI · React · SQLite</li>
+      </ul>
+      <h1>Your own OpenVPN panel.</h1>
+      <p class="lede">
+        OVManager is a self-hosted admin panel for OpenVPN. It keeps the user
+        list, quotas and expiry dates on one box, and drives one or many VPN
+        servers through a small agent called <strong>OVNode</strong>.
+      </p>
+      <p>
+        No hosted service, no account with anyone, no license key. You run the
+        panel on a VPS, you own the data, and the whole stack is MIT-licensed.
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="wiki/install.html">Install it</a>
+        <a class="btn" href="wiki/index.html">Read the wiki</a>
+      </div>
+    </section>
+
+    <h2>Install</h2>
+    <p>
+      One command on a fresh Debian or Ubuntu server, run as root (or with
+      <code>sudo</code>). It installs the panel, generates a random secret URL
+      path, sets up TLS and prints a one-time claim key.
+    </p>
+
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)</code></pre>
+    </figure>
+
+    <div class="note">
+      <h3>Honest status: no release artifacts published yet</h3>
+      <p>
+        v1.0.0 is the first release and nothing is on GitHub Releases or tagged
+        yet. The command above is the project's real entry point, but the
+        installer downloads a <strong>verified</strong> release archive and
+        checks its SHA-256 before it extracts anything &mdash; it fails closed
+        rather than installing an unverified tree. Until those artifacts are
+        published, the download step cannot succeed, and the working path today
+        is a from-source install (see
+        <a href="wiki/install.html#from-source">install from source</a>).
+      </p>
+    </div>
+
+    <p>
+      Choose <strong>Install</strong> (native, systemd + a virtualenv) or
+      <strong>Install with Docker</strong>. Defaults are safe and ask nothing:
+      port <code>2095</code>, admin user <code>admin</code>, self-signed TLS,
+      random URL path. Full walkthrough, unattended flags and the first-login
+      flow: <a href="wiki/install.html">Install &amp; first login</a>.
+    </p>
+
+    <h2>What you get</h2>
+    <ul class="grid">
+      <li class="card">
+        <h3>Users, quotas, expiry</h3>
+        <p>
+          Per-user traffic quota in GB (empty means unlimited), an expiry date,
+          a simultaneous-device limit and searchable tags. Defaults for new
+          users live in one place.
+        </p>
+      </li>
+      <li class="card">
+        <h3>One panel, many nodes</h3>
+        <p>
+          The panel connects out to every VPN server; nodes never call back.
+          Move or replace the panel and the VPN servers never notice.
+        </p>
+      </li>
+      <li class="card">
+        <h3>Claim-key first run</h3>
+        <p>
+          The installer mints no password. It prints a one-time claim key, you
+          choose the owner password in the browser, and it is stored as a hash
+          in the database &mdash; never in <code>.env</code>.
+        </p>
+      </li>
+      <li class="card">
+        <h3>A hidden panel</h3>
+        <p>
+          The panel is served under a random URL prefix and answers an empty
+          404 everywhere else, so internet scanners see nothing to poke at.
+        </p>
+      </li>
+      <li class="card">
+        <h3>TLS either way</h3>
+        <p>
+          Self-signed by default, so the first start is encrypted with no
+          domain. Switch to Let's Encrypt from the panel or with
+          <code>ovm https --domain</code>.
+        </p>
+      </li>
+      <li class="card">
+        <h3>Verified backups</h3>
+        <p>
+          <code>ovm backup</code> writes a checked database bundle, a daily
+          timer can keep it fresh, and a scheduled backup can push the newest
+          copy offsite over SSH.
+        </p>
+      </li>
+      <li class="card">
+        <h3>Telegram alerts</h3>
+        <p>
+          Optional bot that messages the owner about users near or over quota,
+          and once per node outage &mdash; then once more when the node is back.
+        </p>
+      </li>
+      <li class="card">
+        <h3>One operator CLI</h3>
+        <p>
+          <code>ovm status</code>, <code>doctor</code>, <code>logs</code>,
+          <code>backup</code>, <code>restore</code>, <code>update</code>,
+          <code>rollback</code> and a recovery menu, all with stable exit codes.
+        </p>
+      </li>
+    </ul>
+
+    <h2>Next steps</h2>
+    <ol class="steps">
+      <li>
+        <h3>Install the panel</h3>
+        <p>
+          Run the installer, open the printed URL, paste the claim key and
+          choose the owner password. Save that URL &mdash; it contains the
+          secret path. <a href="wiki/install.html">Install &amp; first login</a>
+        </p>
+      </li>
+      <li>
+        <h3>Connect a VPN node</h3>
+        <p>
+          The panel does nothing until a node is attached. Same server, or a
+          separate one &mdash; two commands and a form.
+          <a href="wiki/nodes.html">Adding nodes</a>
+        </p>
+      </li>
+      <li>
+        <h3>Create a user</h3>
+        <p>
+          Name, expiry, quota, device limit. The panel then hands you a
+          <code>.ovpn</code> file or a subscription link.
+          <a href="wiki/users.html">Users &amp; subscriptions</a>
+        </p>
+      </li>
+      <li>
+        <h3>Keep it healthy</h3>
+        <p>
+          Watch traffic, renew certificates before they expire, and take
+          backups you have actually restored once.
+          <a href="wiki/traffic.html">Traffic limits</a> ·
+          <a href="wiki/tls.html">TLS</a> ·
+          <a href="wiki/backup.html">Backups</a>
+        </p>
+      </li>
+    </ol>
+
+    <h2>Wiki</h2>
+    <ul class="grid">
+      <li class="card"><h3><a href="wiki/install.html">Install &amp; first login</a></h3><p>Native or Docker, the claim-key flow, update and uninstall, and the from-source path.</p></li>
+      <li class="card"><h3><a href="wiki/nodes.html">Adding nodes</a></h3><p>Install OVNode, register it in the panel, and open the right ports.</p></li>
+      <li class="card"><h3><a href="wiki/users.html">Users &amp; subscriptions</a></h3><p>Create users, hand out configs, understand subscription links.</p></li>
+      <li class="card"><h3><a href="wiki/traffic.html">Traffic limits</a></h3><p>How usage is collected, counted and enforced, and what happens at the quota.</p></li>
+      <li class="card"><h3><a href="wiki/tls.html">TLS certificates</a></h3><p>Self-signed, Let's Encrypt, renewals, and the certificate on the node side.</p></li>
+      <li class="card"><h3><a href="wiki/backup.html">Backups &amp; restore</a></h3><p>Bundles, schedules, offsite copies, and restoring an upload safely.</p></li>
+      <li class="card"><h3><a href="wiki/troubleshooting.html">Troubleshooting</a></h3><p>Lost URL, forgotten password, red nodes, no internet through the tunnel.</p></li>
+      <li class="card"><h3><a href="wiki/cli.html">CLI reference</a></h3><p>Every <code>ovm</code> command, the installer's three flags, and the <code>OVM_*</code> settings.</p></li>
+    </ul>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="wiki/index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a> ·
+      <a href="https://github.com/anonysec/OVManager/blob/main/README.md">README</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

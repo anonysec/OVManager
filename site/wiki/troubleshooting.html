@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting — OVManager wiki</title>
+<meta name="description" content="The OVManager problems people actually hit: lost panel URL, forgotten password, red nodes, missing alerts, and a tunnel with no internet.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html" aria-current="page">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>Troubleshooting</h1>
+    <p class="lede">
+      The symptoms people actually hit, each in the order worth checking. All of
+      it runs from a shell on the panel server, so none of it depends on the
+      panel being reachable.
+    </p>
+
+    <h2 id="urlpath">I lost the panel URL (the <code>/random-path/</code> part)</h2>
+    <p>
+      The panel hides behind a secret path, and requests without it get an empty
+      404 page. That is normal behaviour, not a crash.
+    </p>
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>sudo ovm reset-urlpath</code></pre>
+    </figure>
+    <p>
+      The panel is served at <code>/</code> again. Set a new random path in
+      <strong>Settings &rarr; General &rarr; Panel URL Path</strong>; tick
+      "I saved the new URL" and the page redirects you to it. Prefixes that
+      collide with real routes &mdash; <code>api</code>, <code>assets</code>,
+      <code>health</code>, the subscription path &mdash; are rejected
+      automatically.
+    </p>
+    <p>
+      From a native install, the equivalent is
+      <code>cd /opt/ovmanager &amp;&amp; sudo uv run main.py --reset-urlpath</code>.
+      On Docker, run the same command inside the container, or check
+      <code>ovm status</code>.
+    </p>
+    <p>
+      If <code>ovm recovery</code> still shows a URL you cannot reach, remember
+      that <code>/sub/...</code> and <code>/health</code> are intentionally
+      served <em>without</em> the prefix &mdash; subscription links have to be
+      shareable and health checks have to keep working.
+    </p>
+
+    <h2 id="password">I forgot the owner password</h2>
+    <p>
+      The owner credential is a row in the panel's database, not a
+      <code>.env</code> value. Reset it from the server; user data is untouched.
+    </p>
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>sudo ovm reset-password
+sudo ovm reset-password -p 'new-long-password'
+OVM_PASS='new-long-password' sudo ovm reset-password</code></pre>
+    </figure>
+    <p>
+      The interactive form asks for the new password twice, with hidden input.
+      Both script forms restart the panel afterwards and wait for
+      <code>/health</code>. The value is never echoed and never logged &mdash;
+      it rides in the environment rather than in <code>argv</code>, because a
+      command-line argument is visible in <code>ps</code> to every user on the
+      box.
+    </p>
+    <p>
+      Placeholder-looking passwords (<code>change-me</code>,
+      <code>changeme</code>, <code>password123</code>, <code>admin123</code>)
+      are refused, exactly as the panel refuses them. The same reset is entry 2
+      of the <code>sudo ovm recovery</code> menu. Docker installs work the same
+      way &mdash; <code>ovm</code> finds and restarts the container.
+    </p>
+
+    <h2 id="login">Login fails with "username or password is incorrect"</h2>
+    <ul>
+      <li>Caps lock, or a trailing space. Passwords are case-sensitive.</li>
+      <li>
+        Five wrong tries in five minutes locks that username for five minutes,
+        with both a per-IP and a per-user limit. Wait and retry &mdash;
+        <strong>restarting the panel does not clear the lockout</strong>.
+      </li>
+      <li>Still locked out with shell access? Use <code>reset-password</code> above.</li>
+    </ul>
+
+    <h2 id="cert-warning">The browser warns about the certificate</h2>
+    <p>
+      Expected with the self-signed default. The connection <em>is</em>
+      encrypted; the browser just does not know who issued the certificate.
+      Click Advanced, then Proceed. The warning disappears once you switch to
+      Let's Encrypt with a real domain &mdash; see
+      <a href="tls.html#switch">TLS certificates</a> and
+      <code>ovm tls-status</code>.
+    </p>
+
+    <h2 id="health-probe"><code>ovm status</code> or <code>ovm doctor</code> call the panel unreachable</h2>
+    <p>
+      Rarely a certificate problem. The health probe deliberately pins the
+      certificate recorded in <code>.env</code> (<code>SSL_CERTFILE</code>) and
+      only falls back to unverified behaviour when it cannot read that file, so
+      a healthy self-signed panel reads as healthy. The hostname is not checked
+      on purpose: the installer's certificate carries the public IP as its
+      common name and has no SANs, while the probe dials <code>127.0.0.1</code>,
+      so a name check would fail on a perfectly good panel.
+    </p>
+    <p>
+      What <em>does</em> fail the probe is the panel serving a different
+      certificate from the one in <code>.env</code> &mdash; typically right after
+      replacing it. Compare what is on disk with what is being served:
+    </p>
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>ovm tls-status
+ovm logs</code></pre>
+    </figure>
+
+    <h2 id="node-red">Node stays red</h2>
+    <p>Check in this order:</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">#</th><th scope="col">Check</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><strong>Address.</strong> Public IP or hostname of the node, not a <code>10.x</code>/<code>192.168.x</code> address &mdash; unless panel and node share a private network.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><strong>Port.</strong> The service port (<code>2083</code> by default), not the VPN port (<code>1194</code>).</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><strong>API key.</strong> An exact copy with no extra spaces. It can only be regenerated by reinstalling the node with the same <code>--name</code> &mdash; then update the panel entry too.</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td><strong>TLS switch.</strong> It must match the node: <code>selfsigned</code>/<code>le</code> means on, <code>none</code> means off. A mismatch is a silent connection failure.</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td><strong>Name.</strong> The panel's node name must equal the node's <code>--name</code> exactly.</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td><strong>Firewall.</strong> <code>2083/tcp</code> reachable from the panel. Cloud security groups are the usual culprit.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>From the node itself, this should answer:</p>
+    <figure class="cmd">
+      <figcaption>On the VPN server</figcaption>
+      <pre><code>curl -sk https://127.0.0.1:2083/sync/health</code></pre>
+    </figure>
+    <p>
+      The panel's Health page collects the same causes in one place, and the
+      node row has a <strong>Test connection</strong> button if you want the
+      answer before saving.
+    </p>
+
+    <h2 id="node-alert">No node-down Telegram alert</h2>
+    <ol>
+      <li>
+        <strong>Bot set up.</strong> Token and owner ID saved in
+        <strong>Settings &rarr; Bot</strong>, and <em>Start</em> tapped in the
+        bot once &mdash; Telegram refuses messages from users who never started
+        the chat.
+      </li>
+      <li>
+        <strong>Toggle on.</strong>
+        <strong>Settings &rarr; Alerts &rarr; "Node goes down or comes back"</strong>.
+      </li>
+      <li>
+        <strong>Wait a probe.</strong> Detection is transition-based on the
+        five-minute collector, so allow up to about five minutes after the node
+        actually went down.
+      </li>
+      <li>
+        <strong>One message per outage.</strong> A still-down node is not
+        re-alerted every five minutes: you get the down message once and a
+        "back online" message on recovery.
+      </li>
+      <li>
+        <strong>Deleted and re-added the node?</strong> Alerts key off the panel
+        node entry, so re-adding it resets the "already alerted" state. That is
+        expected.
+      </li>
+    </ol>
+    <p>
+      If the bot itself was broken during the outage, a failed send is retried
+      on the next tick &mdash; the alert arrives late, not never.
+    </p>
+
+    <h2 id="subscription">Subscription link shows <code>localhost</code>, or will not download</h2>
+    <p>
+      Subscription and download links are built from the address you opened the
+      panel with. Always log in through the public URL. Opening the panel as
+      <code>http://localhost:2095/...</code> through an SSH tunnel is the usual
+      cause, and the links you copy then carry <code>localhost</code>.
+    </p>
+    <p>
+      Behind a proxy where the request host is wrong, pin it explicitly: set
+      <code>PUBLIC_URL=https://panel.example.com</code> in <code>.env</code>, or
+      pass <code>OVM_PUBLIC_URL</code> at install time, or set the base URL under
+      <strong>Settings &rarr; Subscription Link</strong>, then restart the panel.
+    </p>
+
+    <h2 id="no-internet">VPN connects but there is no internet</h2>
+    <p>This is a node-side problem: IP forwarding and NAT.</p>
+    <ul>
+      <li>Native installs handle it through the <code>ovnode-nat</code> service &mdash; check <code>systemctl status ovnode-nat</code>.</li>
+      <li>Docker handles it in the container entrypoint, which needs <code>CAP_NET_ADMIN</code> and <code>/dev/net/tun</code> mounted.</li>
+      <li>Verify <code>sysctl net.ipv4.ip_forward</code> is <code>1</code>, and that no other firewall (nftables, a cloud security group) is blocking forwarding.</li>
+    </ul>
+
+    <h2 id="installer-errors">Installer errors</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Message</th><th scope="col">What to do</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Must run as root (sudo)</code></td>
+            <td>Re-run with <code>sudo</code>.</td>
+          </tr>
+          <tr>
+            <td><code>systemd not found — native install needs it</code></td>
+            <td>Use Docker mode (WSL, containers), or a full VM.</td>
+          </tr>
+          <tr>
+            <td><code>Port 80 is busy — Let's Encrypt standalone needs it</code></td>
+            <td>Stop whatever listens on 80, or install with a self-signed certificate for now.</td>
+          </tr>
+          <tr>
+            <td><code>docker compose startup failed</code></td>
+            <td><code>docker logs ovmanager</code> &mdash; usually a busy port or no disk space.</td>
+          </tr>
+          <tr>
+            <td><code>No answer on /health</code></td>
+            <td><code>journalctl -u ovmanager -f</code> natively, or <code>docker logs -f ovmanager</code>; then <code>ovm status</code>.</td>
+          </tr>
+          <tr>
+            <td><code>No verified release file is available</code>, or a checksum error</td>
+            <td>
+              The installer only accepts a verified release archive and its
+              SHA-256 sidecar. If those artifacts are not published yet, nothing
+              is wrong with your server &mdash; use a
+              <a href="install.html#from-source">from-source install</a>. On an
+              older install that is stuck on a download error, re-bootstrap with
+              the current raw one-liner and then run <code>ovm update</code>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="starting-over">Starting over</h2>
+    <p>
+      The panel keeps its data on uninstall unless you purge, and a purge first
+      takes a snapshot at <code>/var/backups/panel-pre-purge-*.tar.gz</code>. Node
+      data in <code>/var/lib/ovnode</code> and <code>/etc/openvpn</code>
+      likewise survives a reinstall &mdash; rename-safe only if you keep the
+      same <code>--name</code>.
+    </p>
+    <figure class="cmd">
+      <figcaption>On the server</figcaption>
+      <pre><code>sudo ovm uninstall
+sudo ovm uninstall --purge</code></pre>
+    </figure>
+
+    <h2 id="next">Next</h2>
+    <p><a href="cli.html">CLI reference</a> &mdash; every command in one place.</p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

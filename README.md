@@ -1,237 +1,142 @@
 # OVManager
 
-[![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
 
-OpenVPN management panel. Works with [OVNode](https://github.com/anonysec/OVNode) for node-side VPN management.
-
-| Panel | Node | Status |
-| ----- | ---- | ------ |
-| 1.2.x | 1.1.x | supported (sync API contract) |
-| 2.x   | ≥ 2.0 | retired |
-
-## Acceptable use
-
-You operate the VPN: abuse complaints (spam, scanning, copyright) go to
-**you**, not to this project. Enforce per-user traffic quotas and expiry,
-watch Security → Authentication Summary, disable abusers promptly, and
-respect your provider's ToS and local law.
-
-## Quickstart (beginners start here)
-
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
-```
-
-Choose **Install** (recommended) or **Install with Docker**. OVManager uses port
-`2095`, generates a private panel URL, and prints a one-time **claim key** — no
-password is created at install time. Open the printed URL, paste the key, and
-choose the owner password in the browser (lost the key? `ovm owner-claim`).
-Then follow the built-in setup checklist (node → user → download `.ovpn`).
-
-Step-by-step with pictures-in-words: [docs/quickstart.md](docs/quickstart.md) ·
-under the hood: [docs/how-it-works.md](docs/how-it-works.md) ·
-one server: [docs/single-vps.md](docs/single-vps.md) ·
-many servers: [docs/multi-node.md](docs/multi-node.md) ·
-stuck: [docs/troubleshooting.md](docs/troubleshooting.md).
+Web panel for an OpenVPN service: users, traffic quotas, expiry dates, live
+sessions, and the servers that carry the VPN. The panel holds the state. Each
+VPN server runs [OVNode](https://github.com/anonysec/OVNode), which owns
+OpenVPN, the certificates and the per-user configs. Nodes never call the panel,
+so you can move or replace the panel without touching them.
 
 ## Install
 
-The installer has two modes — **native** (systemd + uv on the host) and **Docker**
-(image built from source). Humans get a wizard; scripts pass flags and never wait
-on a prompt.
-
-**Human** (keeps the terminal as stdin so the wizard can ask):
-
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
-**Unattended** (`--yes` skips every prompt; the panel URL and the one-time claim
-key are printed):
+Answer `1` to install natively (a systemd service on this host) or `2` for
+Docker. The recommended install asks nothing: port `2095`, a random secret URL
+path, admin user `admin`, self-signed TLS.
+
+It ends with a one-time claim key and the panel URL:
+
+```text
+Open      https://203.0.113.10:2095/k3f9xq2m/claim
+Claim key 9f1c...  (one-time)
+Login     admin
+```
+
+Open that URL, paste the key, and choose the owner password. No password exists
+until you do: the install mints a key, not a credential, and the password is
+stored as a bcrypt hash in the panel database, never in `.env`. The key is spent
+by the claim, and `sudo ovm owner-claim` prints a fresh one while the panel is
+unclaimed.
+
+For the wizard that asks about every setting instead:
 
 ```bash
-# Install
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) interactive
+```
+
+Unattended, for scripts and CI:
+
+```bash
 curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
   | sudo bash -s -- --yes
 
-# Install with Docker
 curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
   | sudo bash -s -- --docker --yes
 ```
 
-The private URL path is always generated for a fresh recommended installation.
-The owner password is never an install input — the install prints a claim key
-and you set the password in the browser. `CI=true` implies `--yes`. Run the
-script with `--help` for the three flags and the `OVM_*` equivalents.
+The installer takes three flags: `-y/--yes`, `--docker`, `-h/--help`. Every
+other setting is an `OVM_*` variable, so an unattended run and an interactive
+one cannot disagree:
 
-Forks: `OVM_REPO=myorg/OVManager` points source downloads and update
-pulls at your own repo (use your fork's raw `install.sh` URL to install
-from it).
-
-`-p/--pass`, `--mode`, `--tls*` and `-i` are deprecated (they still work, and
-each prints what replaces it): every install setting is an `OVM_*` variable, so
-an unattended run and an interactive one cannot disagree.
-
-## Update / Uninstall
-
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) update
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall
-# also drop data:
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall --purge
-# owner password lives in the DB — set it with the CLI (-p for scripts, or OVM_PASS):
-ovm reset-password
-OVM_PASS='new-password' ovm reset-password
-```
-
-Stuck on ≤1.2.5 with a checksum error? Re-bootstrap with the one-liner
-above, then `update` (`ovm update` alone still uses the old installer).
-
-## Terminal menu
-
-Every install adds a command — run `ovmanager` (or `ovm`) on the server and
-pick from a menu: **Status · Start/Stop/Restart · Logs · Backup · Auto
-backup · Update · TLS · Recovery · Uninstall**. Recovery shows the panel URL and login, resets
-the owner password (rewrites the owner's database row), or clears the secret URL path. `logs -f` follows live;
-with `whiptail` installed the menu uses boxed dialogs.
-
-Every item is also a plain command for scripts (stable exit codes):
-`ovmanager status | start | stop | restart | logs [N|-f] | backup | update |
-tls | recovery | reset-password | reset-urlpath | menu | help`.
-
-## Manual Install (developers only — beginners: use the installer above)
-
-```bash
-git clone https://github.com/anonysec/OVManager.git /opt/ovmanager
-cd /opt/ovmanager
-cp .env.example .env   # set PUBLIC_URL; the owner credential is created below
-pip install uv && uv sync
-cd frontend && npm ci && npm run build
-uv run main.py
-# first run creates the schema and the owner row; set its password with:
-.venv/bin/python -m cli.main reset-password -p 'a-strong-password'
-```
-
-### Developer commands
-
-`make` wraps the checks, so you do not have to remember the incantations or
-run them one at a time:
-
-| Target | What it runs |
+| Variable | Values |
 | --- | --- |
-| `make setup` | `uv sync --frozen` and `npm ci` — installs exactly what the lock files pin. |
-| `make test` | The backend suite, `pytest -n auto`. Parallel is safe because each xdist worker imports `conftest`, which allocates its own throwaway data directory. |
-| `make lint` | `ruff check` and `ruff format --check` over backend, bot, cli, tests and bench; `bash -n` on the shell entrypoints; `git diff --check`; and `eslint src/` in the frontend. |
-| `make verify` | `lint`, then the frontend's `npm run verify` (build, design tokens, i18n key parity, RTL, eslint, types, vitest), then regenerates `scripts/openapi.json`. |
-| `make bench` | The node fan-out benchmarks in `scripts/bench/`. Not a test — the figures depend on the machine's core count. |
-| `make openapi` | Regenerate `scripts/openapi.json` from the app on its own. |
-| `make clean` | Drop build artefacts and caches. |
+| `OVM_PORT` | Panel port (default `2095`) |
+| `OVM_PATH` | Secret URL prefix: `random` (default), `root`, or a name |
+| `OVM_ADMIN_USER` | Owner login name (default `admin`) |
+| `OVM_TLS` | `self` (default), `le`, `le-ip`, `custom` |
+| `OVM_TLS_DOMAIN`, `OVM_TLS_KEY`, `OVM_TLS_CERT` | For `le` and `custom` |
+| `OVM_PUBLIC_URL` | Address used in subscription links, when it cannot be inferred |
+| `OVM_VERSION` | Pin an update to one release |
+| `OVM_REPO` | `myorg/OVManager` to install and update from a fork |
 
-`make verify` does **not** run the backend test suite — that is `make test`.
-Run both before pushing; CI runs the same checks, in three parallel jobs
-(`backend`, `frontend`, `frontend-dist`) rather than one target.
+`CI=true` implies `--yes`. The older flag spellings (`-p/--pass`, `--mode`,
+`--tls*`, `-i`) still work and each prints what replaces it. Full list:
+`bash install.sh --help`.
 
-### Container image
+## What you get
 
-The `Dockerfile` is three stages, and the split is the point — the runtime
-image should carry nothing a running panel does not need:
+| | |
+| --- | --- |
+| **Users** | Create with a traffic quota, expiry date and device limit. Tags group them (`vip`, `reseller-a`). Disable, extend, disconnect or delete from the row. |
+| **Delivery** | A subscription link and a downloadable `.ovpn` per user, either one, per node. |
+| **Nodes** | Add a node by address and API key, or paste its `ovnode://` bundle. Live reachability, session counts, OpenVPN/agent version, and per-node DNS, IPv6 and extra ports. |
+| **Accounting** | Every five minutes the panel reads each node's lifetime byte totals and bills only the increase, so restarts and disconnects cannot double-count. Quota crossings are enforced on the spot. |
+| **Limits** | The device limit is pushed to the node and enforced at connect time, so it holds even while the panel is down. |
+| **Security** | Login sessions are opaque database rows. Failed logins are rate-limited per user and per IP. The panel is served under a secret URL prefix that returns an empty 404 anywhere else. |
+| **Backups** | `ovm backup` writes a verified `.ovmbak` bundle. Schedule one inside the panel or with a systemd timer, and push a copy to your own SSH host. Restores are atomic. |
+| **Audit and admins** | A filterable event log, and extra admin accounts the owner can enable or disable. |
+| **Telegram bot** | Off by default. Status, user actions and alerts from the phone. The panel can also send a backup file to Telegram. Locales: `en`, `fa`, `ru`, `cn`. |
+| **Updates** | Staged and verified, with automatic rollback when the new version fails to come up. |
 
-1. **`frontend`** (`node:22-slim`) builds the SPA. Node never reaches the
-   runtime stage.
-2. **`builder`** (`python:3.12-slim`) installs `uv` and runs
-   `uv sync --frozen --no-dev`, which fails closed if `pyproject.toml` and
-   `uv.lock` have drifted apart. `gcc` is installed here and only here: it is
-   needed to build wheels, and it never reaches the runtime image.
-3. **`runtime`** (`python:3.12-slim`) ships the venv, the sources and the
-   frontend build — no compiler, no `uv`, no build tooling.
+## Day to day
 
-It runs as a non-root `appuser` in the `ovpanel` group (gid 997), which is what
-lets the container read the config bind-mounted at `/app/.env`. The installer
-refuses a gid that already has members on the host, because sharing that file
-by group would hand the secret panel URL path to them.
-
-## Panel path (URLPATH)
-
-The panel can be served under a secret URL prefix (e.g. `/k3f9xq2m/`) which
-hides it from internet scanners: requests outside the prefix get an empty
-404, so the server looks like an ordinary empty website.
-
-- The installer generates a **random path by default** (override with
-  `--path mypath`, or `--path root` to serve at `/`).
-- Change it anytime in **Settings → General → Panel URL Path** — takes
-  effect immediately, no restart. Prefixes of real routes (`api`, `assets`,
-  `health`, subscription path, …) are rejected automatically.
-- The prefix is scanner-hiding, **not authentication** — admin login + rate
-  limiting protect the panel either way. Subscription links (`/sub/...`)
-  and `/health` are intentionally served without the prefix: links must be
-  shareable with users and healthchecks must keep working.
-
-Forgot the path? Recover with shell access:
+`ovm` (alias `ovmanager`) is installed on the server and refreshed by every
+update. Every command needs root, because each one reads the panel's `.env`.
+The panel itself does not: any account can log in through the browser.
 
 ```bash
-cd /opt/ovmanager && uv run main.py --reset-urlpath   # panel goes back to /
+sudo ovm status          # service, health, version, panel URL (--all for paths)
+sudo ovm doctor          # 13 health checks (--fix applies the safe ones)
+sudo ovm logs            # last 100 lines; logs -f follows
+sudo ovm backup          # verified data backup now (--keep N, default 14)
+sudo ovm restore         # list backups, or restore one by name
+sudo ovm auto-backup on  # daily backup timer (--time HH:MM)
+sudo ovm https           # self-signed, Let's Encrypt, or your own certificate
+sudo ovm tls-status      # the certificate in use and when it expires
+sudo ovm update          # staged update that rolls back if the panel does not come up
+sudo ovm rollback        # restore the newest pre-update code snapshot
+sudo ovm recover-update  # clean up an update interrupted by a reboot
+sudo ovm owner-claim     # new one-time claim key (before the panel is claimed)
+sudo ovm reset-password  # set a new owner password
+sudo ovm reset-urlpath   # clear the secret URL prefix
+sudo ovm uninstall       # remove the app; --purge deletes the data too
 ```
 
-## Schema migrations
+`ovm` on its own prints that list, and `sudo ovm completion` installs bash
+completion for it. `start`, `stop`, `restart`, `enable` and `disable` control
+the service, `recovery` reprints the panel URL and login name, and
+`version-script` prints which installer release you are running.
 
-The database is migrated automatically on every start. The current version is
-recorded in a `schema_version` table, so numbered steps run once and in order:
+## Docs
 
-```bash
-uv run python -m backend.db.migrations --check    # CI drift gate
-uv run python -m backend.db.migrations --migrate  # apply to the live database
-```
+| Document | What is in it |
+| --- | --- |
+| [quickstart](docs/quickstart.md) | The first run, step by step |
+| [how it works](docs/how-it-works.md) | Process model, traffic accounting, security, updates, the design system |
+| [nodes](docs/nodes.md) | OVNode on the same server or on its own, ports and firewall |
+| [troubleshooting](docs/troubleshooting.md) | Lost URL, forgotten password, red nodes, no internet through the tunnel |
+| [contributing](docs/CONTRIBUTING.md) | Ground rules, manual install, the checks, release freeze |
+| [installer design](docs/adr/installer-design.md) | Why the installer and the CLI look the way they do |
 
-Databases created by an earlier release are **adopted**: their current shape is
-inspected, missing columns are added, and the database is then stamped at the
-current version. No dump/restore is needed. `backend/db/models.py` is the single
-source of truth for the schema; add a step to `STEPS` in
-`backend/db/migrations.py` and bump `SCHEMA_VERSION` for each change.
+## Acceptable use
 
-## Performance notes
+You operate the VPN. Abuse complaints (spam, scanning, copyright) come to you,
+not to this project. Enforce per-user quotas and expiry, watch the connection
+events under Settings → Security, disable abusers promptly, and respect your
+provider's terms of service and local law.
 
-The panel has no external broker and no shared-state service. The web server
-runs with `workers=1` and keeps its state in-process; SQLite is the only
-datastore. It supervises its own children — a jobs process (`worker.py`) and,
-when the bot is enabled, the Telegram bot (`bot_supervisor.py`) — so a job that
-blocks cannot stop the panel answering, and a crashing child is restarted
-rather than taking the panel with it. The children are supervised, not peers:
-the jobs child takes an exclusive lock on the data directory so a second one
-cannot start and double every schedule. See
-[docs/how-it-works.md](docs/how-it-works.md) for the full process model.
+## License
 
-**Redis was evaluated and not added.** It is the right answer when several
-application processes must share cache or pub/sub state. Here the web process
-is the only reader of the live cache, and the children do not share it — they
-coordinate through SQLite, which is already the source of truth — so a Redis
-hop would only add latency, a second thing to run and back up, and roughly
-10–30 MB of resident memory: the opposite of the goal. Introducing it only
-becomes worthwhile if OVManager moves to multiple *web* workers, which would
-also require replacing SQLite with a networked database first.
+MIT. Free for personal and commercial use: no license server, no paid feature
+gate, no node or user limit. Keep the copyright and MIT license notice with
+copies or substantial portions of the software.
 
-What is done instead:
-
-- One background collector polls the nodes and caches the result; request
-  handlers read that cache instead of fanning out to every node per request.
-- The collector backs off to `OVMANAGER_LIVE_IDLE_POLL_SECONDS` (default 300s)
-  when no browser has the live stream open, instead of probing every node every
-  10 seconds for an audience of nobody.
-- Security-header and CSRF handling are plain ASGI middlewares, so requests do
-  not pay for Starlette's `BaseHTTPMiddleware` task-and-queue wrapper — which
-  also keeps the SSE stream unbuffered.
-- The built `index.html` is cached in memory and invalidated by mtime, so
-  serving an SPA route is one `stat()` rather than a file read per navigation.
-
-## Free for personal and commercial use
-
-OVManager is licensed under the [MIT License](LICENSE). You may use, modify,
-distribute, host, and sell services built with it without paying this project
-a license fee. There is no license server, paid feature gate, node limit, or
-user limit. Keep the copyright and MIT license notice with copies or substantial
-portions of the software. Third-party infrastructure and components retain
-their own terms.
-
-See [Privacy](docs/legal/PRIVACY.md), [Acceptable use](docs/legal/ACCEPTABLE_USE.md), and
+See [Privacy](docs/legal/PRIVACY.md),
+[Acceptable use](docs/legal/ACCEPTABLE_USE.md) and
 [third-party licensing](docs/legal/THIRD_PARTY_LICENSES.md).

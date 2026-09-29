@@ -1,0 +1,53 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+name: Pages
+
+# Publishes site/ to GitHub Pages. The site is plain HTML and CSS — there is
+# no build step, so the job only uploads the directory it deploys.
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A run that is queued behind another is superseded,
+# but a deployment already in flight is never cancelled half-way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # enablement asks the API to create the Pages site when it does not exist
+      # yet, with build_type=workflow. GITHUB_TOKEN cannot do that — it has
+      # neither administration nor Pages-write at the repository level — so the
+      # step needs a token that can. Add one as the PAGES_TOKEN secret (a PAT
+      # with the `repo` scope, or a GitHub App token with `pages: write`) and
+      # the site turns itself on; without it, enable Pages once by hand under
+      # Settings -> Pages -> Source: GitHub Actions.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          token: ${{ secrets.PAGES_TOKEN || github.token }}
+          enablement: true
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

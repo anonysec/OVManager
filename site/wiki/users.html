@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users &amp; subscriptions — OVManager wiki</title>
+<meta name="description" content="Create OVManager users, set quota, expiry and device limits, and hand out .ovpn configs or subscription links.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html" aria-current="page">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>Users &amp; subscriptions</h1>
+    <p class="lede">
+      A user is one VPN account: a numeric id, a display name, a quota, an
+      expiry date and a device limit.
+    </p>
+
+    <h2 id="create">Create a user</h2>
+    <p>
+      <strong>Users &rarr; Add User</strong>. The fields are the same whether you
+      are making one account or fifty.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Field</th><th scope="col">What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Name</td>
+            <td>The display name. It is unique, and it is what the panel lists and reports on.</td>
+          </tr>
+          <tr>
+            <td>Expiry date</td>
+            <td>After this date the account stops working. The panel sweeps for expiry-only cases every ten minutes.</td>
+          </tr>
+          <tr>
+            <td>Traffic quota (GB)</td>
+            <td>Bytes allowed, in GB. <strong>Empty means unlimited.</strong> See <a href="traffic.html">Traffic limits</a>.</td>
+          </tr>
+          <tr>
+            <td>Devices</td>
+            <td>Simultaneous connections allowed. <strong>0 means unlimited</strong>; 1 means a new connection takes over the old one; N rejects the N+1th at connect time.</td>
+          </tr>
+          <tr>
+            <td>Tag</td>
+            <td>Optional free text up to 64 characters &mdash; <code>monthly</code>, <code>vip</code>, <code>reseller-a</code>. Shows on the row and is searchable and filterable.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Leave the rest at their defaults. Those defaults come from
+      <strong>Settings &rarr; Defaults</strong>: default days, default traffic in
+      GB, and default devices per new user. A fresh install ships with 30 days,
+      100 GB and 1 device.
+    </p>
+
+    <h2 id="identity">How identity works</h2>
+    <p>
+      A user's numeric panel id <em>is</em> their OpenVPN common name: user 42
+      gets certificate CN <code>42</code>. The node stores the display name
+      alongside it, so usage reports can be keyed by username while the
+      certificate layer stays numeric.
+    </p>
+
+    <h2 id="handoff">Hand the user their config</h2>
+    <p>
+      Immediately after creating a user, the panel offers the handoff:
+      <strong>Get Config</strong> (pick a node, save the <code>.ovpn</code> file)
+      or <strong>Copy subscription link</strong>. Both are available later from
+      the download icon on the user's row.
+    </p>
+    <ul>
+      <li>
+        <strong>Config file.</strong> A one-off <code>.ovpn</code> you send the
+        user. Import it into any OpenVPN client: OpenVPN Connect on Windows and
+        macOS, the OpenVPN app on Android and iOS, NetworkManager or
+        <code>openvpn --config</code> on Linux.
+      </li>
+      <li>
+        <strong>Subscription link.</strong> A stable URL the user can re-fetch;
+        useful when a config needs to be reissued without a new message. It is
+        served <em>without</em> the secret panel path on purpose, so it can
+        actually be shared.
+      </li>
+    </ul>
+    <p>The subscription URL has two shapes:</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Path</th><th scope="col">What it returns</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>/sub/&lt;uuid&gt;</code></td>
+            <td>A page for the user, with the config and usage. Users who use a subscription-capable client fetch this.</td>
+          </tr>
+          <tr>
+            <td><code>/sub/download/&lt;uuid&gt;/&lt;node&gt;</code></td>
+            <td>The <code>.ovpn</code> file for that user on that node.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The <code>sub</code> segment is configurable under
+      <strong>Settings &rarr; Subscription Link</strong>, so a deployment can
+      rename it. An invalid or deleted user gets a plain error page, and an
+      expired user is told the subscription has expired rather than being handed
+      a broken config.
+    </p>
+
+    <h2 id="links">Subscription link shows the wrong host</h2>
+    <p>
+      Subscription and download links are built from the address <em>you</em>
+      open the panel with. Always log in through the public URL &mdash;
+      <code>https://panel.example.com/...</code> rather than
+      <code>http://localhost:2095/...</code> through an SSH tunnel &mdash; and
+      the links you copy will carry that host.
+    </p>
+    <p>
+      If you serve the panel behind a proxy where the request host is wrong, pin
+      it explicitly: set <code>PUBLIC_URL=https://panel.example.com</code> in
+      <code>.env</code> (or <code>OVM_PUBLIC_URL</code> at install time, or the
+      subscription prefix in Settings) and restart the panel.
+    </p>
+
+    <h2 id="manage">Managing users day to day</h2>
+    <ul>
+      <li>
+        <strong>Extend traffic.</strong> Adding GB to a user adds it to their
+        current quota; leaving it at 0 keeps the quota as it was. Handy for
+        topping someone up without changing their plan.
+      </li>
+      <li>
+        <strong>Disable, don't delete.</strong> A disabled user keeps their
+        history and their traffic counters, and can be switched back on.
+      </li>
+      <li>
+        <strong>Filter and search.</strong> Tags and the near-quota filter make
+        the row you want findable once the list is long.
+      </li>
+      <li>
+        <strong>Disconnect.</strong> The panel aggregates live session counts
+        from the nodes and can drop a user's active sessions.
+      </li>
+    </ul>
+    <p>
+      Deleting a node deletes its users and configs with it, and the panel warns
+      you before it does. Deleting a user is likewise not reversible.
+    </p>
+
+    <h2 id="operators">Other panel logins</h2>
+    <p>
+      Beyond the owner, the panel supports additional admin accounts with their
+      own username, and can pair an account with a Telegram id. The owner row is
+      the one created by the
+      <a href="install.html#claim">claim flow</a>; the others are managed from
+      the panel.
+    </p>
+
+    <h2 id="next">Next</h2>
+    <p>
+      Understand what happens when a user reaches their quota:
+      <a href="traffic.html">Traffic limits</a>.
+    </p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>
