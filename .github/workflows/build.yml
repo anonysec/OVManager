@@ -1,0 +1,81 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+name: Build and Test OVManager
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Defensive: the repository's default GITHUB_TOKEN is read-only, and a
+    # SARIF upload to code scanning needs security-events: write.
+    #
+    # This is NOT what was making the scan red. That was the image: six MEDIUM
+    # CVEs, all in the base image's pip, which is now removed. Note the scan
+    # builds its SARIF "with all severities" and exits 1 on findings, so the
+    # severity: CRITICAL,HIGH filter below does not keep MEDIUM out of the exit
+    # code — a clean image is the only real gate. Verified by dispatching this
+    # workflow: before, 6 pip findings and a red step; after, zero findings.
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Create .env file
+        run: |
+          if [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Audit Python dependencies
+        # pip-audit was never installed, so this printed "Failed to spawn:
+        # pip-audit" and `|| true` swallowed it: the Python dependency audit
+        # had not actually run on any release. Install it, and report the
+        # findings without failing the build on an advisory count.
+        run: |
+          uv pip install pip-audit
+          uv run pip-audit --desc || echo "::warning::pip-audit reported findings (see log)"
+
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Audit frontend dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate || true
+
+      - name: Test project startup
+        run: |
+          timeout 5s uv run main.py || true
+
+      - name: Build Docker image for scanning
+        run: docker build --tag ovmanager:ci .
+
+      - name: Scan Docker image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ovmanager:ci'
+          format: 'sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

@@ -1,0 +1,262 @@
+from __future__ import annotations
+
+import asyncio
+import time
+from typing import Any
+
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from backend.db import crud
+from backend.db.engine import SessionLocal
+from backend.logger import logger
+from backend.node.requests import node_client
+from backend.operations.observability.node_alerts import check_node_alerts
+
+_tables_ready: bool = False
+
+
+def ensure_metrics_tables(db: Session) -> None:
+    """Create the metrics tables and indexes if they are not present yet.
+
+    The DDL lives in :mod:`backend.db.migrations`; this wrapper only adds the
+    once-per-process guard. Without it the 5-minute collector and each graph
+    request re-issued seven CREATE statements against the same SQLite file.
+    """
+    global _tables_ready
+    if _tables_ready:
+        return
+    from backend.db.migrations import ensure_extra_tables
+
+    ensure_extra_tables(db)
+    _tables_ready = True
+
+
+async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Probe one node (info + sessions). Returns (snapshot_row, sessions_data).
+
+    The raw sessions payload is returned alongside so callers can derive
+    per-user connection counts without a second fan-out to every node.
+    """
+    start = time.perf_counter()
+    try:
+        info, sessions = await asyncio.gather(
+            run_in_threadpool(node_client(node).get_node_info),
+            run_in_threadpool(node_client(node).get_sessions, None, 8),
+            return_exceptions=True,
+        )
+        latency_ms = round((time.perf_counter() - start) * 1000, 1)
+        if isinstance(info, Exception) or not isinstance(info, dict):
+            info = {}
+        if isinstance(sessions, Exception) or not isinstance(sessions, dict):
+            sessions = {}
+        reachable = bool(info)
+        row = {
+            "node_id": node.id,
+            "node_name": node.name,
+            "cpu": float(info.get("cpu_usage") or 0),
+            "memory": float(info.get("memory_usage") or 0),
+            "live_count": int(sessions.get("live_count") or 0),
+            "latency_ms": latency_ms,
+            "reachable": 1 if reachable else 0,
+            "auth_errors": int(sessions.get("auth_errors") or 0),
+            "rejects": int(sessions.get("rejects") or 0),
+            "stale_markers": int(sessions.get("stale_marker_count") or 0),
+        }
+        return row, sessions
+    except Exception as e:
+        logger.debug("metrics: node snapshot failed for %s: %s", node.name, e)
+        row = {
+            "node_id": node.id,
+            "node_name": node.name,
+            "cpu": 0,
+            "memory": 0,
+            "live_count": 0,
+            "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+            "reachable": 0,
+            "auth_errors": 0,
+            "rejects": 0,
+            "stale_markers": 0,
+        }
+        return row, {}
+
+
+async def collect_metrics() -> None:
+    """Collect a compact operational snapshot for graphs and trend widgets."""
+    from datetime import UTC as UTC_DT
+    from datetime import datetime
+
+    db = SessionLocal()
+    now = time.time()
+    try:
+        ensure_metrics_tables(db)
+        nodes = crud.get_all_nodes(db)
+        users = crud.get_all_users(db)
+        probed = await asyncio.gather(*[_node_snapshot(node) for node in nodes], return_exceptions=True)
+        clean = [p for p in probed if isinstance(p, tuple)]
+        clean_rows = [row for row, _sessions in clean]
+
+        try:
+            settings = crud.get_settings(db)
+            sent = await run_in_threadpool(
+                check_node_alerts,
+                clean_rows,
+                notify=bool(getattr(settings, "notify_node_down", True)),
+            )
+            if sent:
+                logger.info("metrics: node alerts sent: %s", sent)
+        except Exception as e:
+            logger.warning("metrics: node alert check failed: %s", e)
+
+        active_connections = sum(int(r.get("live_count") or 0) for r in clean_rows)
+        auth_errors = sum(int(r.get("auth_errors") or 0) for r in clean_rows)
+        rejects = sum(int(r.get("rejects") or 0) for r in clean_rows)
+        stale_markers = sum(int(r.get("stale_markers") or 0) for r in clean_rows)
+        offline_nodes = sum(1 for r in clean_rows if not r.get("reachable"))
+        online_users = active_connections
+        active_users = sum(1 for u in users if bool(u.is_active))
+        inactive_users = len(users) - active_users
+        total_used = sum(float(u.used or 0) for u in users)
+
+        try:
+            id_to_name = dict(crud.get_user_id_name_pairs(db))
+            active_counts: dict[str, int] = {}
+            for _row, sessions in clean:
+                for sess in sessions.get("live_sessions") or []:
+                    username = id_to_name.get(sess.get("common_name", ""), sess.get("common_name", ""))
+                    active_counts[username] = active_counts.get(username, 0) + 1
+            full_users = 0
+            for u in users:
+                count = int(active_counts.get(u.name, 0) or 0)
+                if count > 0:
+                    u.last_online = datetime.now(UTC_DT)
+                limit = int(u.max_logins or 0)
+                if limit > 0 and count >= limit:
+                    full_users += 1
+            db.commit()
+        except Exception as e:
+            logger.warning("metrics: failed to update last_online: %s", e)
+            db.rollback()
+
+        for row in clean_rows:
+            db.execute(
+                text("""
+                INSERT INTO node_health_snapshots
+                    (ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable)
+                VALUES
+                    (:ts, :node_id, :node_name, :cpu, :memory, :live_count, :latency_ms, :reachable)
+            """),
+                {"ts": now, **row},
+            )
+
+        db.execute(
+            text("""
+            INSERT INTO traffic_snapshots
+                (ts, total_used, active_connections, online_users, active_users, total_users)
+            VALUES
+                (:ts, :total_used, :active_connections, :online_users, :active_users, :total_users)
+        """),
+            {
+                "ts": now,
+                "total_used": total_used,
+                "active_connections": active_connections,
+                "online_users": online_users,
+                "active_users": active_users,
+                "total_users": len(users),
+            },
+        )
+
+        db.execute(
+            text("""
+            INSERT INTO security_snapshots
+                (ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users)
+            VALUES
+                (:ts, :auth_errors, :rejects, :stale_markers, :offline_nodes, :full_users, :inactive_users)
+        """),
+            {
+                "ts": now,
+                "auth_errors": auth_errors,
+                "rejects": rejects,
+                "stale_markers": stale_markers,
+                "offline_nodes": offline_nodes,
+                "full_users": full_users,
+                "inactive_users": inactive_users,
+            },
+        )
+
+        cutoff = now - 30 * 24 * 3600
+        _SNAPSHOT_TABLES = ("node_health_snapshots", "traffic_snapshots", "security_snapshots")
+        for table in _SNAPSHOT_TABLES:
+            db.execute(text(f"DELETE FROM {table} WHERE ts < :cutoff"), {"cutoff": cutoff})
+        db.commit()
+        logger.info("metrics: snapshot collected nodes=%s active_connections=%s", len(clean_rows), active_connections)
+    except Exception as e:
+        db.rollback()
+        logger.error("metrics: collect failed: %s", e, exc_info=True)
+    finally:
+        db.close()
+
+
+def history(db: Session, hours: int = 24) -> dict[str, Any]:
+    ensure_metrics_tables(db)
+    cutoff = time.time() - max(1, min(int(hours or 24), 24 * 30)) * 3600
+    traffic = db.execute(
+        text("""
+        SELECT ts, total_used, active_connections, online_users, active_users, total_users
+        FROM traffic_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
+    security = db.execute(
+        text("""
+        SELECT ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users
+        FROM security_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
+    node_rows = db.execute(
+        text("""
+        SELECT ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable
+        FROM node_health_snapshots WHERE ts >= :cutoff ORDER BY ts ASC
+    """),
+        {"cutoff": cutoff},
+    ).fetchall()
+    return {
+        "traffic": [
+            {
+                "ts": r[0],
+                "total_used": r[1],
+                "active_connections": r[2],
+                "online_users": r[3],
+                "active_users": r[4],
+                "total_users": r[5],
+            }
+            for r in traffic
+        ],
+        "security": [
+            {
+                "ts": r[0],
+                "auth_errors": r[1],
+                "rejects": r[2],
+                "stale_markers": r[3],
+                "offline_nodes": r[4],
+                "full_users": r[5],
+                "inactive_users": r[6],
+            }
+            for r in security
+        ],
+        "nodes": [
+            {
+                "ts": r[0],
+                "node_id": r[1],
+                "node_name": r[2],
+                "cpu": r[3],
+                "memory": r[4],
+                "live_count": r[5],
+                "latency_ms": r[6],
+                "reachable": bool(r[7]),
+            }
+            for r in node_rows
+        ],
+    }

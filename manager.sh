@@ -1,0 +1,1023 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# ovmanager — OVManager panel manager (installed as ovmanager/ovm).
+# Day-to-day operations for an installed panel: status, service control,
+# logs, backups, TLS, recovery. Install/update/uninstall live in
+# install.sh — this script delegates to it.
+#
+#   ovm                  Interactive numbered menu (needs a terminal)
+#   ovm status           Show panel URL, health and version
+#   ovm update           Update via install.sh (backs up data first)
+#   ovm uninstall        Remove the app (data kept unless --purge)
+#
+set -Eeuo pipefail
+
+INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
+VERSION="1.0.0"
+
+usage() {
+    cat << EOF >&2
+  ovmanager — OVManager panel manager v${VERSION} (alias: ovm)
+
+  USAGE
+    ovm                         This list
+    ovm status                  Service, health, version and URL
+    ovm status --all            Also show mode, port, data and install paths
+    ovm start|stop|restart      Service control
+    ovm enable|disable          Enable/disable automatic start
+    ovm logs [N|-f]             Last N log lines (default 100), or follow
+    ovm doctor [--fix]          Health check (13 checks; --fix applies the
+                                safe ones: service, autostart, modes)
+    ovm doctor-fix              Same as doctor --fix
+    ovm tls-status              Installed certificate and expiry (read-only)
+    ovm https --self            New self-signed certificate
+    ovm https --domain NAME     Let's Encrypt for a domain (needs port 80)
+    ovm https --ip              Let's Encrypt for this host's IP
+    ovm https --key F --cert F  Use your own key and certificate
+    ovm backup [--keep N]       Save a data backup now
+    ovm auto-backup [on|off]    Daily backup via a systemd timer
+    ovm restore [NAME]          List data backups, or restore one by name
+    ovm recovery                Panel URL and login name (read-only)
+    ovm owner-claim             Print a fresh one-time claim key (before the
+                                panel is claimed; the browser sets the password)
+    ovm reset-password          Set a new owner password, then restart
+    ovm reset-urlpath           Clear the panel URL prefix
+    ovm update                  Staged update with automatic failover
+    ovm recover-update          Recover an interrupted update transaction
+    ovm rollback                Restore the newest pre-update code snapshot
+    ovm uninstall [--purge]     Remove the app (data kept unless --purge)
+    ovm completion              Install bash completion, and print the source line
+    ovm version-script          The installer's own version and commit
+
+  ROOT
+    Every command below needs root, including the read-only ones: they all
+    read .env, which holds the secret panel URL path and the install config.
+    (The owner credential is a database row, not a .env value.) The web panel
+    itself needs no root — any account can log in. Run 'sudo ovm <command>'.
+
+  OPTIONS
+    -p, --pass PASS     reset-password: new owner password (min 8, not a
+                        common word or placeholder)
+    -y, --yes           Never prompt
+    --fix               doctor: apply safe automatic fixes
+    -a, --all            status: include paths and mode
+    --keep N            backup: how many backups to keep (1-500)
+    --time HH:MM        auto-backup: daily run time
+    --purge             uninstall: also delete data + certs
+    -v, --version V     update: pin a release, e.g. -v v1.0.15
+    -h, --help          This help
+
+  ENVIRONMENT
+    OVM_APP_DIR   installed tree (default /opt/ovmanager, tests override)
+    OVM_DATA_DIR  data dir (default /var/lib/ovmanager, tests override)
+    OVM_PASS      same as --pass
+    CI=true       implies -y
+
+  Status, doctor, tls-status, backups and restore run from the Python CLI in
+  cli/ — the single implementation, on docker installs too. Logs,
+  reset-password and reset-urlpath stay host-side (a container has no
+  journalctl and no host .env), as do update, uninstall, rollback, recovery,
+  certificate issuance, and the stop/restart around a restore.
+  Update and uninstall are implemented in install.sh — this script delegates
+  to \$INSTALL_DIR/install.sh so there is exactly one copy.
+EOF
+    exit 0
+}
+# `ovm help` and a bare `ovm` print usage and stop. Handled here, before
+# anything is sourced, because the libraries live inside the install tree —
+# which is 0700 and root-owned — so a non-root caller could never load them.
+# These two are the only invocations that stay open to a normal user.
+_ovm_mode="command"
+for _ovm_arg in "$@"; do
+    case "$_ovm_arg" in
+        -h|--help|help) _ovm_mode="help"; break ;;
+        -*) continue ;;
+        *) _ovm_mode="command"; break ;;
+    esac
+done
+# No arguments at all, or an explicit help request, prints usage. An unknown
+# flag is not help: it falls through to parse_args, which rejects it — a typo
+# must not look like a successful command.
+if [[ $# -eq 0 || "$_ovm_mode" == "help" ]]; then
+    unset _ovm_mode _ovm_arg
+    usage
+    exit 0
+fi
+unset _ovm_mode _ovm_arg
+
+# Root gate, and unconditional from here: only real commands get this far,
+# and every one of them needs root.
+#
+# Builtins only, because nothing has been sourced yet and die() is defined in
+# the libraries — which is also why the check cannot live at the dispatch arms:
+# a non-root caller never reaches them, because sourcing the libraries out of a
+# 0700 root-owned tree fails first. That was the 1.0.21 behaviour, and all it
+# told an operator was "scripts/lib not found".
+if [[ "$(id -u)" -ne 0 ]]; then
+    printf '  Error: Must run as root (sudo). Every ovm command reads %s/.env,\n' "$INSTALL_DIR" >&2
+    printf '         which holds the secret panel URL path and the install config.\n' >&2
+    printf '         (The owner credential is a database row, not a .env value.)\n' >&2
+    printf '         For the panel itself, just sign in.\n\n' >&2
+    exit 1
+fi
+
+DATA_DIR="${OVM_DATA_DIR:-/var/lib/ovmanager}"
+DEFAULT_PORT=2095
+SYSTEMD_SERVICE="ovmanager.service"
+COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
+INSTALLER="$INSTALL_DIR/install.sh"
+# Installed command names (same as the installer used).
+BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
+CLI_NAME="ovmanager"
+CLI_ALIAS="ovm"
+
+# Shared helpers (output, prompts, TLS, menus). REPO fallback lets this
+# script run straight from a checkout (./manager.sh) as well as installed.
+# scripts/lib is the simulated installer repo: one file per concern.
+for _cand in "$INSTALL_DIR/scripts/lib" "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/scripts/lib"; do
+    if [[ -d "$_cand" ]]; then
+        for _lib in "$_cand"/common.sh "$_cand"/prompt.sh "$_cand"/env.sh "$_cand"/system.sh "$_cand"/backup.sh "$_cand"/tls.sh "$_cand"/policy.sh; do
+            # shellcheck disable=SC1090
+            . "$_lib"
+        done
+        _lib_found=1
+        break
+    fi
+done
+if [[ "${_lib_found:-0}" -ne 1 ]]; then
+    printf '\n  Error: scripts/lib not found (looked in %s/scripts/lib and ./scripts/lib)\n\n' "$INSTALL_DIR" >&2
+    exit 1
+fi
+unset _cand _lib _lib_found
+
+# ── Flags (defaults) ───────────────────────────────────────────────────
+PORT="" ADMIN_PASS="" MODE="" PIN=""
+PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
+TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT="" HTTPS_MODE=""
+ACTION=""
+YES=0 PURGE=0 FIX=0 SHOW_ALL=0
+LOGS_ARG=""
+AUTO_BACKUP_ACTION="" BACKUP_TIME="" BACKUP_KEEP=""
+RESTORE_NAME=""
+OPERATION_LOCK="${DATA_DIR}/.operation.lock"
+OPERATION_LOCK_HELD=0
+
+operation_begin() {
+    local name="$1" owner=""
+    mkdir -p "$DATA_DIR"
+    if ! mkdir "$OPERATION_LOCK" 2>/dev/null; then
+        owner="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
+        if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
+            warn "Removing stale operation lock from process $owner"
+            rm -rf "$OPERATION_LOCK"
+            mkdir "$OPERATION_LOCK" || die "Another maintenance operation is running"
+        else
+            die "Another maintenance operation is running${owner:+ (process $owner)}. Try again later."
+        fi
+    fi
+    printf '%s\n' "$$" > "$OPERATION_LOCK/pid"
+    printf '%s\n' "$name" > "$OPERATION_LOCK/action"
+    chmod 700 "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=1
+}
+
+operation_end() {
+    [[ "$OPERATION_LOCK_HELD" -eq 1 ]] || return 0
+    rm -rf "$OPERATION_LOCK"
+    OPERATION_LOCK_HELD=0
+}
+
+trap operation_end EXIT
+
+[[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
+
+
+
+
+
+# Interactive if the operator did not pass -y AND we can talk to a terminal.
+# `curl | bash` has no stdin TTY; humans still work via /dev/tty.
+# AI / CI must pass -y (or CI=true) so this never blocks on a prompt.
+
+# Stronger check for the interactive menu: stdin must be a real terminal or
+# an openable /dev/tty. Scripts and pipes take the subcommand path instead.
+
+# Masked input: prints one * per character on stderr, backspace works, and
+# the value goes to stdout (never echoed as plain text). Reads stdin, so
+# callers redirect /dev/tty when needed.
+
+
+
+
+# Explicit-yes prompt (default NO): used for destructive extras like deleting
+# data during uninstall. Non-interactive runs keep the safe answer.
+
+
+
+
+
+# ── OS ─────────────────────────────────────────────────────────────────
+OS_ID="" OS_NAME="" PKG_INSTALL="" PKG_UPDATE=""
+
+
+
+has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
+
+check_root() { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
+
+# ── Spinner / steps ────────────────────────────────────────────────────
+
+# ── Deps ───────────────────────────────────────────────────────────────
+UV_BIN=""
+
+
+
+
+
+# ── Backup / firewall / health ─────────────────────────────────────────
+
+
+
+
+
+# ── TLS ────────────────────────────────────────────────────────────────
+# Private keys must never be world-readable. Native mode runs the panel as
+# root (600 root-owned is fine); Docker mode runs it as appuser (uid 1000)
+# with the files mounted read-only, so the key is owned by that uid. The
+# certificate is public and stays 644.
+
+
+
+
+
+
+# ── Source / env ───────────────────────────────────────────────────────
+read_env_port() {
+    [[ -f "$INSTALL_DIR/.env" ]] || return 0
+    local p
+    p="$(awk -F= '/^PORT=/{print $2; exit}' "$INSTALL_DIR/.env" | tr -d '\r')"
+    [[ -n "$p" ]] && PORT="${PORT:-$p}"
+    local t
+    t="$(awk -F= '/^SSL_KEYFILE=/{print $2; exit}' "$INSTALL_DIR/.env" | tr -d '\r')"
+    if [[ -n "$t" && -z "$TLS_MODE" ]]; then TLS_MODE="self"; fi
+}
+
+# ── Native ─────────────────────────────────────────────────────────────
+
+
+# ── Docker ─────────────────────────────────────────────────────────────
+
+
+
+# ── Validate / wizard / plan ───────────────────────────────────────────
+# ── Actions ────────────────────────────────────────────────────────────
+
+
+# Mirrors the panel's boot-time validation (backend/config.py): >= 8 chars
+# and no placeholder-looking values.
+# Empty output = acceptable; otherwise the human-readable reason.
+
+
+# Interactive re-prompt until the typed password passes the panel's rules
+# (max 3 tries, then fail fast — never install a password the panel rejects).
+
+# Recovery for a lost owner password: rewrite the owner's bcrypt hash in the
+# panel database, restart, then wait for /health. Never echoes the password.
+# (A native install with a -p/OVM_PASS goes through cli.main instead; this is
+# the prompting path and the Docker one.)
+do_reset_password() {
+    if [[ -n "$ADMIN_PASS" ]]; then
+        validate_admin_password "$ADMIN_PASS"
+    fi
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
+    local envfile="$INSTALL_DIR/.env"
+    [[ -f "$envfile" ]] || die "Config not found: $envfile — install OVManager first."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+
+    if [[ -z "$ADMIN_PASS" ]]; then
+        can_prompt || die "No password given. Use: $0 reset-password -p 'new-password'  (or set OVM_PASS)"
+        line ""
+        local p1 p2
+        p1="$(ask "New password" "" "h")"
+        p2="$(ask "Confirm password" "" "h")"
+        [[ "$p1" == "$p2" ]] || die "Passwords do not match."
+        ADMIN_PASS="$p1"
+        validate_admin_password "$ADMIN_PASS"
+    fi
+
+    # Store the password as a bcrypt hash (ADMIN_PASSWORD_HASH) and drop the
+    # legacy plaintext line. There is no plaintext mode: the panel ignores
+    # ADMIN_PASSWORD entirely (v16+), so the old fallback wrote a live secret
+    # into .env that nothing ever read — a credential at rest with no purpose.
+    local pass_line=""
+    # is_docker_mode, not $MODE: $MODE is only set by the installer, so a plain
+    # `ovm` run against a detected docker install never took the container
+    # branch and wrote the password in PLAINTEXT and left it there.
+    #
+    # -i so the script arrives on stdin, -e so the secret does: `docker exec`
+    # starts with neither, and both were being dropped silently, which made
+    # hashing "fail" with no error.
+    local -a pybin=("$INSTALL_DIR/.venv/bin/python")
+    local -a pyenv=("HASH_SRC=$ADMIN_PASS")
+    if is_docker_mode; then
+        pybin=(docker exec -i -e "HASH_SRC=$ADMIN_PASS" ovmanager /app/.venv/bin/python)
+        pyenv=()
+    fi
+    if [[ -x "$INSTALL_DIR/.venv/bin/python" ]] || is_docker_mode; then
+        local h
+        if h="$(env "${pyenv[@]}" "${pybin[@]}" - <<'PY' 2>/dev/null
+import os, sys
+sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
+try:
+    from backend.auth.hash import hash_password
+    print(hash_password(os.environ["HASH_SRC"]))
+except Exception:
+    sys.exit(1)
+PY
+)"; then
+            [[ -n "$h" ]] && pass_line="ADMIN_PASSWORD_HASH=$h"
+        fi
+    fi
+    [[ "$pass_line" == ADMIN_PASSWORD_HASH=* ]] \
+        || die "Password hashing is unavailable (the panel's Python is not runnable) — refusing to write a plaintext credential to .env. Repair the install, then retry."
+    step "Password hashed (bcrypt) — no plaintext in .env"
+
+    [[ -w "$envfile" ]] || die "Config $envfile is not writable — check its ownership and mode, then retry."
+    local tmp
+    tmp="$(mktemp "${envfile}.XXXXXX")" || die "Could not create a temp file next to $envfile"
+    # Value rides in the environment, not in an awk -v assignment: passwords
+    # may contain backslashes and -v would interpret them. Only the
+    # ADMIN_PASSWORD(_HASH) line changes; every other line is copied verbatim.
+    if ! NEWLINE="$pass_line" awk '
+        BEGIN { nl = ENVIRON["NEWLINE"] }
+        /^ADMIN_PASSWORD=/ { found = 1; next }
+        /^ADMIN_PASSWORD_HASH=/ { print nl; hashfound = 1; next }
+        { print }
+        END { if (!hashfound && found) print nl; if (!found && !hashfound) exit 1 }
+    ' "$envfile" > "$tmp"; then
+        rm -f "$tmp"
+        die "Could not update $envfile (no ADMIN_PASSWORD= line?)"
+    fi
+    chown --reference="$envfile" "$tmp" 2>/dev/null || true
+    # Preserve the mode rather than forcing 0600: on a docker install the file
+    # is 0640 root:<cfg-gid> so the container can read it, and forcing 0600 here
+    # would take the panel's own config away the next time a password is reset.
+    chmod --reference="$envfile" "$tmp" 2>/dev/null || chmod 600 "$tmp"
+    if ! mv -f "$tmp" "$envfile" 2>/dev/null; then
+        rm -f "$tmp"
+        die "Could not replace $envfile — is it read-only?"
+    fi
+    step "Config updated  $envfile (0600)"
+
+    # A failed restart must not hide the successful password change: warn
+    # and still report the new credentials/login URL.
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        # Recreate, never `docker restart`: a restart reuses the environment the
+        # container was created with, so the rewritten .env would not reach it
+        # and the old password would stay live.
+        if command -v docker >/dev/null 2>&1 \
+            && docker compose -f "$COMPOSE_FILE" up -d --force-recreate >/dev/null 2>&1; then
+            step "Container recreated  ovmanager (new credentials loaded)"
+        else
+            warn "Could not recreate the container — run: docker compose -f $COMPOSE_FILE up -d --force-recreate"
+        fi
+    else
+        systemctl_bounded restart
+        if systemctl is-active --quiet "$SYSTEMD_SERVICE"; then
+            step "Service restarted  $SYSTEMD_SERVICE"
+        else
+            warn "Could not restart $SYSTEMD_SERVICE — run: systemctl restart $SYSTEMD_SERVICE"
+        fi
+    fi
+
+    local scheme url admin
+    scheme="$(scheme_of)"
+    wait_health "${scheme}://127.0.0.1:${PORT}/health" 12 \
+        || warn "No answer on /health yet — check the logs (ovm logs)"
+    # Same source as `status`: URLPATH from .env (a later Settings change
+    # lives in the DB, not here).
+    PATHPREFIX="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" | tr -d '\r')"
+    url="$(panel_url)"
+    admin="$(awk -F= '/^ADMIN_USERNAME=/{print $2; exit}' "$envfile" | tr -d '\r')"
+    [[ -n "$admin" ]] || admin="$DEFAULT_USER"
+    line ""
+    hr
+    kv "Password" "${GR}updated${NC}"
+    kv "Login"    "${WH}${admin}${NC}"
+    kv "Open"     "${WH}${url}${NC}"
+    hr
+    line ""
+}
+
+# Update and uninstall live in install.sh — delegate so there is exactly one
+# implementation.
+run_installer() {
+    [[ -e "$INSTALL_DIR" ]] || [[ "$1" == "uninstall" ]] || die "Not installed ($INSTALL_DIR missing)"
+    [[ -x "$INSTALLER" ]] || die "Installer missing ($INSTALLER)"
+    exec "$INSTALLER" "$@"
+}
+
+delegate_update() {
+    local args=()
+    [[ "$YES" -eq 1 ]] && args+=(-y)
+    [[ -n "$PIN" ]] && args+=(-v "$PIN")
+    run_installer update "${args[@]}"
+}
+
+delegate_uninstall() {
+    local args=()
+    [[ "$YES" -eq 1 ]] && args+=(-y)
+    [[ "$PURGE" -eq 1 ]] && args+=(--purge)
+    run_installer uninstall "${args[@]}"
+}
+
+
+
+# ── Manager menu (x-ui style) ──────────────────────────────────────────
+
+is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
+
+
+
+# systemd waits up to TimeoutStopSec (90s default) for a stuck service, which
+# operators read as a frozen installer. Bound the wait, then force the unit.
+STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
+
+
+service_autostart_status() {
+    if is_docker_mode; then
+        local policy
+        policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' ovmanager 2>/dev/null || true)"
+        [[ -n "$policy" && "$policy" != "no" ]] && printf 'enabled' || printf 'disabled'
+    else
+        systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null && printf 'enabled' || printf 'disabled'
+    fi
+}
+
+service_action() {  # start|stop|restart|enable|disable
+    if is_docker_mode; then
+        command -v docker >/dev/null 2>&1 || die "Docker not found on this host"
+        case "$1" in
+            restart) docker restart -t 10 ovmanager >/dev/null || die "docker restart ovmanager failed" ;;
+            enable)  docker update --restart unless-stopped ovmanager >/dev/null || die "Could not enable automatic start" ;;
+            disable) docker update --restart no ovmanager >/dev/null || die "Could not disable automatic start" ;;
+            start|stop) docker "$1" ovmanager >/dev/null || die "docker $1 ovmanager failed" ;;
+            *) die "Unknown service action: $1" ;;
+        esac
+    else
+        case "$1" in
+            restart) systemctl_bounded restart ;;
+            enable|disable) systemctl "$1" "$SYSTEMD_SERVICE" >/dev/null || die "Could not $1 automatic start" ;;
+            stop) systemctl_bounded stop ;;
+            start) systemctl start "$SYSTEMD_SERVICE" >/dev/null || die "Could not start $SYSTEMD_SERVICE" ;;
+            *) die "Unknown service action: $1" ;;
+        esac
+    fi
+    case "$1" in
+        enable) step "Automatic start enabled" ;;
+        disable) step "Automatic start disabled (the running panel was not stopped)" ;;
+        *) step "Panel $1: done" ;;
+    esac
+}
+
+restart_service() {
+    service_action restart >/dev/null 2>&1 || warn "Restart failed — check the service manually"
+}
+
+show_logs() {
+    local arg="${1:-100}"
+    if is_docker_mode; then
+        if [[ "$arg" == "-f" ]]; then docker logs -f --tail 100 ovmanager; else docker logs --tail "$arg" ovmanager; fi \
+            || warn "Could not read container logs"
+    elif [[ "$arg" == "-f" ]]; then
+        journalctl -u "$SYSTEMD_SERVICE" -n 100 -f || warn "Could not read logs"
+    else
+        journalctl -u "$SYSTEMD_SERVICE" -n "$arg" --no-pager || warn "Could not read logs"
+    fi
+}
+
+# Keep only the newest N tarballs this installer writes (/var/backups).
+prune_backups() {
+    local keep="${1:-14}" i=0 f
+    [[ "$keep" =~ ^[0-9]+$ ]] || keep=14
+    shopt -s nullglob
+    local files=(/var/backups/panel-*.tar.gz)
+    shopt -u nullglob
+    ((${#files[@]} > keep)) || return 0
+    while IFS= read -r f; do
+        i=$((i + 1))
+        if ((i > keep)); then rm -f "$f"; fi
+    done < <(ls -1t "${files[@]}" 2>/dev/null)
+    return 0
+}
+
+# Host-level daily backup: a systemd timer that runs `ovmanager backup`.
+# Separate from the panel-scheduled backup (Settings → Advanced → Backup).
+auto_backup_units_write() {
+    local time="$1" keep="$2"
+    local service="/etc/systemd/system/ovmanager-backup.service"
+    local timer="/etc/systemd/system/ovmanager-backup.timer"
+    cat > "$service" << EOF
+[Unit]
+Description=OVManager automatic backup
+
+[Service]
+Type=oneshot
+ExecStart=${BIN_DIR}/${CLI_NAME} backup --keep ${keep}
+EOF
+    cat > "$timer" << EOF
+[Unit]
+Description=Daily OVManager backup
+
+[Timer]
+OnCalendar=*-*-* ${time}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+}
+
+auto_backup_cli() {
+    local action="${1:-status}" service timer time keep
+    service="/etc/systemd/system/ovmanager-backup.service"
+    timer="/etc/systemd/system/ovmanager-backup.timer"
+    time="${BACKUP_TIME:-03:30}"
+    keep="${BACKUP_KEEP:-14}"
+    case "$action" in
+        on)
+            [[ "$time" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || die "Invalid time '$time' (use HH:MM)"
+            [[ "$keep" =~ ^[0-9]+$ ]] && ((keep >= 1 && keep <= 500)) || die "Invalid --keep '$keep' (1-500)"
+            command -v systemctl >/dev/null 2>&1 || die "systemd not found — the auto-backup timer needs it"
+            auto_backup_units_write "$time" "$keep"
+            systemctl daemon-reload
+            systemctl enable --now ovmanager-backup.timer >/dev/null 2>&1 \
+                || die "Could not enable the backup timer (systemd available?)"
+            step "Auto backup enabled: daily at ${time}, keeping ${keep} tarballs"
+            ;;
+        off)
+            systemctl disable --now ovmanager-backup.timer >/dev/null 2>&1 || true
+            rm -f "$timer" "$service"
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            step "Auto backup disabled (host timer removed)"
+            ;;
+        status|"")
+            if [[ -f "$timer" ]]; then
+                info "Host timer: enabled ($(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown))"
+                systemctl list-timers ovmanager-backup.timer --no-pager 2>/dev/null | sed -n '2p' || true
+            else
+                info "Host timer: disabled  (enable: ovm auto-backup on)"
+            fi
+            info "Panel schedule is separate and configured in Settings → Advanced → Backup."
+            ;;
+        *)
+            die "Usage: $CLI_NAME auto-backup on [--time HH:MM] [--keep N] | off | status" ;;
+    esac
+}
+
+
+show_login_info() {
+    local user path port ip url
+    user="$(env_get "$INSTALL_DIR/.env" ADMIN_USERNAME)"; : "${user:=admin}"
+    path="$(env_get "$INSTALL_DIR/.env" URLPATH)"
+    port="$(env_get "$INSTALL_DIR/.env" PORT)"; : "${port:=$DEFAULT_PORT}"
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$path" ]]; then url="https://${ip}:${port}/${path}/"; else url="https://${ip}:${port}/"; fi
+    kv "URL"   "$url"
+    kv "Login" "$user"
+    info "Password: the one you set (or the generated one saved at install)."
+    info "If the URL 404s, the live path may differ — change it in Settings → General."
+}
+
+reset_urlpath_now() {
+    if is_docker_mode; then
+        docker exec ovmanager /app/.venv/bin/python main.py --reset-urlpath || die "Reset failed"
+    else
+        ( cd "$INSTALL_DIR" && .venv/bin/python main.py --reset-urlpath ) || die "Reset failed"
+    fi
+    step "Panel path reset — the panel is served at / again"
+}
+
+# Certificate issuance. Non-interactive: the mode comes from the flags, so
+# this is scriptable and a mistake cannot leave a half-answered prompt. The
+# menu this replaced asked the same four questions and set the same variables.
+do_https() {
+    local envfile="$INSTALL_DIR/.env"
+    [[ -f "$envfile" ]] || die "Not installed ($envfile missing)"
+    # A key or cert on their own is enough intent to mean "use my own pair", so
+    # the missing half gets a message about the missing half.
+    if [[ -n "$TLS_KEY" || -n "$TLS_CERT" ]]; then HTTPS_MODE="custom"; fi
+    local chosen=0
+    case "$HTTPS_MODE" in
+        self)
+            # The operator asked for a new certificate, so reuse must not
+            # apply: `--self` on a host that already has a pair (shared with
+            # OVNode) would otherwise silently keep the old one.
+            TLS_MODE="self"; TLS_REGENERATE=1; chosen=1 ;;
+        le)
+            [[ -n "$TLS_DOMAIN" ]] || die "Let's Encrypt for a domain needs --domain (or use --ip, or --self)"
+            TLS_MODE="le"; chosen=1 ;;
+        le-ip)
+            TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')"
+            [[ -n "$TLS_DOMAIN" ]] || die "Could not work out this host's IP for --ip"
+            TLS_MODE="le-ip"; chosen=1 ;;
+        custom)
+            [[ -n "$TLS_KEY" && -n "$TLS_CERT" ]] || die "--key and --cert are both required"
+            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Key or certificate file not found: $TLS_KEY $TLS_CERT"
+            TLS_MODE="custom"; chosen=1 ;;
+        *)
+            die "Pick a mode: --self, --domain <name>, --ip, or --key <file> --cert <file>. Read the current certificate with: ovm tls-status" ;;
+    esac
+    (( chosen )) || die "No certificate mode selected"
+
+    operation_begin https-certificate
+    if ! setup_tls; then operation_end; return 0; fi
+    env_set "$envfile" SSL_KEYFILE "$TLS_KEY"
+    env_set "$envfile" SSL_CERTFILE "$TLS_CERT"
+    step "Certificate updated"
+    restart_service
+    operation_end
+    return 0
+}
+
+
+
+# Roll back to the newest pre-update code snapshot (update failover).
+do_rollback() {
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
+    local snap
+    snap="$(latest_snapshot panel)"
+    [[ -n "$snap" ]] || die "No code snapshot in /var/backups — nothing to roll back to"
+    check_root
+    info "Rolling back to: $snap"
+    [[ "$YES" -eq 1 ]] || confirm "Restore the pre-update tree and restart?" n || die "Cancelled."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local scheme; scheme="$(scheme_of)"
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
+    else
+        systemctl_bounded stop >/dev/null 2>&1 || true
+    fi
+    tar -xzf "$snap" -C "$(dirname "$INSTALL_DIR")" \
+        || die "Rollback extract failed — snapshot kept at $snap"
+    if [[ -f "$COMPOSE_FILE" ]]; then
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) >/dev/null 2>&1 \
+            || warn "Could not start the container — docker logs ovmanager"
+    else
+        run_step "Service restarted" systemctl_bounded restart
+    fi
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+        step "Rolled back and healthy"
+    else
+        die "Rollback did not restore health — snapshot at $snap, data backups in /var/backups. Check logs."
+    fi
+}
+
+# ── Restore ────────────────────────────────────────────────────────────
+# Put a stored backup back over the live database. The CLI owns the restore
+# transaction (stage and verify a candidate, copy the live database aside,
+# activate it, roll back to that copy on failure); the host owns what the CLI
+# cannot do: refuse without an explicit confirmation, and restart the panel so
+# it opens the database it was replaced with.
+do_restore() {
+    local name="$1"
+    local backup="$DATA_DIR/backups/$name"
+    case "$name" in
+        */*|.*) die "Invalid backup name: $name" ;;
+    esac
+    [[ -f "$backup" ]] || die "No such backup: $name — 'ovm restore' lists them"
+    check_root
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local scheme; scheme="$(scheme_of)"
+    info "Restoring: $name"
+    confirm "Replace the live database with this backup?" n || die "Cancelled."
+
+    local rc=0
+    if is_docker_mode; then
+        # The CLI runs inside the panel container, so it has to be up for the
+        # restore; the restart is what makes the panel reopen the file it was
+        # replaced with.
+        cmd_restore "$name" || rc=$?
+        ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" restart ) >/dev/null 2>&1 \
+            || warn "Could not restart the container — docker restart ovmanager"
+    else
+        systemctl_bounded stop >/dev/null 2>&1 || true
+        cmd_restore "$name" || rc=$?
+        systemctl_bounded restart >/dev/null 2>&1 || true
+    fi
+    # The panel comes back either way: a failed restore must not leave the box
+    # down with nobody watching it.
+    if [[ "$rc" -ne 0 ]]; then
+        die "Restore failed — the panel was restarted on the previous database. Check: ovm logs 100"
+    fi
+    if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
+        step "Restored $name and healthy"
+    else
+        die "Restored $name but /health is not answering — check: ovm logs 100 (the pre-restore safety copies are in $DATA_DIR/backups)"
+    fi
+}
+
+# ── Usage / args / menu / main ─────────────────────────────────────────
+
+# Print a fresh claim key for an unclaimed panel. Safe to run repeatedly
+# *because* it is not the credential: the panel reads this file per attempt and
+# deletes it once the claim succeeds, so a reprinted key replaces, never adds to.
+do_owner_claim() {
+    check_root
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to claim."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local url claimed=0
+    url="$(panel_url)"
+    # Ask the panel first: a claimed panel refuses every key (409), so printing
+    # one without that warning would send the operator to a dead page. A panel
+    # that is down or unreachable simply does not answer, and the key is
+    # harmless either way — the endpoint checks the claim state before the key.
+    if curl -fskS --max-time 3 "${url}api/owner-claim" 2>/dev/null \
+        | grep -q '"claimable":[[:space:]]*false'; then
+        claimed=1
+    fi
+    local key
+    key="$(mint_claim_key)" || die "Could not write $(claim_key_path)"
+    line ""
+    if [[ "$claimed" -eq 1 ]]; then
+        warn "This panel already has an owner — this key cannot be claimed."
+        warn "To change the password instead: ovm reset-password"
+    fi
+    kv "Claim key" "${YL}${key}${NC}"
+    kv "Open"      "${WH}${url}claim${NC}"
+    kv "Expires"   "${GY}never — spent on the first successful claim${NC}"
+    line ""
+    info "Choose the owner password in the browser; it is stored hashed, never in .env."
+    line ""
+}
+
+# Bash completion for this command, written where bash already looks.
+#
+# The list below is the same surface usage() prints; both are hand-kept, so a
+# new subcommand has to be added in both places.
+OVM_SUBCOMMANDS="status start stop restart enable disable logs doctor doctor-fix tls-status https backup auto-backup restore recovery owner-claim reset-password reset-urlpath rollback update recover-update uninstall version-script completion help"
+OVM_FLAGS="-y --yes -a --all --fix --keep --time --purge -v --version -h --help -p --pass --self --domain --ip --key --cert"
+
+do_completion() {
+    local dir="${OVM_COMPLETION_DIR:-/etc/bash_completion.d}" path
+    path="$dir/$CLI_ALIAS"
+    mkdir -p "$dir" 2>/dev/null || die "Could not create $dir"
+    cat > "$path" << COMPLETION
+# ${CLI_ALIAS} completion — generated by: $CLI_ALIAS completion
+_${CLI_ALIAS}() {
+    local cur prev
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    case "\$prev" in
+        -v|--version) COMPREPLY=(); return ;;
+        --key|--cert) COMPREPLY=( \$(compgen -f -- "\$cur") ); return ;;
+    esac
+    if [[ "\$COMP_CWORD" -eq 1 ]]; then
+        COMPREPLY=( \$(compgen -W "$OVM_SUBCOMMANDS" -- "\$cur") )
+        return
+    fi
+    COMPREPLY=( \$(compgen -W "$OVM_FLAGS" -- "\$cur") )
+}
+complete -F _${CLI_ALIAS} $CLI_ALIAS $CLI_NAME
+COMPLETION
+    chmod 644 "$path" 2>/dev/null || true
+    step "Completion  $path"
+    line ""
+    line "  Activate it in this shell:"
+    line "    ${WH}source $path${NC}"
+    line ""
+}
+
+# Which installer did you actually run? The installed tree comes from a release
+# tarball, so the commit is normally unknown — the script says so rather than
+# inventing one.
+do_version_script() {
+    if [[ -x "$INSTALLER" ]]; then
+        "$INSTALLER" version-script && return 0
+    fi
+    printf 'installer  (missing — %s)\n' "$INSTALLER"
+    printf 'manager    v%s\n' "$VERSION"
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -p|--pass)    [[ $# -ge 2 ]] || die "-p needs a password"; ADMIN_PASS="$2"; shift 2 ;;
+            -y|--yes) YES=1; shift ;;
+            -a|--all) SHOW_ALL=1; shift ;;
+            --fix) FIX=1; shift ;;
+            --purge) PURGE=1; shift ;;
+            -v|--version) [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
+            --keep) [[ $# -ge 2 ]] || die "--keep needs a number"; BACKUP_KEEP="$2"; shift 2 ;;
+            --time) [[ $# -ge 2 ]] || die "--time needs HH:MM"; BACKUP_TIME="$2"; shift 2 ;;
+            -h|--help) usage ;;
+            help) usage ;;
+            status) ACTION="status"; shift ;;
+            start|stop|restart|enable|disable) ACTION="$1"; shift ;;
+            logs) ACTION="logs"
+                if [[ $# -ge 2 && ( "$2" == "-f" || "$2" =~ ^[0-9]+$ ) ]]; then
+                    LOGS_ARG="$2"; shift 2
+                else
+                    shift
+                fi ;;
+            backup) ACTION="backup"; shift ;;
+            restore) ACTION="restore"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then RESTORE_NAME="$1"; shift; fi ;;
+            auto-backup) ACTION="auto-backup"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then AUTO_BACKUP_ACTION="$1"; shift; fi ;;
+            https|tls) ACTION="https"; shift ;;
+            --self) HTTPS_MODE="self"; shift ;;
+            --domain) [[ $# -ge 2 ]] || die "--domain needs a hostname"; TLS_DOMAIN="$2"; HTTPS_MODE="le"; shift 2 ;;
+            --ip) HTTPS_MODE="le-ip"; shift ;;
+            --key) [[ $# -ge 2 ]] || die "--key needs a file"; TLS_KEY="$2"; shift 2 ;;
+            --cert) [[ $# -ge 2 ]] || die "--cert needs a file"; TLS_CERT="$2"; shift 2 ;;
+            tls-status) ACTION="tls-status"; shift ;;
+            recovery) ACTION="recovery"; shift ;;
+            owner-claim) ACTION="owner-claim"; shift ;;
+            completion) ACTION="completion"; shift ;;
+            version-script|script-version) ACTION="version-script"; shift ;;
+            reset-password) ACTION="reset-password"; shift ;;
+            reset-urlpath) ACTION="reset-urlpath"; shift ;;
+            doctor) ACTION="doctor"; shift ;;
+            doctor-fix) ACTION="doctor-fix"; shift ;;
+            rollback) ACTION="rollback"; shift ;;
+            update) ACTION="update"; shift ;;
+            recover-update) ACTION="recover-update"; shift ;;
+            uninstall) ACTION="uninstall"; shift ;;
+            *) die "Unknown option: $1  (see --help)" ;;
+        esac
+    done
+    # Resolved here, not in the `doctor` arm: `--fix` is usually written after
+    # the subcommand (`ovm doctor --fix`), so at the moment that arm runs FIX is
+    # still 0 and the documented form silently ran a plain doctor — reporting
+    # the problems and fixing none of them. Only the flags-first spelling
+    # (`ovm --fix doctor`) ever worked.
+    #
+    # An `if`, not `[[ ... ]] && ACTION=...`: as the last statement of the
+    # function the latter returns 1 whenever the condition is false, and `set -e`
+    # then aborts every other command with no output at all.
+    if [[ "$ACTION" == "doctor" && "$FIX" -eq 1 ]]; then
+        ACTION="doctor-fix"
+    fi
+    return 0
+}
+
+
+
+main() {
+    parse_args "$@"
+    [[ -z "$ADMIN_PASS" && -n "${OVM_PASS:-}" ]] && ADMIN_PASS="$OVM_PASS"
+    # No interactive menu: bare `ovm` prints the command list, so a stray
+    # invocation in a script cannot start waiting for input.
+    [[ -z "$ACTION" ]] && usage
+# The operator CLI (cli/) is the implementation for every read and diagnostic
+# command; this file decides how to reach it. One implementation, no bash twin
+# to drift out of sync.
+#
+# Native: the install's own virtualenv, so `$py -m cli.main` runs directly.
+# Docker: there is no host virtualenv, so the same command runs inside the panel
+# container. The host .env reaches it as environment variables (compose
+# env_file) rather than as a file, and the data dir is the /app/data mount, so
+# `--in-container` plus a host-observed `--service-state` is all it needs.
+#
+# Three commands cannot run in the container at all and stay host-side, because
+# the container has no docker CLI and no host .env to rewrite: logs,
+# reset-password, reset-urlpath. auto-backup, https issuance, update, rollback
+# and uninstall are bash by design.
+_cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
+    if is_docker_mode; then
+        # --public-ip because a container only knows its own address, and the
+        # operator needs the host's to reach the panel.
+        docker exec ovmanager /app/.venv/bin/python -m cli.main \
+            --install-dir /app --data-dir /app/data --in-container \
+            --service-state "$(_host_service_state)" \
+            --public-ip "$(hostname -I 2>/dev/null | awk '{print $1}')" "$@"
+        return $?
+    fi
+    local py="$INSTALL_DIR/.venv/bin/python"
+    [[ -x "$py" ]] || die "Panel virtualenv missing ($py) — repair with: $CLI_NAME update"
+    ( cd "$INSTALL_DIR" && "$py" -m cli.main "$@" )
+}
+
+# What the host can see and the container cannot: `docker ps`.
+_host_service_state() {
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ovmanager; then
+        printf 'running'
+    else
+        printf 'stopped'
+    fi
+}
+
+# One wrapper per command, shared by the interactive menu and the argv
+# dispatcher, so there is a single path to each command.
+cmd_status() {
+    local sargs=()
+    [[ "$SHOW_ALL" -eq 1 ]] && sargs+=(--all)
+    _cli_py status ${sargs[@]+"${sargs[@]}"}
+}
+
+cmd_logs() {  # journalctl/docker logs do not exist inside the container
+    if is_docker_mode; then show_logs "${LOGS_ARG:-100}"; else _cli_py logs "${LOGS_ARG:-100}"; fi
+}
+
+cmd_backup() { _cli_py backup ${BACKUP_KEEP:+--keep "$BACKUP_KEEP"}; }
+cmd_restore() { _cli_py restore "$@"; }
+cmd_tls_status() { _cli_py tls-status; }
+cmd_doctor() { _cli_py doctor; }
+
+cmd_doctor_fix() {
+    check_root
+    if ! is_docker_mode; then _cli_py doctor-fix; return $?; fi
+    # The fixes are all host operations — restart the service, set the restart
+    # policy, chmod the host .env — so they run here and the checks still come
+    # from the CLI in the container.
+    case "$(_host_service_state)" in
+        running) docker restart -t 10 ovmanager >/dev/null 2>&1 || warn "docker restart ovmanager failed" ;;
+        *) warn "Container is not running — start it with: docker start ovmanager" ;;
+    esac
+    docker update --restart unless-stopped ovmanager >/dev/null 2>&1 \
+        || warn "Could not enable automatic start"
+    local envfile="$INSTALL_DIR/.env"
+    if [[ -f "$envfile" ]]; then
+        chmod 600 "$envfile" 2>/dev/null || warn "Could not chmod $envfile"
+    else
+        warn "Config $envfile not found — cannot check its mode"
+    fi
+    _cli_py doctor
+}
+
+    case "$ACTION" in
+        # Every command below needs root, including the read-only ones. They
+        # read .env, which holds ADMIN_PASSWORD_HASH, JWT_SECRET_KEY and the
+        # secret URL path that is the panel's only defence against scanners.
+        # "Read-only" meant "does not change the system", not "discloses
+        # nothing" — and a non-root caller previously failed deep inside the
+        # script with "scripts/lib not found", which says nothing useful.
+        status) check_root; cmd_status; exit $? ;;
+        start|stop|restart|enable|disable) check_root; service_action "$ACTION"; exit 0 ;;
+        logs) check_root; cmd_logs; exit $? ;;
+        backup) check_root; cmd_backup; exit $? ;;
+        restore)
+            check_root
+            # No name is the listing: a read, so it does not prompt and does
+            # not touch the running panel.
+            if [[ -z "$RESTORE_NAME" ]]; then
+                cmd_restore
+                exit $?
+            fi
+            do_restore "$RESTORE_NAME"
+            exit 0 ;;
+        auto-backup) check_root; auto_backup_cli "$AUTO_BACKUP_ACTION"; exit 0 ;;
+        https) check_root; do_https; exit 0 ;;
+        tls-status) check_root; cmd_tls_status; exit $? ;;
+        recovery) check_root; show_login_info; exit 0 ;;
+        owner-claim) do_owner_claim; exit $? ;;
+        completion) do_completion; exit $? ;;
+        # Delegate: the installer is the thing whose version and commit the
+        # operator is asking about, and there is exactly one implementation.
+        version-script) do_version_script; exit $? ;;
+        reset-password)
+            # Validate before the root gate so bad input fails the same
+            # way for root and non-root callers (CI runs non-root).
+            [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
+            check_root
+            # Prompting and docker installs stay in bash: in a container the
+            # host .env that has to be rewritten is not there to be found.
+            if [[ -z "$ADMIN_PASS" ]] || is_docker_mode; then
+                do_reset_password
+                exit $?
+            fi
+            # The secret rides in the environment, not in argv: a command-line
+            # argument is visible in `ps` to every user on the box.
+            ( cd "$INSTALL_DIR" && OVM_ADMIN_PASS="$ADMIN_PASS" .venv/bin/python -m cli.main reset-password )
+            local rc=$?
+            # The CLI only rewrites .env; the restart is ours to do.
+            if [[ "$rc" -eq 0 ]]; then
+                service_action restart || warn "Restart failed — check the service manually"
+            else
+                warn "Password not changed"
+            fi
+            exit $rc ;;
+        reset-urlpath)
+            check_root
+            if is_docker_mode; then reset_urlpath_now; else _cli_py reset-urlpath; fi
+            exit $? ;;
+        doctor) check_root; cmd_doctor; exit $? ;;
+        doctor-fix) check_root; cmd_doctor_fix; exit $? ;;
+        rollback) check_root; do_rollback; exit 0 ;;
+        # update/uninstall/recover-update exec the installer, which has its own
+        # root check — but refusing here means one gate for the whole CLI and a
+        # clear message, instead of exec'ing a script only to be told no.
+        update) check_root; delegate_update; exit 0 ;;
+        recover-update) check_root; run_installer recover-update; exit 0 ;;
+        uninstall) check_root; delegate_uninstall; exit 0 ;;
+    esac
+}
+
+main "$@"

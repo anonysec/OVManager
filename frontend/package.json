@@ -1,0 +1,44 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check:tokens": "node scripts/check-tokens.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:rtl": "node scripts/check-rtl.mjs",
+    "check:types": "npx tsc --noEmit",
+    "verify": "npm run build && npm run check:tokens && npm run check:i18n && npm run check:rtl && npx eslint src/ && npm run check:types && npx vitest run"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "i18next": "^26.4.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.12",
+    "react-icons": "^5.7.0",
+    "react-router-dom": "^7.18.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "globals": "^17.11.0",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

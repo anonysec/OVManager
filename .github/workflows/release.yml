@@ -1,0 +1,92 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+name: Release assets
+
+# Builds the versioned install tarball (repo snapshot + prebuilt
+# frontend/dist) and attaches it to the published GitHub Release, so
+# install.sh --from-release (the default) can install without git/npm.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  # Gates the upload on the suite ci.yml runs. It repeats ci.yml's backend job
+  # rather than calling it via workflow_run, because a release can be published
+  # without a CI run on the same commit, and a workflow_run gate that never
+  # fires is a gate that never blocks.
+  test:
+    runs-on: ubuntu-latest
+    env:
+      ADMIN_USERNAME: test_admin
+      ADMIN_PASSWORD: test_password_12345678!
+      JWT_SECRET_KEY: test-secret-key-for-ci-env-only-change-me-in-production
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # tests/test_asset_serving.py skips itself unless frontend/dist/assets
+      # exists, so the build is what keeps this job as strong as ci.yml's.
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Sync deps + dev group
+        run: |
+          uv sync
+          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist httpx
+      - name: Run backend tests
+        run: .venv/bin/python -m pytest -q -n auto
+
+  assets:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Pack release tarball
+        run: |
+          VER="$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
+          STAGE="$(mktemp -d)"
+          git archive HEAD | tar -x -C "$STAGE"
+          mkdir -p "$STAGE/frontend"
+          cp -r frontend/dist "$STAGE/frontend/dist"
+          # --owner/--group: the Actions runner is uid 1001, and plain tar
+          # stores that, so extracting as root gave every install a tree owned
+          # by a uid that does not exist on the target.
+          tar --owner=0 --group=0 -czf "ovmanager-${VER}.tar.gz" -C "$STAGE" .
+          sha256sum "ovmanager-${VER}.tar.gz" > "ovmanager-${VER}.sha256"
+          echo "VER=${VER}" >> "$GITHUB_ENV"
+
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${VER}" "ovmanager-${VER}.tar.gz" "ovmanager-${VER}.sha256" --clobber

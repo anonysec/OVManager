@@ -1,0 +1,180 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* TLS settings section. Colours come only from tokens.css, so both themes
+   are covered without extra rules. Namespaced `ts-` to avoid collisions. */
+
+.ts-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ts-summary {
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--text-primary);
+}
+
+.ts-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.ts-meta div {
+  min-width: 0;
+}
+
+.ts-meta dt {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ts-meta dd {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.ts-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ts-muted {
+  color: var(--text-muted);
+}
+
+.ts-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.ts-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-muted);
+}
+
+.ts-files,
+.ts-renew-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.ts-files input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.ts-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ts-check input {
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.ts-check input:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset-width);
+}
+
+/* ── Notices ─────────────────────────────────────────────────────────── */
+
+.ts-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-secondary);
+}
+
+.ts-notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.ts-notice--info svg {
+  color: var(--info-text);
+}
+
+.ts-notice--success {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+
+.ts-notice--success svg {
+  color: var(--success-text);
+}
+
+.ts-notice--warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+}
+
+.ts-notice--warning svg {
+  color: var(--warning-text);
+}
+
+.ts-notice--error {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.ts-notice--error svg {
+  color: var(--danger-text);
+}
+
+/* ── Restart prompt ──────────────────────────────────────────────────── */
+
+.ts-restart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.ts-restart-text {
+  margin: 0;
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-secondary);
+}

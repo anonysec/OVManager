@@ -1,0 +1,160 @@
+"""Basic tests for OVManager panel.
+
+Routes are registered at /api/... (no prefix). The URLPathMiddleware handles
+any dynamic prefix at the ASGI level. These tests use TestClient which
+exercises the app directly, so they test the unprefixed routes.
+"""
+
+from fastapi.testclient import TestClient
+
+from backend.app import api
+from backend.config import config
+
+
+def test_app_imports():
+    """Verify the app can be imported without errors."""
+    assert api is not None
+
+
+def test_health_endpoint():
+    client = TestClient(api)
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_health_browser_navigation_serves_spa():
+    """A browser reload/bookmark of /health must show the SPA Health page,
+    while monitors (no Sec-Fetch-Mode) keep getting the JSON probe."""
+    client = TestClient(api)
+    browser = client.get(
+        "/health",
+        headers={"Sec-Fetch-Mode": "navigate", "Accept": "text/html,application/xhtml+xml"},
+    )
+    assert browser.status_code == 200
+    assert "text/html" in browser.headers["content-type"]
+    assert 'id="root"' in browser.text
+
+    probe = client.get("/health", headers={"Accept": "application/json"})
+    assert probe.headers["content-type"].startswith("application/json")
+    assert probe.json()["status"] == "ok"
+
+
+def test_api_users_requires_auth():
+    """API endpoints require authentication."""
+    client = TestClient(api)
+    response = client.get("/api/users/")
+    assert response.status_code in (401, 403)
+
+
+def test_revoked_session_cannot_access_api(make_session_token):
+    """A logout/deleted session dies immediately (DB-backed revocation)."""
+    from backend.auth.sessions import revoke_token
+    from backend.db.engine import SessionLocal
+
+    raw = make_session_token(config.ADMIN_USERNAME, "owner")
+    client = TestClient(api)
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert revoke_token(db, raw)
+    finally:
+        db.close()
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 401
+
+
+def test_unknown_bearer_token_rejected():
+    client = TestClient(api)
+    resp = client.get("/api/server/info", headers={"Authorization": "Bearer not-a-real-session-token"})
+    assert resp.status_code == 401
+
+
+def test_expired_session_rejected(make_session_token):
+    """Absolute-cap expiry is enforced (and cleans up the row)."""
+    from backend.auth.sessions import create_session
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        raw = create_session(db, config.ADMIN_USERNAME, "owner", max_seconds=0)
+    finally:
+        db.close()
+    client = TestClient(api)
+    assert client.get("/api/server/info", headers={"Authorization": f"Bearer {raw}"}).status_code == 401
+
+
+def test_refresh_endpoint_retired():
+    """The JWT-era refresh endpoint is gone: 401 drives forced re-login."""
+    client = TestClient(api)
+    resp = client.post("/api/refresh", headers={"Authorization": "Bearer whatever"})
+    assert resp.status_code == 401
+
+
+def test_urlpath_middleware_blocks_non_matching():
+    """When URLPATH is set, non-matching paths get an empty 404.
+    But /assets/ and /health are always allowed through."""
+    from backend.urlpath import set_urlpath
+
+    client = TestClient(api)
+    try:
+        set_urlpath("mysecret")
+        response = client.get("/mysecret/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+
+        response = client.get("/other-path")
+        assert response.status_code == 404
+        assert response.content == b""
+
+        response = client.get("/")
+        assert response.status_code == 404
+        assert response.content == b""
+
+        response = client.get("/health")
+        assert response.status_code == 200
+    finally:
+        set_urlpath("")
+
+
+def test_urlpath_empty_serves_root():
+    """When URLPATH is empty, all paths are served at root."""
+    from backend.urlpath import set_urlpath
+
+    client = TestClient(api)
+    try:
+        set_urlpath("")
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+    finally:
+        set_urlpath("")
+
+
+def test_background_jobs_pause_during_candidate_verification(monkeypatch, tmp_path):
+    """With the update-maintenance marker present, lifespan must not start
+    the scheduler or bot (defect class: background writes into a database
+    that may be rolled back moments later)."""
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+    (tmp_path / "update-maintenance").touch()
+    started = []
+    monkeypatch.setattr(app_module, "start_scheduler", lambda: started.append("scheduler"))
+    monkeypatch.setattr(app_module, "start_bot", lambda: started.append("bot"))
+    with TestClient(api):
+        pass
+    assert started == []
+
+
+def test_background_jobs_start_normally_without_marker(monkeypatch, tmp_path):
+    """Without the marker, lifespan starts the scheduler and bot."""
+    import backend.app as app_module
+
+    monkeypatch.setattr(app_module, "DATA_DIR", tmp_path)
+    started = []
+    monkeypatch.setattr(app_module, "start_scheduler", lambda: started.append("scheduler"))
+    monkeypatch.setattr(app_module, "start_bot", lambda: started.append("bot"))
+    with TestClient(api):
+        pass
+    assert started == ["scheduler", "bot"]

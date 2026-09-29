@@ -1,0 +1,42 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# OVManager — panel only.
+# The node (OVNode) is a separate project at ../ovnode with its own compose.
+#   panel:  cd ovmanager && docker compose up -d
+#   node:   cd ovnode    && docker compose up -d
+
+services:
+  ovmanager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ovmanager
+    ports:
+      - "2095:2095"
+    environment:
+      - PORT=2095
+      - HOST=0.0.0.0
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:2095}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; p=os.getenv('PORT','2095'); urllib.request.urlopen(f'http://localhost:{p}/health', timeout=3); print('ok')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - /opt/ovmanager/data:/app/data
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'

@@ -1,0 +1,92 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The SPA build on its own, so `backend` can start as soon as the artifact
+  # exists instead of idling behind lint and unit tests. The backend tests
+  # serve the panel from frontend/dist.
+  frontend-dist:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  # The frontend gate is `npm run verify` — the same chain a developer runs,
+  # not a hand-picked subset. It previously ran lint/check:i18n/test/build as
+  # four ad-hoc steps, which silently skipped check:types (tsc) and
+  # check:tokens: the strict TypeScript gate was only ever enforced locally.
+  # The build runs here too, in parallel with frontend-dist, so the canonical
+  # chain stays the gate rather than being split across two jobs.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+
+  backend:
+    runs-on: ubuntu-latest
+    needs: frontend-dist
+    env:
+      ADMIN_USERNAME: test_admin
+      ADMIN_PASSWORD: test_password_12345678!
+      JWT_SECRET_KEY: test-secret-key-for-ci-env-only-change-me-in-production
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Sync deps + dev group
+        run: |
+          uv sync
+          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist httpx
+      - name: Lint backend
+        run: |
+          # Same ruff the lockfile pins, so `make lint` here and in CI agree:
+          # an unpinned ruff reformatted files the local run called clean.
+          uv pip install --python .venv/bin/python3 "ruff==0.16.5"
+          .venv/bin/ruff check backend bot cli main.py tests
+          .venv/bin/ruff format --check backend bot cli main.py tests
+          bash -n install.sh manager.sh scripts/lib/*.sh
+      - name: Run backend tests
+        # -n auto: each xdist worker imports conftest, which allocates its own
+        # throwaway data dir with tempfile.mkdtemp(), so no two workers share a
+        # database. Verified locally at 4, 8 and 16 workers too, not just auto,
+        # so a runner with more cores than this box cannot expose a shared-state
+        # bug that two workers would have hidden.
+        run: .venv/bin/python -m pytest -q -n auto

@@ -1,0 +1,71 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Update notice — shared by HealthCenter (banner) and the settings System
+   section (compact row). Colors come from tokens.css only. */
+
+.health-update {
+  margin-bottom: var(--space-4);
+}
+
+.update-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.update-notice-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: var(--font-size-md);
+}
+
+.update-notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.update-notice-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.update-notice-line {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.update-notice-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-muted);
+}
+
+.update-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.update-inline-versions {
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.update-inline-versions strong {
+  color: var(--text-primary);
+}

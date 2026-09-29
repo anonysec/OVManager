@@ -1,0 +1,88 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* "My activity" settings card. Colours come only from tokens.css, so both
+   themes are covered without extra rules. Namespaced `ma-` to avoid
+   collisions. */
+
+.ma-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.ma-desc {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-muted);
+}
+
+.ma-head .btn {
+  flex: 0 0 auto;
+}
+
+.ma-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ma-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+}
+
+.ma-row:last-child {
+  border-bottom: 0;
+}
+
+.ma-time {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ma-action {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.ma-target {
+  color: var(--text-secondary);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.ma-state {
+  margin: 0;
+  padding: 6px 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--text-muted);
+}
+
+.ma-state--error {
+  color: var(--danger-text);
+}
+
+.ma-spin {
+  animation: ma-rotate 0.9s linear infinite;
+}
+
+@keyframes ma-rotate {
+  to { transform: rotate(360deg); }
+}

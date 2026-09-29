@@ -1,0 +1,27 @@
+/* Select-node download modal — small polish on top of the existing
+   .node-pick-* skin in styles.css. */
+
+.node-pick-item:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.node-pick-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.npi-chip {
+  flex: 0 0 auto;
+}
+
+.npi-body {
+  min-width: 0;
+}
+
+@media (max-width: 599.98px) {
+  .npi-chip {
+    display: none;
+  }
+}

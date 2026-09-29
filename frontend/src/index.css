@@ -1,0 +1,1195 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Fonts are loaded from index.html via preconnect + a non-blocking stylesheet.
+   A CSS @import here would be render-blocking (html -> css -> font css -> font)
+   and would duplicate that request — do not re-add it. */
+
+/* --- 🎨 COLOR TOKENS: Black & Orange, semantic + elevation scale ---
+   Dark is the default (:root). Light overrides via html[data-theme="light"].
+   styles.css aliases several of these to its own --bg/--panel set — keep
+   both in sync when touching surfaces. */
+
+/* --- Light theme: equally polished set --- */
+
+/* --- Ultra-dark theme (3x-ui pattern) --- */
+
+
+
+/* Selection follows the accent */
+::selection {
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
+}
+
+/* Global keyboard focus ring.
+   :focus-visible (not :focus) so mouse clicks stay clean while Tab/Shift+Tab
+   still produce a clear, themed halo. Components can override with their own
+   :focus-visible rule for tight control surfaces (sort headers, list rows). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+  border-color: var(--focus-ring);
+  border-radius: inherit;
+}
+@supports not selector(:focus-visible) {
+  :where(a, button, input, select, textarea, [tabindex]):focus {
+    outline: none;
+    box-shadow: var(--focus-ring-shadow);
+    border-color: var(--focus-ring);
+  }
+}
+
+/* --- Login Page --- */
+#login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, var(--bg) 0%, var(--surface-1) 50%, var(--surface-2) 100%);
+}
+
+/* Skip link - hidden by default, visible on focus */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  inset-inline-start: 6px;
+  /* A filled chip: use the accent FILL plus its designed contrast colour,
+     not the legacy alias (which now resolves to the darker text tone). */
+  background: var(--accent);
+  color: var(--accent-contrast);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 600;
+  z-index: var(--z-modal);
+  transition: top 0.2s ease;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Screen reader only - for accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes orbit {
+  0% { transform: rotate(0deg) scale(1); opacity: 0.7; }
+  50% { transform: rotate(180deg) scale(1.1); opacity: 0.5; }
+  100% { transform: rotate(360deg) scale(1); opacity: 0.7; }
+}
+
+.input-group {
+  margin-bottom: 20px;
+  text-align: start;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.input-group input,
+.input-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-family: var(--font-family);
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Quotas/ports are typed, never spun — hide the native steppers. */
+.input-group input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.input-group input[type="number"]::-webkit-outer-spin-button,
+.input-group input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.input-group input:focus,
+.input-group select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-color-transparent);
+}
+
+.input-group input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.input-group .input-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+/* --- General Components --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  font-family: var(--font-family);
+  background-color: var(--accent);
+  /* Token, not a literal: black on the dark orange (7.9:1), white on the
+     darker light-theme orange. Both clear AA. */
+  color: var(--accent-contrast);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.5px;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  inset-inline-start: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: 0.5s;
+}
+
+.btn:hover::before {
+  inset-inline-start: 100%;
+}
+
+.btn:hover {
+  background-color: var(--accent-color-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(252, 122, 30, 0.4);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn.btn-sm {
+  padding: 8px 16px;
+  font-size: var(--font-size-sm);
+}
+
+.btn.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.btn.btn-danger:hover {
+  background-color: #8b3323;
+}
+
+.btn.btn-success {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.btn.btn-success:hover {
+  background-color: #01a28d;
+}
+
+.error-message {
+  color: var(--danger-color);
+  margin-top: 15px;
+  min-height: 1em;
+  font-size: 14px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Standalone spinner used inside buttons. Centered inline-block so the
+   preceding label keeps its width and does not jump. Uses currentColor as
+   the arc so it works on both accent and accent-contrast backgrounds. */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.6s; }
+}
+
+/* --- Main Layout --- */
+
+
+/* --- Dashboard Shell --- */
+
+
+/* --- Layout with Sidebar --- */
+.ops-layout {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Main content column: sits to the right of the fixed sidebar.
+   Margin mirrors the sidebar width (220px expanded / 72px rail) so
+   content never overlaps it; transitions smoothly with the rail. */
+.ops-main-container {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Layout for .ops-main-content lives in styles.css (single owner).
+   The margin/padding block that used to be here was dead code: the sidebar
+   offset is applied to .ops-main-container, and styles.css reset this
+   element's margin with !important. */
+.ops-main-content {
+  flex: 1;
+  background: var(--body-bg);
+}
+
+/* Topbar — fixed across the full viewport width, above sidebar */
+.ops-topbar-minimal {
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Breadcrumb in topbar */
+.ops-breadcrumb {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ops-breadcrumb ol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.ops-breadcrumb-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.ops-breadcrumb-link:hover {
+  color: var(--accent-color);
+}
+
+.ops-breadcrumb-separator {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ops-current-page {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 767.98px) {
+  .ops-topbar-minimal {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+  .ops-topbar-minimal .ops-userbar {
+    gap: 8px;
+  }
+  .ops-breadcrumb {
+    display: none;
+  }
+}
+
+
+/* --- Icon Buttons (uniform size/style) --- */
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  position: relative;
+}
+
+.icon-btn:hover {
+  color: var(--text-primary);
+  background: rgba(252, 122, 30, 0.1);
+}
+
+.icon-btn.active {
+  color: var(--accent-color);
+  background: rgba(252, 122, 30, 0.15);
+}
+
+.icon-btn.has-alerts {
+  /* Show badge only - the icon-btn-badge spans color already */
+  background: var(--danger-color);
+  color: #fff;
+  border: 1px solid var(--danger-color);
+  border-radius: 9999px;
+}
+.icon-btn.has-alerts::after {
+  /* Red dot removed - count badge is sufficient */
+  display: none;
+}
+
+.icon-btn-badge {
+  /* Badge now shows inside the button itself when there are alerts */
+  position: static;
+  margin-inline-start: 4px;
+  background: transparent;
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0;
+  border-radius: 0;
+  line-height: 1;
+}
+
+/* --- User Bar --- */
+.ops-userbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.avatar-xs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+
+/* --- Notifications --- */
+.notification-wrap {
+  position: relative;
+}
+
+
+.notification-popover {
+  position: absolute;
+  top: 100%;
+  inset-inline-end: 0;
+  width: 280px;
+  max-height: 200px;
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.notification-popover p {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.notification-popover p:last-child {
+  border-bottom: none;
+}
+
+/* --- Main Content --- */
+
+
+/* --- Dashboard Grid --- */
+
+
+/* Overview grid */
+
+/* Lower grid */
+
+/* --- Panels --- */
+
+/* Accent top border — consistent across ALL cards (x-ui pattern) */
+
+
+
+
+
+
+
+
+
+/* --- Toasts --- */
+.toast-stack {
+  position: fixed;
+  bottom: 24px;
+  inset-inline-end: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+}
+
+.toast {
+  background: var(--background-secondary);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  border-inline-start: 5px solid var(--accent-color);
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-width: 360px;
+  color: var(--text-primary);
+  animation: slideIn 0.3s ease, fadeOut 0.2s ease 5s forwards;
+}
+
+.toast strong {
+  color: var(--accent-color);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 12px;
+}
+
+.toast span,
+.toast-message {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  display: block;
+}
+
+.toast.toast-error {
+  background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
+  border-inline-start: 5px solid var(--danger-color);
+}
+.toast.toast-error strong {
+  color: var(--danger-color);
+}
+
+.toast.toast-warning {
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
+  border-inline-start: 5px solid var(--accent-color);
+}
+.toast.toast-warning strong {
+  color: var(--accent-color);
+}
+
+.toast.toast-success {
+  background: color-mix(in srgb, var(--success-color, #2fd276) 14%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--success-color, #2fd276) 50%, transparent);
+  border-inline-start: 5px solid var(--success-color, #2fd276);
+}
+.toast.toast-success strong {
+  color: var(--success-color, #2fd276);
+}
+
+/* --- Tooltip (single implementation; see styles-premium.css .has-tip) --- */
+@media (max-width: 767.98px) {
+  .ops-userbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .toast-stack {
+    inset-inline: 12px;
+    max-width: none;
+  }
+}
+
+/* --- Scrollbar Styles --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color-hover);
+}
+
+/* --- Focus Styles for Accessibility --- */
+*:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* --- Print Styles --- */
+@media print {
+  .ops-userbar {
+    display: none;
+  }
+  
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+}
+.empty-state h3 { margin: 0 0 6px; font-size: 17px; color: var(--text-primary); }
+.empty-state p { margin: 0 0 16px; font-size: var(--font-size-sm); line-height: 1.5; max-width: 360px; }
+.empty-state-action { margin-top: 4px; }
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: var(--z-command);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18vh;
+  backdrop-filter: blur(4px);
+}
+
+.palette {
+  background: var(--panel);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 520px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: paletteIn 150ms ease;
+}
+
+@keyframes paletteIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.palette-input-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 10px;
+}
+
+.palette-search-icon {
+  color: var(--text-muted);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-family);
+}
+
+.palette-input::placeholder { color: var(--text-muted); }
+
+.palette-kbd {
+  font-size: var(--font-size-xs);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.palette-results {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.palette-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  text-align: start;
+  transition: background 100ms ease;
+}
+
+.palette-item:hover,
+.palette-item.is-active {
+  background: var(--surface-hover);
+}
+
+.palette-item.is-active {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.palette-item-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-md);
+  width: 22px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.palette-item-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.palette-item-label small {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.palette-item-go {
+  opacity: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.palette-item:hover .palette-item-go,
+.palette-item.is-active .palette-item-go {
+  opacity: 1;
+}
+
+.palette-footer {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-color);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.palette-footer kbd {
+  font-size: var(--font-size-2xs);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  margin-inline-end: 3px;
+}
+
+/* ============================================================
+   SIDEBAR — collapsible rail (x-ui / PasarGuard pattern)
+   ============================================================ */
+/* Sidebar with variable width based on icon size (36px vs 32px) */
+.ops-sidebar {
+  position: fixed;
+  top: 0;
+  inset-inline-start: 0;
+  bottom: 0;
+  width: var(--sidebar-width, 220px);
+  background: var(--surface-1, var(--background-secondary));
+  border-inline-end: 1px solid var(--line, var(--border-color));
+  display: flex;
+  flex-direction: column;
+  z-index: 70;
+  transition: width 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+  min-width: 72px;
+  max-width: 280px;
+}
+
+.ops-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width, 72px);
+}
+
+/* Brand block — the sidebar owns the product identity (the topbar repeats
+   it only on mobile, where the sidebar is a drawer). */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin: 8px 8px 0;
+  min-height: 56px;
+  flex-shrink: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-brand-text {
+  color: var(--text-primary);
+  font: 800 17px/1 var(--font-display);
+  letter-spacing: -.045em;
+  white-space: nowrap;
+}
+
+.sidebar-brand-text .brand-accent {
+  color: var(--accent-color);
+}
+
+.ops-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width, 72px);
+}
+
+/* Rail mode: logo mark only — a 72px column cannot hold the wordmark. */
+.ops-sidebar--collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 16px 8px;
+  gap: 0;
+}
+
+.ops-sidebar--collapsed .sidebar-brand-text {
+  display: none;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link {
+  justify-content: center;
+  padding: 10px;
+  gap: 0;
+  border-inline-start: none;
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-label {
+  display: none;
+}
+
+/* In rail mode the nav icons sit centered, so pull the knob tighter to the
+   edge to keep it clear of them. */
+.ops-sidebar--collapsed .sidebar-toggle {
+  inset-inline-end: 4px;
+  width: 22px;
+  height: 22px;
+}
+
+.ops-sidebar--collapsed .sidebar-footer {
+  padding: 4px;
+  align-items: center;
+}
+
+/* Mobile: full width */
+.ops-sidebar--mobile {
+  transform: translateX(-100%);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+  width: 280px;
+}
+
+.ops-sidebar--mobile.ops-sidebar--open {
+  transform: translateX(0);
+}
+
+/* translateX has no logical form, so the off-screen direction is spelled out:
+   the drawer lives on the inline-end, which is the left in RTL. */
+html[dir="rtl"] .ops-sidebar--mobile {
+  transform: translateX(100%);
+}
+
+/* Hamburger button (mobile) */
+.sidebar-hamburger {
+  display: none;
+  position: fixed;
+  top: 12px;
+  inset-inline-start: 12px;
+  z-index: 85;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2, var(--background-secondary));
+  border: 1px solid var(--line, var(--border-color));
+  border-radius: 10px;
+  color: var(--text, var(--text-primary));
+  cursor: pointer;
+}
+
+.sidebar-hamburger:hover {
+  background: var(--accent-color-transparent, rgba(255, 122, 30, 0.12));
+  border-color: var(--accent-color, var(--orange));
+}
+
+.sidebar-hamburger svg {
+  width: 24px;
+  height: 24px;
+}
+
+.sidebar-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 80;
+}
+
+/* Sidebar toggle button (expand/collapse) — a minimal ghost knob pinned to
+   the center-right edge of the sidebar. */
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 8px;
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-muted, var(--muted));
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  border-color: var(--border, var(--line));
+  color: var(--text-primary, var(--text));
+}
+
+.sidebar-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent-color));
+  outline-offset: 1px;
+}
+
+.sidebar-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Sidebar footer */
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 12px;
+  margin-top: auto;
+}
+
+/* Mobile: show hamburger, hide sidebar by default. The drawer starts below
+   the topbar (which carries the brand there) and covers full width. */
+@media (max-width: 767.98px) {
+  .sidebar-hamburger {
+    display: flex;
+  }
+  .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(-100%);
+  }
+  html[dir="rtl"] .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(100%);
+  }
+  .ops-sidebar {
+    top: var(--topbar-h);
+  }
+  .sidebar-brand {
+    display: none;
+  }
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px;
+}
+
+.sidebar-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-nav-item {
+  position: relative;
+}
+
+.sidebar-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: all 0.18s ease, background 0.12s ease, color 0.12s ease;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+}
+
+.sidebar-nav-link:hover {
+  background: var(--accent-color-transparent, rgba(255, 122, 30, 0.12));
+  color: var(--accent-color, var(--orange));
+  border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.sidebar-nav-link:hover .sidebar-nav-icon {
+  color: var(--accent-color, var(--orange));
+  transform: scale(1.05);
+}
+
+.sidebar-nav-link.active {
+  background: rgba(255, 122, 30, 0.16);
+  color: var(--accent-color, var(--orange));
+  border-inline-start: 3px solid var(--accent-color, var(--orange));
+  margin-inline-start: -3px;
+  padding-inline-start: 15px;
+}
+
+.sidebar-nav-link.active .sidebar-nav-icon {
+  color: var(--accent-color, var(--orange));
+}
+
+.sidebar-nav-icon {
+  flex: 0 0 auto;
+  font-size: 17px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .15s ease, color .15s ease;
+}
+
+.sidebar-nav-label {
+  flex: 1;
+  /* LTR: text on the left. RTL: text on the right. */
+  text-align: start;
+  margin-inline-end: 4px;
+  letter-spacing: -0.005em;
+}
+
+/* Mobile: show hamburger, hide sidebar by default */
+@media (max-width: 767.98px) {
+  .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(-100%);
+  }
+  html[dir="rtl"] .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(100%);
+  }
+}
+
+/* Status pulse animations (3x-ui pattern) */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  animation: pulse-blink 1.5s ease-in-out infinite;
+}
+
+.status-dot.online {
+  background: var(--success-color, #0e9f85);
+  animation: pulse-online 1.5s ease-in-out infinite;
+}
+
+.status-dot.offline {
+  background: var(--text-muted, #6b7280);
+  animation: none;
+}
+
+.status-dot.danger {
+  background: var(--danger-color, #c0392b);
+  animation: pulse-danger 1.5s ease-in-out infinite;
+}
+
+.status-dot.warning {
+  background: #e6a700;
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-online {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+@keyframes pulse-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .status-dot,
+  .status-dot.online,
+  .status-dot.warning,
+  .status-dot.danger,
+  .status-dot.purple,
+  .privacy-toggle {
+    animation: none !important;
+    transition: none !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   Bottom safe-area bar
+   Always visible — gives breathing room above
+   mobile browser chrome and on-screen keyboard.
+═══════════════════════════════════════════ */
+
+/* On mobile the bottom-nav is 66px; add extra clearance */
+
+/* ═══════════════════════════════════════════
+   Topbar — override: full width, above sidebar
+═══════════════════════════════════════════ */
+.ops-topbar-minimal {
+  /* height anchor for sidebar top offset and content padding-top */
+  height: var(--topbar-h);
+}
+
+/* Sidebar starts below the topbar on mobile too */
+@media (max-width: 767.98px) {
+  .ops-sidebar {
+    top: var(--topbar-h);
+    /* on mobile: overlay starts below topbar */
+  }
+  .ops-sidebar--mobile {
+    top: var(--topbar-h);
+  }
+  .sidebar-hamburger {
+    top: 10px;
+    inset-inline-start: 10px;
+    z-index: 105; /* above sidebar, below topbar */
+  }
+  .ops-main-content,
+  .ops-main-content--collapsed,
+  .ops-main-content--mobile {
+    /* topbar height comes from --topbar-h; content starts below it on mobile */
+    margin-inline: 0;
+  }
+}
+
+/* Topbar brand — visible on all screen sizes */
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary, var(--text));
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.topbar-brand .brand-accent {
+  color: var(--accent-color, var(--orange));
+}/*tail*/

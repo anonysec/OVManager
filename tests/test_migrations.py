@@ -1,0 +1,282 @@
+"""Tests for the versioned migration runner (backend/db/migrations.py).
+
+Each test builds its own throwaway SQLite file so the real panel database is
+never touched, and so the three distinct startup paths — fresh database,
+adopted legacy database, and refusing a newer one — can each be exercised.
+"""
+
+import pytest
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import sessionmaker
+
+from backend.db import migrations
+from backend.db.engine import Base
+from backend.db.migrations import SCHEMA_VERSION
+
+
+@pytest.fixture()
+def session(tmp_path):
+    """Session bound to an isolated SQLite file."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}", connect_args={"check_same_thread": False})
+    maker = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    db = maker()
+    try:
+        yield db
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_fresh_database_is_created_at_head_and_stamped(session):
+    assert migrations.current_version(session) == 0
+
+    result = migrations.migrate(session)
+
+    assert result == SCHEMA_VERSION
+    assert migrations.current_version(session) == SCHEMA_VERSION
+
+    tables = set(inspect(session.bind).get_table_names())
+    for mapped in Base.metadata.sorted_tables:
+        assert mapped.name in tables, f"mapped table {mapped.name} was not created"
+    assert {"audit_logs", "node_health_snapshots", "traffic_snapshots", "security_snapshots"} <= tables
+    assert migrations.verify_schema(session) == []
+
+
+def test_fresh_database_seeds_a_settings_row(session):
+    migrations.migrate(session)
+    row = session.execute(text("SELECT port, protocol, urlpath FROM settings")).fetchone()
+    assert row is not None
+    assert row[0] == 1194
+    assert row[1] == "tcp"
+
+
+def test_migrate_is_idempotent(session):
+    first = migrations.migrate(session)
+    second = migrations.migrate(session)
+    third = migrations.migrate(session)
+    assert first == second == third == SCHEMA_VERSION
+    assert migrations.verify_schema(session) == []
+
+
+def test_legacy_database_gains_missing_columns(session):
+    """A database from an older release must be repaired, not left broken.
+
+    This is the case ``create_all()`` could never handle: it creates missing
+    *tables* but never adds a missing *column* to an existing one.
+    """
+    session.execute(
+        text("""
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR NOT NULL,
+            total BIGINT,
+            used BIGINT,
+            expiry_date DATE NOT NULL,
+            is_active BOOLEAN NOT NULL,
+            owner VARCHAR NOT NULL
+        )
+    """)
+    )
+    session.execute(
+        text(
+            "INSERT INTO users (name, total, used, expiry_date, is_active, owner) "
+            "VALUES ('legacy_user', 0, 0, '2030-01-01', 1, 'owner')"
+        )
+    )
+    session.commit()
+
+    assert migrations.current_version(session) == 0
+    migrations.migrate(session)
+
+    columns = {c["name"] for c in inspect(session.bind).get_columns("users")}
+    for expected in ("uuid", "node_usage", "max_logins", "last_node_usage", "last_online"):
+        assert expected in columns, f"adoption did not add users.{expected}"
+
+    row = session.execute(
+        text("SELECT name, max_logins, node_usage, last_node_usage FROM users WHERE name = 'legacy_user'")
+    ).fetchone()
+    assert row is not None
+    assert row[1] == 1, "max_logins should default to the model's value (1), not NULL"
+    assert row[2] == "{}"
+    assert row[3] == 0
+
+    assert migrations.current_version(session) == SCHEMA_VERSION
+    assert migrations.verify_schema(session) == []
+
+
+def test_adoption_preserves_existing_settings_values(session):
+    """Adopting must not clobber operator configuration."""
+    session.execute(text("CREATE TABLE settings (id INTEGER PRIMARY KEY AUTOINCREMENT, port INTEGER NOT NULL)"))
+    session.execute(text("INSERT INTO settings (id, port) VALUES (1, 4433)"))
+    session.commit()
+
+    migrations.migrate(session)
+
+    row = session.execute(text("SELECT port, protocol, timezone FROM settings WHERE id = 1")).fetchone()
+    assert row[0] == 4433, "an operator's port must not be overwritten"
+    assert row[1] == "tcp"
+    assert row[2] == "UTC"
+
+
+def test_adoption_runs_numbered_steps(session, monkeypatch):
+    """Adopted databases must still run numbered steps.
+
+    Regression: adoption used to stamp straight at HEAD, skipping every step
+    forever — future data fixes never ran.
+
+    v2 is a retired no-op (at-rest encryption removed in 1.0.5); the step
+    that must run on adopted databases is v14, which decrypts ``enc:``
+    secrets once with the legacy keys still present in .env.
+    """
+    from cryptography.fernet import Fernet
+
+    session.execute(
+        text(
+            "CREATE TABLE users ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR NOT NULL, total BIGINT, "
+            "used BIGINT, expiry_date DATE NOT NULL, is_active BOOLEAN NOT NULL, owner VARCHAR NOT NULL)"
+        )
+    )
+    session.commit()
+    migrations.migrate(session)  # adoption creates the mapped tables
+
+    session.execute(
+        text(
+            "INSERT INTO nodes (name, address, protocol, ovpn_port, port, key, status, use_tls) "
+            "VALUES ('legacy-node', '203.0.113.5', 'udp', 1194, 2083, 'plaintext-key-123456', 1, 1)"
+        )
+    )
+    session.execute(text("DELETE FROM schema_version"))
+    session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (1, 0, 'pre-step')"))
+    session.commit()
+
+    import backend.config as config_module
+
+    monkeypatch.setattr(config_module.config, "BOT_ENCRYPT_KEY", Fernet.generate_key().decode())
+    monkeypatch.setattr(config_module.config, "NODE_ENCRYPT_KEY", Fernet.generate_key().decode())
+    node_fernet = Fernet(config_module.config.NODE_ENCRYPT_KEY.encode())
+    node_fernet = Fernet(config_module.config.NODE_ENCRYPT_KEY.encode())
+    session.execute(
+        text("UPDATE nodes SET key = :k WHERE name = 'legacy-node'"),
+        {"k": "enc:" + node_fernet.encrypt(b"plaintext-key-123456").decode()},
+    )
+    session.commit()
+    migrations.migrate(session)
+
+    stored = session.execute(text("SELECT key FROM nodes WHERE name = 'legacy-node'")).scalar()
+    assert stored == "plaintext-key-123456", "v14 must decrypt enc: rows on adopted databases"
+    assert migrations.current_version(session) == SCHEMA_VERSION
+
+
+def test_orphan_daily_traffic_rows_are_cleaned(session):
+    """History rows for a deleted user id must be removed (ids get reused)."""
+    migrations.migrate(session)
+    session.execute(text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (99999, '2030-01-01', 12345)"))
+    session.commit()
+
+    migrations._cleanup_orphan_daily_rows(session)
+    session.commit()
+
+    remaining = session.execute(text("SELECT COUNT(*) FROM user_traffic_daily WHERE user_id = 99999")).scalar()
+    assert remaining == 0
+
+
+def test_newer_database_is_refused(session):
+    """A database written by a newer build must stop the panel, not be clobbered."""
+    session.execute(
+        text("""
+        CREATE TABLE schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at REAL NOT NULL,
+            note TEXT
+        )
+    """)
+    )
+    session.execute(
+        text("INSERT INTO schema_version (version, applied_at, note) VALUES (:v, 0, 'from the future')"),
+        {"v": SCHEMA_VERSION + 1},
+    )
+    session.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT)"))
+    session.commit()
+
+    with pytest.raises(RuntimeError, match="newer than this build supports"):
+        migrations.migrate(session)
+
+
+def test_verify_schema_reports_missing_column(session):
+    session.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR NOT NULL)"))
+    session.commit()
+
+    problems = migrations.verify_schema(session)
+    assert any("users.uuid" in p for p in problems)
+    assert any("missing table" in p for p in problems)
+
+
+def test_alter_table_sql_quotes_defaults(session):
+    """ADD COLUMN defaults must be valid SQL for every mapped column."""
+    users = Base.metadata.tables["users"]
+    by_name = {c.name: c for c in users.columns}
+
+    sql = migrations._add_column_sql("users", by_name["node_usage"])
+    assert "DEFAULT '{}'" in sql, sql
+    assert "NOT NULL" in sql
+
+    sql = migrations._add_column_sql("users", by_name["max_logins"])
+    assert "DEFAULT 1" in sql, sql
+
+    sql = migrations._add_column_sql("users", by_name["uuid"])
+    assert "NOT NULL" not in sql, sql
+
+
+def test_fresh_install_seeds_owner_row_and_first_user():
+    """A brand-new panel must show the owner under Admins and have one
+    user to exercise the enrolment flow with."""
+    from backend.config import config
+    from backend.db.engine import SessionLocal
+    from backend.db.migrations import _seed_owner_and_first_user
+    from backend.db.models import Admin, User
+
+    owner = (config.ADMIN_USERNAME or "admin").strip()
+    db = SessionLocal()
+    try:
+        db.query(User).delete()
+        db.query(Admin).delete()
+        db.commit()
+
+        _seed_owner_and_first_user(db)
+
+        admins = [a.username for a in db.query(Admin).all()]
+        users = db.query(User).all()
+        assert owner in admins, "owner must exist in the admins table"
+        assert len(users) == 1
+        seeded = users[0]
+        assert seeded.owner == owner
+        assert seeded.is_active is True
+        assert seeded.max_logins >= 1
+        assert seeded.expiry_date is not None
+
+        _seed_owner_and_first_user(db)
+        assert db.query(Admin).filter(Admin.username == owner).count() == 1
+        assert db.query(User).count() == 1
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_existing_panel_is_left_untouched():
+    """A panel that already has users must not gain a seeded user or a
+    first-run audit entry."""
+    from backend.db.engine import SessionLocal
+    from backend.db.migrations import _seed_owner_and_first_user
+    from backend.db.models import User
+
+    db = SessionLocal()
+    try:
+        before = db.query(User).count()
+        if before == 0:
+            pytest.skip("suite database has no users; covered by the fresh-install test")
+        _seed_owner_and_first_user(db)
+        assert db.query(User).count() == before
+    finally:
+        db.rollback()
+        db.close()

@@ -1,0 +1,35 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Settings page shell — owner-only notice.
+   Section styling keeps living in Settings.css; this file only owns the
+   page chrome around the sections. */
+
+.sp-owner-note {
+  margin-top: 8px;
+}
+
+.sp-owner-note-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.sp-owner-note-inner svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--warning-text);
+}
+
+.sp-owner-note-inner strong {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.sp-owner-note-inner p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}

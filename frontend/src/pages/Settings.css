@@ -1,0 +1,287 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ═══════════════════════════════════════════════════════ */
+
+.sp-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding-bottom: 32px;
+  animation: fadeUp .2s ease both;
+}
+
+/* ── Jump navigation bar ─────────────────── */
+.sp-jumpnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 8px 11px;
+  background: var(--surface-1, var(--panel));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+}
+
+.sp-jumpnav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary, var(--muted));
+  font: 600 11px/1 var(--font-family);
+  text-decoration: none;
+  transition: background .12s, color .12s, border-color .12s;
+}
+
+.sp-jumpnav-link:hover {
+  background: rgba(255,255,255,.05);
+  color: var(--text-primary, var(--text));
+  border-color: var(--border, var(--line));
+}
+
+/* ── Sections ─────────────────────────────── */
+.sp-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sp-section {
+  margin: 0;
+}
+
+.sp-section-header {
+  margin-bottom: 8px;
+}
+
+.sp-section-icon {
+  color: var(--accent-color, var(--orange));
+  flex-shrink: 0;
+}
+
+.sp-section-header h2 {
+  margin: 0 0 2px;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--text-primary, var(--text));
+  letter-spacing: -.02em;
+}
+
+.sp-section-header p {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted, var(--muted));
+  line-height: 1.4;
+}
+
+/* ── Card ──────────────────────────────────── */
+.sp-card {
+  background: var(--surface-1, var(--panel));
+  border: 1px solid var(--border, var(--line));
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color .12s, box-shadow .12s;
+}
+
+.sp-card:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border, var(--line)));
+  box-shadow: 0 3px 14px rgba(0,0,0,.15);
+}
+
+.sp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border, var(--line));
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, var(--text));
+}
+
+.sp-card-head svg { color: var(--accent-color, var(--orange)); }
+
+.sp-card-body {
+  padding: 14px;
+}
+
+/* ── Fields ──────────────────────────────── */
+.sp-field {
+  margin-bottom: 12px;
+}
+
+.sp-field:last-child { margin-bottom: 0; }
+
+.sp-field--h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sp-field--h .sp-label { margin-bottom: 0; }
+
+.sp-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  color: var(--text-secondary, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.sp-label-xs {
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  color: var(--text-muted, var(--muted));
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.sp-input {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 7px;
+  background: var(--bg, #0e1116);
+  color: var(--text-primary, var(--text));
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  transition: border-color .12s, box-shadow .12s;
+}
+
+.sp-input:focus {
+  outline: none;
+  border-color: var(--accent-color, var(--orange));
+  box-shadow: 0 0 0 3px rgba(252,122,30,.14);
+}
+
+.sp-input::placeholder { color: var(--text-muted, var(--muted)); opacity: .8; }
+.sp-input:disabled { opacity: .45; cursor: not-allowed; background: var(--surface-2, var(--panel)); }
+
+/* ── Select ──────────────────────────────── */
+.sp-select {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 7px;
+  background: var(--bg, #0e1116);
+  color: var(--text-primary, var(--text));
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-inline-end: 36px;
+  transition: border-color .12s, box-shadow .12s;
+}
+
+.sp-select:focus {
+  outline: none;
+  border-color: var(--accent-color, var(--orange));
+  box-shadow: 0 0 0 3px rgba(252,122,30,.14);
+}
+
+.sp-select:disabled { opacity: .45; cursor: not-allowed; background: var(--surface-2, var(--panel)); }
+
+/* ── Toggle switch ───────────────────────── */
+.sp-toggle { display: inline-flex; align-items: center; cursor: pointer; gap: 8px; }
+.sp-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sp-toggle-track {
+  width: 38px; height: 20px;
+  border-radius: 10px;
+  background: var(--border, var(--line));
+  position: relative;
+  transition: background .18s;
+  flex-shrink: 0;
+}
+.sp-toggle input:checked ~ .sp-toggle-track { background: var(--accent-color); }
+.sp-toggle-thumb {
+  position: absolute;
+  top: 2px; inset-inline-start: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .18s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(18px); }
+/* The knob starts at inset-inline-start, so it travels the other way in RTL. */
+html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(-18px); }
+.sp-toggle input:disabled ~ .sp-toggle-track { opacity: .45; cursor: not-allowed; }
+.accent-swatch {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.accent-swatch:hover { transform: scale(1.08); }
+.accent-swatch.active { border-color: var(--text-primary, var(--text)); box-shadow: 0 0 0 2px var(--accent-color, var(--orange)); }
+
+/* ── Theme/Style pills ───────────────────── */
+.sp-theme-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-theme-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, var(--muted));
+  font: 600 11px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.sp-theme-pill:hover { background: rgba(255,255,255,.04); color: var(--text-primary, var(--text)); }
+.sp-theme-pill.active {
+  background: var(--accent-color-transparent, rgba(252,122,30,.14));
+  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border, var(--line)));
+  color: var(--accent-color, var(--orange));
+}
+
+/* ── Button row ──────────────────────────── */
+.sp-btn-group { display: inline-flex; gap: 8px; }
+
+/* ── Buttons ─────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary, var(--muted));
+  font: 600 12px/1 var(--font-family);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.btn:hover { background: rgba(255,255,255,.05); color: var(--text-primary, var(--text)); border-color: var(--accent-color, var(--orange)); }
+.btn:focus-visible { outline: 2px solid var(--accent-color, var(--orange)); outline-offset: 2px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent-color, var(--orange));
+  border-color: var(--accent-color, var(--orange));
+  color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
+
+.btn-sm { padding: 6px 10px; font-size: var(--font-size-xs); }
+.sp-hint { margin: 6px 0 0; font-size: var(--font-size-2xs); color: var(--text-muted, var(--muted)); line-height: 1.4; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Error / Empty states ────────────────── */
+.sp-error { padding: 24px; text-align: center; color: var(--danger-text, var(--danger)); font-weight: 600; }
