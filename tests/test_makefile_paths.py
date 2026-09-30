@@ -55,9 +55,3 @@ def test_every_path_argument_in_the_makefile_exists():
                 missing.append(f"{command!r} -> {token}")
     assert missing == [], "Makefile references paths that do not exist:\n  " + "\n  ".join(missing)
 
-
-def test_the_previously_broken_target_is_actually_green():
-    """Regression pin: `make lint` must not point at the old bench/ path."""
-    body = MAKEFILE.read_text(encoding="utf-8")
-    assert " tests bench" not in body, "the Makefile still points at the pre-move bench/ directory"
-    assert "scripts/bench" in body

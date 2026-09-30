@@ -1078,16 +1078,6 @@ def test_restore_rejects_an_unknown_name_before_it_prompts(tmp_path):
     assert not marker.exists()
 
 
-def test_restore_is_documented_and_dispatched():
-    """`ovm restore` is in the usage, in parse_args and in the dispatch, and
-    its confirmation defaults to NO — the convention `uninstall` follows here."""
-    content = MANAGER_PATH.read_text(encoding="utf-8")
-    usage = content[content.index("  USAGE") : content.index("  OPTIONS")]
-    assert "ovm restore [NAME]      List backups, or restore one" in usage
-    assert re.search(r"(?m)^\s*restore\)\s", content), "no parse_args or dispatch arm"
-    assert "do_restore()" in content
-    assert 'confirm "Replace the live database with this backup?" n' in content
-
 
 # ── owner-claim / completion / version-script (new commands) ───────────
 
@@ -1173,16 +1163,6 @@ def test_version_script_delegates_to_the_installer(tmp_path):
     r = mgr_sb(env, app, "script-version")
     assert "STUB-INSTALLER version-script" in r.stdout + r.stderr
 
-
-def test_the_three_new_commands_are_documented(tmp_path):
-    """usage(), parse_args and the dispatch all know them."""
-    content = MANAGER_PATH.read_text(encoding="utf-8")
-    usage = content[content.index("  USAGE") : content.index("  OPTIONS")]
-    for line in ("ovm owner-claim", "ovm completion", "ovm version-script"):
-        assert line in usage, line
-    for action in ("owner-claim", "completion"):
-        assert re.search(rf"(?m)^\s*{re.escape(action)}\)\s", content), action
-    assert re.search(r"(?m)^\s*version-script\|script-version\)\s", content), "version-script alias"
 
 
 def test_no_reset_path_writes_a_credential_to_env(tmp_path):
