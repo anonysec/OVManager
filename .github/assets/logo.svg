@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="logoTitle">
+  <title id="logoTitle">OVManager</title>
+  <rect width="128" height="128" rx="30" fill="#ff6a1a"/>
+  <g aria-hidden="true">
+    <path d="M34 34 H94 V94 H34 Z" fill="none" stroke="#15110a" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+    <g fill="#15110a">
+      <circle cx="34" cy="34" r="14"/>
+      <circle cx="94" cy="34" r="14"/>
+      <circle cx="94" cy="94" r="14"/>
+      <circle cx="34" cy="94" r="14"/>
+    </g>
+  </g>
+</svg>

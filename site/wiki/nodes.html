@@ -27,6 +27,7 @@
     <nav class="wikinav" aria-label="Wiki topics">
       <ul>
         <li><a href="index.html">Overview</a></li>
+        <li><a href="how-it-works.html">How it works</a></li>
         <li><a href="install.html">Install &amp; first login</a></li>
         <li><a href="nodes.html" aria-current="page">Adding nodes</a></li>
         <li><a href="users.html">Users &amp; subscriptions</a></li>
@@ -120,11 +121,20 @@ API key   abc123...           &lt;- copy this</code></pre>
     <h3>Unattended</h3>
     <figure class="cmd">
       <figcaption>OVNode, no prompts</figcaption>
-      <pre><code>curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh \
-  | sudo bash -s -- -y --name eu-1 --tls selfsigned \
-    --vpn-ports 1194,443 -p "$(openssl rand -hex 32)"</code></pre>
+      <pre><code>curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh -o install.sh
+OVN_NAME=eu-1 OVN_VPN_PORTS=1194,443 OVN_IPV6=1 bash install.sh -y</code></pre>
     </figure>
-    <p>Keep the key it prints (or the one you passed) &mdash; the panel needs it next.</p>
+    <p>
+      The installer takes three flags &mdash; <code>-y/--yes</code>,
+      <code>--docker</code> and <code>-h/--help</code> &mdash; and every other
+      setting is an <code>OVN_*</code> variable (<code>OVN_NAME</code>,
+      <code>OVN_KEY</code>, <code>OVN_PORT</code>, <code>OVN_VPN_PORTS</code>,
+      <code>OVN_PROTO</code>, <code>OVN_TLS</code>,
+      <code>OVN_TLS_DOMAIN</code>, <code>OVN_IPV6</code>,
+      <code>OVN_NO_NAT</code>, <code>OVN_REPO</code>). Older flag spellings still
+      work but print what replaces them. Keep the key it prints (or the one you
+      passed) &mdash; the panel needs it next.
+    </p>
 
     <h2 id="register">2. Register it in the panel</h2>
     <p>
@@ -198,12 +208,47 @@ API key   abc123...           &lt;- copy this</code></pre>
     <p>On the node itself:</p>
     <figure class="cmd">
       <figcaption>On the VPN server</figcaption>
-      <pre><code>ovn status     # health + certificate expiry
-ovn update     # staged update, backs up data first</code></pre>
+      <pre><code>ovn status       # agent, health, version, VPN state, certificate expiry
+ovn doctor       # health check; --fix applies the safe repairs
+ovn logs -f      # last 100 lines, or follow
+ovn credentials  # node name, API key and the panel bundle, any time
+ovn update       # staged update, backs up data first</code></pre>
     </figure>
     <p>
-      Node data in <code>/var/lib/ovnode</code> and <code>/etc/openvpn</code>
-      survives a reinstall, but only if you keep the same <code>--name</code>.
+      <code>ovn credentials</code> is the one to reach for when the panel entry
+      and the node disagree: it reprints the exact name and key the panel needs,
+      so you can compare rather than retype. The full command list is in the
+      <a href="cli.html#node-cli">CLI reference</a>.
+    </p>
+
+    <h2 id="node-data">Node data, backup and reinstall</h2>
+    <p>A node has no database. Its state is plain files:</p>
+    <pre><code>/etc/openvpn/server/     server.conf, PKI (CA, certificates, CRL), logs
+/etc/openvpn/ovnode/     users/&lt;cn&gt;/{name,state,client.ovpn}, sessions/, usage/, scripts/
+/var/lib/ovnode/&lt;name&gt;/  agent data</code></pre>
+    <p>
+      <code>ovn backup</code> archives <code>/var/lib/ovnode</code> and the
+      OpenVPN PKI into root-only tarballs in <code>/var/backups</code>, keeping
+      the newest 14 unless you pass <code>--keep N</code>.
+      <code>ovn auto-backup on</code> adds a daily timer for it.
+      <code>ovn restore</code> lists those archives and, given a name, unpacks
+      one after taking a safety copy of the current state &mdash; and it refuses
+      to continue if that copy cannot be made.
+    </p>
+    <div class="note">
+      <p>
+        <strong>Reinstall and rename.</strong> Node data survives a reinstall
+        <em>only</em> if you keep the same <code>--name</code>: a different name
+        reads a different, empty data folder and orphans the old one on disk.
+        <code>ovn uninstall</code> keeps the data;
+        <code>ovn uninstall --purge</code> deletes it. Both ask first and the
+        prompt defaults to No.
+      </p>
+    </div>
+    <p>
+      A complete disaster-recovery plan has two halves &mdash; the panel database
+      and each node's own files. See
+      <a href="backup.html">Backups &amp; restore</a> for the panel side.
     </p>
 
     <h2 id="next">Next</h2>

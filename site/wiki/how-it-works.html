@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works — OVManager wiki</title>
+<meta name="description" content="The process model, where the data lives, the security model, updates and the container image behind an OVManager panel and its OVNode agents.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="how-it-works.html" aria-current="page">How it works</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>How it works</h1>
+    <p class="lede">
+      A plain-language tour of the moving parts: what runs where, where your data
+      sits, what protects it, and what an update actually does.
+    </p>
+
+    <h2 id="two-programs">Two programs, two kinds of machine</h2>
+    <ul>
+      <li>
+        <strong>The panel</strong> &mdash; the website you log into. It holds the
+        user list, quotas, expiry dates, settings and the audit log.
+      </li>
+      <li>
+        <strong>OVNode</strong> &mdash; a small agent on every VPN server. It owns
+        OpenVPN, the certificates and the per-user files.
+      </li>
+    </ul>
+    <p>
+      The panel always calls the node. <strong>Nodes never call the panel</strong>
+      &mdash; a node does not even store the panel's address &mdash; so you can
+      move or replace the panel at any time without touching the VPN servers.
+      Re-add them with the same address, name and API key and they carry on.
+    </p>
+
+    <h2 id="processes">What runs where</h2>
+    <h3>On the panel</h3>
+    <p>
+      Two processes and one SQLite file. The web server serves requests and runs
+      the live collector; a supervised child process runs the periodic jobs
+      &mdash; traffic accounting, limit enforcement, backups, pruning and alerts
+      &mdash; so a job that blocks cannot stop the panel answering. One service
+      starts and stops both, and the child takes an exclusive lock on the data
+      directory so a second one cannot start and double every schedule.
+    </p>
+    <p>
+      Neither process runs as root. A systemd unit starts them as
+      <code>ovmanager</code>, a dedicated unprivileged account: the web server
+      reads its own code, <code>.env</code> and the TLS key through that
+      account's group, and owns the data directory. The panel is reachable from
+      the network and parses untrusted input, so a compromise of the web app
+      should not be a compromise of the host. The consequence is that the panel
+      cannot replace its own code &mdash; that needs root &mdash; so the update
+      button in the UI prints <code>sudo ovm update</code> instead. Docker runs
+      the app as its own <code>appuser</code> for the same reason.
+    </p>
+    <p>
+      There is no external database, cache or message queue to run or keep
+      alive. There is one SQLite database, and a configured Telegram bot runs as
+      a supervised subprocess next to the two processes.
+    </p>
+    <div class="note">
+      <p>
+        <strong>Why not Redis.</strong> A shared cache pays off when several
+        application processes must share state. Here the web process is the only
+        reader of the live cache and the periodic jobs coordinate through SQLite,
+        which is already the source of truth &mdash; so a Redis hop would only add
+        latency, a second thing to run and back up, and a few tens of megabytes of
+        resident memory. It becomes worthwhile when the panel moves to multiple
+        <em>web</em> workers, and that means replacing SQLite with a networked
+        database first.
+      </p>
+    </div>
+    <p>What the panel does instead of a cache tier:</p>
+    <ul>
+      <li>One background collector polls the nodes and caches the result. Request handlers read that cache rather than fanning out to every node per request.</li>
+      <li>
+        The collector backs off to <code>OVMANAGER_LIVE_IDLE_POLL_SECONDS</code>
+        (default <code>300</code>) when no browser has the live stream open,
+        instead of probing every node every 10 seconds for an audience of nobody.
+      </li>
+      <li>The built <code>index.html</code> is cached in memory and invalidated by mtime, so serving a dashboard route is one <code>stat()</code> rather than a file read per navigation.</li>
+      <li>Security-header and CSRF handling are plain ASGI middlewares, which keeps the live event stream unbuffered.</li>
+    </ul>
+
+    <h3>On a VPN node</h3>
+    <ul>
+      <li><strong>The agent</strong> &mdash; a small web API listening on the service port (<code>2083</code> by default).</li>
+      <li><strong>OpenVPN</strong> &mdash; the daemon, run by systemd on a host install or supervised by the container entrypoint in Docker.</li>
+      <li>
+        <strong>The hooks</strong> &mdash; small scripts under OpenVPN's
+        <code>ovnode/scripts/</code> that run at connect and disconnect time. That
+        is where the login limit and the traffic counting actually happen.
+      </li>
+    </ul>
+    <p>There is no database on a node. Everything is plain files on disk.</p>
+
+    <h2 id="talking">How they talk</h2>
+    <p>
+      The panel connects out to each node and calls its <code>/sync/...</code>
+      endpoints. Every request carries the node's API key in a <code>key</code>
+      header, and every reply is the same small envelope:
+    </p>
+    <pre><code>{"success": true, "msg": "...", "data": {...}}</code></pre>
+    <p>
+      The panel treats a call as successful only when it gets HTTP 200
+      <em>and</em> <code>"success": true</code>, so the node reports business
+      failures inside the envelope rather than as an HTTP error.
+    </p>
+    <p>
+      TLS is verified strictly first. A node using a self-signed certificate
+      &mdash; the installer default &mdash; fails that check, so the panel retries
+      once <em>without</em> verification and warns loudly, once per node, as a
+      standing reminder to move that node to Let's Encrypt. See
+      <a href="tls.html">TLS certificates</a>.
+    </p>
+
+    <h2 id="data">Where the data lives</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Where</th><th scope="col">What</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>/var/lib/ovmanager</code></td>
+            <td>The panel's <code>ovmanager.db</code>: users, nodes, login sessions, settings and the audit log. WAL mode lets the jobs process write while you browse.</td>
+          </tr>
+          <tr>
+            <td><code>/opt/ovmanager</code></td>
+            <td>The installed panel tree, with its own virtualenv and <code>.env</code>.</td>
+          </tr>
+          <tr>
+            <td><code>/etc/openvpn/ovnode/users/&lt;cn&gt;/</code></td>
+            <td>One folder per VPN user on a node: display name, login limit and disabled flag, and a cached <code>.ovpn</code>.</td>
+          </tr>
+          <tr>
+            <td><code>/etc/openvpn/server/</code></td>
+            <td>The node's OpenVPN configuration and PKI.</td>
+          </tr>
+          <tr>
+            <td><code>/var/lib/ovnode/&lt;name&gt;/</code></td>
+            <td>The node agent's own data, under the node's <code>--name</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Node data survives a reinstall only if you keep the same node name: a
+      different name reads a different, empty folder and orphans the old one.
+    </p>
+
+    <h2 id="identity">Identity: one number per user</h2>
+    <p>
+      A user's numeric panel id <em>is</em> their OpenVPN common name: user 42
+      gets certificate CN <code>42</code>. The node stores the display name
+      beside it, so usage can be reported by username while the certificate layer
+      stays numeric. Each user can carry an optional free-text tag of up to 64
+      characters (<code>monthly</code>, <code>vip</code>,
+      <code>reseller-a</code>) that shows on the row and is searchable and
+      filterable.
+    </p>
+
+    <h2 id="accounting">Traffic accounting and limits</h2>
+    <p>
+      Every five minutes the panel asks each node for its lifetime byte totals
+      and bills only the increase, so a restart, a disconnect or a short session
+      cannot double-count, and a total that shrinks &mdash; a rebuilt node
+      &mdash; bills zero rather than a negative number. The full picture,
+      including enforcement, is in <a href="traffic.html">Traffic limits</a>.
+    </p>
+    <p>
+      The device limit is not policed from the panel. <code>max_logins</code> is
+      pushed to every node and enforced by the connect hook: <code>1</code> means
+      a new connection takes over the old one, <code>N</code> rejects the N+1th,
+      and <code>0</code> is unlimited. Session identity is the CN plus the VPN
+      pool address, which stays stable for the life of a session &mdash; so users
+      whose real address changes on every reconnect are still counted and limited
+      correctly. The panel only aggregates session counts, and can disconnect a
+      user on any node.
+    </p>
+
+    <h2 id="security">Security model</h2>
+    <ul>
+      <li>
+        <strong>Credentials live in the database, not in <code>.env</code>.</strong>
+        The owner is an ordinary <code>admins</code> row;
+        <code>ADMIN_USERNAME</code> in <code>.env</code> only says <em>which</em>
+        row is the owner. Changing the owner password is
+        <code>ovm reset-password</code>, and it rewrites that row. The panel
+        ignores the older <code>ADMIN_PASSWORD</code> /
+        <code>ADMIN_PASSWORD_HASH</code> lines and logs a warning when it sees
+        them.
+      </li>
+      <li>
+        <strong>The trust boundary is the filesystem.</strong> Secrets in the
+        database &mdash; node API keys, the Telegram bot token &mdash; are stored
+        as written; there is no at-rest encryption, by design, because encrypting
+        them would only move the key to another file on the same host. What
+        protects them is the file modes, so those are load-bearing: the data and
+        backup directories are <code>0700</code>, and the database, the node
+        certificates and every <code>.ovmbak</code> bundle are
+        <code>0600</code>. Treat an off-site backup as secret material and move
+        it over an encrypted channel.
+      </li>
+      <li>
+        <strong>Secret URL path.</strong> The panel is served under a random
+        prefix such as <code>/k3f9xq2m/</code>. Anything outside it gets an empty
+        404, so internet scanners see an empty site. It hides the panel; it is
+        not login.
+      </li>
+      <li>
+        <strong>Database-backed sessions.</strong> A login returns an opaque
+        random token and only its SHA-256 hash is stored. Sessions slide on
+        activity and expire, logout deletes the row, and restarting the panel
+        does not log everyone out. Failed logins are rate-limited per user and
+        per address.
+      </li>
+      <li>
+        <strong>On the node</strong> the OpenVPN management interface listens on
+        localhost only and requires a password file, because containers and host
+        networking can share localhost. The PKI is ECDSA
+        (<code>prime256v1</code>) with <code>tls-crypt</code>, a TLS 1.3 minimum,
+        CRL enforcement and privilege dropping to an unprivileged runtime user.
+        Client profiles embed the private key, so they are created owner-only and
+        written atomically. A PKI failure starts the agent in diagnostics mode
+        instead of killing it.
+      </li>
+    </ul>
+
+    <h2 id="updates">Updates</h2>
+    <p>
+      The installer does not build from source. It downloads a verified release
+      archive and its mandatory SHA-256 sidecar and refuses to continue if the
+      download is not a real archive or the checksum does not match.
+    </p>
+    <p>
+      <code>sudo ovm update</code> stages the new version, health-checks it, and
+      restores the previous code if it does not answer. The database migrates
+      itself on the next start. An update interrupted mid-flight by a power loss
+      is cleaned up by <code>sudo ovm recover-update</code>, and the previous tree
+      is available as <code>sudo ovm rollback</code>.
+    </p>
+    <p>
+      On a node, <code>ovn update</code> takes a verified snapshot of the identity
+      file, the node data directory, <code>/etc/openvpn</code> and the API TLS
+      files before it swaps in a release, and restores the snapshot if the new
+      release does not come up healthy.
+    </p>
+
+    <h2 id="backups">Backups</h2>
+    <p>
+      <code>ovm backup</code> writes a verified <code>.ovmbak</code> bundle of the
+      panel database; <code>ovn backup</code> archives the node's data and PKI.
+      Both keep the newest 14 by default and both have a daily systemd timer.
+      Restoring an upload refuses writes with HTTP 503 until the swap finishes,
+      keeps the replaced database as a fallback, and migrates the restored one on
+      the spot. See <a href="backup.html">Backups &amp; restore</a>.
+    </p>
+
+    <h2 id="container">The panel's container image</h2>
+    <p>
+      The <code>Dockerfile</code> is three stages, and the split is the point: the
+      runtime image carries nothing a running panel does not need.
+    </p>
+    <ol>
+      <li><strong><code>frontend</code></strong> builds the dashboard. Node never reaches the runtime stage.</li>
+      <li>
+        <strong><code>builder</code></strong> installs the Python dependencies
+        from a frozen lock, which fails closed if the lock and the project file
+        have drifted apart. The compiler lives here and only here.
+      </li>
+      <li><strong><code>runtime</code></strong> ships the virtualenv, the sources and the frontend build. No compiler, no build tooling.</li>
+    </ol>
+    <p>
+      It runs as a non-root <code>appuser</code> in the <code>ovpanel</code>
+      group, which is what lets the container read the config bind-mounted at
+      <code>/app/.env</code>. The installer refuses a group id that already has
+      members on the host, because sharing that file by group would hand the
+      secret panel URL path to them.
+    </p>
+
+    <h2 id="migrations">Schema migrations</h2>
+    <p>
+      The database is migrated automatically on every start. The current version
+      is recorded in a <code>schema_version</code> table, so numbered steps run
+      once and in order. Databases created by an earlier release are
+      <strong>adopted</strong>: their current shape is inspected, missing columns
+      are added, and the database is stamped at the current version &mdash; no
+      dump and restore.
+    </p>
+    <figure class="cmd">
+      <figcaption>From a checkout</figcaption>
+      <pre><code>uv run python -m backend.db.migrations --check    # CI drift gate
+uv run python -m backend.db.migrations --migrate  # apply to the live database</code></pre>
+    </figure>
+
+    <h2 id="design-system">The design system</h2>
+    <p>
+      Every colour, space, radius, shadow and font in the dashboard comes from a
+      design token, a CSS custom property declared in exactly one file,
+      <code>frontend/src/tokens.css</code>. That file is the only place allowed to
+      declare <code>:root</code> or <code>html[data-theme=...]</code>, and the rule
+      is enforced mechanically by <code>npm run check:tokens</code>, which fails
+      the build if a token block appears anywhere else. The same script resolves
+      the <code>var()</code> chain and asserts WCAG AA contrast for the
+      text/background pairs that matter, in both themes.
+    </p>
+    <p>Two consequences worth knowing if you are changing the dashboard:</p>
+    <ul>
+      <li>
+        <strong>Use semantic tokens, not hex.</strong> A component asks for
+        <code>var(--danger-text)</code> or <code>var(--space-3)</code>, never
+        <code>#e5484d</code>. Both themes are then a palette swap in one file
+        rather than a hunt through every stylesheet.
+      </li>
+      <li>
+        <strong>Both themes are declared side by side.</strong> Dark is the default
+        <code>:root</code>; light is an override in the same file, so a new token
+        that forgets one theme is visible in review rather than on someone's
+        screen.
+      </li>
+    </ul>
+
+    <h2 id="next">Next</h2>
+    <p>
+      Every command in one place: <a href="cli.html">CLI reference</a>.
+    </p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

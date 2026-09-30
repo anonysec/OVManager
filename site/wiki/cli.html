@@ -27,6 +27,7 @@
     <nav class="wikinav" aria-label="Wiki topics">
       <ul>
         <li><a href="index.html">Overview</a></li>
+        <li><a href="how-it-works.html">How it works</a></li>
         <li><a href="install.html">Install &amp; first login</a></li>
         <li><a href="nodes.html">Adding nodes</a></li>
         <li><a href="users.html">Users &amp; subscriptions</a></li>
@@ -213,16 +214,47 @@ install.sh --help</code></pre>
     <h2 id="node-cli">On each VPN node</h2>
     <p>
       The node agent installs its own CLI, <code>ovn</code> (alias
-      <code>ovnode</code>):
+      <code>ovnode</code>). With no argument it opens a numbered menu; every menu
+      item is also a plain command with a stable exit code, so it is scriptable.
     </p>
-    <figure class="cmd">
-      <figcaption>On the VPN server</figcaption>
-      <pre><code>ovn status     # health + certificate expiry
-ovn update     # staged update, backs up data first</code></pre>
-    </figure>
+    <div class="table-scroll">
+      <table>
+        <caption>On the VPN server.</caption>
+        <thead>
+          <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ovn status</code></td><td>Agent, health, version and VPN state. <code>--all</code> also shows node, mode, port and TLS.</td></tr>
+          <tr><td><code>ovn credentials</code></td><td>Node name, API key and the panel bundle. Read-only.</td></tr>
+          <tr><td><code>ovn start | stop | restart</code></td><td>Control the node agent service.</td></tr>
+          <tr><td><code>ovn restart-vpn</code></td><td>Restart or reload OpenVPN.</td></tr>
+          <tr><td><code>ovn logs [N|-f]</code></td><td>The last N log lines (default 100), or follow live.</td></tr>
+          <tr><td><code>ovn backup [--keep N]</code></td><td>Archive the node data and PKI now. <code>--keep</code> sets retention; default 14.</td></tr>
+          <tr><td><code>ovn auto-backup on | off | status</code></td><td>Daily backup through a host timer, at <code>03:30</code>.</td></tr>
+          <tr><td><code>ovn restore [name]</code></td><td>List the archives, or restore one by name.</td></tr>
+          <tr><td><code>ovn tls</code></td><td>Show or replace the node's certificate.</td></tr>
+          <tr><td><code>ovn doctor [--fix]</code></td><td>Health check across agent, VPN, disk, certificate and backups. <code>--fix</code> applies the safe repairs.</td></tr>
+          <tr><td><code>ovn update</code></td><td>Staged update with a verified safety snapshot first.</td></tr>
+          <tr><td><code>ovn rollback</code></td><td>Restore the newest pre-update code snapshot.</td></tr>
+          <tr><td><code>ovn recover-update</code></td><td>Recover an interrupted update transaction.</td></tr>
+          <tr><td><code>ovn completion</code></td><td>Install bash completion for <code>ovn</code>.</td></tr>
+          <tr><td><code>ovn uninstall [--purge]</code></td><td>Remove OVNode. Data is kept unless <code>--purge</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <code>ovn update</code> and <code>ovn uninstall</code> are implemented in
+      the node's installer, so each exists in exactly one place. The installer
+      itself takes three flags &mdash; <code>-y/--yes</code>,
+      <code>--docker</code> and <code>-h/--help</code> &mdash; and everything
+      else is an <code>OVN_*</code> variable; older flag spellings still work but
+      print what replaces them. An unattended run reports its outcome as an exit
+      code: <code>0</code> ok, <code>1</code> error, <code>2</code> usage error,
+      <code>3</code> already installed, <code>4</code> not installed.
+    </p>
     <p>
       See the <a href="https://github.com/anonysec/OVNode">OVNode repository</a>
-      for the node installer's own flags.
+      for the full <code>OVN_*</code> list and the node's runtime settings.
     </p>
 
     <h2 id="next">Next</h2>
