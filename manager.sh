@@ -781,8 +781,8 @@ do_owner_claim() {
 # word. Help --all carries the mapping.
 OVM_SUBCOMMANDS="status start stop restart enable disable logs doctor doctor-fix \
 tls auth url backup auto-backup restore rollback update uninstall version-script \
-completion help tls-status https recovery owner-claim reset-password reset-urlpath \
-recover-update"
+config completion help tls-status https recovery owner-claim reset-password \
+reset-urlpath recover-update"
 OVM_FLAGS="-y --yes -a --all --fix --keep --time --purge -v --version -h --help -p --pass --self --domain --ip --key --cert"
 
 do_completion() {
@@ -843,6 +843,11 @@ parse_args() {
             # start/stop were never runbooks, they were reflexes: stopping a
             # healthy panel to restart it is `restart`, and that is one command.
             start|stop|restart|enable|disable) ACTION="$1"; shift ;;
+            # `config` had a dispatch arm and a help entry but no arm here, so
+            # `ovm config` answered "Unknown option". A test asserted the arm
+            # existed and passed — it never ran the command. Every verb is now
+            # covered by the sweep in tests/test_cli_shape.py.
+            config) ACTION="config"; shift ;;
             logs) ACTION="logs"
                 if [[ $# -ge 2 && ( "$2" == "-f" || "$2" =~ ^[0-9]+$ ) ]]; then
                     LOGS_ARG="$2"; shift 2

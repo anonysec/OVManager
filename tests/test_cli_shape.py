@@ -69,6 +69,76 @@ def help_text(*args: str) -> str:
     return out.stdout + out.stderr
 
 
+# ── The dispatcher, actually run ─────────────────────────────────────────
+
+# The regression this file exists for. Three node commands shipped broken in
+# f77cf87 and every test passed, because the tests read the source rather than
+# running the command: `ovn backup schedule` answered "Unknown option" because
+# parse_args had two `backup)` arms and bash took the first. The same shape of
+# bug is possible here, so the panel gets the same behavioural sweep.
+ALL_VERBS = (
+    "status",
+    "status --all",
+    "logs",
+    "doctor",
+    "restart",
+    "enable",
+    "disable",
+    "tls",
+    "auth",
+    "url",
+    "backup",
+    "backup schedule",
+    "restore",
+    "update",
+    "rollback",
+    "config",
+    "help",
+)
+
+RETIRED_VERBS = (
+    "https",
+    "tls-status",
+    "owner-claim",
+    "reset-password",
+    "reset-urlpath",
+    "recovery",
+    "auto-backup status",
+    "recover-update",
+    "doctor-fix",
+)
+
+
+def _no_dispatch_failure(command: str) -> None:
+    out = run(*command.split(), env={"OVM_APP_DIR": "/nonexistent", "CI": "1"})
+    combined = out.stdout + out.stderr
+    assert "Unknown option" not in combined, f"ovm {command} does not dispatch:\n{combined}"
+
+
+def test_every_advertised_verb_dispatches():
+    for command in ALL_VERBS:
+        _no_dispatch_failure(command)
+
+
+def test_every_retired_verb_still_dispatches():
+    for command in RETIRED_VERBS:
+        _no_dispatch_failure(command)
+
+
+def test_no_dispatch_arm_is_defined_twice():
+    """Bash takes the first matching arm and silently ignores the rest, so a
+    duplicated arm is not an error — it is a command that quietly does the old
+    thing. That is how `ovn backup schedule` shipped dead."""
+    source = MANAGER.read_text(encoding="utf-8")
+    body = source[source.index("parse_args() {") :]
+    body = body[: body.index("\n# ──") if "\n# ──" in body else len(body)]
+    arms = re.findall(r"^\s{12}([-\w|]+)\)", body, re.M)
+    seen, dupes = set(), set()
+    for arm in arms:
+        (dupes if arm in seen else seen).add(arm)
+    assert not dupes, f"duplicate dispatch arms: {sorted(dupes)}"
+
+
 # ── The short list ──────────────────────────────────────────────────────
 
 
