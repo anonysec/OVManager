@@ -132,7 +132,20 @@ def sandbox(tmp_path, gate_root: bool = False):
         shutil.copy(lib, app / "scripts" / "lib" / lib.name)
     (app / "install.sh").write_text('#!/bin/sh\necho "STUB-INSTALLER $@"\n', encoding="utf-8")
     (app / "install.sh").chmod(0o755)
-    env = {**os.environ, "OVM_APP_DIR": str(app)}
+
+    # A no-op `sleep` on PATH, for the same reason systemctl is stubbed: what
+    # these tests assert is which command a verb reaches, and `wait_health`
+    # polls `sleep 1` up to 12 times against a health endpoint that cannot
+    # answer in a sandbox. That was 12.5 seconds of real waiting per test, on
+    # two tests, for an endpoint that was never going to answer. Same shim
+    # technique, no production change.
+    stub_bin = tmp_path / "shim"
+    stub_bin.mkdir(exist_ok=True)
+    sleeper = stub_bin / "sleep"
+    sleeper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    sleeper.chmod(0o755)
+
+    env = {**os.environ, "OVM_APP_DIR": str(app), "PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"}
     return env, app
 
 

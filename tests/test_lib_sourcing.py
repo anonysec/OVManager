@@ -121,15 +121,23 @@ def _calls(name: str, path: Path) -> list[int]:
     Tolerates the forms a real call takes — bare, after && , after || , after a
     `|| {` group, after `;` — so `x || warn "..."` is caught as well as
     `warn "..."`. A commented line is not a call.
+
+    Written as a single-pass command-boundary match rather than the nested
+    quantifier this used to be. That pattern was
+    ``^\\s*(?:[^#\\n]*?(?:&&|\\|\\||\\{|;)\\s*)*NAME`` — a lazy ``*?`` inside a
+    ``*``, which backtracks exponentially in the number of separators on the
+    line. One 78-character line in common.sh with ten ``;`` took 0.93 seconds
+    to *fail*, and this single test was 43 of the suite's 175 seconds.
+
+    Comments are handled by cutting the line at the first ``#``, which is
+    precisely what ``[^#\\n]`` did, so the matches are identical.
     """
-    pat = re.compile(
-        r"^\s*(?:[^#\n]*?(?:&&|\|\||\{|;)\s*)*" + re.escape(name) + r'\s+["\']'
-    )
-    return [
-        i
-        for i, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-        if pat.search(ln)
-    ]
+    pat = re.compile(r"(?:^|[;&|{()\s])" + re.escape(name) + r'\s+["\']')
+    hits = []
+    for i, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if pat.search(ln.split("#", 1)[0]):
+            hits.append(i)
+    return hits
 
 
 def test_the_retired_output_helpers_are_gone():

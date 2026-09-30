@@ -19,7 +19,10 @@ backup_dir() {
     render_note "Backup ${label} → $file"
     tar -czf "$file" -C "$(dirname "$src")" "$base" 2>/dev/null \
         || render_warn "Backup failed for $src — continuing"
-    if [[ -f "$file" ]]; then step "Backup  $file"; fi
+    # render_ok, not the retired `step` — which was still being called here
+    # after the vocabulary moved, and got away with it because the test meant
+    # to catch exactly this was silently failing to match `then step`.
+    if [[ -f "$file" ]]; then render_ok "Backup  $file"; fi
     return 0
 }
 
