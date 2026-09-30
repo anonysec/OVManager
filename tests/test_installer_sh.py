@@ -48,6 +48,25 @@ def sh(*args: str, env: dict | None = None):
     )
 
 
+def _free_port() -> int:
+    """An unused TCP port on the loopback, for one sandboxed installer.
+
+    The kernel picks it from the ephemeral range, so two concurrent tests cannot
+    be handed the same one — which is what made `make test` fail at random when
+    every test in this file shared 20950.
+
+    The socket is closed before the port is used, so there is a window in which
+    something else could take it. That is the same trade the previous fixed port
+    made, except the window is now per-test and the pool is ~28k wide rather
+    than one value.
+    """
+    import socket as _socket
+
+    with _socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
 def sandbox(tmp_path):
     """A rewritten installer copy pointing at throwaway dirs.
 
@@ -85,8 +104,15 @@ def sandbox(tmp_path):
             # that inherited the real DEFAULT_PORT would pass or fail depending on
             # whether something happened to be listening on it. Two of these tests
             # read the developer's own panel as "port busy" and never reached the
-            # assertion they were written for. Fixed port, asserted free below.
-            .replace("DEFAULT_PORT=2095", "DEFAULT_PORT=20950")
+            # assertion they were written for.
+            #
+            # A *per-test* port, not a fixed one. 20950 was shared by all 103
+            # tests here, and one of them deliberately holds it open to test the
+            # busy-port path — so under `make test` (-n auto) the two collided at
+            # random and the loser failed with "Port 20950 is already in use"
+            # inside a test about password validation, blaming the wrong thing.
+            # The OS hands out an unused ephemeral port per test instead.
+            .replace("DEFAULT_PORT=2095", f"DEFAULT_PORT={_free_port()}")
         )
 
     src = rewrite(INSTALLER_PATH.read_text(encoding="utf-8"))
@@ -98,17 +124,6 @@ def sandbox(tmp_path):
     libdir.mkdir(parents=True, exist_ok=True)
     for lib in LIB_FILES:
         (libdir / lib.name).write_text(rewrite(lib.read_text(encoding="utf-8")), encoding="utf-8")
-    # Fail loudly rather than silently: if 20950 is in use the suite is
-    # measuring the host again.
-    import socket as _socket
-
-    probe = _socket.socket()
-    try:
-        probe.bind(("127.0.0.1", 20950))
-    except OSError as exc:  # pragma: no cover
-        raise AssertionError(f"sandbox port 20950 is in use: {exc}") from exc
-    finally:
-        probe.close()
     for tool in ("systemctl", "ufw", "firewall-cmd", "curl", *ACCOUNT_TOOLS):
         _write_shim(shim / tool, _SHIMS[tool])
     path = tmp_path / "install.sh"
@@ -1578,7 +1593,10 @@ def test_noninteractive_install_rejects_a_busy_port(tmp_path):
     import subprocess
 
     sb, _ = sandbox(tmp_path)
-    busy = 20950  # the sandbox's own default, so it is the one being validated
+    # Its own port, held open for the duration. It used to be the sandbox's
+    # fixed 20950, so every other test in this file was racing it — and under
+    # -n auto the loser failed here, or in a password test, at random.
+    busy = _free_port()
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", busy))
