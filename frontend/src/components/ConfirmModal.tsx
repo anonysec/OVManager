@@ -11,10 +11,9 @@ type ConfirmModalProps = {
   danger?: boolean;
 };
 
-/**
- * A portal-based confirmation dialog that reuses Modal for proper focus trap,
- * Escape-key handling, ARIA attributes, and backdrop click-to-cancel.
- */
+// Reuses Modal for the focus trap, Escape handling, ARIA attributes and
+// backdrop click-to-cancel.
+
 const ConfirmModal = ({
   open,
   onClose,

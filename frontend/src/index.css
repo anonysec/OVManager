@@ -5,18 +5,6 @@
    A CSS @import here would be render-blocking (html -> css -> font css -> font)
    and would duplicate that request — do not re-add it. */
 
-/* --- 🎨 COLOR TOKENS: Black & Orange, semantic + elevation scale ---
-   Dark is the default (:root). Light overrides via html[data-theme="light"].
-   styles.css aliases several of these to its own --bg/--panel set — keep
-   both in sync when touching surfaces. */
-
-/* --- Light theme: equally polished set --- */
-
-/* --- Ultra-dark theme (3x-ui pattern) --- */
-
-
-
-/* Selection follows the accent */
 ::selection {
   background: var(--accent-color-transparent);
   color: var(--accent-color);
@@ -235,9 +223,8 @@
   to { transform: rotate(360deg); }
 }
 
-/* Standalone spinner used inside buttons. Centered inline-block so the
-   preceding label keeps its width and does not jump. Uses currentColor as
-   the arc so it works on both accent and accent-contrast backgrounds. */
+/* inline-block so the preceding label keeps its width; currentColor so it
+   works on both accent and accent-contrast backgrounds. */
 .spinner {
   display: inline-block;
   width: 14px;
@@ -266,9 +253,7 @@
   position: relative;
 }
 
-/* Main content column: sits to the right of the fixed sidebar.
-   Margin mirrors the sidebar width (220px expanded / 72px rail) so
-   content never overlaps it; transitions smoothly with the rail. */
+/* Sits to the right of the fixed sidebar, which offsets it. */
 .ops-main-container {
   flex: 1;
   min-width: 0;
@@ -277,16 +262,13 @@
   min-height: 100vh;
 }
 
-/* Layout for .ops-main-content lives in styles.css (single owner).
-   The margin/padding block that used to be here was dead code: the sidebar
-   offset is applied to .ops-main-container, and styles.css reset this
-   element's margin with !important. */
+/* Layout for .ops-main-content lives in styles.css (single owner); a
+   margin/padding block here would only be reset by its !important. */
 .ops-main-content {
   flex: 1;
   background: var(--body-bg);
 }
 
-/* Topbar — fixed across the full viewport width, above sidebar */
 .ops-topbar-minimal {
   position: fixed;
   top: 0;
@@ -302,7 +284,6 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-/* Breadcrumb in topbar */
 .ops-breadcrumb {
   min-width: 0;
   overflow: hidden;
@@ -386,19 +367,17 @@
 }
 
 .icon-btn.has-alerts {
-  /* Show badge only - the icon-btn-badge spans color already */
   background: var(--danger-color);
   color: #fff;
   border: 1px solid var(--danger-color);
   border-radius: 9999px;
 }
 .icon-btn.has-alerts::after {
-  /* Red dot removed - count badge is sufficient */
+  /* The count badge is sufficient; no red dot. */
   display: none;
 }
 
 .icon-btn-badge {
-  /* Badge now shows inside the button itself when there are alerts */
   position: static;
   margin-inline-start: 4px;
   background: transparent;
@@ -465,28 +444,6 @@
 .notification-popover p:last-child {
   border-bottom: none;
 }
-
-/* --- Main Content --- */
-
-
-/* --- Dashboard Grid --- */
-
-
-/* Overview grid */
-
-/* Lower grid */
-
-/* --- Panels --- */
-
-/* Accent top border — consistent across ALL cards (x-ui pattern) */
-
-
-
-
-
-
-
-
 
 /* --- Toasts --- */
 .toast-stack {
@@ -556,7 +513,6 @@
   color: var(--success-color, #2fd276);
 }
 
-/* --- Tooltip (single implementation; see styles-premium.css .has-tip) --- */
 @media (max-width: 767.98px) {
   .ops-userbar {
     flex-wrap: wrap;
@@ -604,7 +560,6 @@
   
 }
 
-/* Empty state */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -776,7 +731,6 @@
 /* ============================================================
    SIDEBAR — collapsible rail (x-ui / PasarGuard pattern)
    ============================================================ */
-/* Sidebar with variable width based on icon size (36px vs 32px) */
 .ops-sidebar {
   position: fixed;
   top: 0;
@@ -798,8 +752,8 @@
   width: var(--sidebar-collapsed-width, 72px);
 }
 
-/* Brand block — the sidebar owns the product identity (the topbar repeats
-   it only on mobile, where the sidebar is a drawer). */
+/* The sidebar owns the product identity; the topbar repeats it only on
+   mobile, where the sidebar is a drawer. */
 .sidebar-brand {
   display: flex;
   align-items: center;
@@ -851,8 +805,8 @@
   display: none;
 }
 
-/* In rail mode the nav icons sit centered, so pull the knob tighter to the
-   edge to keep it clear of them. */
+/* The rail centers its nav icons, so the knob pulls tighter to the edge to
+   stay clear of them. */
 .ops-sidebar--collapsed .sidebar-toggle {
   inset-inline-end: 4px;
   width: 22px;
@@ -864,7 +818,6 @@
   align-items: center;
 }
 
-/* Mobile: full width */
 .ops-sidebar--mobile {
   transform: translateX(-100%);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
@@ -881,7 +834,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
   transform: translateX(100%);
 }
 
-/* Hamburger button (mobile) */
 .sidebar-hamburger {
   display: none;
   position: fixed;
@@ -916,8 +868,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
   z-index: 80;
 }
 
-/* Sidebar toggle button (expand/collapse) — a minimal ghost knob pinned to
-   the center-right edge of the sidebar. */
 .sidebar-toggle {
   position: absolute;
   top: 50%;
@@ -952,7 +902,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
   height: 14px;
 }
 
-/* Sidebar footer */
 .sidebar-footer {
   display: flex;
   flex-direction: column;
@@ -961,8 +910,7 @@ html[dir="rtl"] .ops-sidebar--mobile {
   margin-top: auto;
 }
 
-/* Mobile: show hamburger, hide sidebar by default. The drawer starts below
-   the topbar (which carries the brand there) and covers full width. */
+/* The drawer starts below the topbar, which carries the brand on mobile. */
 @media (max-width: 767.98px) {
   .sidebar-hamburger {
     display: flex;
@@ -1140,14 +1088,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
 }
 
 /* ═══════════════════════════════════════════
-   Bottom safe-area bar
-   Always visible — gives breathing room above
-   mobile browser chrome and on-screen keyboard.
-═══════════════════════════════════════════ */
-
-/* On mobile the bottom-nav is 66px; add extra clearance */
-
-/* ═══════════════════════════════════════════
    Topbar — override: full width, above sidebar
 ═══════════════════════════════════════════ */
 .ops-topbar-minimal {
@@ -1159,7 +1099,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
 @media (max-width: 767.98px) {
   .ops-sidebar {
     top: var(--topbar-h);
-    /* on mobile: overlay starts below topbar */
   }
   .ops-sidebar--mobile {
     top: var(--topbar-h);
@@ -1172,12 +1111,10 @@ html[dir="rtl"] .ops-sidebar--mobile {
   .ops-main-content,
   .ops-main-content--collapsed,
   .ops-main-content--mobile {
-    /* topbar height comes from --topbar-h; content starts below it on mobile */
     margin-inline: 0;
   }
 }
 
-/* Topbar brand — visible on all screen sizes */
 .topbar-brand {
   display: flex;
   align-items: center;
@@ -1192,4 +1129,4 @@ html[dir="rtl"] .ops-sidebar--mobile {
 
 .topbar-brand .brand-accent {
   color: var(--accent-color, var(--orange));
-}/*tail*/
+}

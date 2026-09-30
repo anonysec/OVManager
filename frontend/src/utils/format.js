@@ -1,8 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Shared display formatters.
-
 export function formatBytes(bytes) {
   const n = Number(bytes);
   if (!n || n <= 0) return '0 B';
@@ -11,8 +9,7 @@ export function formatBytes(bytes) {
   return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
 }
 
-// Total traffic for a user. Bytes in, human out. None/0 => dash.
-// (Backend stores the limit in bytes; 200GB => 214748364800, NOT unlimited.)
+// Backend stores the limit in bytes; 200GB => 214748364800, NOT unlimited.
 export function formatTraffic(bytes) {
   const n = Number(bytes);
   if (!n || isNaN(n)) return '—';

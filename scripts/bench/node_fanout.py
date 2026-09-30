@@ -15,8 +15,7 @@ What each measurement backs:
     thread in anyio's shared 40-thread limiter, and ~50 other call sites use
     that pool.
 
-Two traps this script exists to avoid, both of which produced a confident
-measurement of nothing:
+Two traps this script exists to avoid:
 
   1. A "blackhole" made with a bare ``BaseHTTPRequestHandler`` has no
      ``do_GET``, so it answers **501 immediately**. The client never waits and
@@ -59,8 +58,7 @@ class _NeverAnswers(BaseHTTPRequestHandler):
     """Accepts the request, then never writes a byte. A real blackhole.
 
     Do not replace this with a bare BaseHTTPRequestHandler: with no do_GET it
-    replies 501 straight away, which makes every probe "succeed" in
-    microseconds and the whole measurement meaningless.
+    replies 501 straight away, so every probe "succeeds" in microseconds.
     """
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
@@ -81,8 +79,7 @@ def _probe(port: int, timeout: float) -> None:
 
     Deliberately the real client rather than a socket: a bare TCP connect
     completes the moment the server accepts, so it returns instantly and never
-    waits out the timeout. That is the same class of mistake as the 501
-    blackhole, and it made this script's first draft measure nothing.
+    waits out the timeout — the same class of mistake as the 501 blackhole.
     """
     from backend.node.requests import NodeRequests
 
@@ -93,8 +90,7 @@ def _probe(port: int, timeout: float) -> None:
 def check_premise(port: int, timeout: float = 3.0) -> None:
     """Refuse to measure anything unless a real probe really does block.
 
-    This is trap (1), and it earned its place immediately: it failed on the
-    first draft of this file, which was measuring an instant TCP handshake.
+    This is trap (1): the first draft measured an instant TCP handshake.
     """
     t0 = time.monotonic()
     _probe(port, timeout)
@@ -146,10 +142,9 @@ async def measure_starvation(port: int, nodes: int, timeout: float, workers: int
     shared limiter with no cap, which is the pool ~50 other call sites use.
     "Bounded" is what the panel does now, behind the shared budget.
 
-    Measured *while* the fan-out is in flight, and on the same pool the
-    unrelated work uses. The first draft of this function did neither: it
-    drained the fan-out first and put it on a private executor, so it
-    reported 0.01s where 1.0.18 published 2.95s.
+    Sampled *while* the fan-out is in flight, and on the same pool the
+    unrelated work uses: draining it first on a private executor reported
+    0.01s where 1.0.18 published 2.95s.
     """
     from fastapi.concurrency import run_in_threadpool
 

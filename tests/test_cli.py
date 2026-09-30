@@ -428,7 +428,7 @@ def test_migration_refuses_a_unit_it_does_not_understand(tmp_path, monkeypatch):
 def test_migration_replaces_uv_run_because_it_cannot_run_unprivileged(tmp_path, monkeypatch):
     """`uv run` rebuilds the project, which needs write access to the tree.
 
-    Measured on the live box: as the service account it fails with "Cannot
+    As the service account it fails with "Cannot
     update time stamp of directory 'ovmanager.egg-info'", because uv re-resolves
     the project before starting it and writes into the install tree. The panel
     has therefore never actually run unprivileged before this — an earlier

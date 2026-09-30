@@ -12,7 +12,6 @@ from backend.operations.observability import live
 
 
 async def enforce_user_limits():
-    """Disable users who are expired or exceeded traffic."""
     db = next(get_db())
 
     try:
@@ -52,12 +51,8 @@ def _compute_session_delta(
     """Compute the traffic delta for one user on one node.
 
     Returns (delta_bytes, new_state) where new_state is the updated
-    per-session map (or legacy int total if sessions data unavailable).
-
-    The delta logic handles three cases:
-    1. Per-session diff — both current and previous are dicts (accurate path)
-    2. First-time sessions — sessions dict exists but prev is absent/legacy
-    3. Legacy fallback — no per-session data from the node
+    per-session map, or a legacy int total when the node sends no
+    per-session data.
     """
     if isinstance(sessions, dict) and isinstance(prev_state, dict):
         delta = 0
@@ -99,7 +94,6 @@ def _extract_username(client_name: str, node_name: str, known_names=None) -> str
 
 
 def _load_node_usage(user) -> dict:
-    """Safely parse the user's per-node usage map from JSON."""
     try:
         parsed = json.loads(user.node_usage or "{}")
         return parsed if isinstance(parsed, dict) else {}
@@ -138,14 +132,12 @@ def _apply_user_traffic(db, user_id: int, expected_used, expected_state: str, ne
 async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | None = None) -> bool:
     """Collect traffic data from a single node and update user records.
 
-    Billing prefers the node's lifetime `totals` (banked + live): it bills
-    growth of one cumulative counter per (node, user), so short sessions,
-    disconnect tails and offline-completed bytes are all captured, while
-    resets and daemon restarts can only shrink it (bills zero, never
-    negative). First sight (or post-reset) baselines without billing.
-    Nodes too old to send `totals` fall back to per-session deltas.
-
-    Returns True when the node's state was committed.
+    Billing prefers the node's lifetime `totals` (banked + live): growth of
+    one cumulative counter per (node, user) captures short sessions,
+    disconnect tails and offline-completed bytes, while resets and daemon
+    restarts can only shrink it (bills zero, never negative). First sight and
+    post-reset baseline without billing; nodes too old to send `totals` fall
+    back to per-session deltas.
     """
     usage = await get_users_used_traffic(node, db=db)
     if not usage:
@@ -227,10 +219,7 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
 async def check_user_used_traffic():
     """Poll all nodes for traffic usage and update user records.
 
-    Runs every 5 minutes as a background job. For each node, fetches the
-    current byte counters, computes per-session deltas (to avoid
-    double-counting on session disconnect/reconnect), and persists the
-    updated totals.
+    Runs every 5 minutes as a background job.
     """
     db = next(get_db())
 

@@ -1,17 +1,14 @@
 """Server-side live data: in-process event bus + node snapshot collector.
 
-Architecture (step 1 of the realtime plan):
+ONE background collector polls all nodes on a fixed interval and stores the
+result in an in-memory snapshot (per-user live connection counts, per-node
+reachability). HTTP handlers read the cache instead of fanning out to every
+node per request, so a dead node cannot stall the user list.
 
-- ONE background collector polls all nodes on a fixed interval and stores the
-  result in an in-memory snapshot (per-user live connection counts, per-node
-  reachability). HTTP handlers read the cache instead of fanning out to every
-  node per request — a dead node can no longer stall the user list.
-- Subscribers (SSE connections) receive lightweight invalidation events
-  ("users", "usage", "nodes") and the frontend refetches exactly like it did
-  during 8s polling. The wire payload is intentionally small.
-
-Everything is single-process in-memory (uvicorn runs with workers=1); there is
-no external broker to operate.
+Subscribers (SSE connections) receive lightweight invalidation events
+("users", "usage", "nodes") and the frontend refetches; the wire payload is
+intentionally small. Everything is single-process in-memory (uvicorn runs
+with workers=1); there is no external broker to operate.
 """
 
 import asyncio
@@ -62,7 +59,6 @@ class LiveBus:
             self._subscribers.discard(q)
 
     def has_subscribers(self) -> bool:
-        """True when at least one SSE client is connected."""
         with self._lock:
             return bool(self._subscribers)
 
@@ -143,17 +139,16 @@ def last_poll_ts() -> float:
 
 
 def publish(topic: str, data: dict | None = None) -> None:
-    """Publish an invalidation event to all live subscribers."""
     bus.publish(topic, data)
 
 
 async def collect_live_snapshot() -> None:
     """Poll every active node once and refresh the in-memory snapshot.
 
-    Runs as a single scheduled job (default every 10s). Replaces the previous
-    pattern where each HTTP page load and each browser tab queried all nodes
+    Runs as a single scheduled job (default every 10s), replacing the old
+    pattern where each page load and each browser tab queried all nodes
     directly. Node failures never propagate: a dead node simply contributes
-    zero sessions, exactly like the old per-request code tolerated errors.
+    zero sessions.
 
     Events are published only when the snapshot actually changed, so idle
     panels emit no SSE traffic beyond heartbeats.

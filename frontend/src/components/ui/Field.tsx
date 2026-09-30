@@ -16,15 +16,10 @@ type FieldProps = {
   children?: ReactNode;
 };
 
-/**
- * Field — label + control wrapper with hint/error wiring.
- *
- * The single child (an <input>, <select> or <textarea>) is cloned so the
- * generated id, aria-describedby and aria-invalid always match the rendered
- * label — no caller has to remember the plumbing. A `ui-input` class is merged
- * in so the control inherits the primitive's styling; pass your own className
- * and it is preserved.
- */
+// The single child is cloned so the generated id, aria-describedby and
+// aria-invalid always match the rendered label — no caller has to remember the
+// plumbing.
+
 const Field = ({
   label,
   id,

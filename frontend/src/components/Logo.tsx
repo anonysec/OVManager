@@ -1,12 +1,7 @@
-/**
- * OVManager logo. The accent colour is driven by `currentColor`, so callers
- * can drop the logo in any context and recolour it via `color: var(--accent)`
- * (or any other token). The dark inner detail uses a CSS variable that
- * resolves to the same dark ink in both light and dark themes.
- *
- * The globe is deliberately minimal (ring + meridian + equator + hub) so it
- * stays legible at 38px and below — finer detail turned to mud at menu size.
- */
+// Accent colour comes from `currentColor`, so callers recolour the logo via
+// `color: var(--accent)`. The globe is deliberately minimal (ring + meridian +
+// equator + hub): finer detail turned to mud at menu size.
+
 import { useTranslation } from 'react-i18next';
 
 const Logo = ({ size = 38, className = '' }) => {

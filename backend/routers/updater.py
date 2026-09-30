@@ -1,11 +1,10 @@
 """Panel update checker and one-click updater.
 
 The panel itself never downloads or installs anything: ``/status`` only reads
-GitHub's public release API (fail-soft — an unreachable GitHub must never turn
+GitHub's public release API (fail-soft, so an unreachable GitHub never turns
 the panel's health page into an error), and ``/run`` hands the work to the
-installer that already owns it (``bash /opt/ovmanager/install.sh update``,
-detached with ``start_new_session``). Docker installs have no installer inside
-the container, so ``/run`` answers with the exact host-side command instead of
+installer that already owns it. Docker installs have no installer inside the
+container, so ``/run`` answers with the exact host-side command instead of
 pretending it can update itself.
 """
 
@@ -202,12 +201,9 @@ def run_update(user: dict = Depends(require_owner)):
     """Start the installer in the background, or explain the host-side command."""
     install_sh = _app_dir() / "install.sh"
     in_container = _in_container()
-    # Since 1.0.25 the panel runs as an unprivileged service account, and the
-    # installer replaces the tree and restarts the unit — both of which need
-    # root. It used to be able to do that for itself precisely because it ran
-    # as root, which is the thing worth giving up. So on a native install the
-    # button now names the command instead of running it, the same shape Docker
-    # already took.
+    # The installer replaces the tree and restarts the unit: both need root, and
+    # the panel runs as an unprivileged service account, so it only runs the
+    # installer when it happens to have the privilege to do so.
     if not in_container and os.geteuid() == 0 and install_sh.is_file() and _has_systemctl():
         return _start_native_update(install_sh, user)
 
@@ -221,9 +217,8 @@ def run_update(user: dict = Depends(require_owner)):
         reason = "systemctl was not found, so the service cannot be restarted automatically."
     return ResponseModel(
         success=False,
-        # The docker hint keeps the restart alternative it always had; the
-        # native one names ovm, which is the command that actually replaces the
-        # tree and restarts the unit.
+        # The native hint names ovm, which is what replaces the tree and
+        # restarts the unit; Docker keeps the compose/restart pair.
         msg=(
             f"{reason} From the host, run: {_HOST_COMPOSE_CMD} (or {_HOST_RESTART_CMD})."
             if in_container

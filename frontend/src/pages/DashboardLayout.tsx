@@ -25,14 +25,7 @@ import './SetupWizard.css';
 const SETUP_DISMISS_KEY = 'ovmanager-setup-dismissed';
 const SETUP_CONFIG_DONE_KEY = 'ovmanager-setup-config-done';
 
-/**
- * Small Home-only banner that keeps the first-login wizard discoverable.
- *
- * It reads the same counters as the wizard and hides itself once the node and
- * user steps are done, once the operator dismisses it, or once an admin has
- * completed the manual "download a config" step. It never redirects — it only
- * links to /setup, and only renders on the Home route.
- */
+// Home-only nudge toward the first-login wizard; links to /setup, never redirects.
 type LayoutNotif = {
   id: string;
   level: string;
@@ -144,11 +137,9 @@ const DashboardLayout = () => {
     localStorage.setItem('ovmanager-lang', lang);
   }, [i18n.language]);
 
-  // Seed the operator display timezone once per layout mount (i.e. per full
-  // page load, not per tab switch). Owners read it from /server/settings;
-  // everyone else keeps the guarded localStorage cache (or UTC on a fresh
-  // browser) — the endpoint is owner-only. Re-renders once when the zone
-  // arrives after first paint so already-rendered dates reformat.
+  // Seed the display timezone once per layout mount, not per tab switch — the
+  // endpoint is owner-only, so everyone else keeps the localStorage cache.
+  // Re-renders once when the zone arrives so already-rendered dates reformat.
   const [, bumpTz] = useState(0);
   useEffect(() => {
     if (userRole !== 'owner') return;
@@ -253,16 +244,12 @@ const DashboardLayout = () => {
     return () => document.removeEventListener('keydown', onKey);
   }, [navigate, userRole, logout]);
 
-  // Notification bell: lightweight poll — avoids duplicating the heavy per-node
-  // status calls that ServerStats already makes on the same 30-second cycle.
-  // We only use the fast /nodes/ list (DB-side status flag) + /security/summary.
-  // Per-node reachability checks belong in ServerStats, not in the topbar.
+  // Notification bell: lightweight poll only — the heavy per-node reachability
+  // checks belong in ServerStats, not in the topbar.
   const loadNotifications = useCallback(async () => {
     try {
-      // allSettled: the bell must still surface node alerts when the security
-      // endpoint is down (and vice versa). With Promise.all a single failing
-      // request silently emptied the entire notification list — the worst
-      // possible failure mode for an alerting surface.
+      // allSettled, not all: a single failing endpoint silently emptied the
+      // whole list, so one outage hid every other alert.
       const res: any = await settle({
         users: apiClient.get('/users/'),
         // Nodes + security summary are owner-only: skip them as an admin.
@@ -280,8 +267,8 @@ const DashboardLayout = () => {
         ? (res.serverNotifs.data.data?.data ?? res.serverNotifs.data.data ?? [])
         : [];
       const out: LayoutNotif[] = [];
-      // Server-authoritative offline nodes first (single source; client DB check
-      // below only adds context detail, deduped by node name).
+      // Server-authoritative offline nodes first; the DB check below only adds
+      // context, deduped by node name.
       const serverOffline = new Set<string>();
       (Array.isArray(serverItems) ? serverItems : []).forEach((s: any) => {
         if (s?.type === 'node_offline' && s?.target) {
@@ -289,8 +276,7 @@ const DashboardLayout = () => {
           out.push({ id: `srv-node-${s.target}`, level: s.level || 'danger', title: s.title || t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: s.target }), detail: t('notifNodeUnreachableDetail', 'No API response from OVNode'), action: null, action_path: null });
         }
       });
-      // Surface nodes that are marked inactive in the DB (skip ones the
-      // server already reported so the bell doesn't double-count).
+      // Skip nodes the server already reported so the bell doesn't double-count.
       nodes.forEach((n: any) => {
         if (!n.status && !serverOffline.has(String(n.name))) {
           out.push({ id: `node-${n.id}`, level: 'warning', title: t('notifNodeDisabled', 'Node {{name}} is disabled', { name: n.name }), detail: t('notifNodeDisabledDetail', 'Marked offline in panel database'), action: null, action_path: null });
@@ -310,8 +296,8 @@ const DashboardLayout = () => {
           }
         }
       });
-      // Only real authentication/TLS failures are a danger. Policy rejects
-      // (disabled user, device limit) are information, not an incident.
+      // Policy rejects (disabled user, device limit) are information, not an
+      // incident — only auth/TLS failures are a danger.
       const authFailures = Number(security.auth_failures ?? security.auth_errors ?? 0);
       const policyRejects = Number(security.policy_rejects ?? 0);
       if (authFailures > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: authFailures }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
@@ -327,8 +313,7 @@ const DashboardLayout = () => {
     }
   }, [t, userRole]);
 
-  // Fixed cadence; toggling an alert type reloads immediately so the bell
-  // reflects the new filter without waiting for the next poll.
+  // Toggling an alert type reloads immediately rather than waiting for the next poll.
   useEffect(() => {
     let id: number | null = null;
     const start = (immediate: boolean = false) => {
@@ -351,11 +336,9 @@ const DashboardLayout = () => {
       ? t('darkMode', 'Dark mode')
       : t('systemMode', 'System default');
 
-  // Sync sidebar state across this layout and the Sidebar component so the
-  // main-CONTAINER margin matches the rendered sidebar width (220px / 72px
-  // collapsed) and reacts to collapse toggles + viewport resizes without
-  // prop-drilling. Mobile is a single breakpoint: innerWidth < 768, matching
-  // the 767.98px CSS rules — there is no separate tablet mode.
+  // Sync sidebar state with the Sidebar component without prop-drilling so the
+  // main container's margin matches the rendered sidebar width. Mobile is one
+  // breakpoint — innerWidth < 768, matching the 767.98px CSS rules.
   const getIsMobile = useCallback(() => (typeof window !== 'undefined' && window.innerWidth < 768), []);
   const computeCollapsed = useCallback(() => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile()), [getIsMobile]);
   const [collapsed, setCollapsed] = useState(computeCollapsed);

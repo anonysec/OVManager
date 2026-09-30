@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react';
 import { StatCard } from './ui';
 
-/**
- * UserStatCard — one user-count tile on the Users page.
- * Thin wrapper over the StatCard primitive so every stat in the panel
- * shares the same label/value/tone treatment.
- */
+// Thin wrapper over StatCard so every stat in the panel shares one
+// label/value/tone treatment.
+
 type UserStatCardProps = {
   icon: ReactNode;
   label: string;

@@ -21,18 +21,11 @@ type SectionBoundaryState = {
   resetKey: number;
 };
 
-/**
- * Per-section error boundary.
- *
- * The app-level ErrorBoundary is a last resort: when it trips the whole panel
- * is replaced by an error page. That is the wrong trade-off for a dashboard
- * made of independent widgets — a thrown error while rendering the world map
- * should not take down the users table next to it.
- *
- * SectionBoundary contains the blast radius to one panel and offers a local
- * retry that remounts only that subtree (via the `resetKey` bump), so the rest
- * of the page keeps its state and stays interactive.
- */
+// The app-level ErrorBoundary is a last resort that replaces the whole panel.
+// That is the wrong trade-off for a dashboard of independent widgets: a throw
+// while rendering the world map must not take down the users table beside it.
+// The local retry remounts only this subtree (via the `resetKey` bump), so the
+// rest of the page keeps its state.
 class SectionBoundaryInner extends Component<SectionBoundaryProps, SectionBoundaryState> {
   constructor(props: SectionBoundaryProps) {
     super(props);

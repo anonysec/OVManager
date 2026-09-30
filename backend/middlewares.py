@@ -1,8 +1,8 @@
 """HTTP middlewares: security headers, asset caching, CSRF guard.
 
-Plain ASGI (not Starlette ``BaseHTTPMiddleware``): these only inspect the
-request or rewrite response headers, so wrapping the body through a task
-group would add latency for nothing — notably on the SSE live stream.
+Plain ASGI, not Starlette ``BaseHTTPMiddleware``: these only inspect the request
+or rewrite response headers, so routing the body through a task group would add
+a task, a buffer and latency per request — notably on the SSE live stream.
 """
 
 from __future__ import annotations
@@ -39,12 +39,8 @@ _OVERRIDDEN_HEADERS = frozenset(
 class SecurityHeadersMiddleware:
     """Add hardening headers to every response.
 
-    Written as a plain ASGI middleware instead of Starlette's
-    ``BaseHTTPMiddleware``: that helper runs each request through a task group
-    that copies the response body through a queue, which costs a task and a
-    buffer per request and adds latency to streaming responses — notably the
-    SSE live stream. Rewriting headers on the ``http.response.start`` message
-    does the same job with no per-request allocation.
+    Also enforces the restore/update write lock: a state-changing request while
+    a restore or update is verifying gets a 503 rather than racing the database.
     """
 
     def __init__(self, app):
@@ -110,11 +106,8 @@ class AssetCacheMiddleware:
     ``/assets/*`` filenames carry a content hash and ``/fonts/*.woff2`` are
     frozen upstream releases, so both may be cached forever. Vite writes a
     ``.gz`` sibling next to every compressible file; when the client accepts
-    gzip the sibling is served directly (Content-Encoding set), roughly
-    halving first-load bytes with no runtime compression cost.
-
-    Plain ASGI like the other middlewares — this only inspects the request
-    path and rewrites response headers, no body copying.
+    gzip the sibling is served directly, roughly halving first-load bytes with
+    no runtime compression cost.
     """
 
     _IMMUTABLE = "public, max-age=31536000, immutable"
@@ -184,11 +177,7 @@ class AssetCacheMiddleware:
 
 
 class CSRFProtectionMiddleware:
-    """Reject state-changing requests that look like a cross-origin form post.
-
-    Plain ASGI for the same reason as :class:`SecurityHeadersMiddleware`: the
-    check only inspects the request, so wrapping the response buys nothing.
-    """
+    """Reject state-changing requests that look like a cross-origin form post."""
 
     _MUTATING_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
     _EXEMPT_PATHS = frozenset({"/api/login", "/api/logout", "/api/refresh"})

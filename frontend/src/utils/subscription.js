@@ -1,15 +1,11 @@
-// Subscription link builder — single source for the public /sub/{uuid} URL.
+// Single source for the public /sub/{uuid} URL. Backend contract
+// (routers/sub.py + routers/setting.py): GET /server/settings returns
+// subscription_url_prefix (already trailing-slashed) and subscription_path
+// (default "sub"); the public page is {prefix}{path}/{uuid}.
 //
-// Backend contract (routers/sub.py + routers/setting.py):
-//   GET /server/settings -> { subscription_url_prefix, subscription_path }
-//   subscription_url_prefix already ends with "/" (DB > env > request base)
-//   subscription_path defaults to "sub"
-//   Public page:  {prefix}{path}/{uuid}
-//   (Panel downloads use /api/nodes/ovpn/* instead.)
-//
-// Previous UserManagement.getSubscriptionLink built
-//   `${proto}://${domain}:${port}/${prefix}/${user.name}`
-// which was always '' (settings never loaded) and used name instead of uuid.
+// The previous UserManagement.getSubscriptionLink built
+// `${proto}://${domain}:${port}/${prefix}/${user.name}` — always '' because
+// settings were never loaded, and keyed by name instead of uuid.
 
 export function buildSubscriptionLink(settings, uuid) {
   if (!settings || !uuid) return '';

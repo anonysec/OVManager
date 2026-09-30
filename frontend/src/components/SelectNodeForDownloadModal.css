@@ -1,5 +1,4 @@
-/* Select-node download modal — small polish on top of the existing
-   .node-pick-* skin in styles.css. */
+/* On top of the existing .node-pick-* skin in styles.css. */
 
 .node-pick-item:focus-visible {
   outline: none;

@@ -87,7 +87,7 @@ def test_lib_layout():
 
 
 def test_no_helper_is_defined_in_two_files():
-    """What the deleted parity test measured, now asserted directly."""
+    """What the deleted parity test covered, now asserted directly."""
     origin: dict[str, str] = {}
     for path in (LIB_DIR / lib for lib in LIB_NAMES):
         for name in _defined(path):

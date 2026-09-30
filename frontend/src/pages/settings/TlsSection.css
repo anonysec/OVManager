@@ -1,8 +1,7 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* TLS settings section. Colours come only from tokens.css, so both themes
-   are covered without extra rules. Namespaced `ts-` to avoid collisions. */
+/* TLS settings section. Namespaced `ts-`. */
 
 .ts-status-row {
   display: flex;

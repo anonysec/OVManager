@@ -2,21 +2,13 @@
 
 Fed by the 5-minute metrics collector: every tick passes its node snapshot
 rows to :func:`check_node_alerts`, which compares each node's ``reachable``
-flag with the remembered state and messages the owner once per outage.
+flag with the remembered state.
 
-Design notes
-------------
-* State is in-memory only. A panel restart forgets it, so the first tick
-  after a restart only seeds state and never alerts — no restart spam.
-* An outage is announced once: a node still down on later ticks is not
-  re-announced, but a *failed* send is retried on the next tick (nothing
-  marks the outage announced until Telegram accepts the message).
-* A per-node cooldown keeps a flapping node from paging the owner every
-  5 minutes: a DOWN alert within the window after the previous one is
-  dropped (the flap up in between stays quiet too, since it was never
-  announced).
-* All sending goes through ``notifier.send_telegram``: it no-ops when the
-  bot is disabled or unconfigured and never raises.
+State is in-memory only, so the first tick after a restart only seeds state
+and never alerts. An outage is announced once, but a *failed* send is retried
+on the next tick — nothing marks the outage announced until Telegram accepts
+the message. A per-node cooldown keeps a flapping node from paging the owner
+every 5 minutes.
 """
 
 from __future__ import annotations
@@ -40,7 +32,7 @@ def check_node_alerts(rows: list[dict], *, notify: bool = True, now: float | Non
     ``reachable``). State is always updated — even when ``notify`` is off —
     so re-enabling alerts later does not replay stale transitions; an
     ongoing outage is still announced once when alerts get re-enabled.
-    Returns the number of Telegram messages sent. Never raises.
+    Returns the number of Telegram messages sent.
     """
     sent = 0
     ts = time.time() if now is None else now

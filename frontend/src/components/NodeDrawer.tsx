@@ -9,14 +9,10 @@ import { formatBytes } from '../utils/format';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
 
-/**
- * NodeDrawer — slide-over detail panel for one node.
- *
- * Tabs: Overview (health/version/TLS/live users), Settings (DNS, IPv6,
- * extra ports), Actions (restart/update/download/enable/delete) and Logs.
- * Settings and Actions always print the backend's own message, because the
- * node's answer is the only reliable source of what actually happened.
- */
+// Slide-over detail panel for one node. Settings and Actions always print the
+// backend's own message: the node's answer is the only reliable record of what
+// actually happened.
+
 
 const apiError = (e: any, fallback: any) => {
   const detail = e?.response?.data?.detail;
@@ -506,7 +502,7 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
 
 const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
   const mode = status?.tls_mode;
-  // 'unknown' = never connected (offline or legacy response): stay silent,
+  // 'unknown' = never connected (offline or legacy response). Stay silent —
   // the Online/Offline cell already covers it.
   if (!mode || mode === 'verified' || mode === 'unknown') return null;
   if (mode === 'plain') {
@@ -527,9 +523,9 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
 
 const CertExpiryChip = ({ expiry }: { expiry?: any }) => {
   const { t } = useTranslation();
-  // Intentionally time-dependent display value ("expires in N days" as of
-  // this render). Never fed back into state, so no render-loop risk —
-  // exempt from react-hooks/purity by decision, not by accident.
+  // Time-dependent display value ("expires in N days" as of this render),
+  // never fed back into state, so there is no render-loop risk. The purity
+  // exemption is deliberate.
   // eslint-disable-next-line react-hooks/purity
   const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
   const cls = days < 0 ? 'is-expired' : days <= 7 ? 'is-critical' : days <= 30 ? 'is-soon' : 'is-ok';

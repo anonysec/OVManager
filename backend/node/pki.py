@@ -5,9 +5,6 @@ The panel stores the node's certificate (PEM) the first time it sees it
 verifies HTTPS against exactly that certificate. A self-signed node is
 therefore as safe as a Let's Encrypt one — the unverified-TLS fallback
 disappears once a pin exists.
-
-Certificate files live under ``DATA_DIR/node-certs/`` (0600), one per
-node id, regenerated when the pinned PEM changes.
 """
 
 from __future__ import annotations

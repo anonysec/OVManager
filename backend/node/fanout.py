@@ -2,23 +2,18 @@
 
 Node calls block on socket timeouts, so a fan-out of unreachable nodes
 holds a thread for the whole timeout. Sharing the application's thread pool
-with them means a large enough fan-out takes every thread in it, and
-everything else that needs a thread waits behind them — measured on this
-class of box: eight unrelated operations that normally take 53ms took
-**2.95s** while 40 unreachable nodes were being probed, and 6.00s at 80.
-Fifty-one other call sites use the same pool (sync, geolocation, node
-operations), so that is the whole application queueing behind a dead node.
+with them means a large enough fan-out takes every thread in it and
+everything else that needs a thread waits behind them: one dead-node sweep
+turned eight unrelated 53ms operations into 2.95s.
 
 ops.py bounded its own fan-outs at 20; that limit was never applied to the
 fan-outs that run on a page render, which is where the multiplication
-actually happens. It lives here now so every site shares one budget rather
-than each having its own.
+actually happens. It lives here now so every site shares one budget.
 """
 
 import asyncio
 
-# The project's existing judgement, kept deliberately: half of anyio's
-# 40-thread limiter, so node RPCs can never take all of it.
+# Half of anyio's 40-thread limiter, so node RPCs can never take all of it.
 NODE_FANOUT_LIMIT = 20
 
 _semaphore: asyncio.Semaphore | None = None
@@ -48,23 +43,15 @@ async def run_bounded(fn, *args):
 
 
 # A request that renders a page must not wait on every node, however many there
-# are or however dead they are. Measured on this class of box (six-thread pool):
+# are or however dead they are. The worst case is a node just added and
+# unreachable: the short 3s timeout only applies once a node has been *recorded*
+# as broken, which cannot happen before it has been tried, so one misconfigured
+# node made the whole user list take half a minute.
 #
-#   dead nodes   1 -> 30.1s     healthy nodes, 50ms each   20 -> 1.7s
-#             20 -> 30.1s                                    80 -> 4.1s
-#             80 -> 66.2s                                   200 -> 11.5s
-#
-# The dead-node numbers are the problem, and the single-node case is the worst
-# of them: a node that has just been added and is unreachable costs a full 30s,
-# because the short 3s timeout only applies once a node has been *recorded* as
-# broken, which cannot happen before it has been tried. One misconfigured node
-# made the whole user list take half a minute.
-#
-# 10s sits well above the healthy cases that matter and well below the
-# pathological ones. Past roughly a hundred healthy nodes on a small box the
-# request now returns partial counts instead of waiting, and the background
-# collector — which has no deadline — fills in the rest within one cycle. A
-# page that renders with most of its numbers beats a page that never renders.
+# 10s sits above the healthy cases that matter and below the pathological ones.
+# Past roughly a hundred healthy nodes the request returns partial counts
+# instead of waiting, and the background collector — which has no deadline —
+# fills in the rest within one cycle.
 REQUEST_FANOUT_DEADLINE = 10.0
 
 
@@ -79,9 +66,8 @@ class FanoutDeadline(Exception):
 
 
 # Tasks still running past the deadline. Held so they are not garbage collected
-# mid-flight: a task that is collected while awaiting a threadpool call can take
-# the thread's result with it, and the semaphore slot is only released when the
-# coroutine unwinds.
+# mid-flight: a task collected while awaiting a threadpool call can take the
+# thread's result with it.
 _inflight: set = set()
 
 
@@ -95,14 +81,12 @@ async def gather_nodes(calls, deadline: float = REQUEST_FANOUT_DEADLINE):
 
     Returns one result per call, in order. Anything that finished is its value,
     anything that raised is the exception, and anything still running when the
-    deadline passed is a :class:`FanoutDeadline` — so a caller that ignores
-    exceptions gets the nodes that answered and no worse.
+    deadline passed is a :class:`FanoutDeadline`.
 
     Unfinished calls are deliberately *not* cancelled. The work is already
     inside a blocking thread that cancellation cannot reach, and dropping the
     await would release its semaphore slot while that thread is still occupied,
-    quietly breaking the cap this module exists to enforce. They are left to
-    finish, still counted against the budget.
+    breaking the cap this module exists to enforce.
     """
     tasks = [asyncio.ensure_future(run_bounded(fn)) for fn in calls]
     if not tasks:
@@ -126,12 +110,11 @@ async def gather_nodes(calls, deadline: float = REQUEST_FANOUT_DEADLINE):
 # scheduled jobs live too: create_panel_backup, push_offsite,
 # send_backup_document, run_daily_alerts, and the two prunes. That pool is
 # min(32, cpu_count + 4) — six workers on a two-core box — so probing every
-# node can take all of them and a backup stops running. A backup that cannot
-# run is worse than a live count that lags.
+# node can take all of them and a backup stops running.
 #
 # Deliberately a fixed number rather than a share of the pool: the pool's
-# width scales with cpu_count, and the constraint that matters is leaving
-# room for the scheduled work on any machine.
+# width scales with cpu_count, and what matters is leaving room for the
+# scheduled work on any machine.
 BACKGROUND_FANOUT_LIMIT = 4
 
 _background: asyncio.Semaphore | None = None

@@ -20,19 +20,17 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-    // First visit: follow the OS preference. Legacy "ultra" values are
-    // intentionally discarded so the panel only exposes light/dark modes.
+    // First visit follows the OS preference. Legacy "ultra" values are
+    // discarded so the panel only exposes light/dark modes.
     return 'system';
   });
 
   const [transitioning, setTransitioning] = useState(false);
   const isInitialMount = useRef(true);
 
-  // Apply on mount and whenever theme changes
   useEffect(() => {
     const root = document.documentElement;
 
-    // Set the theme attribute
     if (theme === 'system') {
       const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
       root.dataset.theme = isLight ? 'light' : 'dark';
@@ -40,7 +38,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       root.dataset.theme = theme;
     }
 
-    // Add transition class for smooth theme switching (only on user toggle, not initial mount)
+    // Smooth switch on user toggle only, never on initial mount.
     if (!isInitialMount.current) {
       root.classList.add('theme-transition');
       requestAnimationFrame(() => {
@@ -52,7 +50,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     isInitialMount.current = false;
   }, [theme]);
 
-  // Listen for system theme changes when in 'system' mode
   useEffect(() => {
     if (theme !== 'system') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
@@ -67,14 +64,12 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const safeTheme: Theme = (['system', 'light', 'dark'] as string[]).includes(next) ? (next as Theme) : 'system';
     if (safeTheme === theme) return;
 
-    // Trigger transition class for smooth animation
     setTransitioning(true);
     document.documentElement.classList.add('theme-transition');
 
     setThemeState(safeTheme);
     localStorage.setItem(THEME_KEY, safeTheme);
 
-    // Apply immediately for visual feedback
     if (safeTheme === 'system') {
       const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
       document.documentElement.dataset.theme = isLight ? 'light' : 'dark';
@@ -82,7 +77,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       document.documentElement.dataset.theme = safeTheme;
     }
 
-    // Allow transition to complete
     requestAnimationFrame(() => {
       setTimeout(() => {
         setTransitioning(false);
@@ -91,7 +85,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [theme]);
 
-  // Three choices: system default, light, and dark.
   const cycleTheme = useCallback(() => {
     const cycle = ['system', 'light', 'dark'];
     const idx = cycle.indexOf(theme);
@@ -99,7 +92,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     setTheme(next);
   }, [theme, setTheme]);
 
-  // Keep every open tab in sync
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === THEME_KEY && e.newValue) {

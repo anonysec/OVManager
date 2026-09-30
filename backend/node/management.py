@@ -1,7 +1,7 @@
 """Node CRUD operations — add/update/delete nodes and users.
 
-Handles all direct interactions with OVNode instances for user management:
-creating, activating/deactivating, deleting users, and downloading configs.
+Direct interactions with OVNode instances: creating, activating and
+deactivating users, deleting them, and downloading configs.
 """
 
 import asyncio
@@ -55,7 +55,6 @@ def node_version_compat(agent_version: object) -> dict:
 
 
 async def _run_bounded(fn, *args):
-    """Run one blocking node call in the threadpool under the fan-out cap."""
     return await run_bounded(fn, *args)
 
 
@@ -73,7 +72,6 @@ async def _resolve_pinned_ca(request: NodeCreate) -> str | None:
 
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
-    """Add a new node: validate connectivity, geolocate, persist to DB."""
     geo = await run_in_threadpool(geolocate, request.address)
     if not request.use_tls:
         logger.warning(
@@ -201,16 +199,14 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
 
 
 async def delete_node_handler(node_id: int, db: Session) -> bool:
-    """Delete a node from the panel."""
     from backend.node.connection import forget
 
     crud.delete_node(db, node_id)
-    forget(node_id)  # drop the cached transport
+    forget(node_id)
     return True
 
 
 async def list_nodes_handler(db: Session) -> list:
-    """List all nodes with their current status."""
     nodes = crud.get_all_nodes(db)
     result = []
     for n in nodes:
@@ -234,7 +230,6 @@ async def list_nodes_handler(db: Session) -> list:
 
 
 async def get_node_status_handler(node_id: int, db: Session):
-    """Get detailed status of a specific node."""
     node = crud.get_node_by_id(db, node_id)
     if not node:
         return None
@@ -273,7 +268,7 @@ async def get_node_status_handler(node_id: int, db: Session):
 async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, user_id: int = None):
     """Create a user on every active node concurrently.
 
-    Uses numeric user ID as the OpenVPN CN and node-side identity.
+    The numeric user ID is the OpenVPN CN and the node-side identity.
     """
     nodes = crud.get_active_nodes(db)
     uid = str(user_id) if user_id else None
@@ -312,7 +307,6 @@ async def change_user_status_on_all_nodes(
 
 
 async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, user_id: int = None) -> bool:
-    """Push max_login limit to every active node. Uses numeric user ID."""
     nodes = crud.get_active_nodes(db)
     uid = str(user_id) if user_id else name
     tasks = []
@@ -326,7 +320,6 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
 
 
 async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session):
-    """Download a user's .ovpn config from a specific node. Uses numeric user ID."""
     node = crud.get_node_by_id(db, node_id)
     if not node:
         return None
@@ -336,7 +329,6 @@ async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session
 
 
 async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> StreamingResponse | None:
-    """Download all users' .ovpn configs from a node as a ZIP file. Uses numeric user IDs."""
     node = crud.get_node_by_id(db, node_id)
     if not node:
         return None

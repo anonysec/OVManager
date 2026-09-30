@@ -1,8 +1,7 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* HealthCenter — page-scoped layout only; all primitives come from
-   components/ui and every colour from tokens.css. */
+/* HealthCenter — page-scoped layout only; primitives come from components/ui. */
 
 .health-page {
   max-width: var(--content-max);

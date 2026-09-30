@@ -1,11 +1,9 @@
 """Password hashing with bcrypt.
 
-``passlib`` was dropped as a dependency: its last release was in 2020, it is
-unmaintained, and it breaks outright against ``bcrypt >= 4.1`` (it reads the
-removed ``bcrypt.__about__`` and then feeds a >72-byte probe password to
-``hashpw``, which now raises instead of truncating). Depending on an abandoned
-shim in front of the password database is not a good supply-chain position, so
-the thin wrapper below talks to ``bcrypt`` directly.
+``passlib`` was dropped: its last release was in 2020 and it breaks outright
+against ``bcrypt >= 4.1`` (it reads the removed ``bcrypt.__about__`` and then
+feeds a >72-byte probe password to ``hashpw``, which now raises instead of
+truncating).
 
 Compatibility notes:
 

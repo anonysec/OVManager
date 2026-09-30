@@ -69,7 +69,7 @@ async def test_live_stream_sends_ready_event():
     """Drive the real ASGI app (full middleware stack) with a raw scope.
 
     TestClient/httpx streaming deadlocks on infinite generators in some
-    Starlette versions, so we collect ASGI messages directly: response start,
+    Starlette versions, so ASGI messages are collected directly: response start,
     then the first body chunk must be the SSE "ready" frame. An
     http.disconnect after the first chunk terminates the stream cleanly.
     """

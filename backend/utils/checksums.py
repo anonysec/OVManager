@@ -1,8 +1,8 @@
 """File digests for backup integrity.
 
-``backup_bundle`` and ``telegram_backup`` each carried their own chunked
-SHA-256 — same algorithm, same 1 MiB chunk, two names. These digests decide
-whether a bundle is "verified", so one implementation is the point.
+These digests decide whether a bundle counts as "verified", so backup_bundle
+and telegram_backup share one implementation rather than each carrying a
+private chunked SHA-256.
 """
 
 from __future__ import annotations

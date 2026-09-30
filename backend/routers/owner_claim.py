@@ -8,10 +8,6 @@ it. The account does not exist until the browser posts that key, so there is
 nothing for scrollback to leak and no plaintext credential in any file. The
 password this endpoint writes is a bcrypt hash in the ``admins`` table, never
 ``.env``.
-
-The key file is read from the panel's data dir on every attempt and deleted
-when the claim succeeds, so ``ovm owner-claim`` can mint a replacement without
-restarting anything.
 """
 
 from __future__ import annotations
@@ -118,7 +114,7 @@ def _note_failure(key: str) -> None:
 
 @router.get("/owner-claim")
 async def claim_status(db: Session = Depends(get_db)):
-    """Whether a claim is still possible. No secret is disclosed."""
+    """Whether a claim is still possible, without disclosing the key."""
     claimed = owner_is_claimed(db)
     key_present = False
     if not claimed:
@@ -151,7 +147,7 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No claim key on this host. Run: ovm owner-claim",
         )
-    # compare_digest, not ==: a timing oracle on the key is not a gift to give.
+    # compare_digest, not ==: a timing oracle on the claim key.
     if not hmac.compare_digest(expected, payload.claim_key.strip()):
         _note_failure(rate)
         _audit(db, request, "auth.claim_fail", "Bad claim key")

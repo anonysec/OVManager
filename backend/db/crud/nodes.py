@@ -15,7 +15,6 @@ def get_all_nodes(db: Session):
 
 
 def get_active_nodes(db: Session):
-    """Return only nodes with status=True."""
     return db.query(Node).filter(Node.status == True).all()  # noqa: E712
 
 

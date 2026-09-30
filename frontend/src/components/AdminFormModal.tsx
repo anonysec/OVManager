@@ -5,9 +5,9 @@ import Modal from './Modal';
 import Button from './ui/Button';
 import Field from './ui/Field';
 
-// Unified add/edit admin form. mode="create" (admin=null) or mode="edit".
-// Replaces AddAdminModal + EditAdminModal, which were identical except for
-// title/endpoint and username-disabled + password-required in edit.
+// mode="create" (admin=null) or mode="edit". Replaces AddAdminModal and
+// EditAdminModal, which differed only in title/endpoint and in edit's
+// username-disabled + password-required.
 const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOpen?: any; onClose?: any; onSaved?: any }) => {
   const isEdit = !!admin;
   const { t } = useTranslation();

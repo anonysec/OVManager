@@ -8,13 +8,9 @@ import { Button, Field } from '../components/ui';
 // The pre-auth card, shared with the login page: same shell, same classes.
 import './LoginPage.css';
 
-/**
- * First-run owner claim.
- *
- * The installer prints a one-time claim key and no password. This posts that
- * key with the password the operator chooses, which creates the owner row; the
- * key is spent by the attempt.
- */
+// First-run owner claim: the installer prints a one-time key and no password.
+// Posting it with the chosen password creates the owner row; the key is spent
+// by the attempt.
 const ClaimPage = () => {
   const [claimKey, setClaimKey] = useState('');
   const [password, setPassword] = useState('');

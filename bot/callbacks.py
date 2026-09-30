@@ -1,10 +1,9 @@
 """Typed callback registry for inline-button actions.
 
-Replaces the linear prefix if-chain: each ``prefix:`` maps to exactly one
-handler. ``build_callback`` guards Telegram's 64-byte ``callback_data``
-limit at construction time instead of failing silently at send time.
-``*_arg`` helpers validate the argument half in one place so handlers
-never slice raw indexes or int() untrusted strings directly.
+Each ``prefix:`` maps to exactly one handler. ``build_callback`` guards
+Telegram's 64-byte ``callback_data`` limit at construction time instead of
+failing silently at send time. The ``*_arg`` helpers validate the argument half
+in one place, so handlers never slice raw indexes or int() untrusted strings.
 """
 
 from __future__ import annotations

@@ -9,9 +9,8 @@ Design:
   expect from a session, without any refresh-token machinery.
 - Sliding updates are throttled to at most one row write per
   ``TOUCH_THROTTLE_SECONDS`` per session so read-heavy pages stay cheap.
-- Currency of role membership is still enforced by callers
-  (``role_is_current``), and deleting an admin revokes their sessions
-  outright (see ``revoke_user_sessions``).
+- Role membership is re-checked by callers (``role_is_current``); deleting an
+  admin revokes their sessions outright (``revoke_user_sessions``).
 """
 
 import hashlib

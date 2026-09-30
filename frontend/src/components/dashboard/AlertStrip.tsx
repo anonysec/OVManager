@@ -1,11 +1,9 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * AlertStrip — horizontal pill list of actionable alerts.
- * Each pill deep-links to its target. Past two items collapse into a
- * "+N more" overflow pill that opens the first overflow target.
- */
+// Past two items collapse into a "+N more" pill that opens the first
+// overflow target.
+
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiAlertTriangle, FiCheckCircle } from 'react-icons/fi';

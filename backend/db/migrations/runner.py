@@ -48,9 +48,8 @@ def migrate(db: Session | None = None) -> int:
                 _seed_settings(session)
                 _seed_owner_and_first_user(session)
                 # The fresh path stamps itself at HEAD and skips STEPS, so v16
-                # would never run here — meaning a manual install (git clone →
-                # .env → run) got an owner row with an empty password and no
-                # way in. The import is idempotent and no-ops without a hash.
+                # would never run here and a manual install (git clone → .env →
+                # run) got an owner row with no password and no way in.
                 _import_owner_credential(session)
                 _stamp(session, SCHEMA_VERSION, "initial schema")
                 session.commit()
@@ -103,11 +102,10 @@ def migrate(db: Session | None = None) -> int:
 
 
 def verify_schema(db: Session | None = None) -> list[str]:
-    """Return human-readable problems describing how the DB differs from the models.
+    """Human-readable problems describing how the DB differs from the models.
 
-    An empty list means the schema matches ``models.py``. Used by the test
-    suite and by ``main.py --check-schema`` so drift is caught at build time
-    rather than by a production query failing.
+    An empty list means the schema matches ``models.py``. Used by the test suite
+    and by ``main.py --check-schema``, so drift shows up before a query breaks.
     """
     own_session = db is None
     session = db or SessionLocal()
@@ -135,15 +133,10 @@ def _self_check() -> int:
     """Build, downgrade, then re-upgrade a throwaway database and check it.
 
     Comparing a fresh database against the models would be a tautology — the
-    fresh schema *is* created from the models. The failure mode that actually
-    matters is an **existing** database that a new release has to upgrade: a
-    model gains a column, no migration is written for it, and installs that
-    already have the table keep running without it until a query breaks.
-
-    So this simulates exactly that. It builds the schema, drops a couple of
-    columns and the version stamp to fake an older install, then runs
-    ``migrate()`` again and requires the result to match the models. Nothing
-    the operator owns is touched.
+    fresh schema *is* created from the models. The failure mode that matters is
+    an **existing** database a new release has to upgrade: a model gains a
+    column, no migration is written, and live installs keep running without it
+    until a query breaks. So the columns are dropped and ``migrate()`` re-run.
     """
     import tempfile
     from pathlib import Path
@@ -194,7 +187,6 @@ def _self_check() -> int:
 
 
 def _apply() -> int:
-    """Apply migrations to the configured database."""
     version = migrate()
     problems = verify_schema()
     print(f"database is at schema version {version}")

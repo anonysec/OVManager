@@ -7,19 +7,16 @@ Run from the repository root:
 
 What it backs:
 
-  * **69.5 MB** — the resident memory the second interpreter costs. The work
-    was scoped at about 50 MB; the measurement is what it is.
+  * **69.5 MB** — the resident memory the second interpreter costs.
   * **31.8s blocked / 9 ms worst-case /health** — that a scheduled job which
     wedges for a long time no longer stops the panel answering.
 
 The isolation measurement runs the *real* job function
 (``check_user_used_traffic``) against a node that accepts the connection and
 then never answers, while a real uvicorn serves the panel. A synthetic slow
-HTTP server would prove nothing, and two earlier attempts at this measurement
-were wrong in exactly that way: once because the job was called with the wrong
-signature and raised immediately, and once because the "blackhole" replied 501
-at once. The premise checks below exist for that reason and both fire before
-anything is reported.
+HTTP server would prove nothing: an earlier version called the job with the
+wrong signature and timed a crash, and a "blackhole" with no ``do_GET``
+replies 501 at once. The premise checks below fire before anything is reported.
 """
 
 from __future__ import annotations
@@ -198,8 +195,7 @@ def main() -> int:
                 sys.executable,
                 "-c",
                 # Takes no arguments: it opens its own session. Passing one made
-                # it raise on the first line, and the first run of this
-                # measurement timed a crash rather than a wedge.
+                # it raise on the first line, timing a crash rather than a wedge.
                 f"import sys, asyncio; sys.path.insert(0, {str(REPO_ROOT)!r});"
                 "from backend.operations.billing.daily import check_user_used_traffic;"
                 "asyncio.run(check_user_used_traffic()); print('JOB-DONE')",
@@ -223,8 +219,8 @@ def main() -> int:
 
         if "JOB-DONE" not in (out or ""):
             raise SystemExit(f"the job did not complete, so nothing was measured: {out!r}")
-        # Without this the script would happily "prove" isolation against a
-        # job that never blocked, which is how two earlier runs were wrong.
+        # Without this the script would "prove" isolation against a job that
+        # never blocked, which is how an earlier run was wrong.
         if duration < 8.0:
             raise SystemExit(
                 f"PREMISE FAILED: the job only ran {duration:.1f}s, so it never wedged. "

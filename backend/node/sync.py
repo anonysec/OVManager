@@ -1,8 +1,6 @@
 """Background sync operations — traffic collection, limit pushing, cleanup.
 
-These functions are called by the APScheduler background jobs and by
-maintenance endpoints. They coordinate multi-node data collection and
-reconciliation.
+Called by the APScheduler jobs and by maintenance endpoints.
 """
 
 import asyncio
@@ -18,7 +16,6 @@ from backend.node.requests import node_client
 
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:
-    """Fetch traffic usage data from a single node."""
     nr = node_client(node)
     return await run_in_threadpool(nr.get_usage) or {}
 
@@ -29,7 +26,6 @@ _last_pushed_limits: dict[tuple[int, int], int] = {}
 def _push_limits_batch(node, pairs: list[tuple[object, object, int]]) -> dict:
     """Push one chunk of (user, cn, max_logins) to a node via /sync/users.
 
-    Returns per-node summary: applied/failed counts and a success flag.
     Falls back to per-user PUTs only when the node predates the bulk
     route (404) — keeps upgrades from regressing the sweep.
     """
@@ -59,10 +55,9 @@ async def sync_all_user_limits(db: Session) -> dict:
     timeouts every 30 minutes. They re-sync on next successful contact
     (add/update flows) or via the manual maintenance sync-limits endpoint.
 
-    Transport: one bulk POST /sync/users per node per sweep (chunked at
-    500) instead of one PUT per user per node — N×M → N requests. The
-    per-pair cache still tracks exact (node,user) successes so failures
-    stay dirty; pairs absent from desired (deleted users/nodes) drop out.
+    One bulk POST /sync/users per node per sweep (chunked at 500) instead
+    of one PUT per user per node: N×M → N requests. The per-pair cache
+    still tracks exact (node,user) successes so failures stay dirty.
     """
     global _last_pushed_limits
     users = crud.get_all_users(db)
@@ -121,9 +116,8 @@ async def sync_all_user_limits(db: Session) -> dict:
 
 async def clean_stale_sessions_all_nodes(db: Session) -> dict:
     """Remove stale markers, including dead ones for users that also hold a
-    healthy session (previously skipped forever: one stuck dead marker +
-    one live session read as "full"). Live sessions are never touched —
-    those CNs get the selective cleanup, the rest the full disconnect."""
+    healthy session (previously skipped forever: one stuck dead marker plus
+    one live session read as "full")."""
     nodes = crud.get_all_nodes(db)
     results = []
 

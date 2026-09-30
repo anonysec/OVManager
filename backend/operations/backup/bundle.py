@@ -1,9 +1,8 @@
 """Versioned, verifiable OVManager backup bundles.
 
-A bundle is a gzip-compressed tar archive with an ``.ovmbak`` suffix.  The
-format deliberately starts small: a consistent SQLite snapshot plus a
-manifest and checksums.  New members can be introduced by a future format
-version without making callers guess from filenames.
+A bundle is a gzip-compressed tar archive with an ``.ovmbak`` suffix holding
+a consistent SQLite snapshot plus a manifest and checksums. New members can
+arrive under a future format version without callers guessing from filenames.
 """
 
 from __future__ import annotations

@@ -1,13 +1,9 @@
 """Panel authentication: login rate-limiting + opaque session tokens.
 
-Auth model: ``/login`` exchanges credentials for a random opaque bearer token
-backed by the ``sessions`` table (see backend/auth/sessions.py). There is no
-JWT anywhere — token verification is one indexed DB lookup, revocation is a
-row delete that survives restarts, and expiry is sliding-idle + absolute cap.
-
-The HTTP contract is unchanged: clients still send
-``Authorization: Bearer <token>`` and /login still returns an
-``access_token`` field, so the frontend needed no changes.
+``/login`` exchanges credentials for a random opaque bearer token backed by the
+``sessions`` table (see backend/auth/sessions.py). There is no JWT anywhere —
+token verification is one indexed DB lookup, revocation is a row delete that
+survives restarts, and expiry is sliding-idle + absolute cap.
 """
 
 import hashlib
@@ -30,8 +26,8 @@ logger = logging.getLogger("auth")
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
-_LOCKOUT_SECONDS = 300  # 5 minutes
-_CLEANUP_INTERVAL = 600  # purge stale entries every 10 min
+_LOCKOUT_SECONDS = 300
+_CLEANUP_INTERVAL = 600
 _last_cleanup: float = 0.0
 
 
@@ -101,9 +97,8 @@ def authenticate_user(db: Session, username: str, password: str):
     """Authenticate against the ``admins`` table — the only credential store.
 
     The owner is a normal row whose username matches ``ADMIN_USERNAME``; their
-    bcrypt hash lives in the database like every other admin's. ``.env`` holds
-    no credential (see the v16 migration, which imports a pre-existing
-    ``ADMIN_PASSWORD_HASH`` into the row on upgrade).
+    bcrypt hash lives in the database like every other admin's, so ``.env``
+    holds no credential.
     """
     admin = crud.it_is_admin(db, username=username)
     if not admin or not admin.password:
@@ -186,7 +181,7 @@ def issue_session(request: Request, db: Session, username: str, role: str):
     The one place a session is handed out, so the first-run owner claim returns
     a response the frontend can store exactly like a login.
     """
-    purge_expired(db)  # opportunistic cleanup of dead sessions
+    purge_expired(db)
     raw_token = create_session(
         db,
         username,

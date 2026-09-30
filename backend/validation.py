@@ -1,9 +1,6 @@
 """Central input validators: one regex per concept, shared by API and bot.
 
-The panel username rule, the URLPATH rule, and the domain/email rules each
-used to live in two or three places with subtly different patterns. They
-are defined once here; error messages stay at the call sites so API and
-bot UX keep their own wording.
+Error messages stay at the call sites so API and bot UX keep their own wording.
 """
 
 from __future__ import annotations
@@ -48,9 +45,8 @@ def validate_email(value: str) -> bool:
     return bool(value) and _EMAIL_RE.fullmatch(value) is not None
 
 
-# The owner password has been chosen in three places over time (the installer,
-# `ovm reset-password`, now the browser claim), so the rule lives once here and
-# the callers keep their own wording for the failure.
+# The owner chooses a password from the installer, `ovm reset-password` or the
+# browser claim, so the rule lives once here.
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_PLACEHOLDERS = ("change-me", "changeme", "change_me", "password123", "admin123")
 

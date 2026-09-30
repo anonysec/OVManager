@@ -57,10 +57,8 @@ def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "back
     Checkpoints the WAL first so the backup sees a consistent snapshot, then
     copies through the SQLite online-backup API (safe while writers are
     active). Returns the new backup path, or ``None`` when the database file
-    does not exist; other failures raise to the caller.
-
-    ``keep`` caps how many timestamped backups are retained (defaults to the
-    module-wide ``_MAX_BACKUPS``).
+    does not exist; other failures raise to the caller. ``keep`` caps how
+    many timestamped backups are retained.
     """
     if not DB_PATH.exists():
         return None
@@ -98,9 +96,8 @@ def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "back
 def backup_database(user: dict = Depends(require_owner)):
     """Create a backup of the panel database (POST only).
 
-    Exports a SQLite copy + config snapshot. Downloadable as .db file.
-    Only owner can access this. Declared sync on purpose: FastAPI runs it in
-    the threadpool, so a large database does not block the event loop.
+    Declared sync on purpose: FastAPI runs it in the threadpool, so a large
+    database does not block the event loop.
     """
 
     try:
@@ -267,8 +264,8 @@ def _apply_migrations_after_restore() -> None:
     """Bring a restored database up to date, or fail loudly.
 
     Restoring a backup from an older release must not serve requests against
-    a schema with missing columns; migrations plus the schema check make that
-    impossible (the caller rolls back to the pre-restore copy on failure).
+    a schema with missing columns; the caller rolls back to the pre-restore
+    copy when this raises.
     """
     from backend.db.migrations import migrate, verify_schema
 
@@ -414,9 +411,7 @@ def restore_stored_backup(name: str, actor: str) -> ResponseModel:
 
     Shared by the owner-only POST route (`restore_from_server`) and
     `ovm restore`, so a restore from the CLI and one from the panel are the
-    same transaction: stage and verify a candidate, copy the live database to
-    a fresh pre-restore bundle, activate, and roll back to that copy if the
-    activated database fails.
+    same transaction.
     """
     src_path = (BACKUP_DIR / name).resolve()
     if not src_path.is_relative_to(BACKUP_DIR.resolve()):
@@ -434,13 +429,11 @@ async def restore_backup(
     user: dict = Depends(require_owner),
     restore_from_server: str | None = Form(default=None),
 ):
-    """Restore the database from a backup file.
+    """Restore the database from a backup file (owner only).
 
-    The panel will be stopped during restore. The backup file must be a valid SQLite DB.
-    Only owner can access this.
-
-    If `restore_from_server` is provided (as a form field), the backup is read
-    from the server's backup directory instead of the uploaded file.
+    The panel is stopped during the restore. When ``restore_from_server`` is
+    provided as a form field, the backup is read from the server's backup
+    directory instead of the uploaded file.
     """
 
     try:

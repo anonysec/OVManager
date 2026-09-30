@@ -74,9 +74,8 @@ async def _reply(update: Update, text: str) -> None:
 async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
     """Fetch one user; send the right notice and return None on failure.
 
-    Unreachable panel and missing user used to produce four different
-    notice/markup combinations across the action handlers. All of them know
-    the uuid, so both cases offer back-to-user uniformly.
+    Unreachable panel and missing user get distinct notices; every action
+    handler knows the uuid, so both offer back-to-user uniformly.
     """
     from bot.i18n import t
     from bot.keyboards import back_to_user
@@ -95,11 +94,11 @@ async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
 async def ensure_panel_ok(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, result: dict) -> bool:
     """Central transport/auth guard for panel results.
 
-    Returns True when the caller may proceed (real success OR a meaningful
-    API error the caller should surface). Returns False after handling the
-    two cases callers must never show raw: revoked sessions (401 → drop the
-    cached actor/token, ask for one more tap with a fresh session) and an
-    unreachable panel (status 0 → distinct message, not an empty list).
+    Returns True when the caller may proceed (success, or an API error the
+    caller should surface). Returns False after handling the two cases that must
+    never reach the user raw: a revoked session (401) drops the cached
+    actor/token and asks for one more tap, and status 0 means the panel is
+    unreachable — a distinct message, never an empty list.
     """
     from bot.identity import invalidate_token
 

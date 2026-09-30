@@ -8,9 +8,8 @@
 # Pure helpers only.
 # Interactive prompts, menus, spinners.
 
-# Interactive if the operator did not pass -y AND we can talk to a terminal.
-# `curl | bash` has no stdin TTY; humans still work via /dev/tty.
-# AI / CI must pass -y (or CI=true) so this never blocks on a prompt.
+# Interactive only when -y was not passed and a terminal is reachable: `curl |
+# bash` has no stdin TTY, though /dev/tty usually works.
 can_prompt() {
     [[ "${YES:-0}" -eq 0 ]] || return 1
     [[ -t 0 ]] && return 0
@@ -20,17 +19,14 @@ can_prompt() {
     return 1
 }
 
-# Stronger check for the interactive menu: stdin must be a real terminal or
-# an openable /dev/tty. Scripts and pipes take the subcommand path instead.
+# Interactive menu only: scripts and pipes take the subcommand path instead.
 has_tty() {
     [[ -t 0 ]] && return 0
     { : </dev/tty; } 2>/dev/null && return 0
     return 1
 }
 
-# Masked input: prints one * per character on stderr, backspace works, and
-# the value goes to stdout (never echoed as plain text). Reads stdin, so
-# callers redirect /dev/tty when needed.
+# Reads stdin, so callers redirect /dev/tty when needed.
 _masked_read() {
     local buf="" ch
     while IFS= read -rsn1 ch; do
@@ -69,11 +65,9 @@ ask() {  # ask <label> <default> [hidden]
     printf '%s' "$val"
 }
 
-# confirm <question> [default] — default is y, which is what an unattended
-# run gets. A destructive caller must pass n: with no terminal there is
-# nobody to answer, and answering "yes" on their behalf made `ovm rollback`
-# replace the running install with a snapshot whenever it was invoked from a
-# cron job, a CI step or a pipeline.
+# confirm <question> [default] — default is y, which is what an unattended run
+# gets. A destructive caller must pass n: answering "yes" on nobody's behalf
+# made `ovm rollback` replace the running install from a cron job or pipeline.
 confirm() {
     [[ "${YES:-0}" -eq 1 ]] && return 0
     local default="${2:-y}"
@@ -87,8 +81,7 @@ confirm() {
     [[ ! "$c" =~ ^[Nn]$ ]]
 }
 
-# Explicit-yes prompt (default NO): used for destructive extras like deleting
-# data during uninstall. Non-interactive runs keep the safe answer.
+# Explicit-yes prompt (default NO): non-interactive runs keep the safe answer.
 confirm_no() {
     [[ "${YES:-0}" -eq 1 ]] && return 1
     can_prompt || return 1

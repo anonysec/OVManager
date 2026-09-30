@@ -1,12 +1,8 @@
 import { FiInbox } from 'react-icons/fi';
 
-/**
- * EmptyState — friendly, on-brand empty placeholder.
- *
- * The badge treatment puts the icon in a soft accent-tinted disc so it
- * reads as "intentional" instead of "broken", and so the eye is led to
- * the headline.
- */
+// The soft accent-tinted badge disc makes an empty region read as
+// "intentional" rather than "broken", and leads the eye to the headline.
+
 const EmptyState = ({ title, description, actionLabel, onAction }: { title?: any; description?: any; actionLabel?: any; onAction?: any }) => (
   <div className="empty-state">
     <span className="empty-state-badge" aria-hidden="true">

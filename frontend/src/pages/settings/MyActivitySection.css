@@ -1,9 +1,7 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* "My activity" settings card. Colours come only from tokens.css, so both
-   themes are covered without extra rules. Namespaced `ma-` to avoid
-   collisions. */
+/* "My activity" settings card. Namespaced `ma-`. */
 
 .ma-head {
   display: flex;

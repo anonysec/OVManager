@@ -1,7 +1,7 @@
-"""HTTP client for OVNode API.
+"""HTTP client for the OVNode API.
 
-Every method follows the same pattern: build URL, send request, check response.
-One _request() helper handles all of it.
+Every method builds a URL, sends, and checks the response; ``_request``
+and ``_get_raw`` carry the TLS policy for all of them.
 """
 
 import time as _time
@@ -203,9 +203,9 @@ class NodeRequests:
 
         Expected for self-signed nodes (the installer default). Poll loops
         would spam every tick, so repeats go to debug — but the API key
-        crosses the wire to an unverified endpoint from here, so the first
-        occurrence must stay visible. The same first occurrence also writes
-        one ``node.tls_unverified`` audit event per address.
+        crosses the wire to an unverified endpoint here, so the first
+        occurrence must stay visible and writes one ``node.tls_unverified``
+        audit event per address.
         """
         if self.address not in _tls_fallback_warned:
             if len(_tls_fallback_warned) >= _TLS_WARNED_CAP:
@@ -304,7 +304,6 @@ class NodeRequests:
             return None
 
     def _send_plain(self, method: str, path: str, **kw) -> dict | None:
-        """Non-TLS request path (use_tls=False)."""
         try:
             return self._send(method, path, **kw)
         except Exception as e:

@@ -1,5 +1,4 @@
-/* Node form modal — grouped sections, inline validation and the shared
-   result banner. Loaded by NodeFormModal.jsx. */
+/* Node form modal — section layout and the shared result banner. */
 
 .nf-form {
   display: flex;

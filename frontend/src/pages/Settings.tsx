@@ -1,16 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * Settings — one page, every section in a single flow.
- *
- * Sections live in ./settings/ (one file each) and are rendered unchanged.
- * Owner gating is unchanged: normal admins only see the local-only sections
- * (Appearance, Alerts); everything server-backed stays owner-only.
- *
- * Deep links (`/settings#backup`) still work: the hash scrolls the section
- * into view.
- */
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -63,9 +53,8 @@ const Settings = () => {
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
 
-  // Single shared load of /server/settings for the sections that need it
-  // (General/Defaults/Bot/Display). Saves live requests; each section keeps
-  // its own skeleton/error/retry visuals.
+  // One shared load of /server/settings for the sections that need it
+  // (General/Defaults/Bot/Display); each keeps its own skeleton/error/retry UI.
   const [shared, setShared] = useState<{ data: any; loading: boolean; error: boolean }>({ data: null, loading: true, error: false });
   const reloadShared = useCallback(async () => {
     try {
@@ -85,7 +74,6 @@ const Settings = () => {
     else setShared({ data: {}, loading: false, error: false });
   }, [reloadShared, refreshTick, isOwner]);
 
-  // Owners see all sections; admins only the local-only ones (no server data).
   const activeSections = useMemo(
     () => (isOwner ? SECTIONS : SECTIONS.filter((s) => s.id === 'alerts' || s.id === 'appearance')),
     [isOwner],

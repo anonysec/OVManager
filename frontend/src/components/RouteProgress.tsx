@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-/**
- * RouteProgress — slim top loading bar.
- * Shows on route changes and whenever `ovmanager:loading` is dispatched
- * (the dashboard refresh triggers it). Auto-hides after ~700ms.
- */
+// Also listens for the `ovmanager:loading` event the dashboard refresh emits.
+
 const RouteProgress = () => {
   const location = useLocation();
   const [active, setActive] = useState(false);

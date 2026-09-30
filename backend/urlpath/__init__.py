@@ -1,9 +1,7 @@
 """Dynamic URL path prefix (URLPATH) package.
 
-Same import surface as the old single module — everything is re-exported
-from :mod:`backend.urlpath._core`:
-
-    from backend.urlpath import get_urlpath, set_urlpath, URLPathMiddleware
+Everything is re-exported from :mod:`backend.urlpath._core`, which holds the
+implementation.
 """
 
 from __future__ import annotations

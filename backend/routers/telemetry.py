@@ -1,8 +1,7 @@
 """Telemetry routers: activity feed, metrics, notifications, live SSE stream.
 
-Four single-endpoint routers live here instead of four files: each is one
-APIRouter with its own prefix/tags, so routes are unchanged — only the
-file count is smaller.
+Each endpoint is its own single-route APIRouter with its own prefix and tags;
+they share a file because each is small.
 """
 
 from __future__ import annotations
@@ -81,10 +80,8 @@ async def live_stream(user: dict = Depends(get_current_user)):
     The stream carries lightweight invalidation events only ("users",
     "usage", "nodes"); the frontend reacts by refetching the affected data
     through the normal REST endpoints. No sensitive payloads travel over the
-    stream itself, and every event — not just heartbeats — re-asserts
-    liveness of the channel.
+    stream itself.
 
-    Transport notes:
     - GET + Bearer auth, so it passes the CSRF and URLPath middleware unchanged.
     - ``X-Accel-Buffering: no`` tells nginx/caddy to flush each event instead of
       buffering the whole response (a common "SSE doesn't arrive" gotcha).

@@ -1,7 +1,5 @@
 """Read-only health surface for the panel.
 
-Two views:
-
 - ``/overview`` (owner only): a plain-English checklist covering the panel
   process, the SQLite database, node reachability (read from the in-memory
   live snapshot — no fan-out), TLS, disk space, and backups.
@@ -365,9 +363,8 @@ async def health_overview(db: Session = Depends(get_db), user: dict = Depends(re
 async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
     """Aggregate max-login/auth-failure health across users and nodes.
 
-    Read-only aggregate (owner only). Lives in the health router — it is a
-    read alongside /overview and /setup, not a maintenance write; it moved
-    here from /maintenance/login-health (same response shape).
+    A read alongside /overview and /setup, not a maintenance write, so it
+    lives in the health router.
     """
     from backend.node.diagnostics import login_health_summary
 
@@ -379,7 +376,6 @@ async def login_health(hours: int = 8, db: Session = Depends(get_db), user: dict
 async def user_login_diagnostics(
     username: str, hours: int = 8, db: Session = Depends(get_db), user: dict = Depends(require_owner)
 ):
-    """Per-user drill-down (moved from /maintenance/login-diagnostics)."""
     from backend.node.diagnostics import login_diagnostics
 
     data = await login_diagnostics(username, db, hours=hours)
@@ -424,7 +420,6 @@ async def health_tls(user: dict = Depends(get_current_user)):
 
     Phones refuse to install over an untrusted (self-signed) certificate, so
     ``install_hint`` is only true for a trusted custom or Let's Encrypt cert.
-    Missing or unreadable files answer ``"unknown"`` with the hint off.
     """
     cert_path = _active_cert_path()
     cert = _load_certificate(cert_path) if cert_path is not None else None

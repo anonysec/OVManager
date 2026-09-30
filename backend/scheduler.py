@@ -65,8 +65,8 @@ async def auto_prune_audit_job():
 async def auto_backup_job():
     """Run the scheduled panel database backup when enabled in settings.
 
-    Best-effort by design: every outcome is audited and logged, and nothing
-    is ever raised — a failed backup must not kill the scheduler.
+    Best-effort by design: a failed backup must not kill the scheduler, so every
+    outcome is logged and audited instead of raised.
     """
     from backend.operations.observability.audit import log_event
     from backend.routers.maintenance import create_panel_backup
@@ -153,9 +153,8 @@ def set_scheduler_instance(scheduler) -> None:
 def reschedule_auto_backup():
     """Re-register the daily auto-backup job from the current settings.
 
-    Removes any existing ``auto_backup`` job, then adds it back with the
-    configured time when auto backup is enabled. A no-op when the scheduler
-    is not running. Called at startup and after a settings update.
+    A no-op when the scheduler is not running. Called at startup and after a
+    settings update.
     """
     scheduler = _scheduler
     if scheduler is None:
@@ -205,15 +204,10 @@ def reschedule_auto_backup():
 def start_scheduler():
     """Register only the jobs that need this process's own state.
 
-    The periodic database and node jobs moved to the worker process
-    (:mod:`backend.worker`), so a wedged job cannot stop the panel serving
-    requests. Two jobs stayed here and must not move:
-
-    - ``collect_live_snapshot`` publishes to the in-process live bus that
-      routers/telemetry.py subscribes to for SSE, so a collector in another
-      process would publish into a bus with no subscribers.
-    - ``_watchdog_bot`` holds the Popen for the bot child, which this
-      process starts in its lifespan; elsewhere that handle is None.
+    The periodic database and node jobs live in the worker process
+    (:mod:`backend.worker`). The two jobs below must not move: the live snapshot
+    publishes to an in-process bus, and ``_watchdog_bot`` holds the bot child's
+    Popen — both are process-local.
     """
     from backend.bot_supervisor import _watchdog_bot
 

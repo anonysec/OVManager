@@ -1,6 +1,6 @@
-/* DataTable — clean replacement for ops-table / list-table / user-list-table.
-   Single source going forward. Uses only tokens.css variables, logical props
-   for RTL, and one phone breakpoint (767.98px) matching breakpoints.test.js. */
+/* Single source going forward, replacing ops-table / list-table /
+   user-list-table. Tokens.css variables only, logical props for RTL, and one
+   phone breakpoint (767.98px) that breakpoints.test.js pins. */
 
 .dt-wrap {
   background: var(--surface-1);

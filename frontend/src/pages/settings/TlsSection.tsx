@@ -18,12 +18,6 @@ import './TlsSection.css';
 /* ═══════════════════════════════════════════════════════
    TLS (advanced) — the panel's own HTTPS certificate.
 
-   GET  /tls/status       what certificate the panel will use
-   POST /tls/upload       install a key + certificate pair (multipart)
-   POST /tls/self-signed  regenerate a self-signed certificate
-   POST /tls/renew        request a Let's Encrypt certificate via acme.sh
-   POST /tls/restart      best-effort panel restart so changes apply
-
    Every endpoint is owner-only. File-based changes only take effect after a
    panel restart, so each successful install surfaces the same restart action.
    ═══════════════════════════════════════════════════════ */

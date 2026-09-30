@@ -19,18 +19,9 @@ import {
 import './HealthCenter.css';
 import './UpdateNotice.css';
 
-/**
- * HealthCenter — operational health dashboard.
- *
- * Reads GET /api/health/overview which returns
- *   { checks: [{ id, status: 'ok'|'warn'|'error', summary, hint }], details }
- * and paints one card per check: a fill-token status dot, the plain-language
- * summary, and the remediation hint whenever the check is not ok.
- *
- * Refresh keeps the previous results on screen (only the button enters its
- * busy state) so a slow or failing re-check never blanks a page that was
- * already telling the operator something useful.
- */
+// GET /health/overview returns { checks: [{ id, status, summary, hint }], details };
+// one card per check. Refresh keeps the previous results on screen so a failing
+// re-check never blanks a page that was already telling the operator something.
 
 const STATUS_META = {
   ok: { tone: 'success', key: 'healthStatusOk', fallback: 'OK' },

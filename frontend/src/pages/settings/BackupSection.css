@@ -2,8 +2,7 @@
  * SPDX-License-Identifier: MIT */
 
 /* Backup settings section — inline save feedback for the "Automatic backups"
-   card. Colours come only from tokens.css, so both themes are covered without
-   extra rules. Namespaced `bs-` to avoid collisions. */
+   card. Namespaced `bs-`. */
 
 .bs-auto-msg {
   margin: 10px 0 0;

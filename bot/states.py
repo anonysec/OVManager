@@ -1,8 +1,7 @@
 """Conversation-flow helpers: one dict in ``context.user_data["flow"]``.
 
-Replaces ad-hoc ``user_data.get("flow")`` / ``["flow"] = {...}`` /
-``.pop("flow")`` touches scattered across the handlers. A flow is always
-a dict with at least ``kind``; anything else is treated as absent.
+A flow is always a dict with at least ``kind``; anything else is treated as
+absent.
 """
 
 from __future__ import annotations

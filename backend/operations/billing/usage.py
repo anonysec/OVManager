@@ -1,9 +1,8 @@
 """Per-user daily traffic history (raw-SQL table, like audit_logs).
 
-The collector attributes each billed delta to today's UTC row, so the
-panel can draw per-user graphs and top-talker boards without scanning
-the aggregate snapshots. Sparse by design: only days with billed bytes
-get rows.
+The collector attributes each billed delta to today's UTC row, so the panel
+can draw per-user graphs and top-talker boards without scanning the
+aggregate snapshots. Sparse by design: only days with billed bytes get rows.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ def _today() -> str:
 
 
 def record_daily_bytes(db: Session, user_id: int, delta: int, day: str | None = None) -> None:
-    """Add billed bytes to a user's day row (upsert). No-op for delta <= 0."""
+    """Add billed bytes to a user's day row (upsert)."""
     if not delta or delta <= 0:
         return
     if not _table_ready:

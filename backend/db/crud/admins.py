@@ -51,7 +51,6 @@ def get_all_admins(db: Session):
 
 
 def it_is_admin(db: Session, username: str):
-    """Return the Admin object if found, else None."""
     return db.query(Admin).filter(Admin.username == username).first()
 
 

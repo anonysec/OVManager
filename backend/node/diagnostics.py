@@ -1,7 +1,7 @@
 """Session diagnostics and login health monitoring.
 
-Provides detailed visibility into user sessions, active connections,
-login health status, and per-user login diagnostics.
+Visibility into live sessions, active connections and per-user login
+diagnostics, aggregated across nodes.
 """
 
 import datetime
@@ -19,14 +19,12 @@ from backend.node.requests import node_client
 async def get_active_connection_counts(db: Session) -> dict[str, int]:
     """Query all active nodes for live connection counts per user.
 
-    Returns {username: active_count} across all reachable nodes.
-    CNs are numeric user IDs — we map back to usernames via the user table.
+    Returns {username: active_count}; CNs are numeric user IDs, mapped back
+    through the user table.
 
     A node already known to be unreachable is asked with a short timeout
-    instead of the full 30s: this runs inside the user list request, so paying
-    the long timeout for a node that is down is 30s of a page load. Health is
-    recorded by ``_request``, so a recovered node rejoins on the next request
-    rather than after a wait.
+    instead of the full 30s: this runs inside the user list request, so the
+    long timeout would be 30s of a page load.
     """
     nodes = crud.get_active_nodes(db)
     counts: dict[str, int] = {}
@@ -53,7 +51,6 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
 
 
 async def get_user_session_diagnostics(user_id: int, db: Session, hours: int = 8) -> dict:
-    """Get detailed session info for one user across all nodes. Uses numeric ID."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return {"username": str(user_id), "found": False}
@@ -109,7 +106,6 @@ async def get_user_session_diagnostics(user_id: int, db: Session, hours: int = 8
 
 
 async def disconnect_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict:
-    """Disconnect a user from all active nodes. Uses numeric user ID as CN."""
     nodes = crud.get_active_nodes(db)
     results = []
     cn = str(user_id)
@@ -128,7 +124,6 @@ async def disconnect_user_on_all_nodes(name: str, user_id: int, db: Session) -> 
 
 
 async def login_health_summary(db: Session, hours: int = 8) -> dict:
-    """Aggregate login health across all users and nodes."""
     users = crud.get_all_users(db)
     nodes = crud.get_active_nodes(db)
 
@@ -230,7 +225,6 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
 
 
 async def login_diagnostics(name: str, db: Session, hours: int = 8) -> dict:
-    """Detailed no-disconnect login diagnostics for one user."""
     user = crud.get_user_by_name(db, name)
     if not user:
         return {"username": name, "found": False}

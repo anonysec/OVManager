@@ -3,9 +3,6 @@
 
 import { useTranslation } from 'react-i18next';
 
-/* ─────────────────────────────────────────────
-   Section header with anchor
-───────────────────────────────────────────── */
 const SectionHeader = ({ headingId, icon: Icon, label, description }: any) => (
   <div className="sp-section-header">
     <span className="sp-section-icon">{Icon ? <Icon aria-hidden="true" /> : null}</span>
@@ -16,9 +13,6 @@ const SectionHeader = ({ headingId, icon: Icon, label, description }: any) => (
   </div>
 );
 
-/* ─────────────────────────────────────────────
-   Card wrapper
-───────────────────────────────────────────── */
 const Card = ({ title, icon: Icon, children, className = '' }: any) => (
   <div className={`sp-card ${className}`}>
     {title && (
@@ -31,9 +25,6 @@ const Card = ({ title, icon: Icon, children, className = '' }: any) => (
   </div>
 );
 
-/* ─────────────────────────────────────────────
-   Field helpers
-───────────────────────────────────────────── */
 const Field = ({ label, hint, children, horizontal, inputId }: any) => (
   <div className={`sp-field${horizontal ? ' sp-field--h' : ''}`}>
     <label className="sp-label" htmlFor={inputId}>{label}</label>

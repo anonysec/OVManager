@@ -16,9 +16,8 @@ _table_ready: bool = False
 def ensure_audit_table(db: Session) -> None:
     """Create the audit_logs table and index if not already present.
 
-    Called once at startup (via app.py's lifespan). log_event() skips this
-    check after the first successful call. The DDL itself lives in
-    :mod:`backend.db.migrations` so schema creation has one owner.
+    The DDL itself lives in :mod:`backend.db.migrations` so schema creation
+    has one owner; this wrapper only adds the once-per-process guard.
     """
     global _table_ready
     from backend.db.migrations import ensure_extra_tables
@@ -88,8 +87,8 @@ def recent_events(db, limit=100, actor: str | None = None, action: str | None = 
 def prune_audit_logs(db, keep_days: int = 90) -> int:
     """Delete audit rows older than keep_days. Returns rows removed.
 
-    audit_logs was the only unbounded table (metrics already retain 30d).
-    Called from the 15-minute maintenance sweep in app.py.
+    audit_logs was the only unbounded table (metrics already retain 30d);
+    called from the 15-minute maintenance sweep in app.py.
     """
     if not _table_ready:
         ensure_audit_table(db)

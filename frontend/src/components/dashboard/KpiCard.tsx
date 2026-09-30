@@ -1,15 +1,9 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * KpiCard — compact stat card (panel-style): small accent icon box +
- * muted label in the head, an optional Ring top-right, the big bold
- * value bottom-left, and an optional small chip bottom-right.
- * - `ring` renders a circular progress for `ringPct`.
- * - `chip` renders a quiet badge at the value row's end (e.g. "4 cores").
- * - `to` makes the whole card a button that navigates to that path.
- * - `tone` colors value + icon + ring (ok / warn / danger).
- */
+// `to` makes the whole card a button that navigates to that path; `tone`
+// (ok / warn / danger) colors value, icon and ring.
+
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useCountUp } from '../../hooks/useCountUp';

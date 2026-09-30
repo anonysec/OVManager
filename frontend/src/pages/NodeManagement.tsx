@@ -19,11 +19,8 @@ import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
 import './NodeManagement.css';
 
-/**
- * Nodes page — one row per OVNode with live status, version/TLS chips and
- * quick actions. The heavy lifting (DNS/IPv6/ports, restart, update, logs)
- * lives in NodeDrawer; the list stays scannable.
- */
+// One row per OVNode; the heavy per-node actions (DNS/IPv6/ports, restart,
+// update, logs) live in NodeDrawer.
 
 const tlsMeta = (mode: any, t: any) => {
   if (mode === 'verified') return { tone: 'success', label: t('tlsVerified', 'Verified') };

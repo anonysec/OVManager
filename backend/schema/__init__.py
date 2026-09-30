@@ -1,7 +1,6 @@
 """Schema package: one module for request + response models.
 
-``from backend.schema import CreateUser, ResponseModel`` replaces the old
-``backend.schema._input`` / ``backend.schema.output`` imports.
+Import from here, never from ``backend.schema.api``.
 """
 
 from __future__ import annotations

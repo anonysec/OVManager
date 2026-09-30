@@ -1,6 +1,4 @@
-/* Dashboard — ops-console look: flat stat strip, underline tabs, quiet
-   panels. No gradient washes, no card lift, no uppercase kickers.
-   Owns ALL dashboard visuals; do not add dashboard rules to styles.css. */
+/* Dashboard visuals — owned here; do not add dashboard rules to styles.css. */
 
 /* ── Page wrapper ─────────────────────────────────────────────────── */
 .ds-page {
@@ -53,8 +51,7 @@
   50% { box-shadow: 0 0 0 8px transparent; }
 }
 
-/* ── Stat cards — compact panel-style wall: icon box + label head, ──
-   ── ring top-right, big value bottom, small chip. 1/2/4 columns. ── */
+/* ── Stat cards — 1/2/4 columns. ─────────────────────────────────── */
 .ds-stats-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -902,7 +899,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
     transition: none;
   }
 }
-/*tail*/
 
 /* ── Top users (traffic leaders) ─────────────────────────────────── */
 .ds-topusers {

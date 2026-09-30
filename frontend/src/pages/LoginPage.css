@@ -1,6 +1,5 @@
-/* Login — a single centered card. Everything is token-driven so both themes
-   and RTL work without overrides. The old split showcase lives in styles.css
-   (legacy) and is intentionally no longer used by this page. */
+/* Login — a single centered card. The old split-showcase styles still in
+   styles.css are legacy and unused by this page. */
 
 .login-page {
   display: grid;
@@ -130,7 +129,7 @@
   box-shadow: var(--focus-ring-shadow);
 }
 
-/* First-run pointer to the claim flow. Sits inside the card, below the form. */
+/* First-run pointer to the claim flow. */
 .login-claim-hint {
   margin: 0;
   text-align: center;

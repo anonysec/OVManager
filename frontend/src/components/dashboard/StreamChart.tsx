@@ -1,20 +1,14 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * StreamChart — area chart fed by /metrics/history with polling refresh.
- *
- * Data model:
- *  - Initial load: GET /metrics/history?hours={24|168} populates the series
- *  - Updates: refresh-cadence polling (single live source is /live/stream
- *    invalidation bus in LiveContext; per-chart SSE was removed to avoid
- *    a second DB-polling stream).
- *
- * The chart keeps the latest 240 points (≈ 1h at 15s cadence) to avoid
- * DOM bloat on long sessions. Hover crosshair and tooltip are pure DOM
- * to keep the chart fast. The component renders bare (no card chrome):
- * the dashboard hero owns the surrounding card.
- */
+// Area chart fed by /metrics/history.
+//
+// Updates come from refresh-cadence polling, not from a per-chart SSE stream —
+// LiveContext's /live/stream invalidation bus is the single live source, and a
+// second DB-polling stream per chart was removed.
+//
+// Renders bare (no card chrome): the dashboard hero owns the surrounding card.
+
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import type { MouseEvent as ChartMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +17,7 @@ import { DATA_REFRESH_SEC } from '../../utils/notifPrefs';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
 
+// ≈ 1h at the 15s cadence; capped so long sessions do not bloat the DOM.
 const MAX_POINTS = 240;
 
 const tsToIso = (ts: number | string | null | undefined) => {
@@ -66,7 +61,6 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
 
   const hours = period === '7d' ? 168 : initialHours;
 
-  // Initial + period-switch load
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -83,8 +77,8 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     return () => { cancelled = true; };
   }, [hours]);
 
-  // Refresh on the user's dashboard cadence so the chart stays current
-  // without a second SSE stream.
+  // The user's dashboard cadence keeps the chart current without a second SSE
+  // stream.
   useEffect(() => {
     const id = setInterval(() => {
       apiClient.get(`/metrics/history?hours=${hours}`)

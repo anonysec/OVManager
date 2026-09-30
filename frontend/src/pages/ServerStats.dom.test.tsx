@@ -1,16 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * ServerStats dashboard tests — coverage for the new modern-SaaS layout.
- * Verifies that:
- * - per-source errors do NOT blank the entire dashboard
- * - hero KPI cards are clickable and route to filtered views
- * - the alert strip is clickable and routes per-item
- * - the chart shows data, metric toggle, and error/empty states
- * - activity feed renders with relative timestamps
- * - users tabs (online / needs attention) work
- */
+/** ServerStats dashboard: per-source errors must not blank the whole page. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';

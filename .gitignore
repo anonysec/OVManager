@@ -61,3 +61,6 @@ PROJECT_PLAN.md
 
 # graphify knowledge graph output (local trial, never publish)
 graphify-out/
+
+# Claude Code — personal overrides; .claude/settings.json is shared and tracked
+.claude/settings.local.json

@@ -25,12 +25,8 @@ import TopUsers from '../components/dashboard/TopUsers';
 import StreamChart from '../components/dashboard/StreamChart';
 import './Dashboard.css';
 
-/**
- * Notifications derived from live state — actionable items only.
- * We never flag a node as down before the per-node probe resolves;
- * doing so would flash every node as "unreachable" on first paint
- * and inflate the alert count.
- */
+// Never flag a node as down before the per-node probe resolves — doing so
+// flashed every node as unreachable on first paint.
 type ServerNotif = { id: string; level: string; link: string; title: string };
 
 const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesReady, t }: { users: any[] | null; nodes: any[] | null; nodeStatus: Record<string, any>; serverNotifs: any[] | null; probesReady: boolean; t: any }) => {
@@ -109,8 +105,8 @@ const formatUptime = (seconds: number) => {
 };
 
 // Growth of the cumulative "total_used" counter across the metrics window.
-// Usage resets can make a single step negative; those are clamped to zero so
-// a reset never shows up as negative traffic.
+// A usage reset makes one step negative; those clamp to zero so a reset never
+// shows up as negative traffic.
 const sumPositiveDeltas = (values: number[]) => {
   const list = (values || []).map(Number).filter(Number.isFinite);
   if (list.length < 2) return null;

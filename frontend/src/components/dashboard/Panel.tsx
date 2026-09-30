@@ -1,13 +1,9 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * Panel — base card primitive used by all dashboard panels.
- * - `title` rendered next to `icon` (decorative)
- * - `action` is a React node placed in the header right (e.g. tabs, view-all)
- * - `flush` removes body padding so the consumer can render edge-to-edge
- *   (e.g. DataTable, ActivityFeed)
- */
+// Base card primitive for dashboard panels. `flush` drops body padding so the
+// consumer can render edge-to-edge (DataTable, ActivityFeed).
+
 import { useTranslation } from 'react-i18next';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 import { EmptyState, PanelSkeleton } from '../ui';
@@ -27,11 +23,9 @@ function Panel({ title, icon: Icon, action, flush = false, className = '', child
   );
 }
 
-/**
- * PanelState — resolves to skeleton / inline-error / empty / content
- * in that order. The inline error keeps the rest of the dashboard
- * usable instead of swapping it for a wall of red.
- */
+// The inline error is the point: one failed panel must not swap the rest of
+// the dashboard for a wall of red.
+
 export function PanelState({ loading, error, isEmpty, onRetry, skeleton, children, t: tProp }: { loading?: any; error?: any; isEmpty?: any; onRetry?: any; skeleton?: any; children?: any; t?: any }) {
   const { t } = useTranslation();
   const ti = tProp || t;

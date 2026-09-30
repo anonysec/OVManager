@@ -40,10 +40,9 @@ const AppearanceSection = () => {
     i18n.changeLanguage(id);
     localStorage.setItem('ovmanager-lang', id);
     setLang(id);
-    // No document.documentElement.dir write here: DashboardLayout owns that in
-    // an effect keyed on i18n.language, and it sets html[lang] and body[dir]
-    // too, which this duplicate did not. Mutating the DOM from a function
-    // created during render is what the rule objects to.
+    // dir is set in DashboardLayout's effect, not here — that one also sets
+    // html[lang] and body[dir], and mutating the DOM during render is what the
+    // lint rule objects to.
   };
 
   const ACCENTS = [
@@ -62,9 +61,8 @@ const AppearanceSection = () => {
   };
 
   // ── Install app (PWA) ──────────────────────────────────────────────────
-  // Chrome/Edge fire beforeinstallprompt when the app is installable; we
-  // store the event and replay it from the button. Safari/iOS never fires it,
-  // so the card simply stays hidden there.
+  // Chrome/Edge fire beforeinstallprompt; the event is stored and replayed
+  // from the button. Safari/iOS never fires it, so the card stays hidden there.
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(true);
   const [installed, setInstalled] = useState(

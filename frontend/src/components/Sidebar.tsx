@@ -36,9 +36,8 @@ const Sidebar = () => {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
 
-  // Username for the profile block. The session token is opaque (random
-  // bytes), so it has no "sub" claim to decode — AuthContext stores the name
-  // from the login response instead.
+  // The session token is opaque, so there is no "sub" claim to decode;
+  // AuthContext stores the name from the login response instead.
   const username = useMemo(() => {
     try { return localStorage.getItem('username') || ''; }
     catch { return ''; }
@@ -71,7 +70,6 @@ const Sidebar = () => {
     };
   }, [mobileOpen]);
 
-  // Fetch admin/user stats for the profile block
   const fetchStats = useCallback(async () => {
     try {
       const [usersRes] = await Promise.all([
@@ -103,9 +101,7 @@ const Sidebar = () => {
   };
   const isActiveClass = (item: NavItem) => isActive(item) ? 'sidebar-nav-link active' : 'sidebar-nav-link';
 
-  // Primary nav: Home · Users · Nodes · Health · Settings. Admins and Audit
-  // stay owner-only but are now secondary entries in an "Advanced" group until
-  // Settings grows an Advanced tab in the page-level redesign wave.
+  // Admins and Audit stay owner-only, pushed as secondary "Advanced" entries.
   const navItems: NavItem[] = [
     { to: '/',          label: t('navHome',     'Home'),     icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
     { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
@@ -123,9 +119,9 @@ const Sidebar = () => {
     );
   }
 
-  // Labels stay mounted in both modes — the collapsed rail fades/collapses
-  // them via CSS instead of unmounting, so the width tween looks smooth and
-  // focus is never destroyed mid-toggle.
+  // Labels stay mounted in both modes: the collapsed rail hides them with CSS
+  // rather than unmounting, so the width tween stays smooth and focus survives
+  // the toggle.
   const renderNavItem = (item: NavItem, index: number) => (
     <li key={item.to} className="sidebar-nav-item">
       {(index === 0 || navItems[index - 1].group !== item.group) && (
@@ -155,7 +151,6 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Mobile hamburger trigger */}
       <button
         ref={hamburgerRef}
         className="sidebar-hamburger"
@@ -167,7 +162,6 @@ const Sidebar = () => {
         <FiMenu aria-hidden="true" />
       </button>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
       )}
@@ -180,14 +174,12 @@ const Sidebar = () => {
         className={`ops-sidebar ${collapsed ? 'ops-sidebar--collapsed' : ''} ${mobileOpen ? 'ops-sidebar--mobile ops-sidebar--open' : ''}`}
         aria-label={t('mainNavigation', 'Main navigation')}
       >
-        {/* Brand — the identity block. In rail mode it collapses to the
-            logo mark with the wordmark beneath it. */}
+        {/* In rail mode this collapses to the logo mark, wordmark hidden. */}
         <div className="sidebar-brand" aria-hidden={collapsed}>
           <Logo size={30} />
           <span className="sidebar-brand-text">OV<span className="brand-accent">Manager</span></span>
         </div>
 
-        {/* Collapse toggle */}
         <button
           className="sidebar-toggle"
           onClick={toggleCollapse}
@@ -199,14 +191,12 @@ const Sidebar = () => {
           {collapsed ? <FiChevronRight aria-hidden="true" /> : <FiChevronLeft aria-hidden="true" />}
         </button>
 
-        {/* Navigation — flat list, no submenus */}
         <nav className="sidebar-nav" aria-label={t('sidebarSections', 'Sections')}>
           <ul className="sidebar-nav-list">
             {navItems.map(renderNavItem)}
           </ul>
         </nav>
 
-        {/* Footer: profile with inline logout (icon-only in rail) */}
         <div className="sidebar-footer">
           <div className="sidebar-profile">
             <div className="sidebar-profile-avatar" title={collapsed ? username : undefined}>

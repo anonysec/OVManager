@@ -58,9 +58,9 @@ def _sub_rate_limited(request: Request) -> bool:
 async def subscription_static_js():
     """Serve the subscription page's script as an external file.
 
-    The page used an inline <script>; keeping strict CSP (script-src 'self',
-    no 'unsafe-inline') requires external scripts. The file is fully static
-    (no template interpolation), so it is safe to cache.
+    Strict CSP (script-src 'self', no 'unsafe-inline') forbids inline
+    scripts. The file is fully static — no template interpolation — so it is
+    safe to cache.
     """
     path = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "templates", "subscription.js")
     return FileResponse(

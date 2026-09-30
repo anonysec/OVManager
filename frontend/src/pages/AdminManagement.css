@@ -1,8 +1,7 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* Admins page — header, KPI tiles, status switch and sessions modal.
-   Colours come from tokens.css only, so dark/light both work. */
+/* Admins page — header, KPI tiles, status switch and sessions modal. */
 
 .adm-page {
   max-width: var(--content-max);

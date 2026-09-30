@@ -45,11 +45,10 @@ def get_users_page(
     page: int = 1,
     page_size: int = 100,
 ) -> tuple[list, int]:
-    """DB-level search + pagination (bot + API consumers).
+    """DB-level search + pagination for bot and API consumers.
 
-    The panel UI filters client-side and uses the unpaginated default;
-    server-side search exists so per-keystroke bot lookups don't pull the
-    whole table on every keystroke.
+    Server-side search exists so per-keystroke bot lookups don't pull the whole
+    table; the panel UI filters client-side and uses the unpaginated default.
     """
     query = db.query(User)
     if owner is not None:

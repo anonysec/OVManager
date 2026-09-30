@@ -36,7 +36,7 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
   const load = shared?.reload ?? (() => {});
   const synced = useRef(false);
 
-  // Mount-only sync (as before — no refreshTick revalidation here).
+  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const d = shared?.data;
     if (!d || synced.current) return;

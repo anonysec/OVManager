@@ -1,8 +1,6 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* OVManager Concept #1 implementation */
-
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -18,8 +16,8 @@ body {
 @keyframes botFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 @keyframes lineDraw { from { stroke-dashoffset: 480; } to { stroke-dashoffset: 0; } }
 
-/* Brand wordmark: reset the legacy gradient text-clip from index.css so it
-   reads correctly in BOTH themes (was invisible/half-clipped in light mode). */
+/* Resets the legacy gradient text-clip from index.css, which was invisible
+   or half-clipped in light mode. */
 
 .ops-userbar { display: flex; align-items: center; gap: 14px; justify-content: flex-end; }
 .ops-userbar button:not(.lang-option):not(.profile-trigger):not(.topbar-search-trigger) { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--muted); border: 0; cursor: pointer; font-size: 20px; border-radius: 9px; transition: color .15s ease, background .15s ease; }
@@ -30,13 +28,11 @@ body {
 
 .compact th, .compact td { padding: 9px 10px; }
 
-/* Non-dashboard pages keep a clean ops style */
 .view { animation: fadeUp .3s ease both; }
 .btn:hover { filter: brightness(1.08); }
 .input-group input, .input-group select, .search-input { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 10px; }
-/* Destructive-action utility background: scoped to buttons so it never
-   paints non-button elements (security/alert rows, badges, metric values)
-   with an unreadable solid red. */
+/* Scoped to buttons: painting security/alert rows, badges or metric values
+   with a solid red makes them unreadable. */
 button.danger { background: var(--red) !important; }
 .modal-overlay { background: rgba(0,0,0,.75) !important; }
 .modal, .modal-content { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; }
@@ -69,10 +65,8 @@ html[data-theme="light"] .search-field { background: #f4f6f9; border-color: #dfe
 /* ---- sortable table headers ---- */
 .list-table th.sortable { user-select: none; padding: 0; }
 
-/* The sortable header is a real <button> so it is keyboard reachable and
-   announces aria-sort. It inherits the cell's typography and fills the cell
-   so the whole header area stays clickable, as it was when the <th> itself
-   carried the handler. */
+/* A real <button> so it is keyboard reachable and announces aria-sort; it
+   fills the cell so the whole header area stays clickable. */
 .list-table th.sortable .th-sort-btn {
   display: flex;
   align-items: center;
@@ -106,16 +100,11 @@ html[data-theme="light"] .search-field { background: #f4f6f9; border-color: #dfe
 .list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: linear-gradient(135deg, var(--orange), #ffb466); color: #15110a; font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
 html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(135deg, #ff7e2e, #ffb466); color: var(--accent-contrast); }
 .status-pill { padding: 2px 9px; border-radius: 999px; font-size: var(--font-size-xs); font-weight: 700; }
-/* Status pills.
-   - online/ok     : success-soft + success-text (green) — currently connected
-   - idle          : info-soft    + info-text    (cyan)  — enabled, no live session
-   - info/warn     : warning-soft + warning-text (amber) — needs attention
-   - offline/danger: danger-soft  + danger-text  (red)   — disabled / faulted
-   - muted         : surface-3    + text-secondary (gray) — neutral / not yet seen
-   The previous idle mapping used --surface-3 + --text-secondary, which scored
-   4.45:1 in light mode (right at the AA floor). The new info-soft + info-text
-   pair clears 4.5:1 in both themes and reads as "ready, not in alarm" instead
-   of a generic gray that could be confused with "muted" / "unknown". */
+/* Status pills: success / info / warning / danger / muted, each as a soft
+   fill plus its matching read-safe text tone.
+   The idle mapping used --surface-3 + --text-secondary, which scored 4.45:1
+   in light mode — right at the AA floor, and indistinguishable from "muted".
+   info-soft + info-text clears 4.5:1 in both themes. */
 .status-pill.online, .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
 .status-pill.idle { background: var(--info-soft); color: var(--info-text); }
 .status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
@@ -123,9 +112,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
 .expiry-soon { color: #ffb454; font-weight: 700; }
 
-/* sparkline in stat cell */
-
-/* Flag icon styles */
 .flag-icon {
   display: inline-flex;
   align-items: center;
@@ -185,7 +171,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .list-table.user-list-table .col-check, .list-table.node-list-table .col-check { width: 42px; text-align: center; padding: 0; }
 .list-table.user-list-table .col-check input, .list-table.node-list-table .col-check input { width: 15px; height: 15px; cursor: pointer; }
 .list-table.user-list-table td.traffic-cell { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); }
-/* Item 4 (2026-09): every column text centered on list tables. */
 .list-table.user-list-table td.traffic-cell { display: flex; justify-content: center; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); text-align: center; }
 .list-table.user-list-table td[data-label="Max Logins"] { text-align: center; }
 .list-table.user-list-table td[data-label="Expiry Date"] { text-align: center; }
@@ -234,11 +219,9 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
   background: var(--danger-text) !important;
   border-color: var(--danger-text) !important;
 }
-/* Action icon buttons (edit, delete, more).
-   Resting state: muted on line. Hover lifts to brand colour for the neutral
-   ones, danger for delete. The .danger variant uses a soft danger fill at
-   rest so the destructive action is visually distinct from edit, not just
-   a colour change on hover. */
+/* Resting state is muted on line; hover lifts to brand colour, or to danger
+   for the delete action. The .danger variant carries a soft danger fill at
+   rest, so it is distinct from edit without relying on hover. */
 .icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 7px !important; padding: 6px !important; cursor: pointer; transition: all .12s ease; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; }
 .icon-btn:hover { background: rgba(255,255,255,.08) !important; color: var(--orange) !important; border-color: var(--orange) !important; }
 .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
@@ -246,7 +229,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(13
 .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
 html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 
-/* premium bugfix pass */
 .notification-wrap { position: relative; }
 .notification-popover {
   display: none;
@@ -283,10 +265,9 @@ html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 .notification-item.info .dot { background: var(--cyan); }
 .notification-item .n-title { font-size: var(--font-size-sm); font-weight: 600; line-height: 1.3; color: var(--text); }
 .notification-item .n-time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
-/* NOTE: .row-menu / .row-menu-item full styling lives further down (search
-   "3-dot row menu (portaled to body...")") — this block intentionally left
-   without duplicate width/padding rules to avoid cascade conflicts that
-   previously made the menu render wider/taller than JS positioning expected. */
+/* Deliberately free of width/padding rules: duplicating them here caused
+   cascade conflicts that made the portaled menu render wider/taller than the
+   JS positioning expected. */
 .status-pill.expired { background: var(--warning-soft); color: var(--warning-text); }
 .toast-stack {
   position: fixed;
@@ -405,9 +386,8 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 /* ---- User Management: online view, pills, search, actions ---- */
 .seg-toggle button.active { background: var(--orange); color: #111; }
 
-/* Search field — single border, compact. The previous "2 borders" came from
-   the outer border + a focus ring box-shadow that read as a 2nd outline. We
-   keep just one border, drop the focus ring shadow, and shrink. */
+/* Single border, compact. The "2 borders" look came from the outer border plus
+   a focus-ring box-shadow reading as a second outline, so the shadow is gone. */
 .search-field {
   display: flex;
   align-items: center;
@@ -452,7 +432,6 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 .notice.info { border-inline-start-color: var(--cyan); color: var(--cyan); }
 .seg.active { background: var(--orange); color: #fff; box-shadow: 0 6px 16px rgba(255,106,26,.35); }
 
-/* Subscription code block with copy button */
 .code-copy { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--cyan); border-radius: 8px; cursor: pointer; transition: background .15s ease, color .15s ease; }
 .code-copy:hover { background: rgba(255,255,255,.1); }
 .code-copy svg { width: 15px; height: 15px; }
@@ -493,7 +472,6 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 
 .health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
 
-/* skeleton */
 .panel-skeleton { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .mini-line.empty { background: rgba(255,255,255,.04); border-radius: 6px; }
@@ -501,8 +479,7 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 .ntag.warning { background: color-mix(in srgb, var(--orange) 20%, var(--panel)); color: var(--orange); border-color: color-mix(in srgb, var(--orange) 50%, transparent); font-weight: 600; }
 .ntag.info { background: color-mix(in srgb, var(--cyan) 20%, var(--panel)); color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); font-weight: 600; }
 
-/* notification items as links: the base rule lives with the canonical
-   .notification-item block above; severity backgrounds follow. */
+/* The base .notification-item rule lives above; severity backgrounds follow. */
 
 /* WCAG-compliant danger/warning/info backgrounds */
 .notification-item.danger {
@@ -527,7 +504,7 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
   .modal-grid { grid-template-columns: 1fr; }
 }
 
-/* ===== Custom checkbox (not default browser) ===== */
+/* ===== Custom checkbox ===== */
 input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
   width: 17px; height: 17px; margin: 0;
@@ -583,8 +560,8 @@ html[data-theme="light"] .notification-item { border-color: #e3e8ef; }
 /* --accent-contrast already resolves per theme; no override needed. */
 html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
 html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
-/* Light theme danger icon-btn: keep the soft-danger fill + foreground so the
-   destructive action is still visually distinct from edit in light mode. */
+/* Light theme danger icon-btn keeps the soft-danger fill + foreground so the
+   destructive action stays distinct from edit. */
 html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
 html[data-theme="light"] .icon-btn.danger:hover { color: #fff !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
 html[data-theme="light"] .empty-state { color: #5b6473; }
@@ -600,7 +577,7 @@ html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !impor
 /* ---- Light mode: borderless dashboard panels (shadow only) ---- */
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg) !important; }
-/* ---- Authoritative light-mode: zero shadows everywhere (override any earlier rules) ---- */
+/* ---- Light mode: these surfaces drop their shadow entirely ---- */
 html[data-theme="light"] .notification-popover,
 html[data-theme="light"] .user-list-table,
 html[data-theme="light"] .node-list-table,
@@ -633,7 +610,7 @@ html[data-theme="light"] .btn-secondary:hover { border-color: var(--orange) !imp
 .udetail-linkrow { display: flex; gap: 8px; }
 .udetail-link { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(125,135,150,.08); color: var(--text); font-size: 12px; }
 
-/* ---- Node picker (overhauled subscription/download "sub page") ---- */
+/* ---- Node picker (the subscription/download "sub page") ---- */
 .node-pick { display: flex; flex-direction: column; gap: 14px; }
 .node-pick-hint { color: var(--muted); font-size: var(--font-size-sm); margin: 0; }
 .node-pick-loading, .node-pick-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 12px; text-align: center; color: var(--muted); }
@@ -757,9 +734,8 @@ html[data-theme="light"] .lang-dropdown { background: var(--surface-1); box-shad
 }
 
 /* ===== ErrorState styles =====
-   Mirrors EmptyState geometry on purpose — both placeholders should read as
-   the same family. The badge uses the danger soft + danger-text pair so the
-   hue signals failure without sacrificing AA contrast in light mode. */
+   Mirrors EmptyState geometry so both read as one family. The badge uses the
+   danger soft + danger-text pair: failure hue without losing AA in light. */
 .error-state {
   display: flex;
   flex-direction: column;
@@ -847,10 +823,9 @@ html[data-theme="light"] .btn-secondary:hover {
 }
 
 /* ===== EmptyState (shared) polish =====
-   Badge geometry mirrors the inline alert + error state so the three placeholders
-   (skeleton / error / empty) read as one family. The badge is a soft accent disc
-   with the icon at the brand colour; the headline stays in primary text so the
-   message carries the meaning, not the icon. */
+   Badge geometry mirrors the error state so the three placeholders (skeleton /
+   error / empty) read as one family. The icon sits in a soft accent disc and
+   the headline stays primary text, so the message carries the meaning. */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -895,8 +870,8 @@ html[data-theme="light"] .btn-secondary:hover {
   margin-top: 4px;
 }
 
-/* Legacy class kept so older call-sites that still pass a bare icon keep
-   rendering. New code should use .empty-state-badge above. */
+/* Kept for older call-sites that still pass a bare icon; new code should use
+   .empty-state-badge. */
 
 /* ===== PanelSkeleton (shared) ===== */
 .panel-skeleton {
@@ -934,17 +909,16 @@ html[data-theme="light"] .btn-secondary:hover {
   flex-shrink: 0;
 }
 /* Tinted background + the matching read-safe text tone. These were hardcoded
-   dark-mode hues that stayed put in light mode, where they measured 1.44:1
+   dark-mode hues that stayed put in light mode, where they scored 1.44:1
    (online), 1.76:1 (warning) and 2.5:1 (offline/danger) against white. */
 .status-badge.status-online {
   background: var(--success-soft);
   color: var(--success-text);
 }
-/* "Idle" is the steady state for an enabled user with no live session.
-   Was surface-3 + text-secondary: 4.45:1 in light mode (right at the AA
-   floor) and indistinguishable from the muted / unknown state. info-soft +
-   info-text clears 4.5:1 in both themes and reads as "ready, not in alarm".
-   Bump to 16% + thin accent border so the pill reads as a chip, not text. */
+/* Idle: an enabled user with no live session. Was surface-3 + text-secondary
+   — 4.45:1 in light mode, right at the AA floor, and indistinguishable from
+   muted. info-soft + info-text clears 4.5:1 in both themes; the thin accent
+   border keeps it reading as a chip rather than text. */
 .status-badge.status-idle {
   background: color-mix(in srgb, var(--info-soft) 70%, var(--surface-1));
   color: var(--info-text);
@@ -988,13 +962,10 @@ input[type="checkbox"]:focus-visible,
 }
 
 /* ============================================================
-   OVManager UX polish pass
-   A calmer information hierarchy, clearer actions, and better
-   keyboard/mobile affordances. Kept at the end intentionally so
-   it wins over the older concept styles above.
+   UX polish pass — kept at the end so it wins over the older
+   concept styles above on equal specificity.
    ============================================================ */
 
-/* App chrome */
 .ops-main-content {
   /* Top padding clears the fixed 64px topbar so page content (headings,
      toolbars, table headers) never slides underneath it while scrolling. */
@@ -1166,10 +1137,9 @@ input[type="checkbox"]:focus-visible,
   pointer-events: none;
 }
 
-/* Compact single-border search input. The .search-field wrapper has the
-   border, the inner <input class="search-input"> has none. We keep the inner
-   rule below minimal — no border, no focus ring, no fixed height — so the
-   wrapper's height/padding/border do all the work. */
+/* The .search-field wrapper owns the border; the inner input stays minimal —
+   no border, no focus ring, no fixed height — so the wrapper's
+   height/padding/border do all the work. */
 .search-field .search-input {
   width: 100%;
   height: 100%;
@@ -1312,7 +1282,6 @@ input[type="checkbox"]:focus-visible,
   content: '';
 }
 
-/* Responsive layout */
 @media (max-width: 767.98px) {
   .ops-main-content {
     padding: 20px 14px 36px;
@@ -1327,12 +1296,9 @@ input[type="checkbox"]:focus-visible,
     white-space: nowrap;
   }
 
-  /* One-row topbar on phones: [hamburger][brand icon+name][…userbar…].
-     The hamburger shrinks to 40px and hugs the corner; the brand sits
-     right next to it (small inline-start padding, logical → mirrors in
-     RTL) with the wordmark VISIBLE — the identity is never dropped on
-     phones, it just gets a tighter footprint so search/lang/theme/bell
-     all stay on the same line. */
+  /* One-row topbar on phones: [hamburger][brand][…userbar…]. The brand keeps
+     a visible wordmark and a small inline-start padding (logical, so it
+     mirrors in RTL) so search/lang/theme/bell all fit on the same line. */
   .ops-topbar-minimal {
     min-height: 60px;
     padding-inline: 56px 12px;
@@ -1457,10 +1423,6 @@ html[data-theme="light"] .ops-sidebar {
   margin: 0;
 }
 
-/* ============================================================
-   Requested UX refinement pass
-   ============================================================ */
-
 /* Let the document own scrolling. This avoids pages getting trapped in the
    nested main-column scroll container on shorter screens. */
 html,
@@ -1551,8 +1513,7 @@ body {
   box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color) 55%, transparent);
 }
 
-/* Danger rows get a soft tinted surface with fully readable text —
-   never a solid bright red that text disappears into. */
+/* Soft tinted surface, not solid red, so the row text stays readable. */
 
 .alert-center-item.danger {
   border-color: color-mix(in srgb, var(--danger-color) 36%, var(--border));
@@ -1595,8 +1556,6 @@ body {
 }
 
 @media (max-width: 767.98px) {
-  /* Brand sizing is handled in the first ≤760 block (tighter: 15px / 26px
-     logo) so the wordmark fits next to the hamburger on one row. */
   .ops-breadcrumb {
     display: none !important;
   }
@@ -1621,8 +1580,8 @@ html[data-theme="light"] .security-review-item.danger {
   background: color-mix(in srgb, var(--danger-color) 11%, #f7f9fc);
 }
 
-/* Mobile bottom navigation. The content receives matching safe-area padding
-   so the last row/action is never hidden behind the browser-style bottom bar. */
+/* The content receives matching safe-area padding, so the last row is not
+   hidden behind the bottom bar. */
 .mobile-nav {
   display: none;
 }
@@ -1780,17 +1739,14 @@ html[data-theme="light"] .mobile-nav {
   scrollbar-width: thin;
 }
 
-/* Collapsed rail width is owned by --sidebar-collapsed-width (72px). */
-
 .ops-sidebar--collapsed .sidebar-toggle {
   inset-inline-end: 2px;
   width: 22px;
   height: 22px;
 }
 
-/* Main column offset mirrors the sidebar width and scales smoothly.
-   Driven by the same tokens the <aside> uses, so the rail and the content
-   edge can no longer drift apart (they were 72px vs 60px). */
+/* Driven by the same tokens the <aside> uses, so the rail and the content
+   edge cannot drift apart again (they were 72px vs 60px). */
 .ops-main-container {
   margin-inline-start: var(--sidebar-width);
   transition: margin-inline-start .2s ease;
@@ -1819,7 +1775,7 @@ html[data-theme="light"] .mobile-nav {
   inset-inline-start: 0;
 }
 
-/* ── Sidebar profile (inline, redesigned) ────────────────────────── */
+/* ── Sidebar profile ─────────────────────────────────────────────── */
 .sidebar-footer {
   padding: 12px;
   border-top: 1px solid var(--border);
@@ -1985,14 +1941,13 @@ html[dir="rtl"] .ops-sidebar--mobile.ops-sidebar--open {
   transform: translateX(0);
 }
 
-/* No RTL overrides needed for the main column or topbar: they use logical
-   properties (margin-inline-start / inset-inline-start), which flip
-   automatically with dir. The physical-property versions that used to live
-   here also carried the stale 60px rail width. */
+/* No RTL overrides needed for the main column or topbar: logical properties
+   (margin-inline-start / inset-inline-start) flip with dir automatically. The
+   physical versions that used to live here also carried a stale 60px rail. */
 
 /* ── Phone: off-canvas sidebar + hamburger (no overlap) ────────────────
-   Single breakpoint 767.98px, matching JS (innerWidth < 768). The old
-   900px value hid the rail while JS still laid out a desktop gutter. */
+   767.98px matches the JS threshold (innerWidth < 768); the old 900px value
+   hid the rail while JS still laid out a desktop gutter. */
 @media (max-width: 767.98px) {
   .ops-topbar-minimal {
     inset-inline: 0 !important;
@@ -2103,9 +2058,8 @@ html[dir="rtl"] .notification-popover {
 }
 @keyframes routeSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
 
-/* Horizontal bar — replaces the old ring. Track is the same line as the
-   table divider so it reads as part of the grid, the fill is the only
-   colour. % badge sits at the right edge. */
+/* The track reuses the table divider line so the bar reads as part of the
+   grid; the fill is the only colour. */
 .usage-bar {
   display: flex;
   align-items: center;
@@ -2119,11 +2073,9 @@ html[dir="rtl"] .notification-popover {
 /* ── Filter chips ───────────────────────────────────────── */
 
 .filter-chip.active {
-  /* Filled accent-soft (was 14% transparent — too faint to read as "selected"
-     when several chips are stacked, especially the "All 3" vs "Unlimited 3"
-     pair the user has to disambiguate at a glance). The accent-soft token
-     gives a clearly filled pill that the eye can lock onto, plus an
-     accent border + accent text + a soft shadow to lift it from the row. */
+  /* Accent-soft fill rather than 14% transparent: at 14% a selected chip was
+     too faint to pick out when several are stacked. The accent border, text
+     and soft shadow lift it clear of the row. */
   background: var(--accent-soft);
   border-color: var(--accent-color);
   color: var(--accent-color);
@@ -2140,14 +2092,8 @@ html[dir="rtl"] .notification-popover {
 .table-compact .list-table thead th,
 .table-compact .user-list-table thead th,
 
-/* ── CSV export button ──────────────────────────────────── */
-
 /* ── Dashboard quick actions ────────────────────────────── */
 .dashboard-quick-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-
-/* ── Traffic chart ──────────────────────────────────────── */
-
-/* ── Count-up numbers ───────────────────────────────────── */
 
 /* ── Accent picker ──────────────────────────────────────── */
 .accent-picker { display: flex; gap: 9px; flex-wrap: wrap; }
@@ -2218,8 +2164,6 @@ html[dir="rtl"] .notification-popover {
 .nd-cert.is-soon { background: color-mix(in srgb, var(--accent-color) 10%, transparent); color: var(--accent-color); border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border)); }
 .nd-cert.is-critical, .nd-cert.is-expired { background: color-mix(in srgb, var(--danger-color) 12%, transparent); color: var(--danger-color); border-color: color-mix(in srgb, var(--danger-color) 38%, var(--border)); }
 
-/* ── Pagination footer ─────────────────────────────────── */
-
 /* ── Toast dismiss ─────────────────────────────────────── */
 .toast {
   display: flex;
@@ -2288,7 +2232,7 @@ html[dir="rtl"] .notification-popover {
    section look like" answer lives in one place.
 ═══════════════════════════════════════════════════════════ */
 
-/* ── Skeleton primitives (components/ui/Skeleton.jsx) ───────── */
+/* ── Skeleton primitives (components/ui/Skeleton.tsx) ───────── */
 .sk-block {
   display: block;
   background: var(--surface-2, #1f232c);
@@ -2370,7 +2314,7 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .section-error-copy strong { font-size: 14px; color: var(--text); }
 .section-error-copy span { font-size: 12.5px; color: var(--muted); }
 
-/* ── Route-level page loader (App.jsx) ─────────────────────── */
+/* ── Route-level page loader (App.tsx) ─────────────────────── */
 .page-loader { display: flex; flex-direction: column; gap: 20px; }
 
 .page-loader-grid {
@@ -2398,12 +2342,10 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Merged from polish.css (deleted) — shared bits live here now.
+   Shared bits (formerly polish.css). Tokens.css variables and logical
+   props only; new shared code lands here rather than being scattered
+   across index.css / styles.css / Settings.css.
 ═══════════════════════════════════════════════════════════════════ */
-
-/* polish.css — single home for new shared bits.
-   Uses only tokens.css variables + logical props. New code lands here instead
-   of scattering across index.css / styles.css / Settings.css. */
 
 .sp-chip-row {
   display: flex;
@@ -2493,7 +2435,7 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-stat--ok > strong { color: var(--success-text); }
 .sp-stat--muted > strong { color: var(--text-secondary); }
 
-/* Section header: icon beside the title (was margin-only, icon stacked). */
+/* Icon sits beside the title. */
 .sp-section-header {
   display: flex;
   align-items: flex-start;
@@ -2910,11 +2852,9 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SIDEBAR RAIL — smooth collapse instead of instant unmount pops.
-   Labels stay mounted (Sidebar.jsx) and collapse via max-width/opacity so
-   the width tween looks continuous. Higher specificity than the legacy
-   `.ops-sidebar--collapsed … { display: none }` rules; polish.css also
-   loads last. Logical props throughout for RTL.
+   SIDEBAR RAIL — labels stay mounted and collapse via max-width/opacity, so
+   the width tween looks continuous. Scoped higher than the legacy
+   `.ops-sidebar--collapsed … { display: none }` rules. Logical props for RTL.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .ops-sidebar .sidebar-nav-label {
@@ -3076,7 +3016,7 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .nd-log--error { border-color: color-mix(in srgb, var(--danger-color) 45%, transparent); }
 .nd-log--warning { border-color: color-mix(in srgb, var(--warning, var(--accent-color)) 40%, transparent); }
 .nd-log-time { font-variant-numeric: tabular-nums; color: var(--text-muted); white-space: nowrap; }
-.nd-log-msg { overflow-wrap: anywhere; color: var(--text-primary); }/*tail*/
+.nd-log-msg { overflow-wrap: anywhere; color: var(--text-primary); }
 
 /* ── Touch ergonomics (phones) ────────────────────────────────────────
    44px hit targets for the controls people actually tap, and 16px inputs

@@ -53,12 +53,10 @@ generate_self_signed() {
     local key="/etc/ssl/self-signed/privkey.pem"
     local cert="/etc/ssl/self-signed/fullchain.pem"
     mkdir -p /etc/ssl/self-signed
-    # /etc/ssl/self-signed is shared with OVNode, which this panel's own guide
-    # tells operators to install on the same host. Regenerating replaces the
-    # node's identity and invalidates the certificate the panel pinned for it
-    # (TOFU), so an intact pair is kept. Permissions are still asserted, which
-    # is what repairs a key whose group read a node install took away.
-    # `ovm https --self` is the explicit way to ask for a new one.
+    # /etc/ssl/self-signed is shared with OVNode on the same host: regenerating
+    # replaces the node's identity and invalidates the certificate the panel
+    # pinned for it, so an intact pair is kept and only its permissions are
+    # re-asserted. `ovm https --self` is the explicit way to ask for a new one.
     if [[ "${TLS_REGENERATE:-0}" != "1" ]] && _existing_tls_pair_usable "$key" "$cert"; then
         TLS_KEY="$key"
         TLS_CERT="$cert"
@@ -80,11 +78,9 @@ generate_self_signed() {
 ACME_INSTALL_VERSION="3.1.1"
 
 # Download a third-party installer to a file and run it, instead of piping
-# curl straight into a root shell. Version-pinned where the vendor offers a
-# versioned URL, and the payload is sanity-checked before it is executed.
-# This is not a signature check — it stops a corrupt or truncated response
-# and an obvious redirect stub, not a compromised vendor. Package-manager
-# installs are tried first for exactly that reason.
+# curl straight into a root shell. Not a signature check — it stops a corrupt
+# or truncated response and an obvious redirect stub, not a compromised vendor,
+# which is why package-manager installs are tried first.
 fetch_and_run_installer() {  # url expected-prefix tmpname
     local url="$1" prefix="$2" name="$3" script first rc
     script="$(mktemp "/tmp/${name}.XXXXXX.sh")"

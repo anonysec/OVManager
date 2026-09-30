@@ -1,4 +1,4 @@
-"""A second service on this host must not lose its TLS identity to ours.
+"""A second service on this host must not lose its TLS identity to the panel's.
 
 ``/etc/ssl/self-signed`` is a shared convention: OVNode keeps its own
 certificate in exactly the two files this panel writes, and the panel's own

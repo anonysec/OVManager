@@ -13,21 +13,15 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Persist a session from a login-shaped response.
- *
- * Shared by login and the first-run claim, which returns the same body: one
- * place decides what a session means to this app.
- */
+// Shared by login and the first-run claim, which return the same body.
 function storeSession(data: any, fallbackName = '') {
   const newToken = data.access_token;
   const refreshToken = data.refresh_token;
 
-  // The backend issues an OPAQUE session token (random bytes), not a JWT,
-  // so there is nothing in it to decode — identity comes from the response
-  // body. Older builds decoded it, and because a non-JWT makes atob/JSON.parse
-  // throw, LoginPage's catch reported every successful login as
-  // "Incorrect username or password".
+  // Identity comes from the response body, not the token: the backend issues
+  // an OPAQUE session token (random bytes), and older builds that decoded it
+  // hit atob/JSON.parse on a non-JWT, so LoginPage reported every successful
+  // login as "Incorrect username or password".
   const role = data.role || null;
   // Prefer the server's canonical spelling; fall back to what was typed.
   const resolvedName = data.username || fallbackName || '';
@@ -42,8 +36,8 @@ function storeSession(data: any, fallbackName = '') {
     localStorage.removeItem('refreshToken');
   }
   localStorage.setItem('userRole', role);
-  // Persisted for the sidebar profile block, which previously read the JWT
-  // "sub" claim — impossible with an opaque token.
+  // The sidebar profile block used to read the JWT "sub" claim, which an
+  // opaque token does not have.
   if (resolvedName) localStorage.setItem('username', resolvedName);
   return { token: newToken, role };
 }
@@ -93,9 +87,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserRole(null);
   }, []);
 
-  // When the API layer detects an expired/invalid token (401), it dispatches
-  // AUTH_EXPIRED_EVENT. Resetting state here flips isAuthenticated to false,
-  // and App's routes send the user to the login page (basename-aware).
+  // Resetting state here flips isAuthenticated, and App's routes send the user
+  // to the login page.
   useEffect(() => {
     const handleExpired = () => logout();
     window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
@@ -114,13 +107,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Session expiry is authoritative on the server. The token is opaque, so the
-  // client cannot inspect an exp claim — the previous implementation tried to,
-  // and its catch treated any non-JWT as expired, which logged every user out
-  // on load and immediately after login.
-  //
-  // Staleness is detected by the API layer instead: a 401 dispatches
-  // AUTH_EXPIRED_EVENT, handled by the effect above.
+  // Session expiry is authoritative on the server: the token is opaque, so the
+  // client cannot inspect an exp claim. A previous implementation tried, and
+  // its catch treated any non-JWT as expired — logging every user out on load
+  // and again right after login. Staleness comes from the API layer's 401
+  // AUTH_EXPIRED_EVENT instead.
 
   const isAuthenticated = !!token;
 

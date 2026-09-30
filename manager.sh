@@ -108,14 +108,12 @@ if [[ $# -eq 0 || "$_ovm_mode" == "help" ]]; then
 fi
 unset _ovm_mode _ovm_arg
 
-# Root gate, and unconditional from here: only real commands get this far,
-# and every one of them needs root.
+# Root gate, unconditional from here: only real commands get this far.
 #
-# Builtins only, because nothing has been sourced yet and die() is defined in
-# the libraries — which is also why the check cannot live at the dispatch arms:
-# a non-root caller never reaches them, because sourcing the libraries out of a
-# 0700 root-owned tree fails first. That was the 1.0.21 behaviour, and all it
-# told an operator was "scripts/lib not found".
+# Builtins only, because nothing has been sourced yet and die() lives in the
+# libraries — which is also why the check cannot live at the dispatch arms: a
+# non-root caller never reaches them, because sourcing out of a 0700 root-owned
+# tree fails first (1.0.21 told an operator only "scripts/lib not found").
 if [[ "$(id -u)" -ne 0 ]]; then
     printf '  Error: Must run as root (sudo). Every ovm command reads %s/.env,\n' "$INSTALL_DIR" >&2
     printf '         which holds the secret panel URL path and the install config.\n' >&2
@@ -198,65 +196,15 @@ trap operation_end EXIT
 
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
-
-
-
-
-# Interactive if the operator did not pass -y AND we can talk to a terminal.
-# `curl | bash` has no stdin TTY; humans still work via /dev/tty.
-# AI / CI must pass -y (or CI=true) so this never blocks on a prompt.
-
-# Stronger check for the interactive menu: stdin must be a real terminal or
-# an openable /dev/tty. Scripts and pipes take the subcommand path instead.
-
-# Masked input: prints one * per character on stderr, backspace works, and
-# the value goes to stdout (never echoed as plain text). Reads stdin, so
-# callers redirect /dev/tty when needed.
-
-
-
-
-# Explicit-yes prompt (default NO): used for destructive extras like deleting
-# data during uninstall. Non-interactive runs keep the safe answer.
-
-
-
-
-
 # ── OS ─────────────────────────────────────────────────────────────────
 OS_ID="" OS_NAME="" PKG_INSTALL="" PKG_UPDATE=""
-
-
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
 
 check_root() { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
 
-# ── Spinner / steps ────────────────────────────────────────────────────
-
 # ── Deps ───────────────────────────────────────────────────────────────
 UV_BIN=""
-
-
-
-
-
-# ── Backup / firewall / health ─────────────────────────────────────────
-
-
-
-
-
-# ── TLS ────────────────────────────────────────────────────────────────
-# Private keys must never be world-readable. Native mode runs the panel as
-# root (600 root-owned is fine); Docker mode runs it as appuser (uid 1000)
-# with the files mounted read-only, so the key is owned by that uid. The
-# certificate is public and stays 644.
-
-
-
-
-
 
 # ── Source / env ───────────────────────────────────────────────────────
 read_env_port() {
@@ -269,36 +217,18 @@ read_env_port() {
     if [[ -n "$t" && -z "$TLS_MODE" ]]; then TLS_MODE="self"; fi
 }
 
-# ── Native ─────────────────────────────────────────────────────────────
-
-
-# ── Docker ─────────────────────────────────────────────────────────────
-
-
-
-# ── Validate / wizard / plan ───────────────────────────────────────────
 # ── Actions ────────────────────────────────────────────────────────────
-
-
-# Mirrors the panel's boot-time validation (backend/config.py): >= 8 chars
-# and no placeholder-looking values.
-# Empty output = acceptable; otherwise the human-readable reason.
-
-
-# Interactive re-prompt until the typed password passes the panel's rules
-# (max 3 tries, then fail fast — never install a password the panel rejects).
 
 # Recovery for a lost owner password: prompt for the new one (bash can talk to
 # a terminal; the CLI's getpass cannot be driven from here), hand it to the one
-# implementation — cli/password.py, through `_cli_py`, which reaches the
-# container on a docker install — then restart and wait for /health. Never
-# echoes the password.
+# implementation — cli/password.py through `_cli_py` — then restart and wait for
+# /health. Never echoes the password.
 #
-# Nothing here writes .env, and nothing may. It used to write
-# ADMIN_PASSWORD_HASH into it, and that was the bug: backend/config.py ignores
-# the field and seeds.py imports it once, on the fresh-install path, so the
-# command printed success while the old password kept working. The credential
-# is the owner's row in the panel database, and the CLI is its only writer.
+# Nothing here writes .env, and nothing may: it used to write
+# ADMIN_PASSWORD_HASH into it, but backend/config.py ignores the field and
+# seeds.py imports it once on the fresh-install path, so the command printed
+# success while the old password kept working. The credential is the owner's row
+# in the panel database, and the CLI is its only writer.
 do_reset_password() {
     if [[ -n "$ADMIN_PASS" ]]; then
         validate_admin_password "$ADMIN_PASS"
@@ -350,8 +280,7 @@ do_reset_password() {
     line ""
 }
 
-# Update and uninstall live in install.sh — delegate so there is exactly one
-# implementation.
+# Update and uninstall live in install.sh — delegate, one implementation.
 run_installer() {
     [[ -e "$INSTALL_DIR" ]] || [[ "$1" == "uninstall" ]] || die "Not installed ($INSTALL_DIR missing)"
     [[ -x "$INSTALLER" ]] || die "Installer missing ($INSTALLER)"
@@ -372,18 +301,13 @@ delegate_uninstall() {
     run_installer uninstall "${args[@]}"
 }
 
-
-
 # ── Manager menu (x-ui style) ──────────────────────────────────────────
 
 is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
 
-
-
 # systemd waits up to TimeoutStopSec (90s default) for a stuck service, which
 # operators read as a frozen installer. Bound the wait, then force the unit.
 STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
-
 
 service_autostart_status() {
     if is_docker_mode; then
@@ -516,7 +440,6 @@ auto_backup_cli() {
     esac
 }
 
-
 show_login_info() {
     local user path port ip url
     user="$(env_get "$INSTALL_DIR/.env" ADMIN_USERNAME)"; : "${user:=admin}"
@@ -539,9 +462,8 @@ reset_urlpath_now() {
     step "Panel path reset — the panel is served at / again"
 }
 
-# Certificate issuance. Non-interactive: the mode comes from the flags, so
-# this is scriptable and a mistake cannot leave a half-answered prompt. The
-# menu this replaced asked the same four questions and set the same variables.
+# Certificate issuance. Non-interactive: the mode comes from the flags, so this
+# is scriptable and a mistake cannot leave a half-answered prompt.
 do_https() {
     local envfile="$INSTALL_DIR/.env"
     [[ -f "$envfile" ]] || die "Not installed ($envfile missing)"
@@ -581,8 +503,6 @@ do_https() {
     return 0
 }
 
-
-
 # Roll back to the newest pre-update code snapshot (update failover).
 do_rollback() {
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
@@ -616,11 +536,10 @@ do_rollback() {
 }
 
 # ── Restore ────────────────────────────────────────────────────────────
-# Put a stored backup back over the live database. The CLI owns the restore
-# transaction (stage and verify a candidate, copy the live database aside,
-# activate it, roll back to that copy on failure); the host owns what the CLI
-# cannot do: refuse without an explicit confirmation, and restart the panel so
-# it opens the database it was replaced with.
+# Put a stored backup back over the live database. The CLI owns the transaction
+# (stage and verify a candidate, copy the live database aside, activate it, roll
+# back on failure); the host owns what the CLI cannot do: refuse without an
+# explicit confirmation, and restart the panel onto the database it replaced.
 do_restore() {
     local name="$1"
     local backup="$DATA_DIR/backups/$name"
@@ -649,7 +568,7 @@ do_restore() {
         systemctl_bounded restart >/dev/null 2>&1 || true
     fi
     # The panel comes back either way: a failed restore must not leave the box
-    # down with nobody watching it.
+    # down.
     if [[ "$rc" -ne 0 ]]; then
         die "Restore failed — the panel was restarted on the previous database. Check: ovm logs 100"
     fi
@@ -673,9 +592,9 @@ do_owner_claim() {
     local url claimed=0
     url="$(panel_url)"
     # Ask the panel first: a claimed panel refuses every key (409), so printing
-    # one without that warning would send the operator to a dead page. A panel
-    # that is down or unreachable simply does not answer, and the key is
-    # harmless either way — the endpoint checks the claim state before the key.
+    # one without that warning sends the operator to a dead page. A panel that
+    # is down does not answer, and the key is harmless either way — the endpoint
+    # checks the claim state before the key.
     if curl -fskS --max-time 3 "${url}api/owner-claim" 2>/dev/null \
         | grep -q '"claimable":[[:space:]]*false'; then
         claimed=1
@@ -806,8 +725,6 @@ parse_args() {
     return 0
 }
 
-
-
 main() {
     parse_args "$@"
     [[ -z "$ADMIN_PASS" && -n "${OVM_PASS:-}" ]] && ADMIN_PASS="$OVM_PASS"
@@ -815,7 +732,7 @@ main() {
     # invocation in a script cannot start waiting for input.
     [[ -z "$ACTION" ]] && usage
 # The operator CLI (cli/) is the implementation for every read and diagnostic
-# command; this file decides how to reach it. One implementation, no bash twin
+# command; this file decides how to reach it — one implementation, no bash twin
 # to drift out of sync.
 #
 # Native: the install's own virtualenv, so `$py -m cli.main` runs directly.
@@ -824,10 +741,8 @@ main() {
 # env_file) rather than as a file, and the data dir is the /app/data mount, so
 # `--in-container` plus a host-observed `--service-state` is all it needs.
 #
-# Three commands cannot run in the container at all and stay host-side, because
-# the container has no docker CLI and no host .env to rewrite: logs,
-# reset-password, reset-urlpath. auto-backup, https issuance, update, rollback
-# and uninstall are bash by design.
+# logs, reset-password and reset-urlpath cannot run in the container at all (no
+# docker CLI, no host .env to rewrite) and stay host-side.
 _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
     if is_docker_mode; then
         # --public-ip because a container only knows its own address, and the
@@ -898,21 +813,17 @@ cmd_doctor_fix() {
 }
 
     case "$ACTION" in
-        # Every command below needs root, including the read-only ones. They
+        # Every command below needs root, including the read-only ones: they
         # read .env, which holds JWT_SECRET_KEY and the secret URL path that is
-        # the panel's only defence against scanners (no credential: the owner
-        # password is a database row).
-        # "Read-only" meant "does not change the system", not "discloses
-        # nothing" — and a non-root caller previously failed deep inside the
-        # script with "scripts/lib not found", which says nothing useful.
+        # the panel's only defence against scanners.
         status) check_root; cmd_status; exit $? ;;
         start|stop|restart|enable|disable) check_root; service_action "$ACTION"; exit 0 ;;
         logs) check_root; cmd_logs; exit $? ;;
         backup) check_root; cmd_backup; exit $? ;;
         restore)
             check_root
-            # No name is the listing: a read, so it does not prompt and does
-            # not touch the running panel.
+            # No name is the listing: a read, so it neither prompts nor touches
+            # the running panel.
             if [[ -z "$RESTORE_NAME" ]]; then
                 cmd_restore
                 exit $?
@@ -925,8 +836,8 @@ cmd_doctor_fix() {
         recovery) check_root; show_login_info; exit 0 ;;
         owner-claim) do_owner_claim; exit $? ;;
         completion) do_completion; exit $? ;;
-        # Delegate: the installer is the thing whose version and commit the
-        # operator is asking about, and there is exactly one implementation.
+        # Delegate: the installer is what the operator is asking about, and
+        # there is exactly one implementation of the answer.
         version-script) do_version_script; exit $? ;;
         reset-password)
             # Validate before the root gate so bad input fails the same
@@ -934,8 +845,8 @@ cmd_doctor_fix() {
             [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
             check_root
             # One path for every install: -p/OVM_PASS, the interactive prompt,
-            # native and Docker. bash only collects the password and restarts;
-            # the CLI writes the row (see do_reset_password).
+            # native and Docker. bash collects the password and restarts; the
+            # CLI writes the row (see do_reset_password).
             do_reset_password
             exit $? ;;
         reset-urlpath)
@@ -946,7 +857,7 @@ cmd_doctor_fix() {
         doctor-fix) check_root; cmd_doctor_fix; exit $? ;;
         rollback) check_root; do_rollback; exit 0 ;;
         # update/uninstall/recover-update exec the installer, which has its own
-        # root check — but refusing here means one gate for the whole CLI and a
+        # root check — refusing here means one gate for the whole CLI and a
         # clear message, instead of exec'ing a script only to be told no.
         update) check_root; delegate_update; exit 0 ;;
         recover-update) check_root; run_installer recover-update; exit 0 ;;

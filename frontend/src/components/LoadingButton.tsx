@@ -9,7 +9,7 @@ type LoadingButtonProps = {
 };
 
 const LoadingButton = ({ isLoading, onClick, className, children, disabled = false, type, ...rest }: LoadingButtonProps) => {
-  // Strip 'btn' from className to avoid duplication since we always add it
+  // 'btn' is always added below, so strip it from className to avoid a duplicate.
   const cleanClass = (className || '').replace(/\bbtn\b/g, '').trim();
   const finalClass = cleanClass ? `btn ${cleanClass}` : 'btn';
 

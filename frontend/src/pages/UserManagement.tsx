@@ -173,7 +173,6 @@ const UserManagement = () => {
     }
     return counts;
   }, [users]);
-  // One chip per label would overflow the row once labels pile up.
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const visibleTags = tagsExpanded ? userTags : userTags.slice(0, MAX_VISIBLE_TAGS);
 
@@ -197,9 +196,8 @@ const UserManagement = () => {
     return () => clearTimeout(id);
   }, [draft, searchTerm, patchParams]);
   const setSearchTerm = (value: string) => { setDraft(value); };
-  // Button clicks clear instantly; typing debounces through the effect above.
   // One patchParams call: two in the same tick would rebuild from the same
-  // stale params and the last write would clobber the first.
+  // stale params, and the last write would clobber the first.
   const clearFilters = useCallback(() => {
     setDraft('');
     setPage(1);

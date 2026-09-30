@@ -429,7 +429,6 @@ def _fetch_node_usage(node) -> dict | None:
 
 
 async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[str]]:
-    """Query all active nodes for live sessions of this user (async, non-blocking)."""
     import asyncio
 
     live: set[tuple] = set()

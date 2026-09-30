@@ -3,10 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-/**
- * useCountUp — animate a numeric target from its previous value.
- * Returns the current animated value; pass it through a formatter.
- */
+// Returns the current animated value; pass it through a formatter.
 export const useCountUp = (target, duration = 700) => {
   const [value, setValue] = useState(0);
   const prevRef = useRef(0);

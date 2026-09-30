@@ -10,10 +10,8 @@ import { Card } from './shared';
 import './MyActivitySection.css';
 
 /* ═══════════════════════════════════════════════════════
-   MY ACTIVITY (simple) — the caller's own audit trail.
-
-   GET /activity/?limit=20 is already scoped by the backend:
-   the owner sees every event, an admin only their own.
+   MY ACTIVITY — the caller's own audit trail. GET /activity/ is
+   already scoped by the backend: owner sees all, admin only their own.
    ═══════════════════════════════════════════════════════ */
 
 const LIMIT = 20;

@@ -48,8 +48,8 @@ class AuthSession(Base):
     username: Mapped[str] = mapped_column(index=True)
     role: Mapped[str] = mapped_column()  # "owner" | "admin"
     created_at: Mapped[float] = mapped_column()  # unix ts
-    expires_at: Mapped[float] = mapped_column()  # absolute cap: created + SESSION_MAX_SECONDS
-    last_seen_at: Mapped[float] = mapped_column()  # idle timeout reference (sliding)
+    expires_at: Mapped[float] = mapped_column()
+    last_seen_at: Mapped[float] = mapped_column()
     user_agent: Mapped[str] = mapped_column(nullable=True)
     ip: Mapped[str] = mapped_column(nullable=True)
 

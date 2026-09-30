@@ -8,9 +8,8 @@ import { SkeletonPanel, SkeletonBlock } from './components/ui/Skeleton';
 
 import favicon from './assets/ovmanager-character-clean.png';
 
-// Lazy-loaded pages for code splitting. Each factory is hoisted to a named
-// const so it can be reused by useRoutePrefetch without creating a second,
-// separate chunk.
+// Each factory is a named const so useRoutePrefetch can reuse it without
+// creating a second, separate chunk.
 const loadLogin = () => import('./pages/LoginPage');
 const loadClaim = () => import('./pages/ClaimPage');
 const loadDashboard = () => import('./pages/DashboardLayout');
@@ -35,22 +34,14 @@ const AuditLog = lazy(loadAudit);
 const AdminManagement = lazy(loadAdmins);
 const SetupWizard = lazy(loadSetup);
 
-// Set favicon
 const link = document.createElement('link');
 link.rel = 'icon';
 link.type = 'image/png';
 link.href = favicon;
 document.head.appendChild(link);
 
-/**
- * Page-level loading state.
- *
- * Replaces the old centred spinner. A spinner communicates "something is
- * happening"; a shaped skeleton communicates "this is what is about to
- * appear", which measurably lowers perceived wait and — because it reserves
- * the same space as the real content — removes the layout shift that made
- * navigation feel janky.
- */
+// A shaped skeleton reserves the same space as the real content, so route
+// changes do not shift layout.
 const PageLoader = () => {
   const { t } = useTranslation();
   return (
@@ -66,15 +57,8 @@ const PageLoader = () => {
   );
 };
 
-/**
- * Warm the chunks the user is most likely to need next, once the current page
- * is idle. Navigation then resolves from cache instead of a cold network
- * round-trip, which is the difference between an instant tab switch and a
- * visible skeleton.
- *
- * requestIdleCallback keeps this strictly off the critical path — it never
- * competes with the current route's own data fetching.
- */
+// requestIdleCallback keeps chunk warming off the critical path, so it never
+// competes with the current route's own data fetching.
 function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -86,7 +70,7 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
       // Ordered by likelihood of being visited from the dashboard.
       const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadHealth, loadSettings];
       if (userRole === 'owner') queue.push(loadAdmins);
-      // Chain sequentially so we never saturate the connection pool.
+      // Chained sequentially so prefetching never saturates the connection pool.
       for (const load of queue) {
         try {
           await load();
@@ -100,8 +84,8 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
   }, [isAuthenticated, userRole]);
 }
 
-/** Scroll to top on route change — otherwise a deep scroll position carries
- *  over into the next page and it looks like content is missing. */
+// Without this a deep scroll position carries over into the next page and it
+// looks like content is missing.
 function useScrollReset() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -109,12 +93,8 @@ function useScrollReset() {
   }, [pathname]);
 }
 
-/**
- * Wraps a routed page in its own error boundary + Suspense.
- *
- * Keyed by path so that navigating away from a crashed page gives you a clean
- * mount rather than a sticky error screen.
- */
+// Named so a crash is scoped to one section: navigating to another page mounts
+// clean instead of leaving a sticky error screen.
 const Page = ({ name, children }: { name: string; children: React.ReactNode }) => (
   <SectionBoundary name={name}>
     <Suspense fallback={<PageLoader />}>{children}</Suspense>
@@ -127,7 +107,7 @@ function App({ onReady }: { onReady?: () => void }) {
   useRoutePrefetch(isAuthenticated, userRole);
   useScrollReset();
 
-  // Tell main.jsx the app has committed so it can drop the static boot shell.
+  // Lets main.tsx drop the static boot shell once the app has committed.
   useEffect(() => { onReady?.(); }, [onReady]);
 
   return (

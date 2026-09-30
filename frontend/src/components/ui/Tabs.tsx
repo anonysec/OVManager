@@ -4,14 +4,13 @@
 import { useRef } from 'react';
 import './Tabs.css';
 
-/**
- * Tabs — accessible tab strip (no panel rendering: the caller owns the
- * tabpanel and points aria-labelledby at `tab-<id>`).
- *
- * Keyboard model follows the WAI-ARIA tabs pattern: one tab is tabbable
- * (roving tabindex), arrows move + activate, Home/End jump to the ends.
- * Automatic activation is deliberate — every panel here renders local data.
- */
+// No panel rendering: the caller owns the tabpanel and points
+// aria-labelledby at `tab-<id>`.
+//
+// Keyboard model follows the WAI-ARIA tabs pattern: one tab is tabbable
+// (roving tabindex), arrows move and activate, Home/End jump to the ends.
+// Automatic activation is deliberate — every panel here renders local data.
+
 const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?: any[]; value?: any; onChange?: any; ariaLabel?: any; className?: string }) => {
   const listRef = useRef<any>(null);
   const found = tabs.findIndex((tab: any) => tab.id === value);

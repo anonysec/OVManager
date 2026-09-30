@@ -67,8 +67,8 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     };
   }, [isOpen, user?.uuid]);
 
-  // Generate QR code via a plain dynamic import — lazy() is for React components,
-  // not for calling library functions directly.
+  // A plain dynamic import: lazy() is for React components, not for calling a
+  // library function directly.
   useEffect(() => {
     if (!subscriptionLink || !isOpen) return;
     let cancelled = false;
@@ -80,7 +80,6 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     return () => { cancelled = true; };
   }, [subscriptionLink, isOpen]);
 
-  // Reset QR when modal closes so it regenerates fresh on next open
   useEffect(() => {
     if (!isOpen) setQr('');
   }, [isOpen]);

@@ -62,8 +62,8 @@ def _disable_urlpath_for_tests():
     in test_app.py) call set_urlpath() first, so they expect the real
     middleware to read that value.
 
-    Solution: we patch only the *first call* (before any explicit set_urlpath
-    runs). Tests that call set_urlpath re-cache directly, so they bypass our
+    Solution: only the *first call* is patched (before any explicit set_urlpath
+    runs). Tests that call set_urlpath re-cache directly, so they bypass this
     short-circuit."""
     import backend.urlpath._core as urlpath_mod
 

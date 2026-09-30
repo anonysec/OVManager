@@ -81,10 +81,9 @@ def _zero_literal(column) -> str:
 def _default_literal(column) -> str | None:
     """SQL literal for a column default, or ``None`` when there is none.
 
-    A declared ``server_default`` is rendered by SQLAlchemy's own DDL compiler
-    so quoting matches what ``CREATE TABLE`` would emit. Otherwise a scalar
-    Python-side default is used, which keeps ``ALTER TABLE ADD COLUMN``
-    consistent with the values the ORM would have written on a fresh database.
+    A declared ``server_default`` is rendered by SQLAlchemy's DDL compiler so
+    quoting matches ``CREATE TABLE``; a scalar Python-side default keeps
+    ``ALTER TABLE ADD COLUMN`` consistent with a fresh database.
     """
     if column.server_default is not None:
         try:
@@ -123,7 +122,6 @@ def _add_column_sql(table: str, column) -> str:
 
 
 def _create_mapped_tables(db: Session) -> None:
-    """Create every mapped table that does not exist yet."""
     Base.metadata.create_all(bind=db.get_bind())
 
 
@@ -135,18 +133,18 @@ def _create_extra_tables(db: Session) -> None:
 def ensure_extra_tables(db: Session) -> None:
     """Create the non-ORM tables (audit + metrics) if they are missing.
 
-    Owned here so a single module holds every piece of DDL and the statements
-    run once per process instead of on every write or graph query.
+    Kept here so one module holds every piece of DDL, and it runs once per
+    process instead of on every write.
     """
     _create_extra_tables(db)
     db.commit()
 
 
 def _reconcile_columns(db: Session) -> list[str]:
-    """Add mapped columns that are missing from existing tables.
+    """Add mapped columns missing from existing tables.
 
-    This is the step that ``create_all()`` cannot perform, and the reason an
-    existing install needs a real migration path rather than a table creator.
+    The one thing ``create_all()`` cannot do, and the reason an existing install
+    needs a migration path rather than a table creator.
     """
     added: list[str] = []
     existing_tables = table_names(db)

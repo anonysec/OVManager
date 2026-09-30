@@ -1,17 +1,7 @@
 """Dynamic URL path prefix manager for OVManager.
 
-Reads the current URLPATH from the DB Settings table with a short cache TTL.
-When URLPATH is changed via the web UI, the new value takes effect within
-the cache TTL (default 5 seconds) without any restart.
-
-Usage:
-    from backend.urlpath import get_urlpath, set_urlpath, URLPathMiddleware
-
-    # Get current prefix (cached)
-    prefix = get_urlpath()   # "" or e.g. "mysecret"
-
-    # Update at runtime (immediately cached)
-    set_urlpath("newpath")
+Reads the current URLPATH from the DB Settings table with a short cache TTL, so
+a change made in the web UI takes effect without a restart.
 """
 
 import logging
@@ -47,8 +37,8 @@ def _load_from_db() -> str:
 def get_urlpath() -> str:
     """Return the current URLPATH prefix (without leading/trailing slashes).
 
-    Empty string means the panel is served at root.
-    Cached for _CACHE_TTL seconds to avoid a DB query on every request.
+    Empty string means the panel is served at root. Cached for _CACHE_TTL
+    seconds to keep a DB query off every request.
     """
     global _cache_value, _cache_ts
     now = time.monotonic()
@@ -75,11 +65,11 @@ def get_urlpath() -> str:
 def set_urlpath(value: str) -> str:
     """Update URLPATH in DB and invalidate cache.
 
-    Returns the normalized value that was persisted. Raises when persistence fails so
-    callers cannot report a security-sensitive path change that will be lost on restart.
-    Reserved prefixes (api, assets, sub, …) raise here too: the settings router
-    validates user input, but main.py's CLI path and any future writer must not
-    be able to shadow live routes and lock the operator out.
+    Returns the normalized value that was persisted; raises when persistence
+    fails, so no caller reports a security-sensitive path change that would be
+    lost on restart. Reserved prefixes raise here too — the settings router
+    validates user input, but the CLI path must not be able to shadow live
+    routes and lock the operator out.
     """
     global _cache_value, _cache_ts
     value = (value or "").strip("/")
@@ -120,10 +110,9 @@ def invalidate_cache() -> None:
 def reserved_prefixes() -> set[str]:
     """First path segments the panel itself owns — never usable as URLPATH.
 
-    Derived from the live route table (so it can never drift from reality as
-    routers are added/removed), plus the middleware-level exemptions that
-    must stay reachable no matter what the routes look like. Cached after the
-    first computation; route tables don't change at runtime.
+    Derived from the live route table so it cannot drift as routers are added
+    or removed, plus the middleware-level exemptions that must stay reachable
+    whatever the routes look like.
     """
     global _reserved_cache
     with _lock:
@@ -153,11 +142,10 @@ def reserved_prefixes() -> set[str]:
 
 
 def reset_urlpath() -> bool:
-    """Emergency recovery: clear the panel prefix directly in the DB.
+    """Emergency recovery for an operator locked out by a forgotten prefix.
 
-    Used by ``main.py --reset-urlpath`` when an operator locks themselves out
-    (forgot the path). The settings row is auto-created if missing (default
-    is "" anyway), so failure means the database itself is unreachable.
+    Backs ``main.py --reset-urlpath``. The settings row is auto-created if
+    missing, so failure means the database itself is unreachable.
     """
     global _cache_value, _cache_ts
     try:
@@ -182,18 +170,12 @@ def reset_urlpath() -> bool:
 class URLPathMiddleware:
     """ASGI middleware that enforces the dynamic URLPATH prefix.
 
-    Behavior:
-    - If URLPATH is empty: all requests pass through unchanged.
-    - If URLPATH is set (e.g. "mysecret"):
-      - Requests to /mysecret/... → strip prefix, pass to app as /...
-      - Requests to /mysecret (exact) → strip prefix, pass as /
-      - Any other request → return an empty 404 response (no redirect)
-        This hides the panel from scanners and unauthorized visitors while
-        still looking like a normal (if empty) website to monitoring tools.
+    With URLPATH unset every request passes through. When it is set, requests
+    under the prefix are rewritten to the bare path and anything else gets an
+    empty 404 — no redirect, so the panel stays hidden from scanners.
 
-    This is an ASGI middleware (not Starlette BaseHTTPMiddleware) because it
-    needs to modify the request scope before routing, and must short-circuit
-    non-matching paths before they reach the app.
+    Written as raw ASGI rather than BaseHTTPMiddleware because it must modify
+    the request scope before routing and short-circuit non-matching paths.
     """
 
     def __init__(self, app):
@@ -249,12 +231,8 @@ class URLPathMiddleware:
 
     @staticmethod
     async def _send_empty(send):
-        """Send a minimal empty 404 that reveals nothing.
-
-        The empty body keeps the response content-free while the standard 404
-        status stops monitoring tools and humans from reading an empty 200 as
-        "the server is not running anything".
-        """
+        """An empty body with a real 404 status: content-free, but not mistakable
+        for a 200 from a server that is up."""
         await send(
             {
                 "type": "http.response.start",

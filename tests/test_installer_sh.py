@@ -1520,7 +1520,7 @@ def test_update_does_not_touch_the_service_account(tmp_path):
     """Updates must not migrate the panel off root, and this pins why.
 
     1.0.26 and 1.0.28 both called the migration from `do_update`, before the
-    candidate was verified. Measured twice on this box: the migration rewrote
+    candidate was verified. The migration rewrote
     the unit to `User=ovmanager`, the candidate then failed verification for an
     unrelated reason, and the failover could not undo it — the unit said
     `ovmanager`, the freshly extracted tree was root-owned `700`, and the panel
@@ -1551,7 +1551,7 @@ def test_update_regrants_access_for_an_already_unprivileged_install(tmp_path):
 
     The update replaces the whole tree, so on a box where the panel already runs
     as a service account the new tree is root-owned again and the service cannot
-    even chdir into it. Measured here: 1.0.30 -> 1.0.31 failed verification with
+    even chdir into it. 1.0.30 -> 1.0.31 failed verification with
     `CHDIR: Permission denied`, so every update on a migrated box would break.
 
     The grant has to be re-applied — without ever changing the account, which is

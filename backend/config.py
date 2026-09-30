@@ -44,10 +44,9 @@ class Setting(BaseSettings):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Credentials live in the database, never here: ADMIN_USERNAME only
-        # tells the panel which `admins` row is the owner. A pre-existing
-        # ADMIN_PASSWORD_HASH in .env is imported into that row by the v16
-        # migration; ADMIN_PASSWORD is ignored outright (it was a plaintext
-        # fallback and is no longer read by any code path).
+        # names the `admins` row that is the owner. A pre-existing
+        # ADMIN_PASSWORD_HASH is imported into that row by the v16 migration;
+        # ADMIN_PASSWORD is ignored outright — no code path reads it.
         if self.ADMIN_PASSWORD or self.ADMIN_PASSWORD_HASH:
             import logging
 

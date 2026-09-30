@@ -3,11 +3,9 @@
 
 import './PageHeader.css';
 
-/**
- * PageHeader — the title block every redesigned page opens with.
- * Owns the page's single <h1>; `meta` is a slot for badges/timestamps and
- * `actions` for buttons. On phones the actions wrap below the title.
- */
+// Owns the page's single <h1>. `meta` is a slot for badges/timestamps and
+// `actions` for buttons; on phones the actions wrap below the title.
+
 const PageHeader = ({
   title,
   subtitle,

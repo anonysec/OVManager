@@ -10,27 +10,22 @@ What it backs
 -------------
 
 `gather_nodes` runs inside request handlers -- the user list is the one that
-matters -- and it used to wait for every node however dead they were. The
-numbers below are why that was a ceiling worth naming rather than a limit worth
-documenting:
+matters -- and it used to wait for every node however dead they were:
 
   * a **single** newly-added unreachable node cost 30.1s of page load, because
     the short 3s probe timeout only applies once a node has been *recorded*
     broken, which cannot happen before it has been tried;
   * 80 of them cost 66.2s;
   * the healthy fleet has to stay well clear of whatever deadline replaces that,
-    which is the other half of the measurement and the reason this script
-    measures both.
+    which is the other half of the measurement.
 
 Premises, all checked below
 ---------------------------
 
-Every measurement in this repository was wrong at least once while it was
-written, and this one started wrong in a way worth recording: `DATA_DIR` is
-resolved at **import time** (`backend/data_paths.py:8`), so setting it only in
-the environment handed to a seeding subprocess leaves the measuring process
-reading a different database. The first draft of this script reported a flat
-18.1s for every node count while quietly probing 118 leftover rows from
+`DATA_DIR` is resolved at **import time** (`backend/data_paths.py:8`), so
+setting it only in the environment handed to a seeding subprocess leaves the
+measuring process reading a different database: the first draft reported a flat
+18.1s for every node count while probing 118 leftover rows from
 `OVManager/data` instead of the nodes it had just seeded. Hence
 `_assert_premises` below, which fails rather than reports.
 
@@ -75,7 +70,7 @@ POOL_WIDTH = min(32, (os.cpu_count() or 1) + 4)
 HEALTHY_LATENCY = 0.05  # seconds, per node; a realistic WAN node
 NODE_COUNTS = (1, 8, 20, 80, 200)
 
-# 1.0.33 published. Measured on two cores, so a six-thread pool.
+# 1.0.33 published, on two cores so a six-thread pool.
 PUBLISHED_DEAD = {1: 30.1, 8: 30.1, 20: 30.1, 80: 66.2}
 PUBLISHED_HEALTHY = {1: 0.08, 8: 1.12, 20: 1.74, 80: 4.15, 200: 11.49}
 
@@ -121,10 +116,9 @@ def _serve(handler) -> int:
 def _assert_premises() -> None:
     """The one thing checkable before anything is seeded.
 
-    This is the premise that actually bit: DATA_DIR is resolved at import time,
-    so a measuring process whose environment was only set for the seeding
-    subprocess reads a different database entirely. The per-iteration checks
-    live in `_measure`, where there are nodes to check.
+    DATA_DIR is resolved at import time, so a measuring process whose
+    environment was only set for the seeding subprocess reads a different
+    database. The per-iteration checks live in `_measure`.
     """
     if _dp.DATA_DIR != _DATA:
         raise SystemExit(

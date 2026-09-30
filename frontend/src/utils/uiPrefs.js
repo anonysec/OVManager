@@ -1,8 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/** UI preference helpers (table density, accent, …) — localStorage + event. */
-
 const PREFIX = 'ovmanager-ui-';
 
 export const getUiPref = (key, fallback = null) => {
@@ -20,7 +18,6 @@ export const setUiPref = (key, value) => {
 };
 
 
-/** Apply the persisted accent color as the --accent-color CSS variable. */
 export const applyAccent = () => {
   const accent = getUiPref('accent', '');
   const root = document.documentElement;

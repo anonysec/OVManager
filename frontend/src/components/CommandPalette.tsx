@@ -30,8 +30,8 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
 
   const isAdmin = userRole === 'owner';
 
-  // Global shortcut: Ctrl/Cmd+K. The topbar trigger emits the same event
-  // so keyboard and pointer users get the exact same search experience.
+  // Ctrl/Cmd+K. The topbar trigger emits the same event, so keyboard and
+  // pointer users get the same search.
   useEffect(() => {
     const onKey = (e: any) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {

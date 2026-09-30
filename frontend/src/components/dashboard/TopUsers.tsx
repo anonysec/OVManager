@@ -1,10 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * TopUsers — highest-billed users over the last N days
- * (GET /users/traffic/top, tenancy-aware: admins get their own users).
- */
+// GET /users/traffic/top is tenancy-aware: admins get their own users.
+
 import { useTranslation } from 'react-i18next';
 import { EmptyState, Panel, PanelSkeleton, PanelState } from '../ui';
 import { formatBytes } from '../../utils/format';

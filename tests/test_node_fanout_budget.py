@@ -1,8 +1,8 @@
 """The shared node fan-out budget.
 
 Node calls block on socket timeouts, so an unbounded fan-out takes threads
-out of pools the rest of the application needs. Measured on a two-core box:
-eight unrelated operations that take 40ms normally took 2.95s while 40
+out of pools the rest of the application needs. On a two-core box, eight
+unrelated operations that take 40ms normally took 2.95s while 40
 unreachable nodes were being probed, because the fan-out held every thread
 in anyio's shared 40-thread limiter — which 50-odd other call sites use.
 
@@ -141,8 +141,8 @@ async def test_unrelated_work_is_not_starved_by_a_node_fanout():
 def test_gather_nodes_returns_by_the_deadline_not_when_the_last_node_answers():
     """A request must not wait on a dead node.
 
-    Measured before this: one unreachable node cost 30.1s of page load, and
-    eighty cost 66.2s. The 3s probe timeout only applies to a node *already
+    One unreachable node cost 30.1s of page load before this, and eighty cost
+    66.2s. The 3s probe timeout only applies to a node *already
     recorded* broken, which cannot happen before it has been tried — so a node
     added a moment ago is always a 30s node, and a misconfigured one hangs the
     whole user list.
@@ -212,7 +212,7 @@ def test_fast_nodes_are_unaffected_by_the_deadline():
 def test_the_deadline_is_long_enough_for_a_healthy_fleet():
     """Guard the choice of 10s against a fleet that legitimately needs more.
 
-    Healthy nodes measured on a two-core box at 50ms each: 20 nodes 1.7s, 80
+    A healthy fleet on a two-core box at 50ms per node: 20 nodes 1.7s, 80
     nodes 4.1s. The deadline has to clear those comfortably, or the fix trades
     one slow page for truncated data.
     """

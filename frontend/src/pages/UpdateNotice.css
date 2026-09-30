@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: MIT */
 
 /* Update notice — shared by HealthCenter (banner) and the settings System
-   section (compact row). Colors come from tokens.css only. */
+   section (compact row). */
 
 .health-update {
   margin-bottom: var(--space-4);

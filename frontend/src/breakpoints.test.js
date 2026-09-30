@@ -3,17 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/**
- * The phone layout is decided in two places that must agree:
- *
- *   - JS:  DashboardLayout uses `window.innerWidth < 768` to set isMobile,
- *          which drives the --mobile class modifiers.
- *   - CSS: the phone blocks show the bottom tab bar and drop the rail offset.
- *
- * These drifted before: CSS used `max-width: 760px` while JS switched at 768,
- * so 761-767px got mobile JS state with no bottom navigation. This test fails
- * if they drift again.
- */
+// The phone layout is decided in two places that must agree: DashboardLayout's
+// `window.innerWidth < 768` (which drives the --mobile class modifiers) and the
+// CSS phone blocks. They drifted before — CSS used `max-width: 760px` while JS
+// switched at 768, so 761-767px got mobile JS state with no bottom navigation.
+
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(here, p), 'utf8');
 

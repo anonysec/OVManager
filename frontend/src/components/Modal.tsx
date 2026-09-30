@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
 
-// Ensure the portal mount point exists once.
 function getModalRoot() {
   let root = document.getElementById('modal-root');
   if (!root) {
@@ -26,23 +25,22 @@ const FOCUSABLE = [
 const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: any; onClose?: any; title?: any; children?: any; size?: any }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
-  // Store what had focus before the modal opened so we can restore it on close.
+  // Focus is restored to this element on close.
   const previousFocusRef = useRef<any>(null);
-  // Keep the latest close handler without re-running the focus effect below:
-  // a fresh closure every render must not steal focus back to the header's
-  // close button while the user is typing.
+  // Keeps the latest close handler available without re-running the focus
+  // effect below: a fresh closure every render would steal focus back to the
+  // header's close button while the user is typing.
   const onCloseRef = useRef<any>(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  // Escape key + focus management — runs once per open, never per re-render.
+  // Runs once per open, never per re-render.
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    // Save current focus target and move focus into the dialog. Prefer the
-    // first input field (a form should open ready to type); fall back to the
-    // first focusable element or the dialog itself.
+    // Prefer the first input field (a form should open ready to type); fall
+    // back to the first focusable element or the dialog itself.
     previousFocusRef.current = document.activeElement;
     const dialog = dialogRef.current;
     if (dialog) {
@@ -85,7 +83,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
     };
   }, [isOpen]);
 
-  // Prevent body scroll while modal is open
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.body.style.overflow;

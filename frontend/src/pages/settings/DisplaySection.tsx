@@ -40,7 +40,7 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
   const triggerRef = useRef(null);
   useInlineEditFocus(editing, inputRef, triggerRef);
 
-  // Mount-only sync (as before — no refreshTick revalidation here).
+  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const tz = shared?.data?.timezone;
     if (!tz || synced.current) return;

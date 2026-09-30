@@ -1,17 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * SetupWizard — the first-login checklist, reachable at /setup.
- *
- * Three steps: install/add a node, create a user, download a config.
- * Steps 1 and 2 check themselves off from GET /health/setup; step 3 is a
- * manual "Mark as done" (a download cannot be observed by the panel).
- *
- * When all three are done the wizard congratulates briefly, stores the
- * dismissal and leaves for Home. "Skip" does the same without the wait.
- * The page itself stays reachable at /setup (a completed visit bounces).
- */
+// First-login checklist at /setup: node, user, config. Steps 1 and 2 self-check
+// from GET /health/setup; step 3 is manual — a download cannot be observed.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

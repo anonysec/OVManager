@@ -31,8 +31,7 @@ validate_admin_password() {
     [[ -z "$problem" ]] || die "Admin password $problem"
 }
 
-# Interactive re-prompt until the typed password passes the panel's rules
-# (max 3 tries, then fail fast — never install a password the panel rejects).
+# Max 3 tries, then fail fast — never install a password the panel rejects.
 prompt_validate_admin_password() {
     local tries=0 problem
     while (( tries < 3 )); do
@@ -49,17 +48,14 @@ prompt_validate_admin_password() {
 }
 
 # ── Owner claim key ────────────────────────────────────────────────────
-# The installer mints this instead of an owner password. The panel reads the
-# file on every claim attempt, so a regenerated key works with no restart, and
-# deletes it once the claim succeeds — which is why regenerating is safe: it is
-# not the credential, it is the invitation.
+# Not the credential: the panel re-reads the file on every claim attempt and
+# deletes it once the claim succeeds, so regenerating one is safe.
 claim_key_path() { printf '%s/owner-claim.key' "$DATA_DIR"; }
 
 # mint_claim_key → writes the key 0600 and prints it (stdout only).
 #
-# Ownership follows the panel's: the data dir is the service account's on a
-# native install and uid 1000's under Docker, and a key those users cannot read
-# is a key that cannot be claimed.
+# Ownership follows the data dir: the service account natively, uid 1000 under
+# Docker — a key those users cannot read is a key that cannot be claimed.
 mint_claim_key() {
     local path key owner=""
     path="$(claim_key_path)"

@@ -1,14 +1,10 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * User preference helpers for dashboard alerts and polling.
- *
- * All prefs are front-end only (localStorage) — nothing sensitive here.
- * Toggled from Settings → "Alerts & Dashboard". Every change dispatches
- * `ovmanager-prefs-changed` so live components (topbar notifications,
- * dashboard polling) pick it up without a reload.
- */
+// Front-end only (localStorage), toggled from Settings → "Alerts & Dashboard".
+// Every change dispatches `ovmanager-prefs-changed` so live components (topbar
+// notifications, dashboard polling) pick it up without a reload.
+
 
 const KEYS = {
   nodeDown: 'ovmanager-pref-alert-node',
@@ -26,10 +22,9 @@ const DEFAULTS = {
   quota: true,
 };
 
-// Single polling cadence for dashboard, bell and node lists. There is no
-// user-facing refresh setting: the live stream (or its tick fallback)
-// already pushes immediacy, and every poll below is a background refresh
-// that never flashes loading states.
+// Single cadence for dashboard, bell and node lists; deliberately not
+// user-configurable, since the live stream already pushes immediacy and these
+// polls are background refreshes that never flash a loading state.
 export const DATA_REFRESH_SEC = 30;
 
 export const readPrefs = () => {
@@ -51,7 +46,6 @@ export const writePref = (key, value) => {
   } catch { /* noop */ }
 };
 
-/** Alert-type → preference key map used to filter notification lists. */
 export const alertPrefKey = (id) => {
   if (String(id).startsWith('node-')) return 'nodeDown';
   if (String(id).startsWith('full-')) return 'maxLogins';

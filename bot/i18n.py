@@ -1,7 +1,7 @@
 """Bot translations — same four languages as the panel (en/fa/ru/cn).
 
-Language is never taken from the Telegram app. The operator picks it from
-the bot menu / reply keyboard / inline buttons.
+Language is never taken from the Telegram app; the operator picks it from the
+bot menu, reply keyboard or inline buttons.
 """
 
 from __future__ import annotations

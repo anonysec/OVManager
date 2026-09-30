@@ -1,16 +1,11 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * Runtime panel-URL helpers — single source: the <base href> tag.
- *
- * The backend injects <base href="/{urlpath}/"> into the served HTML on every
- * request, so these helpers always reflect the CURRENT panel prefix without
- * any build-time constant (VITE_URLPATH) or injected global
- * (window.__OV_URLPATH__). The frontend is fully prefix-agnostic.
- */
+// Single source for the panel URL prefix: the <base href> the backend injects
+// on every served HTML response. Reading it at runtime (rather than a
+// build-time VITE_URLPATH or a window global) keeps the frontend fully
+// prefix-agnostic.
 
-/** Read the <base href> as a path, e.g. "/dashboard/" or "/". */
 const baseHref = () => {
   const el = typeof document !== 'undefined' ? document.querySelector('base') : null;
   const href = el?.getAttribute('href');

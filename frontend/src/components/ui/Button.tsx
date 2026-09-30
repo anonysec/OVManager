@@ -18,13 +18,10 @@ type ButtonProps = {
   [key: string]: any;
 };
 
-/**
- * Button — the single interactive action primitive.
- *
- * Always a real <button>, so keyboard activation, form semantics and the
- * global focus ring come for free. `type` defaults to "button": an untyped
- * button inside a form submits it, which is never what a toolbar wants.
- */
+// Always a real <button>, so keyboard activation, form semantics and the
+// global focus ring come for free. `type` defaults to "button": an untyped
+// button inside a form submits it, which is never what a toolbar wants.
+
 const Button = ({
   variant = 'secondary',
   size = 'md',

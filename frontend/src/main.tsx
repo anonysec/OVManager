@@ -17,9 +17,8 @@ import './i18n';
 // Apply persisted UI preferences (custom accent) before first paint.
 try { applyAccent(); } catch { /* noop */ }
 
-// PWA: cache the static app shell so the panel can reload offline. Production
-// only — the dev server serves unbundled source files and caching them would
-// break hot reload. Registration failures are not worth surfacing.
+// Production only — the dev server serves unbundled source files, and caching
+// them would break hot reload.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* optional */ });
 }
@@ -30,13 +29,8 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
 const raw = getUrlPath();
 const base = raw ? `/${raw}` : '';
 
-/**
- * Remove the static app-shell skeleton from index.html.
- *
- * Called from the root render callback, so it only runs once React has
- * actually committed real content — swapping any earlier would show a blank
- * frame. Fades out to avoid a hard cut between shell and app.
- */
+// Runnable from the root render callback, so the shell is only swapped out
+// once React has committed real content; any earlier would show a blank frame.
 function dismissBootSkeleton() {
   const shell = document.getElementById('app-skeleton');
   if (!shell) return;
@@ -49,7 +43,6 @@ function dismissBootSkeleton() {
 
   shell.style.transition = 'opacity .18s ease';
   shell.style.opacity = '0';
-  // Match the transition; `once` so the node is only removed a single time.
   shell.addEventListener('transitionend', () => shell.remove(), { once: true });
   // Belt and braces: if the transition never fires (tab backgrounded), clean up.
   setTimeout(() => shell.remove(), 400);

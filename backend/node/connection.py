@@ -7,12 +7,8 @@ change a transport (address, port, key, TLS flag) — a metadata-only edit
 replaces it. Health is an explicit state machine so poll loops can skip
 BROKEN nodes cheaply instead of paying full timeouts every tick.
 
-Single process + scheduler-driven access, so the registry lock only
-guards dict replacement, not RPCs.
-
-The client class is resolved lazily inside :func:`get_connection` via
-``backend.node.requests``: this module is imported from the bottom of
-``requests.py`` (after ``NodeRequests`` is defined) to break the import
+The client class is resolved lazily inside :func:`get_connection`: this
+module is imported from the bottom of ``requests.py`` to break the import
 cycle, so a module-level from-import here would see a partially
 initialized module.
 """
@@ -153,19 +149,9 @@ def healthy(node) -> bool:
 
 
 # How long to wait for a node we have already lost to. Not a cooldown: the
-# node is still probed on every cycle, just cheaply.
-#
-# Measured on a two-core box whose default thread pool is 6 workers, so a
-# fan-out cycle costs ceil(nodes / 6) x timeout:
-#
-#   dead nodes   30s timeout    3s timeout
-#              1         30s        3s
-#             8         64s        6s
-#            64        332s       33s
-#
-# A 30s wait for a node that is known to be down is 30s of a blocked worker,
-# and the collector polls every 10s with a dashboard open, so it is most of a
-# cycle. Three seconds is enough to hear from a node that is up and reachable.
+# node is still probed on every cycle, just cheaply. A 30s wait for a node
+# known to be down is 30s of a blocked worker, and the collector polls every
+# 10s with a dashboard open, so it is most of a cycle.
 BROKEN_PROBE_TIMEOUT = 3.0
 
 
@@ -174,9 +160,8 @@ def probe_timeout(node) -> float:
 
     A node that has already failed gets a short one, so re-checking it is
     nearly free and a node that comes back is noticed on the very next cycle.
-    The previous design skipped a broken node for 60s instead, which measured
-    worse on both counts: one full 30s timeout per 90s window, and up to 90s
-    before a recovered node rejoined.
+    Skipping a broken node for 60s instead cost a full 30s timeout per 90s
+    window and delayed a recovered node's return.
     """
     if healthy(node):
         from backend.node.requests import LONG_TIMEOUT

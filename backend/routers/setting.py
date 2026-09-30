@@ -234,8 +234,6 @@ async def update_urlpath(
     - Non-empty → panel served only at /<urlpath>/...
     - When set, root and other paths return empty response (security)
     - Takes effect within 5 seconds (cache TTL) — no restart needed
-
-    Only owner can change this.
     """
     from backend.validation import validate_urlpath
 

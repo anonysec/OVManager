@@ -1,8 +1,8 @@
 """Telegram bot supervision: one subprocess, restarted on crash.
 
-A clean exit (rc=0) means disabled (no token / toggled off) and is not
-hot-looped: retries are throttled to once per hour. Real crashes (rc!=0)
-restart via the per-minute scheduler watchdog.
+A clean exit (rc=0) means disabled (no token / toggled off), so those retries
+are throttled to once per hour instead of hot-looping; rc!=0 restarts on the
+per-minute scheduler watchdog.
 """
 
 from __future__ import annotations

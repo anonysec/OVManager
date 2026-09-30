@@ -27,11 +27,8 @@ const toIso = (value: string | number | null | undefined) => {
   return new Date(n * 1000).toISOString();
 };
 
-/**
- * Sessions modal — active bearer sessions for one admin, with a
- * "Sign out all devices" action. Fetches on open via the owner-only
- * /admin/{username}/sessions endpoints.
- */
+// Active bearer sessions for one admin, fetched from the owner-only
+// /admin/{username}/sessions endpoints.
 const AdminSessionsModal = ({ admin, onClose }: { admin: any; onClose: () => void }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();

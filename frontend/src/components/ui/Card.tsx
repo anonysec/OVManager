@@ -17,12 +17,9 @@ type CardProps = {
   [key: string]: any;
 };
 
-/**
- * Card — surface container with an optional titled header and actions slot.
- *
- * `as` lets a caller render a <section>/<article> when the card is a landmark
- * region; it defaults to a plain <div> so cards can nest freely.
- */
+// `as` lets a caller render a <section>/<article> when the card is a landmark
+// region; it defaults to <div> so cards can nest freely.
+
 const Card = ({
   as: Tag = 'div',
   title,

@@ -1,13 +1,9 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * Tiny SVG sparkline. Renders a smooth area + line given a numeric series.
- * - viewBox is always 100x100; the SVG is sized by its CSS container.
- * - `tone` selects the gradient color via a CSS var fallback.
- * - Decorative by default; pass `label` to give screen readers a hint.
- * - `className` is forwarded to the outer svg so the parent can size it.
- */
+// viewBox is always 100x100; the SVG is sized by its CSS container.
+// Decorative by default — pass `label` to give screen readers a hint.
+
 import { memo, useId } from 'react';
 
 const Sparkline = memo(function Sparkline({ values = [], tone = 'info', label, className = '' }: { values?: any[]; tone?: any; label?: any; className?: string }) {

@@ -1,8 +1,6 @@
-/**
- * Geo helpers + flag SVGs shared by the dashboard map and the node list.
- * Extracted from ServerStats so the map chunk and the page can both use them
- * without the page pulling in d3-geo/world-atlas.
- */
+// Shared by the dashboard map and the node list. Kept in its own module so the
+// page does not have to pull in the map chunk's d3-geo/world-atlas.
+
 
 const CODES = {
   DE: { name: 'Germany', coords: [10.4, 51.1] },
@@ -44,9 +42,8 @@ const COUNTRY_ALIASES = {
 };
 
 const normalizeCountryCode = (node) => {
-  // ONLY the stored ISO code from the backend counts. Never guess from the
-  // node name — fuzzy matching once turned "node-1" into Netherlands
-  // (lowercase-stripped names matched country initials).
+  // Never guess from the node name: fuzzy matching once turned "node-1" into
+  // Netherlands (lowercase-stripped names matched country initials).
   const raw = String(node?.country_code || '').trim().toUpperCase();
   if (!raw) return null;
   if (CODES[raw]) return raw;

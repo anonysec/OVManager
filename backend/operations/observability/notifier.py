@@ -1,23 +1,13 @@
 """Daily Telegram alerts for users who are expiring or out of traffic.
 
-The panel process sends these messages itself over the Telegram HTTPS API
-(``sendMessage``). That is safe to do while the bot subprocess is polling:
-Telegram treats an outbound send and an inbound ``getUpdates`` long poll as
-independent requests, so neither blocks the other.
+The panel process sends these itself over the Telegram HTTPS API
+(``sendMessage``). That is safe while the bot subprocess is polling: Telegram
+treats an outbound send and an inbound ``getUpdates`` long poll as independent
+requests.
 
-Design notes
-------------
-* ``send_telegram`` reads ``Settings`` on its own and no-ops when the bot is
-  disabled, the token is missing or cannot be decrypted, or no owner id is
-  set. It never raises.
-* ``run_daily_alerts`` is the scheduler entry point. It sends at most one
-  summary per calendar day (module-level ``_last_sent_day`` guard). The guard
-  lives in memory only, so restarting the panel forgets it and the summary
-  **may be sent a second time that day** — an accepted trade-off that avoids
-  adding a bookkeeping table for a single daily message.
-* Nothing here ever logs the bot token, the request URL, or response bodies:
-  a ``requests`` exception string embeds the URL (which carries the token),
-  so failures are logged by exception type only.
+Nothing here ever logs the bot token, the request URL, or response bodies: a
+``requests`` exception string embeds the URL (which carries the token), so
+failures are logged by exception type only.
 """
 
 from __future__ import annotations
@@ -54,12 +44,12 @@ def _decrypt_bot_token(stored: str | None) -> str | None:
 
 
 def send_telegram(text: str, db=None) -> bool:
-    """Send one HTML-escaped message to the configured owner. Never raises.
+    """Send one HTML-escaped message to the configured owner.
 
-    Returns ``True`` only when Telegram accepted the message. Silently returns
-    ``False`` when the bot is disabled, no token is stored/can be decrypted,
-    or no owner id is set. ``db`` is optional so callers that already hold a
-    session (the daily job) can avoid opening another one.
+    Returns ``True`` only when Telegram accepted the message; every other
+    outcome (bot disabled, no token, no owner id, transport failure) returns
+    ``False`` and never raises. ``db`` is optional so callers that already
+    hold a session (the daily job) can avoid opening another one.
     """
     own_session = db is None
     session = None
@@ -107,14 +97,10 @@ def collect_alerts(db) -> dict[str, list[str]]:
     * ``expiring`` — active users whose ``expiry_date`` falls between today
       and today + :data:`EXPIRY_WINDOW_DAYS` (both inclusive).
     * ``out_of_traffic`` — active users with a real quota (``total`` is not
-      NULL) and ``used >= total``. ``total = NULL`` means unlimited and is
-      skipped.
+      NULL) and ``used >= total``. ``total = NULL`` means unlimited.
     * ``disabled_expiry`` / ``disabled_traffic`` — already-disabled users
       whose ``is_active`` flag was flipped because they expired or ran out
       of traffic. Reported separately because they need no action today.
-
-    Names are sorted so the daily message is stable. Missing/never-expiring
-    expiry values (``None`` or a far-future placeholder) simply never match.
     """
     today = datetime.now(UTC).date()
     deadline = today + timedelta(days=EXPIRY_WINDOW_DAYS)
@@ -192,12 +178,12 @@ def build_summary(alerts: dict[str, list[str]], *, notify_expiry: bool = True, n
 
 
 def run_daily_alerts() -> bool:
-    """Send the daily summary once per calendar day. Never raises.
+    """Send the daily summary once per calendar day.
 
     Returns ``True`` when a message was sent. The in-memory guard remembers
     the UTC day of the last successful send, so a second scheduler run that
-    day is a no-op. **A panel restart clears the guard and may resend the
-    same day's summary.**
+    day is a no-op — but a panel restart clears it and may resend the same
+    day's summary.
     """
     global _last_sent_day
     today = datetime.now(UTC).date()

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Start OVManager panel.
-"""
+"""Start OVManager panel."""
 
 import getpass
 import os
@@ -37,14 +35,13 @@ def _require_readable(path: str, what: str) -> None:
     """Fail with the actual problem when the service cannot open ``path``.
 
     ``os.path.isfile`` only needs directory traversal, so a key this account
-    cannot read passes it and then dies inside uvicorn's SSL context build as
-    a bare PermissionError with no hint of which file or why.
+    cannot read passes it and then dies inside uvicorn's SSL context build as a
+    bare PermissionError with no hint of which file or why.
 
-    This is a real failure mode, not a hypothetical: OVNode keeps its
-    certificate in the same /etc/ssl/self-signed pair, and installing it on
-    the panel's host rewrote the key and chmod-ed it 600. The panel kept
-    serving from the context it had already loaded, so the damage only showed
-    up on the next restart.
+    A real failure mode: installing OVNode on the panel's host rewrote the
+    shared /etc/ssl/self-signed key and chmod-ed it 600. The running panel kept
+    serving from the context it had already loaded, so it only broke on the
+    next restart.
     """
     try:
         with open(path, "rb"):
@@ -60,7 +57,6 @@ def _require_readable(path: str, what: str) -> None:
 
 
 def main():
-    """Run OVManager panel."""
     if any(a == "--reset-urlpath" for a in sys.argv[1:]):
         from backend.urlpath import reset_urlpath
 

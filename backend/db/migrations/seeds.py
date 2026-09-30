@@ -19,11 +19,9 @@ def _seed_settings(db: Session) -> None:
     """Ensure a settings row exists and carries the configured URLPATH.
 
     The row is created through the ORM rather than a raw INSERT: ``create_all()``
-    does not emit DEFAULT clauses for Python-side defaults, so ``timezone``,
-    ``bot_enabled``, ``default_days`` and friends are NOT NULL with no SQL
-    default. A raw partial INSERT therefore violates NOT NULL and — under
-    ``INSERT OR IGNORE`` — is discarded silently, leaving a fresh install with
-    no settings row and the ``URLPATH`` from ``.env`` unseeded.
+    emits no DEFAULT clause for Python-side defaults, so ``timezone``,
+    ``bot_enabled`` and friends are NOT NULL with no SQL default, and a partial
+    INSERT under ``INSERT OR IGNORE`` is discarded silently.
 
     An existing row is never overwritten; the prefix is only filled in when it
     is still empty.
@@ -60,14 +58,10 @@ def _seed_summary() -> str:
 def _seed_owner_and_first_user(db: Session) -> None:
     """Give a fresh install a usable starting point (v12).
 
-    Two gaps on a brand-new panel:
-    * the Admins page was empty because the owner authenticates from ``.env``
-      and nothing ever inserted the matching ``admins`` row;
-    * there was no user at all, so the panel looked unfinished and the
-      enrolment/download flow had nothing to exercise.
-
-    Additive and idempotent: existing rows are never touched, and the audit
-    entry is written only when this step actually created something.
+    Without it the owner authenticates from ``.env`` with no matching ``admins``
+    row, and the enrolment/download flow has no user to exercise. Additive and
+    idempotent: existing rows are never touched, and the audit entry is written
+    only when this step actually created something.
     """
     import uuid as uuid_mod
     from datetime import date, timedelta
@@ -120,14 +114,13 @@ def _seed_owner_and_first_user(db: Session) -> None:
 def _import_owner_credential(db: Session) -> None:
     """Move the owner credential out of ``.env`` and into the ``admins`` row (v16).
 
-    Upgrading installs authenticate the owner from ``ADMIN_PASSWORD_HASH`` in
-    ``.env``; v12 already created the matching ``admins`` row but left its
-    ``password`` empty. The hash is copied into that row here, which is what
-    makes ``.env`` stop being a credential store without locking anyone out.
+    v12 creates the matching ``admins`` row but leaves its ``password`` empty,
+    so the hash is copied in here — that is what stops ``.env`` being a
+    credential store without locking anyone out.
 
     Idempotent and fail-safe: an existing non-empty hash is never overwritten,
-    and a missing/invalid env hash leaves the row alone (the owner then sets a
-    password through the one-time setup key instead of being silently bricked).
+    and a missing or invalid env hash leaves the row alone (the owner then sets
+    a password through the one-time setup key instead of being locked out).
     """
     from backend.config import config
     from backend.db.models import Admin

@@ -1,13 +1,10 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Operator display timezone (IANA name, e.g. "Asia/Tehran") from backend
-// Settings. Owners load it from /server/settings; everyone (including
-// non-owner admins, who cannot call that owner-only endpoint) reads the
-// guarded localStorage cache so dates still render in the operator zone.
-//
-// time.js defaults to getDisplayTimezone() — callers can still pass an
-// explicit { timeZone } to override.
+// Operator display timezone (IANA name, e.g. "Asia/Tehran"). Owners load it
+// from /server/settings; non-owner admins cannot call that owner-only endpoint,
+// so they read the cached value instead. time.js defaults to
+// getDisplayTimezone() — callers can still pass an explicit { timeZone }.
 
 const STORAGE_KEY = 'ovTimezone';
 

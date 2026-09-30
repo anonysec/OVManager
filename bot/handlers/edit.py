@@ -1,9 +1,7 @@
 """Owner-only user edit flow: fix quota, expiry or device limit in place.
 
-The panel's PUT /users/{uuid} supports full edits, but the bot previously
-exposed no path to it (update_user() was dead code) — a typo'd quota could
-only be fixed from the panel. Bounded to three fields with the same ranges
-as the create flow; admins keep extend/reset/toggle only.
+Bounded to three fields with the same ranges as the create flow; admins keep
+extend/reset/toggle only.
 """
 
 from __future__ import annotations

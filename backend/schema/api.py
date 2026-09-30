@@ -1,7 +1,6 @@
 """Request/response models for the OVManager API.
 
-Input models (validated by FastAPI) and response envelopes lived in two
-underscore-prefixed files; they are one module now. Import from the
+Input models (validated by FastAPI) and response envelopes. Import from the
 package root: ``from backend.schema import CreateUser, ResponseModel``.
 """
 

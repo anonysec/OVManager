@@ -1,8 +1,6 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* Card primitive — the base surface for the redesigned pages. */
-
 .ui-card {
   display: flex;
   flex-direction: column;

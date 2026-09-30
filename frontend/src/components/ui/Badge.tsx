@@ -3,12 +3,8 @@
 
 import './Badge.css';
 
-/**
- * Badge — compact status/count pill.
- *
- * The dot's colour is the FILL token (--success/--warning/--danger) while the
- * label uses the *-text tone, so the pill stays readable in both themes.
- */
+// The dot takes the FILL token (--success/--warning/--danger) while the label
+// uses the *-text tone, so the pill stays readable in both themes.
 const Badge = ({ tone = 'neutral', dot = false, className = '', children, ...rest }: { tone?: any; dot?: any; className?: string; children?: any; [key: string]: any }) => (
   <span
     className={['ui-badge', `ui-badge--${tone}`, className].filter(Boolean).join(' ')}

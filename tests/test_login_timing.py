@@ -7,7 +7,7 @@ oracle. The fix is to verify against a hash nobody can supply, so every failure
 pays the same price.
 
 The assertion is on the mechanism (was a verify attempted?) rather than on
-measured wall-clock time, which would be flaky on a shared box.
+wall-clock time, which would be flaky on a shared box.
 """
 
 import pytest

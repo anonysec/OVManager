@@ -35,43 +35,29 @@ SYSTEMD_SERVICE="ovmanager.service"
 VERSION="1.0.0"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
-# Terminal command installed by install_cli() (copy of the manager).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 
-# The account the panel itself runs as, on a native install.
-#
-# The panel is an HTTPS server that parses untrusted input from anyone who can
-# reach the port, so running it as root meant a remote compromise of the web
-# app was a compromise of the box. It needs almost nothing: read its own code,
-# read .env, write its data directory, read the TLS key, and make node RPCs.
-# A dedicated unprivileged account covers all of that, and mirrors what the
-# Docker image already does with its own appuser.
-#
-# It cannot update itself: `ovm update` replaces the tree and restarts the
-# unit, which needs root. The in-app update button says so and prints the
-# command instead — the same shape Docker already takes.
+# The account the panel runs as on a native install: an HTTPS server parsing
+# untrusted input from anyone who can reach the port, so as root a remote
+# compromise of the web app was a compromise of the box. It needs almost
+# nothing — read its own code, read .env, write its data directory, read the
+# TLS key — and cannot update itself, because `ovm update` replaces the tree
+# and restarts the unit as root. Docker already takes this shape with appuser.
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
 CLI_NAME="ovmanager"
 CLI_ALIAS="ovm"
 
 # ── Shared helpers (scripts/lib) ───────────────────────────────────────
-# The helpers are not copied into this file: they are fetched and sourced
-# here, so scripts/lib is their one definition (colour, output, prompts, env,
-# system, backups, TLS, policy). Sourced before anything else uses them.
-#
-# At the installer's OWN VERSION, never the --version target: the libs are
-# installer infrastructure, so `install.sh -v 1.0.15` fetches this installer's
-# libs and pins only the app tarball. Pinning them to the target would break
-# installing anything older than the split — those tags carry no libs at all.
-#
-# All-or-nothing into a staging dir: a partial set is never sourced, because a
-# half-defined environment then fails twenty lines later as something else.
+# Fetched and sourced here rather than copied in, so scripts/lib is their one
+# definition. Sourced at this installer's OWN VERSION, never the --version
+# target: they are installer infrastructure, and a tag older than the split
+# carries none at all. All-or-nothing into a staging dir, so a partial set is
+# never sourced.
 LIB_BASE="${OVM_LIB_BASE:-https://raw.githubusercontent.com/${REPO}/v${VERSION}/scripts/lib}"
 LIB_FILES="common prompt env system backup tls policy"
 
 _boot_die() {  # die() lives in the libs, which are exactly what may be missing
-    # Plain text: the colour globals arrive with the libs, and an installer
-    # that cannot load them is usually piping its output anyway.
+    # Plain text: the colour globals arrive with the libs.
     printf '\n  Error: %s\n  Run ID: %s\n\n' "$1" "${OVM_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}" >&2
     exit 1
 }
@@ -87,9 +73,8 @@ _libs_source() {  # <dir> → source the set, or nothing when one file is missin
     done
 }
 
-# An installed tree, and a checkout, already have the libs beside the script.
-# A curl-piped installer is a lone file in /dev/fd or /tmp, so it fetches its
-# own — the same set the matching release tag carries.
+# An installed tree or a checkout has the libs beside the script; a curl-piped
+# installer is a lone file in /dev/fd or /tmp, so it fetches its own.
 _libs_install() {
     local here="" stage name
     if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
@@ -104,7 +89,6 @@ _libs_install() {
             || _boot_die "Could not fetch ${LIB_BASE}/${name}.sh — this installer cannot run without its libraries"
     done
     _libs_source "$stage" || _boot_die "The set fetched from $LIB_BASE is incomplete"
-    # The functions are loaded; the files are not read again.
     rm -rf "$stage"
 }
 _libs_install
@@ -115,8 +99,7 @@ trap 'warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' E
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 # Three flags: -y/--yes, --docker, -h/--help. Everything else that used to be
-# a flag is an OVM_* environment variable (see apply_env) — the values that
-# shape what gets written stay install-time, the rest move to `ovm`.
+# a flag is an OVM_* environment variable (see apply_env).
 PORT="" PATHPREFIX="" ADMIN_USER=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 PUBLIC_URL="" MODE="" ACTION="install" PIN=""
@@ -148,11 +131,10 @@ finally:
 PY
 }
 
-# The owner account is not created here, and no password is minted: the
-# operator claims the panel in the browser with a one-time key. A key can be
-# reprinted at will (ovm owner-claim) because it is not the credential, and
-# there is nothing in scrollback or in a file that a stolen copy could use
-# twice. mint_claim_key lives in scripts/lib/policy.sh.
+# The owner is claimed in the browser with a one-time key, not created here:
+# a key can be reprinted at will (ovm owner-claim) because it is not the
+# credential, so nothing stolen from scrollback or a file is reusable.
+# mint_claim_key lives in scripts/lib/policy.sh.
 issue_claim_key() {
     CLAIM_KEY="$(mint_claim_key)" || warn "Could not write the claim key — run: ovm owner-claim"
     return 0
@@ -160,9 +142,9 @@ issue_claim_key() {
 
 update_safety_backup() {
     local keep=10 path
-    # Try the installed tree's transactional backup first; any failure
-    # (missing module, older signature) falls back to a legacy bundle so
-    # updates from old releases are never blocked.
+    # The installed tree's transactional backup first; any failure (missing
+    # module, older signature) falls back to a legacy bundle so old releases
+    # can still update.
     if [[ "$MODE" == "docker" ]]; then
         if path="$(docker exec ovmanager /app/.venv/bin/python -c \
             "from backend.routers.maintenance import create_panel_backup; p=create_panel_backup(${keep}, label='pre-update'); print(p or '')" 2>/dev/null)"; then
@@ -180,8 +162,8 @@ update_safety_backup() {
     fi
     warn "Installed release lacks transactional backups — legacy safety bundle"
     # Installed release predates transactional backups: build an equivalent
-    # .ovmbak with stdlib python so updates from old releases are not
-    # blocked. restore_update_database consumes both variants unchanged.
+    # .ovmbak with stdlib python. restore_update_database consumes both
+    # variants unchanged.
     legacy_safety_bundle "${1:-unknown}" || return 1
 }
 
@@ -253,9 +235,9 @@ PY
 }
 
 # True when the live database no longer matches the safety bundle (schema
-# version): the candidate migrated it, so failover must restore. When the
-# versions match the candidate never migrated and failover skips the
-# restore. A missing/unreadable live database also requests a restore.
+# version): the candidate migrated it, so failover must restore. Matching
+# versions mean it never migrated and the restore is skipped, and a
+# missing/unreadable live database also requests a restore.
 # Version reported by the candidate. Native: loopback /health discloses it.
 # Docker: host-side requests never see a version (loopback-only disclosure),
 # so read it from inside the container — its filesystem IS the staged image,
@@ -362,9 +344,8 @@ trap operation_end EXIT
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
 # A release version: MAJOR.MINOR.PATCH, optionally with a pre-release or build
-# suffix (1.2.3-rc1, 1.2.3+build5), and an optional leading v. The suffix is
-# what lets a pre-release be installed by name, and the tag it resolves to is
-# "v" + this (see release_url), so both spellings of the same release work.
+# suffix (1.2.3-rc1, 1.2.3+build5), and an optional leading v. The tag it
+# resolves to is "v" + this (see release_url), so both spellings work.
 valid_release_version() {
     [[ "$1" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
 }
@@ -470,10 +451,9 @@ preflight_install() {
 # a clear message — never as a checksum mismatch further down.
 is_release_archive() { tar -tzf "$1" >/dev/null 2>&1; }
 
-# Download the versioned release file into $1 (an existing directory).
-# The tarball holds a repo snapshot plus the prebuilt frontend/dist, so no
-# git or npm is needed on the server. The mandatory .sha256 sidecar is
-# verified before extraction.
+# Download the versioned release file into $1 (an existing directory). The
+# tarball holds a repo snapshot plus the prebuilt frontend/dist, so no git or
+# npm is needed on the server; the .sha256 sidecar is verified before extraction.
 fetch_release() {
     local dest="$1" work base
     base="$(release_base)"
@@ -579,11 +559,10 @@ write_env() {
 
 # The container reads the .env through a read-only bind mount, not through
 # compose `env_file`: compose expands $NAME inside env_file values, which
-# truncates a bcrypt hash at its salt (measured over 400 hashes: 83% start with
-# a letter or dot, i.e. a valid variable name). So the file must be readable by
-# the app user's group and by nobody else — 0600 root puts the panel's own
-# config out of reach, and chowning to uid 1000 would hand the admin hash and
-# the JWT secret to the first human user on the host.
+# truncates a bcrypt hash at its salt. So the file must be readable by the app
+# user's group and by nobody else — 0600 root puts the panel's own config out
+# of reach, and chowning to uid 1000 would hand the admin hash and the JWT
+# secret to the first human user on the host.
 #
 # The gid is read from the image, so there is no constant to keep in step with
 # the Dockerfile and no assumption about which gids this host already uses.
@@ -704,9 +683,7 @@ compose_up() {
     info "Pulling published OVManager image…"
     ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" pull ) \
         || die "docker compose pull failed — is the image published?"
-    # The image is here now, so the config can be shared with the container by
-    # the very gid the image defines — no constant to keep in step with the
-    # Dockerfile, and no guess about which gids the host already uses.
+    # The image is here now, so its own gid can be read rather than guessed.
     share_env_with_container
     ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) \
         || die "docker compose startup failed — docker logs ovmanager"
@@ -714,9 +691,8 @@ compose_up() {
 }
 
 # The panel binds this port on the host in both modes, so one check serves
-# both. Shared rather than written twice: the wizard wants it at prompt time
-# (before three more questions) and validate_input needs it on the
-# non-interactive path, and two copies of the same test would drift.
+# both: the wizard wants it at prompt time and validate_input on the
+# non-interactive path, and two copies of the test would drift.
 port_available_or_die() {  # port_available_or_die <port> [hint]
     # `if`, not `port_in_use ... && die`: a && list returns 1 when the port is
     # free, so as a plain statement under `set -e` that aborted every
@@ -732,10 +708,9 @@ port_available_or_die() {  # port_available_or_die <port> [hint]
 validate_input() {
     is_port "$PORT" || die "Invalid port: '$PORT'"
     # A non-interactive install defaults PORT *after* preflight_install has
-    # already run, so preflight's check never saw it. Without this, a busy port
-    # on `curl ... | bash -s -- --docker --yes` — the documented one-liner —
-    # failed much later with a raw Docker daemon error about address
-    # already in use, after the download and the compose file.
+    # already run, so preflight's check never saw it: without this, a busy port
+    # on the documented `curl ... | bash -s -- --docker --yes` one-liner failed
+    # much later with a raw Docker "address already in use" error.
     port_available_or_die "$PORT"
     [[ -n "$ADMIN_USER" ]] || ADMIN_USER="$DEFAULT_USER"
     [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_.-]{3,64}$ ]] || die "Admin username: 3–64 letters, digits, . _ -"
@@ -915,8 +890,8 @@ do_install() {
     info "Step 4/4 — Health check and finish"
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
         || warn "No answer on /health yet — check logs"
-    # Minted now, not earlier: the data dir is chowned to the panel user by
-    # grant_panel_access (step 3), and the panel reads the key file per claim.
+    # Minted now, not earlier: grant_panel_access (step 3) chowns the data dir
+    # to the panel user, and the panel reads the key file per claim.
     issue_claim_key
     if [[ "$MODE" == "docker" ]]; then
         docker restart ovmanager >/dev/null 2>&1 || true
@@ -996,18 +971,16 @@ do_update() {
     fi
 
     # Deliberately no service-account *migration* here. It was here in 1.0.26
-    # and 1.0.28, and it made every update a coin flip: the migration rewrote
-    # the unit before the candidate was verified, so a candidate that failed for
-    # any other reason left a half-applied migration the failover could not
-    # undo. `ovm doctor --fix` is the only path that changes the account.
+    # and 1.0.28 and made every update a coin flip: the migration rewrote the
+    # unit before the candidate was verified, so a candidate that failed for any
+    # other reason left a half-applied migration the failover could not undo.
+    # `ovm doctor --fix` is the only path that changes the account.
     #
-    # Re-applying the *grant* is a different matter and is required. The step
-    # above replaced the whole tree, so on a box where the panel already runs
-    # unprivileged the new tree is root-owned again and the service cannot even
-    # chdir into it -- measured here as 1.0.30 -> 1.0.31 failing verification
-    # with CHDIR: Permission denied, which means every update on a migrated box
-    # would break. grant_panel_access is idempotent and changes no ownership of
-    # the unit, so it is safe to repeat.
+    # Re-applying the *grant* is required instead: the step above replaced the
+    # whole tree, so on a box where the panel already runs unprivileged the new
+    # tree is root-owned again and the service cannot even chdir into it (1.0.30
+    # -> 1.0.31 failed verification with CHDIR: Permission denied). The grant is
+    # idempotent and changes no ownership of the unit, so it is safe to repeat.
     if [[ "$MODE" != "docker" ]] && ! grep -qE '^User=root\s*$' "/etc/systemd/system/$SYSTEMD_SERVICE" 2>/dev/null; then
         grant_panel_access
         step "Service access re-granted for $PANEL_USER"
@@ -1115,8 +1088,8 @@ PY
             fi
             ;;
         preflight|staging)
-            # Activation had not begun, so the installed release and database
-            # are untouched. Stale staging content can be discarded safely.
+            # Activation had not begun: the installed release and database are
+            # untouched, so stale staging content can be discarded safely.
             check_root
             rm -rf "$UPDATE_STAGE"
             rm -f "$UPDATE_MARKER"
@@ -1270,9 +1243,9 @@ start_menu() {
     line ""
 }
 
-# The manager (manager.sh) is installed as "ovmanager" (+ "ovm" alias), so
-# day-to-day ops live outside this installer. Refreshed on every update,
-# which auto-swaps boxes whose ovm is an old installer copy.
+# manager.sh is installed as "ovmanager" (+ "ovm" alias), so day-to-day ops
+# live outside this installer. Refreshed on every update, which auto-swaps
+# boxes whose ovm is an old installer copy.
 install_cli() {
     local src="${INSTALL_DIR}/manager.sh"
     [[ -f "$src" ]] || return 0
@@ -1346,8 +1319,7 @@ EOF
     exit 0
 }
 
-# One line to stderr per deprecated flag, naming the replacement. Flags are
-# cut in a deprecation release: they keep working now and are removed later.
+# One line to stderr per deprecated flag, naming the replacement.
 deprecated_flag() {  # deprecated_flag "FLAG" "what to use instead"
     warn "$1 is deprecated — use $2"
 }
@@ -1355,17 +1327,17 @@ deprecated_flag() {  # deprecated_flag "FLAG" "what to use instead"
 # `version-script` / `script-version`: which installer did you actually run?
 #
 # VERSION is embedded; a commit only exists when this file sits in a git
-# checkout (a developer run, or a source install). The release tarball is a
-# `git archive` with no .git, and a curl-piped installer is a lone file, so
-# both report the commit as unknown rather than guessing at one.
+# checkout. The release tarball is a `git archive` with no .git, and a
+# curl-piped installer is a lone file, so both report the commit as unknown
+# rather than guessing at one.
 script_commit() {
     local dir candidate
     dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || { printf 'unknown'; return 0; }
     candidate="$dir"
     while [[ -n "$candidate" && "$candidate" != "/" ]]; do
         if [[ -e "$candidate/.git" ]]; then
-            # Read-only, and only when a checkout is actually there: the
-            # common case never invokes git at all.
+            # Read-only, and only when a checkout is there: the common case
+            # never invokes git at all.
             git -C "$candidate" rev-parse --short HEAD 2>/dev/null || printf 'unknown'
             return 0
         fi
@@ -1390,8 +1362,8 @@ parse_args() {
         CLI_GIVEN=1
         case "$1" in
             -p|--pass)    [[ $# -ge 2 ]] || die "-p needs a password"
-                           # Accepted and dropped: the owner password is chosen
-                           # in the browser, so honouring it would be a lie.
+                           # Accepted and dropped: honouring it would be a lie,
+                           # because the owner password is set in the browser.
                            deprecated_flag "-p, --pass" "the claim key: the owner password is set in the browser"
                            shift 2 ;;
             --docker)      MODE="docker"; shift ;;
@@ -1454,7 +1426,7 @@ apply_env() {
     [[ -z "$PIN" && -n "${OVM_VERSION:-}" ]] && PIN="$OVM_VERSION"
     [[ -z "$PUBLIC_URL" && -n "${OVM_PUBLIC_URL:-}" ]] && PUBLIC_URL="$OVM_PUBLIC_URL"
     # Silently ignoring a credential the operator passed is worse than refusing
-    # it: say so, once, and let the install continue.
+    # it: say so, once.
     if [[ -n "${OVM_PASS:-}${OVM_ADMIN_PASS:-}" ]]; then
         deprecated_flag "OVM_PASS / OVM_ADMIN_PASS" "the claim key: the owner password is set in the browser"
     fi
@@ -1472,8 +1444,7 @@ main() {
         VERSION="${PIN#v}"
     fi
     # Before the banner and before root: "which installer did you actually
-    # run?" is a support question, and the CDN caches for ~5 minutes so a
-    # stale one is normal.
+    # run?" is a support question, and the CDN caches for ~5 minutes.
     [[ "$ACTION" == "version-script" ]] && { print_version_script; exit 0; }
     if can_prompt; then
         command clear >/dev/null 2>&1 || true
@@ -1572,8 +1543,7 @@ banner() {
 # case is the documented pipe form — `curl … | sudo bash -s -- --yes` leaves
 # BASH_SOURCE unset, and under `set -u` the bare `"${BASH_SOURCE[0]}"` here was
 # an "unbound variable" fatal, so that one-liner never ran at all. Sourcing
-# still sets BASH_SOURCE to the sourcing file, which is not $0, so tests that
-# source this for its functions are unaffected.
+# still sets BASH_SOURCE to the sourcing file, which is not $0.
 if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

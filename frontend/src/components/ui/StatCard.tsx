@@ -16,12 +16,9 @@ type StatCardProps = {
   [key: string]: any;
 };
 
-/**
- * StatCard — a single KPI tile (label, value, optional icon/hint).
- *
- * Render it as a <button> via `as="button"` when the tile navigates: the
- * button semantics buy keyboard activation and the focus ring for free.
- */
+// Use `as="button"` when the tile navigates: button semantics buy keyboard
+// activation and the focus ring for free.
+
 const StatCard = ({
   as: Tag = 'div',
   label,

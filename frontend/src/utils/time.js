@@ -1,7 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Date/time formatting helpers shared across the app.
 // Timestamps render in the operator display timezone from backend Settings
 // (see displayTimezone.js) unless the caller passes { timeZone }.
 
@@ -27,7 +26,6 @@ function safeT(key, fallback) {
   }
 }
 
-// Format an ISO string (UTC) into the operator timezone.
 export function fmtDateTime(iso, opts = {}) {
   if (!iso) return '—';
   const { timeZone = getDisplayTimezone(), ...rest } = opts;
@@ -66,11 +64,10 @@ export function fmtDate(iso, opts = {}) {
   }
 }
 
-// Alias used by UserTable / list views.
 export const formatDate = fmtDate;
 
-// "3h ago" style relative time, localized via Intl (English fallback kept
-// for environments without the ICU data).
+// Localized via Intl; the hand-rolled English path below covers environments
+// without ICU data.
 export function fmtRelative(iso) {
   if (!iso) return safeT('never', 'never');
   const d = new Date(iso);
@@ -86,7 +83,7 @@ export function fmtRelative(iso) {
     if (abs < 86400000) return rtf.format(Math.round(diffMs / 3600000), 'hour');
     if (abs < 2592000000) return rtf.format(Math.round(diffMs / 86400000), 'day');
   } catch {
-    // Fall through to the English helper.
+    /* fall through to the English helper */
   }
   const min = Math.floor(-diffMs / 60000);
   if (min < 1) return safeT('justNow', 'just now');
@@ -107,7 +104,6 @@ export function daysUntil(expiry) {
   return Math.ceil((d - now) / 86400000);
 }
 
-// Format uptime seconds into human-readable "Xd Yh Zm"
 export function formatUptime(seconds) {
   if (!seconds || seconds === '-') return '-';
   const n = Number(seconds);

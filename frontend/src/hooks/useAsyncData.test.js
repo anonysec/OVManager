@@ -1,9 +1,7 @@
-/**
- * Smoke tests for the loading / error-isolation behaviour.
- * These lock in the two regressions that motivated the work:
- *   1. a single failing endpoint must not blank the dashboard
- *   2. the users table must actually render a skeleton on first load
- */
+// Locks in the two regressions that motivated this work:
+//   1. a single failing endpoint must not blank the dashboard
+//   2. the users table must actually render a skeleton on first load
+
 import { describe, it, expect } from 'vitest';
 import { settle } from './useAsyncData';
 

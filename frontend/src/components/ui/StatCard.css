@@ -1,8 +1,6 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* StatCard primitive — KPI tile used by the redesigned Home/Health pages. */
-
 .ui-stat-card {
   display: flex;
   flex-direction: column;

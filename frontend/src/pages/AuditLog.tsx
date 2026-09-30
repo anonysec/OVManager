@@ -100,8 +100,8 @@ const AuditLog = () => {
     try { rtf = new Intl.RelativeTimeFormat(i18n.language || 'en', { numeric: 'auto' }); } catch { rtf = null; }
     return (ts: any, now: number) => {
       if (!ts) return '—';
-      // `now` is 0 until the first effect pass — fall back to the shared
-      // helper so the very first paint cannot show a nonsense distance.
+      // `now` is 0 until the first effect pass — fall back so the first paint
+      // cannot show a nonsense distance.
       if (!rtf || !now) return fmtRelative(new Date(Number(ts) * 1000).toISOString());
       const diff = Math.round(Number(ts) - now);
       const abs = Math.abs(diff);

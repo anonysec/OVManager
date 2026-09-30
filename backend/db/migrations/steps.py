@@ -23,9 +23,8 @@ from backend.logger import logger
 def _encrypt_node_keys(db: Session) -> None:
     """Retired no-op (was: encrypt node API keys at rest, v2).
 
-    1.0.5 removes at-rest encryption entirely (owner decision: the DB file
-    behind 0600 perms + owner-held server is the trust boundary, same as
-    PasarGuard). Databases stamped below v2 pass through this step unchanged.
+    At-rest encryption is gone: the DB file behind 0600 perms on an owner-held
+    server is the trust boundary. Databases stamped below v2 pass through.
     """
     logger.info("migrations v2: at-rest key encryption is retired — no-op")
 
@@ -33,12 +32,10 @@ def _encrypt_node_keys(db: Session) -> None:
 def _decrypt_stored_secrets(db: Session) -> None:
     """Decrypt ``enc:`` rows once (v14): at-rest encryption is retired.
 
-    Uses the retired ``BOT/NODE_ENCRYPT_KEY`` values still present in .env on
-    the first 1.0.5 boot (the old installer stages the .env verbatim) — they
-    are deprecated no-ops to the app but remain available to this migration.
-    Rows that fail to decrypt are left untouched and reported — fail-closed,
-    never truncated. A no-op when the values are absent (fresh installs,
-    already-plaintext databases).
+    Reads the retired ``BOT/NODE_ENCRYPT_KEY`` values still present in .env on
+    the first boot after the upgrade. Rows that fail to decrypt are left
+    untouched and reported — fail-closed, never truncated. A no-op when the
+    values are absent (fresh installs, already-plaintext databases).
     """
     from cryptography.fernet import Fernet
 
@@ -93,10 +90,9 @@ def _decrypt_stored_secrets(db: Session) -> None:
 def _add_node_server_ca(db: Session) -> None:
     """Add ``nodes.server_ca`` (v15): TLS-pinned node certificates.
 
-    PasarGuard-style: the panel stores the node's certificate (PEM) and
-    verifies HTTPS against it, so a self-signed node is as safe as an
-    LE one — no unverified fallback. Adoption (before==0) already
-    reconciles the column; guard here so that path never re-adds it.
+    The panel stores the node's certificate (PEM) and verifies HTTPS against
+    it, so a self-signed node is as safe as an LE one — no unverified
+    fallback. Guarded so adoption (before==0) never re-adds the column.
     """
     if "nodes" not in table_names(db) or "server_ca" in column_names(db, "nodes"):
         return
@@ -131,9 +127,8 @@ def _add_lookup_indices(db: Session) -> None:
 def _add_admin_disabled_flag(db: Session) -> None:
     """Add ``admins.disabled`` for databases stamped before v5.
 
-    Adoption from a pre-runner database already reconciles the column, and a
-    database stamped at 4 has the table but not the column — reconciliation
-    does not run for those before the numbered steps, so add it here.
+    Reconciliation runs only when adopting a pre-runner database, so a database
+    stamped at 4 has the table but not the column.
     """
     if "admins" not in table_names(db) or "disabled" in column_names(db, "admins"):
         return
@@ -144,10 +139,9 @@ def _add_admin_disabled_flag(db: Session) -> None:
 def _add_notification_flags(db: Session) -> None:
     """Add ``settings.notify_expiry`` / ``settings.notify_traffic`` (v6).
 
-    Both default to True, so existing installs keep sending the daily
-    Telegram alerts after the upgrade. A database stamped at 5 has the
-    settings table but not the columns, and reconciliation only runs while
-    adopting a pre-runner database — hence this step.
+    Both default to True, so existing installs keep sending the daily Telegram
+    alerts. Reconciliation runs only when adopting a pre-runner database, so a
+    database stamped at 5 needs this.
     """
     if "settings" not in table_names(db):
         return
@@ -162,10 +156,9 @@ def _add_notification_flags(db: Session) -> None:
 def _add_auto_backup_settings(db: Session) -> None:
     """Add ``settings.auto_backup_*`` for databases stamped before v7.
 
-    Auto backup is off by default, so existing installs keep behaving exactly
-    as before after the upgrade. A database stamped at 6 has the settings
-    table but not the columns, and reconciliation only runs while adopting a
-    pre-runner database — hence this step.
+    Auto backup is off by default, so existing installs keep behaving as before.
+    Reconciliation runs only when adopting a pre-runner database, so a database
+    stamped at 6 needs this.
     """
     if "settings" not in table_names(db):
         return
@@ -180,8 +173,7 @@ def _add_auto_backup_settings(db: Session) -> None:
 def _add_user_tag(db: Session) -> None:
     """Add ``users.tag`` for databases stamped before v8.
 
-    Adoption reconciles the column for pre-runner databases; versioned ones
-    need the numbered step.
+    Reconciliation covers pre-runner databases only; versioned ones need this.
     """
     if "users" not in table_names(db) or "tag" in column_names(db, "users"):
         return

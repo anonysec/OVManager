@@ -1,20 +1,17 @@
 """Offsite copy of the newest scheduled backup.
 
 After each scheduled backup the panel can push the fresh ``.db`` file to an
-operator-configured remote target using the system ``rsync`` (falling back
-to ``scp``). The target is a plain scp-style string: ``[user@]host:/path``.
+operator-configured target using the system ``rsync`` (falling back to
+``scp``). The target is a plain scp-style string: ``[user@]host:/path``.
 
-Design notes
-------------
-* The transfer runs as a plain ``subprocess.run`` argv list — never through
-  a shell — and the target is validated against a strict whitelist pattern
-  before it is ever used.
-* SSH runs with ``BatchMode=yes`` and a connect timeout so a background job
-  can never hang on a password prompt; key-based login is expected.
-* Everything is best-effort and never raises: the outcome is returned to
-  the caller (the scheduler) which audits and logs it.
-* No remote cleanup: the remote side keeps whatever it keeps; the local
-  retention policy is unaffected.
+The transfer runs as a plain ``subprocess.run`` argv list — never through a
+shell — and the target is validated against a strict whitelist pattern before
+it is used. SSH runs with ``BatchMode=yes`` and a connect timeout, so a
+background job can never hang on a password prompt; key-based login is
+expected.
+
+Everything is best-effort and never raises: the outcome is returned to the
+caller (the scheduler), which audits and logs it.
 """
 
 from __future__ import annotations

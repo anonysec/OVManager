@@ -1,10 +1,8 @@
 """OVManager FastAPI composition root.
 
-Thin by design: middlewares live in :mod:`backend.middlewares`, background
-jobs in :mod:`backend.scheduler`, bot supervision in
-:mod:`backend.bot_supervisor`. This module wires them together (lifespan,
-routes, static assets, SPA fallback) and re-exports the names the test
-suite and routers import from here.
+Thin by design: middlewares live in :mod:`backend.middlewares`, background jobs
+in :mod:`backend.scheduler`, bot supervision in :mod:`backend.bot_supervisor`.
+This module wires them together and re-exports the names routers import here.
 """
 
 from __future__ import annotations
@@ -61,11 +59,10 @@ __all__ = [
 
 
 def _run_migrations():
-    """Bring the database up to the current schema version.
+    """Startup hook for :mod:`backend.db.migrations`.
 
-    All migration logic lives in :mod:`backend.db.migrations`; this is only the
-    startup hook. It raises on failure so a half-migrated database stops the
-    panel instead of serving requests against a broken schema.
+    Raises on failure, so a half-migrated database stops the panel instead of
+    serving requests against a broken schema.
     """
     migrate()
 
@@ -77,7 +74,6 @@ ssl_certfile = tls_config.get("cert_file") or None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application startup and shutdown via the modern lifespan API."""
     _run_migrations()
     from backend.db.engine import SessionLocal as _SL
     from backend.operations.observability.audit import ensure_audit_table

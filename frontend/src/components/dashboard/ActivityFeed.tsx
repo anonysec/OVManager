@@ -1,10 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * ActivityFeed — last N admin events with avatar + action + target +
- * relative time. Header carries a "View all" link to the audit log.
- */
+// The header's "View all" link points at the audit log.
+
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelState, EmptyState, PanelSkeleton } from '../ui';

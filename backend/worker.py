@@ -1,32 +1,20 @@
 """The scheduled-jobs worker: the periodic jobs, in their own process.
 
-Why a separate process at all. These jobs share a process with the HTTP
-server, so a job that wedges takes the panel down with it: a backup that
-fills the disk, a traffic-enforcement pass that fans out to nodes the
-moment a lot of them are unreachable. The panel then stops answering
-/health and stops serving the login page, which is indistinguishable from
-a hung install. Measured cost of the isolation is ~45 MB of resident
-memory for the second interpreter.
+These jobs otherwise share a process with the HTTP server, so one that wedges
+— a backup filling the disk, an enforcement pass fanning out while nodes are
+unreachable — takes the panel down with it and looks like a hung install.
 
-What stays in the web process, deliberately, because it cannot move:
+Two jobs stay in the web process because they cannot move:
 
-- ``collect_live_snapshot`` publishes to the in-process live bus that
-  ``routers/telemetry.py`` subscribes to for SSE. A collector in another
-  process would publish to a bus with no subscribers, and the live view
-  would silently stop updating.
-- ``_watchdog_bot`` holds the ``Popen`` for the bot child, which the web
-  process starts in its lifespan. In another process that handle is
-  None and the watchdog would do nothing.
+- ``collect_live_snapshot`` publishes to an in-process live bus that
+  ``routers/telemetry.py`` subscribes to; from another process it would publish
+  to a bus with no subscribers and the live view would silently stop updating.
+- ``_watchdog_bot`` holds the ``Popen`` for the bot child, which the web process
+  starts in its lifespan — in another process that handle is None.
 
-So this process runs the periodic database and node work, and the web
-process keeps the two jobs that are tied to in-process state.
-
-Exactly one worker may run. A second one would double every schedule --
-two backups a night, two enforcement passes -- so the entrypoint takes an
-exclusive lock on the data dir and exits if it cannot. The web process
-supervises and restarts this child, which is also why the lock rather
-than a pidfile: a pidfile cannot tell a live worker from a stale one
-after a crash.
+Exactly one worker may run, or every schedule fires twice, so the entrypoint
+takes an exclusive lock on the data dir and exits if it cannot. A lock rather
+than a pidfile: a pidfile cannot tell a live worker from a stale one.
 """
 
 from __future__ import annotations
@@ -82,9 +70,8 @@ def acquire_single_instance_lock():
 def register_worker_jobs(scheduler) -> None:
     """Register every job that does not need the web process's own state.
 
-    Kept in one place so the split is reviewable: anything added here runs
-    out of process, and anything needing in-process state belongs in
-    ``backend.scheduler.start_scheduler`` instead.
+    Kept in one place so the split stays reviewable: anything needing in-process
+    state belongs in ``backend.scheduler.start_scheduler``.
     """
     from apscheduler.triggers.cron import CronTrigger
 
@@ -156,8 +143,8 @@ async def _run() -> None:
 
 
 def main() -> int:
-    # Importing backend.logger is what configures logging — it installs its
-    # handlers at module import, so the child's lines land in the same
+    # The module-level backend.logger import is what configures logging here —
+    # handlers are installed at import, so this child's lines land in the same
     # app.log and on the same stderr as the panel's.
     try:
         asyncio.run(_run())
@@ -179,19 +166,16 @@ _monitor: asyncio.Task | None = None
 def start_worker() -> None:
     """Start the jobs worker and watch it.
 
-    A fresh interpreter rather than a fork: forking from a process with a
-    running event loop and live threads is how you inherit a locked lock.
-    The child gets this process's environment, so DATA_DIR and the rest
-    point where the panel's do.
+    A fresh interpreter rather than a fork: forking from a process with a running
+    event loop and live threads is how you inherit a locked lock. The child gets
+    this process's environment, so DATA_DIR points where the panel's does.
     """
     global _worker, _monitor
     if _worker is not None and _worker.poll() is None:
         return
     if os.environ.get("OVM_WORKER") == "0":
-        # Escape hatch, and how the test suite keeps from spawning a real
-        # second interpreter for every test that exercises the lifespan. The
-        # worker itself is covered by tests/s/test_worker_process.py, which
-        # turns this back on deliberately.
+        # Escape hatch: stops every lifespan test from spawning a second
+        # interpreter. tests/test_worker_process.py turns it back on.
         return
     _worker = subprocess.Popen(  # noqa: S603 - fixed argv, this interpreter
         [sys.executable, "-m", "backend.worker"],
@@ -247,5 +231,4 @@ def stop_worker(timeout: float = 10.0) -> None:
 
 
 def worker_alive() -> bool:
-    """Whether the jobs worker is currently running."""
     return _worker is not None and _worker.poll() is None

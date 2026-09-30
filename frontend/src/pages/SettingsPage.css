@@ -1,9 +1,8 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* Settings page shell — owner-only notice.
-   Section styling keeps living in Settings.css; this file only owns the
-   page chrome around the sections. */
+/* Settings page shell and owner-only notice; section styling lives in
+   Settings.css. */
 
 .sp-owner-note {
   margin-top: 8px;

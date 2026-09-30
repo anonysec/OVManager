@@ -1,12 +1,10 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-/**
- * Ring — small SVG circular progress indicator for stat cards.
- * Tone colors the arc: ok (success), warn (warning), danger (danger),
- * default (accent). Never animated beyond CSS transitions; disabled
- * under prefers-reduced-motion via the stylesheet.
- */
+// Tone colors the arc: ok, warn, danger or default (accent). Never animated
+// beyond CSS transitions, and disabled under prefers-reduced-motion via the
+// stylesheet.
+
 const TONE_VAR: Record<string, string> = {
   ok: 'var(--success)',
   warn: 'var(--warning)',

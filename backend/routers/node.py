@@ -50,8 +50,8 @@ class NodePortsUpdate(BaseModel):
 def _supports_return_envelope(method) -> bool:
     """True when update_config() declares the ``return_envelope`` opt-in.
 
-    Test doubles expose ``**kwargs`` (or an older signature); only pass the
-    opt-in to callables that spell it out, so route tests keep working.
+    Only callables that spell it out get the opt-in; test doubles and older
+    node clients expose ``**kwargs`` and would reject it.
     """
     try:
         return "return_envelope" in inspect.signature(method).parameters
@@ -92,8 +92,7 @@ async def test_node(
 ):
     """Check connectivity to a node without saving it.
 
-    Read-only: builds a one-off client from the payload and hits
-    /sync/status. Lets the Add Node form validate before persisting.
+    Lets the Add Node form validate before persisting.
     """
     from fastapi.concurrency import run_in_threadpool
 

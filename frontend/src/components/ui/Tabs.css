@@ -1,8 +1,6 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
-/* Tabs primitive — an underline strip that scrolls horizontally on phones. */
-
 .ui-tabs {
   display: flex;
   align-items: stretch;

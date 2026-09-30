@@ -16,7 +16,6 @@ const LAZY_LOCALES = {
   cn: () => import('./lang/cn.json'),
 };
 
-/** Apply the document direction + lang for the current i18n language. */
 const applyDocumentDir = (lng) => {
   const dir = lng.startsWith('fa') ? 'rtl' : 'ltr';
   document.documentElement.dir = dir;
@@ -36,13 +35,13 @@ const readStoredLang = () => {
 const writeStoredLang = (lng) => {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem('ovmanager-lang', lng);
-  } catch { /* preference only: never break a language switch */ }
+  } catch { /* preference only: a failed write must not break the switch */ }
 };
 
 const stored = readStoredLang() || 'en';
-// Start on a language we definitely have. If the stored preference is a lazy
-// locale we boot in English and swap the instant its bundle lands — this keeps
-// first paint immediate instead of blocking render on a JSON fetch.
+// Start on a language that is definitely bundled. A stored lazy locale boots
+// in English and swaps the instant its bundle lands, so first paint is never
+// blocked on a JSON fetch.
 const initial = stored in LAZY_LOCALES ? 'en' : stored;
 
 i18n
@@ -59,11 +58,7 @@ i18n
 
 const loading = new Map();
 
-/**
- * Ensure a locale's resource bundle is present, then activate it.
- * Safe to call repeatedly: in-flight loads are de-duplicated and already
- * loaded locales resolve immediately.
- */
+/** Safe to call repeatedly: in-flight loads are de-duplicated. */
 export async function loadLanguage(lng) {
   if (!lng || lng === i18n.language) return;
 
@@ -76,8 +71,8 @@ export async function loadLanguage(lng) {
             i18n.addResourceBundle(lng, 'translation', mod.default, true, true);
           })
           .catch((err) => {
-            // Stay on the current language rather than switching to a blank
-            // bundle; the user keeps a usable UI.
+            // Stay on the current language: switching to a missing bundle
+            // would leave every key blank.
             console.error(`Failed to load locale "${lng}"`, err);
             throw err;
           })
@@ -95,18 +90,17 @@ export async function loadLanguage(lng) {
   writeStoredLang(lng);
 }
 
-// Restore the user's real language right after boot. Deferred so it never
-// competes with the first paint or the initial data requests.
+// Deferred so restoring the stored language never competes with the first
+// paint or the initial data requests.
 if (stored !== initial) {
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1));
   idle(() => loadLanguage(stored));
 }
 
-// Apply direction immediately at startup (login page included — it renders
-// outside DashboardLayout, which previously was the only place that set dir).
+// Applied at startup, not from DashboardLayout: the login page renders outside
+// it and used to come up with the wrong direction.
 applyDocumentDir(i18n.language);
 
-// Keep dir in sync whenever the language changes anywhere in the app.
 i18n.on('languageChanged', applyDocumentDir);
 
 export default i18n;

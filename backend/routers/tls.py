@@ -7,7 +7,7 @@ SSL_KEYFILE / SSL_CERTFILE environment variables: files written here live in
 control the panel's own TLS identity.
 
 Key material is never returned or logged; every write goes through an atomic
-temp-file + ``os.replace`` inside ``DATA_DIR/tls/`` only.
+temp-file + ``os.replace`` inside ``DATA_DIR/tls/``.
 """
 
 import ipaddress

@@ -32,7 +32,6 @@ _ONGOING_WINDOW_S = 3600
 
 
 def _cn_to_username(db: Session) -> dict[str, str]:
-    """Map OpenVPN common names (panel user ids) to usernames."""
     try:
         return {str(u.id): u.name for u in db.query(User).all()}
     except Exception:
@@ -115,7 +114,7 @@ def _legacy_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: d
 
     The old node counts every reject as an "auth error" and only returns the
     last line per identity, so the panel re-applies the same classification to
-    the text it can see and treats the rest as policy. The node is flagged as
+    the text it can see and treats the rest as policy. Nodes are flagged
     unclassified so the UI can say the exact numbers arrive after an update.
     """
     le = data.get("last_error")
@@ -151,7 +150,6 @@ def _legacy_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: d
 
 
 def _node_events(data: dict, node_name: str, panel_tz: ZoneInfo, id_to_name: dict[str, str]) -> list[dict]:
-    """Structured events from a current node, normalized for the UI."""
     now = datetime.now(UTC).timestamp()
     rows: list[dict] = []
     for ev in data.get("events") or []:

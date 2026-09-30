@@ -13,8 +13,6 @@ SELF_SIGNED_DIR = "/etc/ssl/self-signed"
 
 
 class TLSConfig:
-    """Centralized TLS configuration."""
-
     @classmethod
     def get_ssl_config(cls) -> dict:
         """Return cert/key paths. Empty strings mean no TLS."""

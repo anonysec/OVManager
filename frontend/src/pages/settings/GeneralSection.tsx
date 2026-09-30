@@ -48,7 +48,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
   useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
 
-  // Mount-only sync (as before — no refreshTick revalidation here).
+  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const s = shared?.data;
     if (!s || synced.current) return;
@@ -99,7 +99,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
 
   return (
     <div className="sp-cards">
-      {/* Panel URL */}
       <Card title={t('panelUrl', 'Panel URL Path')} icon={FiLink}>
         <div className="sp-url-row">
           <code className="sp-code">{urlPath ? `/${urlPath}/` : '/'}</code>
@@ -154,7 +153,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
         <p className="sp-hint">{urlPath ? t('urlpathActive', 'Panel served at /{path}/. Clear to serve at root.', { path: urlPath }) : t('urlpathRoot', 'Panel served at root (/).')}</p>
       </Card>
 
-      {/* Subscription URL prefix */}
       <Card title={t('subscriptionLinkCard', 'Subscription URL Prefix')} icon={FiLink}>
         <div className="sp-url-row">
           <code className="sp-code sp-code--muted">{subPrefix || t('notSet', '(uses panel origin)')}</code>

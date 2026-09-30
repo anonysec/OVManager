@@ -1,7 +1,5 @@
 /* Users page — list, toolbar and the shared user form/detail modal styles.
-   All values come from tokens.css so both themes and RTL need no overrides.
-   Loaded by UserManagement.jsx; the modal markup renders in a portal but the
-   class names below are global. */
+   The modal markup renders in a portal, so the class names below are global. */
 
 /* ── Page shell ──────────────────────────────────────────────────── */
 .um-page {
