@@ -55,6 +55,19 @@ def test_runtime_user_data_dir_and_healthcheck_kept():
     assert "HEALTHCHECK" in runtime
 
 
+def test_runtime_image_ships_the_operator_cli():
+    """`ovm` runs cli.main inside the container — the image has to carry it.
+
+    Every command manager.sh delegates (`status`, `doctor`, backups, and now
+    `reset-password`) is `docker exec ovmanager /app/.venv/bin/python -m
+    cli.main`. Without this COPY that exec dies with ModuleNotFoundError, and
+    on a docker install the owner credential could never be changed.
+    """
+    runtime = _stages()[-1]
+    assert "COPY cli/ ./cli/" in runtime, "the runtime stage must ship cli/"
+    assert "COPY backend/ ./backend/" in runtime, "and the package the CLI imports"
+
+
 def test_runtime_image_ships_no_pip():
     """pip was the only thing Trivy ever flagged in this image.
 

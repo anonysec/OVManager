@@ -34,12 +34,13 @@ def hash_password(password: str) -> str | None:
 
 
 def reset_password(install_dir: str, password: str | None = None, data_dir: str | None = None) -> dict:
-    """Rewrite the owner credential in the installed .env (atomic).
+    """Set the owner's bcrypt hash in the ``admins`` row at ``data_dir``.
 
-    The password comes from the argument or, when omitted, from the
-    OVM_ADMIN_PASS environment variable. The environment is how the manager
-    passes it: a command-line argument would be visible in `ps` to every user
-    on the box, and it would land in the shell history.
+    ``install_dir`` is only read for ADMIN_USERNAME and DATA_DIR; the .env file
+    itself is never written. The password comes from the argument or, when
+    omitted, from the OVM_ADMIN_PASS environment variable. The environment is
+    how the manager passes it: a command-line argument would be visible in `ps`
+    to every user on the box, and it would land in the shell history.
 
     Returns a result dict (never raises, never echoes the password).
     """

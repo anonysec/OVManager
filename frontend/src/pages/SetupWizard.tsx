@@ -144,7 +144,7 @@ const SetupWizard = () => {
             </button>
           </div>
           <p className="setup-hint">
-            {t('setupSameServerHint', 'Same server as OVManager? The installer’s Ready card already printed a ready-to-paste OVNode command with the API key — run that instead, then paste the ovnode:// bundle into Nodes → Add Node.')}
+            {t('setupSameServerHint', 'Same server as OVManager? Run the command above here too. The OVNode installer prints an ovnode:// bundle on its Ready card — paste that into Nodes → Add Node.')}
           </p>
           <div className="setup-actions">
             <Link to="/nodes" className="setup-link">

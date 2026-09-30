@@ -109,8 +109,9 @@ This one is handled on the host rather than in the container, which has neither
 **Every `ovm` command requires root**, including the read-only ones. This is
 deliberate and enforced, not a side effect of file permissions.
 
-They all read `.env`, which holds `ADMIN_PASSWORD_HASH`, `JWT_SECRET_KEY` and
-the secret URL path — the panel's only defence against scanners. So "read-only"
+They all read `.env`, which holds `JWT_SECRET_KEY` and the secret URL path — the
+panel's only defence against scanners (the owner credential is a database row,
+not a `.env` value). So "read-only"
 meant "changes nothing", not "discloses nothing". `ovm status` prints the panel
 URL including that path; `ovm recovery` prints it directly.
 
@@ -259,14 +260,11 @@ sudo ovm reset-urlpath
 things the old menu could do from there are commands of their own:
 `reset-password` and `reset-urlpath`.
 
-`reset-password` rewrites only the owner credential line in the installed `.env`
-(preferring `ADMIN_PASSWORD_HASH=` with a bcrypt hash; plaintext only if the panel's
-hasher is unavailable) and preserves the file's existing mode and group — which
-matters on Docker, where the container reads the file through a group. Either form
-restarts the panel so the new credential takes effect; on Docker the container is
-**recreated** rather than restarted, because a restart reuses the environment the
-container was created with and would leave the old password live. The prompting form
-additionally waits 12s for `/health` and prints the login name and URL.
+`reset-password` sets the owner's bcrypt hash in the panel database (`cli/password.py`
+is the only writer) and never touches `.env`. It prompts for the password, or takes it
+from `-p`/`OVM_PASS`; either way it restarts the panel before reporting. On Docker the
+command runs the same CLI inside the container, where that database is. The prompting
+form additionally waits 12s for `/health` and prints the login name and URL.
 
 Policy: single line, at least 8 characters, and not one of `change-me`, `changeme`,
 `change_me`, `password123`, `admin123`. The value is never echoed or logged, and it

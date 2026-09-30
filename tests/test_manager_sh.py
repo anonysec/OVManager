@@ -7,9 +7,11 @@ sandbox trees plus stub tools stand in for systemd/curl/docker.
 """
 
 import os
+import pty
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -132,6 +134,33 @@ def sandbox(tmp_path, gate_root: bool = False):
     (app / "install.sh").chmod(0o755)
     env = {**os.environ, "OVM_APP_DIR": str(app)}
     return env, app
+
+
+def mgr_sb_tty(env, app, *args: str, answers: str):
+    """Run the sandbox manager with a pty on stdin, so prompts can be answered.
+
+    `ovm reset-password` without -p asks for the password through a hidden
+    prompt that only runs when it has a terminal; a pty is the only way to
+    exercise the path an operator actually uses.
+    """
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(
+            ["bash", str(app / "manager.sh"), *args],
+            stdin=slave,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+    finally:
+        os.close(slave)
+    os.write(master, answers.encode())
+    try:
+        out, err = proc.communicate(timeout=60)
+    finally:
+        os.close(master)
+    return proc.returncode, out, err
 
 
 def mgr_sb(env, app, *args: str, extra_env: dict | None = None):
@@ -572,16 +601,16 @@ def test_cli_py_unsupported_command_uses_bash(tmp_path):
 def test_dispatch_shape_matches_the_documented_split():
     """Root-free check of which commands reach the CLI and which stay host-side.
 
-    In a container there is no docker CLI and no host .env, so logs,
-    reset-password and reset-urlpath cannot run there; everything else can, and
-    is handed the host's view of the service. Pinned as source because the
-    behavioural docker test needs a real container.
+    In a container there is no docker CLI and no host .env, so logs and
+    reset-urlpath cannot run there; everything else can, and is handed the
+    host's view of the service. Pinned as source because the behavioural docker
+    test needs a real container.
     """
     with open(MANAGER, encoding="utf-8") as fh:
         content = fh.read()
 
     cli_block = content[content.index("_cli_py() {") : content.index("# One wrapper per command")]
-    assert "docker exec ovmanager /app/.venv/bin/python -m cli.main" in cli_block
+    assert "docker exec " in cli_block and "ovmanager /app/.venv/bin/python -m cli.main" in cli_block
     assert "--install-dir /app" in cli_block and "--data-dir /app/data" in cli_block
     assert "--in-container" in cli_block and "--service-state" in cli_block
     assert "Panel virtualenv missing" in cli_block, "a broken venv must say what to do"
@@ -590,8 +619,13 @@ def test_dispatch_shape_matches_the_documented_split():
         body = content[content.index(fn) : content.index("\n}\n", content.index(fn))]
         assert "is_docker_mode" in body, f"{fn} must branch on the install mode"
     assert "if is_docker_mode; then reset_urlpath_now" in content
-    assert 'if [[ -z "$ADMIN_PASS" ]] || is_docker_mode; then' in content, (
-        "prompting and docker both need the host-side password rewrite"
+    # reset-password has one path for every install: bash prompts, the CLI (in
+    # the container when there is one) writes the row.
+    assert "_cli_py reset-password" in content, "the CLI is the only writer"
+    dispatch = content[content.rindex("reset-password)") : content.rindex("reset-urlpath)")]
+    assert "do_reset_password" in dispatch, "the dispatch must reach the one reset path"
+    assert "is_docker_mode" not in dispatch and "cli.main" not in dispatch, (
+        "the docker branch lives in _cli_py now; the dispatch must not fork again"
     )
 
     # SHOW_ALL is forwarded numerically, not by ${VAR:+--all}: a set-but-zero
@@ -1093,33 +1127,30 @@ def test_the_three_new_commands_are_documented(tmp_path):
     assert re.search(r"(?m)^\s*version-script\|script-version\)\s", content), "version-script alias"
 
 
-def test_no_command_writes_a_plaintext_owner_password_to_env(tmp_path):
-    """.env may receive a bcrypt hash and nothing else.
+def test_no_reset_path_writes_a_credential_to_env(tmp_path):
+    """.env receives no password and no hash — the credential is a row.
 
-    The old fallback wrote ADMIN_PASSWORD=<plaintext> when the panel's Python
-    could not be run — a live secret in a config file the panel ignores
-    entirely since v16. With no bcrypt the reset now refuses.
+    The reset used to rewrite ADMIN_PASSWORD_HASH in .env (and, on its older
+    fallback, ADMIN_PASSWORD in plaintext). backend/config.py ignores both and
+    seeds.py imports the hash once, on the fresh-install path, so the command
+    reported success while the old password kept working.
     """
     content = MANAGER_PATH.read_text(encoding="utf-8")
     assert 'pass_line="ADMIN_PASSWORD=' not in content
     assert "printf 'ADMIN_PASSWORD=" not in content
-    # Every remaining mention is a comment, the awk that deletes the legacy
-    # line, or the error text for when neither line was found.
-    allowed = ("#", "/^ADMIN_PASSWORD", "die ")
-    offenders = [
-        line.strip()
-        for line in content.splitlines()
-        if "ADMIN_PASSWORD" in line and "ADMIN_PASSWORD_HASH" not in line and not line.strip().startswith(allowed)
-    ]
+    assert "ADMIN_PASSWORD_HASH=" not in content, "the hash must not be written either"
+    # Every remaining mention is a comment explaining why .env holds none.
+    offenders = [line.strip() for line in content.splitlines() if "ADMIN_PASSWORD" in line and not line.strip().startswith("#")]
     assert not offenders, offenders
 
-    # Docker mode, with a docker that cannot produce a hash: the old fallback
-    # wrote the plaintext password here and the panel ignored it.
+    # Docker mode whose container cannot answer: nothing may reach .env, and
+    # the command must fail loudly rather than report a change it did not make.
     env, app = sandbox(tmp_path)
     data = tmp_path / "data"
     data.mkdir()
     (data / "ovmanager-compose.yml").write_text("services: {}\n", encoding="utf-8")
-    (app / ".env").write_text("PORT=2095\nADMIN_USERNAME=admin\n", encoding="utf-8")
+    before = "PORT=2095\nADMIN_USERNAME=admin\n"
+    (app / ".env").write_text(before, encoding="utf-8")
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
     (stub_bin / "docker").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
@@ -1128,10 +1159,143 @@ def test_no_command_writes_a_plaintext_owner_password_to_env(tmp_path):
 
     r = mgr_sb(env, app, "reset-password", "-p", "long-enough-password")
     body = (app / ".env").read_text(encoding="utf-8")
-    assert "long-enough-password" not in body, "the plaintext password reached .env"
-    assert "ADMIN_PASSWORD=" not in body, "no plaintext credential may be written"
-    assert r.returncode != 0, "with no hasher the reset must refuse"
-    assert "plaintext" in r.stderr, r.stderr
+    assert body == before, "no reset path may write .env"
+    assert r.returncode != 0, "a docker exec that fails must fail the command"
+    assert "not changed" in r.stderr, r.stderr
+
+
+def test_the_docker_reset_runs_the_cli_where_the_database_is(tmp_path):
+    """Docker has no host venv, so the row is written from inside the container.
+
+    The command has to reach /app/data — the mounted volume holding
+    ovmanager.db — and the secret has to travel by environment. `-e NAME` with
+    no value is the one form that keeps it out of `ps` on the host: docker
+    reads it from its own environment.
+    """
+    env, app = sandbox(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "ovmanager-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (app / ".env").write_text("PORT=2095\nADMIN_USERNAME=admin\n", encoding="utf-8")
+
+    marker = tmp_path / "docker.log"
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    (stub_bin / "docker").write_text(
+        '#!/bin/sh\necho "DOCKER $*" >> "$MARKER"\n[ "$1" = ps ] && exit 1\nexit 0\n', encoding="utf-8"
+    )
+    (stub_bin / "docker").chmod(0o755)
+    stub_curl = stub_bin / "curl"
+    stub_curl.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stub_curl.chmod(0o755)
+    systemctl = stub_bin / "systemctl"
+    systemctl.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    systemctl.chmod(0o755)
+    env = {**env, "OVM_DATA_DIR": str(data), "MARKER": str(marker), "PATH": f"{stub_bin}:{env['PATH']}"}
+
+    r = mgr_sb(env, app, "reset-password", "-p", "long-enough-password")
+    assert r.returncode == 0, r.stderr
+    calls = marker.read_text(encoding="utf-8")
+    exec_line = next(line for line in calls.splitlines() if line.startswith("DOCKER exec"))
+    assert "-e OVM_ADMIN_PASS" in exec_line, exec_line
+    assert "OVM_ADMIN_PASS=" not in exec_line, f"the secret must not be an argument: {exec_line}"
+    assert "ovmanager /app/.venv/bin/python -m cli.main" in exec_line, exec_line
+    assert "--install-dir /app --data-dir /app/data" in exec_line, exec_line
+    assert exec_line.endswith(" reset-password"), exec_line
+    assert "long-enough-password" not in calls, "the secret reached the docker command line"
+    assert "long-enough-password" not in r.stdout + r.stderr
+
+
+def _sandbox_cli(app, data):
+    """An installed tree whose .venv runs the real CLI out of this repo.
+
+    The CLI resolves its own imports (cli/, backend/) from the checkout, and
+    the install tree supplies .env, the data dir and the venv path manager.sh
+    insists on. Only the interpreter path is faked.
+    """
+    (app / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
+    wrapper = app / ".venv" / "bin" / "python"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+    db = data / "ovmanager.db"
+    return db, {"PYTHONPATH": str(REPO)}
+
+
+def _seed_owner(db_path, username, password):
+    from sqlalchemy import create_engine
+
+    from backend.auth.hash import hash_password
+    from backend.db.models import Admin
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    Admin.__table__.create(engine)
+    with engine.begin() as conn:
+        conn.execute(Admin.__table__.insert().values(username=username, password=hash_password(password), disabled=False))
+    engine.dispose()
+
+
+def _authenticates(db_path, username, password):
+    """The panel's own authentication against the row on disk."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.auth.auth import authenticate_user
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    db = sessionmaker(bind=engine)()
+    try:
+        return authenticate_user(db, username, password) is not None
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_reset_password_interactive_path_changes_the_row(tmp_path):
+    """The prompting path must change the credential, not merely exit 0.
+
+    This is the assertion whose absence let the bug ship: the prompt used to
+    hash into ADMIN_PASSWORD_HASH in .env, which nothing reads on an installed
+    panel, so `ovm reset-password` printed "updated" and the old password kept
+    working. Driven through a pty because the prompt needs a terminal, and then
+    authenticated against the real row — old password out, new password in.
+    """
+    env, app = sandbox(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    db, extra = _sandbox_cli(app, data)
+    _seed_owner(db, "admin", "old-owner-password-123")
+    before = f"PORT=2095\nADMIN_USERNAME=admin\nDATA_DIR={data}\n"
+    (app / ".env").write_text(before, encoding="utf-8")
+
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    for name, body in (("curl", "#!/bin/sh\nexit 0\n"), ("systemctl", "#!/bin/sh\nexit 0\n")):
+        stub = stub_bin / name
+        stub.write_text(body, encoding="utf-8")
+        stub.chmod(0o755)
+    env = {**env, **extra, "PATH": f"{stub_bin}:{env['PATH']}"}
+
+    rc, out, err = mgr_sb_tty(env, app, "reset-password", answers="new-owner-password-123\nnew-owner-password-123\n")
+    assert rc == 0, err or out
+    assert _authenticates(db, "admin", "new-owner-password-123"), "the new password must work"
+    assert not _authenticates(db, "admin", "old-owner-password-123"), "the old password must be dead"
+    assert (app / ".env").read_text(encoding="utf-8") == before, ".env is not part of the credential path"
+
+
+def test_reset_password_interactive_mismatch_leaves_the_row_alone(tmp_path):
+    """A mistyped confirmation changes nothing — and says so."""
+    env, app = sandbox(tmp_path)
+    data = tmp_path / "data"
+    data.mkdir()
+    db, extra = _sandbox_cli(app, data)
+    _seed_owner(db, "admin", "old-owner-password-123")
+    (app / ".env").write_text(f"PORT=2095\nADMIN_USERNAME=admin\nDATA_DIR={data}\n", encoding="utf-8")
+    env = {**env, **extra}
+
+    rc, _, err = mgr_sb_tty(env, app, "reset-password", answers="new-owner-password-123\ntypo-owner-123\n")
+    assert rc != 0
+    assert "do not match" in err, err
+    assert _authenticates(db, "admin", "old-owner-password-123"), "a mismatch must not touch the row"
 
 
 def test_owner_claim_warns_when_the_panel_already_has_an_owner(tmp_path):

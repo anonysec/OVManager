@@ -16,7 +16,6 @@ import pytest
 
 INSTALLER = os.path.join(os.path.dirname(__file__), "..", "install.sh")
 INSTALLER_PATH = Path(INSTALLER)
-MANAGER_PATH = INSTALLER_PATH.parent / "manager.sh"
 LIB_DIR = INSTALLER_PATH.parent / "scripts" / "lib"
 # install.sh sources the libs in this order (see _libs_install); a helper it
 # calls now lives in one of these files rather than in install.sh itself.
@@ -1253,37 +1252,6 @@ def test_env_is_shared_with_the_container_before_it_starts(tmp_path):
     assert up.index("pull") < up.index("share_env_with_container") < up.index("up -d"), (
         "the gid can only be read once the image is present, and the config must be shared before the container starts"
     )
-
-
-def test_reset_password_preserves_the_env_mode(tmp_path):
-    """A password reset must not strip the container's read access.
-
-    The rewrite used to force 0600, which on a docker install would leave the
-    panel unable to read its own config until the next manual fix.
-    """
-    with open(MANAGER_PATH, encoding="utf-8") as f:
-        content = f.read()
-    body = content.split("do_reset_password()")[1]
-    chmod_line = next(x.strip() for x in body.splitlines() if '"$tmp"' in x and x.strip().startswith("chmod"))
-    assert chmod_line.startswith('chmod --reference="$envfile"'), chmod_line
-    # 0600 may only survive as the fallback for a coreutils without --reference.
-    assert chmod_line.count("chmod") == 2 and chmod_line.endswith('|| chmod 600 "$tmp"'), chmod_line
-
-
-def test_reset_password_uses_the_container_hasher_and_recreates(tmp_path):
-    """The docker branch must actually be taken, and actually reload the env.
-
-    -i and -e are both required (stdin and environment), and `docker restart`
-    reuses the original environment, so the new .env needs a recreate.
-    """
-    with open(MANAGER_PATH, encoding="utf-8") as f:
-        content = f.read()
-    assert 'docker exec -i -e "HASH_SRC=$ADMIN_PASS"' in content
-    assert "pybin=(docker exec -i" in content, "-i (stdin) and -e (secret) are both required"
-    assert "--force-recreate" in content, "a restart would keep the old credentials live"
-    body = content.split("do_reset_password()")[1][:4000]
-    body = "\n".join(x for x in body.splitlines() if not x.lstrip().startswith("#"))
-    assert "docker restart ovmanager" not in body, "a restart keeps the old environment"
 
 
 def test_config_is_never_shared_with_a_populated_host_group():

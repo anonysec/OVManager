@@ -75,11 +75,12 @@ usage() {
     OVM_PASS      same as --pass
     CI=true       implies -y
 
-  Status, doctor, tls-status, backups and restore run from the Python CLI in
-  cli/ — the single implementation, on docker installs too. Logs,
-  reset-password and reset-urlpath stay host-side (a container has no
-  journalctl and no host .env), as do update, uninstall, rollback, recovery,
-  certificate issuance, and the stop/restart around a restore.
+  Status, doctor, tls-status, backups, restore and reset-password run from the
+  Python CLI in cli/ — the single implementation, on docker installs too (the
+  owner credential is a database row, so the container is where it lives).
+  Logs and reset-urlpath stay host-side (a container has no journalctl and no
+  host .env), as do update, uninstall, rollback, recovery, certificate
+  issuance, and the stop/restart around a restore.
   Update and uninstall are implemented in install.sh — this script delegates
   to \$INSTALL_DIR/install.sh so there is exactly one copy.
 EOF
@@ -125,6 +126,10 @@ fi
 
 DATA_DIR="${OVM_DATA_DIR:-/var/lib/ovmanager}"
 DEFAULT_PORT=2095
+# Only ever a label for the login line when .env has no ADMIN_USERNAME — which
+# the panel could not boot without. It was used without being defined, so the
+# final report of a reset died under `set -u`.
+DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 INSTALLER="$INSTALL_DIR/install.sh"
@@ -283,21 +288,21 @@ read_env_port() {
 # Interactive re-prompt until the typed password passes the panel's rules
 # (max 3 tries, then fail fast — never install a password the panel rejects).
 
-# Recovery for a lost owner password: rewrite the owner's bcrypt hash in the
-# panel database, restart, then wait for /health. Never echoes the password.
-# (A native install with a -p/OVM_PASS goes through cli.main instead; this is
-# the prompting path and the Docker one.)
+# Recovery for a lost owner password: prompt for the new one (bash can talk to
+# a terminal; the CLI's getpass cannot be driven from here), hand it to the one
+# implementation — cli/password.py, through `_cli_py`, which reaches the
+# container on a docker install — then restart and wait for /health. Never
+# echoes the password.
+#
+# Nothing here writes .env, and nothing may. It used to write
+# ADMIN_PASSWORD_HASH into it, and that was the bug: backend/config.py ignores
+# the field and seeds.py imports it once, on the fresh-install path, so the
+# command printed success while the old password kept working. The credential
+# is the owner's row in the panel database, and the CLI is its only writer.
 do_reset_password() {
     if [[ -n "$ADMIN_PASS" ]]; then
         validate_admin_password "$ADMIN_PASS"
-    fi
-    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
-    local envfile="$INSTALL_DIR/.env"
-    [[ -f "$envfile" ]] || die "Config not found: $envfile — install OVManager first."
-    read_env_port
-    : "${PORT:=$DEFAULT_PORT}"
-
-    if [[ -z "$ADMIN_PASS" ]]; then
+    else
         can_prompt || die "No password given. Use: $0 reset-password -p 'new-password'  (or set OVM_PASS)"
         line ""
         local p1 p2
@@ -307,91 +312,24 @@ do_reset_password() {
         ADMIN_PASS="$p1"
         validate_admin_password "$ADMIN_PASS"
     fi
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
+    local envfile="$INSTALL_DIR/.env"
+    [[ -f "$envfile" ]] || die "Config not found: $envfile — install OVManager first."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
 
-    # Store the password as a bcrypt hash (ADMIN_PASSWORD_HASH) and drop the
-    # legacy plaintext line. There is no plaintext mode: the panel ignores
-    # ADMIN_PASSWORD entirely (v16+), so the old fallback wrote a live secret
-    # into .env that nothing ever read — a credential at rest with no purpose.
-    local pass_line=""
-    # is_docker_mode, not $MODE: $MODE is only set by the installer, so a plain
-    # `ovm` run against a detected docker install never took the container
-    # branch and wrote the password in PLAINTEXT and left it there.
-    #
-    # -i so the script arrives on stdin, -e so the secret does: `docker exec`
-    # starts with neither, and both were being dropped silently, which made
-    # hashing "fail" with no error.
-    local -a pybin=("$INSTALL_DIR/.venv/bin/python")
-    local -a pyenv=("HASH_SRC=$ADMIN_PASS")
-    if is_docker_mode; then
-        pybin=(docker exec -i -e "HASH_SRC=$ADMIN_PASS" ovmanager /app/.venv/bin/python)
-        pyenv=()
-    fi
-    if [[ -x "$INSTALL_DIR/.venv/bin/python" ]] || is_docker_mode; then
-        local h
-        if h="$(env "${pyenv[@]}" "${pybin[@]}" - <<'PY' 2>/dev/null
-import os, sys
-sys.path.insert(0, "/app" if os.path.isdir("/app") else ".")
-try:
-    from backend.auth.hash import hash_password
-    print(hash_password(os.environ["HASH_SRC"]))
-except Exception:
-    sys.exit(1)
-PY
-)"; then
-            [[ -n "$h" ]] && pass_line="ADMIN_PASSWORD_HASH=$h"
-        fi
-    fi
-    [[ "$pass_line" == ADMIN_PASSWORD_HASH=* ]] \
-        || die "Password hashing is unavailable (the panel's Python is not runnable) — refusing to write a plaintext credential to .env. Repair the install, then retry."
-    step "Password hashed (bcrypt) — no plaintext in .env"
+    # In the environment, not in argv: `ps` shows every process's arguments, so
+    # a password passed on the command line would be readable by any user on
+    # the box.
+    export OVM_ADMIN_PASS="$ADMIN_PASS"
+    _cli_py reset-password \
+        || die "Password not changed — the owner row in the panel database was not updated (see above)."
+    step "Password updated  (bcrypt row in the panel database)"
 
-    [[ -w "$envfile" ]] || die "Config $envfile is not writable — check its ownership and mode, then retry."
-    local tmp
-    tmp="$(mktemp "${envfile}.XXXXXX")" || die "Could not create a temp file next to $envfile"
-    # Value rides in the environment, not in an awk -v assignment: passwords
-    # may contain backslashes and -v would interpret them. Only the
-    # ADMIN_PASSWORD(_HASH) line changes; every other line is copied verbatim.
-    if ! NEWLINE="$pass_line" awk '
-        BEGIN { nl = ENVIRON["NEWLINE"] }
-        /^ADMIN_PASSWORD=/ { found = 1; next }
-        /^ADMIN_PASSWORD_HASH=/ { print nl; hashfound = 1; next }
-        { print }
-        END { if (!hashfound && found) print nl; if (!found && !hashfound) exit 1 }
-    ' "$envfile" > "$tmp"; then
-        rm -f "$tmp"
-        die "Could not update $envfile (no ADMIN_PASSWORD= line?)"
-    fi
-    chown --reference="$envfile" "$tmp" 2>/dev/null || true
-    # Preserve the mode rather than forcing 0600: on a docker install the file
-    # is 0640 root:<cfg-gid> so the container can read it, and forcing 0600 here
-    # would take the panel's own config away the next time a password is reset.
-    chmod --reference="$envfile" "$tmp" 2>/dev/null || chmod 600 "$tmp"
-    if ! mv -f "$tmp" "$envfile" 2>/dev/null; then
-        rm -f "$tmp"
-        die "Could not replace $envfile — is it read-only?"
-    fi
-    step "Config updated  $envfile (0600)"
-
-    # A failed restart must not hide the successful password change: warn
-    # and still report the new credentials/login URL.
-    if [[ -f "$COMPOSE_FILE" ]]; then
-        # Recreate, never `docker restart`: a restart reuses the environment the
-        # container was created with, so the rewritten .env would not reach it
-        # and the old password would stay live.
-        if command -v docker >/dev/null 2>&1 \
-            && docker compose -f "$COMPOSE_FILE" up -d --force-recreate >/dev/null 2>&1; then
-            step "Container recreated  ovmanager (new credentials loaded)"
-        else
-            warn "Could not recreate the container — run: docker compose -f $COMPOSE_FILE up -d --force-recreate"
-        fi
-    else
-        systemctl_bounded restart
-        if systemctl is-active --quiet "$SYSTEMD_SERVICE"; then
-            step "Service restarted  $SYSTEMD_SERVICE"
-        else
-            warn "Could not restart $SYSTEMD_SERVICE — run: systemctl restart $SYSTEMD_SERVICE"
-        fi
-    fi
+    # The panel reads that row on every login, so nothing has to be reloaded
+    # for the new password to be live; the restart is what `ovm reset-password`
+    # documents, and a failed one must not hide the successful change.
+    restart_service
 
     local scheme url admin
     scheme="$(scheme_of)"
@@ -588,7 +526,7 @@ show_login_info() {
     if [[ -n "$path" ]]; then url="https://${ip}:${port}/${path}/"; else url="https://${ip}:${port}/"; fi
     kv "URL"   "$url"
     kv "Login" "$user"
-    info "Password: the one you set (or the generated one saved at install)."
+    info "Password: the owner password you set. On a panel nobody has claimed yet, first login is with the claim key instead (ovm owner-claim)."
     info "If the URL 404s, the live path may differ — change it in Settings → General."
 }
 
@@ -894,7 +832,14 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
     if is_docker_mode; then
         # --public-ip because a container only knows its own address, and the
         # operator needs the host's to reach the panel.
-        docker exec ovmanager /app/.venv/bin/python -m cli.main \
+        #
+        # OVM_ADMIN_PASS by name only: `docker exec` starts from the container's
+        # environment, not this one, so the reset secret has to be named — and
+        # `-e NAME=value` would put the password in `ps` on this host, which is
+        # the one thing the CLI's environment contract exists to avoid.
+        local -a secret_env=()
+        [[ -n "${OVM_ADMIN_PASS:-}" ]] && secret_env=(-e OVM_ADMIN_PASS)
+        docker exec ${secret_env[@]+"${secret_env[@]}"} ovmanager /app/.venv/bin/python -m cli.main \
             --install-dir /app --data-dir /app/data --in-container \
             --service-state "$(_host_service_state)" \
             --public-ip "$(hostname -I 2>/dev/null | awk '{print $1}')" "$@"
@@ -954,8 +899,9 @@ cmd_doctor_fix() {
 
     case "$ACTION" in
         # Every command below needs root, including the read-only ones. They
-        # read .env, which holds ADMIN_PASSWORD_HASH, JWT_SECRET_KEY and the
-        # secret URL path that is the panel's only defence against scanners.
+        # read .env, which holds JWT_SECRET_KEY and the secret URL path that is
+        # the panel's only defence against scanners (no credential: the owner
+        # password is a database row).
         # "Read-only" meant "does not change the system", not "discloses
         # nothing" — and a non-root caller previously failed deep inside the
         # script with "scripts/lib not found", which says nothing useful.
@@ -987,23 +933,11 @@ cmd_doctor_fix() {
             # way for root and non-root callers (CI runs non-root).
             [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
             check_root
-            # Prompting and docker installs stay in bash: in a container the
-            # host .env that has to be rewritten is not there to be found.
-            if [[ -z "$ADMIN_PASS" ]] || is_docker_mode; then
-                do_reset_password
-                exit $?
-            fi
-            # The secret rides in the environment, not in argv: a command-line
-            # argument is visible in `ps` to every user on the box.
-            ( cd "$INSTALL_DIR" && OVM_ADMIN_PASS="$ADMIN_PASS" .venv/bin/python -m cli.main reset-password )
-            local rc=$?
-            # The CLI only rewrites .env; the restart is ours to do.
-            if [[ "$rc" -eq 0 ]]; then
-                service_action restart || warn "Restart failed — check the service manually"
-            else
-                warn "Password not changed"
-            fi
-            exit $rc ;;
+            # One path for every install: -p/OVM_PASS, the interactive prompt,
+            # native and Docker. bash only collects the password and restarts;
+            # the CLI writes the row (see do_reset_password).
+            do_reset_password
+            exit $? ;;
         reset-urlpath)
             check_root
             if is_docker_mode; then reset_urlpath_now; else _cli_py reset-urlpath; fi

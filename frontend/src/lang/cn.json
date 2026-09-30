@@ -316,7 +316,7 @@
   "setupStepConfig": "下载配置",
   "setupStepConfigDesc": "在“用户”页面，点击用户行上的下载图标，选择一个节点并保存 .ovpn 文件。将其导入任意 OpenVPN 客户端即可完成连接。",
   "setupCopyCommand": "复制命令",
-  "setupSameServerHint": "与 OVManager 同一台服务器？安装程序的 Ready 卡片已打印带 API 密钥的 OVNode 命令——直接运行，然后将 ovnode:// 捆绑包粘贴到“节点 → 添加节点”。",
+  "setupSameServerHint": "与 OVManager 同一台服务器？请也在此服务器上运行上面的命令。OVNode 安装程序会在 Ready 卡片上打印 ovnode:// 捆绑包——将其粘贴到“节点 → 添加节点”。",
   "setupOpenNodes": "打开节点",
   "setupOpenUsers": "打开用户",
   "setupRefresh": "刷新检查",
