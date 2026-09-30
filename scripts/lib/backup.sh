@@ -16,9 +16,9 @@ backup_dir() {
     stamp="$(date +%Y%m%d-%H%M%S)"
     base="$(basename "$src")"
     file="/var/backups/${label}-${base}-${stamp}.tar.gz"
-    info "Backup ${label} → $file"
+    render_note "Backup ${label} → $file"
     tar -czf "$file" -C "$(dirname "$src")" "$base" 2>/dev/null \
-        || warn "Backup failed for $src — continuing"
+        || render_warn "Backup failed for $src — continuing"
     if [[ -f "$file" ]]; then step "Backup  $file"; fi
     return 0
 }
@@ -34,7 +34,7 @@ snapshot_code() {  # snapshot_code <dir> <label> [keep=2] → prints the file
     file="/var/backups/${label}-code-${base}-${stamp}.tar.gz"
     tar -czf "$file" -C "$(dirname "$dir")" "$base" 2>/dev/null \
         || die "Could not snapshot $dir"
-    step "Snapshot  $file"
+    render_ok "Snapshot  $file"
     local old
     old="$(ls -t /var/backups/${label}-code-*.tar.gz 2>/dev/null | tail -n +$((keep + 1)) || true)"
     if [[ -n "$old" ]]; then

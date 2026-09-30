@@ -49,7 +49,7 @@ _existing_tls_pair_usable() {  # <key> <cert> → 0 when an intact, unexpired pa
 }
 
 generate_self_signed() {
-    info "Self-signed certificate…"
+    render_note "Self-signed certificate…"
     local key="/etc/ssl/self-signed/privkey.pem"
     local cert="/etc/ssl/self-signed/fullchain.pem"
     mkdir -p /etc/ssl/self-signed
@@ -61,7 +61,7 @@ generate_self_signed() {
         TLS_KEY="$key"
         TLS_CERT="$cert"
         secure_tls_files "$key" "$cert"
-        step "Certificate  $TLS_CERT  (existing — reused)"
+        render_ok "Certificate  $TLS_CERT  (existing — reused)"
         return 0
     fi
     local cn; cn="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -72,7 +72,7 @@ generate_self_signed() {
     secure_tls_files "$key" "$cert"
     TLS_KEY="$key"
     TLS_CERT="$cert"
-    step "Certificate  $TLS_CERT"
+    render_ok "Certificate  $TLS_CERT"
 }
 
 ACME_INSTALL_VERSION="3.1.1"
@@ -101,7 +101,7 @@ fetch_and_run_installer() {  # url expected-prefix tmpname
 
 ensure_acme() {
     [[ -x "$HOME/.acme.sh/acme.sh" ]] && return 0
-    info "Installing acme.sh…"
+    render_note "Installing acme.sh…"
     # get.acme.sh is a moving target; the tagged release is not, and this
     # install runs as root.
     fetch_and_run_installer \
@@ -124,17 +124,17 @@ issue_lets_encrypt() {
         expiry="$(openssl x509 -enddate -noout -in "$outdir/fullchain.pem" 2>/dev/null | cut -d= -f2)"
         days_left=$(( ($(date -d "$expiry" +%s 2>/dev/null || echo 0) - $(date +%s)) / 86400 ))
         if (( days_left > 7 )); then
-            step "Existing certificate valid ${days_left}d"
+            render_ok "Existing certificate valid ${days_left}d"
             return 0
         fi
-        warn "Certificate expires in ${days_left}d — renewing"
+        render_warn "Certificate expires in ${days_left}d — renewing"
     fi
     local extra_args=()
     if [[ "$is_ip" == "1" ]]; then
-        info "Short-lived certificate for IP $domain…"
+        render_note "Short-lived certificate for IP $domain…"
         extra_args=(--certificate-profile shortlived --days 6)
     else
-        info "Let's Encrypt for $domain…"
+        render_note "Let's Encrypt for $domain…"
     fi
     "$HOME/.acme.sh/acme.sh" --issue -d "$domain" --standalone "${extra_args[@]}" \
         --accountemail "$email" >/dev/null 2>&1 \
@@ -148,7 +148,7 @@ issue_lets_encrypt() {
     # branch the same way this function does — it runs later, on its own, long
     # after these variables are gone, so it cannot call back into here.
     secure_tls_files "$outdir/privkey.pem" "$outdir/fullchain.pem"
-    step "Certificate  $outdir"
+    render_ok "Certificate  $outdir"
 }
 
 setup_tls() {

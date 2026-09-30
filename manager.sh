@@ -141,7 +141,7 @@ CLI_ALIAS="ovm"
 # scripts/lib is the simulated installer repo: one file per concern.
 for _cand in "$INSTALL_DIR/scripts/lib" "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/scripts/lib"; do
     if [[ -d "$_cand" ]]; then
-        for _lib in "$_cand"/common.sh "$_cand"/prompt.sh "$_cand"/env.sh "$_cand"/system.sh "$_cand"/backup.sh "$_cand"/tls.sh "$_cand"/policy.sh; do
+        for _lib in "$_cand"/common.sh "$_cand"/render.sh "$_cand"/prompt.sh "$_cand"/env.sh "$_cand"/system.sh "$_cand"/backup.sh "$_cand"/tls.sh "$_cand"/policy.sh; do
             # shellcheck disable=SC1090
             . "$_lib"
         done
@@ -173,7 +173,7 @@ operation_begin() {
     if ! mkdir "$OPERATION_LOCK" 2>/dev/null; then
         owner="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
         if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
-            warn "Removing stale operation lock from process $owner"
+            render_warn "Removing stale operation lock from process $owner"
             rm -rf "$OPERATION_LOCK"
             mkdir "$OPERATION_LOCK" || die "Another maintenance operation is running"
         else
@@ -234,7 +234,7 @@ do_reset_password() {
         validate_admin_password "$ADMIN_PASS"
     else
         can_prompt || die "No password given. Use: $0 reset-password -p 'new-password'  (or set OVM_PASS)"
-        line ""
+        render_line ""
         local p1 p2
         p1="$(ask "New password" "" "h")"
         p2="$(ask "Confirm password" "" "h")"
@@ -254,7 +254,7 @@ do_reset_password() {
     export OVM_ADMIN_PASS="$ADMIN_PASS"
     _cli_py reset-password \
         || die "Password not changed — the owner row in the panel database was not updated (see above)."
-    step "Password updated  (bcrypt row in the panel database)"
+    render_ok "Password updated  (bcrypt row in the panel database)"
 
     # The panel reads that row on every login, so nothing has to be reloaded
     # for the new password to be live; the restart is what `ovm reset-password`
@@ -264,20 +264,20 @@ do_reset_password() {
     local scheme url admin
     scheme="$(scheme_of)"
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 12 \
-        || warn "No answer on /health yet — check the logs (ovm logs)"
+        || render_warn "No answer on /health yet — check the logs (ovm logs)"
     # Same source as `status`: URLPATH from .env (a later Settings change
     # lives in the DB, not here).
     PATHPREFIX="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" | tr -d '\r')"
     url="$(panel_url)"
     admin="$(awk -F= '/^ADMIN_USERNAME=/{print $2; exit}' "$envfile" | tr -d '\r')"
     [[ -n "$admin" ]] || admin="$DEFAULT_USER"
-    line ""
-    hr
-    kv "Password" "${GR}updated${NC}"
-    kv "Login"    "${WH}${admin}${NC}"
-    kv "Open"     "${WH}${url}${NC}"
-    hr
-    line ""
+    render_line ""
+    render_rule
+    render_kv "Password" "${GR}updated${NC}"
+    render_kv "Login"    "${WH}${admin}${NC}"
+    render_kv "Open"     "${WH}${url}${NC}"
+    render_rule
+    render_line ""
 }
 
 # Update and uninstall live in install.sh — delegate, one implementation.
@@ -339,25 +339,25 @@ service_action() {  # start|stop|restart|enable|disable
         esac
     fi
     case "$1" in
-        enable) step "Automatic start enabled" ;;
-        disable) step "Automatic start disabled (the running panel was not stopped)" ;;
-        *) step "Panel $1: done" ;;
+        enable) render_ok "Automatic start enabled" ;;
+        disable) render_ok "Automatic start disabled (the running panel was not stopped)" ;;
+        *) render_ok "Panel $1: done" ;;
     esac
 }
 
 restart_service() {
-    service_action restart >/dev/null 2>&1 || warn "Restart failed — check the service manually"
+    service_action restart >/dev/null 2>&1 || render_warn "Restart failed — check the service manually"
 }
 
 show_logs() {
     local arg="${1:-100}"
     if is_docker_mode; then
         if [[ "$arg" == "-f" ]]; then docker logs -f --tail 100 ovmanager; else docker logs --tail "$arg" ovmanager; fi \
-            || warn "Could not read container logs"
+            || render_warn "Could not read container logs"
     elif [[ "$arg" == "-f" ]]; then
-        journalctl -u "$SYSTEMD_SERVICE" -n 100 -f || warn "Could not read logs"
+        journalctl -u "$SYSTEMD_SERVICE" -n 100 -f || render_warn "Could not read logs"
     else
-        journalctl -u "$SYSTEMD_SERVICE" -n "$arg" --no-pager || warn "Could not read logs"
+        journalctl -u "$SYSTEMD_SERVICE" -n "$arg" --no-pager || render_warn "Could not read logs"
     fi
 }
 
@@ -418,22 +418,22 @@ auto_backup_cli() {
             systemctl daemon-reload
             systemctl enable --now ovmanager-backup.timer >/dev/null 2>&1 \
                 || die "Could not enable the backup timer (systemd available?)"
-            step "Auto backup enabled: daily at ${time}, keeping ${keep} tarballs"
+            render_ok "Auto backup enabled: daily at ${time}, keeping ${keep} tarballs"
             ;;
         off)
             systemctl disable --now ovmanager-backup.timer >/dev/null 2>&1 || true
             rm -f "$timer" "$service"
             systemctl daemon-reload >/dev/null 2>&1 || true
-            step "Auto backup disabled (host timer removed)"
+            render_ok "Auto backup disabled (host timer removed)"
             ;;
         status|"")
             if [[ -f "$timer" ]]; then
-                info "Host timer: enabled ($(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown))"
+                render_note "Host timer: enabled ($(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown))"
                 systemctl list-timers ovmanager-backup.timer --no-pager 2>/dev/null | sed -n '2p' || true
             else
-                info "Host timer: disabled  (enable: ovm auto-backup on)"
+                render_note "Host timer: disabled  (enable: ovm auto-backup on)"
             fi
-            info "Panel schedule is separate and configured in Settings → Advanced → Backup."
+            render_note "Panel schedule is separate and configured in Settings → Advanced → Backup."
             ;;
         *)
             die "Usage: $CLI_NAME auto-backup on [--time HH:MM] [--keep N] | off | status" ;;
@@ -447,10 +447,10 @@ show_login_info() {
     port="$(env_get "$INSTALL_DIR/.env" PORT)"; : "${port:=$DEFAULT_PORT}"
     ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
     if [[ -n "$path" ]]; then url="https://${ip}:${port}/${path}/"; else url="https://${ip}:${port}/"; fi
-    kv "URL"   "$url"
-    kv "Login" "$user"
-    info "Password: the owner password you set. On a panel nobody has claimed yet, first login is with the claim key instead (ovm owner-claim)."
-    info "If the URL 404s, the live path may differ — change it in Settings → General."
+    render_kv "URL"   "$url"
+    render_kv "Login" "$user"
+    render_note "Password: the owner password you set. On a panel nobody has claimed yet, first login is with the claim key instead (ovm owner-claim)."
+    render_note "If the URL 404s, the live path may differ — change it in Settings → General."
 }
 
 reset_urlpath_now() {
@@ -459,7 +459,7 @@ reset_urlpath_now() {
     else
         ( cd "$INSTALL_DIR" && .venv/bin/python main.py --reset-urlpath ) || die "Reset failed"
     fi
-    step "Panel path reset — the panel is served at / again"
+    render_ok "Panel path reset — the panel is served at / again"
 }
 
 # Certificate issuance. Non-interactive: the mode comes from the flags, so this
@@ -497,7 +497,7 @@ do_https() {
     if ! setup_tls; then operation_end; return 0; fi
     env_set "$envfile" SSL_KEYFILE "$TLS_KEY"
     env_set "$envfile" SSL_CERTFILE "$TLS_CERT"
-    step "Certificate updated"
+    render_ok "Certificate updated"
     restart_service
     operation_end
     return 0
@@ -510,7 +510,7 @@ do_rollback() {
     snap="$(latest_snapshot panel)"
     [[ -n "$snap" ]] || die "No code snapshot in /var/backups — nothing to roll back to"
     check_root
-    info "Rolling back to: $snap"
+    render_note "Rolling back to: $snap"
     [[ "$YES" -eq 1 ]] || confirm "Restore the pre-update tree and restart?" n || die "Cancelled."
     read_env_port
     : "${PORT:=$DEFAULT_PORT}"
@@ -524,12 +524,12 @@ do_rollback() {
         || die "Rollback extract failed — snapshot kept at $snap"
     if [[ -f "$COMPOSE_FILE" ]]; then
         ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) >/dev/null 2>&1 \
-            || warn "Could not start the container — docker logs ovmanager"
+            || render_warn "Could not start the container — docker logs ovmanager"
     else
         run_step "Service restarted" systemctl_bounded restart
     fi
     if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
-        step "Rolled back and healthy"
+        render_ok "Rolled back and healthy"
     else
         die "Rollback did not restore health — snapshot at $snap, data backups in /var/backups. Check logs."
     fi
@@ -551,7 +551,7 @@ do_restore() {
     read_env_port
     : "${PORT:=$DEFAULT_PORT}"
     local scheme; scheme="$(scheme_of)"
-    info "Restoring: $name"
+    render_note "Restoring: $name"
     confirm "Replace the live database with this backup?" n || die "Cancelled."
 
     local rc=0
@@ -561,7 +561,7 @@ do_restore() {
         # replaced with.
         cmd_restore "$name" || rc=$?
         ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" restart ) >/dev/null 2>&1 \
-            || warn "Could not restart the container — docker restart ovmanager"
+            || render_warn "Could not restart the container — docker restart ovmanager"
     else
         systemctl_bounded stop >/dev/null 2>&1 || true
         cmd_restore "$name" || rc=$?
@@ -573,7 +573,7 @@ do_restore() {
         die "Restore failed — the panel was restarted on the previous database. Check: ovm logs 100"
     fi
     if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
-        step "Restored $name and healthy"
+        render_ok "Restored $name and healthy"
     else
         die "Restored $name but /health is not answering — check: ovm logs 100 (the pre-restore safety copies are in $DATA_DIR/backups)"
     fi
@@ -601,17 +601,17 @@ do_owner_claim() {
     fi
     local key
     key="$(mint_claim_key)" || die "Could not write $(claim_key_path)"
-    line ""
+    render_line ""
     if [[ "$claimed" -eq 1 ]]; then
-        warn "This panel already has an owner — this key cannot be claimed."
-        warn "To change the password instead: ovm reset-password"
+        render_warn "This panel already has an owner — this key cannot be claimed."
+        render_warn "To change the password instead: ovm reset-password"
     fi
-    kv "Claim key" "${YL}${key}${NC}"
-    kv "Open"      "${WH}${url}claim${NC}"
-    kv "Expires"   "${GY}never — spent on the first successful claim${NC}"
-    line ""
-    info "Choose the owner password in the browser; it is stored hashed, never in .env."
-    line ""
+    render_kv "Claim key" "${YL}${key}${NC}"
+    render_kv "Open"      "${WH}${url}claim${NC}"
+    render_kv "Expires"   "${GY}never — spent on the first successful claim${NC}"
+    render_line ""
+    render_note "Choose the owner password in the browser; it is stored hashed, never in .env."
+    render_line ""
 }
 
 # Bash completion for this command, written where bash already looks.
@@ -644,11 +644,11 @@ _${CLI_ALIAS}() {
 complete -F _${CLI_ALIAS} $CLI_ALIAS $CLI_NAME
 COMPLETION
     chmod 644 "$path" 2>/dev/null || true
-    step "Completion  $path"
-    line ""
-    line "  Activate it in this shell:"
-    line "    ${WH}source $path${NC}"
-    line ""
+    render_ok "Completion  $path"
+    render_line ""
+    render_line "  Activate it in this shell:"
+    render_line "    ${WH}source $path${NC}"
+    render_line ""
 }
 
 # Which installer did you actually run? The installed tree comes from a release
@@ -798,16 +798,16 @@ cmd_doctor_fix() {
     # policy, chmod the host .env — so they run here and the checks still come
     # from the CLI in the container.
     case "$(_host_service_state)" in
-        running) docker restart -t 10 ovmanager >/dev/null 2>&1 || warn "docker restart ovmanager failed" ;;
-        *) warn "Container is not running — start it with: docker start ovmanager" ;;
+        running) docker restart -t 10 ovmanager >/dev/null 2>&1 || render_warn "docker restart ovmanager failed" ;;
+        *) render_warn "Container is not running — start it with: docker start ovmanager" ;;
     esac
     docker update --restart unless-stopped ovmanager >/dev/null 2>&1 \
-        || warn "Could not enable automatic start"
+        || render_warn "Could not enable automatic start"
     local envfile="$INSTALL_DIR/.env"
     if [[ -f "$envfile" ]]; then
-        chmod 600 "$envfile" 2>/dev/null || warn "Could not chmod $envfile"
+        chmod 600 "$envfile" 2>/dev/null || render_warn "Could not chmod $envfile"
     else
-        warn "Config $envfile not found — cannot check its mode"
+        render_warn "Config $envfile not found — cannot check its mode"
     fi
     _cli_py doctor
 }

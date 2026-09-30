@@ -109,7 +109,7 @@ def sandbox(tmp_path):
         raise AssertionError(f"sandbox port 20950 is in use: {exc}") from exc
     finally:
         probe.close()
-    for tool in ("systemctl", "ufw", "firewall-cmd", *ACCOUNT_TOOLS):
+    for tool in ("systemctl", "ufw", "firewall-cmd", "curl", *ACCOUNT_TOOLS):
         _write_shim(shim / tool, _SHIMS[tool])
     path = tmp_path / "install.sh"
     path.write_text(src, encoding="utf-8")
@@ -135,6 +135,19 @@ exit 0
 """
 
 _SHIMS = {
+    # The sandbox has no network. Without this, an install that reaches the
+    # release fetch waits on github.com for real — three tests used to sit there
+    # until they timed out, and passed in CI only because the fetch happened to
+    # fail fast there. Failing the way curl does when it cannot connect makes any
+    # such test die at once, and makes the whole suite hermetic.
+    #
+    # Tests that genuinely need a fetch define their own `curl` shell function
+    # inside their harness, and a function wins over a PATH binary, so this does
+    # not interfere with them.
+    "curl": """
+echo "curl: (7) Failed to connect" >&2
+exit 7
+""",
     "useradd": _ACCOUNT_SHIM,
     "chown": _ACCOUNT_SHIM,
     "chgrp": _ACCOUNT_SHIM,
@@ -162,7 +175,14 @@ exit 1
 def sh_sb(sandbox_installer, *args: str, env: dict | None = None):
     sandbox_env = {}
     root = Path(sandbox_installer).parent
-    if root.name.startswith("tmp"):
+    # Keyed on the shim directory existing, not on the directory being *named*
+    # like a tempdir. The previous `root.name.startswith("tmp")` matched only
+    # tempfile's naming, never pytest's tmp_path (`.../test_foo0`), so under
+    # pytest this block never ran: every shim in _SHIMS was inert, PATH was not
+    # set, and a test reaching the release fetch went to the real network and
+    # timed out. The assertions that check the shim log are guarded by
+    # `if log.exists()`, so they were passing without asserting anything.
+    if (root / "bin").is_dir():
         sandbox_env = {
             "OVM_BIN_DIR": str(root / "usr" / "local" / "bin"),
             "PATH": f"{root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
@@ -515,13 +535,22 @@ def test_manager_ops_redirect_to_ovm():
     assert "is the default" in r.stderr
 
 
-def test_plan_prints_by_default():
-    """No --dry-run flag exists anymore — the plan card prints on every
-    mutating action instead."""
+def test_the_machine_is_summarised_before_anything_changes():
+    """No --dry-run flag exists; what the install is about to do is the first
+    progress step instead.
+
+    This replaced a nine-row plan card that printed before every mutating
+    action. It restated the port, the URL path, the admin name and the TLS mode
+    — every value the operator had just been asked for — and added only the
+    machine's own state, which nobody chose and which decides whether the run
+    can succeed at all. That state is now on the preflight line.
+    """
     content = _installer_source()
     assert "--dry-run)" not in content
-    assert "print_plan()" in content
-    assert content.count("print_plan") >= 3  # def + install/update callers (+ inline uninstall card)
+    assert "print_plan" not in content, "the plan card came back"
+    assert "preflight_summary" in content
+    assert 'render_begin "preflight"' in content
+    assert "$(preflight_summary)" in content
 
 
 def test_installer_uses_release_artifacts_and_published_docker_image_only():
@@ -562,7 +591,7 @@ def test_recovery_handles_every_persisted_update_phase():
         "committed",
     ):
         assert phase in source
-    assert "Re-created the missing update maintenance marker" in source
+    assert "re-created the missing update maintenance marker" in source
     assert '"$reported" == "$target"' in source
     assert '"$reported" == "$from"' in source
 
@@ -633,7 +662,10 @@ def test_update_journal_is_private_and_atomic(tmp_path):
 def test_snapshot_rotation_keeps_two(tmp_path):
     """snapshot_code keeps the newest 2 code snapshots, pruning older ones."""
     src = _extract_function("snapshot_code")
-    helpers = 'set -Eeuo pipefail\ndie() { echo "DIE: $1" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\nwarn() { :; }\n'
+    helpers = (
+        'set -Eeuo pipefail\ndie() { echo "DIE: $1" >&2; exit 1; }\n'
+        'render_ok() { :; }\nrender_note() { :; }\nrender_warn() { :; }\n'
+    )
     harness = (
         helpers
         + src.replace("/var/backups", str(tmp_path))
@@ -652,10 +684,15 @@ def test_already_installed_menu_is_installer_only():
     """The installer's already-installed menu offers update/uninstall/quit —
     day-to-day ops moved to ovm."""
     content = _installer_source()
-    assert 'tui_select "OVManager — installer"' in content
-    assert 'quit      "Quit")' in content
-    assert "*)         return 0 ;;" in content
-    assert "use ovm" in content or "Manage the panel with: ovm" in content
+    assert "already_installed_menu" in content
+    assert 'update    "update to v${VERSION}"' in content
+    assert 'uninstall "uninstall"' in content
+    assert 'quit      "quit"' in content
+    assert "render_menu" in content
+    # tui_select survives only as a one-line alias into render_menu; a caller
+    # reaching for it is fine, a second implementation of it is not.
+    prompt = (LIB_DIR / "prompt.sh").read_text(encoding="utf-8")
+    assert 'tui_select() { render_menu "$@"; }' in prompt
 
 
 def test_already_installed_menu_is_safe_by_default(tmp_path):
@@ -665,7 +702,33 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
     os.makedirs(fake_opt)
     r = sh_sb(sb, "-y", "-p", "long-enough-password")
     assert r.returncode == 2
-    assert "Already installed" in r.stderr
+    # Exit 2 with the reason on stderr, in the renderer's own wording.
+    assert "already installed" in r.stderr
+    assert fake_opt in r.stderr
+    assert "update" in r.stderr
+
+
+def test_the_menu_is_one_renderer():
+    """render_menu owns the pointer, the digits and the arrow.
+
+    A menu drawn in two places is how they disagree: whiptail on boxes that
+    have it, hand-rolled printf everywhere else. The old tui_select branched on
+    `command -v whiptail` and rendered two different menus with two different
+    selections. There is now one renderer and one keystroke reader.
+    """
+    content = _installer_source()
+    code = "\n".join(
+        ln for ln in content.splitlines() if not ln.lstrip().startswith("#")
+    )
+    assert "whiptail" not in code, "the whiptail branch is back"
+    assert "tui_select() { render_menu" in content
+    render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
+    # The pointer and the visible number are updated together in the same case
+    # arm: that is the invariant, and it is only checkable in one place.
+    assert "_MENU_CUR=$(( _MENU_CUR - 1 ))" in render
+    assert "_MENU_CUR=$(( _MENU_CUR + 1 ))" in render
+    assert "_MENU_CUR=$(( 10#$ch - 1 ))" in render
+    assert 'reply=$(( _MENU_CUR + 1 )); break' in render
 
 
 def test_update_without_install_dir_fails(tmp_path):
@@ -707,15 +770,26 @@ def test_plain_http_flag_is_gone():
 
 
 def test_start_menu_is_install_or_docker():
-    """The front door uses beginner wording and generates secure defaults."""
+    """The front door uses beginner wording and generates secure defaults.
+
+    The mode is asked here and nowhere else. The wizard used to ask it again as
+    "Step 1/5", so the answer could be given twice and the two did not always
+    agree — choosing "install with docker" on the menu and "native" in the
+    wizard was a reachable state.
+    """
     source = _extract_function("start_menu")
-    assert "Install              " in source
-    assert "Install with Docker" in source
+    assert "install  ·  systemd on this host" in source
+    assert "install  ·  containerized" in source
     assert "Express" not in source
     assert "Custom" not in source
     assert 'MODE="native"; panel_express_defaults' in source
     assert 'MODE="docker"; panel_express_defaults' in source
-    assert "0.${NC} Exit" in source
+    assert "render_menu" in source
+    # And the wizard must not ask again. TLS_MODE is a different question and
+    # appears legitimately; the install MODE must not.
+    wizard = _extract_function("wizard")
+    assert "Install mode" not in wizard, "the wizard must not re-ask the install mode"
+    assert '"$MODE"' not in wizard
 
 
 def test_no_bundled_node_offer():
@@ -735,8 +809,7 @@ def test_installer_deploys_the_manager():
     assert 'local src="${INSTALL_DIR}/manager.sh"' in content
     assert content.count("install_cli") >= 3  # definition + do_install + do_update
     assert content.count("remove_cli") >= 2  # definition + do_uninstall
-    assert "command -v whiptail" in content
-    assert "tui_select" in content
+    assert "render_menu" in content
 
 
 def test_no_function_ends_with_a_failing_test():
@@ -756,6 +829,32 @@ def test_no_function_ends_with_a_failing_test():
         if re.match(r"^\[\[.*\]\]\s*&&", tail)
     ]
     assert not offenders, offenders
+
+
+def _extract_function_sh(name: str, path: Path) -> str:
+    """_extract_function for a file the installer does not define the name in.
+
+    Brace-aware, because a body may contain a `{ … }` on a single line (a case
+    arm, an awk program). Stopping at the first `}` there truncates the function
+    and the harness then fails to parse — which reads as a broken helper rather
+    than a broken extractor.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(f"{name}()")), None)
+    if start is None:
+        raise AssertionError(f"{name}() is not in {path.name}")
+    depth = 0
+    started = False
+    out = []
+    for line in lines[start:]:
+        out.append(line)
+        opens, closes = line.count("{"), line.count("}")
+        if not started and opens:
+            started = True
+        depth += opens - closes
+        if started and depth == 0:
+            break
+    return "\n".join(out)
 
 
 def _function_tails(path):
@@ -848,28 +947,90 @@ def test_masked_password_echoes_stars_and_handles_backspace():
     assert "\b \b" in r.stderr  # backspace erased one star
 
 
-def test_confirm_no_is_safe_by_default():
-    source = _extract_function("confirm_no")
-    template = (
-        "set -Eeuo pipefail\nGR=''; NC=''\n"
-        "can_prompt() {{ return {prompt}; }}\nYES={yes}\n"
-        "_read_reply() {{ printf '%s' '{reply}'; }}\n{fn}\nconfirm_no 'Delete data?'\n"
+def _confirm_harness(fn: str, call: str) -> str:
+    """A bash script that has just the prompt helpers, the real function, and
+    the named call — no installer, no libs, no terminal."""
+    return (
+        "set -Eeuo pipefail\n"
+        "GR=''; NC=''; B=''; GY=''\n"
+        "render_ask() { :; }\n"
+        # A return code, not a boolean: can_prompt SUCCEEDS when a terminal is
+        # reachable, so "promptable" is rc 0 and "no terminal" is rc 1.
+        "can_prompt() { return \"$CAN_PROMPT_RC\"; }\n"
+        "YES=\"$YES\"\n"
+        "_read_reply() { printf '%s' \"$REPLY\"; }\n"
+        f"{fn}\n"
+        f"{call}\n"
     )
-    fn = source
-    cases = [("0", "0", "y", 0), ("0", "0", "Y", 0), ("0", "0", "", 1), ("0", "0", "n", 1), ("1", "0", "y", 1)]
-    for prompt, yes, reply, expected in cases:
-        r = subprocess.run(
-            ["bash", "-c", template.format(prompt=prompt, yes=yes, reply=reply, fn=fn)],
-            capture_output=True,
-            text=True,
-            timeout=30,
+
+
+def _run_confirm(fn: str, call: str, *, can_prompt_rc: int, yes: int, reply: str):
+    script = _confirm_harness(fn, call)
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "CAN_PROMPT_RC": str(can_prompt_rc), "YES": str(yes), "REPLY": reply},
+    )
+
+
+def test_confirm_no_is_safe_by_default():
+    """confirm_no answers no unless a human typed y or Y."""
+    source = _extract_function_sh("confirm_no", LIB_DIR / "prompt.sh")
+    cases = [
+        (0, 0, "y", 0),
+        (0, 0, "Y", 0),
+        (0, 0, "", 1),   # Enter keeps the default, which is no
+        (0, 0, "n", 1),
+        (0, 1, "y", 1),  # --yes means "never ask", and this helper says no
+        (1, 0, "y", 1),  # no terminal: nothing was typed, nothing is confirmed
+    ]
+    for can_prompt_rc, yes, reply, expected in cases:
+        r = _run_confirm(
+            source, "confirm_no 'Delete data?'", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply
         )
-        assert r.returncode == expected, (prompt, yes, reply, r.returncode, r.stderr)
+        assert r.returncode == expected, (reply, yes, can_prompt_rc, r.returncode, r.stderr)
+
+
+def test_confirm_word_makes_the_destructive_answer_the_typed_one():
+    """`purge` has to be spelled out; Enter must keep the data.
+
+    A y/N prompt put "yes, delete the database" one keystroke from the default.
+    confirm_word answers no to everything except the exact word, and answers no
+    outright when there is no terminal — a script can never purge by accident.
+    """
+    source = _extract_function_sh("confirm_word", LIB_DIR / "prompt.sh")
+    cases = [
+        (0, 0, "purge", 0),   # the word purges
+        (0, 0, "", 1),        # Enter keeps it
+        (0, 0, "y", 1),       # y does not
+        (0, 0, "yes", 1),     # and neither does yes
+        (0, 0, "PURGE", 1),   # case matters
+        (0, 0, "purg", 1),    # nor a prefix
+        (0, 1, "purge", 0),   # --yes is an explicit request to purge
+        (1, 0, "purge", 1),   # no terminal: nothing can be typed, nothing purges
+    ]
+    for can_prompt_rc, yes, reply, expected in cases:
+        r = _run_confirm(
+            source, "confirm_word 'delete the data?' purge", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply
+        )
+        assert r.returncode == expected, (reply, can_prompt_rc, yes, r.returncode, r.stderr)
 
 
 def test_uninstall_asks_about_data():
-    content = _installer_source()
-    assert 'confirm_no "Also delete data and backups?" && PURGE=1' in content
+    """The list of what goes comes before the question, and the question is
+    not yes/no."""
+    uninstall = _extract_function("do_uninstall")
+    assert 'confirm_word "delete the data as well? type purge" "purge" && PURGE=1' in uninstall
+    # The sizes have to be printed: "84 MB" and "210 MB" make the purge decision
+    # differently, and an operator choosing whether to keep data needs the
+    # number in front of them.
+    assert "dir_size" in uninstall
+    assert uninstall.index("dir_size") < uninstall.index("confirm_word")
+    # And the app itself still takes a plain confirmation, so a non-destructive
+    # install can be removed without typing anything.
+    assert 'confirm "remove the app and stop the service?"' in uninstall
 
 
 def test_detect_os_preserves_app_version(tmp_path):
@@ -957,15 +1118,22 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
 
 
 def test_installer_menu_copy_uses_new_tui():
-    """The front door has one numbered dialect and beginner-facing labels."""
+    """The front door offers two installs and an exit, and says what each is.
+
+    The labels are lowercase verbs with the mode after a separator, because the
+    menu is drawn by render_menu and there is no "Setup" heading to attach a
+    capital to any more — the banner already says what is running.
+    """
     content = _installer_source()
     source = _extract_function("start_menu")
-    assert "OVManager Setup" in source
-    assert "1.${NC} Install" in source
-    assert "2.${NC} Install with Docker" in source
-    assert "0.${NC} Exit" in source
+    assert "install  ·  systemd on this host" in source
+    assert "install  ·  containerized" in source
+    assert 'quit    "exit"' in source
     assert "How do you want to install?" not in source
-    assert "Ready — claim your panel" in content
+    for retired in ("Setup${NC}", "1.${NC} Install", "0.${NC} Exit", "Ready — claim your panel"):
+        assert retired not in content, f"retired wording back: {retired}"
+    # Cancelling says what did not happen, not "Cancelled." with a full stop.
+    assert "nothing was changed" in source
 
 
 def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
@@ -985,7 +1153,7 @@ def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
     con.close()
     harness = (
         'die() { echo "DIE: $1" >&2; exit 1; }\n'
-        'warn() { echo "WARN: $1" >&2; }\nstep() { :; }\ninfo() { :; }\n'
+        'render_warn() { echo "WARN: $1" >&2; }\nrender_ok() { :; }\nrender_note() { :; }\n'
         + _extract_function("update_safety_backup")
         + "\n"
         + _extract_function("legacy_safety_bundle")
@@ -1023,7 +1191,7 @@ def test_db_restore_needed_skips_untouched_database(tmp_path):
     con.execute("PRAGMA user_version=11")
     con.commit()
     con.close()
-    helpers = 'die() { echo "DIE: $1" >&2; exit 1; }\nwarn() { :; }\nstep() { :; }\ninfo() { :; }\n'
+    helpers = 'die() { echo "DIE: $1" >&2; exit 1; }\nrender_warn() { :; }\nrender_ok() { :; }\nrender_note() { :; }\n'
     mk = (
         helpers
         + _extract_function("legacy_safety_bundle")
@@ -1056,7 +1224,7 @@ def test_write_env_never_writes_a_backup_key(tmp_path):
     (fake_install / "backend").mkdir(parents=True)
     (fake_install / "backend" / "config.py").write_text("class Setting: pass\n", encoding="utf-8")
     harness = (
-        'die() { echo "DIE: $1" >&2; exit 1; }\nstep() { :; }\ninfo() { :; }\n'
+        'die() { echo "DIE: $1" >&2; exit 1; }\nrender_ok() { :; }\nrender_note() { :; }\n'
         + _extract_function("write_env")
         + "\nMODE=native PORT=2095 PATHPREFIX=abc ADMIN_USER=admin ADMIN_PASS=long-enough-password\n"
         + f'PUBLIC_URL="" TLS_KEY="" TLS_CERT="" DATA_DIR="{tmp_path}" INSTALL_DIR="{fake_install}"\n'
@@ -1100,23 +1268,52 @@ def test_installer_design_language_matches_node():
     language. The node suite pins the same list — update both together."""
     content = _installer_source()
     for token in (
-        "Setup${NC}",
-        "1.${NC} Install",
-        "2.${NC} Install with Docker",
-        "0.${NC} Exit",
-        "Cancelled. No changes were made.",
-        "installer${NC}",
-        "up and running in a few minutes",
-        "Step 1/4",
-        "verified release",
-        "Ready — claim your panel",
+        "render_menu",
+        "render_banner",
+        "render_card",
+        "install  ·  systemd on this host",
+        "install  ·  containerized",
+        "1 self-signed · 2 lets encrypt · 3 custom",
+        "render_ok",
+        "render_warn",
+        "render_fail",
+        "render_next",
     ):
         assert token in content, f"design drift: {token}"
     for retired in (
+        "Setup${NC}",
+        "1.${NC} Install",
         "How do you want to install?",
         "Choose every option yourself",
+        "Step 1/4",
+        "Ready — claim your panel",
+        "Let's Encrypt (domain)",
     ):
         assert retired not in content, f"retired wording back: {retired}"
+
+
+def test_the_output_vocabulary_is_shared_not_repeated():
+    """Both repos must carry the same render.sh under the same names.
+
+    This is the failure the old layout invited: the panel's Ready card and the
+    node's were two copies of one idea, and they drifted. The names below are
+    the contract. If one repo gains a helper the other lacks, that is the drift
+    starting again.
+    """
+    panel = {p.name for p in LIB_DIR.glob("*.sh")}
+    node_lib = INSTALLER_PATH.parent.parent / "OVNode" / "scripts" / "lib"
+    if not node_lib.is_dir():
+        pytest.skip("OVNode checkout not beside this repo")
+    node = {p.name for p in node_lib.glob("*.sh")}
+    assert "render.sh" in panel
+    assert "render.sh" in node
+
+    def helpers(path: Path) -> set[str]:
+        src = path.read_text(encoding="utf-8")
+        return set(re.findall(r"^(render_[a-z_]+)\(\)", src, re.M))
+
+    p, n = helpers(LIB_DIR / "render.sh"), helpers(node_lib / "render.sh")
+    assert p == n, f"render.sh differs between repos: panel-only {p - n}, node-only {n - p}"
 
 
 def test_no_command_substitution_in_unit_heredoc():
@@ -1153,12 +1350,20 @@ def test_native_unit_creates_private_files_by_default():
     assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")
 
 
-def test_banner_tagline_only_for_fresh_install():
-    """The tagline advertises a fresh install; on update/uninstall it reads
-    as if work were about to start."""
+def test_the_banner_is_one_line_and_a_rule():
+    """Name, version, repo — then a rule. No tagline.
+
+    The old banner had a second line whose only job was to advertise a fresh
+    install, and it had to be suppressed on update/uninstall because a
+    "up and running in a few minutes" line over an update reads as a lie. One
+    line has no context to get wrong.
+    """
     source = _extract_function("banner")
-    assert 'install) subtitle="Secure VPN panel — up and running in a few minutes"' in source
-    assert '*)      subtitle="Secure VPN panel"' in source
+    assert 'render_banner "OVManager" "v${VERSION}"' in source
+    assert "subtitle" not in source
+    content = _installer_source()
+    assert "up and running in a few minutes" not in content
+    assert "Secure VPN panel —" not in content
 
 
 def test_generated_password_is_twelve_characters():
@@ -1718,15 +1923,47 @@ def test_the_claim_key_is_issued_after_the_runtime_exists():
     body = _installer_source()
     call = body.index("issue_claim_key\n")
     assert call > body.index("write_env\n"), "issue_claim_key must run after the .env is written"
-    assert "Step 4/4" in body[:call], "and after the runtime is up (Step 4)"
+    runtime = body.index('render_done "active"')
+    assert runtime < call, "and after the runtime is up"
 
 
-def test_install_prints_the_claim_url_and_never_a_password():
-    """The Ready card points at the browser claim, and prints no credential."""
+def test_the_setup_key_is_the_second_line_of_the_card():
+    """Key first, explanation after.
+
+    An operator who interrupts the card mid-fade must already have the one thing
+    they cannot get back. render_card takes the secret as its second argument
+    for exactly this, and prints it before any row.
+    """
+    render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
+    card = render[render.index("render_card() {") :]
+    assert '[[ -n "$secret_label" ]] && render_key' in card
+    assert card.index("render_key") < card.index('for row in "$@"')
     source = _extract_function("success_card")
-    assert 'kv "Claim key"' in source
+    assert 'render_card "ready" "setup key" "$key"' in source
+
+
+def test_install_prints_the_setup_url_and_never_a_password():
+    """The card points at the browser setup page, and prints no credential."""
+    source = _extract_function("success_card")
+    assert "setup key" in source
     assert "Password" not in source
-    assert "claim${NC}" in source, "the card opens the claim page, not the login page"
+    assert "/setup" in source, "the card opens the setup page, not the login page"
+    # The URL the operator must open is a url row, not plain text: it is the
+    # thing they copy.
+    assert '"panel|$url/setup"' in source
+
+
+def test_the_card_says_how_to_remove_the_install():
+    """The uninstall command is spelled out in full, every time.
+
+    An operator who wants it later is reading a log or a scrollback, not this
+    script, so a short form would not be runnable from either.
+    """
+    source = _extract_function("success_card")
+    assert "installer_uninstall_command" in source
+    cmd = _extract_function("installer_uninstall_command")
+    assert "raw.githubusercontent.com" in cmd
+    assert "uninstall --purge -y" in cmd
 
 
 def test_umask_is_scoped_to_the_env_write():

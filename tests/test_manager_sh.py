@@ -826,7 +826,9 @@ def test_destructive_call_sites_pass_a_default_of_no():
     rollback = MANAGER_PATH.read_text(encoding="utf-8")
     assert 'confirm "Restore the pre-update tree and restart?" n' in rollback
     installer = (MANAGER_PATH.parent / "install.sh").read_text(encoding="utf-8")
-    assert 'confirm "Remove OVManager and stop the service?" n' in installer
+    assert 'confirm "remove the app and stop the service?" n' in installer
+    # And the data half of the purge is a typed word, not a y/N at all.
+    assert 'confirm_word "delete the data as well? type purge" "purge"' in installer
 
 
 # ── the root requirement ──────────────────────────────────────────────────

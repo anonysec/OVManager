@@ -58,7 +58,7 @@ _read_reply() {  # hidden? → prints the line on stdout
 ask() {  # ask <label> <default> [hidden]
     local label="$1" default="$2" hidden="${3:-}" val=""
     if can_prompt; then
-        printf '  %b%-18s%b %b[%s]%b : ' "$WH" "$label" "$NC" "$GY" "$default" "$NC" >&2
+        render_ask "$label" "$default"
         val="$(_read_reply "$hidden")" || true
     fi
     [[ -n "$val" ]] || val="$default"
@@ -75,7 +75,7 @@ confirm() {
         [[ "$default" == "y" ]]
         return
     fi
-    printf '  %s [%bY%b/n] : ' "$1" "$GR" "$NC" >&2
+    render_ask "$1" "$([ "$default" = y ] && printf 'Y/n' || printf 'y/N')"
     local c=""
     c="$(_read_reply)" || true
     [[ ! "$c" =~ ^[Nn]$ ]]
@@ -85,53 +85,43 @@ confirm() {
 confirm_no() {
     [[ "${YES:-0}" -eq 1 ]] && return 1
     can_prompt || return 1
-    printf '  %s [y/%bN%b] : ' "$1" "$GR" "$NC" >&2
+    render_ask "$1" "y/N"
     local c=""
     c="$(_read_reply)" || true
     [[ "$c" =~ ^[Yy]$ ]]
 }
 
-run_step() {
-    local msg="$1"; shift
-    if [[ -t 1 ]]; then
-        "$@" >/dev/null 2>&1 &
-        local pid=$! chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0 rc=0
-        while kill -0 "$pid" 2>/dev/null; do
-            printf '\r  %b%s%b  %-46s' "$OR" "${chars:$((i % 10)):1}" "$NC" "$msg" >&2
-            sleep 0.08; i=$((i + 1))
-        done
-        wait "$pid" 2>/dev/null || rc=$?
-        printf '\r\033[K' >&2
-        if [[ $rc -eq 0 ]]; then step "$msg"; else fail "$msg"; return 1; fi
-    else
-        info "$msg"
-        "$@" || { fail "$msg"; return 1; }
-        step "$msg"
-    fi
+# confirm_word <question> <word> — the destructive default. `uninstall` asks
+# for the word "purge" before it deletes a database, and Enter keeps the data.
+# A plain y/N made the destructive answer one stray keystroke away from the
+# default, which is the wrong way round.
+confirm_word() {
+    local question="$1" word="$2" reply=""
+    [[ "${YES:-0}" -eq 1 ]] && return 0
+    can_prompt || return 1
+    render_ask "$question" "press enter to keep it"
+    reply="$(_read_reply)" || true
+    [[ "$reply" == "$word" ]]
 }
 
-# Boxed menu when whiptail is already installed; colored menu otherwise.
-tui_select() {  # tui_select "Title" tag label [tag label ...] → prints the tag
-    local title="$1"; shift
-    local tags=() labels=()
-    while [[ $# -ge 2 ]]; do tags+=("$1"); labels+=("$2"); shift 2; done
-    if command -v whiptail >/dev/null 2>&1 && can_prompt; then
-        local args=() i=0 out=""
-        for tag in "${tags[@]}"; do args+=("$tag" "${labels[$i]}"); i=$((i + 1)); done
-        out="$(whiptail --title "$title" --menu "Choose an action" 24 78 12 "${args[@]}" 3>&1 1>&2 2>&3)" && {
-            printf '%s' "$out"
-            return 0
-        }
+run_step() {
+    local label="$1"; shift
+    "$@" >/dev/null 2>&1 &
+    local pid=$! rc=0
+    render_watch
+    wait "$pid" 2>/dev/null || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        render_done ""
         return 0
     fi
-    line "  ${B}${title}${NC}"; line ""
-    local i=0
-    for tag in "${tags[@]}"; do
-        i=$((i + 1))
-        printf '  %b%d%b)  %s\n' "$WH" "$i" "$NC" "${labels[$((i - 1))]}" >&2
-    done
-    line ""
-    local choice; choice="$(ask "Select" "1")"
-    [[ "$choice" =~ ^[0-9]+$ ]] || { printf '%s' "${tags[0]}"; return 0; }
-    printf '%s' "${tags[$(((choice - 1) % ${#tags[@]}))]}"
+    render_fail "$label" "command failed with status $rc"
+    return 1
 }
+
+# Menu. The drawing and the keystrokes belong to render.sh; this is the
+# ask-side wrapper for callers that just want a tag back.
+#
+# The old version preferred whiptail when it happened to be installed, which
+# meant the same menu rendered two completely different ways on two different
+# boxes. One renderer, so the pointer, the number and the arrow always agree.
+tui_select() { render_menu "$@"; }

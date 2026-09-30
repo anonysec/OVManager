@@ -37,10 +37,10 @@ prompt_validate_admin_password() {
     while (( tries < 3 )); do
         problem="$(admin_password_problem "$ADMIN_PASS")"
         if [[ -z "$problem" ]]; then
-            step "Password set (hidden while typing)"
+            render_ok "Password set (hidden while typing)"
             return 0
         fi
-        warn "Weak password: $problem"
+        render_warn "Weak password: $problem"
         tries=$((tries + 1))
         [[ $tries -lt 3 ]] && ADMIN_PASS="$(ask "Admin password" "" "h")"
     done
