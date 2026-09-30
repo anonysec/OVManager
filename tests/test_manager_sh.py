@@ -1250,6 +1250,10 @@ def _authenticates(db_path, username, password):
         engine.dispose()
 
 
+@pytest.mark.skipif(
+    os.geteuid() != 0,
+    reason="the interactive path is gated on root, so an unprivileged run dies before the prompt",
+)
 def test_reset_password_interactive_path_changes_the_row(tmp_path):
     """The prompting path must change the credential, not merely exit 0.
 
@@ -1282,6 +1286,10 @@ def test_reset_password_interactive_path_changes_the_row(tmp_path):
     assert (app / ".env").read_text(encoding="utf-8") == before, ".env is not part of the credential path"
 
 
+@pytest.mark.skipif(
+    os.geteuid() != 0,
+    reason="the interactive path is gated on root, so an unprivileged run dies before the prompt",
+)
 def test_reset_password_interactive_mismatch_leaves_the_row_alone(tmp_path):
     """A mistyped confirmation changes nothing — and says so."""
     env, app = sandbox(tmp_path)
