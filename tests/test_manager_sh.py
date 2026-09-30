@@ -193,16 +193,48 @@ def test_help_documents_manager_surface():
         "logs",
         "backup",
         "tls",
-        "recovery",
-        "reset-password",
+        "url",
+        "auth",
         "doctor",
         "rollback",
         "uninstall",
         "ovm",
-        "-p",
-        "--fix",
     ):
         assert token in output, f"help missing {token}"
+
+
+def test_the_full_reference_carries_what_the_short_one_drops():
+    """One screen lists thirteen verbs; the rest is one flag away.
+
+    "One flag away" only works if the flag exists, so every retired name, every
+    option, and where each half runs live in the second screen — and the retired
+    names are why an old cron job keeps working.
+    """
+    r = mgr("help", "--all")
+    assert r.returncode == 0
+    output = r.stdout + r.stderr
+    for token in (
+        "recovery",
+        "reset-password",
+        "owner-claim",
+        "reset-urlpath",
+        "auto-backup",
+        "recover-update",
+        "tls-status",
+        "https",
+        "-p",
+        "--fix",
+        "RETIRED NAMES",
+        ".env",
+    ):
+        assert token in output, f"help --all missing {token}"
+
+
+def test_the_short_help_is_one_screen():
+    """Sixty-four lines was the problem; the whole point is that this fits."""
+    r = mgr()
+    lines = (r.stdout + r.stderr).splitlines()
+    assert len(lines) < 40, f"short help is {len(lines)} lines"
 
 
 def test_bare_run_prints_usage_and_exits_zero():
@@ -534,8 +566,11 @@ def test_status_is_concise_and_all_is_opt_in():
         content = f.read()
     assert "-a|--all" in content
     assert '[[ "$SHOW_ALL" -eq 1 ]] && sargs+=(--all)' in content
-    for row in ("'Service'", "'Health'", "'Version'", "'Open'"):
+    # Labels live in one tuple now, not four f-strings with their own padding —
+    # which is how "Service account" came to print one column out from the rest.
+    for row in ('"Service"', '"Health"', '"Version"', '"Open"'):
         assert row in src, row
+    assert "render.rows" in src, "rows must come from the shared renderer"
 
 
 def _stub_cli_python(app, tmp_path, exit_code=0):
@@ -594,8 +629,13 @@ def test_cli_py_unsupported_command_uses_bash(tmp_path):
     env = {**env, "MARKER": str(marker)}
     (app / ".env").write_text("PORT=2095\nURLPATH=sekret\nADMIN_USERNAME=admin\n", encoding="utf-8")
     r = mgr_sb(env, app, "recovery")
-    assert "URL" in r.stderr and "admin" in r.stderr
-    assert not marker.exists(), "recovery stays host-side"
+    # `recovery` is now `ovm url`: the same read, under the name that says what
+    # it is. The prefix it reports comes from the panel's database rather than
+    # from .env, so it is read through the CLI — the stub records the call, which
+    # is the point of the marker here.
+    assert "Panel" in r.stderr and "admin" in r.stderr
+    assert marker.exists(), "url reads the live prefix through the CLI"
+    assert "urlpath-show" in marker.read_text(encoding="utf-8")
 
 
 def test_dispatch_shape_matches_the_documented_split():
@@ -618,12 +658,15 @@ def test_dispatch_shape_matches_the_documented_split():
     for fn in ("cmd_logs()", "cmd_doctor_fix()"):
         body = content[content.index(fn) : content.index("\n}\n", content.index(fn))]
         assert "is_docker_mode" in body, f"{fn} must branch on the install mode"
-    assert "if is_docker_mode; then reset_urlpath_now" in content
     # reset-password has one path for every install: bash prompts, the CLI (in
     # the container when there is one) writes the row.
     assert "_cli_py reset-password" in content, "the CLI is the only writer"
-    dispatch = content[content.rindex("reset-password)") : content.rindex("reset-urlpath)")]
+    # `auth` replaced reset-password and owner-claim as one command with two
+    # actions, so the dispatch arm is named `auth` and both reach do_reset_password
+    # and do_owner_claim respectively — one implementation each.
+    dispatch = content[content.rindex("auth)") : content.rindex("url)")]
     assert "do_reset_password" in dispatch, "the dispatch must reach the one reset path"
+    assert "do_owner_claim" in dispatch
     assert "is_docker_mode" not in dispatch and "cli.main" not in dispatch, (
         "the docker branch lives in _cli_py now; the dispatch must not fork again"
     )
@@ -1027,7 +1070,7 @@ def test_restore_is_documented_and_dispatched():
     its confirmation defaults to NO — the convention `uninstall` follows here."""
     content = MANAGER_PATH.read_text(encoding="utf-8")
     usage = content[content.index("  USAGE") : content.index("  OPTIONS")]
-    assert "ovm restore [NAME]          List data backups, or restore one by name" in usage
+    assert "ovm restore [NAME]      List backups, or restore one" in usage
     assert re.search(r"(?m)^\s*restore\)\s", content), "no parse_args or dispatch arm"
     assert "do_restore()" in content
     assert 'confirm "Replace the live database with this backup?" n' in content

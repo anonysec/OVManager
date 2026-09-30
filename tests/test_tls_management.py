@@ -44,13 +44,22 @@ _register_tls_router()
 
 @pytest.fixture(autouse=True)
 def _managed_tls_dir(monkeypatch, tmp_path):
-    """Point the router at a scratch TLS dir and a TLS-less environment."""
+    """Declare a scratch certificate path, the way an installed panel does.
+
+    These tests used to rely on the router falling back to ``DATA_DIR/tls``
+    when nothing was declared. It no longer does: an undeclared install gets
+    one documented default under ``/etc``, and a test that let that stand would
+    write to the real filesystem — so the declaration is set, which is also the
+    contract these tests should have been checking.
+    """
     from backend.urlpath import get_urlpath, set_urlpath
 
     managed = tmp_path / "tls"
     monkeypatch.setattr(tls_mod, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(config, "SSL_KEYFILE", None)
-    monkeypatch.setattr(config, "SSL_CERTFILE", None)
+    monkeypatch.setattr(config, "SSL_KEYFILE", str(managed / "privkey.pem"))
+    monkeypatch.setattr(config, "SSL_CERTFILE", str(managed / "fullchain.pem"))
+    monkeypatch.delenv("SSL_KEYFILE", raising=False)
+    monkeypatch.delenv("SSL_CERTFILE", raising=False)
     previous = get_urlpath()
     set_urlpath("")
     try:
@@ -189,7 +198,7 @@ def test_tls_upload_accepts_valid_pair_and_secures_files(client, _managed_tls_di
 
     status = client.get("/api/tls/status", headers=_owner_headers()).json()["data"]
     assert status["mode"] == "managed"
-    assert status["source"] == "panel-managed"
+    assert status["source"] == "declared", "the status must name where the pair was declared"
     assert status["cert_path"] == str(_managed_tls_dir / "fullchain.pem")
     assert status["issued_by"] == "self-signed"
     assert status["subject"] and "upload.test" in status["subject"]

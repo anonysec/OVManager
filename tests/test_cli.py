@@ -167,7 +167,12 @@ def _shape_and_all_ok(monkeypatch, tmp_path, install):
         "Service account",
     ]
     assert all(c.ok for c in checks), [(c.name, c.detail) for c in checks]
-    assert "Problems" in doctor.render_text(checks)
+    # A clean run is one line: thirteen passing checks used to spend fifteen
+    # lines saying "ok", which is why nobody read the screen that matters.
+    text = doctor.render_text(checks)
+    assert "no problems" in text
+    assert len(text.strip().splitlines()) == 2, text
+    assert "Problems" not in text
 
 
 def test_doctor_flags_bad_env_perms(monkeypatch, tmp_path):

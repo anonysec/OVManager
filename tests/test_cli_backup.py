@@ -69,7 +69,7 @@ def test_backup_now_success_with_stubbed_backend(monkeypatch, tmp_path):
     assert data["filename"] == fake_path.name
     assert data["keep"] == 5
     assert calls == {"keep": 5}
-    assert "Verified backup" in backup.render_backup_text(data)
+    assert "verified backup" in backup.render_backup_text(data)
 
 
 def test_backup_now_default_keep_is_fourteen(monkeypatch, tmp_path):
@@ -93,7 +93,7 @@ def test_backup_now_missing_database_reports_clean_error(monkeypatch, tmp_path):
     data = backup.backup_now(install, keep=7)
     assert data["ok"] is False
     assert "not found" in data["error"].lower()
-    assert backup.render_backup_text(data).startswith("  Error:")
+    assert backup.render_backup_text(data).startswith("  ✗")
 
 
 def test_backup_now_backend_failure_reports_clean_error(monkeypatch, tmp_path):
@@ -148,7 +148,7 @@ def test_auto_backup_time_validation_rejects_junk(monkeypatch, tmp_path):
         data = backup.auto_backup("on", install, time=bad)
         assert data["ok"] is False, bad
         assert "time" in data["error"].lower(), bad
-    assert backup.render_auto_backup_text(data).startswith("  Error:")
+    assert backup.render_auto_backup_text(data).startswith("  ✗")
 
 
 def test_auto_backup_keep_validation_rejects_junk(monkeypatch, tmp_path):
@@ -209,7 +209,7 @@ def test_main_dispatch_returns_correct_codes(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(maintenance, "create_panel_backup", lambda keep=None: tmp_path / "b.ovmbak")
     rc = main(["--install-dir", str(tmp_path / "opt"), "backup", "--keep", "5"])
     assert rc == 0
-    assert "Verified backup" in capsys.readouterr().out
+    assert "verified backup" in capsys.readouterr().out
 
     def _none(keep=None):
         return None
@@ -228,7 +228,7 @@ def test_main_dispatch_returns_correct_codes(monkeypatch, tmp_path, capsys):
 
     rc = main(["--install-dir", str(tmp_path / "opt"), "auto-backup", "on", "--time", "junk"])
     assert rc != 0
-    assert "Error" in capsys.readouterr().out
+    assert "HH:MM" in capsys.readouterr().out
 
 
 # ── restore ────────────────────────────────────────────────────────────
@@ -282,7 +282,7 @@ def test_restore_without_a_name_lists_backups_with_dates_and_sizes(monkeypatch, 
         assert name in text, text
     assert re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", text), text
     assert "2.9 KB" in text and "10 B" in text, text
-    assert "Restore one with: ovm restore <name>" in text
+    assert "restore one with: ovm restore <name>" in text
     # A listing is a read: no file was added, moved or removed.
     assert sorted(item.name for item in backups.iterdir()) == sorted([older.name, newer.name])
 
@@ -298,7 +298,7 @@ def test_restore_reports_no_backups_without_failing(monkeypatch, tmp_path, capsy
     rc = main(["--install-dir", str(install.install_dir), "restore"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "No data backups in" in out
+    assert "none — create one with: ovm backup" in out
     assert "ovm backup" in out
     assert list(backups.iterdir()) == []
 
@@ -412,4 +412,4 @@ def test_restore_reports_the_safety_copy_when_the_restore_fails(monkeypatch, tmp
     assert data["ok"] is False
     assert data["safety_backup"].startswith("ovmanager-pre-restore-")
     text = restore.render_restore_text(data)
-    assert "Error" in text and "Safety copy" in text
+    assert text.startswith("  ✗") and "Safety copy" in text

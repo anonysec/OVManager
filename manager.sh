@@ -18,53 +18,97 @@ INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
 VERSION="1.0.0"
 
 usage() {
+    # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
+    # commands listed one per line, a five-paragraph note about which half runs
+    # in Python, and an architecture paragraph that belongs in CONTRIBUTING.md.
+    # Anything that did not fit is one flag away rather than one screen away.
     cat << EOF >&2
-  ovmanager — OVManager panel manager v${VERSION} (alias: ovm)
+  ovmanager — panel manager v${VERSION}  (alias: ovm)
 
   USAGE
-    ovm                         This list
-    ovm status                  Service, health, version and URL
-    ovm status --all            Also show mode, port, data and install paths
-    ovm start|stop|restart      Service control
-    ovm enable|disable          Enable/disable automatic start
-    ovm logs [N|-f]             Last N log lines (default 100), or follow
-    ovm doctor [--fix]          Health check (13 checks; --fix applies the
-                                safe ones: service, autostart, modes)
-    ovm doctor-fix              Same as doctor --fix
-    ovm tls-status              Installed certificate and expiry (read-only)
-    ovm https --self            New self-signed certificate
-    ovm https --domain NAME     Let's Encrypt for a domain (needs port 80)
-    ovm https --ip              Let's Encrypt for this host's IP
-    ovm https --key F --cert F  Use your own key and certificate
-    ovm backup [--keep N]       Save a data backup now
-    ovm auto-backup [on|off]    Daily backup via a systemd timer
-    ovm restore [NAME]          List data backups, or restore one by name
-    ovm recovery                Panel URL and login name (read-only)
-    ovm owner-claim             Print a fresh one-time claim key (before the
-                                panel is claimed; the browser sets the password)
-    ovm reset-password          Set a new owner password, then restart
-    ovm reset-urlpath           Clear the panel URL prefix
-    ovm update                  Staged update with automatic failover
-    ovm recover-update          Recover an interrupted update transaction
-    ovm rollback                Restore the newest pre-update code snapshot
-    ovm uninstall [--purge]     Remove the app (data kept unless --purge)
-    ovm completion              Install bash completion, and print the source line
-    ovm version-script          The installer's own version and commit
+    ovm status              Service, health, version, panel URL  (--all for paths)
+    ovm logs [N|-f]         Last N lines, or follow live
+    ovm doctor [--fix]      Health checks; --fix applies the safe ones
+    ovm restart             Restart the panel
+    ovm enable | disable    Automatic start on or off
+
+    ovm tls                 Certificate — lists the options
+    ovm auth                Owner credential — lists the options
+    ovm url                 Panel URL — lists the options
+
+    ovm backup [--keep N]   Write a data backup now
+    ovm backup schedule     on | off | status — the host timer
+    ovm restore [NAME]      List backups, or restore one
+
+    ovm update              Staged update; recovers an interrupted one first
+    ovm rollback            Restore the pre-update code snapshot
+    ovm uninstall           Remove the app (--purge for data too)
 
   ROOT
-    Every command below needs root, including the read-only ones: they all
-    read .env, which holds the secret panel URL path and the install config.
-    (The owner credential is a database row, not a .env value.) The web panel
-    itself needs no root — any account can log in. Run 'sudo ovm <command>'.
+    Every command needs root, including the read-only ones: they all read .env,
+    which holds the secret panel URL path. Run 'sudo ovm <command>'. The web
+    panel itself needs no root — any account can log in.
+
+  full reference: ovm help --all
+EOF
+}
+
+# The full reference. Kept because "one flag away" only works if the flag is
+# there: every command, every flag, and where it lives.
+usage_full() {
+    cat << EOF >&2
+  ovmanager — panel manager v${VERSION}  (alias: ovm)
+
+  COMMANDS
+    ovm status              Service, health, version, panel URL
+    ovm status --all        Adds mode, port, data and install paths
+    ovm logs [N|-f]         Last N lines (default 100), or follow live
+    ovm doctor [--all]      Health checks; --all lists every one
+    ovm doctor --fix        Same checks, plus safe automatic repairs
+    ovm restart             Restart the panel service
+    ovm enable | disable    Turn automatic start on or off
+
+    ovm tls                 Certificate: key, cert, expiry
+    ovm tls selfsigned      New self-signed certificate
+    ovm tls le IP|DOMAIN    Let's Encrypt — ip or domain, detected
+    ovm tls custom CERT KEY Use your own pair
+    ovm auth                Owner credential and what to do next
+    ovm auth key            Print the one-time setup key
+    ovm auth reset          Set a new owner password
+    ovm url                 Panel URL, and where the prefix comes from
+    ovm url set PREFIX      Set a custom path prefix
+    ovm url reset           Generate a fresh random path
+
+    ovm backup [--keep N]   Write a verified data backup now
+    ovm backup schedule     on | off | status — the host timer
+    ovm restore [NAME]      List data backups, or restore one by name
+    ovm update              Staged update with automatic failover
+    ovm rollback            Restore the newest pre-update code snapshot
+    ovm uninstall [--purge] Remove the app (data kept unless --purge)
+    ovm config              Every effective setting and where it comes from
+    ovm completion          Install bash completion, print the source line
+    ovm version-script      The installer's own version and commit
+
+  RETIRED NAMES — still work, no longer in the short help
+    ovm https              → ovm tls selfsigned | le | custom
+    ovm tls-status         → ovm tls
+    ovm owner-claim        → ovm auth key
+    ovm reset-password     → ovm auth reset
+    ovm reset-urlpath      → ovm url reset
+    ovm auto-backup        → ovm backup schedule
+    ovm recovery           → ovm url
+    ovm doctor-fix         → ovm doctor --fix
+    ovm start | stop       → ovm restart
+    ovm recover-update     → ovm update (it recovers first)
 
   OPTIONS
-    -p, --pass PASS     reset-password: new owner password (min 8, not a
+    -p, --pass PASS     auth reset: new owner password (min 8, not a
                         common word or placeholder)
     -y, --yes           Never prompt
     --fix               doctor: apply safe automatic fixes
-    -a, --all            status: include paths and mode
+    -a, --all            status and doctor: include everything
     --keep N            backup: how many backups to keep (1-500)
-    --time HH:MM        auto-backup: daily run time
+    --time HH:MM        backup schedule: daily run time
     --purge             uninstall: also delete data + certs
     -v, --version V     update: pin a release, e.g. -v v1.0.15
     -h, --help          This help
@@ -75,16 +119,26 @@ usage() {
     OVM_PASS      same as --pass
     CI=true       implies -y
 
-  Status, doctor, tls-status, backups, restore and reset-password run from the
-  Python CLI in cli/ — the single implementation, on docker installs too (the
-  owner credential is a database row, so the container is where it lives).
-  Logs and reset-urlpath stay host-side (a container has no journalctl and no
-  host .env), as do update, uninstall, rollback, recovery, certificate
-  issuance, and the stop/restart around a restore.
-  Update and uninstall are implemented in install.sh — this script delegates
-  to \$INSTALL_DIR/install.sh so there is exactly one copy.
+  .env
+    Written once by the installer and never by this tool. It owns the boot
+    settings outright — DATA_DIR, HOST, PORT, JWT_SECRET_KEY, SSL_KEYFILE,
+    SSL_CERTFILE, PUBLIC_URL — because the database cannot be opened without
+    DATA_DIR and the socket cannot bind without HOST and PORT. Edit it freely;
+    changes take effect on restart, and `ovm config` shows what is in force.
+
+    Everything not named there (url path, owner, subscription prefix, proxy
+    trust) is a database row, changed in the panel or by the command that owns
+    it. SSL_KEYFILE and SSL_CERTFILE say where `ovm tls` puts the certificate —
+    the file names the location, and the command writes to it.
+
+  Status, doctor, backups, restore and auth run from the Python CLI in cli/ —
+  the single implementation, on docker installs too, because the owner
+  credential is a database row and the container is where it lives. Logs and
+  url reset stay host-side (a container has no journalctl and no host .env), as
+  do update, uninstall, rollback, certificate issuance, and the restart around
+  a restore. Update and uninstall live in install.sh; this script delegates so
+  there is one copy of each.
 EOF
-    exit 0
 }
 # `ovm help` and a bare `ovm` print usage and stop. Handled here, before
 # anything is sourced, because the libraries live inside the install tree —
@@ -103,7 +157,10 @@ done
 # must not look like a successful command.
 if [[ $# -eq 0 || "$_ovm_mode" == "help" ]]; then
     unset _ovm_mode _ovm_arg
-    usage
+    # `ovm help --all` is one flag away from the short list. "One flag away"
+    # only works if the flag is there: the retired names, every option, and
+    # where each half runs all live in that second screen.
+    if [[ " $* " == *" --all "* ]]; then usage_full; else usage; fi
     exit 0
 fi
 unset _ovm_mode _ovm_arg
@@ -159,6 +216,9 @@ unset _cand _lib _lib_found
 PORT="" ADMIN_PASS="" MODE="" PIN=""
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT="" HTTPS_MODE=""
+# Grouped-command state. `tls` picks a subcommand, `auth` picks an action, `url`
+# picks set-or-rotate — each with a bare form that just lists the options.
+AUTH_ACTION="key" URLPATH_SET="" URLPATH_RESET=0
 ACTION=""
 YES=0 PURGE=0 FIX=0 SHOW_ALL=0
 LOGS_ARG=""
@@ -443,23 +503,87 @@ auto_backup_cli() {
 show_login_info() {
     local user path port ip url
     user="$(env_get "$INSTALL_DIR/.env" ADMIN_USERNAME)"; : "${user:=admin}"
-    path="$(env_get "$INSTALL_DIR/.env" URLPATH)"
     port="$(env_get "$INSTALL_DIR/.env" PORT)"; : "${port:=$DEFAULT_PORT}"
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    ip="$(_public_ip)"
+    # The live prefix, read from the panel rather than .env: URLPATH has been a
+    # settings row since v16 and .env is only the seed the installer wrote. The
+    # URL is built from the live value, because a URL built from the seed is
+    # exactly the URL that 404s.
+    local live
+    live="$(_cli_py urlpath-show 2>/dev/null || true)"
+    path="$(printf '%s' "$live" | sed -n 's/^ *Prefix  *//p')"
+    [[ "$path" == "none — served at /" || "$path" == "none" ]] && path=""
     if [[ -n "$path" ]]; then url="https://${ip}:${port}/${path}/"; else url="https://${ip}:${port}/"; fi
-    render_kv "URL"   "$url"
-    render_kv "Login" "$user"
-    render_note "Password: the owner password you set. On a panel nobody has claimed yet, first login is with the claim key instead (ovm owner-claim)."
-    render_note "If the URL 404s, the live path may differ — change it in Settings → General."
+    render_kv "Panel"      "$url"
+    render_kv "Prefix"     "${path:-none — served at /}"
+    render_kv "Source"     "database — .env seeds it once, at install"
+    render_kv "Owner"      "$user"
+    render_kv "Public url" "$(env_get "$INSTALL_DIR/.env" PUBLIC_URL || true)"
+    render_blank
+    render_kv "Set"   "ovm url set NAME"
+    render_kv "Reset" "ovm url reset — a fresh random path"
 }
 
-reset_urlpath_now() {
-    if is_docker_mode; then
-        docker exec ovmanager /app/.venv/bin/python main.py --reset-urlpath || die "Reset failed"
+# The box's routable address, preferring what the internet dials. A panel behind
+# NAT still needs the public one, or the printed URL is unreachable from the
+# operator's laptop.
+_public_ip() {
+    local ip
+    for ip in $(curl -fsS --max-time 2 https://api.ipify.org 2>/dev/null); do
+        [[ "$ip" =~ ^[0-9.]+$ ]] && { printf '%s' "$ip"; return 0; }
+    done
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    printf '%s' "${ip:-127.0.0.1}"
+}
+
+# `ovm auth` with no subcommand. The panel has exactly one owner credential and
+# two states, and the right command differs between them — so the state comes
+# first and the command follows from it.
+show_auth_state() {
+    local owner claimed="yes"
+    owner="$(env_get "$INSTALL_DIR/.env" ADMIN_USERNAME)"; : "${owner:=admin}"
+    # The key file is deleted the moment the claim succeeds, so its presence is
+    # the signal — no database read, and no way for the two to disagree.
+    [[ -f "$(claim_key_path)" ]] && claimed="no"
+    render_kv "Owner"   "$owner"
+    render_kv "Claimed" "$claimed"
+    render_blank
+    if [[ "$claimed" == "no" ]]; then
+        render_kv "Key"    "ovm auth key — paste it at the panel's /setup page"
     else
-        ( cd "$INSTALL_DIR" && .venv/bin/python main.py --reset-urlpath ) || die "Reset failed"
+        render_kv "Reset"  "ovm auth reset — set a new owner password"
+        render_line "  the key is spent; change the password in the panel or here"
     fi
-    render_ok "Panel path reset — the panel is served at / again"
+}
+
+# `ovm url set` / `ovm url reset`. A database write, never a .env one: the prefix
+# has been a settings row since v16, and .env is the seed the installer wrote.
+# Writing the seed instead is how `ovm reset-urlpath` silently did nothing.
+cmd_url() {
+    local want="${1:-}" rotate="${2:-0}"
+    if [[ -z "$want" && "$rotate" -eq 0 ]]; then show_login_info; return 0; fi
+
+    local value
+    if [[ "$rotate" -eq 1 ]]; then
+        # Rotating, not clearing: a random prefix is the whole point of having
+        # one, so `reset` moves to a fresh random path and serving at the root
+        # stays something you have to ask for explicitly.
+        value="$(_rand_urlpath)"
+    else
+        value="${want#/}"; value="${value%/}"
+        [[ "$value" =~ ^[A-Za-z0-9_-]{1,64}$ ]] \
+            || die "url path: letters, digits, dash and underscore only (or / for the root)"
+    fi
+
+    local out rc=0
+    out="$(_cli_py urlpath-set "$value")" || rc=$?
+    [[ $rc -eq 0 ]] || { printf '%s\n' "$out" >&2; exit 1; }
+    printf '%s\n' "$out" >&2
+    render_line "  restart to serve it: ovm restart"
+}
+
+_rand_urlpath() {
+    openssl rand -hex 4 2>/dev/null || head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n'
 }
 
 # Certificate issuance. Non-interactive: the mode comes from the flags, so this
@@ -495,12 +619,46 @@ do_https() {
 
     operation_begin https-certificate
     if ! setup_tls; then operation_end; return 0; fi
-    env_set "$envfile" SSL_KEYFILE "$TLS_KEY"
-    env_set "$envfile" SSL_CERTFILE "$TLS_CERT"
+    # .env is not edited. It declared where the certificate goes (or stayed
+    # silent, and there is a documented default); either way the job now is to
+    # put the files where it said, not to record where they ended up. Recording
+    # is what produced two locations and a panel that served the one nobody
+    # could see.
+    _tls_install_to_declared "$TLS_KEY" "$TLS_CERT"
     render_ok "Certificate updated"
     restart_service
     operation_end
     return 0
+}
+
+# Put a freshly issued pair where the panel will actually look for it.
+#
+# When .env names the pair that is the destination and setup_tls wrote there
+# already, so there is nothing to do. When .env is silent there is one default
+# (see backend/tls_paths) and the certificate moves there — including a Let's
+# Encrypt pair, whose /etc/letsencrypt location is not something the panel could
+# have guessed.
+_tls_install_to_declared() {
+    local want_key="$1" want_cert="$2"
+    local envfile="$INSTALL_DIR/.env"
+    local decl_key decl_cert
+    decl_key="$(env_get "$envfile" SSL_KEYFILE)"
+    decl_cert="$(env_get "$envfile" SSL_CERTFILE)"
+    if [[ -n "$decl_key" && -n "$decl_cert" ]]; then
+        [[ "$decl_key" == "$want_key" ]] && return 0
+        mkdir -p "$(dirname "$decl_key")" "$(dirname "$decl_cert")"
+        cp -f "$want_key" "$decl_key" || die "Could not install the key at $decl_key"
+        cp -f "$want_cert" "$decl_cert" || die "Could not install the certificate at $decl_cert"
+        secure_tls_files "$decl_key" "$decl_cert"
+        return 0
+    fi
+    local dir="/etc/ovmanager/tls"
+    mkdir -p "$dir" || die "Could not create $dir"
+    cp -f "$want_key" "$dir/privkey.pem" || die "Could not install the key"
+    cp -f "$want_cert" "$dir/fullchain.pem" || die "Could not install the certificate"
+    secure_tls_files "$dir/privkey.pem" "$dir/fullchain.pem"
+    render_kv "Installed" "$dir"
+    render_note "Set SSL_KEYFILE and SSL_CERTFILE in $envfile to use a path of your own."
 }
 
 # Roll back to the newest pre-update code snapshot (update failover).
@@ -618,7 +776,13 @@ do_owner_claim() {
 #
 # The list below is the same surface usage() prints; both are hand-kept, so a
 # new subcommand has to be added in both places.
-OVM_SUBCOMMANDS="status start stop restart enable disable logs doctor doctor-fix tls-status https backup auto-backup restore recovery owner-claim reset-password reset-urlpath rollback update recover-update uninstall version-script completion help"
+# Completion offers the current names plus the retired ones, because a tab
+# completing `ovm auto-b` to a command that then errors is worse than a longer
+# word. Help --all carries the mapping.
+OVM_SUBCOMMANDS="status start stop restart enable disable logs doctor doctor-fix \
+tls auth url backup auto-backup restore rollback update uninstall version-script \
+completion help tls-status https recovery owner-claim reset-password reset-urlpath \
+recover-update"
 OVM_FLAGS="-y --yes -a --all --fix --keep --time --purge -v --version -h --help -p --pass --self --domain --ip --key --cert"
 
 do_completion() {
@@ -673,9 +837,11 @@ parse_args() {
             -v|--version) [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
             --keep) [[ $# -ge 2 ]] || die "--keep needs a number"; BACKUP_KEEP="$2"; shift 2 ;;
             --time) [[ $# -ge 2 ]] || die "--time needs HH:MM"; BACKUP_TIME="$2"; shift 2 ;;
-            -h|--help) usage ;;
-            help) usage ;;
+            -h|--help) usage; exit 0 ;;
+            help) ACTION="help"; shift ;;
             status) ACTION="status"; shift ;;
+            # start/stop were never runbooks, they were reflexes: stopping a
+            # healthy panel to restart it is `restart`, and that is one command.
             start|stop|restart|enable|disable) ACTION="$1"; shift ;;
             logs) ACTION="logs"
                 if [[ $# -ge 2 && ( "$2" == "-f" || "$2" =~ ^[0-9]+$ ) ]]; then
@@ -683,29 +849,69 @@ parse_args() {
                 else
                     shift
                 fi ;;
-            backup) ACTION="backup"; shift ;;
+            backup) ACTION="backup"; shift
+                if [[ "$1" == "schedule" ]]; then
+                    ACTION="auto-backup"; AUTO_BACKUP_ACTION="status"; shift 2
+                fi ;;
             restore) ACTION="restore"; shift
                 if [[ $# -ge 1 && "$1" != -* ]]; then RESTORE_NAME="$1"; shift; fi ;;
-            auto-backup) ACTION="auto-backup"; shift
-                if [[ $# -ge 1 && "$1" != -* ]]; then AUTO_BACKUP_ACTION="$1"; shift; fi ;;
-            https|tls) ACTION="https"; shift ;;
+
+            # ── the three grouped commands ──
+            # Bare, a group prints what it can do; a subcommand acts. One rule,
+            # the same for all three, so the shape is learned once.
+            tls) ACTION="tls"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then
+                    case "$1" in
+                        selfsigned) HTTPS_MODE="self"; shift ;;
+                        le) [[ $# -ge 2 ]] || die "ovm tls le needs an ip or a domain"
+                            TLS_DOMAIN="$2"; shift 2 ;;
+                        custom) [[ $# -ge 3 ]] || die "ovm tls custom needs CERT and KEY"
+                            TLS_CERT="$2"; TLS_KEY="$3"; shift 3 ;;
+                        *) die "ovm tls: unknown option '$1'  (see: ovm tls)" ;;
+                    esac
+                fi ;;
+            auth) ACTION="auth"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then
+                    case "$1" in
+                        key) AUTH_ACTION="key"; shift ;;
+                        reset|reset-password) AUTH_ACTION="reset"; shift ;;
+                        *) die "ovm auth: unknown option '$1'  (see: ovm auth)" ;;
+                    esac
+                else
+                    AUTH_ACTION="state"
+                fi ;;
+            url) ACTION="url"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then
+                    case "$1" in
+                        set) [[ $# -ge 2 ]] || die "ovm url set needs a path"
+                            URLPATH_SET="$2"; shift 2 ;;
+                        reset) URLPATH_RESET=1; shift ;;
+                        *) die "ovm url: unknown option '$1'  (see: ovm url)" ;;
+                    esac
+                fi ;;
+
+            # ── retired names ──
+            # Still dispatched, no longer in the short help. Mapping table in
+            # `ovm help --all`; nothing warns, because a deprecation line on
+            # every cron job that calls `ovm auto-backup` is noise, not notice.
+            https|tls-status) ACTION="tls"; shift ;;
             --self) HTTPS_MODE="self"; shift ;;
             --domain) [[ $# -ge 2 ]] || die "--domain needs a hostname"; TLS_DOMAIN="$2"; HTTPS_MODE="le"; shift 2 ;;
             --ip) HTTPS_MODE="le-ip"; shift ;;
             --key) [[ $# -ge 2 ]] || die "--key needs a file"; TLS_KEY="$2"; shift 2 ;;
             --cert) [[ $# -ge 2 ]] || die "--cert needs a file"; TLS_CERT="$2"; shift 2 ;;
-            tls-status) ACTION="tls-status"; shift ;;
-            recovery) ACTION="recovery"; shift ;;
-            owner-claim) ACTION="owner-claim"; shift ;;
+            auto-backup) ACTION="auto-backup"; shift
+                if [[ $# -ge 1 && "$1" != -* ]]; then AUTO_BACKUP_ACTION="$1"; shift; fi ;;
+            recovery) ACTION="url"; shift ;;
+            owner-claim) ACTION="auth"; AUTH_ACTION="key"; shift ;;
+            reset-password) ACTION="auth"; AUTH_ACTION="reset"; shift ;;
+            reset-urlpath) ACTION="url"; URLPATH_RESET=1; shift ;;
             completion) ACTION="completion"; shift ;;
             version-script|script-version) ACTION="version-script"; shift ;;
-            reset-password) ACTION="reset-password"; shift ;;
-            reset-urlpath) ACTION="reset-urlpath"; shift ;;
             doctor) ACTION="doctor"; shift ;;
             doctor-fix) ACTION="doctor-fix"; shift ;;
             rollback) ACTION="rollback"; shift ;;
-            update) ACTION="update"; shift ;;
-            recover-update) ACTION="recover-update"; shift ;;
+            update|recover-update) ACTION="update"; shift ;;
             uninstall) ACTION="uninstall"; shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
@@ -730,7 +936,7 @@ main() {
     [[ -z "$ADMIN_PASS" && -n "${OVM_PASS:-}" ]] && ADMIN_PASS="$OVM_PASS"
     # No interactive menu: bare `ovm` prints the command list, so a stray
     # invocation in a script cannot start waiting for input.
-    [[ -z "$ACTION" ]] && usage
+    [[ -z "$ACTION" ]] && { usage; exit 0; }
 # The operator CLI (cli/) is the implementation for every read and diagnostic
 # command; this file decides how to reach it — one implementation, no bash twin
 # to drift out of sync.
@@ -765,6 +971,19 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
     ( cd "$INSTALL_DIR" && "$py" -m cli.main "$@" )
 }
 
+# The same call, but a missing interpreter is a returned code rather than an
+# exit. Only for screens whose job is to print something regardless: `ovm tls`
+# with no subcommand has to list its options even on a box it cannot read, or
+# the one command that would explain the problem is the one that cannot run.
+_cli_py_soft() {
+    local py="$INSTALL_DIR/.venv/bin/python"
+    if [[ ! -x "$py" ]]; then
+        render_warn "cannot reach the panel interpreter at $py"
+        return 1
+    fi
+    ( cd "$INSTALL_DIR" && "$py" -m cli.main "$@" )
+}
+
 # What the host can see and the container cannot: `docker ps`.
 _host_service_state() {
     if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ovmanager; then
@@ -790,6 +1009,28 @@ cmd_backup() { _cli_py backup ${BACKUP_KEEP:+--keep "$BACKUP_KEEP"}; }
 cmd_restore() { _cli_py restore "$@"; }
 cmd_tls_status() { _cli_py tls-status; }
 cmd_doctor() { _cli_py doctor; }
+
+# `ovm tls` with no subcommand. Reads the installed certificate and then lists
+# what it can replace it with — so the answer to "what am I running, and how do I
+# change it" is one screen instead of two commands to remember.
+cmd_tls_options() {
+    # The option list is the point of this command, so it is printed whatever
+    # the read does. An operator who came here to find out what `ovm tls` can do
+    # must not be met with a stack trace from the thing it was about to offer.
+    # One warning per cause, not per attempt: two lines saying the same thing
+    # about the same missing file is how a real problem gets missed.
+    if _cli_py_soft tls-migrate; then
+        _cli_py_soft tls-status \
+            || render_warn "could not read the installed certificate — the options below still apply"
+    else
+        render_warn "the certificate state below is unknown; the options are not"
+    fi
+    render_blank
+    render_kv "Set"     "ovm tls selfsigned"
+    render_kv "Encrypt" "ovm tls le IP|DOMAIN"
+    render_kv "Custom"  "ovm tls custom CERT KEY"
+    render_line "  the paths come from .env — this writes the certificate, never the file"
+}
 
 cmd_doctor_fix() {
     check_root
@@ -831,28 +1072,39 @@ cmd_doctor_fix() {
             do_restore "$RESTORE_NAME"
             exit 0 ;;
         auto-backup) check_root; auto_backup_cli "$AUTO_BACKUP_ACTION"; exit 0 ;;
-        https) check_root; do_https; exit 0 ;;
-        tls-status) check_root; cmd_tls_status; exit $? ;;
-        recovery) check_root; show_login_info; exit 0 ;;
-        owner-claim) do_owner_claim; exit $? ;;
         completion) do_completion; exit $? ;;
+        config) check_root; _cli_py config; exit $? ;;
         # Delegate: the installer is what the operator is asking about, and
         # there is exactly one implementation of the answer.
         version-script) do_version_script; exit $? ;;
-        reset-password)
-            # Validate before the root gate so bad input fails the same
-            # way for root and non-root callers (CI runs non-root).
-            [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
+        # ── the three grouped commands ──
+        # Bare, each prints what it can do; the retired spellings land here too
+        # and behave identically, which is what makes them safe to keep.
+        tls)
             check_root
+            if [[ -z "$HTTPS_MODE" ]]; then cmd_tls_options; else do_https; fi
+            exit $? ;;
+        auth)
+            # Bare `ovm auth` is the state, because the two actions are only
+            # meaningful against it: a spent key is not a problem to solve, and a
+            # forgotten password is not solvable in the panel — that is the door
+            # you cannot open.
+            if [[ "$AUTH_ACTION" == "state" ]]; then show_auth_state; exit 0; fi
+            if [[ "$AUTH_ACTION" == "key" ]]; then do_owner_claim; exit $?; fi
+            check_root
+            # Validated before the root gate so bad input fails the same way for
+            # root and non-root callers, exactly as reset-password always did.
             # One path for every install: -p/OVM_PASS, the interactive prompt,
             # native and Docker. bash collects the password and restarts; the
-            # CLI writes the row (see do_reset_password).
+            # CLI writes the row.
+            [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
             do_reset_password
             exit $? ;;
-        reset-urlpath)
+        url)
             check_root
-            if is_docker_mode; then reset_urlpath_now; else _cli_py reset-urlpath; fi
+            cmd_url "$URLPATH_SET" "$URLPATH_RESET"
             exit $? ;;
+        help) usage_full; exit 0 ;;
         doctor) check_root; cmd_doctor; exit $? ;;
         doctor-fix) check_root; cmd_doctor_fix; exit $? ;;
         rollback) check_root; do_rollback; exit 0 ;;

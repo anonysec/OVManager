@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 
+from cli import render
 from cli.env import Install
 
 _AUTO_BACKUP_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -150,22 +151,21 @@ def auto_backup(action: str | None, install: Install, time: str | None = None, k
 
 
 def render_backup_text(data: dict) -> str:
-    """Human row matching manager.sh backup_now ("Verified backup ...")."""
+    """One row: the path, which is the only thing an operator needs from this."""
     if not data.get("ok"):
-        return f"  Error: {data.get('error', 'backup failed')}\n"
-    return f"  Verified backup  {data.get('path', '')}\n"
+        return render.block([render.failed(data.get("error", "backup failed"))])
+    return render.block([render.ok("verified backup"), render.kv("path", data.get("path", ""))])
 
 
 def render_auto_backup_text(data: dict) -> str:
-    """Human rows for the panel auto-backup schedule (kv layout)."""
+    """The host timer. `ovm backup schedule` is the command that changes it."""
     if not data.get("ok"):
-        return f"  Error: {data.get('error', 'auto-backup failed')}\n"
-    state = "enabled" if data.get("enabled") else "disabled"
-    lines = [
-        f"  {'Auto backup':<14} {state}",
-        f"  {'Time':<14} {data.get('time', _DEFAULT_AUTO_TIME)}",
-        f"  {'Keep':<14} {data.get('keep', _DEFAULT_AUTO_KEEP)}",
+        return render.block([render.failed(data.get("error", "auto-backup failed"))])
+    items = [
+        ("Auto backup", "enabled" if data.get("enabled") else "disabled"),
+        ("Time", str(data.get("time", _DEFAULT_AUTO_TIME))),
+        ("Keep", str(data.get("keep", _DEFAULT_AUTO_KEEP))),
     ]
     if not data.get("enabled"):
-        lines.append(f"  {'Enable':<14} ovm auto-backup on")
-    return "\n".join(lines) + "\n"
+        items.append(("Enable", "ovm backup schedule on"))
+    return render.block(render.rows(items))

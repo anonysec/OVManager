@@ -15,6 +15,7 @@ import os
 import sys
 
 from cli import backup as _backup
+from cli import config as _config
 from cli import doctor as _doctor
 from cli import logs as _logs
 from cli import password as _password
@@ -82,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
         ("doctor", "read-only health checks"),
         ("tls-status", "installed certificate at a glance"),
         ("reset-urlpath", "clear the panel URL prefix"),
+        ("urlpath-show", "print the url prefix the panel is serving"),
+        ("config", "print every effective setting and where it comes from"),
+        ("tls-migrate", "move a pre-declaration certificate onto the .env paths"),
     ):
         sub.add_parser(name, help=help_text, parents=[common])
     logs_p = sub.add_parser("logs", help="tail service logs", parents=[common])
@@ -96,6 +100,8 @@ def build_parser() -> argparse.ArgumentParser:
     auto_p.add_argument("--keep", default=None, help="tarballs to keep 1-500 (for on)")
     restore_p = sub.add_parser("restore", help="list backups, or restore one by name", parents=[common])
     restore_p.add_argument("name", nargs="?", default=None, help="backup filename, as listed")
+    ups = sub.add_parser("urlpath-set", help="set the url prefix", parents=[common])
+    ups.add_argument("prefix", nargs="?", default="", help="prefix, or empty for the root")
     rp = sub.add_parser("reset-password", help="rewrite the owner credential (hashed)", parents=[common])
     rp.add_argument("--admin-pass", default=None, help="new password (else prompt)")
     return parser
@@ -116,11 +122,11 @@ def main(argv: list[str] | None = None) -> int:
         return _logs.run(_logs.build_command(install.install_dir, install.compose_file, args.count))
     if args.command == "doctor":
         checks = _doctor.collect(install, service, in_container)
-        print(_doctor.render_text(checks), end="")
+        print(_doctor.render_text(checks, show_all=args.show_all), end="")
         return 0 if all(c.ok for c in checks) else 1
     if args.command == "doctor-fix":
         checks = _doctor.fix_all(install, service, in_container)
-        print(_doctor.render_text(checks), end="")
+        print(_doctor.render_text(checks, show_all=args.show_all), end="")
         return 0 if all(c.ok for c in checks) else 1
     if args.command == "tls-status":
         data = _tls.status(install)
@@ -159,8 +165,26 @@ def main(argv: list[str] | None = None) -> int:
         print(_password.render_text(data), end="")
         return 0 if data.get("ok") else 1
     if args.command == "reset-urlpath":
-        data = _urlpath.reset_urlpath(install.install_dir, install.compose_file, in_container=in_container)
+        data = _urlpath.reset(install.install_dir, install.compose_file, in_container=in_container)
         print(_urlpath.render_text(data), end="")
+        return 0 if data.get("ok") else 1
+    if args.command == "urlpath-show":
+        data = _urlpath.current()
+        print(_urlpath.render_current(data), end="")
+        return 0 if data.get("ok") else 1
+    if args.command == "urlpath-set":
+        data = _urlpath.set_prefix(args.prefix or "")
+        print(_urlpath.render_set(data), end="")
+        return 0 if data.get("ok") else 1
+    if args.command == "config":
+        data = _config.collect(install)
+        print(_config.render_text(data), end="")
+        return 0 if data.get("ok") else 1
+    if args.command == "tls-migrate":
+        data = _tls.migrate()
+        # Silent when there is nothing to do: this runs before every `ovm tls`,
+        # and a line saying "nothing happened" on every read is noise.
+        print(_tls.render_migrate(data), end="")
         return 0 if data.get("ok") else 1
     return 2
 

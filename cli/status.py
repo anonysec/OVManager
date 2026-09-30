@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 
+from cli import render
 from cli.env import Install
 from cli.probes import fetch_health, primary_ip, service_state
 
@@ -40,20 +41,20 @@ def collect(install: Install, service: str | None = None, public_ip: str | None 
 
 
 def render_text(data: dict, show_all: bool = False) -> str:
-    """Human rows matching manager.sh do_status (kv layout)."""
+    """Human rows, built by render.rows so the label column fits its own labels."""
     if not data.get("installed"):
-        return f"  Error: {data.get('error')}\n"
-    lines = [
-        f"  {'Service':<14} {data['service']}",
-        f"  {'Health':<14} {data['health']}",
-        f"  {'Version':<14} v{data['version']}",
-        f"  {'Open':<14} {data['url']}",
+        return render.block([render.failed(data.get("error", "not installed"))])
+    items = [
+        ("Service", data["service"]),
+        ("Health", data["health"]),
+        ("Version", f"v{data['version']}"),
+        ("Open", data["url"]),
     ]
     if show_all:
-        lines += [
-            f"  {'Mode':<14} {data['mode']}",
-            f"  {'Port':<14} {data['port']}",
-            f"  {'Data':<14} {data['data_dir']}",
-            f"  {'Install':<14} {data['install_dir']}",
+        items += [
+            ("Mode", data["mode"]),
+            ("Port", str(data["port"])),
+            ("Data", data["data_dir"]),
+            ("Install", data["install_dir"]),
         ]
-    return "\n".join(lines) + "\n"
+    return render.block(render.rows(items))

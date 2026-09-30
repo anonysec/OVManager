@@ -80,7 +80,7 @@ def test_reset_password_reports_a_missing_data_dir(tmp_path, monkeypatch):
 
 
 def test_reset_urlpath_missing_install(tmp_path):
-    out = urlpath.reset_urlpath(str(tmp_path / "missing"), str(tmp_path / "compose.yml"))
+    out = urlpath.reset(str(tmp_path / "missing"), str(tmp_path / "compose.yml"))
     assert out["ok"] is False and "Not installed" in out["error"]
 
 
@@ -99,7 +99,7 @@ def test_reset_urlpath_runs_panel_entrypoint(monkeypatch, tmp_path):
         return Done()
 
     monkeypatch.setattr(urlpath.subprocess, "run", fake_run)
-    out = urlpath.reset_urlpath(install_dir, str(tmp_path / "compose-missing.yml"))
+    out = urlpath.reset(install_dir, str(tmp_path / "compose-missing.yml"))
     assert out == {"ok": True}
     assert calls["argv"][-2:] == ["main.py", "--reset-urlpath"]
     assert calls["cwd"] == install_dir
@@ -121,7 +121,7 @@ def test_reset_urlpath_docker_uses_exec(monkeypatch, tmp_path):
         return Done()
 
     monkeypatch.setattr(urlpath.subprocess, "run", fake_run)
-    out = urlpath.reset_urlpath(install_dir, str(compose))
+    out = urlpath.reset(install_dir, str(compose))
     assert out == {"ok": True}
     assert calls["argv"][:2] == ["docker", "exec"]
 
@@ -135,7 +135,7 @@ def test_reset_urlpath_reports_failure(monkeypatch, tmp_path):
         stderr = "boom"
 
     monkeypatch.setattr(urlpath.subprocess, "run", lambda *a, **k: Bad())
-    out = urlpath.reset_urlpath(install_dir, str(tmp_path / "compose-missing.yml"))
+    out = urlpath.reset(install_dir, str(tmp_path / "compose-missing.yml"))
     assert out["ok"] is False and "boom" in out["error"]
 
 
