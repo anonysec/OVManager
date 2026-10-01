@@ -1421,10 +1421,10 @@ USAGE
   Interactive:
     bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 
-  Unattended Install:
+  No terminal (accepts every default without asking):
     curl -sSL URL | sudo bash -s -- --yes
 
-  Unattended Install with Docker:
+  No terminal, with Docker:
     curl -sSL URL | sudo bash -s -- --docker --yes
 
 COMMANDS
@@ -1440,7 +1440,7 @@ OPTIONS
   -h, --help                Show this help
 
 Every other install setting is an OVM_* environment variable — no flag, so an
-unattended run and an interactive one cannot disagree:
+run with no terminal and an interactive one cannot disagree:
   OVM_MODE=native|docker        OVM_PORT / OVM_PATH      OVM_ADMIN_USER
   OVM_TLS=self|le|le-ip|custom  OVM_TLS_DOMAIN           OVM_PUBLIC_URL
   OVM_TLS_KEY / OVM_TLS_CERT    OVM_VERSION (update pin)

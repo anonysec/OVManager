@@ -186,11 +186,13 @@ Login     admin</code></pre>
       <a href="troubleshooting.html#password">forgot the owner password</a>.
     </p>
 
-    <h2 id="unattended">Unattended install</h2>
+    <h2 id="no-terminal">Install with no terminal</h2>
     <p>
-      Scripts pass flags and never wait on a prompt. There are only three flags;
-      everything else is an <code>OVM_*</code> variable, and the same variable is
-      the wizard's default &mdash; so an unattended run and an interactive one
+      A run with no terminal has nobody to answer, so it needs
+      <code>--yes</code> to say that is intended; without it the installer stops
+      and says so rather than choosing for you. There are only three flags, and
+      everything else is an <code>OVM_*</code> variable which is also the
+      wizard&rsquo;s default &mdash; so a scripted run and an interactive one
       cannot disagree.
     </p>
     <figure class="cmd">

@@ -113,13 +113,15 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
+This is the interactive install. Run with no flags it asks, and given no terminal it stops and tells you to pass `--yes` rather than choosing for you.
+
 The menu offers **Install** (recommended, asks nothing else) and **Install with Docker**. To answer every setting yourself, run the wizard instead:
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) interactive
 ```
 
-**Unattended**, for scripts and CI:
+**With no terminal** — a run without one cannot ask, so it needs `--yes` to say that is intended:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
