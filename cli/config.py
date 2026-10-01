@@ -75,8 +75,7 @@ def render_text(data: dict) -> str:
     lines.append(render.heading("ownership"))
     lines.append(
         render.hint(
-            ".env is written once by the installer and never by this tool — edit it freely, "
-            "changes take effect on restart"
+            ".env is written once by the installer and never by this tool — edit it freely, changes take effect on restart"
         )
     )
     lines.append(render.hint("everything not named in .env is a row: change it in the panel"))

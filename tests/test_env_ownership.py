@@ -213,16 +213,12 @@ def test_migration_says_where_the_certificate_went():
 def _install(tmp_path, env):
     from cli.env import Install
 
-    (tmp_path / ".env").write_text(
-        "".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8"
-    )
+    (tmp_path / ".env").write_text("".join(f"{k}={v}\n" for k, v in env.items()), encoding="utf-8")
     return Install.detect(install_dir=str(tmp_path), data_dir=env.get("DATA_DIR", str(tmp_path)))
 
 
 def test_config_says_where_every_value_lives(tmp_path):
-    data = config.collect(
-        _install(tmp_path, {"PORT": "2095", "DATA_DIR": str(tmp_path), "SSL_CERTFILE": "/c"})
-    )
+    data = config.collect(_install(tmp_path, {"PORT": "2095", "DATA_DIR": str(tmp_path), "SSL_CERTFILE": "/c"}))
     text = config.render_text(data)
     for key in ("DATA_DIR", "HOST", "PORT", "SSL_KEYFILE", "SSL_CERTFILE"):
         assert key in text, key
@@ -247,9 +243,7 @@ def test_config_never_shows_the_secret(tmp_path):
     A config dump that leaks the signing key is a config dump nobody pastes into
     a ticket, which was the reason to have one.
     """
-    data = config.collect(
-        _install(tmp_path, {"PORT": "2095", "JWT_SECRET_KEY": "s3cret-value-not-to-print"})
-    )
+    data = config.collect(_install(tmp_path, {"PORT": "2095", "JWT_SECRET_KEY": "s3cret-value-not-to-print"}))
     text = config.render_text(data)
     assert "s3cret-value-not-to-print" not in text
     assert "set" in text

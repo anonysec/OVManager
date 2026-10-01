@@ -92,9 +92,7 @@ def render_current(data: dict) -> str:
     """The live prefix and where it came from."""
     if not data.get("ok"):
         return render.block([render.failed(data.get("error", "could not read the url path"))])
-    return render.block(
-        render.rows([("Prefix", data.get("prefix") or "none — served at /"), ("Source", "database")])
-    )
+    return render.block(render.rows([("Prefix", data.get("prefix") or "none — served at /"), ("Source", "database")]))
 
 
 def render_set(data: dict) -> str:

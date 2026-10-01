@@ -679,7 +679,7 @@ def test_snapshot_rotation_keeps_two(tmp_path):
     src = _extract_function("snapshot_code")
     helpers = (
         'set -Eeuo pipefail\ndie() { echo "DIE: $1" >&2; exit 1; }\n'
-        'render_ok() { :; }\nrender_note() { :; }\nrender_warn() { :; }\n'
+        "render_ok() { :; }\nrender_note() { :; }\nrender_warn() { :; }\n"
     )
     harness = (
         helpers
@@ -732,9 +732,7 @@ def test_the_menu_is_one_renderer():
     selections. There is now one renderer and one keystroke reader.
     """
     content = _installer_source()
-    code = "\n".join(
-        ln for ln in content.splitlines() if not ln.lstrip().startswith("#")
-    )
+    code = "\n".join(ln for ln in content.splitlines() if not ln.lstrip().startswith("#"))
     assert "whiptail" not in code, "the whiptail branch is back"
     assert "tui_select() { render_menu" in content
     render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
@@ -743,7 +741,7 @@ def test_the_menu_is_one_renderer():
     assert "_MENU_CUR=$(( _MENU_CUR - 1 ))" in render
     assert "_MENU_CUR=$(( _MENU_CUR + 1 ))" in render
     assert "_MENU_CUR=$(( 10#$ch - 1 ))" in render
-    assert 'reply=$(( _MENU_CUR + 1 )); break' in render
+    assert "reply=$(( _MENU_CUR + 1 )); break" in render
 
 
 def test_update_without_install_dir_fails(tmp_path):
@@ -971,8 +969,8 @@ def _confirm_harness(fn: str, call: str) -> str:
         "render_ask() { :; }\n"
         # A return code, not a boolean: can_prompt SUCCEEDS when a terminal is
         # reachable, so "promptable" is rc 0 and "no terminal" is rc 1.
-        "can_prompt() { return \"$CAN_PROMPT_RC\"; }\n"
-        "YES=\"$YES\"\n"
+        'can_prompt() { return "$CAN_PROMPT_RC"; }\n'
+        'YES="$YES"\n'
         "_read_reply() { printf '%s' \"$REPLY\"; }\n"
         f"{fn}\n"
         f"{call}\n"
@@ -996,15 +994,13 @@ def test_confirm_no_is_safe_by_default():
     cases = [
         (0, 0, "y", 0),
         (0, 0, "Y", 0),
-        (0, 0, "", 1),   # Enter keeps the default, which is no
+        (0, 0, "", 1),  # Enter keeps the default, which is no
         (0, 0, "n", 1),
         (0, 1, "y", 1),  # --yes means "never ask", and this helper says no
         (1, 0, "y", 1),  # no terminal: nothing was typed, nothing is confirmed
     ]
     for can_prompt_rc, yes, reply, expected in cases:
-        r = _run_confirm(
-            source, "confirm_no 'Delete data?'", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply
-        )
+        r = _run_confirm(source, "confirm_no 'Delete data?'", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply)
         assert r.returncode == expected, (reply, yes, can_prompt_rc, r.returncode, r.stderr)
 
 
@@ -1017,19 +1013,17 @@ def test_confirm_word_makes_the_destructive_answer_the_typed_one():
     """
     source = _extract_function_sh("confirm_word", LIB_DIR / "prompt.sh")
     cases = [
-        (0, 0, "purge", 0),   # the word purges
-        (0, 0, "", 1),        # Enter keeps it
-        (0, 0, "y", 1),       # y does not
-        (0, 0, "yes", 1),     # and neither does yes
-        (0, 0, "PURGE", 1),   # case matters
-        (0, 0, "purg", 1),    # nor a prefix
-        (0, 1, "purge", 0),   # --yes is an explicit request to purge
-        (1, 0, "purge", 1),   # no terminal: nothing can be typed, nothing purges
+        (0, 0, "purge", 0),  # the word purges
+        (0, 0, "", 1),  # Enter keeps it
+        (0, 0, "y", 1),  # y does not
+        (0, 0, "yes", 1),  # and neither does yes
+        (0, 0, "PURGE", 1),  # case matters
+        (0, 0, "purg", 1),  # nor a prefix
+        (0, 1, "purge", 0),  # --yes is an explicit request to purge
+        (1, 0, "purge", 1),  # no terminal: nothing can be typed, nothing purges
     ]
     for can_prompt_rc, yes, reply, expected in cases:
-        r = _run_confirm(
-            source, "confirm_word 'delete the data?' purge", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply
-        )
+        r = _run_confirm(source, "confirm_word 'delete the data?' purge", can_prompt_rc=can_prompt_rc, yes=yes, reply=reply)
         assert r.returncode == expected, (reply, can_prompt_rc, yes, r.returncode, r.stderr)
 
 

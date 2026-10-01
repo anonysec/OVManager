@@ -446,9 +446,7 @@ def _readable_lines(path: Path) -> list[str]:
     ids=lambda p: p.name,
 )
 def test_no_retired_name_in_operator_facing_text(path):
-    offenders = [
-        line for line in _readable_lines(path) if any(n in line for n in RETIRED_NAMES)
-    ]
+    offenders = [line for line in _readable_lines(path) if any(n in line for n in RETIRED_NAMES)]
     # The retired-names table in help --all is the one place they belong.
     offenders = [ln for ln in offenders if "→" not in ln]
     assert not offenders, f"{path.name} still shows a retired name:\n" + "\n".join(offenders)
@@ -476,6 +474,7 @@ def test_the_ready_card_prints_a_runnable_uninstall_command():
 # Both of these passed 904 tests. Neither was visible except by installing on a
 # clean box and typing the command.
 
+
 def test_bare_backup_does_not_read_a_missing_argument():
     """`ovm backup` is the first command an operator runs, and it died.
 
@@ -489,9 +488,7 @@ def test_bare_backup_does_not_read_a_missing_argument():
     # The first read of an argument after `shift` must be defaulted. Later reads
     # sit behind a `$# -ge 1` guard and are fine.
     first_read = next(ln for ln in arm.splitlines() if '"$1"' in ln or '"${1' in ln)
-    assert '"${1:-}"' in first_read, (
-        f"unguarded read of a shifted argument: {first_read.strip()}"
-    )
+    assert '"${1:-}"' in first_read, f"unguarded read of a shifted argument: {first_read.strip()}"
 
 
 def test_backup_schedule_consumes_its_own_action():

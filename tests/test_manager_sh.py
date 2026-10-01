@@ -1078,7 +1078,6 @@ def test_restore_rejects_an_unknown_name_before_it_prompts(tmp_path):
     assert not marker.exists()
 
 
-
 # ── owner-claim / completion / version-script (new commands) ───────────
 
 
@@ -1162,7 +1161,6 @@ def test_version_script_delegates_to_the_installer(tmp_path):
     assert "STUB-INSTALLER version-script" in r.stdout + r.stderr
     r = mgr_sb(env, app, "script-version")
     assert "STUB-INSTALLER version-script" in r.stdout + r.stderr
-
 
 
 def test_no_reset_path_writes_a_credential_to_env(tmp_path):

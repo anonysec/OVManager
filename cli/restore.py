@@ -83,9 +83,7 @@ def render_list_text(data: dict) -> str:
     backups = data.get("backups") or []
     directory = data.get("dir", "")
     if not backups:
-        return render.block(
-            [render.heading(f"data backups in {directory}"), render.hint("none — create one with: ovm backup")]
-        )
+        return render.block([render.heading(f"data backups in {directory}"), render.hint("none — create one with: ovm backup")])
     width = max(len(item["name"]) for item in backups)
     lines = [render.heading(f"data backups in {directory}")]
     for item in backups:

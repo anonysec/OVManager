@@ -53,9 +53,7 @@ def status(install: Install) -> dict:
 
 def render_text(data: dict) -> str:
     if not data.get("tls"):
-        return render.block(
-            [render.heading("HTTPS certificate"), render.kv("Key file", "<none>  plain HTTP")]
-        )
+        return render.block([render.heading("HTTPS certificate"), render.kv("Key file", "<none>  plain HTTP")])
     items = [
         ("Key file", data.get("key") or "<none>"),
         ("Cert file", data.get("cert") or "<none>"),

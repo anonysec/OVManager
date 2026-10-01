@@ -721,9 +721,7 @@ def render_text(checks: list[Check], show_all: bool = False) -> str:
     failed_checks = [c for c in checks if not c.ok]
     passed = len(checks) - len(failed_checks)
     if not failed_checks:
-        return render.block(
-            [render.ok(f"no problems — {passed} checks passed"), render.hint("detail: ovm doctor --all")]
-        )
+        return render.block([render.ok(f"no problems — {passed} checks passed"), render.hint("detail: ovm doctor --all")])
 
     lines = [render.failed(f"{len(failed_checks)} problems")]
     lines.append("")

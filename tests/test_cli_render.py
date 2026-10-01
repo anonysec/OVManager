@@ -124,9 +124,7 @@ def test_glyphs_fall_back_to_ascii_when_the_locale_cannot_show_them():
         "print(render.glyphs())\n"
     )
     env = {**os.environ, "LANG": "C", "LC_ALL": "C", "PYTHONPATH": str(REPO)}
-    out = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, env=env, cwd=REPO, timeout=30
-    )
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, env=env, cwd=REPO, timeout=30)
     assert out.returncode == 0, out.stderr
     assert "✓" not in out.stdout
     assert out.stdout.strip() == "('ok', 'XX')"
@@ -183,9 +181,7 @@ def test_a_clean_doctor_is_one_line_and_a_hint():
 
 
 def test_doctor_puts_failures_first_with_their_fix():
-    text = doctor.render_text(
-        _checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free space on /var"))
-    )
+    text = doctor.render_text(_checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free space on /var")))
     assert text.splitlines()[0].startswith("  ✗ 1 problems")
     assert "free space on /var" in text
     # The passing checks are counted, not listed.
@@ -193,9 +189,7 @@ def test_doctor_puts_failures_first_with_their_fix():
 
 
 def test_doctor_shows_every_check_on_request():
-    text = doctor.render_text(
-        _checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free it")), show_all=True
-    )
+    text = doctor.render_text(_checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free it")), show_all=True)
     assert "all checks" in text
     assert "Service" in text and "active" in text
 
@@ -270,11 +264,7 @@ def test_no_cli_module_builds_a_row_by_hand():
     for path in sorted((REPO / "cli").glob("*.py")):
         if path.name in ("render.py", "main.py"):
             continue
-        hits = [
-            i
-            for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-            if pattern.search(line)
-        ]
+        hits = [i for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if pattern.search(line)]
         if hits:
             offenders[path.name] = hits
     assert not offenders, f"hand-built rows back in {offenders}"
@@ -305,9 +295,7 @@ def test_locale_is_read_lazily():
         "from cli import render\n"
         "print(render.glyphs())\n"
     )
-    out = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO, timeout=30
-    )
+    out = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO, timeout=30)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip()
 

@@ -54,4 +54,3 @@ def test_every_path_argument_in_the_makefile_exists():
             if not (REPO / token).exists():
                 missing.append(f"{command!r} -> {token}")
     assert missing == [], "Makefile references paths that do not exist:\n  " + "\n  ".join(missing)
-
