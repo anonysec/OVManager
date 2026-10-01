@@ -12,6 +12,7 @@ the flag is there and the commands it names actually run.
 
 from __future__ import annotations
 
+import atexit
 import re
 import subprocess
 from pathlib import Path
@@ -20,6 +21,31 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = REPO / "manager.sh"
+
+# A copy of manager.sh with the root gate disabled, built once per session. The
+# gate is two checks — the `id -u` one at the top of the file and check_root() —
+# and neutralising only the second is not enough, because the first runs first.
+_neutered_src = MANAGER.read_text(encoding="utf-8").splitlines()
+_start = next(i for i, ln in enumerate(_neutered_src) if ln.startswith('if [[ "$(id -u)" -ne 0 ]]'))
+_end = next(i for i in range(_start, len(_neutered_src)) if _neutered_src[i] == "fi")
+_neutered_src[_start] = "if false; then"
+_neutered_src = [
+    ln.replace('check_root() { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }', "check_root() { return 0; }")
+    for ln in _neutered_src
+]
+# Beside manager.sh, and removed on the way out. It has to be: the script
+# resolves scripts/lib relative to its own location, so a copy in /tmp cannot
+# find the libs and dies before it parses anything. A leftover file in the repo
+# root would be committed by the next `git add -A`.
+_NEUTERED = REPO / ".manager-nogate.sh"
+_NEUTERED.write_text("\n".join(_neutered_src) + "\n", encoding="utf-8")
+
+
+def _drop_neutered() -> None:
+    _NEUTERED.unlink(missing_ok=True)
+
+
+atexit.register(_drop_neutered)
 
 # The thirteen verbs on the short list. What the user asked the tool to be.
 SHORT_LIST = (
@@ -54,10 +80,19 @@ RETIRED = {
 
 
 def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    """Run the real manager.sh, through a neutered root gate.
+
+    The gate matters: every command requires root, so on a non-root runner — CI,
+    which is deliberately non-root — the script exits at the gate and never
+    reaches the parser. Four tests here asserted on messages the parser only
+    prints after that, and they passed on a root box while failing everywhere
+    else. The gate is neutered the same way test_manager_sh.py does it, on the
+    code rather than the comment above it.
+    """
     import os
 
     return subprocess.run(
-        ["bash", str(MANAGER), *args],
+        ["bash", str(_NEUTERED), *args],
         capture_output=True,
         text=True,
         timeout=60,
