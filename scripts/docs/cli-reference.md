@@ -385,7 +385,7 @@ it says so and exits 0.
 path if health is not restored.
 
 `uninstall` shows what it will delete and asks before doing it. `--purge` needs the
-word `purge` typed, not just the flag, so an unattended run cannot empty a data
+word `purge` typed, not just the flag, so a run with no terminal cannot empty a data
 directory.
 
 ## Exit codes

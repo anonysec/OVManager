@@ -65,7 +65,7 @@ ask() {  # ask <label> <default> [hidden]
     printf '%s' "$val"
 }
 
-# confirm <question> [default] — default is y, which is what an unattended run
+# confirm <question> [default] — default is y, which is what a run with no
 # gets. A destructive caller must pass n: answering "yes" on nobody's behalf
 # made `ovm rollback` replace the running install from a cron job or pipeline.
 confirm() {

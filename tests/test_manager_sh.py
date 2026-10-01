@@ -826,7 +826,7 @@ def test_cli_py_status_passes_only_the_requested_flags(tmp_path):
     assert not marker.exists(), "a rejected flag must never reach the twin"
 
 
-# ── confirm() unattended behaviour ───────────────────────────────────────
+# ── confirm() with no terminal ───────────────────────────────────────
 #
 # Sourced directly rather than driven through `ovm rollback` on purpose: that
 # command stops the service and extracts a snapshot from /var/backups, so a
@@ -843,7 +843,7 @@ def _confirm(yes: int, default: str) -> str:
     """Ask confirm() with no terminal, the way a cron job or CI step would."""
     script = _CONFIRM_HARNESS.format(lib=PROMPT_LIB, default=default)
     cmd = ["bash", "-c", script]
-    if SETSID:  # drop the controlling tty: this is the unattended case
+    if SETSID:  # drop the controlling tty: nobody can answer
         cmd = [SETSID, *cmd]
     r = subprocess.run(
         cmd,
@@ -857,7 +857,7 @@ def _confirm(yes: int, default: str) -> str:
     return r.stdout.strip()
 
 
-def test_confirm_answers_yes_unattended_by_default():
+def test_confirm_answers_yes_with_no_terminal():
     """A non-destructive confirmation keeps the documented 'default answer'."""
     assert _confirm(yes=0, default="y") == "YES"
 
