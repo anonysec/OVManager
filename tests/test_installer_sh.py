@@ -2089,3 +2089,77 @@ def test_script_commit_only_shells_out_when_a_checkout_exists():
     assert ".git" in source
     assert "git -C" in source
     assert source.index('.git"') < source.index("git -C"), "the .git check must come first"
+
+
+# ── The recovery journal, run rather than grepped ─────────────────────────
+#
+# A corrupt update journal is the state an operator reaches after a power loss
+# mid-update, and it is the one state where the wrong answer is unrecoverable:
+# writes are blocked until recovery resolves it. The behaviour was only ever
+# checked by reading the source, which is how a raw python traceback came to
+# be printed above the sentence explaining it.
+
+
+def _journal(install, phase, **extra):
+    import json
+
+    data = {"phase": phase, "from_version": "1.0.0", "to_version": "1.0.1", "safety_backup": ""}
+    data.update(extra)
+    path = Path(install).parent / "data" / "update-state.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    marker = path.parent / "update-maintenance"
+    marker.touch()
+    return path, marker
+
+
+def test_a_corrupt_journal_reports_one_clean_line(tmp_path):
+    """No traceback, no trap warning — just what is wrong.
+
+    Both leaked before. A process substitution runs in its own process, so the
+    JSONDecodeError went to the terminal while `read` returned non-zero, and
+    the ERR trap added a second line. The operator saw two stack traces and
+    then the explanation.
+    """
+    sb, _ = sandbox(tmp_path)
+    data = Path(sb).parent / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "update-state.json").write_text("not json{", encoding="utf-8")
+    (data / "update-maintenance").touch()
+
+    r = sh_sb(sb, "recover-update", "-y")
+    out = r.stdout + r.stderr
+    assert "Update state journal is unreadable" in out, out[-500:]
+    for noise in ("Traceback", "JSONDecodeError", "Command failed near line"):
+        assert noise not in out, f"{noise} leaked above the explanation:\n{out[-500:]}"
+
+
+def test_an_unknown_phase_refuses_rather_than_guessing(tmp_path):
+    """Writes stay blocked. Guessing could activate the wrong tree."""
+    sb, _ = sandbox(tmp_path)
+    _journal(sb, "wibble")
+    r = sh_sb(sb, "recover-update", "-y")
+    out = r.stdout + r.stderr
+    assert "unknown phase" in out and "writes remain blocked" in out, out[-500:]
+
+
+def test_a_preactivation_journal_is_cleared_and_says_so(tmp_path):
+    """Nothing was activated, so there is nothing to restore — say which."""
+    sb, _ = sandbox(tmp_path)
+    journal, marker = _journal(sb, "preflight")
+    r = sh_sb(sb, "recover-update", "-y")
+    out = r.stdout + r.stderr
+    assert "pre-activation" in out, out[-500:]
+    assert not marker.exists(), "the maintenance marker must be cleared"
+    import json
+
+    assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "failed_over"
+
+
+def test_a_clean_box_says_there_is_nothing_to_do(tmp_path):
+    """The common case, and it must not look like a failure."""
+    sb, _ = sandbox(tmp_path)
+    r = sh_sb(sb, "recover-update", "-y")
+    out = r.stdout + r.stderr
+    assert "no interrupted update needs recovery" in out, out[-500:]
+    assert "Error" not in out, out[-500:]

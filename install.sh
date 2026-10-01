@@ -1193,12 +1193,21 @@ do_recover_update() {
         return 0
     fi
     local phase from target safety scheme reported
-    read -r phase from target safety < <(python3 - "$UPDATE_STATE" <<'PY'
+    # Captured, not read from a process substitution. A substitution runs in its
+    # own process: a corrupt journal printed a python traceback to the terminal
+    # while `read` returned non-zero, and the ERR trap then added its own line —
+    # so the operator saw two stack traces and then the one sentence that
+    # explained the problem. Assigning first lets `|| ` swallow the failure
+    # quietly, and the unreadable journal is reported as exactly that.
+    local journal=""
+    journal="$(python3 - "$UPDATE_STATE" 2>/dev/null <<'PY'
 import json, sys
 x=json.load(open(sys.argv[1]))
 print(x.get("phase","unknown"), x.get("from_version","unknown"), x.get("to_version","unknown"), x.get("safety_backup") or "")
 PY
-) || die "Update state journal is unreadable"
+)" || journal=""
+    [[ -n "$journal" ]] || die "Update state journal is unreadable"
+    read -r phase from target safety <<< "$journal"
     case "$phase" in
         committed|failed_over)
             if [[ ! -f "$UPDATE_MARKER" ]]; then

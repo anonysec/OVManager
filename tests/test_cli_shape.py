@@ -337,3 +337,52 @@ def test_config_never_appears_in_the_short_list():
     """
     assert "ovm config" not in help_text()
     assert "ovm config" in help_text("help", "--all")
+
+
+# ── The docs must teach the commands that exist ──────────────────────────
+
+# A reference that documents seven removed commands is worse than none: it sends
+# people to names the short help does not list, and it never mentions the three
+# grouped commands that replaced them. This was true of both repos' docs until
+# 2026-09-30.
+
+REFERENCE = REPO / "scripts" / "docs" / "cli-reference.md"
+RETIRED_IN_PROSE = (
+    "ovm https",
+    "ovm tls-status",
+    "ovm owner-claim",
+    "ovm reset-password",
+    "ovm reset-urlpath",
+    "ovm recover-update",
+    "ovm doctor-fix",
+)
+
+
+def _prose_only(text: str) -> str:
+    """The document minus the retired-names table, which is meant to name them."""
+    if "### Retired names" in text:
+        return text.split("### Retired names")[0] + text.split("## Status and service")[-1]
+    return text
+
+
+def test_the_reference_does_not_teach_retired_commands():
+    prose = _prose_only(REFERENCE.read_text(encoding="utf-8"))
+    for name in RETIRED_IN_PROSE:
+        assert name not in prose, f"cli-reference.md still teaches `{name}`"
+
+
+def test_the_reference_documents_the_grouped_commands():
+    text = REFERENCE.read_text(encoding="utf-8")
+    for name in ("ovm tls", "ovm auth", "ovm url"):
+        assert name in text, f"cli-reference.md never mentions `{name}`"
+    for sub in ("tls selfsigned", "tls le", "tls custom", "auth key", "auth reset", "url set"):
+        assert sub in text, f"cli-reference.md never mentions `{sub}`"
+
+
+def test_the_reference_states_the_env_rule():
+    """The one rule a reader cannot infer: nothing writes .env after install."""
+    # Whitespace-normalised: the sentence is wrapped, and a line break in the
+    # middle of it must not decide whether the rule is documented.
+    text = " ".join(REFERENCE.read_text(encoding="utf-8").split())
+    assert "ever edits it again" in text
+    assert "ovm config" in text
