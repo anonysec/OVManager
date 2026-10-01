@@ -2137,8 +2137,15 @@ def test_an_unknown_phase_refuses_rather_than_guessing(tmp_path):
     assert "unknown phase" in out and "writes remain blocked" in out, out[-500:]
 
 
+@pytest.mark.skipif(os.geteuid() != 0, reason="recover-update is root-gated")
 def test_a_preactivation_journal_is_cleared_and_says_so(tmp_path):
-    """Nothing was activated, so there is nothing to restore — say which."""
+    """Nothing was activated, so there is nothing to restore — say which.
+
+    Root-gated, and the skip is the point: CI runs this suite as a non-root
+    user, where the installer correctly refused before it did anything. The test
+    passed on a root box and failed everywhere else, which is the same failure
+    as the source-grep tests — a test that cannot fail where it was written.
+    """
     sb, _ = sandbox(tmp_path)
     journal, marker = _journal(sb, "preflight")
     r = sh_sb(sb, "recover-update", "-y")
