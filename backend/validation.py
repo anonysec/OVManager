@@ -45,7 +45,7 @@ def validate_email(value: str) -> bool:
     return bool(value) and _EMAIL_RE.fullmatch(value) is not None
 
 
-# The owner chooses a password from the installer, `ovm reset-password` or the
+# The owner chooses a password from the installer, `ovm auth reset` or the
 # browser claim, so the rule lives once here.
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_PLACEHOLDERS = ("change-me", "changeme", "change_me", "password123", "admin123")

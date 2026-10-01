@@ -1362,7 +1362,7 @@ def test_owner_claim_warns_when_the_panel_already_has_an_owner(tmp_path):
     r = mgr_sb(env, app, "owner-claim")
     assert r.returncode == 0, r.stderr
     assert "already has an owner" in r.stderr, r.stderr
-    assert "reset-password" in r.stderr
+    assert "ovm auth reset" in r.stderr
     assert (data / "owner-claim.key").is_file(), "the key is still written"
 
 

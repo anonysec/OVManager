@@ -16,6 +16,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = REPO / "manager.sh"
 
@@ -386,3 +388,72 @@ def test_the_reference_states_the_env_rule():
     text = " ".join(REFERENCE.read_text(encoding="utf-8").split())
     assert "ever edits it again" in text
     assert "ovm config" in text
+
+
+# ── No retired name where an operator can read it ────────────────────────
+
+# The install card said "reprint: ovm owner-claim" after that name was retired,
+# and three error messages in manager.sh still said reset-password and
+# tls-status. A retired name still works, so nothing breaks — the operator is
+# just sent to a command the tool does not advertise.
+
+RETIRED_NAMES = (
+    "ovm owner-claim",
+    "ovm reset-password",
+    "ovm tls-status",
+    "ovm recover-update",
+    "ovm doctor-fix",
+    "ovm reset-urlpath",
+    "ovm recovery",
+    "ovm auto-backup",
+)
+
+
+def _readable_lines(path: Path) -> list[str]:
+    """Lines a person could see: not comments, not the retired-names table."""
+    out = []
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        out.append(f"{i}: {line}")
+    return out
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        REPO / "manager.sh",
+        REPO / "install.sh",
+        REPO / "cli" / "doctor.py",
+        REPO / "cli" / "password.py",
+        REPO / "cli" / "urlpath.py",
+        REPO / "backend" / "config.py",
+        REPO / "backend" / "routers" / "owner_claim.py",
+    ],
+    ids=lambda p: p.name,
+)
+def test_no_retired_name_in_operator_facing_text(path):
+    offenders = [
+        line for line in _readable_lines(path) if any(n in line for n in RETIRED_NAMES)
+    ]
+    # The retired-names table in help --all is the one place they belong.
+    offenders = [ln for ln in offenders if "→" not in ln]
+    assert not offenders, f"{path.name} still shows a retired name:\n" + "\n".join(offenders)
+
+
+def test_the_ready_card_prints_a_runnable_uninstall_command():
+    """It is a function, and the card interpolated it as a variable.
+
+    `set -u` made that a fatal unbound variable on the last line of a successful
+    install — after the panel was already serving — so a working install exited
+    non-zero and the card had no uninstall line at all.
+    """
+    source = (REPO / "install.sh").read_text(encoding="utf-8")
+    start = source.index("success_card() {")
+    card = source[start : source.index("\n}\n", start)]
+    assert "$(installer_uninstall_command)" in card, "the card must call it, not interpolate it"
+    # A bare $name is an unset variable under `set -u`, which is what made a
+    # successful install exit non-zero on its last line.
+    bare = card.replace("$(installer_uninstall_command)", "")
+    assert "$installer_uninstall_command" not in bare

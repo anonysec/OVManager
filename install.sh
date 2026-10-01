@@ -14,7 +14,7 @@
 #   curl -sSL URL | sudo bash -s -- --docker --yes
 #
 # No owner password is set here: the install prints a one-time claim key and
-# the operator claims the panel in the browser (ovm owner-claim reprints one).
+# the operator claims the panel in the browser (ovm auth key reprints one).
 #
 # Day-to-day operations (status, logs, backup, restore, TLS, recovery) live in the
 # manager: ovm  (installed as ovmanager/ovm).
@@ -132,11 +132,11 @@ PY
 }
 
 # The owner is claimed in the browser with a one-time key, not created here:
-# a key can be reprinted at will (ovm owner-claim) because it is not the
+# a key can be reprinted at will (ovm auth key) because it is not the
 # credential, so nothing stolen from scrollback or a file is reusable.
 # mint_claim_key lives in scripts/lib/policy.sh.
 issue_claim_key() {
-    CLAIM_KEY="$(mint_claim_key)" || render_warn "Could not write the claim key — run: ovm owner-claim"
+    CLAIM_KEY="$(mint_claim_key)" || render_warn "Could not write the claim key — run: ovm auth key"
     return 0
 }
 
@@ -889,9 +889,9 @@ success_card() {
     url="$(panel_url)"
     if [[ -n "$CLAIM_KEY" ]]; then
         key="$CLAIM_KEY"
-        note="$(printf '  %bone-time%s · reprint: %sovm owner-claim%s' "$GY" "$NC" "$B" "$NC")"
+        note="$(printf '  %bone-time%s · reprint: %sovm auth key%s' "$GY" "$NC" "$B" "$NC")"
     else
-        key="$(printf '%snot written%s  %s(run: ovm owner-claim)%s' "$RD" "$NC" "$GY" "$NC")"
+        key="$(printf '%snot written%s  %s(run: ovm auth key)%s' "$RD" "$NC" "$GY" "$NC")"
         note=""
     fi
     render_card "ready" "setup key" "$key" \
@@ -904,7 +904,13 @@ success_card() {
     if [[ "$TLS_MODE" == "self" ]]; then
         render_line "$(printf '  %sthe browser certificate warning is expected on a self-signed cert — %sovm tls%s replaces it' "$GY" "$B" "$NC")"
     fi
-    render_line "  uninstall: $installer_uninstall_command"
+    # Called, not interpolated. A bare reference is an unset variable — `set -u`
+    # turns it into a fatal "unbound variable" at the very last line of a
+    # successful install, after the panel is already serving. The card printed
+    # with no uninstall line and the installer exited non-zero, so a working
+    # install looked like a failed one. This was the one place it missed:
+    # render_next on the failure path already had the parens.
+    render_line "  uninstall: $(installer_uninstall_command)"
     render_blank
 }
 
@@ -1086,7 +1092,7 @@ do_update() {
             die "Could not activate the staged release; the previous release remains active and data was not changed"
         fi
         update_state recovery_required "$from_version" "$VERSION" "$safety"
-        die "Could not activate or restore release files. Writes remain blocked; run: ovm recover-update"
+        die "Could not activate or restore release files. Writes remain blocked; run: ovm update (it recovers an interrupted one first)"
     fi
 
     # Deliberately no service-account *migration* here. It was here in 1.0.26
@@ -1178,7 +1184,7 @@ do_update() {
     if ! wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
         : > "$UPDATE_MARKER"; chmod 600 "$UPDATE_MARKER"
         update_state recovery_required "$from_version" "$VERSION" "$safety"
-        die "Candidate passed verification but failed its final restart. Writes are blocked; run: ovm recover-update"
+        die "Candidate passed verification but failed its final restart. Writes are blocked; run: ovm update (it recovers an interrupted one first)"
     fi
     update_state committed "$from_version" "$VERSION" "$safety"
     render_done "v${from_version} → v${VERSION}"
@@ -1452,7 +1458,7 @@ DEPRECATED (still works)
 
 Fresh installs mint a one-time claim key, never a password. Open the Ready
 card's URL, paste the key, and choose the owner password in the browser.
-ovm owner-claim prints a fresh key at any time before the panel is claimed.
+ovm auth key prints a fresh key at any time before the panel is claimed.
 
 After installation, use ovm (alias: ovmanager) for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery, updates, and uninstall.

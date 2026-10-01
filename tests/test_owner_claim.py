@@ -146,7 +146,7 @@ def test_a_missing_key_file_says_how_to_mint_one(client, tmp_path, monkeypatch, 
     monkeypatch.setattr(data_paths, "DATA_DIR", tmp_path)
     r = _post(client)
     assert r.status_code == 400
-    assert "ovm owner-claim" in r.json()["detail"]
+    assert "ovm auth key" in r.json()["detail"]
 
 
 def test_an_unreadable_key_path_is_an_error_not_a_missing_key(client, tmp_path, monkeypatch, unclaimed_owner):
@@ -155,7 +155,7 @@ def test_an_unreadable_key_path_is_an_error_not_a_missing_key(client, tmp_path, 
     (tmp_path / owner_claim.CLAIM_KEY_FILE).mkdir()
     r = _post(client)
     assert r.status_code == 500
-    assert "ovm owner-claim" in r.json()["detail"]
+    assert "ovm auth key" in r.json()["detail"]
 
 
 def test_repeated_failures_are_rate_limited(client, claim_key_file, unclaimed_owner):

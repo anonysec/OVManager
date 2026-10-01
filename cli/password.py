@@ -1,7 +1,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-"""`ovm reset-password` in Python: rewrite the owner credential in the database.
+"""`ovm auth reset` in Python: rewrite the owner credential in the database.
 
 The owner is an ordinary ``admins`` row (see the v16 migration), so the
 credential is updated there — never in ``.env``. Never echoes the value.

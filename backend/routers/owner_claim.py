@@ -55,7 +55,7 @@ class ClaimRequest(BaseModel):
 
 
 def claim_key_path():
-    """Where the installer and ``ovm owner-claim`` put the key."""
+    """Where the installer and ``ovm auth key`` put the key."""
     return data_paths.DATA_DIR / CLAIM_KEY_FILE
 
 
@@ -82,7 +82,7 @@ def read_claim_key() -> str | None:
     except OSError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cannot read {path} ({exc.__class__.__name__}) — re-run: ovm owner-claim",
+            detail=f"Cannot read {path} ({exc.__class__.__name__}) — re-run: ovm auth key",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
@@ -138,14 +138,14 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
     if owner_is_claimed(db):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This panel already has an owner. Sign in, or use: ovm reset-password",
+            detail="This panel already has an owner. Sign in, or use: ovm auth reset",
         )
 
     expected = read_claim_key()
     if expected is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No claim key on this host. Run: ovm owner-claim",
+            detail="No claim key on this host. Run: ovm auth key",
         )
     # compare_digest, not ==: a timing oracle on the claim key.
     if not hmac.compare_digest(expected, payload.claim_key.strip()):

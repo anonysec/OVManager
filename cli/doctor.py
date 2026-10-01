@@ -353,7 +353,7 @@ def _cert_days_left(cert: str) -> int | None:
 def check_update_journal(install: Install) -> Check:
     """An interrupted update leaves a journal or the write-block marker."""
     if os.path.isfile(os.path.join(install.data_dir, "update-maintenance")):
-        return Check("Update", False, "recovery required", "ovm recover-update")
+        return Check("Update", False, "recovery required", "ovm update")
     state = os.path.join(install.data_dir, "update-state.json")
     if os.path.isfile(state):
         try:
@@ -362,7 +362,7 @@ def check_update_journal(install: Install) -> Check:
         except (OSError, ValueError):
             phase = None
         if phase not in ("committed", "failed_over"):
-            return Check("Update", False, "recovery required", "ovm recover-update")
+            return Check("Update", False, "recovery required", "ovm update")
     return Check("Update", True, "no interrupted transaction", "")
 
 

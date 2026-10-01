@@ -293,7 +293,7 @@ do_reset_password() {
     if [[ -n "$ADMIN_PASS" ]]; then
         validate_admin_password "$ADMIN_PASS"
     else
-        can_prompt || die "No password given. Use: $0 reset-password -p 'new-password'  (or set OVM_PASS)"
+        can_prompt || die "No password given. Use: $0 auth reset -p 'new-password'  (or set OVM_PASS)"
         render_line ""
         local p1 p2
         p1="$(ask "New password" "" "h")"
@@ -487,11 +487,17 @@ auto_backup_cli() {
             render_ok "Auto backup disabled (host timer removed)"
             ;;
         status|"")
+            # render_kv, and the row that changes it uses the current name.
+            # This was a hand-built "Label: value" line naming `auto-backup`, a
+            # command no longer in the short help — the node's copy of this was
+            # fixed and the panel's was not.
             if [[ -f "$timer" ]]; then
-                render_note "Host timer: enabled ($(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown))"
-                systemctl list-timers ovmanager-backup.timer --no-pager 2>/dev/null | sed -n '2p' || true
+                render_kv "Auto backup" "enabled"
+                render_kv "Timer" "$(systemctl is-active ovmanager-backup.timer 2>/dev/null || echo unknown)"
+                render_kv "Next" "$(systemctl list-timers ovmanager-backup.timer --no-pager 2>/dev/null | sed -n '2p' | awk '{print $1, $2, $3}')"
             else
-                render_note "Host timer: disabled  (enable: ovm auto-backup on)"
+                render_kv "Auto backup" "disabled"
+                render_kv "Enable" "ovm backup schedule on"
             fi
             render_note "Panel schedule is separate and configured in Settings → Advanced → Backup."
             ;;
@@ -613,7 +619,7 @@ do_https() {
             [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Key or certificate file not found: $TLS_KEY $TLS_CERT"
             TLS_MODE="custom"; chosen=1 ;;
         *)
-            die "Pick a mode: --self, --domain <name>, --ip, or --key <file> --cert <file>. Read the current certificate with: ovm tls-status" ;;
+            die "Pick a mode: ovm tls selfsigned | le IP|DOMAIN | custom CERT KEY. Read the current certificate with: ovm tls" ;;
     esac
     (( chosen )) || die "No certificate mode selected"
 
@@ -762,7 +768,7 @@ do_owner_claim() {
     render_line ""
     if [[ "$claimed" -eq 1 ]]; then
         render_warn "This panel already has an owner — this key cannot be claimed."
-        render_warn "To change the password instead: ovm reset-password"
+        render_warn "To change the password instead: ovm auth reset"
     fi
     render_kv "Claim key" "${YL}${key}${NC}"
     render_kv "Open"      "${WH}${url}claim${NC}"

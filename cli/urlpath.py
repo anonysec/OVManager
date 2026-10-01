@@ -1,7 +1,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-"""`ovm reset-urlpath` in Python: clear the panel prefix via main.py.
+"""`ovm url reset` in Python: clear the panel prefix via main.py.
 
 Mirrors manager.sh reset_urlpath_now (native python vs docker exec).
 """
