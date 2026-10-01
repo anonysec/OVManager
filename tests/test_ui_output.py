@@ -62,7 +62,10 @@ def run(script: str, *, tty: bool, **env: str) -> str:
             capture_output=True,
             text=True,
             timeout=60,
-            env={**os.environ, **env},
+            # TERM is set here rather than inherited: render.sh gates motion on
+            # ${TERM:-dumb}, so a runner with no TERM silently tests the
+            # no-motion path while these assertions look for a repaint.
+            env={"TERM": "xterm-256color", **os.environ, **env},
             stdin=subprocess.DEVNULL,
         )
     assert r.returncode == 0, r.stderr
@@ -90,7 +93,7 @@ def run_pty(script: str, *, stdin_pipe: bool = False, **env: str) -> str:
             stdin=subprocess.PIPE if stdin_pipe else subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=slave,
-            env={**os.environ, **env},
+            env={"TERM": "xterm-256color", **os.environ, **env},
         )
         os.close(slave)
         chunks = []
