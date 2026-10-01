@@ -53,7 +53,7 @@ class Setting(BaseSettings):
             logging.getLogger("config").warning(
                 "ADMIN_PASSWORD/ADMIN_PASSWORD_HASH in .env are no longer used — "
                 "the owner credential lives in the panel database. "
-                "Use `ovm reset-password` to change it; you can delete these lines."
+                "Use `ovm auth reset` to change it; you can delete these lines."
             )
 
 

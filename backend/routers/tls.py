@@ -1,13 +1,18 @@
 """Panel-side TLS certificate management.
 
-The panel can own its HTTPS certificate instead of relying on the
-SSL_KEYFILE / SSL_CERTFILE environment variables: files written here live in
-``DATA_DIR/tls/`` (``privkey.pem`` + ``fullchain.pem``) and are preferred by
-``main.py`` on the next start. All endpoints are owner-only because they
-control the panel's own TLS identity.
+Where the certificate lives is not decided here. ``.env`` declares it —
+``SSL_KEYFILE`` and ``SSL_CERTFILE`` — and this module fulfils that
+declaration: every write lands at those exact paths, whether the certificate
+came from the browser, from ``ovm tls``, or from a hand-placed pair.
 
+That used to be two locations, and the panel silently preferred its own: an
+operator who put a certificate at the path in ``.env`` watched the panel keep
+serving the old one from ``DATA_DIR/tls/`` with no error anywhere. One
+declaration, one location, one writer's worth of confusion removed.
+
+All endpoints are owner-only because they control the panel's own TLS identity.
 Key material is never returned or logged; every write goes through an atomic
-temp-file + ``os.replace`` inside ``DATA_DIR/tls/``.
+temp-file + ``os.replace`` beside its target.
 """
 
 import ipaddress
@@ -30,6 +35,7 @@ from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
 
+from backend import tls_paths
 from backend.auth.authz import require_owner
 from backend.config import config
 from backend.data_paths import DATA_DIR
@@ -60,19 +66,68 @@ class RenewRequest(BaseModel):
 
 
 def _tls_dir() -> Path:
+    """Where this module keeps its bookkeeping (meta.json, previous-*).
+
+    Not where the certificate lives. That is answered by ``backend.tls_paths``,
+    which everyone shares, so a certificate uploaded in the browser lands exactly
+    where ``ovm tls`` and uvicorn are already looking.
+    """
     return Path(DATA_DIR) / "tls"
 
 
 def _key_path() -> Path:
-    return _tls_dir() / "privkey.pem"
+    return tls_paths.key_path()
 
 
 def _cert_path() -> Path:
-    return _tls_dir() / "fullchain.pem"
+    return tls_paths.cert_path()
 
 
 def _meta_path() -> Path:
     return _tls_dir() / "meta.json"
+
+
+def legacy_pair() -> tuple[Path, Path] | None:
+    """The pre-declaration location, when it holds a pair.
+
+    Installs given a certificate before ``.env`` became the declaration have one
+    at ``DATA_DIR/tls``. The declared paths now win, so without this they would
+    silently fall back to whatever ``.env`` happened to name — a stale
+    certificate, with no error anywhere.
+    """
+    key = _tls_dir() / "privkey.pem"
+    cert = _tls_dir() / "fullchain.pem"
+    if key.is_file() and cert.is_file():
+        return key, cert
+    return None
+
+
+def migrate_legacy_tls() -> dict:
+    """Copy a pre-declaration pair onto the declared paths. Never raises.
+
+    Copies rather than moves, and only when the declared path has nothing in
+    it: an operator who has already put a certificate where ``.env`` says is not
+    going to have it overwritten by one from the old directory.
+
+    Worth doing at all because the declared paths win now. Without it, an
+    install whose certificate lives in ``DATA_DIR/tls`` and whose ``.env`` names
+    a path that happens to hold nothing would fall back to serving plain HTTP —
+    the one outcome that is both silent and total.
+    """
+    legacy = legacy_pair()
+    if legacy is None:
+        return {"ok": True, "migrated": False}
+    old_key, old_cert = legacy
+    new_key, new_cert = _key_path(), _cert_path()
+    if new_key.resolve() == old_key.resolve():
+        return {"ok": True, "migrated": False}
+    if new_key.is_file() and new_cert.is_file():
+        return {"ok": True, "migrated": False}
+    try:
+        _write_managed_files(old_key.read_bytes(), old_cert.read_bytes(), "migrated")
+    except Exception as exc:
+        return {"ok": False, "error": f"Could not migrate the existing certificate: {exc}"}
+    return {"ok": True, "migrated": True, "from": str(old_cert), "to": str(new_cert)}
 
 
 def _ensure_tls_dir() -> Path:
@@ -83,13 +138,29 @@ def _ensure_tls_dir() -> Path:
 def _atomic_write(path: Path, data: bytes, mode: int) -> None:
     """Write ``data`` next to ``path`` then replace it atomically.
 
-    The temp file is created with mkstemp (0600) inside the TLS directory, so
-    nothing is ever written outside DATA_DIR/tls and no half-written file can
-    ever become the active certificate.
+    The target must be one this module owns: the pair declared in ``.env``, or a
+    bookkeeping file beside it in ``DATA_DIR/tls``. The check is on the resolved
+    path rather than on the string, so a symlink or a ``..`` in a declaration
+    cannot walk the write somewhere else — and because the declarations come
+    from a root-owned file the installer wrote, they are not attacker input.
+
+    The temp file is created with mkstemp in the target's own directory, so the
+    replace is a rename on one filesystem and a half-written certificate can
+    never become the active one.
     """
-    _ensure_tls_dir()
-    if path.parent.resolve() != _ensure_tls_dir().resolve():
-        raise ValueError("refusing to write outside the panel TLS directory")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    resolved = path.resolve()
+    # The two declared files, plus the bookkeeping directory as a directory —
+    # not a set of the files already in it, which would refuse meta.json on the
+    # very first certificate and only allow it afterwards.
+    allowed = {p.resolve() for p in (_key_path(), _cert_path())}
+    state = _tls_dir().resolve()
+    if resolved.parent == state or resolved == state:
+        pass
+    elif resolved in allowed:
+        pass
+    else:
+        raise ValueError(f"refusing to write outside the declared certificate paths: {resolved}")
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
     try:
@@ -122,7 +193,7 @@ def _write_managed_files(key_pem: bytes, cert_pem: bytes, mode: str) -> x509.Cer
     """
     _, parsed = _validate_pair(key_pem, cert_pem)
     with _CERTIFICATE_LOCK:
-        _ensure_tls_dir()
+        _tls_dir().mkdir(parents=True, exist_ok=True)
         old_key = _key_path().read_bytes() if _key_path().is_file() else None
         old_cert = _cert_path().read_bytes() if _cert_path().is_file() else None
         old_meta = _meta_path().read_bytes() if _meta_path().is_file() else None
@@ -235,8 +306,8 @@ def _status_payload(mode: str, source: str | None, cert_path: str | None, cert: 
 def tls_status(user: dict = Depends(require_owner)):
     """Report which certificate the panel will use on its next start.
 
-    Panel-managed files win over SSL_KEYFILE/SSL_CERTFILE, exactly like
-    ``main.py``. The key file is never read here.
+    The declared pair (``.env``) wins, exactly like ``main.py``. The key file is
+    never read here.
     """
     managed_cert = _cert_path()
     managed_key = _key_path()
@@ -244,20 +315,20 @@ def tls_status(user: dict = Depends(require_owner)):
         if not managed_cert.is_file() or not managed_key.is_file():
             return ResponseModel(
                 success=True,
-                msg="The panel-managed TLS files are incomplete (key and certificate are both required).",
-                data=_status_payload("misconfigured", "panel-managed", str(managed_cert) if managed_cert.is_file() else None),
+                msg="The declared TLS files are incomplete (key and certificate are both required).",
+                data=_status_payload("misconfigured", "declared", str(managed_cert) if managed_cert.is_file() else None),
             )
         cert = _load_certificate(managed_cert)
         if cert is None:
             return ResponseModel(
                 success=True,
-                msg="The panel-managed certificate could not be read.",
-                data=_status_payload("misconfigured", "panel-managed", str(managed_cert)),
+                msg="The declared certificate could not be read.",
+                data=_status_payload("misconfigured", "declared", str(managed_cert)),
             )
         return ResponseModel(
             success=True,
-            msg="TLS is managed by the panel.",
-            data=_status_payload("managed", "panel-managed", str(managed_cert), cert),
+            msg="TLS is declared in .env.",
+            data=_status_payload("managed", "declared", str(managed_cert), cert),
         )
 
     cert_file = (config.SSL_CERTFILE or "").strip()

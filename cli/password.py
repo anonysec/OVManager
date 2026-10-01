@@ -1,7 +1,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-"""`ovm reset-password` in Python: rewrite the owner credential in the database.
+"""`ovm auth reset` in Python: rewrite the owner credential in the database.
 
 The owner is an ordinary ``admins`` row (see the v16 migration), so the
 credential is updated there — never in ``.env``. Never echoes the value.
@@ -10,6 +10,8 @@ credential is updated there — never in ``.env``. Never echoes the value.
 from __future__ import annotations
 
 import os
+
+from cli import render
 
 
 def validate(password: str) -> str | None:
@@ -145,5 +147,15 @@ def _write_owner_hash(data_dir: str, hashed: str, owner: str) -> dict:
 
 def render_text(data: dict) -> str:
     if not data.get("ok"):
-        return f"  Error: {data.get('error')}\n"
-    return f"  Password updated for {data.get('username', 'the owner')} in the panel database\n"
+        return render.block([render.failed(data.get("error", "password not changed"))])
+    owner = data.get("username", "the owner")
+    # "in the database, not .env" is not decoration. `.env` still carries
+    # ADMIN_PASSWORD_HASH from old installs, so the operator's first question
+    # after any password change is which of the two the panel now reads — and
+    # the answer has been non-obvious before.
+    return render.block(
+        [
+            render.ok(f"owner password updated for {owner}"),
+            render.hint("stored in the panel database — .env is not edited"),
+        ]
+    )

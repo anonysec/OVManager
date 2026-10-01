@@ -110,8 +110,14 @@ def _guard_sandbox(tmp_path):
 
 
 def test_already_installed_guard_exits_two_with_a_clear_message(tmp_path):
-    """A non-interactive run on an installed host names the way forward."""
+    """A non-interactive run on an installed host names the way forward.
+
+    Exit 2, not 1: this is a state the caller asked about, so a provisioning
+    script can tell it apart from a real failure. The reason goes to stderr in
+    the renderer's wording, and stdout stays empty.
+    """
     r = run_installer("-y", installer=_guard_sandbox(tmp_path))
     assert r.returncode == 2, r.stderr
-    assert "Already installed" in r.stderr
+    assert "already installed" in r.stderr
+    assert "update" in r.stderr
     assert r.stdout == ""

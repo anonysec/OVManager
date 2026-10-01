@@ -132,7 +132,20 @@ def sandbox(tmp_path, gate_root: bool = False):
         shutil.copy(lib, app / "scripts" / "lib" / lib.name)
     (app / "install.sh").write_text('#!/bin/sh\necho "STUB-INSTALLER $@"\n', encoding="utf-8")
     (app / "install.sh").chmod(0o755)
-    env = {**os.environ, "OVM_APP_DIR": str(app)}
+
+    # A no-op `sleep` on PATH, for the same reason systemctl is stubbed: what
+    # these tests assert is which command a verb reaches, and `wait_health`
+    # polls `sleep 1` up to 12 times against a health endpoint that cannot
+    # answer in a sandbox. That was 12.5 seconds of real waiting per test, on
+    # two tests, for an endpoint that was never going to answer. Same shim
+    # technique, no production change.
+    stub_bin = tmp_path / "shim"
+    stub_bin.mkdir(exist_ok=True)
+    sleeper = stub_bin / "sleep"
+    sleeper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    sleeper.chmod(0o755)
+
+    env = {**os.environ, "OVM_APP_DIR": str(app), "PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"}
     return env, app
 
 
@@ -193,16 +206,48 @@ def test_help_documents_manager_surface():
         "logs",
         "backup",
         "tls",
-        "recovery",
-        "reset-password",
+        "url",
+        "auth",
         "doctor",
         "rollback",
         "uninstall",
         "ovm",
-        "-p",
-        "--fix",
     ):
         assert token in output, f"help missing {token}"
+
+
+def test_the_full_reference_carries_what_the_short_one_drops():
+    """One screen lists thirteen verbs; the rest is one flag away.
+
+    "One flag away" only works if the flag exists, so every retired name, every
+    option, and where each half runs live in the second screen — and the retired
+    names are why an old cron job keeps working.
+    """
+    r = mgr("help", "--all")
+    assert r.returncode == 0
+    output = r.stdout + r.stderr
+    for token in (
+        "recovery",
+        "reset-password",
+        "owner-claim",
+        "reset-urlpath",
+        "auto-backup",
+        "recover-update",
+        "tls-status",
+        "https",
+        "-p",
+        "--fix",
+        "RETIRED NAMES",
+        ".env",
+    ):
+        assert token in output, f"help --all missing {token}"
+
+
+def test_the_short_help_is_one_screen():
+    """Sixty-four lines was the problem; the whole point is that this fits."""
+    r = mgr()
+    lines = (r.stdout + r.stderr).splitlines()
+    assert len(lines) < 40, f"short help is {len(lines)} lines"
 
 
 def test_bare_run_prints_usage_and_exits_zero():
@@ -534,8 +579,11 @@ def test_status_is_concise_and_all_is_opt_in():
         content = f.read()
     assert "-a|--all" in content
     assert '[[ "$SHOW_ALL" -eq 1 ]] && sargs+=(--all)' in content
-    for row in ("'Service'", "'Health'", "'Version'", "'Open'"):
+    # Labels live in one tuple now, not four f-strings with their own padding —
+    # which is how "Service account" came to print one column out from the rest.
+    for row in ('"Service"', '"Health"', '"Version"', '"Open"'):
         assert row in src, row
+    assert "render.rows" in src, "rows must come from the shared renderer"
 
 
 def _stub_cli_python(app, tmp_path, exit_code=0):
@@ -594,8 +642,13 @@ def test_cli_py_unsupported_command_uses_bash(tmp_path):
     env = {**env, "MARKER": str(marker)}
     (app / ".env").write_text("PORT=2095\nURLPATH=sekret\nADMIN_USERNAME=admin\n", encoding="utf-8")
     r = mgr_sb(env, app, "recovery")
-    assert "URL" in r.stderr and "admin" in r.stderr
-    assert not marker.exists(), "recovery stays host-side"
+    # `recovery` is now `ovm url`: the same read, under the name that says what
+    # it is. The prefix it reports comes from the panel's database rather than
+    # from .env, so it is read through the CLI — the stub records the call, which
+    # is the point of the marker here.
+    assert "Panel" in r.stderr and "admin" in r.stderr
+    assert marker.exists(), "url reads the live prefix through the CLI"
+    assert "urlpath-show" in marker.read_text(encoding="utf-8")
 
 
 def test_dispatch_shape_matches_the_documented_split():
@@ -618,12 +671,15 @@ def test_dispatch_shape_matches_the_documented_split():
     for fn in ("cmd_logs()", "cmd_doctor_fix()"):
         body = content[content.index(fn) : content.index("\n}\n", content.index(fn))]
         assert "is_docker_mode" in body, f"{fn} must branch on the install mode"
-    assert "if is_docker_mode; then reset_urlpath_now" in content
     # reset-password has one path for every install: bash prompts, the CLI (in
     # the container when there is one) writes the row.
     assert "_cli_py reset-password" in content, "the CLI is the only writer"
-    dispatch = content[content.rindex("reset-password)") : content.rindex("reset-urlpath)")]
+    # `auth` replaced reset-password and owner-claim as one command with two
+    # actions, so the dispatch arm is named `auth` and both reach do_reset_password
+    # and do_owner_claim respectively — one implementation each.
+    dispatch = content[content.rindex("auth)") : content.rindex("url)")]
     assert "do_reset_password" in dispatch, "the dispatch must reach the one reset path"
+    assert "do_owner_claim" in dispatch
     assert "is_docker_mode" not in dispatch and "cli.main" not in dispatch, (
         "the docker branch lives in _cli_py now; the dispatch must not fork again"
     )
@@ -826,7 +882,9 @@ def test_destructive_call_sites_pass_a_default_of_no():
     rollback = MANAGER_PATH.read_text(encoding="utf-8")
     assert 'confirm "Restore the pre-update tree and restart?" n' in rollback
     installer = (MANAGER_PATH.parent / "install.sh").read_text(encoding="utf-8")
-    assert 'confirm "Remove OVManager and stop the service?" n' in installer
+    assert 'confirm "remove the app and stop the service?" n' in installer
+    # And the data half of the purge is a typed word, not a y/N at all.
+    assert 'confirm_word "delete the data as well? type purge" "purge"' in installer
 
 
 # ── the root requirement ──────────────────────────────────────────────────
@@ -1020,17 +1078,6 @@ def test_restore_rejects_an_unknown_name_before_it_prompts(tmp_path):
     assert not marker.exists()
 
 
-def test_restore_is_documented_and_dispatched():
-    """`ovm restore` is in the usage, in parse_args and in the dispatch, and
-    its confirmation defaults to NO — the convention `uninstall` follows here."""
-    content = MANAGER_PATH.read_text(encoding="utf-8")
-    usage = content[content.index("  USAGE") : content.index("  OPTIONS")]
-    assert "ovm restore [NAME]          List data backups, or restore one by name" in usage
-    assert re.search(r"(?m)^\s*restore\)\s", content), "no parse_args or dispatch arm"
-    assert "do_restore()" in content
-    assert 'confirm "Replace the live database with this backup?" n' in content
-
-
 # ── owner-claim / completion / version-script (new commands) ───────────
 
 
@@ -1114,17 +1161,6 @@ def test_version_script_delegates_to_the_installer(tmp_path):
     assert "STUB-INSTALLER version-script" in r.stdout + r.stderr
     r = mgr_sb(env, app, "script-version")
     assert "STUB-INSTALLER version-script" in r.stdout + r.stderr
-
-
-def test_the_three_new_commands_are_documented(tmp_path):
-    """usage(), parse_args and the dispatch all know them."""
-    content = MANAGER_PATH.read_text(encoding="utf-8")
-    usage = content[content.index("  USAGE") : content.index("  OPTIONS")]
-    for line in ("ovm owner-claim", "ovm completion", "ovm version-script"):
-        assert line in usage, line
-    for action in ("owner-claim", "completion"):
-        assert re.search(rf"(?m)^\s*{re.escape(action)}\)\s", content), action
-    assert re.search(r"(?m)^\s*version-script\|script-version\)\s", content), "version-script alias"
 
 
 def test_no_reset_path_writes_a_credential_to_env(tmp_path):
@@ -1324,7 +1360,7 @@ def test_owner_claim_warns_when_the_panel_already_has_an_owner(tmp_path):
     r = mgr_sb(env, app, "owner-claim")
     assert r.returncode == 0, r.stderr
     assert "already has an owner" in r.stderr, r.stderr
-    assert "reset-password" in r.stderr
+    assert "ovm auth reset" in r.stderr
     assert (data / "owner-claim.key").is_file(), "the key is still written"
 
 

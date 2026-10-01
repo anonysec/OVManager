@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parent.parent
 INSTALLER = REPO / "install.sh"
 MANAGER = REPO / "manager.sh"
 LIB_DIR = REPO / "scripts" / "lib"
-LIB_NAMES = ("common.sh", "prompt.sh", "env.sh", "system.sh", "backup.sh", "tls.sh", "policy.sh")
+LIB_NAMES = ("common.sh", "render.sh", "prompt.sh", "env.sh", "system.sh", "backup.sh", "tls.sh", "policy.sh")
 
 DEFINITION = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\(\)", re.M)
 
@@ -101,8 +101,84 @@ def test_no_helper_is_defined_in_two_files():
 def test_manager_sources_lib_not_copies():
     manager = MANAGER.read_text(encoding="utf-8")
     assert "scripts/lib" in manager
-    for name in _defined(LIB_DIR / "common.sh"):
+    for name in _defined(LIB_DIR / "common.sh") + _defined(LIB_DIR / "render.sh"):
         assert not re.search(rf"^{re.escape(name)}\(\)", manager, re.M), f"manager.sh duplicates {name}"
+
+
+# ── Rendering is one place ──────────────────────────────────────────────
+#
+# The output vocabulary moved out of the two installers and the old helpers into
+# scripts/lib/render.sh. A caller that invents its own printf is how the two
+# installers drifted apart in the first place, so the ban is enforced rather
+# than documented.
+
+RETIRED_HELPERS = ("step", "info", "warn", "kv", "hr", "fail", "line")
+
+
+def _calls(name: str, path: Path) -> list[int]:
+    """Lines that call <name> as a command.
+
+    Tolerates the forms a real call takes — bare, after && , after || , after a
+    `|| {` group, after `;` — so `x || warn "..."` is caught as well as
+    `warn "..."`. A commented line is not a call.
+
+    Written as a single-pass command-boundary match rather than the nested
+    quantifier this used to be. That pattern was
+    ``^\\s*(?:[^#\\n]*?(?:&&|\\|\\||\\{|;)\\s*)*NAME`` — a lazy ``*?`` inside a
+    ``*``, which backtracks exponentially in the number of separators on the
+    line. One 78-character line in common.sh with ten ``;`` took 0.93 seconds
+    to *fail*, and this single test was 43 of the suite's 175 seconds.
+
+    Comments are handled by cutting the line at the first ``#``, which is
+    precisely what ``[^#\\n]`` did, so the matches are identical.
+    """
+    pat = re.compile(r"(?:^|[;&|{()\s])" + re.escape(name) + r'\s+["\']')
+    hits = []
+    for i, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if pat.search(ln.split("#", 1)[0]):
+            hits.append(i)
+    return hits
+
+
+def test_the_retired_output_helpers_are_gone():
+    """Nothing may reintroduce step/info/warn/kv/hr/fail/line.
+
+    These were the old vocabulary. Each one printed a hardcoded glyph or
+    colour inline, which is exactly the duplication render.sh exists to remove:
+    the panel card and the node card were once two copies of the same idea, and
+    they drifted. `line` is included because render_line replaced it and
+    `line` is far too easy to reach for by accident.
+    """
+    offenders = {}
+    for path in (INSTALLER, MANAGER, *(p for p in LIB_DIR.glob("*.sh") if p.name != "render.sh")):
+        hits = {name: _calls(name, path) for name in RETIRED_HELPERS}
+        hits = {k: v for k, v in hits.items() if v}
+        if hits:
+            offenders[path.name] = hits
+    assert not offenders, f"retired output helpers back in use: {offenders}"
+
+
+def test_render_owns_the_only_output_primitives():
+    """The primitives are defined once, in render.sh.
+
+    _render_out is the single writer for indented output. If it appears
+    anywhere else, some script has started printing outside the renderer and the
+    fade/flush accounting will not know about the row it consumed.
+    """
+    for path in (INSTALLER, MANAGER, *(p for p in LIB_DIR.glob("*.sh") if p.name != "render.sh")):
+        source = path.read_text(encoding="utf-8")
+        assert "_render_out()" not in source, f"{path.name} defines its own _render_out"
+        assert "_render_paint()" not in source, f"{path.name} defines its own _render_paint"
+    render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
+    assert "_render_out() {" in render
+    assert "_render_paint() {" in render
+
+
+def test_the_installer_fetches_render_sh():
+    """render.sh has to be in the fetched set, or a curl-piped install has no
+    output vocabulary at all and dies on the first render_* call."""
+    files = next(line for line in INSTALLER.read_text(encoding="utf-8").splitlines() if line.startswith("LIB_FILES="))
+    assert "render" in files, files
 
 
 def test_lib_has_no_panel_imports():

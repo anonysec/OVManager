@@ -113,7 +113,7 @@ def test_main_doctor_fix_and_tls_status(monkeypatch, tmp_path, capsys, hold_work
 
     monkeypatch.setattr(m, "Install", type("I", (), {"detect": staticmethod(lambda **kw: install)}))
     assert main(["doctor-fix"]) == 0, capsys.readouterr().out
-    assert "Problems" in capsys.readouterr().out
+    assert "no problems" in capsys.readouterr().out
     assert main(["tls-status"]) == 0
 
 
@@ -292,5 +292,5 @@ def test_reset_urlpath_uses_the_native_path_in_container(tmp_path, monkeypatch):
     monkeypatch.setattr(urlpath.subprocess, "run", fake_run)
     compose = tmp_path / "ovmanager-compose.yml"
     compose.write_text("services: {}\n", encoding="utf-8")
-    assert urlpath.reset_urlpath(install.install_dir, str(compose), in_container=True)["ok"] is True
+    assert urlpath.reset(install.install_dir, str(compose), in_container=True)["ok"] is True
     assert calls["argv"][0].endswith("python"), calls["argv"]

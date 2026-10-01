@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from cli import render
 from cli.env import SYSTEMD_SERVICE, Install
 from cli.probes import fetch_health, service_state
 
@@ -352,7 +353,7 @@ def _cert_days_left(cert: str) -> int | None:
 def check_update_journal(install: Install) -> Check:
     """An interrupted update leaves a journal or the write-block marker."""
     if os.path.isfile(os.path.join(install.data_dir, "update-maintenance")):
-        return Check("Update", False, "recovery required", "ovm recover-update")
+        return Check("Update", False, "recovery required", "ovm update")
     state = os.path.join(install.data_dir, "update-state.json")
     if os.path.isfile(state):
         try:
@@ -361,7 +362,7 @@ def check_update_journal(install: Install) -> Check:
         except (OSError, ValueError):
             phase = None
         if phase not in ("committed", "failed_over"):
-            return Check("Update", False, "recovery required", "ovm recover-update")
+            return Check("Update", False, "recovery required", "ovm update")
     return Check("Update", True, "no interrupted transaction", "")
 
 
@@ -706,15 +707,36 @@ def fix_all(install: Install, service: str | None = None, in_container: bool = F
     return [fix(c, install, service) for c in collect(install, service, in_container)]
 
 
-def render_text(checks: list[Check]) -> str:
-    lines = ["  Panel health"]
-    problems = 0
-    for c in checks:
-        mark = "ok" if c.ok else "FAIL"
-        lines.append(f"  {c.name:<14} {mark}  {c.detail}")
-        if not c.ok:
-            problems += 1
-            if c.fix:
-                lines.append(f"  {'Fix':<14} {c.fix}")
-    lines.append(f"  {'Problems':<14} {problems}")
-    return "\n".join(lines) + "\n"
+def render_text(checks: list[Check], show_all: bool = False) -> str:
+    """Failures first, and only the failures unless asked otherwise.
+
+    Thirteen passing checks spent fifteen lines to say the word "ok", which is
+    why this screen was the one nobody read: everything looked equally urgent,
+    so nothing did. The problems go to the top with their fixes, and the count
+    of what passed goes underneath as one line — present, so a clean run still
+    proves it ran, and short enough to skip.
+
+    `show_all` keeps the full list, for pasting into a ticket.
+    """
+    failed_checks = [c for c in checks if not c.ok]
+    passed = len(checks) - len(failed_checks)
+    if not failed_checks:
+        return render.block([render.ok(f"no problems — {passed} checks passed"), render.hint("detail: ovm doctor --all")])
+
+    lines = [render.failed(f"{len(failed_checks)} problems")]
+    lines.append("")
+    for c in failed_checks:
+        lines.append(render.kv(c.name, c.detail, render.rows_width([(c.name, c.detail)])))
+        if c.fix:
+            lines.append(render.kv("fix", c.fix, render.rows_width([("fix", "")])))
+    if show_all or not passed:
+        lines.append("")
+        lines.append(render.heading("all checks"))
+        width = render.rows_width([(c.name, "") for c in checks])
+        for c in checks:
+            mark = "ok" if c.ok else "FAIL"
+            lines.append(f"  {c.name:<{width}}  {mark}  {c.detail}")
+    else:
+        lines.append("")
+        lines.append(render.hint(f"{passed} other checks passed — detail: ovm doctor --all"))
+    return render.block(lines)

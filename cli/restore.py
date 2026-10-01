@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
+from cli import render
 from cli.env import Install
 
 
@@ -78,29 +79,29 @@ def restore_backup(install: Install, name: str) -> dict:
 def render_list_text(data: dict) -> str:
     """Human rows matching the manager's listing: name, date, size."""
     if not data.get("ok"):
-        return f"  Error: {data.get('error', 'could not list backups')}\n"
+        return render.block([render.failed(data.get("error", "could not list backups"))])
     backups = data.get("backups") or []
     directory = data.get("dir", "")
     if not backups:
-        return f"  No data backups in {directory} — create one with: ovm backup\n"
+        return render.block([render.heading(f"data backups in {directory}"), render.hint("none — create one with: ovm backup")])
     width = max(len(item["name"]) for item in backups)
-    lines = [f"  Data backups in {directory}"]
+    lines = [render.heading(f"data backups in {directory}")]
     for item in backups:
         when = datetime.fromtimestamp(item["mtime"]).strftime("%Y-%m-%d %H:%M")
         lines.append(f"  {item['name']:<{width}}  {when}  {_human_size(item['size'])}")
     lines.append("")
-    lines.append("  Restore one with: ovm restore <name>")
-    return "\n".join(lines) + "\n"
+    lines.append(render.hint("restore one with: ovm restore <name>"))
+    return render.block(lines)
 
 
 def render_restore_text(data: dict) -> str:
     """What was restored, and the copy that undoes it."""
     if not data.get("ok"):
-        text = f"  Error: {data.get('error', 'restore failed')}\n"
+        lines = [render.failed(data.get("error", "restore failed"))]
         if data.get("safety_backup"):
-            text += f"  {'Safety copy':<14} {data['safety_backup']}\n"
-        return text
-    lines = [f"  {'Restored':<14} {data.get('name', '')}"]
+            lines.append(render.kv("Safety copy", data["safety_backup"]))
+        return render.block(lines)
+    items = [("Restored", data.get("name", ""))]
     if data.get("safety_backup"):
-        lines.append(f"  {'Safety copy':<14} {data['safety_backup']}")
-    return "\n".join(lines) + "\n"
+        items.append(("Safety copy", data["safety_backup"]))
+    return render.block([render.ok("restored"), *render.rows(items)])

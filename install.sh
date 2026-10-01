@@ -14,7 +14,7 @@
 #   curl -sSL URL | sudo bash -s -- --docker --yes
 #
 # No owner password is set here: the install prints a one-time claim key and
-# the operator claims the panel in the browser (ovm owner-claim reprints one).
+# the operator claims the panel in the browser (ovm auth key reprints one).
 #
 # Day-to-day operations (status, logs, backup, restore, TLS, recovery) live in the
 # manager: ovm  (installed as ovmanager/ovm).
@@ -54,7 +54,7 @@ CLI_ALIAS="ovm"
 # carries none at all. All-or-nothing into a staging dir, so a partial set is
 # never sourced.
 LIB_BASE="${OVM_LIB_BASE:-https://raw.githubusercontent.com/${REPO}/v${VERSION}/scripts/lib}"
-LIB_FILES="common prompt env system backup tls policy"
+LIB_FILES="common render prompt env system backup tls policy"
 
 _boot_die() {  # die() lives in the libs, which are exactly what may be missing
     # Plain text: the colour globals arrive with the libs.
@@ -95,7 +95,7 @@ _libs_install
 
 # Pinpoint trap: any future failure (real or environmental) reports the exact
 # command and line instead of surfacing as a mystery message elsewhere.
-trap 'warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' ERR
+trap 'render_warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' ERR
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 # Three flags: -y/--yes, --docker, -h/--help. Everything else that used to be
@@ -132,11 +132,11 @@ PY
 }
 
 # The owner is claimed in the browser with a one-time key, not created here:
-# a key can be reprinted at will (ovm owner-claim) because it is not the
+# a key can be reprinted at will (ovm auth key) because it is not the
 # credential, so nothing stolen from scrollback or a file is reusable.
 # mint_claim_key lives in scripts/lib/policy.sh.
 issue_claim_key() {
-    CLAIM_KEY="$(mint_claim_key)" || warn "Could not write the claim key — run: ovm owner-claim"
+    CLAIM_KEY="$(mint_claim_key)" || render_warn "Could not write the claim key — run: ovm auth key"
     return 0
 }
 
@@ -160,7 +160,7 @@ update_safety_backup() {
             return 0
         fi
     fi
-    warn "Installed release lacks transactional backups — legacy safety bundle"
+    render_warn "Installed release lacks transactional backups — legacy safety bundle"
     # Installed release predates transactional backups: build an equivalent
     # .ovmbak with stdlib python. restore_update_database consumes both
     # variants unchanged.
@@ -320,7 +320,7 @@ operation_begin() {
     if ! mkdir "$OPERATION_LOCK" 2>/dev/null; then
         owner="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
         if [[ "$owner" =~ ^[0-9]+$ ]] && ! kill -0 "$owner" 2>/dev/null; then
-            warn "Removing stale operation lock from process $owner"
+            render_warn "Removing stale operation lock from process $owner"
             rm -rf "$OPERATION_LOCK"
             mkdir "$OPERATION_LOCK" || die "Another maintenance operation is running"
         else
@@ -377,7 +377,7 @@ detect_os() {
 }
 
 pkg_install() {
-    info "Installing packages: $*"
+    render_note "packages: $*"
     $PKG_UPDATE >/dev/null 2>&1 || true
     $PKG_INSTALL "$@" >/dev/null 2>&1 || die "Failed to install: $*  ($PKG_INSTALL $*)"
 }
@@ -391,9 +391,9 @@ UV_INSTALL_VERSION="0.12.19"
 
 ensure_uv() {
     if command -v uv >/dev/null 2>&1; then
-        UV_BIN="$(command -v uv)"; step "uv  $UV_BIN"; return
+        UV_BIN="$(command -v uv)"; render_note "uv  $UV_BIN"; return
     fi
-    info "Installing uv…"
+    render_note "installing uv…"
     # Trusted sources first (distro package, then the pinned release on the
     # index), then the upstream script.
     pkg_install uv >/dev/null 2>&1 \
@@ -404,12 +404,12 @@ ensure_uv() {
     UV_BIN="$(command -v uv 2>/dev/null || true)"
     [[ -n "$UV_BIN" ]] || UV_BIN="$HOME/.local/bin/uv"
     [[ -x "$UV_BIN" ]] || die "uv not found after install"
-    step "uv  $UV_BIN"
+    render_note "uv  $UV_BIN"
 }
 
 ensure_docker() {
     if ! command -v docker >/dev/null 2>&1; then
-        info "Installing Docker Engine…"
+        render_note "installing Docker Engine…"
         if [[ "$PKG_INSTALL" == apt* ]]; then
             $PKG_UPDATE >/dev/null 2>&1 || true
             $PKG_INSTALL docker.io >/dev/null 2>&1 \
@@ -423,7 +423,7 @@ ensure_docker() {
     docker compose version >/dev/null 2>&1 \
         || command -v docker-compose >/dev/null 2>&1 \
         || die "Docker Compose v2 is required (docker compose plugin)"
-    step "Docker  $(docker --version 2>/dev/null | head -1)"
+    render_note "Docker  $(docker --version 2>/dev/null | head -1)"
 }
 
 check_deps() {
@@ -432,7 +432,7 @@ check_deps() {
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     [[ ${#missing[@]} -eq 0 ]] || pkg_install "${missing[@]}"
-    step "System tools present"
+    render_done "system tools present"
 }
 
 # Pre-flight: fail BEFORE downloading anything when the box cannot host us.
@@ -451,6 +451,40 @@ preflight_install() {
 # a clear message — never as a checksum mismatch further down.
 is_release_archive() { tar -tzf "$1" >/dev/null 2>&1; }
 
+# fetch_to_file <url> <path> — download with a live byte count on the running
+# step.
+#
+# curl's own progress meter writes carriage returns to stderr, which fights the
+# progress block for the same row and ends up interleaved with it. One writer
+# per row: count the bytes here and feed the step's detail line instead.
+#
+# The total is unknown until the headers arrive, so it appears a moment after
+# the start rather than being guessed up front — a bar that claims a size it
+# does not have is worse than a byte count that grows.
+fetch_to_file() {
+    local url="$1" out="$2"
+    local started elapsed rate=0 total="" rc=0 pid
+    started="$(_render_now)"
+    curl -fsSL -o "$out" "$url" &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        local have
+        have="$(wc -c < "$out" 2>/dev/null || printf 0)"
+        have="${have// /}"
+        elapsed=$(( $(( $(_render_now) - started )) / 1000000 ))
+        (( elapsed < 1 )) && elapsed=1
+        rate=$(( have / elapsed / 1024 ))
+        if [[ -z "$total" ]]; then
+            total="$(curl -fsSLI --max-time 5 "$url" 2>/dev/null \
+                | awk 'tolower($1)=="content-length:"{print $2}' | tail -1 | tr -d '\r[:space:]')"
+        fi
+        _render_bytes "$have" "$total" "$rate"
+        sleep 0.4
+    done
+    wait "$pid" 2>/dev/null || rc=$?
+    return $rc
+}
+
 # Download the versioned release file into $1 (an existing directory). The
 # tarball holds a repo snapshot plus the prebuilt frontend/dist, so no git or
 # npm is needed on the server; the .sha256 sidecar is verified before extraction.
@@ -458,16 +492,20 @@ fetch_release() {
     local dest="$1" work base
     base="$(release_base)"
     work="$(mktemp -d)"
-    run_step "Downloading release v${VERSION}" \
-        curl -fsSL -o "$work/$base.tar.gz" "$(release_url)" \
-        || { rm -rf "$work"; die "No verified release file is available for v${VERSION}"; }
+    # The download is the one step with real bytes to report, so it gets a live
+    # byte count instead of a spinner with nothing behind it.
+    render_watch "downloading v${VERSION}"
+    fetch_to_file "$(release_url)" "$work/$base.tar.gz" \
+        || { rm -rf "$work"; render_done "unavailable"; die "No verified release file is available for v${VERSION}"; }
+    render_done ""
     is_release_archive "$work/$base.tar.gz" \
         || { rm -rf "$work"; die "Download for v${VERSION} is not a release archive. Re-bootstrap with the latest installer: bash <(curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh)"; }
     curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" 2>/dev/null \
         || { rm -rf "$work"; die "Release checksum file is missing for v${VERSION}"; }
     ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
         || { rm -rf "$work"; die "Release checksum mismatch for v${VERSION}"; }
-    step "Checksum ok"
+    render_note "$(release_size "$work/$base.tar.gz") · sha256 ok"
+    render_unwatch
     mkdir -p "$dest"
     # --no-same-owner: an archive from an older release still carries whatever
     # uid built it, and extracting as root would restore that. The install runs
@@ -479,7 +517,7 @@ fetch_release() {
     # traverse is what keeps a non-root operator out of the panel's secrets.
     chown -R root:root "$dest"
     rm -rf "$work"
-    step "Release extracted"
+    render_done ""
 }
 
 ensure_panel_user() {  # create the service account if it is not there yet
@@ -488,7 +526,7 @@ ensure_panel_user() {  # create the service account if it is not there yet
         useradd --system --no-create-home --home-dir "$DATA_DIR" \
             --shell /usr/sbin/nologin --comment "OVManager panel service account" "$PANEL_USER" \
             || die "Could not create the $PANEL_USER service account"
-        step "Service account $PANEL_USER created"
+        render_note "account $PANEL_USER"
     fi
 }
 
@@ -554,7 +592,7 @@ write_env() {
     # Ownership is applied later, in share_env_with_container, once the image
     # is on the box and its gid can be read rather than guessed.
     [[ "$MODE" == "docker" ]] || chmod 600 "$INSTALL_DIR/.env"
-    step "Config  $INSTALL_DIR/.env"
+    render_note "$INSTALL_DIR/.env"
 }
 
 # The container reads the .env through a read-only bind mount, not through
@@ -638,7 +676,7 @@ WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload >/dev/null 2>&1
     systemctl enable "$SYSTEMD_SERVICE" >/dev/null 2>&1
-    step "systemd  $SYSTEMD_SERVICE"
+    render_note "$SYSTEMD_SERVICE"
 }
 
 # ── Docker ─────────────────────────────────────────────────────────────
@@ -675,19 +713,19 @@ services:
       retries: 3
       start_period: 25s
 COMPOSE
-    step "Compose  $COMPOSE_FILE"
+    render_note "$COMPOSE_FILE"
 }
 
 compose_up() {
     write_compose
-    info "Pulling published OVManager image…"
+    render_note "pulling image"
     ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" pull ) \
         || die "docker compose pull failed — is the image published?"
     # The image is here now, so its own gid can be read rather than guessed.
     share_env_with_container
     ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" up -d ) \
         || die "docker compose startup failed — docker logs ovmanager"
-    step "Container  ovmanager"
+    render_done "ovmanager"
 }
 
 # The panel binds this port on the host in both modes, so one check serves
@@ -743,116 +781,155 @@ panel_express_defaults() {
     return 0
 }
 
+# One wizard question per screen, screen cleared between them. There are no
+# "Step N/5" headers: the clear already separates one answer from the next, and
+# a second counter competing with the menu's own numbering was the thing that
+# made the old flow hard to read.
 wizard() {
-    if [[ -z "$MODE" ]]; then
-        line "${B}Step 1/5 — Install mode${NC}"
-        line "  ${WH}1${NC}  Native     systemd service on this host (recommended)"
-        line "  ${WH}2${NC}  Docker     containerized, needs Docker Engine"
-        local m
-        m="$(ask "Mode" "1")"
-        case "${m:-1}" in
-            2|docker|Docker) MODE="docker" ;;
-            *)               MODE="native" ;;
-        esac
-        line ""
+    if [[ -z "$PORT" ]]; then
+        render_screen
+        render_line "$(printf '%bport%s' "$B" "$NC")"
+        PORT="$(ask "" "$DEFAULT_PORT")"
+        is_port "$PORT" || die "Invalid port: '$PORT'"
+        port_available_or_die "$PORT"
     fi
-    line "${B}Step 2/5 — Panel port${NC}"
-    line "  ${WH}1${NC}  Default: ${DEFAULT_PORT}"
-    line "  ${WH}2${NC}  Custom"
-    line "  ${WH}3${NC}  Random (1024-62000)"
-    local pc
-    pc="$(ask "Port choice" "1")"
-    case "${pc:-1}" in
-        2) PORT="$(ask "Port" "${PORT:-$DEFAULT_PORT}")" ;;
-        3) if command -v shuf >/dev/null 2>&1; then PORT="$(shuf -i 1024-62000 -n 1)"; else PORT="$DEFAULT_PORT"; fi ;;
-        *) : "${PORT:=$DEFAULT_PORT}" ;;
-    esac
-    is_port "$PORT" || die "Invalid port: '$PORT'"
-    port_available_or_die "$PORT"
-    line ""
-    line "${B}Step 3/5 — Panel URL path${NC}"
-    line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
-    local path_default="random"
-    [[ "$PATH_SET" -eq 1 ]] && path_default="${PATHPREFIX:-root}"
-    local path_in
-    path_in="$(ask "URL path  (random / root / name)" "$path_default")"
-    case "$path_in" in
-        root|"/") PATHPREFIX="" ;;
-        random|"") PATHPREFIX="$(rand_path)" ;;
-        *) PATHPREFIX="${path_in#/}"; PATHPREFIX="${PATHPREFIX%/}" ;;
-    esac
-    line ""
-    line "${B}Step 4/5 — Owner login${NC}"
-    line "  ${GY}No password is set here: the Ready card prints a one-time claim${NC}"
-    line "  ${GY}key, and you choose the owner password in the browser.${NC}"
-    ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
-    if [[ -z "$TLS_MODE" ]]; then
-        line ""
-        line "${B}Step 5/5 — Certificate (always encrypted)${NC}"
-        line "  ${WH}1${NC}  Self-signed (default)      encrypted; one browser warning to click through"
-        line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
-        line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
-        line "  ${WH}4${NC}  Custom key + cert          bring your own PEM files"
-        local tls
-        tls="$(ask "TLS" "1")"
-        case "${tls:-1}" in
-            1) TLS_MODE="self" ;;
-            2) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
-               [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
-            3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
-            4) TLS_MODE="custom"; TLS_KEY="$(ask "Key file" "")"; TLS_CERT="$(ask "Cert file" "")" ;;
-            *) TLS_MODE="self" ;;
+
+    if [[ "$PATH_SET" -eq 0 ]]; then
+        render_screen
+        render_line "$(printf '%burl path%s' "$B" "$NC")"
+        render_ask_note "a secret path hides the panel from scanners — leave empty for a random one"
+        local path_in
+        path_in="$(ask "" "random")"
+        case "$path_in" in
+            root|"/") PATHPREFIX="" ;;
+            random|"") PATHPREFIX="$(rand_path)" ;;
+            *) PATHPREFIX="${path_in#/}"; PATHPREFIX="${PATHPREFIX%/}" ;;
         esac
+        PATH_SET=1
     fi
+
+    if [[ -z "$ADMIN_USER" ]]; then
+        render_screen
+        render_line "$(printf '%bowner%s' "$B" "$NC")"
+        render_ask_note "no password here — the setup key on the last screen is your way in"
+        ADMIN_USER="$(ask "" "$DEFAULT_USER")"
+    fi
+
+    [[ -n "$TLS_MODE" ]] || ask_tls
+    return 0
 }
 
-# Plan card: printed before every mutating action (no --dry-run flag —
-# the plan is always shown).
-print_plan() {
-    hr
-    kv "OS"      "$OS_NAME"
-    kv "Version" "v${VERSION} (verified release)"
-    kv "Mode"    "${B}${MODE}${NC}"
-    kv "Port"    "$PORT"
-    kv "URL path" "$( [[ -n "$PATHPREFIX" ]] && printf '/%s/' "$PATHPREFIX" || printf '/' )"
-    kv "Admin"   "$ADMIN_USER"
-    kv "TLS"     "$TLS_MODE"
-    kv "Install" "$INSTALL_DIR"
-    kv "Data"    "$DATA_DIR"
-    hr
+# Three certificates, and one free-text field for the Let's Encrypt case.
+#
+# The old wizard asked "domain or this IP?" as its own question, which made the
+# operator decide a distinction the installer can make for itself: what they type
+# says which it is. One prompt, and the branch happens after the answer.
+ask_tls() {
+    render_screen
+    render_line "$(printf '%btls%s' "$B" "$NC")"
+    local choice
+    choice="$(ask "1 self-signed · 2 lets encrypt · 3 custom" "1")"
+    case "${choice:-1}" in
+        2) ask_lets_encrypt ;;
+        3) TLS_MODE="custom"
+            TLS_CERT="$(ask "cert" "${TLS_CERT:-}")"
+            TLS_KEY="$(ask "key" "${TLS_KEY:-}")"
+            [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] || die "Custom TLS files not found" ;;
+        *) TLS_MODE="self" ;;
+    esac
+}
+
+ask_lets_encrypt() {
+    local here detected others
+    here="$(public_ip || true)"
+    detected="${TLS_DOMAIN:-${here:-}}"
+    others="$(public_ips)"
+    if [[ -n "$others" && "$others" != "$here "* && "$others" != "$here" ]]; then
+        render_ask_note "this box answers on ${others// /, }"
+    fi
+    render_ask_note "Let's Encrypt sees whatever you type here — an IP gets a short-lived cert, a name gets a normal one"
+    local answer
+    answer="$(ask "ip or domain" "$detected")"
+    [[ -n "$answer" ]] || answer="$detected"
+    [[ -n "$answer" ]] || die "Let's Encrypt needs an IP or a domain"
+
+    if is_ip_literal "$answer"; then
+        TLS_MODE="le-ip"; TLS_DOMAIN="$answer"
+        return 0
+    fi
+    TLS_MODE="le"; TLS_DOMAIN="$answer"
+    # Say what the name resolves to before spending a rate-limited issuance on
+    # it. A wrong record fails the request and burns one of Let's Encrypt's
+    # weekly attempts, which is the expensive way to learn a typo.
+    local resolved
+    resolved="$(resolve_host "$answer")"
+    if [[ -z "$resolved" ]]; then
+        render_warn "$answer does not resolve yet — DNS has to point here before the certificate can be issued"
+    elif [[ -n "$here" && "$resolved" != "$here" ]]; then
+        render_warn "$answer resolves to $resolved, not $here — Let's Encrypt will refuse it"
+    fi
+    return 0
+}
+
+# What the install is about to do, in one line, as the first progress step.
+#
+# This replaced a nine-row plan card printed before every mutating action. The
+# card restated every value the operator had just been asked for, and a wall of
+# grey labels in front of the run is not a safety feature — the wizard is. What
+# is worth keeping is the machine's own state, because nobody chose it and it is
+# the thing that changes whether the run can succeed.
+preflight_summary() {
+    local os="${OS_NAME:-linux}" free
+    free="$(df -h --output=avail /opt 2>/dev/null | tail -1 | tr -d ' ')"
+    printf '%s · %s free at /opt · :%s free' "$os" "${free:-?}" "$PORT"
 }
 
 success_card() {
-    local url manage logs
+    local url key note
     url="$(panel_url)"
-    if [[ "$MODE" == "docker" ]]; then
-        manage="docker ps --filter name=ovmanager"
-        logs="docker logs -f ovmanager"
-    else
-        manage="systemctl status ${SYSTEMD_SERVICE}"
-        logs="journalctl -u ${SYSTEMD_SERVICE} -f"
-    fi
-    line ""
-    line "  ${GR}Ready — claim your panel${NC}"
-    hr
-    kv "Open"  "${WH}${url}claim${NC}"
     if [[ -n "$CLAIM_KEY" ]]; then
-        kv "Claim key" "${YL}${CLAIM_KEY}${NC}  ${GY}(one-time)${NC}"
+        key="$CLAIM_KEY"
+        note="$(printf '  %bone-time%s · reprint: %sovm auth key%s' "$GY" "$NC" "$B" "$NC")"
     else
-        kv "Claim key" "${RD}not written${NC}  ${GY}(run: ovm owner-claim)${NC}"
+        key="$(printf '%snot written%s  %s(run: ovm auth key)%s' "$RD" "$NC" "$GY" "$NC")"
+        note=""
     fi
-    kv "Login" "${GR}${ADMIN_USER}${NC}"
-    kv "Manage" "ovm  (status, logs, backup, restore, TLS, recovery)"
-    kv "Logs"   "$logs"
-    kv "Data"   "$DATA_DIR"
-    line ""
+    render_card "ready" "setup key" "$key" \
+        "panel|$url/setup" \
+        "user|$ADMIN_USER — password set by you, in the browser" \
+        "tls|$(tls_summary)" \
+        "logs|$CLI_ALIAS logs -f" \
+        "data|$DATA_DIR"
+    [[ -n "$note" ]] && render_line "$note"
     if [[ "$TLS_MODE" == "self" ]]; then
-        info "The browser's certificate warning is expected for a self-signed cert — run ovm https to replace it."
+        render_line "$(printf '  %sthe browser certificate warning is expected on a self-signed cert — %sovm tls%s replaces it' "$GY" "$B" "$NC")"
     fi
-    info "The key is spent once the panel is claimed. Reprint one with: ovm owner-claim"
-    info "No password was set at install time — you choose it in the browser."
-    info "Next: install an OVNode (one per VPN server), then Nodes → Add Node in the panel."
-    line ""
+    # Called, not interpolated. A bare reference is an unset variable — `set -u`
+    # turns it into a fatal "unbound variable" at the very last line of a
+    # successful install, after the panel is already serving. The card printed
+    # with no uninstall line and the installer exited non-zero, so a working
+    # install looked like a failed one. This was the one place it missed:
+    # render_next on the failure path already had the parens.
+    render_line "  uninstall: $(installer_uninstall_command)"
+    render_blank
+}
+
+# Spelled out in full, every time. An operator who wants it later is reading a
+# log or a scrollback, not this script, and a short form would not be runnable
+# from either.
+installer_uninstall_command() {
+    local repo="${REPO}"
+    printf 'bash <(curl -sSL https://raw.githubusercontent.com/%s/%s/install.sh) uninstall --purge -y' "$repo" "$BRANCH"
+}
+
+tls_summary() {
+    case "$TLS_MODE" in
+        self)    printf 'self-signed · replace anytime: %s tls' "$CLI_ALIAS" ;;
+        le)      printf "lets encrypt · %s" "$TLS_DOMAIN" ;;
+        le-ip)   printf 'lets encrypt · %s · short-lived' "$TLS_DOMAIN" ;;
+        custom)  printf 'custom · %s' "$TLS_CERT" ;;
+        *)       printf 'none' ;;
+    esac
 }
 
 # ── Actions ────────────────────────────────────────────────────────────
@@ -863,34 +940,48 @@ do_install() {
     # belongs to uid 1000 instead; doctor --fix normalizes old installs).
     [[ "$MODE" == "docker" ]] || chmod 700 "$DATA_DIR"
     ensure_panel_user
-    print_plan
-    hr; info "Step 1/4 — Download verified release v${VERSION}"
+
+    render_begin "preflight" 6
+    render_done "$(preflight_summary)"
+
+    render_begin "release" 6
     fetch_release "$INSTALL_DIR"
 
-    info "Step 2/4 — Certificate and configuration"
+    render_begin "certificate" 6
     setup_tls
     write_env
+    render_done "$(tls_summary)"
 
     local scheme; scheme="$(scheme_of)"
 
-    info "Step 3/4 — Runtime and service"
     if [[ "$MODE" == "docker" ]]; then
+        render_begin "runtime" 6
         compose_up
+        render_done "container ovmanager"
     else
+        render_begin "runtime" 6
         ensure_uv
         cd "$INSTALL_DIR"
-        run_step "Python packages" "$UV_BIN" sync --frozen --no-dev --quiet
+        render_note "python packages"
+        render_watch "uv sync"
+        "$UV_BIN" sync --frozen --no-dev --quiet >/dev/null 2>&1 \
+            || die "Could not install the panel's Python packages"
+        render_done "packages installed"
         grant_panel_access
         [[ -d "$INSTALL_DIR/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
-        step "Frontend prebuilt"
+        render_note "frontend prebuilt"
         write_systemd_unit
-        run_step "Service started" systemctl_bounded restart
+        systemctl_bounded restart >/dev/null 2>&1 || die "Could not start $SYSTEMD_SERVICE"
+        render_done "active"
     fi
 
-    info "Step 4/4 — Health check and finish"
-    wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
-        || warn "No answer on /health yet — check logs"
-    # Minted now, not earlier: grant_panel_access (step 3) chowns the data dir
+    render_begin "health" 6
+    wait_health_live "${scheme}://127.0.0.1:${PORT}/health" 40 || {
+        render_fail "health" "no answer on /health after 40s"
+        install_failure_next
+        return 1
+    }
+    # Minted now, not earlier: grant_panel_access (runtime) chowns the data dir
     # to the panel user, and the panel reads the key file per claim.
     issue_claim_key
     if [[ "$MODE" == "docker" ]]; then
@@ -899,16 +990,47 @@ do_install() {
         systemctl_bounded restart >/dev/null 2>&1 || true
     fi
     wait_health "${scheme}://127.0.0.1:${PORT}/health" 40 \
-        || warn "No answer on /health after finalize"
+        || render_warn "no answer on /health after finalize — check $CLI_ALIAS logs -f"
+    render_done "200"
+
+    render_begin "command" 6
     open_firewall_port "$PORT"
     install_cli
+    render_done "$BIN_DIR/$CLI_ALIAS"
+
+    # The claim key is not a step of its own. Minting happens inside the health
+    # step because it depends on the data dir the runtime chowned, and a step
+    # whose label is "setup key" and whose detail is the key itself printed the
+    # secret twice on one screen — once in the block, once in the card below it.
     success_card
+}
+
+# The way out, printed once on failure: how to see what happened, and how to
+# remove the install. Two commands, both runnable as printed.
+install_failure_next() {
+    render_next "$CLI_ALIAS logs 50" "$(installer_uninstall_command)"
+}
+
+# Sizes a downloaded file or a directory. The release step reports what actually
+# arrived, not just "done" — the number is also the first thing anyone
+# suspicious of a slow or truncated download looks at.
+release_size() {
+    local kb
+    if [[ -f "$1" ]]; then
+        kb=$(( $(wc -c < "$1" 2>/dev/null || printf 0) / 1024 ))
+    else
+        kb="$(du -sk "$1" 2>/dev/null | awk '{print $1}')"
+    fi
+    if [[ -n "$kb" ]]; then
+        awk -v k="$kb" 'BEGIN{printf "%.1f MB", k/1024}'
+    fi
+    return 0
 }
 
 do_update() {
     operation_begin update
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
-    info "Updating OVManager to v${VERSION}…"
+    render_line "$(printf '  %b→ %sv%s → %sv%s' "$OR" "$NC" "$VERSION")"
     [[ -f "$COMPOSE_FILE" ]] && MODE="docker"
     read_env_port
     : "${PORT:=$DEFAULT_PORT}"
@@ -919,16 +1041,16 @@ do_update() {
     from_version="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' "$INSTALL_DIR/backend/version.py" 2>/dev/null | head -1)"
     : "${from_version:=unknown}"
     scheme="$(scheme_of)"
-    print_plan
     update_state preflight "$from_version" "$VERSION"
 
-    info "Step 1/6 — Verified safety backup"
+    render_begin "backup" 6
     safety="$(update_safety_backup "$from_version")" || die "Could not create the mandatory pre-update backup"
     [[ -n "$safety" && -f "$safety" ]] || die "The pre-update backup was not created"
     snapshot="$(snapshot_code "$INSTALL_DIR" "panel" 2)"
+    render_done "$(basename "$safety" 2>/dev/null)"
     update_state staging "$from_version" "$VERSION" "$safety"
 
-    info "Step 2/6 — Stage verified release"
+    render_begin "stage" 6
     rm -rf "$UPDATE_STAGE"
     mkdir -p "$UPDATE_STAGE"
     fetch_release "$UPDATE_STAGE"
@@ -938,12 +1060,14 @@ do_update() {
     # unknown .env keys and would crash-loop on first boot.
     sed -i '/^BACKUP_ENCRYPT_KEY=/d' "$UPDATE_STAGE/.env"
     if [[ "$MODE" != "docker" ]]; then
-        ( cd "$UPDATE_STAGE" && run_step "Staged Python packages" "$UV_BIN" sync --frozen --no-dev --quiet ) \
+        render_note "python packages"
+        ( cd "$UPDATE_STAGE" && "$UV_BIN" sync --frozen --no-dev --quiet ) >/dev/null 2>&1 \
             || die "Could not prepare the staged release; current version is still running"
         [[ -d "$UPDATE_STAGE/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
     fi
+    render_done ""
 
-    info "Step 3/6 — Enter maintenance mode"
+    render_begin "maintenance" 6
     : > "$UPDATE_MARKER"
     chmod 600 "$UPDATE_MARKER"
     update_state activating "$from_version" "$VERSION" "$safety"
@@ -952,8 +1076,9 @@ do_update() {
     else
         systemctl_bounded stop
     fi
+    render_done "writes paused"
 
-    info "Step 4/6 — Activate candidate"
+    render_begin "activate" 6
     rm -rf "$UPDATE_PREVIOUS"
     if mv "$INSTALL_DIR" "$UPDATE_PREVIOUS" && mv "$UPDATE_STAGE" "$INSTALL_DIR"; then
         activated=1
@@ -967,7 +1092,7 @@ do_update() {
             die "Could not activate the staged release; the previous release remains active and data was not changed"
         fi
         update_state recovery_required "$from_version" "$VERSION" "$safety"
-        die "Could not activate or restore release files. Writes remain blocked; run: ovm recover-update"
+        die "Could not activate or restore release files. Writes remain blocked; run: ovm update (it recovers an interrupted one first)"
     fi
 
     # Deliberately no service-account *migration* here. It was here in 1.0.26
@@ -983,28 +1108,29 @@ do_update() {
     # idempotent and changes no ownership of the unit, so it is safe to repeat.
     if [[ "$MODE" != "docker" ]] && ! grep -qE '^User=root\s*$' "/etc/systemd/system/$SYSTEMD_SERVICE" 2>/dev/null; then
         grant_panel_access
-        step "Service access re-granted for $PANEL_USER"
+        render_note "access re-granted for $PANEL_USER"
     fi
 
     local start_ok=0
     if [[ "$MODE" == "docker" ]]; then
         ( compose_up ) && start_ok=1 || true
     else
-        run_step "Candidate service started" systemctl_bounded restart && start_ok=1 || true
+        render_note "starting candidate"
+        systemctl_bounded restart >/dev/null 2>&1 && start_ok=1 || true
     fi
 
-    info "Step 5/6 — Verify candidate"
+    render_begin "verify" 6
     update_state verifying "$from_version" "$VERSION" "$safety"
     if [[ "$start_ok" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
         local reported
         reported="$(candidate_version)"
-        [[ "$reported" == "$VERSION" ]] || { warn "Candidate reported version '${reported:-unknown}', expected '$VERSION'"; start_ok=0; }
+        [[ "$reported" == "$VERSION" ]] || { render_warn "Candidate reported version '${reported:-unknown}', expected '$VERSION'"; start_ok=0; }
     else
         start_ok=0
     fi
 
     if [[ "$start_ok" -ne 1 ]]; then
-        fail "Candidate verification failed — failing over to v${from_version}"
+        render_fail "verify" "candidate did not answer — failing over to v${from_version}"
         update_state failing_over "$from_version" "$VERSION" "$safety"
         if [[ "$MODE" == "docker" ]]; then
             ( cd "$INSTALL_DIR" && docker compose -f "$COMPOSE_FILE" down ) >/dev/null 2>&1 || true
@@ -1021,7 +1147,7 @@ do_update() {
                 || { update_state recovery_required "$from_version" "$VERSION" "$safety"; die "Previous code was restored but the database safety backup could not be restored"; }
             db_restored=1
         else
-            step "Database untouched by the candidate — restore skipped"
+            render_note "database untouched — restore skipped"
         fi
 
         local rollback_started=0
@@ -1029,7 +1155,7 @@ do_update() {
             ACTIVE_IMAGE_VERSION="$from_version"
             ( compose_up ) && rollback_started=1 || true
         else
-            run_step "Previous service restarted" systemctl_bounded restart && rollback_started=1 || true
+            systemctl_bounded restart >/dev/null 2>&1 && rollback_started=1 || true
         fi
         if [[ "$rollback_started" -eq 1 ]] && wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
             rm -f "$UPDATE_MARKER"
@@ -1044,7 +1170,7 @@ do_update() {
         die "Update recovery needs attention. Previous files: $INSTALL_DIR; safety backup: $safety; snapshot: $snapshot"
     fi
 
-    info "Step 6/6 — Commit update"
+    render_begin "commit" 6
     install_cli
     rm -f "$UPDATE_MARKER"
     # Verification mode intentionally paused all background writers. Restart
@@ -1058,32 +1184,40 @@ do_update() {
     if ! wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
         : > "$UPDATE_MARKER"; chmod 600 "$UPDATE_MARKER"
         update_state recovery_required "$from_version" "$VERSION" "$safety"
-        die "Candidate passed verification but failed its final restart. Writes are blocked; run: ovm recover-update"
+        die "Candidate passed verification but failed its final restart. Writes are blocked; run: ovm update (it recovers an interrupted one first)"
     fi
     update_state committed "$from_version" "$VERSION" "$safety"
-    step "Update complete  v${from_version} → v${VERSION}"
-    step "Failover release kept at $UPDATE_PREVIOUS"
-    line ""
+    render_done "v${from_version} → v${VERSION}"
+    render_line "  rollback: $CLI_ALIAS rollback"
     return 0
 }
 
 do_recover_update() {
     if [[ ! -f "$UPDATE_STATE" ]]; then
         [[ -f "$UPDATE_MARKER" ]] && die "Update maintenance marker exists but its state journal is missing"
-        step "No interrupted update needs recovery"
+        render_ok "no interrupted update needs recovery"
         return 0
     fi
     local phase from target safety scheme reported
-    read -r phase from target safety < <(python3 - "$UPDATE_STATE" <<'PY'
+    # Captured, not read from a process substitution. A substitution runs in its
+    # own process: a corrupt journal printed a python traceback to the terminal
+    # while `read` returned non-zero, and the ERR trap then added its own line —
+    # so the operator saw two stack traces and then the one sentence that
+    # explained the problem. Assigning first lets `|| ` swallow the failure
+    # quietly, and the unreadable journal is reported as exactly that.
+    local journal=""
+    journal="$(python3 - "$UPDATE_STATE" 2>/dev/null <<'PY'
 import json, sys
 x=json.load(open(sys.argv[1]))
 print(x.get("phase","unknown"), x.get("from_version","unknown"), x.get("to_version","unknown"), x.get("safety_backup") or "")
 PY
-) || die "Update state journal is unreadable"
+)" || journal=""
+    [[ -n "$journal" ]] || die "Update state journal is unreadable"
+    read -r phase from target safety <<< "$journal"
     case "$phase" in
         committed|failed_over)
             if [[ ! -f "$UPDATE_MARKER" ]]; then
-                step "No interrupted update needs recovery"
+                render_ok "no interrupted update needs recovery"
                 return 0
             fi
             ;;
@@ -1094,7 +1228,7 @@ PY
             rm -rf "$UPDATE_STAGE"
             rm -f "$UPDATE_MARKER"
             update_state failed_over "$from" "$target" "$safety"
-            step "Cleared an interrupted pre-activation update; v${from} remains active"
+            render_ok "cleared an interrupted pre-activation update · v${from} remains active"
             return 0
             ;;
         activating|verifying|failing_over|recovery_required) ;;
@@ -1104,7 +1238,7 @@ PY
     if [[ ! -f "$UPDATE_MARKER" ]]; then
         : > "$UPDATE_MARKER"
         chmod 600 "$UPDATE_MARKER"
-        warn "Re-created the missing update maintenance marker"
+        render_warn "re-created the missing update maintenance marker"
     fi
     [[ -f "$COMPOSE_FILE" ]] && MODE="docker" || MODE="native"
     read_env_port; : "${PORT:=$DEFAULT_PORT}"; : "${TLS_MODE:=none}"
@@ -1113,13 +1247,13 @@ PY
     if [[ -n "$reported" && "$reported" == "$target" ]]; then
         rm -f "$UPDATE_MARKER"
         update_state committed "$from" "$target" "$safety"
-        step "Recovered update journal — v${target} is healthy"
+        render_ok "recovered update journal · v${target} is healthy"
         return 0
     fi
     if [[ -n "$reported" && "$reported" == "$from" && ! -d "$UPDATE_PREVIOUS" ]]; then
         rm -f "$UPDATE_MARKER"
         update_state failed_over "$from" "$target" "$safety"
-        step "Recovered update journal — previous v${from} is healthy"
+        render_ok "recovered update journal · previous v${from} is healthy"
         return 0
     fi
     [[ -d "$UPDATE_PREVIOUS" ]] || {
@@ -1135,13 +1269,13 @@ PY
         if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
             rm -f "$UPDATE_MARKER"
             update_state failed_over "$from" "$target" "$safety"
-            step "Interrupted update never activated — v${from} restarted, staging discarded"
+            render_ok "interrupted update never activated · v${from} restarted, staging discarded"
             return 0
         fi
         update_state recovery_required "$from" "$target" "$safety"
         die "Interrupted update never activated and v${from} does not answer health. Run: ovm logs 100"
     }
-    info "Interrupted candidate is unhealthy — failing over to v${from}"
+    render_warn "interrupted candidate is unhealthy — failing over to v${from}"
     if [[ "$MODE" == "docker" ]]; then
         docker rm -f ovmanager >/dev/null 2>&1 || true
     else
@@ -1161,7 +1295,7 @@ PY
     if wait_health "${scheme}://127.0.0.1:${PORT}/health" 60; then
         rm -f "$UPDATE_MARKER"
         update_state failed_over "$from" "$target" "$safety"
-        step "Interrupted update failed over safely to v${from}"
+        render_ok "interrupted update failed over safely to v${from}"
         return 0
     fi
     update_state recovery_required "$from" "$target" "$safety"
@@ -1172,11 +1306,24 @@ do_uninstall() {
     operation_begin uninstall
     [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing)"
     check_root
-    hr
-    kv "Remove" "$INSTALL_DIR"
-    kv "Data"   "$DATA_DIR $( [[ "$PURGE" -eq 1 ]] && printf '(will be deleted)' || printf '(kept)' )"
-    hr
-    confirm "Remove OVManager and stop the service?" n || die "Cancelled."
+    # The list comes before the question, and the question is not yes/no: the
+    # destructive answer is a word, so a stray Enter keeps the data. A y/N
+    # prompt puts "yes, delete the database" one keystroke from the default.
+    render_screen
+    render_line "  $(printf '%bthis removes%b' "$B" "$NC")"
+    render_rule
+    render_kv "service" "$SYSTEMD_SERVICE"
+    render_kv "files" "$(dir_size "$INSTALL_DIR")   $INSTALL_DIR"
+    if [[ "$PURGE" -eq 1 ]]; then
+        render_kv "data" "$(printf '%s%s%s   %s ← users, settings, certs' "$RD" "$DATA_DIR" "$NC" "$GY")"
+    else
+        render_kv "data" "$(dir_size "$DATA_DIR")   $DATA_DIR"
+    fi
+    render_rule
+    confirm_word "delete the data as well? type purge" "purge" && PURGE=1
+    confirm "remove the app and stop the service?" n || die "Cancelled."
+
+    render_begin "uninstall" 1
     systemctl_bounded stop
     systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
     rm -f "/etc/systemd/system/$SYSTEMD_SERVICE"
@@ -1190,57 +1337,60 @@ do_uninstall() {
     if [[ "$PURGE" -eq 1 ]]; then
         backup_dir "$DATA_DIR" "panel-pre-purge"
         rm -rf "$DATA_DIR"
-        step "Data removed"
+        render_done "data removed"
     else
-        step "App removed. Data kept at $DATA_DIR  (--purge to delete)"
+        render_done "app removed · data kept at $DATA_DIR"
     fi
-    step "Uninstalled"
-    line ""
+    render_blank
+}
+
+# Sizes a directory for the uninstall list. Present because "210 MB" and "84 MB"
+# read very differently, and an operator deciding whether to purge needs the
+# number in front of them, not after.
+dir_size() {
+    local kb
+    kb="$(du -sk "$1" 2>/dev/null | awk '{print $1}')"
+    if [[ -n "$kb" ]]; then
+        awk -v k="$kb" 'BEGIN { printf "%.0f MB", k/1024 }'
+    fi
+    return 0
 }
 
 already_installed_menu() {
-    warn "OVManager is already at $INSTALL_DIR"
-    info "Manage the panel with: ovm  (status, logs, backup, restore, TLS, recovery)"
+    render_warn "OVManager is already installed at $INSTALL_DIR"
     if ! can_prompt; then
-        fail "Already installed ($INSTALL_DIR). Re-run with:  $0 update"
+        # Exit 2, not die's 1: "already installed" is a state the caller asked
+        # about, not a failure, and `install.sh ... || true` in a provisioning
+        # script must be able to tell the two apart.
+        render_fail "already installed" "$INSTALL_DIR — re-run with: $0 update"
         exit 2
     fi
-    while true; do
-        local tag
-        tag="$(tui_select "OVManager — installer" \
-            update    "Update to the latest release" \
-            uninstall "Uninstall" \
-            quit      "Quit")"
-        case "$tag" in
-            update)    check_root; detect_os; check_deps; do_update || warn "Update failed" ;;
-            uninstall)
-                check_root
-                confirm_no "Also delete data and backups?" && PURGE=1
-                do_uninstall
-                return 0 ;;
-            *)         return 0 ;;
-        esac
-    done
+    local tag
+    tag="$(render_menu "" \
+        update    "update to v${VERSION}" \
+        uninstall "uninstall" \
+        quit      "quit")"
+    case "$tag" in
+        update)    check_root; detect_os; check_deps; do_update || render_warn "update failed" ;;
+        uninstall) check_root; do_uninstall ;;
+        *)         render_line "  nothing was changed" ;;
+    esac
 }
 
+# The front door. Install mode is chosen here and nowhere else — the old wizard
+# asked it again as "Step 1/5", so the answer could be given twice and did not
+# always agree with what the first menu said.
 start_menu() {
-    line "  ${B}OVManager Setup${NC}"
-    hr
-    line ""
-    line "  ${GR}1.${NC} Install              ${GY}Recommended${NC}"
-    line "  ${WH}2.${NC} Install with Docker"
-    line ""
-    line "  ${WH}0.${NC} Exit"
-    line ""
-    local choice
-    choice="$(ask "Select" "1")"
-    case "${choice:-1}" in
-        1) MODE="native"; panel_express_defaults ;;
-        2) MODE="docker"; panel_express_defaults ;;
-        0) line "Cancelled. No changes were made."; exit 0 ;;
-        *) warn "Choose 0, 1, or 2."; start_menu ;;
+    local tag
+    tag="$(render_menu "" \
+        native  "install  ·  systemd on this host" \
+        docker  "install  ·  containerized" \
+        quit    "exit")"
+    case "$tag" in
+        native) MODE="native"; panel_express_defaults ;;
+        docker) MODE="docker"; panel_express_defaults ;;
+        *)      render_line "  cancelled — nothing was changed"; exit 0 ;;
     esac
-    line ""
 }
 
 # manager.sh is installed as "ovmanager" (+ "ovm" alias), so day-to-day ops
@@ -1249,12 +1399,12 @@ start_menu() {
 install_cli() {
     local src="${INSTALL_DIR}/manager.sh"
     [[ -f "$src" ]] || return 0
-    mkdir -p "$BIN_DIR" 2>/dev/null || { warn "Could not create $BIN_DIR"; return 0; }
+    mkdir -p "$BIN_DIR" 2>/dev/null || { render_warn "Could not create $BIN_DIR"; return 0; }
     if cp -f "$src" "$BIN_DIR/$CLI_NAME" 2>/dev/null && chmod 0755 "$BIN_DIR/$CLI_NAME"; then
         ln -sf "$CLI_NAME" "$BIN_DIR/$CLI_ALIAS" 2>/dev/null || true
-        step "Command  ${BIN_DIR}/${CLI_NAME}  (alias: ${CLI_ALIAS})"
+        render_ok "Command  ${BIN_DIR}/${CLI_NAME}  (alias: ${CLI_ALIAS})"
     else
-        warn "Could not install the $CLI_NAME command into $BIN_DIR"
+        render_warn "Could not install the $CLI_NAME command into $BIN_DIR"
     fi
 }
 
@@ -1308,7 +1458,7 @@ DEPRECATED (still works)
 
 Fresh installs mint a one-time claim key, never a password. Open the Ready
 card's URL, paste the key, and choose the owner password in the browser.
-ovm owner-claim prints a fresh key at any time before the panel is claimed.
+ovm auth key prints a fresh key at any time before the panel is claimed.
 
 After installation, use ovm (alias: ovmanager) for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery, updates, and uninstall.
@@ -1321,7 +1471,7 @@ EOF
 
 # One line to stderr per deprecated flag, naming the replacement.
 deprecated_flag() {  # deprecated_flag "FLAG" "what to use instead"
-    warn "$1 is deprecated — use $2"
+    render_warn "$1 is deprecated — use $2"
 }
 
 # `version-script` / `script-version`: which installer did you actually run?
@@ -1522,18 +1672,8 @@ run_wizard_install() {
     do_install
 }
 
-# Banner: the tagline advertises a fresh install, so it must not appear on
-# update/uninstall/repair where it reads as if work were about to start.
 banner() {
-    local subtitle
-    case "$ACTION" in
-        install) subtitle="Secure VPN panel — up and running in a few minutes" ;;
-        *)      subtitle="Secure VPN panel" ;;
-    esac
-    line ""
-    line "  ${B}OVManager installer${NC}  ${GY}v${VERSION}${NC}"
-    line "  ${GY}${subtitle}${NC}"
-    line ""
+    render_banner "OVManager" "v${VERSION}"
 }
 
 # Dispatch only when run, not when sourced, so the tests can source the

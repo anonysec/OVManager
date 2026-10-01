@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 
+from cli import render
 from cli.env import Install
 
 
@@ -52,12 +53,41 @@ def status(install: Install) -> dict:
 
 def render_text(data: dict) -> str:
     if not data.get("tls"):
-        return "  HTTPS certificate\n  Key file  <none> (plain HTTP)\n"
-    lines = [
-        "  HTTPS certificate",
-        f"  {'Key file':<14} {data.get('key') or '<none>'}",
-        f"  {'Cert file':<14} {data.get('cert') or '<none>'}",
+        return render.block([render.heading("HTTPS certificate"), render.kv("Key file", "<none>  plain HTTP")])
+    items = [
+        ("Key file", data.get("key") or "<none>"),
+        ("Cert file", data.get("cert") or "<none>"),
     ]
     if data.get("expiry"):
-        lines.append(f"  {'Expires':<14} {data['expiry']}")
-    return "\n".join(lines) + "\n"
+        items.append(("Expires", data["expiry"]))
+    return render.block([render.heading("HTTPS certificate"), *render.rows(items)])
+
+
+def migrate() -> dict:
+    """Move a pre-declaration certificate onto the paths in ``.env``.
+
+    Installs given a certificate before ``.env`` became the declaration keep
+    one in ``DATA_DIR/tls``, and the declared paths now win over it. Left alone,
+    the panel would quietly fall back to a stale certificate — the one failure
+    nobody notices until a browser warns them months later. So this runs before
+    the first read of the certificate, and says nothing when there is nothing
+    to do.
+    """
+    try:
+        from backend.routers.tls import migrate_legacy_tls
+    except Exception as exc:  # the backend may not be importable host-side
+        return {"ok": False, "error": f"Could not check for an old certificate: {exc}"}
+    return migrate_legacy_tls()
+
+
+def render_migrate(data: dict) -> str:
+    if not data.get("migrated"):
+        return ""  # the common case, and it should cost the reader nothing
+    return render.block(
+        [
+            render.ok("moved the existing certificate onto the paths in .env"),
+            render.kv("From", data["from"]),
+            render.kv("To", data["to"]),
+            render.hint("the old copy is left in place; remove it once this serves"),
+        ]
+    )

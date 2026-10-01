@@ -18,17 +18,29 @@ sys.path.insert(0, APP_DIR)
 def _resolve_ssl_paths() -> tuple[str | None, str | None]:
     """Return the active (key, cert) pair for uvicorn.
 
-    Panel-managed files written by /api/tls (DATA_DIR/tls/) win when both are
-    present; SSL_KEYFILE/SSL_CERTFILE from the environment are the fallback.
+    One rule, in ``backend.tls_paths``: ``.env`` declares the pair, or there is
+    one default. ``DATA_DIR/tls`` is still read for installs given a certificate
+    before the declaration existed and not yet migrated — it loses to the
+    declaration deliberately, because a stale pair in a hidden directory must
+    never outrank a path the operator can see and edit.
+
+    Returns None for either half that has no file, so uvicorn is never handed a
+    path it cannot open — that failure is a startup error the operator can read,
+    rather than a silent downgrade to plain HTTP.
     """
+    from backend import tls_paths
     from backend.data_paths import DATA_DIR
 
-    managed_dir = Path(DATA_DIR) / "tls"
-    managed_key = managed_dir / "privkey.pem"
-    managed_cert = managed_dir / "fullchain.pem"
-    if managed_key.is_file() and managed_cert.is_file():
-        return str(managed_key), str(managed_cert)
-    return config.SSL_KEYFILE or None, config.SSL_CERTFILE or None
+    key = tls_paths.key_path()
+    cert = tls_paths.cert_path()
+    if key.is_file() and cert.is_file():
+        return str(key), str(cert)
+
+    legacy = Path(DATA_DIR) / "tls"
+    legacy_key, legacy_cert = legacy / "privkey.pem", legacy / "fullchain.pem"
+    if legacy_key.is_file() and legacy_cert.is_file():
+        return str(legacy_key), str(legacy_cert)
+    return (str(key) if key.is_file() else None), (str(cert) if cert.is_file() else None)
 
 
 def _require_readable(path: str, what: str) -> None:
