@@ -1,6 +1,47 @@
 # Changelog
 
-## 1.0.0 — 2026-09-29
+## 1.0.1 — 2026-10-01
+
+One renderer for every character, and a CLI that matches it.
+
+**Output**
+
+- `ovm doctor` is one line when clean and a failure-first list when not, with each
+  fix in its label's own column. It was fifteen lines of `ok`.
+- A clean `ovm` is 27 lines, down from 64. `Service account` — fifteen characters,
+  and the label on the check most likely to fail — lines up because the column is
+  computed from the labels actually present.
+- The installer and the CLI share one renderer. `scripts/lib/render.sh` is
+  byte-identical to the node's, and a test enforces it.
+
+**A bare install is interactive**
+
+The node installer read a missing terminal as "no questions wanted" and installed
+anyway, reporting success for choices nobody made. A script that lost its tty —
+CI, a cron job, a pipeline — got a complete install. A bare run is now
+interactive unconditionally and stops without a terminal, naming `-y`. Bad input
+is still reported as bad input, not as a complaint about the terminal.
+
+**Fixed**
+
+- A successful install exited non-zero: the Ready card interpolated a function as
+  a variable, fatal under `set -u` on its last line, after the panel was serving.
+- `ovm backup` wrote nothing — an unguarded `$1` after `shift`.
+- `ovm backup schedule` did nothing and exited 0 — `shift 2` on one argument.
+- `ovm doctor --all` changed nothing: the flag parsed and was dropped.
+- Eleven places told an operator to run a name the tool no longer advertises.
+
+**Suite**
+
+175s → 71s, and a 22s `make check` for the inner loop. Two broken tests were a
+third of the runtime. 908 pass.
+
+**Layout**
+
+`site/` and `docs/` moved under `.github/`, and `.claude/` is ignored and
+untracked.
+
+## 1.0.0 — 2026-09-29 — 2026-09-29
 
 First public release.
 
