@@ -58,6 +58,31 @@ _NEUTERED.write_text(_neutered_body, encoding="utf-8")
 # the thing the test was asserting on.
 (_NEUTERED.parent / "scripts").mkdir()
 (_NEUTERED.parent / "scripts" / "lib").symlink_to(REPO / "scripts" / "lib")
+
+# A no-op systemctl ahead of the real one on PATH. The dispatch sweep below runs
+# every advertised verb — including enable, disable, restart and doctor-fix —
+# with the root gate neutered, and with the real systemctl those four acted on
+# the *running* panel: the suite turned autostart off and restarted the live
+# service every time it ran. Discovered by noticing `systemctl is-enabled`
+# flipping to "disabled" after a green suite.
+#
+# The stub records its arguments rather than swallowing them, so a test can still
+# assert that a verb tried to touch the service. test_manager_sh.py stubs the
+# same way; this file was written without copying that.
+_STUB_BIN = _NEUTERED.parent / "stubbin"
+_STUB_BIN.mkdir()
+_STUB_LOG = _NEUTERED.parent / "systemctl.log"
+_stub = _STUB_BIN / "systemctl"
+_stub.write_text(
+    '#!/bin/sh\nprintf "%s\\n" "$*" >> "$OVM_TEST_SYSTEMCTL_LOG" 2>/dev/null\n'
+    # `is-active`/`is-enabled` answer "no" rather than nothing, so a status line
+    # that branches on them renders the same as it would on a stopped service
+    # instead of printing an empty value.
+    'case "$1" in is-active|is-enabled) echo inactive; exit 1 ;; esac\n'
+    "exit 0\n",
+    encoding="utf-8",
+)
+_stub.chmod(0o755)
 atexit.register(shutil.rmtree, _neutered_dir, True)
 
 # The thirteen verbs on the short list. What the user asked the tool to be.
@@ -105,6 +130,14 @@ def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     OVM_APP_DIR points back at the repo so the temp-dir copy still finds
     scripts/lib. Callers that pass their own OVM_APP_DIR override this, which is
     what the failing-read test wants.
+
+    PATH is prefixed with the stub bin and the log path is exported, so a verb
+    that reaches for systemctl records the attempt instead of performing it.
+
+    Merge order matters and got this wrong once: os.environ has to expand FIRST,
+    or its own PATH overwrites the stub and the real systemctl is found again.
+    The caller's env comes last so a test that sets OVM_APP_DIR to a broken path
+    still wins over the default.
     """
     import os
 
@@ -113,7 +146,13 @@ def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=60,
-        env={"OVM_APP_DIR": str(REPO), **os.environ, **(env or {})},
+        env={
+            **os.environ,
+            "OVM_APP_DIR": str(REPO),
+            "OVM_TEST_SYSTEMCTL_LOG": str(_STUB_LOG),
+            "PATH": f"{_STUB_BIN}{os.pathsep}{os.environ.get('PATH', '')}",
+            **(env or {}),
+        },
     )
 
 
@@ -571,3 +610,30 @@ def test_doctor_forwards_the_all_flag():
         body = source[start : source.index("\n}\n", start)]
         assert "SHOW_ALL" in body, f"{fn}() drops --all"
         assert "--all" in body, f"{fn}() never forwards --all"
+
+
+def test_the_dispatch_sweep_never_touches_the_real_systemd():
+    """The suite used to disable autostart on the running panel.
+
+    test_every_advertised_verb_dispatches runs all thirteen verbs, four of which
+    act on the service. With the root gate neutered and the real systemctl on
+    PATH, `disable` actually disabled autostart and `restart` actually restarted
+    the live panel — every time this suite ran. Nothing failed: a green suite had
+    been quietly reconfiguring production.
+
+    Found by watching `systemctl is-enabled` flip to "disabled" straight after a
+    907-passing run, and then bisecting file by file to this one.
+    """
+    before = subprocess.run(["systemctl", "is-enabled", "ovmanager"], capture_output=True, text=True).stdout.strip()
+
+    _no_dispatch_failure("disable")
+    _no_dispatch_failure("enable")
+    _no_dispatch_failure("restart")
+
+    after = subprocess.run(["systemctl", "is-enabled", "ovmanager"], capture_output=True, text=True).stdout.strip()
+    assert before == after, f"the sweep changed live autostart: {before} -> {after}"
+
+    # And prove the verbs still reached systemctl, so this cannot pass by the
+    # stub being unreachable.
+    log = _STUB_LOG.read_text(encoding="utf-8") if _STUB_LOG.exists() else ""
+    assert "disable" in log and "enable" in log, f"stub saw nothing: {log!r}"

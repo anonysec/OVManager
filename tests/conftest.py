@@ -1,5 +1,9 @@
 """Shared pytest fixtures."""
 
+import hashlib
+import subprocess
+from pathlib import Path
+
 import anyio.abc
 import anyio.from_thread
 
@@ -189,3 +193,75 @@ def hold_worker_lock():
             handle.close()
         except OSError:  # pragma: no cover
             pass
+
+
+# ── The suite must not touch the running install ──────────────────────────
+#
+# The node has had a guard like this since its self-signed sweep wrote over the
+# panel's certificate on a shared host. The panel had none, and within a day
+# test_cli_shape.py's dispatch sweep was disabling autostart on the live panel
+# every time the suite ran — four of the thirteen verbs it exercises act on the
+# service, and with the root gate neutered for the test they reached the real
+# systemctl.
+#
+# Nothing failed. A 907-test suite went green while reconfiguring production,
+# which is the worst version of that bug: it looks like the tests are working.
+# The per-test assertion in test_cli_shape.py catches the one verb set that
+# caused it; this catches everything else, including whatever is written next.
+#
+# Only paths nothing legitimate touches are listed. /var/lib/ovmanager and
+# /var/backups were in the first version of this and made it fail on its first
+# run — the running panel rewrites its own database, WAL and log continuously,
+# and its backup timer writes the other. A guard that fires on normal operation
+# is a guard that gets deleted.
+_LIVE_STATE_UNTOUCHED = (
+    "/etc/ssl/self-signed",
+    "/etc/systemd/system/ovmanager.service",
+)
+
+
+def _live_state() -> dict:
+    """Name, size and mtime under each path, plus the service's enable state.
+
+    Size and mtime rather than a content hash: a byte-for-byte hash of a live
+    path twice per session is slow, and it flakes on anything else on the host
+    touching the same files. What matters is whether the *suite* created,
+    truncated or removed something — and whether it left the unit disabled.
+    """
+    out: dict = {}
+    for raw in _LIVE_STATE_UNTOUCHED:
+        path = Path(raw)
+        try:
+            if not path.exists():
+                out[raw] = None
+                continue
+            digest = hashlib.sha256()
+            for item in sorted(path.rglob("*")):
+                try:
+                    stat = item.stat()
+                    digest.update(f"{item}:{stat.st_size}:{stat.st_mtime_ns}".encode())
+                except OSError:
+                    # Vanished or unreadable between walk and stat. Raising here
+                    # would fail the suite for something it cannot attribute.
+                    digest.update(f"{item}:unreadable".encode())
+            out[raw] = digest.hexdigest()
+        except OSError as exc:
+            out[raw] = f"unreadable: {exc}"
+    out["<ovmanager-enabled>"] = subprocess.run(
+        ["systemctl", "is-enabled", "ovmanager"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return out
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _live_install_untouched():
+    before = _live_state()
+    yield
+    after = _live_state()
+    changed = [k for k in before if before[k] != after[k]]
+    assert not changed, (
+        f"the test suite changed the live install: {changed}. A test is acting "
+        "outside its sandbox — stub the command, or skip the verb."
+    )
