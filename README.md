@@ -224,7 +224,7 @@ Full documentation is published at **<https://anonysec.github.io/OVManager/>**.
 Elsewhere in this repository:
 
 - [CONTRIBUTING.md](.github/CONTRIBUTING.md) — ground rules, manual install, the checks, release freeze.
-- [docs/adr/installer-design.md](docs/adr/installer-design.md) — why the installer and the CLI look the way they do.
+- [.github/docs/adr/installer-design.md](.github/docs/adr/installer-design.md) — why the installer and the CLI look the way they do.
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
 
@@ -234,4 +234,4 @@ MIT. Free for personal and commercial use: no license server, no paid feature ga
 
 **You operate the VPN.** Abuse complaints (spam, scanning, copyright) come to you, not to this project. Enforce per-user quotas and expiry, watch the connection events in the audit log, disable abusers promptly, and respect your provider's terms of service and local law.
 
-See [Privacy](docs/legal/PRIVACY.md), [Acceptable use](docs/legal/ACCEPTABLE_USE.md), [Trademarks](docs/legal/TRADEMARKS.md) and [third-party licensing](docs/legal/THIRD_PARTY_LICENSES.md).
+See [Privacy](.github/docs/legal/PRIVACY.md), [Acceptable use](.github/docs/legal/ACCEPTABLE_USE.md), [Trademarks](.github/docs/legal/TRADEMARKS.md) and [third-party licensing](.github/docs/legal/THIRD_PARTY_LICENSES.md).

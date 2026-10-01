@@ -3,8 +3,8 @@
 
 name: Pages
 
-# Publishes site/ to GitHub Pages. The site is plain HTML and CSS — there is
-# no build step, so the job only uploads the directory it deploys.
+# Publishes .github/site/ to GitHub Pages. The site is plain HTML and CSS —
+# there is no build step, so the job only uploads the directory it deploys.
 on:
   push:
     branches: [main, dev]
@@ -46,7 +46,7 @@ jobs:
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: .github/site
 
       - name: Deploy to GitHub Pages
         id: deploy

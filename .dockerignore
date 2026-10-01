@@ -30,6 +30,9 @@ tests
 *.md
 !README.md
 
+# Agent configuration — never part of a build context
+.claude
+
 # Editor / OS
 .idea
 .vscode
