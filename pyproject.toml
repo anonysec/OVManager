@@ -60,6 +60,12 @@ pythonpath = ["."]
 # by default, so without this the suite could pass while emitting them.
 filterwarnings = ["error"]
 
+[tool.pyright]
+# Resolve third-party imports against the project venv. Without this pyright
+# falls back to its own interpreter and reports every dependency as missing.
+venvPath = "."
+venv = ".venv"
+
 [tool.ruff]
 line-length = 130
 target-version = "py312"
