@@ -409,6 +409,18 @@ RETIRED_NAMES = (
 )
 
 
+def _arm_named(source: str, name: str) -> str:
+    """One parse_args arm, comments removed.
+
+    The comments explaining these two bugs mention the broken forms by name, so
+    an assertion over the raw text would match the explanation rather than the
+    code — and pass against a fix that removed the comment but not the bug.
+    """
+    start = source.index(f'{name}) ACTION="{name}"')
+    arm = source[start : source.index(";;", start)]
+    return "\n".join(ln for ln in arm.splitlines() if not ln.strip().startswith("#"))
+
+
 def _readable_lines(path: Path) -> list[str]:
     """Lines a person could see: not comments, not the retired-names table."""
     out = []
@@ -457,3 +469,40 @@ def test_the_ready_card_prints_a_runnable_uninstall_command():
     # successful install exit non-zero on its last line.
     bare = card.replace("$(installer_uninstall_command)", "")
     assert "$installer_uninstall_command" not in bare
+
+
+# ── The two bugs a real install found ────────────────────────────────────
+
+# Both of these passed 904 tests. Neither was visible except by installing on a
+# clean box and typing the command.
+
+def test_bare_backup_does_not_read_a_missing_argument():
+    """`ovm backup` is the first command an operator runs, and it died.
+
+    The arm shifted "backup" away and then read `$1` unguarded. With no
+    arguments left that is an unbound variable under `set -u`, so the command
+    failed with "line 864: $1: unbound variable" and wrote no backup at all —
+    a silent loss of the thing you run a backup for.
+    """
+    source = MANAGER.read_text(encoding="utf-8")
+    arm = _arm_named(source, "backup")
+    # The first read of an argument after `shift` must be defaulted. Later reads
+    # sit behind a `$# -ge 1` guard and are fine.
+    first_read = next(ln for ln in arm.splitlines() if '"$1"' in ln or '"${1' in ln)
+    assert '"${1:-}"' in first_read, (
+        f"unguarded read of a shifted argument: {first_read.strip()}"
+    )
+
+
+def test_backup_schedule_consumes_its_own_action():
+    """`ovm backup schedule` printed nothing and exited 0.
+
+    `shift 2` on one remaining argument is fatal under `set -u`, and it fired
+    after ACTION was set — so the command looked like it had run. The action
+    word after "schedule" also fell through to the next arm: `on` was rejected
+    as an unknown option and `status` ran the full status screen.
+    """
+    source = MANAGER.read_text(encoding="utf-8")
+    arm = _arm_named(source, "backup")
+    assert "shift 2" not in arm, "shift 2 on one argument is fatal under set -u"
+    assert 'AUTO_BACKUP_ACTION="$1"' in arm, "the action word must be consumed here"

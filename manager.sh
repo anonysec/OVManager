@@ -861,8 +861,26 @@ parse_args() {
                     shift
                 fi ;;
             backup) ACTION="backup"; shift
-                if [[ "$1" == "schedule" ]]; then
-                    ACTION="auto-backup"; AUTO_BACKUP_ACTION="status"; shift 2
+                # A defaulted read, not a bare one: a bare `ovm backup` leaves no
+                # arguments, and under `set -u` reading the first one there is a
+                # fatal unbound variable. So the command every operator runs
+                # first died on that line and wrote no backup.
+                if [[ "${1:-}" == "schedule" ]]; then
+                    # One shift, not two: the arm already consumed "backup", so
+                    # only "schedule" is left, and `shift 2` on one argument is a
+                    # fatal error under `set -u`. The node's copy had exactly this
+                    # and it shipped broken twice — `ovn backup schedule` answered
+                    # "Unknown option: schedule" because a duplicate `backup)` arm
+                    # made the second, working one dead code.
+                    ACTION="auto-backup"; AUTO_BACKUP_ACTION="status"
+                    shift
+                    # Then the action, if there is one. Without this the next
+                    # word falls through to the next arm: `backup schedule on`
+                    # said "Unknown option: on", and `backup schedule status` ran
+                    # the full status screen instead.
+                    if [[ $# -ge 1 && "$1" != -* ]]; then
+                        AUTO_BACKUP_ACTION="$1"; shift
+                    fi
                 fi ;;
             restore) ACTION="restore"; shift
                 if [[ $# -ge 1 && "$1" != -* ]]; then RESTORE_NAME="$1"; shift; fi ;;
