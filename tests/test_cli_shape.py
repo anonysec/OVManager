@@ -506,3 +506,19 @@ def test_backup_schedule_consumes_its_own_action():
     arm = _arm_named(source, "backup")
     assert "shift 2" not in arm, "shift 2 on one argument is fatal under set -u"
     assert 'AUTO_BACKUP_ACTION="$1"' in arm, "the action word must be consumed here"
+
+
+def test_doctor_forwards_the_all_flag():
+    """`ovm doctor --all` printed the same summary as `ovm doctor`.
+
+    The flag parsed — the subcommand gets the shared parent — and was then
+    dropped, because cmd_doctor() called the CLI with no arguments. So the
+    help's own "detail: ovm doctor --all" pointed at a command that changed
+    nothing, and a failing check could not be shown in full.
+    """
+    source = MANAGER.read_text(encoding="utf-8")
+    for fn in ("cmd_doctor", "cmd_doctor_fix"):
+        start = source.index(f"{fn}() {{")
+        body = source[start : source.index("\n}\n", start)]
+        assert "SHOW_ALL" in body, f"{fn}() drops --all"
+        assert "--all" in body, f"{fn}() never forwards --all"

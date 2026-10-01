@@ -1037,7 +1037,16 @@ cmd_logs() {  # journalctl/docker logs do not exist inside the container
 cmd_backup() { _cli_py backup ${BACKUP_KEEP:+--keep "$BACKUP_KEEP"}; }
 cmd_restore() { _cli_py restore "$@"; }
 cmd_tls_status() { _cli_py tls-status; }
-cmd_doctor() { _cli_py doctor; }
+cmd_doctor() {
+    # Forwards --all, as cmd_status always has. Without this the flag parsed,
+    # was ignored, and the help's "detail: ovm doctor --all" pointed at a command
+    # that printed the same summary either way — so a failing check could not be
+    # shown in full without guessing at other arguments. The node's copy has
+    # always forwarded it; the panel's did not.
+    local dargs=()
+    [[ "$SHOW_ALL" -eq 1 ]] && dargs+=(--all)
+    _cli_py doctor ${dargs[@]+"${dargs[@]}"}
+}
 
 # `ovm tls` with no subcommand. Reads the installed certificate and then lists
 # what it can replace it with — so the answer to "what am I running, and how do I
@@ -1063,7 +1072,12 @@ cmd_tls_options() {
 
 cmd_doctor_fix() {
     check_root
-    if ! is_docker_mode; then _cli_py doctor-fix; return $?; fi
+    if ! is_docker_mode; then
+        local fargs=()
+        [[ "$SHOW_ALL" -eq 1 ]] && fargs+=(--all)
+        _cli_py doctor-fix ${fargs[@]+"${fargs[@]}"}
+        return $?
+    fi
     # The fixes are all host operations — restart the service, set the restart
     # policy, chmod the host .env — so they run here and the checks still come
     # from the CLI in the container.
