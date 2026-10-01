@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import atexit
 import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -33,19 +35,30 @@ _neutered_src = [
     ln.replace('check_root() { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }', "check_root() { return 0; }")
     for ln in _neutered_src
 ]
-# Beside manager.sh, and removed on the way out. It has to be: the script
-# resolves scripts/lib relative to its own location, so a copy in /tmp cannot
-# find the libs and dies before it parses anything. A leftover file in the repo
-# root would be committed by the next `git add -A`.
-_NEUTERED = REPO / ".manager-nogate.sh"
-_NEUTERED.write_text("\n".join(_neutered_src) + "\n", encoding="utf-8")
+# In a temp dir, not the repo. Two reasons, both found by running as a user who
+# does not own the checkout: writing into the source tree failed collection
+# outright with PermissionError, and a leftover file in the repo root is one
+# `git add -A` away from being committed. A copy outside the repo used to fail
+# differently — manager.sh resolves scripts/lib relative to its own location —
+# so the run below points OVM_APP_DIR back at the repo, which is the documented
+# override for exactly that.
+_neutered_body = "\n".join(_neutered_src) + "\n"
+# Asserted on the text, not on the file, so a broken neuter fails here with a
+# readable message instead of four tests mysteriously hitting the root gate.
+assert "if false; then" in _neutered_body, "root gate 1 was not neutralised"
+assert "check_root() { return 0; }" in _neutered_body, "root gate 2 was not neutralised"
 
-
-def _drop_neutered() -> None:
-    _NEUTERED.unlink(missing_ok=True)
-
-
-atexit.register(_drop_neutered)
+_neutered_dir = tempfile.mkdtemp(prefix="ovmanager-nogate-")
+_NEUTERED = Path(_neutered_dir) / "manager.sh"
+_NEUTERED.write_text(_neutered_body, encoding="utf-8")
+# scripts/lib is symlinked beside the copy so the script's own fallback
+# ("$(dirname $BASH_SOURCE)/scripts/lib") resolves. Without it, any test that
+# points OVM_APP_DIR somewhere without a lib dir — which several do on purpose,
+# to make a read fail — died on "scripts/lib not found" before it could print
+# the thing the test was asserting on.
+(_NEUTERED.parent / "scripts").mkdir()
+(_NEUTERED.parent / "scripts" / "lib").symlink_to(REPO / "scripts" / "lib")
+atexit.register(shutil.rmtree, _neutered_dir, True)
 
 # The thirteen verbs on the short list. What the user asked the tool to be.
 SHORT_LIST = (
@@ -88,6 +101,10 @@ def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     prints after that, and they passed on a root box while failing everywhere
     else. The gate is neutered the same way test_manager_sh.py does it, on the
     code rather than the comment above it.
+
+    OVM_APP_DIR points back at the repo so the temp-dir copy still finds
+    scripts/lib. Callers that pass their own OVM_APP_DIR override this, which is
+    what the failing-read test wants.
     """
     import os
 
@@ -96,7 +113,7 @@ def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=60,
-        env={**os.environ, **(env or {})},
+        env={"OVM_APP_DIR": str(REPO), **os.environ, **(env or {})},
     )
 
 
