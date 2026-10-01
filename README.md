@@ -224,7 +224,6 @@ Full documentation is published at **<https://anonysec.github.io/OVManager/>**.
 Elsewhere in this repository:
 
 - [CONTRIBUTING.md](.github/CONTRIBUTING.md) — ground rules, manual install, the checks, release freeze.
-- [.github/docs/adr/installer-design.md](.github/docs/adr/installer-design.md) — why the installer and the CLI look the way they do.
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
 
