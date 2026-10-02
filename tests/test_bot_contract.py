@@ -17,7 +17,7 @@ Two invariants that must survive every refactor:
 import re
 from pathlib import Path
 
-from bot.callbacks import (
+from backend.bot.callbacks import (
     MAX_CALLBACK_BYTES,
     build_callback,
     int_arg,
@@ -40,7 +40,7 @@ def test_build_callback_enforces_size_limit():
 
 
 def test_registered_prefixes_round_trip():
-    import bot.handlers.actions  # noqa: F401 (populates the registry)
+    import backend.bot.handlers.actions  # noqa: F401 (populates the registry)
 
     for prefix, arg in [
         ("ext", "some-uuid"),
@@ -104,9 +104,9 @@ def test_every_emitted_callback_fits_and_matches():
         "lang",
         "plan",
     }
-    text = (REPO / "bot" / "keyboards.py").read_text(encoding="utf-8")
+    text = (REPO / "backend" / "bot" / "keyboards.py").read_text(encoding="utf-8")
     for mod in ("actions", "create", "edit", "users", "status", "settings", "home", "router"):
-        text += (REPO / "bot" / "handlers" / f"{mod}.py").read_text(encoding="utf-8")
+        text += (REPO / "backend" / "bot" / "handlers" / f"{mod}.py").read_text(encoding="utf-8")
     # f"<prefix>:..." literals (static part before any {interpolation}).
     emitted = set(re.findall(r'f"([a-z0-9]+):', text))
     unknown = {p for p in emitted if p not in known}
@@ -118,7 +118,7 @@ def test_bot_never_writes_through_crud():
     state but must never call crud create/update/delete paths."""
     writes = re.compile(r"crud\.(create|update|delete|adjust|restore|change_user_status|reset_user_usage)\w*\(")
     offenders = []
-    for path in (REPO / "bot").rglob("*.py"):
+    for path in (REPO / "backend" / "bot").rglob("*.py"):
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if writes.search(line):
                 offenders.append(f"{path.name}:{i}: {line.strip()}")

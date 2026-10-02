@@ -23,14 +23,14 @@ def start_bot():
     import sys
 
     app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    bot_path = os.path.join(app_root, "bot", "main.py")
+    bot_path = os.path.join(app_root, "backend", "bot", "main.py")
     if not os.path.exists(bot_path):
         return None
     if _bot_process and _bot_process.poll() is None:
         return _bot_process
     try:
         _bot_process = subprocess.Popen(
-            [sys.executable, "-m", "bot.main"],
+            [sys.executable, "-m", "backend.bot.main"],
             cwd=app_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT,

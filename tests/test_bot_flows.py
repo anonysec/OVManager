@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from bot.i18n import t
-from bot.identity import Actor, _identity_cache, _token_cache
+from backend.bot.i18n import t
+from backend.bot.identity import Actor, _identity_cache, _token_cache
 
 
 class FakeMessage:
@@ -122,7 +122,7 @@ class FakePanel:
 
 @pytest.mark.asyncio
 async def test_panel_request_branches(monkeypatch):
-    import bot.api as api_mod
+    import backend.bot.api as api_mod
 
     seen = {}
 
@@ -184,7 +184,7 @@ async def test_panel_request_branches(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_restore_user_path(monkeypatch):
-    import bot.api as api_mod
+    import backend.bot.api as api_mod
 
     called = {}
 
@@ -212,8 +212,8 @@ async def test_restore_user_path(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ensure_panel_ok_unauthorized_resets_session():
-    from bot.handlers.access import ensure_panel_ok
-    from bot.identity import _identity_cache as cache
+    from backend.bot.handlers.access import ensure_panel_ok
+    from backend.bot.identity import _identity_cache as cache
 
     actor = make_actor()
     cache[7] = (0.0, actor)
@@ -227,7 +227,7 @@ async def test_ensure_panel_ok_unauthorized_resets_session():
 
 @pytest.mark.asyncio
 async def test_ensure_panel_ok_unreachable_and_ok():
-    from bot.handlers.access import ensure_panel_ok
+    from backend.bot.handlers.access import ensure_panel_ok
 
     actor = make_actor()
     update = make_update(callback_data="u:x")
@@ -242,9 +242,9 @@ async def test_ensure_panel_ok_unreachable_and_ok():
 
 @pytest.mark.asyncio
 async def test_invalidate_token_sweeps_caches():
-    from bot.identity import _identity_cache as cache
-    from bot.identity import _token_cache as tcaches
-    from bot.identity import invalidate_token
+    from backend.bot.identity import _identity_cache as cache
+    from backend.bot.identity import _token_cache as tcaches
+    from backend.bot.identity import invalidate_token
 
     actor = make_actor()
     cache[7] = (0.0, actor)
@@ -260,7 +260,7 @@ async def test_invalidate_token_sweeps_caches():
 
 @pytest.mark.asyncio
 async def test_create_confirm_gated_on_valid_input(monkeypatch):
-    from bot.handlers import create as create_mod
+    from backend.bot.handlers import create as create_mod
 
     monkeypatch.setattr(create_mod, "Panel", FakePanel)
     actor = make_actor()
@@ -274,7 +274,7 @@ async def test_create_confirm_gated_on_valid_input(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_delete_then_undo(monkeypatch):
-    from bot.handlers import actions as actions_mod
+    from backend.bot.handlers import actions as actions_mod
 
     class DeletingPanel(FakePanel):
         async def get_user(self, *, uuid=None, name=None):
@@ -296,14 +296,14 @@ async def test_delete_then_undo(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_edit_flow_owner_only_and_happy_path(monkeypatch):
-    from bot.handlers import edit as edit_mod
+    from backend.bot.handlers import edit as edit_mod
 
     class EditingPanel(FakePanel):
         async def get_user(self, *, uuid=None, name=None):
             return {"uuid": "u-1", "name": "amy", "is_active": True}
 
     monkeypatch.setattr(edit_mod, "Panel", EditingPanel)
-    monkeypatch.setattr("bot.handlers.users.Panel", EditingPanel)
+    monkeypatch.setattr("backend.bot.handlers.users.Panel", EditingPanel)
 
     admin = make_actor(role="admin")
     update = make_update(callback_data="edt:u-1")
@@ -338,7 +338,7 @@ async def test_edit_flow_owner_only_and_happy_path(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unknown_command_returns_home(monkeypatch):
-    from bot.handlers import router as router_mod
+    from backend.bot.handlers import router as router_mod
 
     actor = make_actor()
     update = make_update(text="/frobnicate")
@@ -350,7 +350,7 @@ async def test_unknown_command_returns_home(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_node_drill_down(monkeypatch):
-    from bot.handlers import status as status_mod
+    from backend.bot.handlers import status as status_mod
 
     class NodePanel(FakePanel):
         async def get_nodes(self):

@@ -2,7 +2,7 @@
 
 Background: a 140 MB Playwright install once landed in a production venv.
 These tests pin the hygiene rules so it cannot happen again:
-- runtime code (backend/, bot/, main.py) imports only runtime deps + stdlib,
+- runtime code (backend/, main.py) imports only runtime deps + stdlib,
   never test/dev-only packages;
 - every `uv sync` invocation that provisions a server (install.sh,
   Dockerfile) uses --frozen --no-dev.
@@ -23,7 +23,7 @@ BANNED_RUNTIME_IMPORTS = {
     "yaml",  # PyYAML: not a runtime dep; keep the tree PyYAML-free
 }
 
-RUNTIME_DIRS = [REPO / "backend", REPO / "bot", REPO / "main.py"]
+RUNTIME_DIRS = [REPO / "backend", REPO / "main.py"]
 
 
 def _imports_of(path: Path) -> set[str]:

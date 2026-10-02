@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx2
 
-from bot.config import config
+from backend.bot.config import config
 
 log = logging.getLogger(__name__)
 TIMEOUT = httpx2.Timeout(30.0, connect=8.0)

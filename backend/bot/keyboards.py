@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
-from bot.i18n import DEFAULT_LANG, LANG_NAMES, LOCALES, t
+from backend.bot.i18n import DEFAULT_LANG, LANG_NAMES, LOCALES, t
 
 
 def main_menu(*, in_flow: bool = False, lang: str = DEFAULT_LANG, is_owner: bool = False) -> ReplyKeyboardMarkup:

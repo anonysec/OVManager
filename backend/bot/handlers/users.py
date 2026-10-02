@@ -3,13 +3,13 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from bot.api import Panel
-from bot.formatters import esc, expiry_label, status_label, status_rank, user_card
-from bot.i18n import lang_of, t
-from bot.identity import Actor
-from bot.keyboards import user_actions, users_nav
-from bot.states import set_flow
-from bot.ui import edit_or_reply
+from backend.bot.api import Panel
+from backend.bot.formatters import esc, expiry_label, status_label, status_rank, user_card
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import user_actions, users_nav
+from backend.bot.states import set_flow
+from backend.bot.ui import edit_or_reply
 
 PAGE_SIZE = 8
 

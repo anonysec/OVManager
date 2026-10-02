@@ -3,13 +3,13 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.formatters import esc
-from bot.handlers.access import require_actor
-from bot.i18n import LANG_NAMES, LANG_PROMPT, has_lang, lang_of, set_lang, t
-from bot.identity import Actor
-from bot.keyboards import home_actions, language_menu, language_picker, main_menu
-from bot.states import clear_flow
-from bot.ui import answer, edit_or_reply
+from backend.bot.formatters import esc
+from backend.bot.handlers.access import require_actor
+from backend.bot.i18n import LANG_NAMES, LANG_PROMPT, has_lang, lang_of, set_lang, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import home_actions, language_menu, language_picker, main_menu
+from backend.bot.states import clear_flow
+from backend.bot.ui import answer, edit_or_reply
 
 
 def _welcome(actor: Actor, lang: str) -> str:

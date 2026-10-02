@@ -10,7 +10,7 @@ one for the same disabled row on the next tap.
 
 import pytest
 
-from bot.identity import Actor, _identity_cache, _token_cache, resolve
+from backend.bot.identity import Actor, _identity_cache, _token_cache, resolve
 
 
 @pytest.fixture(autouse=True)
@@ -104,7 +104,7 @@ async def test_disabling_mid_session_drops_cached_actor():
 
 @pytest.mark.anyio
 async def test_remote_resolve_skips_disabled_admin(monkeypatch):
-    import bot.identity as identity
+    import backend.bot.identity as identity
 
     class FakePanel:
         def __init__(self, token):
@@ -123,7 +123,7 @@ async def test_remote_resolve_skips_disabled_admin(monkeypatch):
         return "svc-token"
 
     monkeypatch.setattr(identity, "service_token", fake_service_token)
-    monkeypatch.setattr("bot.api.Panel", FakePanel)
+    monkeypatch.setattr("backend.bot.api.Panel", FakePanel)
 
     assert await resolve(900004) is None
 

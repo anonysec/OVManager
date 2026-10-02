@@ -23,7 +23,6 @@ RUN apt-get update \
 # Copy package metadata and Python sources before installing the project.
 COPY pyproject.toml uv.lock* README.md ./
 COPY backend/ ./backend/
-COPY bot/ ./bot/
 COPY main.py ./
 
 # Install uv then sync from the lock file for fully reproducible builds.
@@ -57,7 +56,6 @@ RUN python -m pip uninstall -y pip \
 # Copy the pre-built venv (no uv, no compiler) and the sources.
 COPY --from=builder /app/.venv ./.venv
 COPY backend/ ./backend/
-COPY bot/ ./bot/
 COPY cli/ ./cli/
 COPY main.py ./
 COPY .env.example ./.env.example

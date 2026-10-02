@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 from datetime import date, datetime
 
-from bot.i18n import DEFAULT_LANG, t
+from backend.bot.i18n import DEFAULT_LANG, t
 
 
 def esc(value) -> str:

@@ -11,15 +11,15 @@ from datetime import date, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.api import Panel
-from bot.formatters import esc
-from bot.handlers.access import ensure_panel_ok, fetch_user
-from bot.handlers.users import show_user
-from bot.i18n import lang_of, t
-from bot.identity import Actor
-from bot.keyboards import back_to_user, confirm_edit, edit_fields
-from bot.states import clear_flow, get_flow, set_flow
-from bot.ui import answer, edit_or_reply
+from backend.bot.api import Panel
+from backend.bot.formatters import esc
+from backend.bot.handlers.access import ensure_panel_ok, fetch_user
+from backend.bot.handlers.users import show_user
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import back_to_user, confirm_edit, edit_fields
+from backend.bot.states import clear_flow, get_flow, set_flow
+from backend.bot.ui import answer, edit_or_reply
 
 GB = 1073741824
 
@@ -55,7 +55,7 @@ async def start_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: 
 
 
 async def handle_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, data: str) -> bool:
-    from bot.callbacks import uuid_arg
+    from backend.bot.callbacks import uuid_arg
 
     flow = _flow(context)
     if data.startswith("edt:"):

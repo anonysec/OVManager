@@ -5,12 +5,12 @@ import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.api import Panel
-from bot.formatters import esc, fmt_uptime, is_expired
-from bot.i18n import lang_of, t
-from bot.identity import Actor
-from bot.keyboards import node_detail, nodes_actions, nodes_list, status_actions
-from bot.ui import edit_or_reply
+from backend.bot.api import Panel
+from backend.bot.formatters import esc, fmt_uptime, is_expired
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import node_detail, nodes_actions, nodes_list, status_actions
+from backend.bot.ui import edit_or_reply
 
 
 async def show_status(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor) -> None:

@@ -10,9 +10,9 @@ from types import SimpleNamespace
 import pytest
 from telegram import ReplyKeyboardMarkup
 
-from bot.i18n import LOCALES, menu_action, t
-from bot.identity import Actor
-from bot.keyboards import home_actions, main_menu, user_actions
+from backend.bot.i18n import LOCALES, menu_action, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import home_actions, main_menu, user_actions
 
 
 class FakeMessage:
@@ -166,7 +166,7 @@ def test_user_actions_cover_every_operation():
 
 @pytest.mark.asyncio
 async def test_start_shows_persistent_sections_and_home_actions():
-    from bot.handlers.home import handle_start
+    from backend.bot.handlers.home import handle_start
 
     update = make_update(text="/start")
     context = make_context(actor=make_actor())
@@ -186,8 +186,8 @@ async def test_start_shows_persistent_sections_and_home_actions():
 
 @pytest.mark.asyncio
 async def test_text_stats_reuses_status_summary(monkeypatch):
-    from bot.handlers import router as router_mod
-    from bot.handlers import status as status_mod
+    from backend.bot.handlers import router as router_mod
+    from backend.bot.handlers import status as status_mod
 
     class StatsPanel(FakePanel):
         async def get_info(self):
@@ -209,7 +209,7 @@ async def test_text_stats_reuses_status_summary(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_text_settings_owner_view_and_admin_denied():
-    from bot.handlers import router as router_mod
+    from backend.bot.handlers import router as router_mod
 
     owner_update = make_update(text="Settings")
     await router_mod.on_text(owner_update, make_context(actor=make_actor()))
@@ -225,7 +225,7 @@ async def test_text_settings_owner_view_and_admin_denied():
 
 @pytest.mark.asyncio
 async def test_callback_settings_opens_owner_view():
-    from bot.handlers import router as router_mod
+    from backend.bot.handlers import router as router_mod
 
     update = make_update(callback_data="settings")
     await router_mod.on_callback(update, make_context(actor=make_actor()))
@@ -236,7 +236,7 @@ async def test_callback_settings_opens_owner_view():
 
 @pytest.mark.asyncio
 async def test_text_create_opens_plan_picker_first():
-    from bot.handlers import router as router_mod
+    from backend.bot.handlers import router as router_mod
 
     update = make_update(text="Create")
     context = make_context(actor=make_actor())
@@ -248,8 +248,8 @@ async def test_text_create_opens_plan_picker_first():
 
 @pytest.mark.asyncio
 async def test_create_plan_then_name_then_confirm(monkeypatch):
-    from bot.handlers import create as create_mod
-    from bot.handlers import users as users_mod
+    from backend.bot.handlers import create as create_mod
+    from backend.bot.handlers import users as users_mod
 
     created = []
 
@@ -299,7 +299,7 @@ async def test_create_plan_then_name_then_confirm(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_standard_plan_falls_back_to_local_config_when_panel_has_no_defaults(monkeypatch):
-    from bot.handlers import create as create_mod
+    from backend.bot.handlers import create as create_mod
 
     class NoDefaultsPanel(FakePanel):
         async def user_defaults(self):
@@ -320,7 +320,7 @@ async def test_standard_plan_falls_back_to_local_config_when_panel_has_no_defaul
 
 @pytest.mark.asyncio
 async def test_create_custom_asks_values_after_name(monkeypatch):
-    from bot.handlers import create as create_mod
+    from backend.bot.handlers import create as create_mod
 
     monkeypatch.setattr(create_mod, "Panel", FakePanel)
     actor = make_actor()
@@ -353,7 +353,7 @@ async def test_create_custom_asks_values_after_name(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_free_text_during_plan_step_reshows_buttons(monkeypatch):
-    from bot.handlers import create as create_mod
+    from backend.bot.handlers import create as create_mod
 
     monkeypatch.setattr(create_mod, "Panel", FakePanel)
     actor = make_actor()
@@ -370,8 +370,8 @@ async def test_free_text_during_plan_step_reshows_buttons(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_unknown_text_guides_back_to_menu(monkeypatch):
-    from bot.handlers import router as router_mod
-    from bot.handlers import users as users_mod
+    from backend.bot.handlers import router as router_mod
+    from backend.bot.handlers import users as users_mod
 
     monkeypatch.setattr(users_mod, "Panel", FakePanel)
     update = make_update(text="zzz-not-a-name")
@@ -383,7 +383,7 @@ async def test_unknown_text_guides_back_to_menu(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_delete_button_asks_confirmation(monkeypatch):
-    from bot.handlers import actions as actions_mod
+    from backend.bot.handlers import actions as actions_mod
 
     class DeletingPanel(FakePanel):
         async def get_user(self, *, uuid=None, name=None):

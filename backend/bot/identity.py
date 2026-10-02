@@ -6,7 +6,7 @@ import logging
 import time
 from dataclasses import dataclass
 
-from bot.config import config
+from backend.bot.config import config
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ async def _resolve_remote(telegram_id: int) -> Actor | None:
     token = await service_token()
     if not token:
         return None
-    from bot.api import Panel
+    from backend.bot.api import Panel
 
     panel = Panel(token)
     settings = await panel.get_settings()
@@ -135,7 +135,7 @@ async def service_token() -> str | None:
     if config.api_token:
         return config.api_token
     if config.api_username and config.api_password:
-        from bot.api import login
+        from backend.bot.api import login
 
         return await login(config.api_username, config.api_password)
     try:

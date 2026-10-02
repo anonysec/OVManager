@@ -6,9 +6,9 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.i18n import lang_of, t
-from bot.identity import Actor, resolve
-from bot.ui import edit_or_reply
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor, resolve
+from backend.bot.ui import edit_or_reply
 
 log = logging.getLogger(__name__)
 
@@ -77,9 +77,9 @@ async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
     Unreachable panel and missing user get distinct notices; every action
     handler knows the uuid, so both offer back-to-user uniformly.
     """
-    from bot.i18n import t
-    from bot.keyboards import back_to_user
-    from bot.ui import edit_or_reply
+    from backend.bot.i18n import t
+    from backend.bot.keyboards import back_to_user
+    from backend.bot.ui import edit_or_reply
 
     user = await panel.get_user(uuid=uuid)
     if user:
@@ -100,7 +100,7 @@ async def ensure_panel_ok(update: Update, context: ContextTypes.DEFAULT_TYPE, ac
     actor/token and asks for one more tap, and status 0 means the panel is
     unreachable — a distinct message, never an empty list.
     """
-    from bot.identity import invalidate_token
+    from backend.bot.identity import invalidate_token
 
     lang = lang_of(update, context)
     status = (result or {}).get("status")

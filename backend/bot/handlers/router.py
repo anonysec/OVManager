@@ -5,17 +5,17 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.handlers.access import require_actor
-from bot.handlers.actions import dispatch_action
-from bot.handlers.create import handle_create_callback, handle_create_text, start_create
-from bot.handlers.edit import handle_edit_callback, handle_edit_text
-from bot.handlers.home import apply_language, show_home, show_languages
-from bot.handlers.settings import show_settings
-from bot.handlers.status import show_node_detail, show_nodes, show_status
-from bot.handlers.users import prompt_search, search_users, show_user, show_users
-from bot.i18n import has_lang, lang_of, menu_action, t
-from bot.states import clear_flow, get_flow
-from bot.ui import answer, edit_or_reply
+from backend.bot.handlers.access import require_actor
+from backend.bot.handlers.actions import dispatch_action
+from backend.bot.handlers.create import handle_create_callback, handle_create_text, start_create
+from backend.bot.handlers.edit import handle_edit_callback, handle_edit_text
+from backend.bot.handlers.home import apply_language, show_home, show_languages
+from backend.bot.handlers.settings import show_settings
+from backend.bot.handlers.status import show_node_detail, show_nodes, show_status
+from backend.bot.handlers.users import prompt_search, search_users, show_user, show_users
+from backend.bot.i18n import has_lang, lang_of, menu_action, t
+from backend.bot.states import clear_flow, get_flow
+from backend.bot.ui import answer, edit_or_reply
 
 log = logging.getLogger(__name__)
 
@@ -164,13 +164,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await prompt_search(update, context)
             return
         if data.startswith("users:"):
-            from bot.callbacks import int_arg
+            from backend.bot.callbacks import int_arg
 
             await answer(update)
             await show_users(update, context, actor, int_arg(data.split(":", 1)[1]))
             return
         if data.startswith("u:"):
-            from bot.callbacks import uuid_arg
+            from backend.bot.callbacks import uuid_arg
 
             await answer(update)
             uuid = uuid_arg(data[2:])
@@ -180,7 +180,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await show_user(update, context, actor, uuid)
             return
         if data.startswith("ns:"):
-            from bot.callbacks import int_arg
+            from backend.bot.callbacks import int_arg
 
             await answer(update)
             await show_node_detail(update, context, actor, int_arg(data.split(":", 1)[1]))

@@ -1,5 +1,5 @@
-from bot.formatters import expiry_label, fmt_bytes, status_label, status_rank
-from bot.i18n import LOCALES, _catalog, has_lang, lang_of, menu_action, normalize, set_lang, t
+from backend.bot.formatters import expiry_label, fmt_bytes, status_label, status_rank
+from backend.bot.i18n import LOCALES, _catalog, has_lang, lang_of, menu_action, normalize, set_lang, t
 
 
 def test_locale_key_parity():
@@ -33,7 +33,7 @@ def test_lang_is_not_telegram_app_language():
     import os
     import tempfile
 
-    import bot.i18n as i18n
+    import backend.bot.i18n as i18n
 
     fd, path = tempfile.mkstemp(suffix=".json")
     os.close(fd)

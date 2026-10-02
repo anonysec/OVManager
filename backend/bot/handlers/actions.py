@@ -5,15 +5,15 @@ from io import BytesIO
 from telegram import InputFile, Update
 from telegram.ext import ContextTypes
 
-from bot.api import Panel
-from bot.callbacks import action, parse_callback
-from bot.formatters import esc
-from bot.handlers.access import ensure_panel_ok, fetch_user
-from bot.handlers.users import show_user
-from bot.i18n import lang_of, t
-from bot.identity import Actor
-from bot.keyboards import after_delete, back_to_user, confirm_delete, extend_actions, node_picker
-from bot.ui import answer, edit_or_reply
+from backend.bot.api import Panel
+from backend.bot.callbacks import action, parse_callback
+from backend.bot.formatters import esc
+from backend.bot.handlers.access import ensure_panel_ok, fetch_user
+from backend.bot.handlers.users import show_user
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import after_delete, back_to_user, confirm_delete, extend_actions, node_picker
+from backend.bot.ui import answer, edit_or_reply
 
 GB = 1073741824
 
@@ -236,7 +236,7 @@ async def _cfg(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor,
 
 @action("dl")
 async def _download(update: Update, context: ContextTypes.DEFAULT_TYPE, actor: Actor, rest: str) -> bool:
-    from bot.callbacks import node_ref_arg
+    from backend.bot.callbacks import node_ref_arg
 
     lang = lang_of(update, context)
     await answer(update, t(lang, "preparing"))

@@ -12,9 +12,9 @@ import signal
 
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
-from bot.api import close_client
-from bot.config import config
-from bot.handlers import handle_start, on_callback, on_error, on_text, on_unknown_command
+from backend.bot.api import close_client
+from backend.bot.config import config
+from backend.bot.handlers import handle_start, on_callback, on_error, on_text, on_unknown_command
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 log = logging.getLogger("bot")

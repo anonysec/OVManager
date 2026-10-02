@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["backend*", "bot*"]
+include = ["backend*"]
 
 [project.optional-dependencies]
 dev = [

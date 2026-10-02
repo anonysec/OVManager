@@ -3,17 +3,17 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from backend.bot.api import Panel
+from backend.bot.config import config
+from backend.bot.formatters import esc, plan_label
+from backend.bot.handlers.access import ensure_panel_ok
+from backend.bot.handlers.users import show_user
+from backend.bot.i18n import lang_of, t
+from backend.bot.identity import Actor
+from backend.bot.keyboards import cancel_actions, confirm_create, main_menu, name_prompt, plan_picker
+from backend.bot.states import clear_flow, get_flow, set_flow
+from backend.bot.ui import answer, edit_or_reply
 from backend.validation import validate_username
-from bot.api import Panel
-from bot.config import config
-from bot.formatters import esc, plan_label
-from bot.handlers.access import ensure_panel_ok
-from bot.handlers.users import show_user
-from bot.i18n import lang_of, t
-from bot.identity import Actor
-from bot.keyboards import cancel_actions, confirm_create, main_menu, name_prompt, plan_picker
-from bot.states import clear_flow, get_flow, set_flow
-from bot.ui import answer, edit_or_reply
 
 
 def _flow(context: ContextTypes.DEFAULT_TYPE) -> dict:
@@ -110,7 +110,7 @@ async def handle_create_callback(update: Update, context: ContextTypes.DEFAULT_T
     if data == "cancel":
         await answer(update)
         clear_flow(context)
-        from bot.handlers.home import show_home
+        from backend.bot.handlers.home import show_home
 
         await show_home(update, context, actor)
         return True
