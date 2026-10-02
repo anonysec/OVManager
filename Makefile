@@ -38,12 +38,20 @@ check-bash:
 	.venv/bin/python -m pytest -q -p no:cacheprovider \
 	  tests/test_ui_output.py tests/test_lib_sourcing.py
 
-lint:
+# Split so each CI job can run the half it owns. The frontend half needs
+# node_modules, which the backend job has no reason to install — pointing it at
+# the combined target made it fail on a missing @eslint/js rather than on
+# anything about the backend.
+lint-backend:
 	.venv/bin/ruff check backend cli main.py tests scripts/bench
 	.venv/bin/ruff format --check backend cli main.py tests scripts/bench
 	bash -n install.sh manager.sh scripts/lib/*.sh
 	git diff --check
+
+lint-frontend:
 	cd frontend && npx eslint src/
+
+lint: lint-backend lint-frontend
 
 verify: lint
 	cd frontend && npm run verify
