@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.3 — 2026-10-02
+
+The screen clears, and the output uses your terminal.
+
+**Fixed**
+
+- The screen never cleared. `render_screen` ran `command clear >/dev/null 2>&1`,
+  and `clear` clears by *printing* escape codes — so the redirection threw them
+  away. The fallback only ran when `clear` failed, which it does not, making the
+  function a no-op that looked like it worked. Both start-screen clears had it.
+- The menu printed its prompt twice whenever the 2-second keystroke read timed
+  out, because the fallback called `ask()`, which prints the same prompt again.
+- The rule was a hardcoded 46 characters. It is now the terminal's width, from
+  `tput`, then `stty`, then `COLUMNS`, clamped to [48, 100]. A pipe still gets
+  80.
+
+All three were found by running the installer on a real pty. None of them is
+reachable from a pipe, which is where the tests live.
+
+908 pass.
+
 ## 1.0.2 — 2026-10-02
 
 The bot moves under the backend, and lint lives in one place.
