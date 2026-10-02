@@ -8,6 +8,7 @@
   never swapped out from under the rest of the suite.
 """
 
+import os
 import sqlite3
 
 import pytest
@@ -134,6 +135,62 @@ def test_backup_restore_roundtrip_on_scratch_db(monkeypatch, tmp_path):
                 conn.close()
             assert rows == ["before"]
             assert any(p.name.startswith("ovmanager-pre-restore-") for p in fake_backups.glob("*.ovmbak"))
+    finally:
+        fake_engine.dispose()
+
+
+def test_restore_keeps_the_database_readable_by_the_service_account(monkeypatch, tmp_path):
+    """A restored database must stay owned by whoever owned it before.
+
+    `ovm restore` runs as root, and the candidate it activates comes from
+    `mkstemp`, so it is root-owned. `os.replace` keeps the *candidate's*
+    owner, not the live file's — so without an explicit chown the panel comes
+    back unable to read its own database and crash-loops on
+    `sqlite3.OperationalError: unable to open database file`. That is a real
+    production failure, not a hypothetical: the panel service runs as a
+    dedicated unprivileged account, and a 0600 root-owned database is simply
+    not openable to it.
+
+    Ownership is captured from the live file and re-applied, so this asserts
+    the *relationship* (owner preserved across a restore) rather than a
+    hardcoded uid — the same code is correct for the native service account and
+    for uid 1000 under Docker.
+    """
+    scratch = tmp_path / "live.db"
+    conn = sqlite3.connect(str(scratch))
+    conn.execute("CREATE TABLE probe (id INTEGER PRIMARY KEY, v TEXT)")
+    conn.execute("INSERT INTO probe (v) VALUES ('before')")
+    conn.commit()
+    conn.close()
+
+    # Pretend the live database belongs to some unprivileged account that is
+    # not the user running the restore. This is the real arrangement: the panel
+    # never runs as the user invoking `ovm restore`.
+    service_uid, service_gid = 4242, 4242
+    os.chown(scratch, service_uid, service_gid)
+
+    fake_engine = create_engine(f"sqlite:///{scratch}")
+    fake_backups = tmp_path / "backups"
+    monkeypatch.setattr(m, "DB_PATH", scratch)
+    monkeypatch.setattr(m, "BACKUP_DIR", fake_backups)
+    monkeypatch.setattr(m, "engine", fake_engine)
+    try:
+        with TestClient(api) as client:
+            h = _owner_headers()
+            r = client.post("/api/maintenance/backup", headers=h)
+            assert r.json()["success"] is True, r.json()
+
+            r = client.post(
+                "/api/maintenance/backup/restore", data={"restore_from_server": r.json()["data"]["filename"]}, headers=h
+            )
+            assert r.json()["success"] is True, r.json()
+
+        # The whole point: the service account can still open its own database.
+        restored = os.stat(scratch)
+        assert (restored.st_uid, restored.st_gid) == (service_uid, service_gid), (
+            "restore did not preserve the database owner — the panel's service "
+            f"account would get 'unable to open database file' (now {restored.st_uid}:{restored.st_gid})"
+        )
     finally:
         fake_engine.dispose()
 
