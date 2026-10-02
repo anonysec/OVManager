@@ -80,9 +80,12 @@ jobs:
           # Same ruff the lockfile pins, so `make lint` here and in CI agree:
           # an unpinned ruff reformatted files the local run called clean.
           uv pip install --python .venv/bin/python3 "ruff==0.16.5"
-          .venv/bin/ruff check backend bot cli main.py tests
-          .venv/bin/ruff format --check backend bot cli main.py tests
-          bash -n install.sh manager.sh scripts/lib/*.sh
+          # `make lint`, not a second copy of it. This step and the Makefile each
+          # listed the lint targets, and after the bot moved under backend the
+          # Makefile was fixed while this one kept naming the old path — so CI
+          # died with E902 while `make lint` passed, twice. One command, one home.
+          make lint
+
       - name: Run backend tests
         # -n auto: each xdist worker imports conftest, which allocates its own
         # throwaway data dir with tempfile.mkdtemp(), so no two workers share a
