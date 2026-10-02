@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GROUPS = [
   { dir: join(root, 'src', 'lang'), locales: ['fa', 'ru', 'cn'], budget: 13 },
-  { dir: join(root, '..', 'bot', 'locales'), locales: ['fa', 'ru', 'cn'], budget: 0 },
+  { dir: join(root, '..', 'backend', 'bot', 'locales'), locales: ['fa', 'ru', 'cn'], budget: 0 },
 ];
 
 let failures = 0;

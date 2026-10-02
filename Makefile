@@ -39,8 +39,8 @@ check-bash:
 	  tests/test_ui_output.py tests/test_lib_sourcing.py
 
 lint:
-	.venv/bin/ruff check backend bot cli main.py tests scripts/bench
-	.venv/bin/ruff format --check backend bot cli main.py tests scripts/bench
+	.venv/bin/ruff check backend cli main.py tests scripts/bench
+	.venv/bin/ruff format --check backend cli main.py tests scripts/bench
 	bash -n install.sh manager.sh scripts/lib/*.sh
 	git diff --check
 	cd frontend && npx eslint src/
@@ -61,4 +61,4 @@ openapi:
 
 clean:
 	rm -rf frontend/dist backend/__pycache__ .pytest_cache
-	find backend bot tests -name '__pycache__' -type d -prune -exec rm -rf {} +
+	find backend tests -name '__pycache__' -type d -prune -exec rm -rf {} +
