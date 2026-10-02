@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.4 — 2026-10-02
+
+The release scan goes green.
+
+**Fixed**
+
+`build.yml` — Build and Test — has failed on every release since v1.0.0 on
+30 September, including the three cut on 1 October. It runs Trivy with
+`exit-code: 1` against CRITICAL and HIGH, and it found four:
+
+- `libpcre2-8-0`, HIGH, fixed in 10.46-1~deb13u3
+- `urllib3`, three HIGH and MEDIUM, fixed in 2.8.0
+
+The first is the base image. `python:3.12-slim` ships whatever Debian had when
+the tag was cut, so a release can carry a HIGH Debian has already fixed, and
+nothing in the Dockerfile ever upgraded it. The runtime stage now does.
+
+The second was in the lock at 2.7.0 and is now 2.8.0.
+
+Both verified inside the built image rather than by reading the Dockerfile:
+libpcre2-8-0 at 10.46-1~deb13u3, urllib3 at 2.8.0.
+
+908 pass.
+
 ## 1.0.3 — 2026-10-02
 
 The screen clears, and the output uses your terminal.

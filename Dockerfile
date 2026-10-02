@@ -38,6 +38,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Patch the base image's OS packages. python:3.12-slim ships whatever Debian
+# had when the tag was cut, so a published release can carry a HIGH that Debian
+# has already fixed — libpcre2-8-0 was one, and Trivy failed the release on it.
+# `--no-install-recommends` and no new packages: this upgrades what is already
+# there, so the image gains no attack surface to fix the first one. Without
+# --fix-missing the upgrade aborts if a fixed version has been withdrawn, which
+# is the correct outcome for a release build rather than a silent partial one.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user.
 # ovpanel is the group that may read the config bind-mounted at /app/.env — the
 # .env is mounted read-only instead of being passed through compose `env_file`,
