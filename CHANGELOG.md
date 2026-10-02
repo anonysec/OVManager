@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.2 — 2026-10-02
+
+The bot moves under the backend, and lint lives in one place.
+
+**Layout**
+
+`bot/` is now `backend/bot/`. The bot already imported `backend.urlpath`,
+`backend.db`, `backend.config` and `backend.validation`, and
+`backend/bot_supervisor.py` already owned its process, so this makes an existing
+one-way dependency explicit. Verified in the built image: `backend.bot.main`
+imports, `/app/bot` is gone, and the supervisor launches the new module.
+
+**CI**
+
+Both workflows listed the lint targets as well as the Makefile did, so a path
+change had to be made twice — and CI failed twice while the local run passed.
+They now call `make lint-backend`, split from `lint-frontend` so each job runs
+the half it can actually check. pyright resolves against the project venv.
+
+908 pass.
+
 ## 1.0.1 — 2026-10-01
 
 One renderer for every character, and a CLI that matches it.
