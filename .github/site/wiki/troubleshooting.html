@@ -325,18 +325,12 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
             <td><code>No verified release file is available</code>, or a checksum error</td>
             <td>
               The installer only accepts a verified release archive and its
-              SHA-256 sidecar. If those artifacts are not published yet, nothing
-              is wrong with your server &mdash; use a
+              SHA-256 sidecar &mdash; that download is the only thing it makes.
+              If those artifacts are not published yet, nothing is wrong with
+              your server &mdash; use a
               <a href="install.html#from-source">from-source install</a>. On an
               older install that is stuck on a download error, re-bootstrap with
               the current raw one-liner and then run <code>ovm update</code>.
-            </td>
-          </tr>
-          <tr>
-            <td><code>Could not fetch …/scripts/lib/…</code></td>
-            <td>
-              The installer could not reach its own helper library, which it
-              needs before it can do anything. Check outbound HTTPS, then retry.
             </td>
           </tr>
         </tbody>
