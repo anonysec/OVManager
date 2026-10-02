@@ -18,9 +18,10 @@ import os
 import subprocess
 from pathlib import Path
 
+import inline_lib
 import pytest
 
-LIB = Path(__file__).resolve().parent.parent / "scripts" / "lib" / "tls.sh"
+LIB = inline_lib.path("tls.sh")
 
 
 def _current_group() -> str:

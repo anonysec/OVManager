@@ -17,11 +17,12 @@ import re
 import subprocess
 from pathlib import Path
 
+import inline_lib
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = REPO / "manager.sh"
-LIB = REPO / "scripts" / "lib" / "tls.sh"
+LIB = inline_lib.path("tls.sh")
 
 
 def _shell(script: str) -> subprocess.CompletedProcess:

@@ -193,24 +193,1443 @@ BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
 CLI_ALIAS="ovm"
 
-# Shared helpers (output, prompts, TLS, menus). REPO fallback lets this
-# script run straight from a checkout (./manager.sh) as well as installed.
-# scripts/lib is the simulated installer repo: one file per concern.
-for _cand in "$INSTALL_DIR/scripts/lib" "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/scripts/lib"; do
-    if [[ -d "$_cand" ]]; then
-        for _lib in "$_cand"/common.sh "$_cand"/render.sh "$_cand"/prompt.sh "$_cand"/env.sh "$_cand"/system.sh "$_cand"/backup.sh "$_cand"/tls.sh "$_cand"/policy.sh; do
-            # shellcheck disable=SC1090
-            . "$_lib"
-        done
-        _lib_found=1
-        break
-    fi
-done
-if [[ "${_lib_found:-0}" -ne 1 ]]; then
-    printf '\n  Error: scripts/lib not found (looked in %s/scripts/lib and ./scripts/lib)\n\n' "$INSTALL_DIR" >&2
+# ── The manager is one file ──────────────────────────────────────────────
+#
+# These eight were scripts/lib/*.sh, fetched or sourced from the install tree.
+# Sourcing them from inside a 0700 root-owned tree is what a non-root caller
+# could never get past, and the copy held in step by hand is what drifts. The
+# helpers are here instead, identical to the ones in install.sh.
+#
+# The installer and this script are two different programs with two different
+# dispatchers, so they each carry their own copy deliberately —
+# tests/test_lib_sourcing.py enforces that a helper is defined once per program.
+
+# ==========================================================================
+# common.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+#
+# Colour globals and the fatal-exit path. Rendering lives in render.sh; this
+# file owns what it needs to render at all, and the one thing rendering must
+# not own — the exit.
+
+# ── Colour / TTY ───────────────────────────────────────────────────────
+NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
+WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
+YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'
+OR=$'\033[38;5;208m'
+# Colour only when stderr is a terminal. Every helper in this library writes to
+# fd 2, so the gate must test fd 2: [[ -t 1 ]] passed on `2>install.log` from a
+# terminal and wrote escape codes into the log, and failed on `>/dev/null` and
+# stripped colour from a terminal that could show it. The node side already uses
+# [[ -t 2 ]] — this matches it.
+# TERM=dumb is in the same condition as NO_COLOR and not a colour: a dumb
+# terminal honours no escapes at all, and writing them produces the visible
+# garbage the mode exists to prevent.
+[[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]] \
+    || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+
+trap 'printf "\n  %bInterrupted.%b\n" "$RD" "$NC" >&2; exit 130' INT TERM
+
+# Fatal exit. Deliberately NOT a render helper: this is the exit path, not
+# decoration, and it must keep working when the terminal is unusable, when
+# render.sh failed to source, and when output is a pipe. The Run ID is the
+# support handle — it ties a log, a backup file and an update journal together.
+die() {
+    local run_id="${OVM_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
+    printf '\n  %bError:%b %s\n  %bRun ID:%b %s\n\n' "$RD" "$NC" "$1" "$GY" "$NC" "$run_id" >&2
     exit 1
+}
+
+is_port() { [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+
+rand_path() {
+    openssl rand -hex 4 2>/dev/null || head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n'
+}
+
+rand_pass() {
+    openssl rand -base64 12 2>/dev/null | tr -d '/+=\n' | head -c 12
+}
+
+rand_hex() {
+    openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
+}
+
+# ==========================================================================
+# render.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+#
+# Every character this project puts on a terminal. It knows how a line looks;
+# it never knows what happened, which service was started, or whether a port is
+# free. That split is the whole reason it is a separate file: install.sh owns
+# the sequence, render.sh owns the rendering, and either can be replaced alone.
+#
+# Everything writes to fd 2, for the same reason it always has: stdout stays
+# parseable (`ovm status --all`, `install.sh version-script`) while progress
+# goes to the terminal, so `install.sh ... > file` still logs.
+#
+# Design rules, in the order they matter:
+#   1. Non-TTY output is byte-identical to TTY output. The animation, the
+#      fade and the cursor moves are colour and motion only — never content.
+#      A piped CI log must not describe a different run than a watched one.
+#   2. Colour never carries meaning alone. Every coloured thing also has a
+#      glyph or a word, so NO_COLOR=1 and LANG=C lose nothing.
+#   3. Bold is reserved for things a human might type or copy back: the
+#      selected menu number, a URL, a secret.
+#   4. Every redraw is best-effort. A terminal that cannot do it gets the
+#      static form and a slower install, never a failed one.
+
+# ── Capability detection ───────────────────────────────────────────────
+# One decision, made once, read everywhere. Resolved at source time so the
+# helpers below are branch-free.
+#
+# The colour gate tests fd 2, not fd 1: every helper here writes to fd 2, and
+# `install.sh 2>install.log` from a terminal used to pass [[ -t 1 ]] and write
+# escape codes into the log. The node side already tests -t 2; this matches it.
+if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+    RENDER_COLOR=1
+else
+    RENDER_COLOR=0
 fi
-unset _cand _lib _lib_found
+
+# Braille is the only widely-available frame set that reads as continuous
+# rotation without shifting the line. LANG=C and a non-UTF-8 SSH client get the
+# dot frames, which are the same visual idea in one column.
+if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+    RENDER_SPINNER_UNICODE=1
+else
+    RENDER_SPINNER_UNICODE=0
+fi
+
+# Animation is motion on a screen nobody is watching, and cursor-up-and-rewrite
+# is the one thing in this file that can fail a `set -e` shell. It therefore
+# runs only when stderr is a terminal.
+#
+# Deliberately NOT also gated on stdin: `curl -sSL URL | sudo bash -s -- --yes`
+# is the documented install path and its stdin is the pipe, yet its stderr is
+# the operator's terminal. Requiring a tty on stdin meant the most common way
+# to install the panel got the degraded output. The menu is the one thing that
+# genuinely needs keystrokes, and render_menu checks for /dev/tty itself.
+# A dumb terminal honours no escapes at all — not SGR, not cursor motion — so
+# it gets the static form as well as no colour. NO_COLOR is narrower: it is a
+# request about colour specifically, and a terminal that declined colour still
+# repaints fine, so the motion stays.
+if [[ -t 2 && "${TERM:-dumb}" != "dumb" ]]; then
+    RENDER_ANIMATE=1
+else
+    RENDER_ANIMATE=0
+fi
+
+# Three depths, not more: a terminal that can show three greys reliably shows
+# them, and a fourth is indistinguishable from the third on most palettes.
+RENDER_FADE_0=$'\033[38;5;250m'   # finished, still fresh
+RENDER_FADE_1=$'\033[38;5;244m'   # one step further back
+RENDER_FADE_2=$'\033[38;5;240m'   # the rest of the run
+
+# ── Primitives ──────────────────────────────────────────────────────────
+
+# Every glyph in one place, ASCII and Unicode pairs. Callers never type a
+# character directly, so LANG=C output stays coherent.
+if [[ "$RENDER_SPINNER_UNICODE" -eq 1 ]]; then
+    RENDER_FRAMES='⣾⣽⣻⢿⡿⣟⣯⣷'
+    RENDER_POINTER='▸'
+    RENDER_OK='✓'
+    RENDER_BAD='✗'
+    RENDER_RULE='──────────────────────────────────────────────'
+    RENDER_BAR_FULL='█'
+    RENDER_BAR_EMPTY='░'
+else
+    RENDER_FRAMES='-\|/-\'
+    RENDER_POINTER='>'
+    RENDER_OK='ok'
+    RENDER_BAD='XX'
+    RENDER_RULE='----------------------------------------------'
+    RENDER_BAR_FULL='#'
+    RENDER_BAR_EMPTY='.'
+fi
+
+_render_paint() {  # _render_paint <colour> <text> — no-op when colour is off
+    if [[ "$RENDER_COLOR" -eq 1 ]]; then printf '%b%s%b' "$1" "$2" "${NC:-}"; else printf '%s' "$2"; fi
+}
+
+_render_out() { printf '  %b\n' "$*" >&2; }
+
+# Note that output was written BELOW the progress block without repainting it.
+#
+# Every plain line — a blank, a card row, a warning — pushes the cursor one row
+# further from the block's first row, and the next repaint has to know that or
+# it lands a row too low and leaves a duplicate step line behind. Anything that
+# writes while a block is on screen goes through here.
+_render_cursor_advanced() {
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    [[ "${RENDER_TOP:-0}" -gt 0 ]] || return 0
+    RENDER_TOP=$(( RENDER_TOP + 1 ))
+    return 0
+}
+
+# Milliseconds → a fixed-width human duration. Sub-second steps read as "0.4s"
+# rather than vanishing: the right column is the answer to "why did this take
+# twenty seconds", so it must never be the one thing that is blank.
+_render_ms() {
+    [[ -n "${1:-}" ]] || { printf ''; return 0; }
+    awk -v ms="${1}" 'BEGIN { s = ms / 1000; if (s >= 60) printf "%dm%02ds", int(s/60), s%60; else if (s >= 10) printf "%.0fs", s; else printf "%.1fs", s }' | tr -d '\n' | awk '{ printf "%7s", $0 }'
+}
+
+_render_bar() {  # _render_bar <fraction 0-1> <width>
+    local filled width="${2:-24}" frac="$1" i bar=""
+    filled="$(awk -v f="$frac" -v w="$width" 'BEGIN { n = int(f * w + 0.5); print (n < 0 ? 0 : (n > w ? w : n)) }')"
+    for (( i = 0; i < width; i++ )); do
+        if (( i < filled )); then bar+="$RENDER_BAR_FULL"; else bar+="$RENDER_BAR_EMPTY"; fi
+    done
+    printf '%s' "$bar"
+}
+
+# ── Banner / screen ─────────────────────────────────────────────────────
+
+render_banner() {  # render_banner <name> <version>
+    local name="$1" version="$2"
+    _render_out "$(_render_paint "$B" "$name")  $version  $(_render_paint "$GY" "· anonysec")"
+    render_rule
+}
+
+render_rule() { _render_out "$(_render_paint "$GY" "$RENDER_RULE")"; }
+
+# Wipe between wizard steps. TTY only: `clear` in a pipe writes form feeds into
+# the log and destroys the record of what was chosen. A caller that reaches the
+# wizard has already been proven able to prompt, so this is belt-and-braces
+# rather than the primary check.
+render_screen() {
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    # `clear 2>/dev/null`, not `command clear >/dev/null 2>&1`. `clear` clears
+    # by *printing* escape codes, so redirecting its stdout to /dev/null threw
+    # the codes away and the screen was never cleared — the exact opposite of
+    # what that redirection looks like it is doing. Only stderr is silenced, to
+    # keep "terminal not found" out of the output. The printf fallback still
+    # covers a host where `clear` is missing or non-functional.
+    clear 2>/dev/null || printf '\033[H\033[2J\033[3J' >&2 || true
+    return 0
+}
+
+# ── Menu ───────────────────────────────────────────────────────────────
+#
+# The pointer and the number on the input line are the same thing. Arrows do
+# not "select" separately: they move the cursor and rewrite the digits, and
+# Enter always reads back what is visible. One source of truth means no branch
+# where the pointer and the number disagree, which is the bug every hand-rolled
+# arrow menu grows.
+#
+# render_menu <title> <tag> <label> [<tag> <label> ...] → prints the tag.
+# Falls back to a plain numbered read when there is no terminal to draw on.
+
+render_menu() {
+    shift    # title is the caller's; the banner already said what this is
+    local -a tags=() labels=()
+    while [[ $# -ge 2 ]]; do tags+=("$1"); labels+=("$2"); shift 2; done
+    local count=${#tags[@]}
+    [[ "$count" -gt 0 ]] || return 1
+
+    _menu_draw() {  # reads _MENU_TAGS/_MENU_LABELS/_MENU_CUR
+        local i=0 n=${#_MENU_TAGS[@]}
+        while (( i < n )); do
+            if (( i == _MENU_CUR )); then
+                printf '  %b%s%b  %b%d%b  %s\n' \
+                    "$OR" "$RENDER_POINTER" "$NC" "$B" "$(( i + 1 ))" "$NC" "${_MENU_LABELS[$i]}"
+            else
+                printf '    %b%d%b  %s\n' "$GY" "$(( i + 1 ))" "$NC" "${_MENU_LABELS[$i]}"
+            fi
+            i=$(( i + 1 ))
+        done
+    }
+
+    _MENU_TAGS=("${tags[@]}"); _MENU_LABELS=("${labels[@]}"); _MENU_CUR=0
+
+    if [[ "$RENDER_ANIMATE" -ne 1 || ! -e /dev/tty || ! -r /dev/tty ]]; then
+        _menu_draw >&2
+        local n
+        n="$(ask "choice" "1")"
+        [[ "$n" =~ ^[0-9]+$ ]] || n=1
+        printf '%s' "${tags[$(( (n - 1) % count ))]}"
+        return 0
+    fi
+
+    # Own fd for the drawing. The keystroke reader must not see the menu's own
+    # writes on the same descriptor, and the prompt line is rewritten in place,
+    # so the two are kept apart from here down.
+    exec 3>&2
+    local frame=$(( count + 3 )) ch c1 c2 reply="" digits=""
+    local hint='↑↓ move · ⏎ confirm'
+    [[ "$RENDER_SPINNER_UNICODE" -eq 1 ]] || hint='type a number · ↑↓ move'
+    while true; do
+        printf '\033[%dA\033[J' "$frame" >&3 2>/dev/null || true
+        _menu_draw >&3
+        printf '  %b%s%b\n' "$GY" "$hint" "$NC" >&3
+        printf '  %bchoice [%s%d%s]%b: ' "$NC" "$B" "$(( _MENU_CUR + 1 ))" "$NC" "$NC" >&3
+
+        # One keystroke, no Enter. Every read is timed: a pasted line, a closed
+        # terminal or a tmux that lost the pane must not wedge the installer
+        # mid-menu with a half-drawn frame on screen.
+        if ! IFS= read -rsn1 -t 2 ch < /dev/tty; then
+            # Timed out with nothing typed. Fall back to a plain line read so a
+            # keystroke-free session (a CI runner with a pty, a flaky tmux) still
+            # completes instead of redrawing forever.
+            # The newline ends the prompt line above, and `ask` would print that
+            # same prompt a second time — so every run that took the fallback
+            # showed "choice [1]:" twice, once with the cursor already past it.
+            # Read the line directly: the prompt is on screen and we have just
+            # moved off it, and the default is applied by the next line either
+            # way.
+            printf '\n' >&3
+            IFS= read -r digits || digits=""
+            [[ "$digits" =~ ^[0-9]+$ ]] || digits=$(( _MENU_CUR + 1 ))
+            reply=$(( (10#$digits - 1) % count + 1 ))
+            break
+        fi
+        # A bare newline comes back from `read -n1` as an empty string with a
+        # zero status: the delimiter was consumed and there was nothing left.
+        # Without this, Enter would redraw the menu and wait again.
+        [[ -z "$ch" ]] && ch=$'\n'
+        case "$ch" in
+            $'\n'|$'\r'|$'\x04')
+                reply=$(( _MENU_CUR + 1 )); break ;;
+            $'\033')
+                # CSI is three bytes: ESC [ <final>. Read the two that follow
+                # with a short timeout — an ESC alone (a bare Escape keypress)
+                # times out here and is ignored, which is the wanted behaviour.
+                if IFS= read -rsn1 -t 0.3 c1 < /dev/tty && IFS= read -rsn1 -t 0.3 c2 < /dev/tty; then
+                    case "$c2" in
+                        A) (( _MENU_CUR > 0 )) && _MENU_CUR=$(( _MENU_CUR - 1 )) ;;
+                        B) (( _MENU_CUR < count - 1 )) && _MENU_CUR=$(( _MENU_CUR + 1 )) ;;
+                    esac
+                fi ;;
+            $'\x7f'|$'\b')
+                digits="${digits%?}"
+                (( _MENU_CUR > 0 )) || _MENU_CUR=0 ;;
+            [0-9])
+                digits="$ch"
+                _MENU_CUR=$(( 10#$ch - 1 ))
+                (( _MENU_CUR >= count )) && _MENU_CUR=$(( count - 1 )) ;;
+        esac
+    done
+    exec 3>&-
+    printf '%s' "${tags[$(( reply - 1 ))]}"
+}
+
+# ── Progress ───────────────────────────────────────────────────────────
+#
+# A step is one line: [n/6] ✓ label   detail   time. The counter is the only
+# header — phase names were a second, competing way of saying where you are,
+# and the indentation that came with them cost more than they explained.
+#
+# Finished lines recede: a step holds full weight for one beat, then drops a
+# grey per beat, so the eye has a moving edge to follow and the whole run reads
+# as faint history once it ends. That trail is left in the scrollback, which is
+# why it survives into a piped log — the colours differ, the text does not.
+#
+# Non-TTY never redraws and never animates: each step prints once, the moment
+# it finishes, in order. Identical text, no cursor movement, so a CI log reads
+# as a plain record of the run.
+
+RENDER_TOTAL=0
+RENDER_LABELS=()
+RENDER_DETAILS=()
+RENDER_TIMES=()
+RENDER_DONE=0
+RENDER_NOW=0
+RENDER_DRAWN=0
+RENDER_TOP=0
+RENDER_SETTLE=0
+
+_render_ms_since() {  # ms since RENDER_NOW, as a plain integer
+    local now="${1:-}" tail
+    now="$(date +%s%N 2>/dev/null || printf '')"
+    [[ "$now" == *N* ]] || now="$(date +%s 2>/dev/null || printf 0)000000000"
+    tail="${now##*.}"; [[ "$tail" =~ ^[0-9]+$ ]] || tail=0
+    tail=$(( 10#$tail / 1000000 ))
+    local start="${RENDER_NOW##*.}"; [[ "$start" =~ ^[0-9]+$ ]] || start=0
+    start=$(( 10#$start / 1000000 ))
+    local d=$(( tail - start ))
+    (( d < 0 )) && d=0
+    printf '%s' "$d"
+}
+
+_render_now() {
+    local now
+    now="$(date +%s%N 2>/dev/null || printf '')"
+    [[ "$now" == *N* ]] || now="$(date +%s 2>/dev/null || printf 0)000000000"
+    printf '%s' "$now"
+}
+
+# Grey by steps-back. Three depths only: a terminal that renders three reliably
+# renders them, and a fourth is indistinguishable from the third on most
+# palettes. Without colour every depth is the same — which is the point, the
+# glyph still says which step is running.
+#
+# RENDER_SETTLE overrides all of it: once the run is over there is no "current"
+# step left to point at, so the whole block drops to the faintest depth and the
+# card that follows is the only thing on screen at full weight.
+_render_depth_colour() {
+    local back="$1"
+    [[ "$RENDER_COLOR" == 1 ]] || { printf ''; return 0; }
+    [[ "${RENDER_SETTLE:-0}" == 1 ]] && { printf '%s' "$RENDER_FADE_2"; return 0; }
+    [[ "$back" -le 0 ]] && { printf ''; return 0; }
+    [[ "$back" == 1 ]] && { printf '%s' "$RENDER_FADE_0"; return 0; }
+    [[ "$back" == 2 ]] && { printf '%s' "$RENDER_FADE_1"; return 0; }
+    printf '%s' "$RENDER_FADE_2"
+}
+
+# Column widths, so the block reads as a table: counter, glyph, label, detail,
+# time. Everything is padded to the widest value seen so far, which is why a
+# label set early does not make later lines jitter.
+_render_widths() {  # sets _W_LABEL _W_DETAIL
+    local i n=${#RENDER_LABELS[@]} l d
+    _W_LABEL=0; _W_DETAIL=0
+    for (( i = 0; i < n; i++ )); do
+        l=${#RENDER_LABELS[$i]}
+        d=${#RENDER_DETAILS[$i]}
+        (( l > _W_LABEL )) && _W_LABEL=$l
+        (( d > _W_DETAIL )) && _W_DETAIL=$d
+    done
+    (( _W_LABEL < 8 )) && _W_LABEL=8
+    (( _W_DETAIL < 10 )) && _W_DETAIL=10
+    return 0
+}
+
+_render_step_line() {  # _render_step_line <index> <frame> [no-newline]
+    local i="$1" frame="${2:-}" nl="${3:-}" running=0
+    (( i == RENDER_DONE )) && running=1
+    _render_widths
+    local back=$(( RENDER_DONE - i ))
+    local c="$(_render_depth_colour "$back")"
+    local label="${RENDER_LABELS[$i]}" detail="${RENDER_DETAILS[$i]}" time="${RENDER_TIMES[$i]}"
+    # The spinner is a separate process holding a snapshot of the arrays, so it
+    # hands the live detail over in a variable instead. One detail, whichever
+    # process is painting it.
+    [[ -n "${RENDER_DETAILS_SNAPSHOT:-}" ]] && detail="$RENDER_DETAILS_SNAPSHOT"
+    local counter="" glyph glyph_c body
+    if (( RENDER_TOTAL > 1 )); then
+        counter="$(printf '%b[%d/%d]%b' "$c" "$(( i + 1 ))" "$RENDER_TOTAL" "$NC")"
+    fi
+    if (( running )); then
+        # The running step is the only full-weight line on screen. Its clock
+        # ticks, because a step that has said nothing for a minute is
+        # indistinguishable from a hung installer.
+        glyph="${frame:-$RENDER_POINTER}"; glyph_c="$OR"
+        body="$(printf '%b%-*s%b  %-*s' "$OR" "$_W_LABEL" "$label" "$NC" "$_W_DETAIL" "$detail")"
+        time="$(_render_ms_since "$RENDER_NOW")"
+    else
+        glyph="$RENDER_OK"; glyph_c="$GR"
+        body="$(printf '%-*s  %-*s' "$_W_LABEL" "$label" "$_W_DETAIL" "$detail")"
+    fi
+    if [[ -n "$nl" ]]; then
+        printf '  %b%s%b %b%s%b %b%s%b %7s' \
+            "$c" "$counter" "$NC" \
+            "$glyph_c" "$glyph" "$NC" \
+            "$c" "$body" "$NC" \
+            "$(_render_ms "$time")"
+    else
+        printf '  %b%s%b %b%s%b %b%s%b %7s\n' \
+            "$c" "$counter" "$NC" \
+            "$glyph_c" "$glyph" "$NC" \
+            "$c" "$body" "$NC" \
+            "$(_render_ms "$time")"
+    fi
+}
+
+_render_repaint() {  # repaint the whole block in place
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    local total=${#RENDER_LABELS[@]} i
+    (( total > 0 )) || return 0
+    # The block's first row, tracked rather than derived.
+    #
+    # A step that animated leaves a half-drawn line behind it, so the cursor is
+    # not simply one past the block's last row: the repaint has to reach further
+    # back to find the top. RENDER_TOP is the distance from the cursor to that
+    # first row, and the spinner's own row is part of it — which is why unwatch
+    # adds one.
+    (( RENDER_TOP > 0 )) && printf '\033[%dA\033[J' "$RENDER_TOP" >&2 2>/dev/null || true
+    for (( i = 0; i < total; i++ )); do
+        _render_step_line "$i" >&2 2>/dev/null || true
+    done
+    RENDER_DRAWN="$total"
+    RENDER_TOP="$total"
+    return 0
+}
+
+# render_begin <label> <total> — open a step.
+#
+# The number is the caller's position, so a mode that skips a step (docker has
+# no uv to install) still numbers honestly. The total is a floor, not a cap: if
+# more steps open than were declared — a conditional branch the caller did not
+# count — the denominator grows to match rather than printing [7/6]. A counter
+# that overcounts is worse than no counter.
+render_begin() {
+    RENDER_NOW="$(_render_now)"
+    local next=$(( ${#RENDER_LABELS[@]} + 1 ))
+    if (( next > ${2:-1} )); then RENDER_TOTAL="$next"; else RENDER_TOTAL="$2"; fi
+    RENDER_LABELS+=("$1")
+    RENDER_DETAILS+=("")
+    RENDER_TIMES+=("")
+    RENDER_DONE=$(( ${#RENDER_LABELS[@]} - 1 ))
+    RENDER_SPIN_PID=""
+    RENDER_SPIN_FLAG=""
+    return 0
+}
+
+# render_watch [detail] — start animating the running step. Separate from
+# render_begin so a caller doing something quick does not spawn a subshell for
+# it, and so non-TTY spawns nothing at all.
+render_watch() {
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    local idx="$RENDER_DONE" detail="${1:-${RENDER_DETAILS[$RENDER_DONE]:-}}"
+    RENDER_SPIN_DETAIL="$(_render_flagfile)"
+    RENDER_SPIN_FLAG="$(_render_flagfile)"
+    printf '%s' "$detail" > "$RENDER_SPIN_DETAIL" 2>/dev/null || true
+    render_spin "$idx" "$RENDER_SPIN_DETAIL" "$RENDER_SPIN_FLAG" &
+    RENDER_SPIN_PID=$!
+    disown 2>/dev/null || true
+    return 0
+}
+
+_render_flagfile() {
+    local f
+    f="$(mktemp "${TMPDIR:-/tmp}/render-spin.XXXXXX" 2>/dev/null)" || f=""
+    [[ -n "$f" ]] || return 0
+    rm -f "$f"
+    printf '%s' "$f"
+}
+
+# Stop the animation and account for the row it left behind. Safe to call when
+# it was never started.
+#
+# The spinner ended mid-row (no trailing newline), so the cursor is parked at
+# the end of that line. The newline here closes it and turns it into a real row
+# the block's next repaint has to include.
+render_unwatch() {
+    [[ -n "${RENDER_SPIN_PID:-}" ]] || return 0
+    kill "$RENDER_SPIN_PID" 2>/dev/null || true
+    wait "$RENDER_SPIN_PID" 2>/dev/null || true
+    if [[ -n "${RENDER_SPIN_FLAG:-}" && -e "$RENDER_SPIN_FLAG" ]]; then
+        printf '\n' >&2
+        RENDER_DRAWN=$(( RENDER_DRAWN + 1 ))
+        RENDER_TOP=$(( RENDER_TOP + 1 ))
+    fi
+    [[ -n "${RENDER_SPIN_FLAG:-}" ]] && rm -f "$RENDER_SPIN_FLAG" 2>/dev/null
+    [[ -n "${RENDER_SPIN_DETAIL:-}" ]] && rm -f "$RENDER_SPIN_DETAIL" 2>/dev/null
+    RENDER_SPIN_PID=""
+    RENDER_SPIN_FLAG=""
+    RENDER_SPIN_DETAIL=""
+    return 0
+}
+
+# render_bytes <have> <total> <kb_per_s> — the detail line for a transfer.
+# With a total it is a bar, without one it is a plain count that grows. The
+# bar appears the moment the size is known and not before, so the one number on
+# screen is never a fiction.
+_render_bytes() {
+    local have="${1:-0}" total="${2:-}" rate="${3:-0}"
+    if [[ "$total" =~ ^[0-9]+$ ]] && (( total > 0 )); then
+        local frac mb_have mb_total
+        frac="$(awk -v h="$have" -v t="$total" 'BEGIN{print h/t}')"
+        mb_have="$(awk -v b="$have" 'BEGIN{printf "%.1f", b/1048576}')"
+        mb_total="$(awk -v b="$total" 'BEGIN{printf "%.0f", b/1048576}')"
+        render_note "$(printf '%s  %s/%s MB · %s MB/s' "$(_render_bar "$frac" 16)" "$mb_have" "$mb_total" "$rate")"
+    else
+        render_note "$(awk -v b="$have" 'BEGIN{printf "%.1f MB · %s MB/s", b/1048576, '"$rate"'}')"
+    fi
+    return 0
+}
+
+# render_note <detail> — annotate the running step. Free to call repeatedly;
+# only the last call before render_done survives.
+#
+# With no step open it prints instead of swallowing the text: a lib helper
+# (tls.sh, backup.sh) can be called outside a numbered step — from a wizard, a
+# repair, or `ovm tls` — and its message must not vanish into a step that does
+# not exist.
+render_note() {
+    local last=$(( ${#RENDER_DETAILS[@]} - 1 ))
+    if (( last < 0 )); then
+        render_line "$1"
+        return 0
+    fi
+    RENDER_DETAILS[$last]="$1"
+    # A running spinner reads its detail from a file; updating it here is what
+    # makes the running line change instead of sitting on its first value.
+    if [[ -n "${RENDER_SPIN_DETAIL:-}" && -n "${RENDER_SPIN_PID:-}" ]]; then
+        printf '%s' "$1" > "$RENDER_SPIN_DETAIL" 2>/dev/null || true
+    fi
+    return 0
+}
+
+# render_spin <index> <detail-file> <painted-flag> — animate one line until
+# killed. A no-op without a terminal, so a non-TTY run spawns nothing at all.
+#
+# The detail arrives through a FILE, not through the step arrays. The spinner is
+# a background subshell: it inherited a snapshot of RENDER_DETAILS when it
+# forked and would otherwise repaint the same text for the whole step, so a
+# health check that reports "attempt 7/40" would sit there saying "attempt 1/40".
+# Reading a file each frame is what makes a long step show progress.
+#
+# <painted-flag> lets the parent know whether anything reached the screen: a
+# step that failed instantly never painted, and counting a line that is not
+# there makes every later repaint drift up one row.
+render_spin() {
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    local idx="$1" dfile="${2:-}" flag="${3:-}"
+    local frames="$RENDER_FRAMES"
+    local n=${#frames} i=0 detail=""
+    while :; do
+        detail=""
+        [[ -n "$dfile" && -r "$dfile" ]] && detail="$(cat "$dfile" 2>/dev/null)"
+        RENDER_DETAILS_SNAPSHOT="$detail"
+        _render_spin_line "$idx" "${frames:$(( i % n )):1}" >&2 2>/dev/null || true
+        [[ -n "$flag" ]] && : > "$flag" 2>/dev/null || true
+        sleep 0.12
+        i=$(( i + 1 ))
+    done
+}
+
+# One spinner frame, on ONE row, forever.
+#
+# The frame is written without a trailing newline and every iteration starts by
+# returning to the start of that row and clearing it. With a newline the cursor
+# walks down a row per frame, and after a few seconds the animation is a column
+# of stale frames instead of one line that spins — which is exactly what the
+# first version did.
+#
+# RENDER_DRAWN is deliberately untouched: this is a separate process with its
+# own copy of that counter, and the parent owns the block's accounting. It
+# learns that one extra row exists from the painted-flag file.
+_render_spin_line() {
+    local idx="$1" frame="$2"
+    printf '\r\033[K' >&2 2>/dev/null || true
+    _render_step_line "$idx" "$frame" no-newline >&2
+    return 0
+}
+
+# render_done <detail> [ms] — close the running step as ok. In a terminal it
+# rewrites the line in place; everywhere else it appends it once.
+render_done() {
+    local last=$(( ${#RENDER_LABELS[@]} - 1 ))
+    (( last >= 0 )) || return 0
+    [[ -n "${1:-}" ]] && RENDER_DETAILS[$last]="$1"
+    RENDER_TIMES[$last]="${2:-$(_render_ms_since "$RENDER_NOW")}"
+    render_unwatch
+    RENDER_DONE=$(( last + 1 ))
+    if [[ "$RENDER_ANIMATE" -eq 1 ]]; then
+        # Repaint: the step that just finished was the running one, so it now
+        # recedes a grey and the block shifts a shade down with it.
+        _render_repaint
+    else
+        _render_step_line "$last" >&2
+    fi
+    return 0
+}
+
+# render_settle — the run is over. Repaints the block one last time with
+# everything at the faintest depth, so the card below it is the only thing on
+# screen that pulls the eye. A no-op without a terminal, where the block was
+# printed once and is already in the scrollback.
+render_settle() {
+    [[ "$RENDER_ANIMATE" -eq 1 ]] || return 0
+    render_unwatch
+    RENDER_SETTLE=1
+    _render_repaint
+    RENDER_SETTLE=0
+    return 0
+}
+
+# Leave the block in the scrollback and stop painting over it. Called before
+# anything else prints, so a card never lands on top of a half-drawn step.
+render_flush() { RENDER_DRAWN=0; RENDER_TOP=0; return 0; }
+
+# ── Plain lines ─────────────────────────────────────────────────────────
+# Everything that is not a numbered step. One place, so there is exactly one
+# answer to "how is ordinary output indented and coloured".
+
+render_line() { _render_out "$*"; _render_cursor_advanced; }
+render_blank() { printf '\n' >&2; _render_cursor_advanced; }
+
+# render_ok <text> — a completed thing that is not one of the numbered steps.
+# The green check is the same glyph the progress block uses, so "done" looks
+# the same everywhere in the installer.
+render_ok() {
+    printf '  %b%s%b  %s\n' "$GR" "$RENDER_OK" "$NC" "$1" >&2
+    _render_cursor_advanced
+}
+
+# render_warn <text> — a caveat. Yellow, no glyph: a mid-run warning marker on
+# its own line is the thing operators learn to skip, so the colour carries it
+# and the text carries the meaning.
+render_warn() {
+    printf '  %b%s%b\n' "$YL" "$1" "$NC" >&2
+    _render_cursor_advanced
+}
+
+# Card rows share one label width, so every value starts in the same column.
+# 14 is the longest label either card uses ("install name" is 12, "setup key"
+# and "not written" are shorter) — wide enough for the node card's labels, and
+# not so wide that a short value sits in the middle of the screen.
+RENDER_LABEL_W=14
+
+# render_kv <label> <value> — a label/value row.
+render_kv() {
+    printf '   %b%-*s%b %s\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$2" >&2
+    _render_cursor_advanced
+}
+
+# render_kv_w <width> <label> <value> — a row in a column this caller computed.
+#
+# A fixed width only works when every label is shorter than it. At 14, a
+# 44-character backup filename printed whole and dropped its date a column right
+# of every other row's, so a table of timestamps lined up with nothing. Pass the
+# width the set actually needs and the values line up.
+render_kv_w() {
+    printf '   %b%-*s%b %s\n' "$GY" "$1" "$2" "$NC" "$3" >&2
+    _render_cursor_advanced
+}
+
+# render_key — a secret. The only thing in the installer that gets bold white,
+# because it is the only thing that must not be skimmed past.
+render_key() {
+    printf '   %b%-*s%b %b%s%b\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$B" "$2" "$NC" >&2
+    _render_cursor_advanced
+}
+
+# render_url — bold for the same reason as render_key: it gets copied.
+render_url() { render_kv "$1" "$(_render_paint "$B" "$2")"; }
+
+# ── Card ───────────────────────────────────────────────────────────────
+#
+# The finish card fades in line by line, and the secret is passed in second so
+# it is on screen before the lines that explain it: an operator who interrupts
+# at the second line has the one thing they must not lose.
+#
+# render_card <title> <secret-label> <secret> <row>... — rows are "label|value".
+# The uninstall line is added by render_card_undo, not here, so a caller that
+# has no uninstall command does not print a broken one.
+
+render_card() {
+    local title="$1" secret_label="$2" secret="$3"; shift 3
+    render_settle
+    render_flush
+    render_blank
+    _render_out "$(_render_paint "$B" "$title")"
+    render_rule
+    [[ -n "$secret_label" ]] && render_key "$secret_label" "$secret"
+    local row
+    for row in "$@"; do
+        [[ "$row" == *"|"* ]] || continue
+        render_kv "${row%%|*}" "${row#*|}"
+    done
+    render_blank
+    return 0
+}
+
+# render_card_undo <url> — the removal command, spelled out in full. An operator
+# who wants it later is reading a log or a terminal scrollback, not the source.
+render_card_undo() {
+    render_blank
+    _render_out "$(printf '%buninstall:%b %s' "$GY" "$NC" "$1")"
+    render_blank
+}
+
+# ── Failure ────────────────────────────────────────────────────────────
+#
+# One line, then one way out. The gap between what was promised and what
+# happened is the thing an operator actually needs, and it fits in a line — the
+# rest of the old error prose was the same information at four times the length.
+
+render_fail() {  # render_fail <label> <cause>
+    local last=$(( ${#RENDER_LABELS[@]} - 1 ))
+    if (( last >= 0 )); then
+        render_unwatch
+        RENDER_TIMES[$last]="${RENDER_TIMES[$last]:-$(_render_ms_since "$RENDER_NOW")}"
+        RENDER_DONE=$(( last + 1 ))
+    fi
+    render_settle
+    render_flush
+    printf '  %b%s%b %b%s%b  %s\n' "$RD" "$RENDER_BAD" "$NC" "$B" "$1" "$NC" "$2" >&2
+    return 0
+}
+
+render_next() {  # render_next <how to look> <how to remove>
+    printf '  %bnext%b  %s · uninstall: %s\n' "$GY" "$NC" "$1" "$2" >&2
+    _render_cursor_advanced
+    return 0
+}
+
+# ── Ask ─────────────────────────────────────────────────────────────────
+# Styled to match the menu: the default is bold, the label is dim, and the
+# colon sits after the bracket so the answer's position never moves.
+
+render_ask() {  # render_ask <label> <default>
+    printf '  %b%s%b %b[%s]%b: ' "$GY" "$1" "$NC" "$B" "$2" "$NC" >&2
+}
+
+render_ask_note() { _render_out "$(_render_paint "$GY" "$1")"; }
+
+# ==========================================================================
+# prompt.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# Interactive prompts, menus, spinners.
+
+# Interactive only when -y was not passed and a terminal is reachable: `curl |
+# bash` has no stdin TTY, though /dev/tty usually works.
+can_prompt() {
+    [[ "${YES:-0}" -eq 0 ]] || return 1
+    [[ -t 0 ]] && return 0
+    # /dev/tty can exist but be unopenable (containers, detached shells):
+    # actually try to open it, or prompts silently fall back to defaults.
+    { : </dev/tty; } 2>/dev/null && return 0
+    return 1
+}
+
+# Interactive menu only: scripts and pipes take the subcommand path instead.
+has_tty() {
+    [[ -t 0 ]] && return 0
+    { : </dev/tty; } 2>/dev/null && return 0
+    return 1
+}
+
+# Reads stdin, so callers redirect /dev/tty when needed.
+_masked_read() {
+    local buf="" ch
+    while IFS= read -rsn1 ch; do
+        case "$ch" in
+            ""|$'\n'|$'\r') break ;;
+            $'\x7f'|$'\b')
+                if [[ -n "$buf" ]]; then buf="${buf%?}"; printf '\b \b' >&2; fi ;;
+            *) buf+="$ch"; printf '*' >&2 ;;
+        esac
+    done
+    printf '\n' >&2
+    printf '%s' "$buf"
+}
+
+_read_reply() {  # hidden? → prints the line on stdout
+    local hidden="${1:-}" buf=""
+    if [[ -t 0 ]]; then
+        if [[ "$hidden" == "h" ]]; then _masked_read; return 0; fi
+        read -r buf
+    elif [[ -e /dev/tty && -r /dev/tty ]]; then
+        if [[ "$hidden" == "h" ]]; then _masked_read </dev/tty; return 0; fi
+        read -r buf </dev/tty
+    else
+        return 1
+    fi
+    printf '%s' "$buf"
+}
+
+ask() {  # ask <label> <default> [hidden]
+    local label="$1" default="$2" hidden="${3:-}" val=""
+    if can_prompt; then
+        render_ask "$label" "$default"
+        val="$(_read_reply "$hidden")" || true
+    fi
+    [[ -n "$val" ]] || val="$default"
+    printf '%s' "$val"
+}
+
+# confirm <question> [default] — default is y, which is what a run with no
+# gets. A destructive caller must pass n: answering "yes" on nobody's behalf
+# made `ovm rollback` replace the running install from a cron job or pipeline.
+confirm() {
+    [[ "${YES:-0}" -eq 1 ]] && return 0
+    local default="${2:-y}"
+    if ! can_prompt; then
+        [[ "$default" == "y" ]]
+        return
+    fi
+    render_ask "$1" "$([ "$default" = y ] && printf 'Y/n' || printf 'y/N')"
+    local c=""
+    c="$(_read_reply)" || true
+    [[ ! "$c" =~ ^[Nn]$ ]]
+}
+
+# Explicit-yes prompt (default NO): non-interactive runs keep the safe answer.
+confirm_no() {
+    [[ "${YES:-0}" -eq 1 ]] && return 1
+    can_prompt || return 1
+    render_ask "$1" "y/N"
+    local c=""
+    c="$(_read_reply)" || true
+    [[ "$c" =~ ^[Yy]$ ]]
+}
+
+# confirm_word <question> <word> — the destructive default. `uninstall` asks
+# for the word "purge" before it deletes a database, and Enter keeps the data.
+# A plain y/N made the destructive answer one stray keystroke away from the
+# default, which is the wrong way round.
+confirm_word() {
+    local question="$1" word="$2" reply=""
+    [[ "${YES:-0}" -eq 1 ]] && return 0
+    can_prompt || return 1
+    render_ask "$question" "press enter to keep it"
+    reply="$(_read_reply)" || true
+    [[ "$reply" == "$word" ]]
+}
+
+run_step() {
+    local label="$1"; shift
+    "$@" >/dev/null 2>&1 &
+    local pid=$! rc=0
+    render_watch
+    wait "$pid" 2>/dev/null || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        render_done ""
+        return 0
+    fi
+    render_fail "$label" "command failed with status $rc"
+    return 1
+}
+
+# Menu. The drawing and the keystrokes belong to render.sh; this is the
+# ask-side wrapper for callers that just want a tag back.
+#
+# The old version preferred whiptail when it happened to be installed, which
+# meant the same menu rendered two completely different ways on two different
+# boxes. One renderer, so the pointer, the number and the arrow always agree.
+tui_select() { render_menu "$@"; }
+
+# ==========================================================================
+# env.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# Atomic .env read/write.
+
+env_get() {  # env_get FILE KEY → value (empty when missing)
+    grep -E "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true
+}
+
+env_set() {  # env_set FILE KEY VALUE — rewrite one line, atomically
+    local file="$1" key="$2" value="$3" tmp
+    tmp="$(mktemp)" || die "Could not stage $file"
+    awk -v k="$key" -v v="$value" '
+        BEGIN { done = 0 }
+        $0 ~ "^" k "=" { if (!done) { print k "=" v; done = 1; next } }
+        { print }
+        END { if (!done) print k "=" v }
+    ' "$file" > "$tmp" || { rm -f "$tmp"; die "Could not update $file"; }
+    cat "$tmp" > "$file" || { rm -f "$tmp"; die "Could not update $file"; }
+    rm -f "$tmp"
+}
+
+# ==========================================================================
+# system.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# Services, firewall, health, URLs.
+
+# systemd waits up to TimeoutStopSec (90s default) for a stuck service, which
+# operators read as a frozen installer. Bound the wait, then force the unit.
+systemctl_bounded() {  # systemctl_bounded stop|restart|<other systemctl verb> [unit]
+    local action="$1" unit="${2:-$SYSTEMD_SERVICE}" timeout="${OVM_STOP_TIMEOUT:-20}"
+    case "$action" in
+        stop)
+            timeout "$timeout" systemctl stop "$unit" >/dev/null 2>&1 && return 0
+            render_warn "Service stop timed out after ${timeout}s — force-killing $unit"
+            systemctl kill -s KILL "$unit" >/dev/null 2>&1 || true
+            return 0
+            ;;
+        restart)
+            timeout "$timeout" systemctl restart "$unit" >/dev/null 2>&1 && return 0
+            render_warn "Service restart timed out after ${timeout}s — force-restarting $unit"
+            systemctl kill -s KILL "$unit" >/dev/null 2>&1 || true
+            sleep 1
+            systemctl start "$unit" >/dev/null 2>&1 || render_warn "Could not start $unit — check logs"
+            return 0
+            ;;
+        *)
+            # Anything else is a real systemctl verb, run as asked.
+            #
+            # This used to fall through to the restart branch, which meant
+            # `systemctl_bounded daemon-reload` silently *restarted the
+            # service* and never reloaded anything. The damage was not
+            # theoretical: a 1.0.27 update failed verification, the failover
+            # put the old unit back on disk, called this to reload it — and
+            # systemd went on running the migrated unit, so the box was left
+            # trying to start as a service account against a root-owned tree
+            # and would not come up until someone ran daemon-reload by hand.
+            timeout "$timeout" systemctl "$action" "$unit" >/dev/null 2>&1
+            return $?
+            ;;
+    esac
+}
+
+# This box's public address, as Let's Encrypt would see it. Tried first from a
+# public resolver (the address the internet routes to), then from the local
+# interfaces, filtered to globally routable ranges.
+public_ip() {
+    local ip
+    for ip in $(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null) \
+              $(curl -fsS --max-time 3 https://ifconfig.me/ip 2>/dev/null); do
+        [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] && { printf '%s' "$ip"; return 0; }
+    done
+    for ip in $(hostname -I 2>/dev/null); do
+        case "$ip" in
+            *:*) continue ;;                       # skip IPv6: LE and the panel's TLS paths are v4 here
+            127.*|10.*|192.168.*|169.254.*) continue ;;
+            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;   # 172.16/12 is private
+            *) printf '%s' "$ip"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# Every routable address on this host, for a box with more than one. The
+# Let's Encrypt prompt names them so an operator with several IPs can pick the
+# one the certificate should carry instead of guessing.
+public_ips() {
+    local ip out=""
+    for ip in $(hostname -I 2>/dev/null); do
+        case "$ip" in
+            *:*) continue ;;
+            127.*|10.*|192.168.*|169.254.*) continue ;;
+            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
+            *) out+="$ip " ;;
+        esac
+    done
+    printf '%s' "${out% }"
+}
+
+# Does this string look like a bare IP rather than a hostname? Decides whether
+# a Let's Encrypt request is the short-lived IP kind or the ordinary domain one,
+# so one free-text prompt can serve both.
+is_ip_literal() {
+    [[ "$1" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || [[ "$1" == *:* ]]
+}
+
+# Resolve and report, so a certificate attempt is not spent discovering a
+# misconfigured record. Prints "<ip>" on success, empty otherwise.
+resolve_host() {
+    local host="$1"
+    getent hosts "$host" 2>/dev/null | awk '{ print $1; exit }' || true
+}
+
+open_firewall_port() {
+    local port="$1"
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        ufw allow "$port/tcp" >/dev/null 2>&1 && render_ok "UFW allowed ${port}/tcp"
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        firewall-cmd --permanent --add-port="${port}/tcp" >/dev/null 2>&1 \
+            && firewall-cmd --reload >/dev/null 2>&1 \
+            && render_ok "firewalld allowed ${port}/tcp"
+    fi
+}
+
+wait_health() {
+    local url="$1" tries="${2:-30}" i
+    for i in $(seq 1 "$tries"); do
+        curl -fskS -o /dev/null --max-time 3 "$url" 2>/dev/null && return 0
+        sleep 1
+    done
+    return 1
+}
+
+# wait_health_live — wait_health, but the running step's detail counts the
+# attempts.
+#
+# The old wait was forty seconds of complete silence, which is indistinguishable
+# from a hang and is the single most-reported "is this thing stuck?" moment in
+# an install. Each poll updates the step line, so the operator sees it is
+# trying and how long it has been trying.
+wait_health_live() {  # wait_health_live <url> <tries>
+    local url="$1" tries="${2:-30}" i ms=0 code=""
+    for (( i = 1; i <= tries; i++ )); do
+        code="$(curl -fskS -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null || true)"
+        if [[ "$code" == "200" ]]; then
+            render_note "200 in ${ms}ms"
+            return 0
+        fi
+        render_note "waiting · attempt ${i}/${tries}"
+        sleep 1
+        ms=$(( ms + 1000 ))
+    done
+    return 1
+}
+
+scheme_of() { [[ "${TLS_MODE:-none}" == "none" ]] && printf 'http' || printf 'https'; }
+
+panel_url() {
+    local host scheme
+    host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [[ -n "$host" ]] || host="127.0.0.1"
+    scheme="$(scheme_of)"
+    if [[ -n "${PATHPREFIX:-}" ]]; then
+        printf '%s://%s:%s/%s/' "$scheme" "$host" "$PORT" "$PATHPREFIX"
+    else
+        printf '%s://%s:%s/' "$scheme" "$host" "$PORT"
+    fi
+}
+
+port_in_use() {
+    command -v ss >/dev/null 2>&1 || return 1
+    # `found=1` + `exit !found`, not `exit 0`: awk still runs END after an
+    # `exit 0` in a rule, so `END { exit 1 }` always won and this function
+    # reported every port as free. Which meant the "port already in use"
+    # guard never fired — not for a busy install port, and not for the port 80
+    # check before Let's Encrypt.
+    ss -ltn 2>/dev/null | awk -v p=":${1}$" '$4 ~ p { found = 1 } END { exit !found }'
+}
+
+# ==========================================================================
+# backup.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# Safety backups + code snapshots for update failover.
+
+backup_dir() {
+    local src="$1" label="$2"
+    [[ -d "$src" ]] || return 0
+    mkdir -p /var/backups
+    local stamp base file
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    base="$(basename "$src")"
+    file="/var/backups/${label}-${base}-${stamp}.tar.gz"
+    render_note "Backup ${label} → $file"
+    tar -czf "$file" -C "$(dirname "$src")" "$base" 2>/dev/null \
+        || render_warn "Backup failed for $src — continuing"
+    # render_ok, not the retired `step` — which was still being called here
+    # after the vocabulary moved, and got away with it because the test meant
+    # to catch exactly this was silently failing to match `then step`.
+    if [[ -f "$file" ]]; then render_ok "Backup  $file"; fi
+    return 0
+}
+
+# Code-tree snapshots for update failover: keep the newest $keep.
+snapshot_code() {  # snapshot_code <dir> <label> [keep=2] → prints the file
+    local dir="$1" label="$2" keep="${3:-2}"
+    [[ -d "$dir" ]] || die "Not installed ($dir missing)"
+    mkdir -p /var/backups
+    local stamp base file
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    base="$(basename "$dir")"
+    file="/var/backups/${label}-code-${base}-${stamp}.tar.gz"
+    tar -czf "$file" -C "$(dirname "$dir")" "$base" 2>/dev/null \
+        || die "Could not snapshot $dir"
+    render_ok "Snapshot  $file"
+    local old
+    old="$(ls -t /var/backups/${label}-code-*.tar.gz 2>/dev/null | tail -n +$((keep + 1)) || true)"
+    if [[ -n "$old" ]]; then
+        # shellcheck disable=SC2086
+        rm -f $old
+    fi
+    printf '%s' "$file"
+}
+
+latest_snapshot() {  # latest_snapshot <label> → prints newest code snapshot or empty
+    ls -t /var/backups/"$1"-code-*.tar.gz 2>/dev/null | head -1 || true
+}
+
+# ==========================================================================
+# tls.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# TLS: self-signed, acme.sh, Let's Encrypt, setup dispatch.
+
+_is_docker_install() {  # MODE when the installer set it, else the compose file's presence
+    if [[ -n "${MODE:-}" ]]; then
+        [[ "$MODE" == "docker" ]]
+    else
+        [[ -n "${COMPOSE_FILE:-}" && -f "${COMPOSE_FILE:-}" ]]
+    fi
+}
+
+secure_tls_files() {
+    local key="$1" cert="$2"
+    if [[ -f "$key" ]]; then
+        # Who reads this key depends on the deployment, and getting it wrong is
+        # not cosmetic: the key becomes unreadable by whoever serves TLS and
+        # the panel dies on its next start. Docker reads it as the image's
+        # appuser (uid 1000) through a read-only mount, so ownership is what
+        # lets it in. The native panel is a service account that reads through
+        # the group, and nothing on this path runs as root on its behalf —
+        # chowning to 1000 unconditionally is what made `ovm https --self`
+        # restart straight into a PermissionError from inside uvicorn.
+        if _is_docker_install; then
+            chown 1000:1000 "$key" 2>/dev/null || true
+            chmod 600 "$key"
+        else
+            chgrp "${PANEL_USER:-ovmanager}" "$key" 2>/dev/null || true
+            chmod 640 "$key"
+        fi
+    fi
+    [[ -f "$cert" ]] && chmod 644 "$cert"
+    return 0
+}
+
+_existing_tls_pair_usable() {  # <key> <cert> → 0 when an intact, unexpired pair is already there
+    local key="$1" cert="$2" key_pub cert_pub
+    [[ -s "$key" && -s "$cert" ]] || return 1
+    openssl x509 -noout -checkend 0 -in "$cert" >/dev/null 2>&1 || return 1
+    key_pub="$(openssl pkey -pubout -in "$key" 2>/dev/null | openssl sha256)" || return 1
+    cert_pub="$(openssl x509 -pubkey -noout -in "$cert" 2>/dev/null | openssl sha256)" || return 1
+    [[ -n "$key_pub" && "$key_pub" == "$cert_pub" ]]
+}
+
+generate_self_signed() {
+    render_note "Self-signed certificate…"
+    local key="/etc/ssl/self-signed/privkey.pem"
+    local cert="/etc/ssl/self-signed/fullchain.pem"
+    mkdir -p /etc/ssl/self-signed
+    # /etc/ssl/self-signed is shared with OVNode on the same host: regenerating
+    # replaces the node's identity and invalidates the certificate the panel
+    # pinned for it, so an intact pair is kept and only its permissions are
+    # re-asserted. `ovm https --self` is the explicit way to ask for a new one.
+    if [[ "${TLS_REGENERATE:-0}" != "1" ]] && _existing_tls_pair_usable "$key" "$cert"; then
+        TLS_KEY="$key"
+        TLS_CERT="$cert"
+        secure_tls_files "$key" "$cert"
+        render_ok "Certificate  $TLS_CERT  (existing — reused)"
+        return 0
+    fi
+    local cn; cn="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout "$key" \
+        -out "$cert" \
+        -subj "/C=US/ST=Local/L=Local/O=OVManager/CN=${cn}" >/dev/null 2>&1
+    secure_tls_files "$key" "$cert"
+    TLS_KEY="$key"
+    TLS_CERT="$cert"
+    render_ok "Certificate  $TLS_CERT"
+}
+
+ACME_INSTALL_VERSION="3.1.1"
+
+# Download a third-party installer to a file and run it, instead of piping
+# curl straight into a root shell. Not a signature check — it stops a corrupt
+# or truncated response and an obvious redirect stub, not a compromised vendor,
+# which is why package-manager installs are tried first.
+fetch_and_run_installer() {  # url expected-prefix tmpname
+    local url="$1" prefix="$2" name="$3" script first rc
+    script="$(mktemp "/tmp/${name}.XXXXXX.sh")"
+    if ! curl -fsSL --max-time 60 -o "$script" -- "$url"; then
+        rm -f "$script"
+        return 1
+    fi
+    first="$(head -c 200 "$script" 2>/dev/null || true)"
+    case "$first" in
+        *"$prefix"*) : ;;
+        *) rm -f "$script"; return 1 ;;
+    esac
+    sh "$script" >/dev/null 2>&1
+    rc=$?
+    rm -f "$script"
+    return $rc
+}
+
+ensure_acme() {
+    [[ -x "$HOME/.acme.sh/acme.sh" ]] && return 0
+    render_note "Installing acme.sh…"
+    # get.acme.sh is a moving target; the tagged release is not, and this
+    # install runs as root.
+    fetch_and_run_installer \
+        "https://raw.githubusercontent.com/acmesh-official/acme.sh/${ACME_INSTALL_VERSION}/acme.sh" \
+        "#!/usr/bin/env sh" "acme-install" \
+        || fetch_and_run_installer \
+        "https://raw.githubusercontent.com/acmesh-official/acme.sh/${ACME_INSTALL_VERSION}/acme.sh" \
+        "#!/bin/sh" "acme-install" \
+        || die "Failed to install acme.sh — install certbot instead: apt install certbot"
+}
+
+issue_lets_encrypt() {
+    local domain="$1" is_ip="$2"
+    ensure_acme
+    local email="acme-$(openssl rand -hex 4)@example.com"
+    local outdir="/etc/letsencrypt/$domain"
+    mkdir -p "$outdir"
+    if [[ -f "$outdir/fullchain.pem" ]]; then
+        local expiry days_left=0
+        expiry="$(openssl x509 -enddate -noout -in "$outdir/fullchain.pem" 2>/dev/null | cut -d= -f2)"
+        days_left=$(( ($(date -d "$expiry" +%s 2>/dev/null || echo 0) - $(date +%s)) / 86400 ))
+        if (( days_left > 7 )); then
+            render_ok "Existing certificate valid ${days_left}d"
+            return 0
+        fi
+        render_warn "Certificate expires in ${days_left}d — renewing"
+    fi
+    local extra_args=()
+    if [[ "$is_ip" == "1" ]]; then
+        render_note "Short-lived certificate for IP $domain…"
+        extra_args=(--certificate-profile shortlived --days 6)
+    else
+        render_note "Let's Encrypt for $domain…"
+    fi
+    "$HOME/.acme.sh/acme.sh" --issue -d "$domain" --standalone "${extra_args[@]}" \
+        --accountemail "$email" >/dev/null 2>&1 \
+        || die "Failed to issue Let's Encrypt certificate for $domain"
+    "$HOME/.acme.sh/acme.sh" --install-cert -d "$domain" \
+        --key-file "$outdir/privkey.pem" \
+        --fullchain-file "$outdir/fullchain.pem" \
+        --reloadcmd "if [ -f $COMPOSE_FILE ]; then chown 1000:1000 $outdir/privkey.pem 2>/dev/null || true; chmod 600 $outdir/privkey.pem; else chgrp ${PANEL_USER:-ovmanager} $outdir/privkey.pem 2>/dev/null || true; chmod 640 $outdir/privkey.pem; fi; chmod 644 $outdir/fullchain.pem; systemctl restart $SYSTEMD_SERVICE >/dev/null 2>&1 || docker restart ovmanager >/dev/null 2>&1 || true" \
+        >/dev/null 2>&1 || die "Failed to install certificate to $outdir"
+    # Renewals re-apply permissions through the reloadcmd above, which has to
+    # branch the same way this function does — it runs later, on its own, long
+    # after these variables are gone, so it cannot call back into here.
+    secure_tls_files "$outdir/privkey.pem" "$outdir/fullchain.pem"
+    render_ok "Certificate  $outdir"
+}
+
+setup_tls() {
+    case "$TLS_MODE" in
+        le)
+            port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it (or --tls 1 for now)"
+            issue_lets_encrypt "$TLS_DOMAIN" "0"
+            TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
+            TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
+            ;;
+        le-ip)
+            port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it (or --tls 1 for now)"
+            TLS_DOMAIN="${TLS_DOMAIN:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+            issue_lets_encrypt "$TLS_DOMAIN" "1"
+            TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
+            TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
+            ;;
+        self) generate_self_signed ;;
+        custom)
+            [[ -f "$TLS_KEY" && -f "$TLS_CERT" ]] || die "Custom key/cert not found: $TLS_KEY $TLS_CERT"
+            local out="/etc/letsencrypt/${TLS_DOMAIN:-panel}"
+            mkdir -p "$out"
+            cp "$TLS_KEY" "$out/privkey.pem"
+            cp "$TLS_CERT" "$out/fullchain.pem"
+            secure_tls_files "$out/privkey.pem" "$out/fullchain.pem"
+            TLS_KEY="$out/privkey.pem"; TLS_CERT="$out/fullchain.pem"
+            ;;
+        none) ;;
+        *) die "Invalid TLS mode: '$TLS_MODE'" ;;
+    esac
+}
+
+# ==========================================================================
+# policy.sh
+# ==========================================================================
+#!/usr/bin/env bash
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Inline helper block. install.sh and manager.sh each carry a copy of this,
+# kept byte-identical by tests/test_lib_sourcing.py.
+# Pure helpers only.
+# Password policy + release artifact URLs.
+
+# Mirrors the panel's boot-time validation (backend/config.py): >= 8 chars
+# and no placeholder-looking values.
+admin_password_problem() {
+    local pass="$1" lowered
+    [[ -n "$pass" ]] || { printf 'must not be empty'; return 0; }
+    [[ "$pass" != *$'\n'* && "$pass" != *$'\r'* ]] \
+        || { printf 'must be a single line'; return 0; }
+    [[ ${#pass} -ge 8 ]] \
+        || { printf 'must be at least 8 characters (the panel requires >= 8)'; return 0; }
+    lowered="${pass,,}"
+    case "$lowered" in
+        *change-me*|*changeme*|*change_me*|*password123*|*admin123*)
+            printf 'looks like a placeholder — choose a strong password (the panel rejects change-me/changeme/change_me/password123/admin123)' ;;
+    esac
+    return 0
+}
+
+validate_admin_password() {
+    local problem
+    problem="$(admin_password_problem "$1")"
+    [[ -z "$problem" ]] || die "Admin password $problem"
+}
+
+# Max 3 tries, then fail fast — never install a password the panel rejects.
+prompt_validate_admin_password() {
+    local tries=0 problem
+    while (( tries < 3 )); do
+        problem="$(admin_password_problem "$ADMIN_PASS")"
+        if [[ -z "$problem" ]]; then
+            render_ok "Password set (hidden while typing)"
+            return 0
+        fi
+        render_warn "Weak password: $problem"
+        tries=$((tries + 1))
+        [[ $tries -lt 3 ]] && ADMIN_PASS="$(ask "Admin password" "" "h")"
+    done
+    die "No acceptable password after 3 tries (need >= 8 characters, not a common word)"
+}
+
+# ── Owner claim key ────────────────────────────────────────────────────
+# Not the credential: the panel re-reads the file on every claim attempt and
+# deletes it once the claim succeeds, so regenerating one is safe.
+claim_key_path() { printf '%s/owner-claim.key' "$DATA_DIR"; }
+
+# mint_claim_key → writes the key 0600 and prints it (stdout only).
+#
+# Ownership follows the data dir: the service account natively, uid 1000 under
+# Docker — a key those users cannot read is a key that cannot be claimed.
+mint_claim_key() {
+    local path key owner=""
+    path="$(claim_key_path)"
+    key="$(rand_hex | cut -c1-32)"
+    mkdir -p "$DATA_DIR"
+    ( umask 077; printf '%s\n' "$key" > "$path" ) || die "Could not write $path"
+    chmod 600 "$path" 2>/dev/null || true
+    if [[ "${MODE:-}" == "docker" || ( -z "${MODE:-}" && -f "$DATA_DIR/ovmanager-compose.yml" ) ]]; then
+        owner="1000:1000"
+    elif [[ -n "${PANEL_USER:-}" ]]; then
+        owner="$PANEL_USER:$PANEL_USER"
+    fi
+    [[ -n "$owner" ]] && chown "$owner" "$path" 2>/dev/null || true
+    printf '%s\n' "$key"
+}
+
+release_base() { printf '%s-%s' "$APP_SLUG" "$VERSION"; }
+
+release_url() {
+    printf 'https://github.com/%s/releases/download/v%s/%s.tar.gz' \
+        "$REPO" "$VERSION" "$(release_base)"
+}
+
+release_checksum_url() {
+    printf 'https://github.com/%s/releases/download/v%s/%s.sha256' \
+        "$REPO" "$VERSION" "$(release_base)"
+}
 
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" ADMIN_PASS="" MODE="" PIN=""

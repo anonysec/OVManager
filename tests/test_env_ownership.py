@@ -47,13 +47,34 @@ def test_no_cli_command_opens_env_for_writing():
     assert not offenders, f"cli writes .env at {offenders}"
 
 
+def _called(text: str, name: str) -> list[str]:
+    """Every line that calls `name`, ignoring its definition."""
+    out = []
+    for line in text.splitlines():
+        stripped = line.split("#", 1)[0]
+        # A definition is `name() {`; a call is the name followed by arguments.
+        if re.search(rf"^\s*(?:function\s+)?{re.escape(name)}\b", stripped):
+            continue
+        if re.search(rf"[^a-zA-Z0-9_]{re.escape(name)}\s+[\"'$]", stripped):
+            out.append(line.strip())
+    return out
+
+
 def test_the_manager_only_reads_env():
-    """`env_get` reads. There is no writer, and adding one is the bug."""
+    """`env_get` reads. There is no writer, and adding one is the bug.
+
+    The writer helper, `env_set`, is defined in the inline block the manager
+    carries — it has to be, because the block is kept byte-identical to the
+    installer's. What matters is that nothing calls it: the installer writes
+    `.env` exactly once, and the manager never touches it. So this checks call
+    sites rather than the mere presence of the definition.
+    """
     text = MANAGER.read_text(encoding="utf-8")
     assert "env_get" in text
     writers = re.findall(r"^\s*(?:printf|echo|cat)\s+.*>\s*\"?\$\{?INSTALL_DIR\}?\.env", text, re.M)
     assert not writers, f"manager.sh writes .env: {writers}"
-    assert "env_set" not in text, "env_set is a writer and must not come back"
+    calls = _called(text, "env_set")
+    assert not calls, f"env_set is a writer and must not be called: {calls}"
 
 
 def test_config_is_read_only():

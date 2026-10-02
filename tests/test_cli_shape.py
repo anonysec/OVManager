@@ -51,13 +51,10 @@ assert "check_root() { return 0; }" in _neutered_body, "root gate 2 was not neut
 _neutered_dir = tempfile.mkdtemp(prefix="ovmanager-nogate-")
 _NEUTERED = Path(_neutered_dir) / "manager.sh"
 _NEUTERED.write_text(_neutered_body, encoding="utf-8")
-# scripts/lib is symlinked beside the copy so the script's own fallback
-# ("$(dirname $BASH_SOURCE)/scripts/lib") resolves. Without it, any test that
-# points OVM_APP_DIR somewhere without a lib dir — which several do on purpose,
-# to make a read fail — died on "scripts/lib not found" before it could print
-# the thing the test was asserting on.
-(_NEUTERED.parent / "scripts").mkdir()
-(_NEUTERED.parent / "scripts" / "lib").symlink_to(REPO / "scripts" / "lib")
+# Nothing is laid down beside the copy: the helpers are inline, so the script
+# runs from wherever it sits. That is what lets a test point OVM_APP_DIR at a
+# missing tree on purpose — which several do, to make a read fail — without the
+# script dying on a missing lib before it can print the thing being asserted.
 
 # A no-op systemctl ahead of the real one on PATH. The dispatch sweep below runs
 # every advertised verb — including enable, disable, restart and doctor-fix —

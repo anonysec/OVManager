@@ -1,9 +1,9 @@
 """Behavioral tests for manager.sh (ovmanager/ovm): day-to-day operations.
 
 The manager runs against an installed tree ($INSTALL_DIR, overridable via
-OVM_APP_DIR for hermetic tests) and sources $INSTALL_DIR/scripts/lib/*.sh.
-Update/uninstall delegate to install.sh. Tests never touch the live system:
-sandbox trees plus stub tools stand in for systemd/curl/docker.
+OVM_APP_DIR for hermetic tests) and carries its helpers inline. Update/uninstall
+delegate to install.sh. Tests never touch the live system: sandbox trees plus
+stub tools stand in for systemd/curl/docker.
 """
 
 import os
@@ -14,18 +14,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+import inline_lib
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 MANAGER = os.path.join(os.path.dirname(__file__), "..", "manager.sh")
-PROMPT_LIB = Path(__file__).resolve().parent.parent / "scripts" / "lib" / "prompt.sh"
+PROMPT_LIB = inline_lib.path("prompt.sh")
 MANAGER_PATH = Path(MANAGER)
 # The operator CLI owns these commands now; contract assertions about them
 # belong here rather than in manager.sh.
 _CLI_DIR = Path(__file__).resolve().parents[1] / "cli"
 CLI_STATUS = _CLI_DIR / "status.py"
 CLI_DOCTOR = _CLI_DIR / "doctor.py"
-LIB_DIR = REPO / "scripts" / "lib"
 SETSID = shutil.which("setsid")
 
 
@@ -37,12 +37,8 @@ def neutered_manager(tmp_path: Path) -> Path:
     rather than who is allowed to run the command.
     """
     out = tmp_path / "manager.sh"
-    # The lib lookup falls back to the script's own directory, and these tests
-    # point OVM_APP_DIR at a missing tree on purpose, so the copy has to bring
-    # its own libs with it.
-    (tmp_path / "scripts" / "lib").mkdir(parents=True, exist_ok=True)
-    for lib in LIB_DIR.glob("*.sh"):
-        shutil.copy(lib, tmp_path / "scripts" / "lib" / lib.name)
+    # The copy carries its own helpers, so nothing has to be laid down beside
+    # it — which is what lets these tests point OVM_APP_DIR at a missing tree.
     out.write_text(_neuter_root_gate(MANAGER_PATH.read_text(encoding="utf-8")), encoding="utf-8")
     return out
 
@@ -123,13 +119,11 @@ def sandbox(tmp_path, gate_root: bool = False):
     with the gate intact.
     """
     app = tmp_path / "opt"
-    (app / "scripts" / "lib").mkdir(parents=True)
+    app.mkdir(parents=True, exist_ok=True)
     src = MANAGER_PATH.read_text(encoding="utf-8")
     if not gate_root:
         src = _neuter_root_gate(src)
     (app / "manager.sh").write_text(src, encoding="utf-8")
-    for lib in LIB_DIR.glob("*.sh"):
-        shutil.copy(lib, app / "scripts" / "lib" / lib.name)
     (app / "install.sh").write_text('#!/bin/sh\necho "STUB-INSTALLER $@"\n', encoding="utf-8")
     (app / "install.sh").chmod(0o755)
 
@@ -471,7 +465,7 @@ def test_no_function_ends_with_a_failing_test():
 
     offenders = [
         (str(path), name, tail, line)
-        for path in (MANAGER_PATH, *sorted(LIB_DIR.glob("*.sh")))
+        for path in (MANAGER_PATH,)
         for name, tail, line in tails(path)
         if re.match(r"^\[\[.*\]\]\s*&&", tail)
     ]

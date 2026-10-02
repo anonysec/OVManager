@@ -192,17 +192,17 @@ def test_short_passwords_are_not_the_only_rejection(client, claim_key_file, uncl
 def test_the_key_the_installer_mints_is_the_key_the_panel_accepts(tmp_path, monkeypatch, unclaimed_owner):
     """The contract across the language boundary, exercised for real.
 
-    `mint_claim_key` (scripts/lib) writes the file; this endpoint reads it.
-    A typo in either the path or the file name would only show up on a live
-    install, which is precisely the failure this catches.
+    `mint_claim_key` — an inline helper in install.sh — writes the file; this
+    endpoint reads it. A typo in either the path or the file name would only
+    show up on a live install, which is precisely the failure this catches.
     """
     import subprocess
-    from pathlib import Path
 
-    repo = Path(__file__).resolve().parent.parent
+    from inline_lib import path as lib_path
+
     data = tmp_path / "data"
     monkeypatch.setattr(data_paths, "DATA_DIR", data)
-    harness = "\n".join(f'source "{repo / "scripts" / "lib" / name}"' for name in ("common.sh", "policy.sh"))
+    harness = "\n".join(f'source "{lib_path(name)}"' for name in ("common.sh", "policy.sh"))
     r = subprocess.run(
         ["bash", "-c", f'{harness}\nDATA_DIR="{data}" MODE=native mint_claim_key'],
         capture_output=True,

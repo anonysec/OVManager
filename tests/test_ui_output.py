@@ -23,9 +23,14 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import inline_lib
+
 REPO = Path(__file__).resolve().parent.parent
-LIB = REPO / "scripts" / "lib"
 NODE = REPO.parent / "OVNode"
+# Sourced in this order and the order matters: common.sh sets the colour globals
+# and the INT/TERM trap that render.sh reads at source time, and prompt.sh calls
+# render_ask(). These are the sections cut out of install.sh's inline block.
+LIBS = [inline_lib.path(n) for n in ("common.sh", "render.sh", "prompt.sh")]
 
 # Braille, box drawing and block characters all live above U+00FF; a terminal
 # or locale that cannot show them gets the ASCII set instead.
@@ -36,11 +41,9 @@ def _probe(script: str, *, promptable: bool) -> str:
     """A bash file with the libs sourced and one snippet appended."""
     return (
         "set -Eeuo pipefail\n"
-        f'. "{LIB / "common.sh"}"\n'
-        f'. "{LIB / "render.sh"}"\n'
-        f'. "{LIB / "prompt.sh"}"\n'
-        f"can_prompt() {{ return {0 if promptable else 1}; }}\n"
-        f"{script}\n"
+        + "".join(f'. "{lib}"\n' for lib in LIBS)
+        + f"can_prompt() {{ return {0 if promptable else 1}; }}\n"
+        + f"{script}\n"
     )
 
 
@@ -536,7 +539,7 @@ def test_the_menu_is_not_drawn_as_a_whiptail_box():
     like a boxed dialog on one box and a coloured list on another, and the two
     disagreed about which item was selected.
     """
-    prompt = (LIB / "prompt.sh").read_text(encoding="utf-8")
+    prompt = inline_lib.section("prompt.sh")
     assert 'tui_select() { render_menu "$@"; }' in prompt
     code = "\n".join(ln for ln in prompt.splitlines() if not ln.lstrip().startswith("#"))
     assert "whiptail" not in code
@@ -636,7 +639,7 @@ def test_render_takes_no_arguments_that_could_be_injected():
     A secret that reached a printf format would be a shell-injection surface in
     the one place a secret is printed.
     """
-    render = (LIB / "render.sh").read_text(encoding="utf-8")
+    render = inline_lib.section("render.sh")
     fns = ("render_kv", "render_kv_w", "render_key", "render_card", "render_note", "render_warn")
     for fn in fns:
         start = render.index(f"{fn}() {{")
@@ -661,27 +664,42 @@ def test_render_kv_w_takes_the_column_it_is_given():
     assert len(columns) == 1, f"values do not share a column: {rows}"
 
 
-def test_render_sh_is_byte_identical_to_the_nodes():
-    """One renderer, two installers, one file.
+def test_the_renderer_matches_the_nodes():
+    """One renderer, two installers, same code.
 
     The panel card and the node card used to be two copies of one idea written
-    at different times, and they had already drifted. This file is a copy of the
-    node's, which is why the same assertions pass in both repos unedited — and
-    that only stays true while the renderer does.
+    at different times, and they had already drifted. The panel's copy is now a
+    section of install.sh's inline block rather than a file of its own, so the
+    two are compared on their code rather than their bytes — the comment above
+    each says where the helpers live, which now genuinely differs. Everything
+    that executes is still required to be identical.
     """
     import pytest as _pytest
 
     if not NODE.is_dir():
         _pytest.skip("OVNode checkout not beside this repo")
-    here = (LIB / "render.sh").read_text(encoding="utf-8")
-    there = (NODE / "scripts" / "lib" / "render.sh").read_text(encoding="utf-8")
+
+    def code(text: str) -> list[str]:
+        """Lines that are not comments and not blank.
+
+        The two renderers are compared on their code, not their bytes. The
+        panel's helpers are inline and the node's still live in scripts/lib, so
+        the provenance comment above each block is genuinely different text
+        saying different things — comparing it would fail on a true statement.
+        Everything that runs is still compared exactly.
+        """
+        out = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                out.append(line)
+        return out
+
+    here = code(inline_lib.section("render.sh"))
+    there = code((NODE / "scripts" / "lib" / "render.sh").read_text(encoding="utf-8"))
     if here == there:
         return
     import difflib
 
-    diff = "\n".join(
-        list(difflib.unified_diff(there.splitlines(), here.splitlines(), "node/render.sh", "panel/render.sh", lineterm="", n=1))[
-            :40
-        ]
-    )
-    raise AssertionError(f"render.sh has drifted between the two installers:\n{diff}")
+    diff = "\n".join(list(difflib.unified_diff(there, here, "node/render.sh", "panel/render.sh", lineterm="", n=1))[:40])
+    raise AssertionError(f"the renderer has drifted between the two installers:\n{diff}")

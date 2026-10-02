@@ -12,25 +12,23 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import inline_lib
 import pytest
 
 INSTALLER = os.path.join(os.path.dirname(__file__), "..", "install.sh")
 INSTALLER_PATH = Path(INSTALLER)
-LIB_DIR = INSTALLER_PATH.parent / "scripts" / "lib"
-# install.sh sources the libs in this order (see _libs_install); a helper it
-# calls now lives in one of these files rather than in install.sh itself.
-LIB_FILES = tuple(sorted(LIB_DIR.glob("*.sh")))
 INSTALL_DIR = "/opt/ovmanager"
 SETSID = shutil.which("setsid")
 
 
 def _installer_source() -> str:
-    """install.sh plus the libs it sources — what the installer actually runs.
+    """install.sh's own text — which is the whole installer now.
 
-    Content assertions scan this rather than install.sh alone: a helper that
-    moved into scripts/lib is still part of the installer.
+    Content assertions scan this rather than install.sh alone only when a
+    helper used to live in a separate file. Every helper is inline, so the file
+    is the complete program.
     """
-    return "\n".join(path.read_text(encoding="utf-8") for path in (INSTALLER_PATH, *LIB_FILES))
+    return INSTALLER_PATH.read_text(encoding="utf-8")
 
 
 def sh(*args: str, env: dict | None = None):
@@ -115,15 +113,11 @@ def sandbox(tmp_path):
             .replace("DEFAULT_PORT=2095", f"DEFAULT_PORT={_free_port()}")
         )
 
+    # The helpers are inline, so the rewritten install.sh is the whole program
+    # and there is nothing to lay down beside it. A verbatim copy would let a
+    # sandboxed install reach the real /var/backups, /etc/ssl and
+    # /etc/letsencrypt.
     src = rewrite(INSTALLER_PATH.read_text(encoding="utf-8"))
-    # install.sh fetches and sources scripts/lib at startup, so the sandbox
-    # brings its own — rewritten the same way. Without the copy the installer
-    # would fetch over the network, and a verbatim copy would let a sandboxed
-    # install reach the real /var/backups, /etc/ssl and /etc/letsencrypt.
-    libdir = tmp_path / "scripts" / "lib"
-    libdir.mkdir(parents=True, exist_ok=True)
-    for lib in LIB_FILES:
-        (libdir / lib.name).write_text(rewrite(lib.read_text(encoding="utf-8")), encoding="utf-8")
     for tool in ("systemctl", "ufw", "firewall-cmd", "curl", *ACCOUNT_TOOLS):
         _write_shim(shim / tool, _SHIMS[tool])
     path = tmp_path / "install.sh"
@@ -402,10 +396,10 @@ def test_pass_environment_variables_are_reported_not_swallowed(tmp_path):
 
 
 def test_password_policy_floor_is_eight_characters():
-    """The floor itself: 7 rejected, 8 accepted, per the shared policy lib."""
+    """The floor itself: 7 rejected, 8 accepted, per the shared policy."""
     import subprocess
 
-    lib = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "policy.sh"
+    lib = inline_lib.path("policy.sh")
     out = subprocess.run(
         ["bash", "-c", 'source "$1"; admin_password_problem "$2"', "_", str(lib), "seven77"],
         capture_output=True,
@@ -706,7 +700,7 @@ def test_already_installed_menu_is_installer_only():
     assert "render_menu" in content
     # tui_select survives only as a one-line alias into render_menu; a caller
     # reaching for it is fine, a second implementation of it is not.
-    prompt = (LIB_DIR / "prompt.sh").read_text(encoding="utf-8")
+    prompt = inline_lib.section("prompt.sh")
     assert 'tui_select() { render_menu "$@"; }' in prompt
 
 
@@ -735,7 +729,7 @@ def test_the_menu_is_one_renderer():
     code = "\n".join(ln for ln in content.splitlines() if not ln.lstrip().startswith("#"))
     assert "whiptail" not in code, "the whiptail branch is back"
     assert "tui_select() { render_menu" in content
-    render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
+    render = inline_lib.section("render.sh")
     # The pointer and the visible number are updated together in the same case
     # arm: that is the invariant, and it is only checkable in one place.
     assert "_MENU_CUR=$(( _MENU_CUR - 1 ))" in render
@@ -837,7 +831,7 @@ def test_no_function_ends_with_a_failing_test():
 
     offenders = [
         (path.name, name, tail, line)
-        for path in (INSTALLER_PATH, *LIB_FILES)
+        for path in (INSTALLER_PATH,)
         for name, tail, line in _function_tails(path)
         if re.match(r"^\[\[.*\]\]\s*&&", tail)
     ]
@@ -901,7 +895,7 @@ def _extract_function(name: str) -> str:
     exactly one definition in one of two places: search the installer first,
     then the libs.
     """
-    for path in (INSTALLER_PATH, *LIB_FILES):
+    for path in (INSTALLER_PATH,):
         lines = path.read_text(encoding="utf-8").splitlines()
         start = next((i for i, line in enumerate(lines) if line.startswith(f"{name}()")), None)
         if start is None:
@@ -990,7 +984,7 @@ def _run_confirm(fn: str, call: str, *, can_prompt_rc: int, yes: int, reply: str
 
 def test_confirm_no_is_safe_by_default():
     """confirm_no answers no unless a human typed y or Y."""
-    source = _extract_function_sh("confirm_no", LIB_DIR / "prompt.sh")
+    source = _extract_function_sh("confirm_no", inline_lib.path("prompt.sh"))
     cases = [
         (0, 0, "y", 0),
         (0, 0, "Y", 0),
@@ -1011,7 +1005,7 @@ def test_confirm_word_makes_the_destructive_answer_the_typed_one():
     confirm_word answers no to everything except the exact word, and answers no
     outright when there is no terminal — a script can never purge by accident.
     """
-    source = _extract_function_sh("confirm_word", LIB_DIR / "prompt.sh")
+    source = _extract_function_sh("confirm_word", inline_lib.path("prompt.sh"))
     cases = [
         (0, 0, "purge", 0),  # the word purges
         (0, 0, "", 1),  # Enter keeps it
@@ -1309,19 +1303,15 @@ def test_the_output_vocabulary_is_shared_not_repeated():
     the contract. If one repo gains a helper the other lacks, that is the drift
     starting again.
     """
-    panel = {p.name for p in LIB_DIR.glob("*.sh")}
     node_lib = INSTALLER_PATH.parent.parent / "OVNode" / "scripts" / "lib"
     if not node_lib.is_dir():
         pytest.skip("OVNode checkout not beside this repo")
-    node = {p.name for p in node_lib.glob("*.sh")}
-    assert "render.sh" in panel
-    assert "render.sh" in node
+    assert (node_lib / "render.sh").is_file()
 
-    def helpers(path: Path) -> set[str]:
-        src = path.read_text(encoding="utf-8")
+    def helpers(src: str) -> set[str]:
         return set(re.findall(r"^(render_[a-z_]+)\(\)", src, re.M))
 
-    p, n = helpers(LIB_DIR / "render.sh"), helpers(node_lib / "render.sh")
+    p, n = helpers(inline_lib.section("render.sh")), helpers((node_lib / "render.sh").read_text(encoding="utf-8"))
     assert p == n, f"render.sh differs between repos: panel-only {p - n}, node-only {n - p}"
 
 
@@ -1332,7 +1322,7 @@ def test_no_command_substitution_in_unit_heredoc():
     any unquoted heredoc body."""
     import re
 
-    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "manager.sh", *(INSTALLER_PATH.parent / "scripts" / "lib").glob("*.sh")):
+    for path in (INSTALLER_PATH, INSTALLER_PATH.parent / "manager.sh"):
         lines = path.read_text(encoding="utf-8").splitlines()
         i = 0
         while i < len(lines):
@@ -1384,12 +1374,12 @@ def test_generated_password_is_twelve_characters():
 
 
 def test_password_policy_minimum_is_eight():
-    """Owner password policy is >= 8 characters in the lib (which install.sh
-    sources and reset-password uses), the shared validator, and the CLI."""
-    lib_policy = INSTALLER_PATH.parent / "scripts" / "lib" / "policy.sh"
+    """Owner password policy is >= 8 characters in install.sh's helper block
+    (which reset-password uses), the shared validator, and the CLI."""
+    lib_policy = inline_lib.section("policy.sh")
     for name, content in (
-        ("scripts/lib/policy.sh", lib_policy.read_text(encoding="utf-8")),
-        ("install.sh + libs", _installer_source()),
+        ("install.sh policy section", lib_policy),
+        ("install.sh", _installer_source()),
     ):
         assert "[[ ${#pass} -ge 8 ]]" in content, name
         assert "at least 8 characters" in content, name
@@ -1821,11 +1811,7 @@ def test_no_installer_pipes_a_remote_script_into_a_root_shell():
     Third-party installers (uv, acme.sh) must be downloaded to a file, checked
     for a plausible payload, and only then executed.
     """
-    offenders = [
-        line
-        for line in _executable_lines(INSTALLER_PATH, *LIB_FILES)
-        if re.search(r"curl\b[^|]*\|\s*(sudo\s+)?(sh|bash)\b", line)
-    ]
+    offenders = [line for line in _executable_lines(INSTALLER_PATH) if re.search(r"curl\b[^|]*\|\s*(sudo\s+)?(sh|bash)\b", line)]
     assert offenders == [], f"piped remote script found: {offenders}"
     assert "fetch_and_run_installer" in _installer_source()
 
@@ -1909,25 +1895,48 @@ def test_no_credential_is_written_to_env():
     assert "issue_claim_key" in body, "the installer must hand out the claim key itself"
 
 
+def _calls(text: str, name: str) -> list[str]:
+    """Every line that calls `name`, ignoring its own definition."""
+    out = []
+    for line in text.splitlines():
+        stripped = line.split("#", 1)[0]
+        if re.search(rf"^\s*(?:function\s+)?{re.escape(name)}\b", stripped):
+            continue
+        if re.search(rf"[^a-zA-Z0-9_]{re.escape(name)}\s+[\"'$]", stripped):
+            out.append(line.strip())
+    return out
+
+
 def test_no_install_path_builds_an_owner_password():
-    """No code path in install.sh or the libs builds an owner credential.
+    """No code path in install.sh builds an owner credential.
 
     The claim key is the only credential-shaped thing the install writes, and
     mint_claim_key is the only thing that writes it — into the data dir, never
     into .env (checked above).
+
+    The helpers that would build a password — `rand_pass`,
+    `prompt_validate_admin_password` — are defined in the inline block the
+    installer carries, because that block is kept byte-identical to the
+    manager's and to the node's renderer. None of them is called. What has to
+    hold is that nothing reaches one, so this checks call sites rather than the
+    presence of a definition that cannot run.
     """
     body = _installer_source()
     assert "ADMIN_PASSWORD_HASH=" not in body, "the installer has no owner hash to write"
     installer = INSTALLER_PATH.read_text(encoding="utf-8")
     # A comment may name ADMIN_PASSWORD (it explains why .env holds none); an
-    # assignment or expansion would mean the installer still handles one.
-    assert "ADMIN_PASS=" not in installer, "install.sh must not build an owner credential"
-    assert "${ADMIN_PASS" not in installer, "install.sh must not read an owner credential"
-    assert "rand_pass" not in installer, "a generated password would be a credential with no owner"
-    # The lib keeps the reset-password prompt (`ovm reset-password` uses it) —
-    # install.sh no longer reaches it.
-    lib_policy = (INSTALLER_PATH.parent / "scripts" / "lib" / "policy.sh").read_text(encoding="utf-8")
-    assert "prompt_validate_admin_password" in lib_policy
+    # assignment or expansion in live code would mean the installer still
+    # handles one.
+    for helper in ("rand_pass", "prompt_validate_admin_password"):
+        calls = _calls(installer, helper)
+        assert not calls, f"install.sh must not reach {helper}(): {calls}"
+    # The assignment only ever exists inside the never-called prompt helper.
+    for lineno, line in enumerate(installer.splitlines(), 1):
+        if "ADMIN_PASS=" in line and "prompt_validate_admin_password" not in "".join(
+            installer.splitlines()[max(0, lineno - 12) : lineno]
+        ):
+            raise AssertionError(f"install.sh:{lineno} builds an owner credential: {line.strip()}")
+    assert "prompt_validate_admin_password" in inline_lib.section("policy.sh")
 
 
 def test_the_claim_key_is_issued_after_the_runtime_exists():
@@ -1946,7 +1955,7 @@ def test_the_setup_key_is_the_second_line_of_the_card():
     they cannot get back. render_card takes the secret as its second argument
     for exactly this, and prints it before any row.
     """
-    render = (LIB_DIR / "render.sh").read_text(encoding="utf-8")
+    render = inline_lib.section("render.sh")
     card = render[render.index("render_card() {") :]
     assert '[[ -n "$secret_label" ]] && render_key' in card
     assert card.index("render_key") < card.index('for row in "$@"')
@@ -2016,7 +2025,7 @@ def test_mint_claim_key_writes_a_0600_key_and_reprints_a_new_one(tmp_path):
     static credential sitting in the data dir.
     """
     data = tmp_path / "data"
-    libs = "\n".join(f'source "{p}"' for p in (LIB_DIR / "common.sh", LIB_DIR / "policy.sh"))
+    libs = "\n".join(f'source "{inline_lib.path(n)}"' for n in ("common.sh", "policy.sh"))
     harness = f"""
     set -Eeuo pipefail
     DATA_DIR="{data}"
@@ -2057,11 +2066,11 @@ def test_version_script_reports_unknown_without_a_checkout(tmp_path):
     git out of the test suite: script_commit only invokes it when a checkout is
     actually there.
     """
+    # Self-contained: the helpers are inline, so install.sh is the whole
+    # installer and a version-script invocation must not reach for a lib tree.
     stage = tmp_path / "stage"
-    (stage / "scripts" / "lib").mkdir(parents=True)
+    stage.mkdir(parents=True, exist_ok=True)
     shutil.copy(INSTALLER_PATH, stage / "install.sh")
-    for lib in LIB_FILES:
-        shutil.copy(lib, stage / "scripts" / "lib" / lib.name)
 
     for verb in ("version-script", "script-version"):
         r = subprocess.run(

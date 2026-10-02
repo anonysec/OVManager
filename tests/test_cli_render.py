@@ -19,8 +19,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import inline_lib
+
 REPO = Path(__file__).resolve().parent.parent
-RENDER_SH = REPO / "scripts" / "lib" / "render.sh"
+RENDER_SH = inline_lib.path("render.sh")
 
 
 from cli import doctor, render, status, tls  # noqa: E402

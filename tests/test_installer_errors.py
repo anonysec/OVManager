@@ -97,15 +97,9 @@ def _guard_sandbox(tmp_path):
     )
     path = tmp_path / "install.sh"
     path.write_text(src, encoding="utf-8")
-    # install.sh sources scripts/lib at startup; without a copy beside it the
-    # installer would leave the sandbox and fetch them over the network.
-    # Rewritten like the installer's own copy, so nothing here can reach the
-    # real /var/backups, /etc/ssl or /etc/letsencrypt.
-    libdir = tmp_path / "scripts" / "lib"
-    libdir.mkdir(parents=True)
-    for lib in (INSTALLER.parent / "scripts" / "lib").glob("*.sh"):
-        text = lib.read_text(encoding="utf-8").replace("/var/lib/ovmanager", f"{tmp_path}/data")
-        (libdir / lib.name).write_text(text, encoding="utf-8")
+    # The helpers are inline, so the rewritten file is the whole installer and
+    # there is nothing beside it to rewrite — which is also what keeps this run
+    # inside the sandbox instead of reaching over the network for a lib tree.
     return path
 
 
