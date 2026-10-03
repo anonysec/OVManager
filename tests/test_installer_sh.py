@@ -442,6 +442,18 @@ def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
     assert "my-admin12345" not in r.stderr, "the supplied password was echoed back"
 
 
+def _machine_path() -> str:
+    """The `else` branch of main() that runs when nothing can prompt.
+
+    Sliced from `if can_prompt ... else:` to its closing `fi`, so a test
+    asserting the defaults cannot pass on text that merely appears elsewhere.
+    """
+    body = _installer_source()
+    start = body.index('    if can_prompt && [[ "$YES" -eq 0 ]]; then')
+    tail = body.index("\n    fi", start)
+    return body[body.index("\n    else", start) + len("\n    else") : tail]
+
+
 def test_default_install_generates_the_panel_path_and_no_credential():
     """The recommended flow generates the private URL path, and nothing else.
 
@@ -449,12 +461,24 @@ def test_default_install_generates_the_panel_path_and_no_credential():
     one-time claim key and the browser turns it into the credential (design
     decision 4). A generated password here would be a credential with no owner.
     """
-    source = _extract_function("panel_express_defaults")
-    assert 'PATHPREFIX="$(rand_path)"' in source
-    assert "ask " not in source
-    assert "ADMIN_PASS" not in source
-    assert "GENERATED_PASS" not in _installer_source(), "no install-time password survives"
-    assert "prompt_validate_admin_password" in _installer_source()  # reset-password still validates
+    # The machine path, not a helper: the wizard asks, and everything else
+    # falls through to these defaults.
+    machine = _machine_path()
+    assert 'PATHPREFIX="$(rand_path)"' in machine, "the URL path is not generated on the machine path"
+    assert ': "${ADMIN_USER:=$DEFAULT_USER}"' in machine
+    assert "TLS_MODE:=self" in machine
+    assert "ask " not in machine, "the machine path must not prompt"
+    body = _installer_source()
+    # ADMIN_PASS survives only in the reset-password prompt, which the manager
+    # reaches and the installer never calls, and in the deprecation notice for
+    # the retired flag. Neither may sit on an install path.
+    install_paths = _extract_function("do_install") + _extract_function("wizard") + _extract_function("write_env")
+    # Comments name ADMIN_PASSWORD to explain why .env holds none, so only live
+    # code can answer this.
+    install_code = "\n".join(ln for ln in install_paths.splitlines() if not ln.lstrip().startswith("#"))
+    assert "ADMIN_PASS" not in install_code, "an install path builds an owner credential"
+    assert "GENERATED_PASS" not in body, "no install-time password survives"
+    assert "prompt_validate_admin_password" in body  # reset-password still validates
 
 
 def test_unknown_option_fails():
@@ -802,27 +826,23 @@ def test_plain_http_flag_is_gone():
     assert "--tls-self" not in content
 
 
-def test_start_menu_is_install_or_docker():
-    """The front door uses beginner wording and generates secure defaults.
+def test_the_wizard_asks_the_mode_once_as_its_first_step():
+    """Install mode is Step 1 of the wizard, and there is no menu before it.
 
-    The mode is asked here and nowhere else. The wizard used to ask it again as
-    "Step 1/5", so the answer could be given twice and the two did not always
-    agree — choosing "install with docker" on the menu and "native" in the
-    wizard was a reachable state.
+    A front-door menu followed by a wizard that asked the same question again
+    let the two answers disagree — "containerized" on the menu and "native" in
+    the wizard was reachable. Asking once, as a numbered step with the two
+    options spelled out, is both the earlier arrangement and the safer one.
     """
-    source = _extract_function("start_menu")
-    assert "install  ·  systemd on this host" in source
-    assert "install  ·  containerized" in source
-    assert "Express" not in source
-    assert "Custom" not in source
-    assert 'MODE="native"; panel_express_defaults' in source
-    assert 'MODE="docker"; panel_express_defaults' in source
-    assert "render_menu" in source
-    # And the wizard must not ask again. TLS_MODE is a different question and
-    # appears legitimately; the install MODE must not.
-    wizard = _extract_function("wizard")
-    assert "Install mode" not in wizard, "the wizard must not re-ask the install mode"
-    assert '"$MODE"' not in wizard
+    source = _extract_function("wizard")
+    assert "Step 1/5 — Install mode" in source
+    assert "Native     systemd service on this host (recommended)" in source
+    assert "Docker     containerized, needs Docker Engine" in source
+    assert 'MODE="docker"' in source and 'MODE="native"' in source
+    assert "start_menu" not in _installer_source(), "the front-door menu is back"
+    # Asked once, and only when nothing already chose: a flag or OVM_MODE must
+    # not be overridden by a question.
+    assert '[[ -z "$MODE" ]]' in source, "the mode step ignores an answer already given"
 
 
 def test_no_bundled_node_offer():
@@ -943,21 +963,21 @@ def _extract_function(name: str) -> str:
 
 
 def test_recommended_defaults_never_touch_a_password():
-    """Recommended installation asks for nothing and mints no credential."""
-    source = _extract_function("panel_express_defaults")
+    """A non-interactive run asks for nothing and mints no credential."""
+    machine = _machine_path()
     harness = f"""set -Eeuo pipefail
     rand_path() {{ echo generatedpath; }}
     rand_pass() {{ echo generated-password-123; }}
     DEFAULT_PORT=2095; DEFAULT_USER=admin
-    EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
+    MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
     ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
-    {source}
-    panel_express_defaults
+    {machine}
     [[ -z "$ADMIN_PASS" ]]
     [[ "$GENERATED_PASS" -eq 0 ]]
     [[ "$PATHPREFIX" == generatedpath ]]
     [[ "$ADMIN_USER" == admin ]]
-    [[ "$PATH_SET" -eq 1 ]]
+    [[ "$PATH_SET" -eq 0 ]]
+    [[ "$TLS_MODE" == self ]]
     """
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -1145,23 +1165,21 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
     assert "STUB-BAD" in r.stdout and "REAL-OK" in r.stdout
 
 
-def test_installer_menu_copy_uses_new_tui():
-    """The front door offers two installs and an exit, and says what each is.
+def test_every_wizard_step_says_what_its_options_mean():
+    """Each step's options carry their consequence, not just a label.
 
-    The labels are lowercase verbs with the mode after a separator, because the
-    menu is drawn by render_menu and there is no "Setup" heading to attach a
-    capital to any more — the banner already says what is running.
+    This is the whole point of the numbered-step form: someone reading the
+    wizard cold learns what "self-signed" costs and what Let's Encrypt needs
+    before choosing, rather than picking a digit and finding out later.
     """
-    content = _installer_source()
-    source = _extract_function("start_menu")
-    assert "install  ·  systemd on this host" in source
-    assert "install  ·  containerized" in source
-    assert 'quit    "exit"' in source
-    assert "How do you want to install?" not in source
-    for retired in ("Setup${NC}", "1.${NC} Install", "0.${NC} Exit", "Ready — claim your panel"):
-        assert retired not in content, f"retired wording back: {retired}"
-    # Cancelling says what did not happen, not "Cancelled." with a full stop.
-    assert "nothing was changed" in source
+    source = _extract_function("wizard")
+    assert "Self-signed (default)      encrypted; one browser warning to click through" in source
+    assert "Let's Encrypt (domain)     needs a domain pointed here + free port 80" in source
+    assert "Let's Encrypt (this IP)    short-lived cert, no domain needed" in source
+    assert "Custom key + cert          bring your own PEM files" in source
+    # Every option in a step explains itself, so no step is a bare list of words.
+    for step in ("Step 1/5", "Step 2/5", "Step 3/5", "Step 4/5", "Step 5/5"):
+        assert step in source, f"missing {step}"
 
 
 def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
@@ -1299,9 +1317,10 @@ def test_installer_design_language_matches_node():
         "render_menu",
         "render_banner",
         "render_card",
-        "install  ·  systemd on this host",
-        "install  ·  containerized",
-        "1 self-signed · 2 lets encrypt · 3 custom",
+        "Step 1/5 — Install mode",
+        "Native     systemd service on this host (recommended)",
+        "Docker     containerized, needs Docker Engine",
+        "Self-signed (default)      encrypted; one browser warning to click through",
         "render_ok",
         "render_warn",
         "render_fail",
@@ -1313,28 +1332,39 @@ def test_installer_design_language_matches_node():
         "1.${NC} Install",
         "How do you want to install?",
         "Choose every option yourself",
+        # The renderer rewrite replaced the numbered steps with one cleared
+        # screen per question and called this wording retired. The steps are
+        # back: the whole plan stays visible, the answers do not scroll away,
+        # and nothing clears under a fast typist. Only the four-step variant
+        # the rewrite invented is still retired — install mode is a step again,
+        # so the count is five.
         "Step 1/4",
         "Ready — claim your panel",
-        "Let's Encrypt (domain)",
+        # The rewrite collapsed four certificate choices into three and asked
+        # "domain or this IP?" as its own question. The four-option step is
+        # back, so the label below is wanted wording again.
+        "1 self-signed · 2 lets encrypt · 3 custom",
     ):
         assert retired not in content, f"retired wording back: {retired}"
 
 
-def test_the_tls_prompt_takes_the_name_or_the_digit():
-    """The TLS prompt answers to both what it shows and what it used to show.
+def test_the_tls_step_takes_the_digit_and_says_what_it_costs():
+    """TLS is a numbered step again, and every option names its consequence.
 
-    The default in the bracket reads `self-signed` rather than `1`, because a
-    digit tells someone reading the screen cold nothing about what they get. But
-    a wizard whose default changed spelling is a wizard that breaks muscle
-    memory and any saved answer, so `1`/`2`/`3` still select the same branches.
+    This is the arrangement from before the renderer rewrite, where each
+    option carried what choosing it would mean rather than a bare digit. The
+    free-text field for Let's Encrypt came back too: "domain or this IP?" as its
+    own question made the operator decide a distinction the installer can make
+    for itself from what they type.
     """
-    source = _extract_function("ask_tls")
-    assert '"self-signed")"' in source, "the default should read as the certificate you get, not the digit"
-    # The digits lead their arms (`2|lets*|...`); `1` is the catch-all, which is
-    # why it needs no arm of its own.
-    assert "2|lets*" in source, "answer 2 no longer selects Let's Encrypt"
-    assert "3|custom*" in source, "answer 3 no longer selects a custom certificate"
-    assert re.search(r"\*\)\s*TLS_MODE=\"self\"", source), "the default no longer falls through to self-signed"
+    source = _extract_function("wizard")
+    assert "Step 5/5 — Certificate (always encrypted)" in source
+    assert 'tls="$(ask "TLS" "1")"' in source, "the TLS step must answer through ask"
+    assert '1) TLS_MODE="self" ;;' in source, "1 no longer selects self-signed"
+    assert '2) TLS_MODE="le";' in source, "2 no longer selects Let's Encrypt by domain"
+    assert '3) TLS_MODE="le-ip";' in source, "3 no longer selects Let's Encrypt by IP"
+    assert '4) TLS_MODE="custom"' in source, "4 no longer selects a custom pair"
+    assert '*) TLS_MODE="self" ;;' in source, "an unknown answer must fall back to self-signed"
 
 
 def test_the_output_vocabulary_is_shared_not_repeated():

@@ -1435,7 +1435,7 @@ PORT="" PATHPREFIX="" ADMIN_USER=""
 TLS_MODE="" TLS_DOMAIN="" TLS_KEY="" TLS_CERT=""
 PUBLIC_URL="" MODE="" ACTION="install" PIN=""
 YES=0 PURGE=0 DRY=0 PATH_SET=0
-CLI_GIVEN=0 EXPRESS=0 CLAIM_KEY=""
+CLI_GIVEN=0 CLAIM_KEY=""
 OPERATION_LOCK="${DATA_DIR}/.operation.lock"
 OPERATION_LOCK_HELD=0
 UPDATE_STATE="${DATA_DIR}/update-state.json"
@@ -2122,86 +2122,88 @@ validate_input() {
     fi
 }
 
-# Recommended preset: the private panel path is always generated. There is no
-# credential to generate — the owner is claimed in the browser.
-panel_express_defaults() {
-    EXPRESS=1
-    : "${MODE:=native}"
-    : "${PORT:=$DEFAULT_PORT}"
-    PATHPREFIX="$(rand_path)"
-    PATH_SET=1
-    ADMIN_USER="$DEFAULT_USER"
-    TLS_MODE="self"
-    return 0
-}
-
-# One wizard question per screen, screen cleared between them. There are no
-# "Step N/5" headers: the clear already separates one answer from the next, and
-# a second counter competing with the menu's own numbering was the thing that
-# made the old flow hard to read.
+# Numbered steps on one screen, each option carrying what it means. This is the
+# shape the installer had before the renderer rewrite replaced it with one
+# cleared screen per question, and it is the better one: the whole plan is
+# visible at once, the answers stay on screen instead of scrolling away, and
+# nothing clears under a fast typist.
 wizard() {
-    if [[ -z "$PORT" ]]; then
-        render_screen
-        render_line "$(printf '%bport%s' "$B" "$NC")"
-        render_ask_note "the port the panel answers on — change it only if something else already uses $DEFAULT_PORT"
-        PORT="$(ask "" "$DEFAULT_PORT")"
-        is_port "$PORT" || die "Invalid port: '$PORT'"
-        port_available_or_die "$PORT"
+    if [[ -z "$MODE" ]]; then
+        render_line "$(printf '%bStep 1/5 — Install mode%s' "$B" "$NC")"
+        render_line "  ${WH}1${NC}  Native     systemd service on this host (recommended)"
+        render_line "  ${WH}2${NC}  Docker     containerized, needs Docker Engine"
+        local m
+        m="$(ask "Mode" "1")"
+        case "${m:-1}" in
+            2|docker|Docker) MODE="docker" ;;
+            *)               MODE="native" ;;
+        esac
+        render_line ""
     fi
 
-    # TLS before the URL path. Both are safe to answer wrongly, but the
-    # certificate is the one a beginner is most likely to be unsure about, and
-    # showing it while the port — the only question that can fail outright — is
-    # already behind them means the first refusal happens on question one.
-    [[ -n "$TLS_MODE" ]] || ask_tls
+    if [[ -z "$PORT" ]]; then
+        render_line "$(printf '%bStep 2/5 — Panel port%s' "$B" "$NC")"
+        render_line "  ${WH}1${NC}  Default: ${DEFAULT_PORT}"
+        render_line "  ${WH}2${NC}  Custom"
+        render_line "  ${WH}3${NC}  Random"
+        local pc
+        pc="$(ask "Port choice" "1")"
+        case "${pc:-1}" in
+            2) PORT="$(ask "Port" "${PORT:-$DEFAULT_PORT}")" ;;
+            3) if command -v shuf >/dev/null 2>&1; then PORT="$(shuf -i 1024-62000 -n 1)"; else PORT="$DEFAULT_PORT"; fi ;;
+            *) : "${PORT:=$DEFAULT_PORT}" ;;
+        esac
+        is_port "$PORT" || die "Invalid port: '$PORT'"
+        port_available_or_die "$PORT"
+        render_line ""
+    fi
 
     if [[ "$PATH_SET" -eq 0 ]]; then
-        render_screen
-        render_line "$(printf '%burl path%s' "$B" "$NC")"
-        render_ask_note "a secret path hides the panel from scanners — leave empty for a random one"
+        render_line "$(printf '%bStep 3/5 — Panel URL path%s' "$B" "$NC")"
+        render_line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
+        local path_default="random"
+        [[ "$PATH_SET" -eq 1 ]] && path_default="${PATHPREFIX:-root}"
         local path_in
-        path_in="$(ask "" "random")"
+        path_in="$(ask "URL path  (random / root / name)" "$path_default")"
         case "$path_in" in
             root|"/") PATHPREFIX="" ;;
             random|"") PATHPREFIX="$(rand_path)" ;;
             *) PATHPREFIX="${path_in#/}"; PATHPREFIX="${PATHPREFIX%/}" ;;
         esac
         PATH_SET=1
+        render_line ""
     fi
 
     if [[ -z "$ADMIN_USER" ]]; then
-        render_screen
-        render_line "$(printf '%bowner%s' "$B" "$NC")"
-        render_ask_note "no password here — the setup key on the last screen is your way in"
-        ADMIN_USER="$(ask "" "$DEFAULT_USER")"
+        render_line "$(printf '%bStep 4/5 — Owner login%s' "$B" "$NC")"
+        render_line "  ${GY}No password is set here: the Ready card prints a one-time claim${NC}"
+        render_line "  ${GY}key, and you choose the owner password in the browser.${NC}"
+        ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
+        render_line ""
+    fi
+
+    if [[ -z "$TLS_MODE" ]]; then
+        render_line "$(printf '%bStep 5/5 — Certificate (always encrypted)%s' "$B" "$NC")"
+        render_line "  ${WH}1${NC}  Self-signed (default)      encrypted; one browser warning to click through"
+        render_line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
+        render_line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
+        render_line "  ${WH}4${NC}  Custom key + cert          bring your own PEM files"
+        local tls
+        tls="$(ask "TLS" "1")"
+        case "${tls:-1}" in
+            1) TLS_MODE="self" ;;
+            2) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
+               [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
+            3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
+            4) TLS_MODE="custom"
+               TLS_CERT="$(ask "Cert file" "${TLS_CERT:-}")"
+               TLS_KEY="$(ask "Key file" "${TLS_KEY:-}")"
+               [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] || die "Custom TLS files not found" ;;
+            *) TLS_MODE="self" ;;
+        esac
     fi
 
     return 0
-}
-
-# Three certificates, and one free-text field for the Let's Encrypt case.
-#
-# The old wizard asked "domain or this IP?" as its own question, which made the
-# operator decide a distinction the installer can make for itself: what they type
-# says which it is. One prompt, and the branch happens after the answer.
-ask_tls() {
-    render_screen
-    render_line "$(printf '%btls%s' "$B" "$NC")"
-    render_ask_note "the certificate your browser sees — a warning is normal on a self-signed one"
-    local choice
-    # The default reads as the name of the thing you get, not the digit that
-    # selects it. "[1]" told someone reading this cold nothing; "[self-signed]"
-    # tells them what pressing Enter does. Both spellings still answer, so a
-    # script or a muscle-memory "1" keeps working.
-    choice="$(ask "1 self-signed · 2 lets encrypt · 3 custom" "self-signed")"
-    case "${choice:-}" in
-        2|lets*|LE*|encrypt*) ask_lets_encrypt ;;
-        3|custom*) TLS_MODE="custom"
-            TLS_CERT="$(ask "cert file" "${TLS_CERT:-}")"
-            TLS_KEY="$(ask "key file" "${TLS_KEY:-}")"
-            [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] || die "Custom TLS files not found" ;;
-        *) TLS_MODE="self" ;;
-    esac
 }
 
 ask_lets_encrypt() {
@@ -2742,22 +2744,6 @@ already_installed_menu() {
     esac
 }
 
-# The front door. Install mode is chosen here and nowhere else — the old wizard
-# asked it again as "Step 1/5", so the answer could be given twice and did not
-# always agree with what the first menu said.
-start_menu() {
-    local tag
-    tag="$(render_menu "" \
-        native  "install  ·  systemd on this host" \
-        docker  "install  ·  containerized" \
-        quit    "exit")"
-    case "$tag" in
-        native) MODE="native"; panel_express_defaults ;;
-        docker) MODE="docker"; panel_express_defaults ;;
-        *)      render_line "  cancelled — nothing was changed"; exit 0 ;;
-    esac
-}
-
 # manager.sh is installed as "ovmanager" (+ "ovm" alias), so day-to-day ops
 # live outside this installer. Refreshed on every update, which auto-swaps
 # boxes whose ovm is an old installer copy.
@@ -2985,7 +2971,6 @@ main() {
             check_root
             detect_os
             check_deps
-            EXPRESS=0
             run_wizard_install
             exit 0
             ;;
@@ -3003,19 +2988,11 @@ main() {
     detect_os
     check_deps
 
-    # Bare interactive run → Express/Custom choice. Scripts/flags and
-    # OVM_* env configuration keep the machine path untouched.
-    if [[ "$CLI_GIVEN" -eq 0 ]] && can_prompt; then
-        start_menu
-    fi
-
+    # A bare interactive run goes through the wizard, which asks for the install
+    # mode as its first step. Scripts, flags and OVM_* env configuration keep
+    # the machine path untouched.
     if can_prompt && [[ "$YES" -eq 0 ]]; then
-        if [[ "$EXPRESS" -eq 1 ]]; then
-            # Express already collected its single answer (the install mode).
-            :
-        else
-            wizard
-        fi
+        wizard
     else
         : "${PORT:=$DEFAULT_PORT}"
         if [[ "$PATH_SET" -eq 0 ]]; then
@@ -3031,7 +3008,6 @@ main() {
 }
 
 run_wizard_install() {
-    EXPRESS=0
     wizard
     validate_input
     do_install
