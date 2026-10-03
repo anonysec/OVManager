@@ -1311,6 +1311,23 @@ def test_installer_design_language_matches_node():
         assert retired not in content, f"retired wording back: {retired}"
 
 
+def test_the_tls_prompt_takes_the_name_or_the_digit():
+    """The TLS prompt answers to both what it shows and what it used to show.
+
+    The default in the bracket reads `self-signed` rather than `1`, because a
+    digit tells someone reading the screen cold nothing about what they get. But
+    a wizard whose default changed spelling is a wizard that breaks muscle
+    memory and any saved answer, so `1`/`2`/`3` still select the same branches.
+    """
+    source = _extract_function("ask_tls")
+    assert '"self-signed")"' in source, "the default should read as the certificate you get, not the digit"
+    # The digits lead their arms (`2|lets*|...`); `1` is the catch-all, which is
+    # why it needs no arm of its own.
+    assert "2|lets*" in source, "answer 2 no longer selects Let's Encrypt"
+    assert "3|custom*" in source, "answer 3 no longer selects a custom certificate"
+    assert re.search(r"\*\)\s*TLS_MODE=\"self\"", source), "the default no longer falls through to self-signed"
+
+
 def test_the_output_vocabulary_is_shared_not_repeated():
     """Both repos must carry the same render.sh under the same names.
 
@@ -1874,6 +1891,11 @@ def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
     probe.write_text(
         "set -Eeuo pipefail\n"
         "_render_now() { date +%s%N; }\n"
+        # render_note is the branch taken while the server's content-length is
+        # unknown; _render_bytes is the one taken once it is. These assert on
+        # the counter, so the probe's curl answers the HEAD request with a real
+        # content-length and the measured branch is the one exercised.
+        "render_note() { :; }\n"
         '_render_bytes() { printf "%s|%s|%s\\n" "$1" "${2:-}" "${3:-}" >&2; }\n'
         f"curl() {{\n{curl_body}\n}}\n"
         f"{_extract_function_sh('fetch_to_file', INSTALLER_PATH)}\n"
@@ -1903,9 +1925,19 @@ def test_the_download_counter_reads_a_real_byte_count(tmp_path):
     payload = tmp_path / "out.bin"
     payload.write_bytes(b"x" * 5000)
 
-    # curl never runs here: the file is already in place, so every poll measures
-    # the same 5000 bytes. The count must be that number on every poll.
-    polls = _probe_fetch(tmp_path, "return 0", "out.bin")
+    # The GET is a background call that must outlive the first poll check, or
+    # the loop never runs at all. The HEAD is a separate foreground call and is
+    # what supplies the content-length; without it the loop reports elapsed time
+    # instead of a bar, and there is no count here to assert.
+    #
+    # Matching on `*SLI*`, not `*-I*`: the flag string is `-fsSLI`, where the
+    # capital I follows an L rather than a dash, so a glob expecting `-I` never
+    # matches it and the HEAD silently returns nothing.
+    polls = _probe_fetch(
+        tmp_path,
+        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
+        "out.bin",
+    )
 
     for have, _total, _rate in polls:
         assert have == "5000", f"counter reported {have} bytes for a 5000-byte file; polls={polls}"
@@ -1919,7 +1951,11 @@ def test_the_download_counter_starts_at_zero_when_the_file_is_absent(tmp_path):
     `_render_bytes` as a bare integer, because the caller divides by it:
     `rate=$(( have / elapsed / 1024 ))` would abort on anything else.
     """
-    polls = _probe_fetch(tmp_path, "sleep 1", "never-written.bin")
+    polls = _probe_fetch(
+        tmp_path,
+        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
+        "never-written.bin",
+    )
     for have, _total, _rate in polls:
         assert have == "0", f"expected 0 bytes before the file exists, got {have}; polls={polls}"
 

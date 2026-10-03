@@ -1887,10 +1887,21 @@ fetch_to_file() {
         (( elapsed < 1 )) && elapsed=1
         rate=$(( have / elapsed / 1024 ))
         if [[ -z "$total" ]]; then
+            # Ask once, up front, rather than on the first poll: this is a
+            # second connection that costs a round trip right when the main one
+            # is warming up, and the answer is the same every time.
             total="$(curl -fsSLI --max-time 5 "$url" 2>/dev/null \
                 | awk 'tolower($1)=="content-length:"{print $2}' | tail -1 | tr -d '\r[:space:]')"
         fi
-        _render_bytes "$have" "$total" "$rate"
+        # Until the server's size is known the bar would read 0.0/0 MB and sit
+        # there — eleven seconds of a step that looks stalled rather than
+        # working. Elapsed time says the truth in the meantime, which is what
+        # rustup, uv and bun all print before they have a total either.
+        if [[ -z "$total" ]]; then
+            render_note "downloading · ${elapsed}s elapsed"
+        else
+            _render_bytes "$have" "$total" "$rate"
+        fi
         sleep 0.4
     done
     wait "$pid" 2>/dev/null || rc=$?
@@ -2201,10 +2212,17 @@ wizard() {
     if [[ -z "$PORT" ]]; then
         render_screen
         render_line "$(printf '%bport%s' "$B" "$NC")"
+        render_ask_note "the port the panel answers on — change it only if something else already uses $DEFAULT_PORT"
         PORT="$(ask "" "$DEFAULT_PORT")"
         is_port "$PORT" || die "Invalid port: '$PORT'"
         port_available_or_die "$PORT"
     fi
+
+    # TLS before the URL path. Both are safe to answer wrongly, but the
+    # certificate is the one a beginner is most likely to be unsure about, and
+    # showing it while the port — the only question that can fail outright — is
+    # already behind them means the first refusal happens on question one.
+    [[ -n "$TLS_MODE" ]] || ask_tls
 
     if [[ "$PATH_SET" -eq 0 ]]; then
         render_screen
@@ -2227,7 +2245,6 @@ wizard() {
         ADMIN_USER="$(ask "" "$DEFAULT_USER")"
     fi
 
-    [[ -n "$TLS_MODE" ]] || ask_tls
     return 0
 }
 
@@ -2239,13 +2256,18 @@ wizard() {
 ask_tls() {
     render_screen
     render_line "$(printf '%btls%s' "$B" "$NC")"
+    render_ask_note "the certificate your browser sees — a warning is normal on a self-signed one"
     local choice
-    choice="$(ask "1 self-signed · 2 lets encrypt · 3 custom" "1")"
-    case "${choice:-1}" in
-        2) ask_lets_encrypt ;;
-        3) TLS_MODE="custom"
-            TLS_CERT="$(ask "cert" "${TLS_CERT:-}")"
-            TLS_KEY="$(ask "key" "${TLS_KEY:-}")"
+    # The default reads as the name of the thing you get, not the digit that
+    # selects it. "[1]" told someone reading this cold nothing; "[self-signed]"
+    # tells them what pressing Enter does. Both spellings still answer, so a
+    # script or a muscle-memory "1" keeps working.
+    choice="$(ask "1 self-signed · 2 lets encrypt · 3 custom" "self-signed")"
+    case "${choice:-}" in
+        2|lets*|LE*|encrypt*) ask_lets_encrypt ;;
+        3|custom*) TLS_MODE="custom"
+            TLS_CERT="$(ask "cert file" "${TLS_CERT:-}")"
+            TLS_KEY="$(ask "key file" "${TLS_KEY:-}")"
             [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] || die "Custom TLS files not found" ;;
         *) TLS_MODE="self" ;;
     esac
