@@ -195,6 +195,109 @@ def hold_worker_lock():
             pass
 
 
+# ── Shared test helpers ──────────────────────────────────────────────────
+#
+# Helpers that were byte-identical in more than one test file, hoisted here so
+# the copies cannot drift. Only bodies verified identical in every file that
+# defined them belong in this block: several same-named helpers across the suite
+# differ meaningfully (some call `_run_migrations()`, some add an
+# `X-Requested-With` header, some restore a previous value where others
+# reset), and a merged file would silently adopt one file's behaviour for all
+# of them. Those stayed where they are.
+#
+# `_ensure_schema` is deliberately absent. It is byte-identical in three files,
+# but conftest already defines a session-scoped `_ensure_schema` fixture, and
+# these three call it as a plain function — hoisting would shadow the fixture.
+
+
+def create_admin(username: str) -> None:
+    """Create a throwaway admin row, if one is not already there."""
+    from backend.db import crud
+    from backend.db.engine import SessionLocal
+    from backend.schema import AdminCreate
+
+    db = SessionLocal()
+    try:
+        if crud.get_admin_by_username(db, username) is None:
+            crud.create_admin(db, AdminCreate(username=username, password=f"pw-{username}-12345"))
+    finally:
+        db.close()
+
+
+def cleanup_admin(username: str) -> None:
+    """Remove an admin row and every session belonging to it."""
+    from backend.auth.sessions import revoke_user_sessions
+    from backend.db import crud
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        revoke_user_sessions(db, username)
+        admin = crud.get_admin_by_username(db, username)
+        if admin is not None:
+            crud.delete_admin(db, admin)
+    finally:
+        db.close()
+
+
+def delete_node(node) -> None:
+    """Delete a node row by ORM instance, for a test's own cleanup."""
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        db.delete(db.merge(node))
+        db.commit()
+    finally:
+        db.close()
+
+
+def probe_value(path) -> str:
+    """Read the single `value` column out of a throwaway SQLite probe db."""
+    import sqlite3
+
+    conn = sqlite3.connect(path)
+    try:
+        return conn.execute("SELECT value FROM probe").fetchone()[0]
+    finally:
+        conn.close()
+
+
+def bot_all_texts(update) -> list:
+    """Every string the handler replied with, across the message and the edit."""
+    out = [text for text, _ in update.effective_message.sent if isinstance(text, str)]
+    if update.callback_query:
+        out += [text for text, _ in update.callback_query.edited]
+    return out
+
+
+def bot_all_markups(update) -> list:
+    """Every reply_markup the handler sent or edited."""
+    out = [kw.get("reply_markup") for _, kw in update.effective_message.sent]
+    if update.callback_query:
+        out += [kw.get("reply_markup") for _, kw in update.callback_query.edited]
+    return [m for m in out if m is not None]
+
+
+def bot_callbacks(markup) -> list:
+    """The callback_data values carried by an inline keyboard."""
+    return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+
+def bot_make_actor(role: str = "owner"):
+    """A telegram Actor double for handler tests."""
+    from backend.bot.identity import Actor
+
+    return Actor(telegram_id=7, username="boss", role=role, token="tok-1")
+
+
+def bot_make_context(**extra):
+    """A telegram Context double carrying only user_data."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(user_data={"lang": "en", **extra})
+
+
 # ── The suite must not touch the running install ──────────────────────────
 #
 # The node has had a guard like this since its self-signed sweep wrote over the

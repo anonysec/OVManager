@@ -7,6 +7,7 @@ touching the network.
 
 import uuid as _uuid
 
+from conftest import delete_node as _delete_node
 from fastapi.testclient import TestClient
 
 from backend.app import _run_migrations, api
@@ -61,15 +62,6 @@ def _node():
             ),
             None,
         )
-    finally:
-        db.close()
-
-
-def _delete_node(node):
-    db = SessionLocal()
-    try:
-        db.delete(db.merge(node))
-        db.commit()
     finally:
         db.close()
 

@@ -14,6 +14,8 @@ import uuid
 
 import pytest
 import requests
+from conftest import cleanup_admin as _cleanup_admin
+from conftest import create_admin as _create_admin
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -53,34 +55,6 @@ def _headers(username: str, role: str) -> dict:
 
 def _owner_headers() -> dict:
     return _headers(config.ADMIN_USERNAME, "owner")
-
-
-def _create_admin(username: str) -> None:
-    from backend.db import crud
-    from backend.db.engine import SessionLocal
-    from backend.schema import AdminCreate
-
-    db = SessionLocal()
-    try:
-        if crud.get_admin_by_username(db, username) is None:
-            crud.create_admin(db, AdminCreate(username=username, password=f"pw-{username}-12345"))
-    finally:
-        db.close()
-
-
-def _cleanup_admin(username: str) -> None:
-    from backend.auth.sessions import revoke_user_sessions
-    from backend.db import crud
-    from backend.db.engine import SessionLocal
-
-    db = SessionLocal()
-    try:
-        revoke_user_sessions(db, username)
-        admin = crud.get_admin_by_username(db, username)
-        if admin is not None:
-            crud.delete_admin(db, admin)
-    finally:
-        db.close()
 
 
 @pytest.fixture(autouse=True)

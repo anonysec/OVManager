@@ -9,6 +9,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from conftest import probe_value as _value
 from sqlalchemy import create_engine
 
 import cli.backup as backup
@@ -245,14 +246,6 @@ def _db(path: Path, value: str) -> None:
     conn.execute("INSERT INTO probe VALUES (?)", (value,))
     conn.commit()
     conn.close()
-
-
-def _value(path: Path) -> str:
-    conn = sqlite3.connect(path)
-    try:
-        return conn.execute("SELECT value FROM probe").fetchone()[0]
-    finally:
-        conn.close()
 
 
 def _backup_dir(tmp_path, monkeypatch):

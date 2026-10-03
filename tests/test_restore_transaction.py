@@ -2,6 +2,7 @@ import shutil
 import sqlite3
 from pathlib import Path
 
+from conftest import probe_value as _value
 from sqlalchemy import create_engine
 
 import backend.routers.maintenance as maintenance
@@ -13,14 +14,6 @@ def _db(path: Path, value: str) -> None:
     conn.execute("INSERT INTO probe VALUES (?)", (value,))
     conn.commit()
     conn.close()
-
-
-def _value(path: Path) -> str:
-    conn = sqlite3.connect(path)
-    try:
-        return conn.execute("SELECT value FROM probe").fetchone()[0]
-    finally:
-        conn.close()
 
 
 def test_restore_refuses_activation_when_safety_backup_fails(monkeypatch, tmp_path):

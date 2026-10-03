@@ -9,9 +9,14 @@ patched where it is looked up).
 from types import SimpleNamespace
 
 import pytest
+from conftest import bot_all_markups as all_markups
+from conftest import bot_all_texts as all_texts
+from conftest import bot_callbacks as callbacks
+from conftest import bot_make_actor as make_actor
+from conftest import bot_make_context as make_context
 
 from backend.bot.i18n import t
-from backend.bot.identity import Actor, _identity_cache, _token_cache
+from backend.bot.identity import _identity_cache, _token_cache
 
 
 class FakeMessage:
@@ -45,32 +50,6 @@ def make_update(text="", callback_data=None):
         callback_query=FakeQuery(callback_data) if callback_data is not None else None,
         effective_user=SimpleNamespace(id=7),
     )
-
-
-def make_context(**extra):
-    return SimpleNamespace(user_data={"lang": "en", **extra})
-
-
-def make_actor(role="owner"):
-    return Actor(telegram_id=7, username="boss", role=role, token="tok-1")
-
-
-def all_texts(update):
-    out = [text for text, _ in update.effective_message.sent if isinstance(text, str)]
-    if update.callback_query:
-        out += [text for text, _ in update.callback_query.edited]
-    return out
-
-
-def all_markups(update):
-    out = [kw.get("reply_markup") for _, kw in update.effective_message.sent]
-    if update.callback_query:
-        out += [kw.get("reply_markup") for _, kw in update.callback_query.edited]
-    return [m for m in out if m is not None]
-
-
-def callbacks(markup):
-    return [b.callback_data for row in markup.inline_keyboard for b in row]
 
 
 class FakePanel:
