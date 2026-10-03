@@ -2128,21 +2128,8 @@ validate_input() {
 # visible at once, the answers stay on screen instead of scrolling away, and
 # nothing clears under a fast typist.
 wizard() {
-    if [[ -z "$MODE" ]]; then
-        render_line "$(printf '%bStep 1/5 — Install mode%s' "$B" "$NC")"
-        render_line "  ${WH}1${NC}  Native     systemd service on this host (recommended)"
-        render_line "  ${WH}2${NC}  Docker     containerized, needs Docker Engine"
-        local m
-        m="$(ask "Mode" "1")"
-        case "${m:-1}" in
-            2|docker|Docker) MODE="docker" ;;
-            *)               MODE="native" ;;
-        esac
-        render_line ""
-    fi
-
     if [[ -z "$PORT" ]]; then
-        render_line "$(printf '%bStep 2/5 — Panel port%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 1/4 — Panel port%s' "$B" "$NC")"
         render_line "  ${WH}1${NC}  Default: ${DEFAULT_PORT}"
         render_line "  ${WH}2${NC}  Custom"
         render_line "  ${WH}3${NC}  Random"
@@ -2159,7 +2146,7 @@ wizard() {
     fi
 
     if [[ "$PATH_SET" -eq 0 ]]; then
-        render_line "$(printf '%bStep 3/5 — Panel URL path%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 2/4 — Panel URL path%s' "$B" "$NC")"
         render_line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
         local path_default="random"
         [[ "$PATH_SET" -eq 1 ]] && path_default="${PATHPREFIX:-root}"
@@ -2175,7 +2162,7 @@ wizard() {
     fi
 
     if [[ -z "$ADMIN_USER" ]]; then
-        render_line "$(printf '%bStep 4/5 — Owner login%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 3/4 — Owner login%s' "$B" "$NC")"
         render_line "  ${GY}No password is set here: the Ready card prints a one-time claim${NC}"
         render_line "  ${GY}key, and you choose the owner password in the browser.${NC}"
         ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
@@ -2183,7 +2170,7 @@ wizard() {
     fi
 
     if [[ -z "$TLS_MODE" ]]; then
-        render_line "$(printf '%bStep 5/5 — Certificate (always encrypted)%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 4/4 — Certificate (always encrypted)%s' "$B" "$NC")"
         render_line "  ${WH}1${NC}  Self-signed (default)      encrypted; one browser warning to click through"
         render_line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
         render_line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
@@ -2723,26 +2710,49 @@ dir_size() {
     return 0
 }
 
-already_installed_menu() {
-    render_warn "OVManager is already installed at $INSTALL_DIR"
-    if ! can_prompt; then
-        # Exit 2, not die's 1: "already installed" is a state the caller asked
-        # about, not a failure, and `install.sh ... || true` in a provisioning
-        # script must be able to tell the two apart.
-        render_fail "already installed" "$INSTALL_DIR — re-run with: $0 update"
-        exit 2
-    fi
+# The front door: one menu, asked before anything else on a bare run.
+#
+# `uninstall` is only on the menu when there is something to uninstall. Offering
+# it on a clean host would put a destructive action in the same list as the
+# ordinary ones, where a mistyped digit lands on it.
+#
+# Install mode is chosen here and nowhere else — the wizard does not ask it
+# again, so the two cannot disagree.
+start_menu() {
     local tag
-    tag="$(render_menu "" \
-        update    "update to v${VERSION}" \
-        uninstall "uninstall" \
-        quit      "quit")"
+    if [[ -d "$INSTALL_DIR" ]]; then
+        render_line "  ${GY}OVManager is already installed at ${INSTALL_DIR}${NC}"
+        render_blank
+        tag="$(render_menu "" \
+            install    "install  ·  systemd on this host" \
+            docker     "install  ·  containerized" \
+            uninstall  "uninstall" \
+            exit       "exit")"
+        if [[ "$tag" == "uninstall" ]]; then
+            check_root
+            do_uninstall
+            return 0
+        fi
+    else
+        tag="$(render_menu "" \
+            install    "install  ·  systemd on this host" \
+            docker     "install  ·  containerized" \
+            exit       "exit")"
+    fi
+
     case "$tag" in
-        update)    check_root; detect_os; check_deps; do_update || render_warn "update failed" ;;
-        uninstall) check_root; do_uninstall ;;
-        *)         render_line "  nothing was changed" ;;
+        install) MODE="native" ;;
+        docker)  MODE="docker" ;;
+        *)       render_line "  nothing was changed"; exit 0 ;;
     esac
+    check_root
+    detect_os
+    check_deps
+    wizard
+    validate_input
+    do_install
 }
+
 
 # manager.sh is installed as "ovmanager" (+ "ovm" alias), so day-to-day ops
 # live outside this installer. Refreshed on every update, which auto-swaps
@@ -2976,32 +2986,44 @@ main() {
             ;;
     esac
 
-    if [[ -d "$INSTALL_DIR" ]]; then
-        already_installed_menu
-        exit 0
-    fi
+    # A bare run with no terminal: say which state it is in, because the two
+    # have different commands and the answer differs.
     if [[ "$CLI_GIVEN" -eq 0 && "$YES" -eq 0 ]] && ! can_prompt; then
+        if [[ -d "$INSTALL_DIR" ]]; then
+            # Exit 2, not die's 1: "already installed" is a state the caller
+            # asked about, not a failure, and `install.sh ... || true` in a
+            # provisioning script must be able to tell the two apart.
+            render_fail "already installed" "$INSTALL_DIR — re-run with: $0 update"
+            exit 2
+        fi
         die "No interactive terminal. Use --yes to Install or --docker --yes to Install with Docker."
     fi
-    check_root
 
+    # A bare interactive run gets the front door: one menu that chooses the
+    # action, then the wizard for its details. It ends the run itself, having
+    # either installed, uninstalled or exited.
+    if [[ "$CLI_GIVEN" -eq 0 && "$YES" -eq 0 ]]; then
+        start_menu
+        exit 0
+    fi
+
+    # Everything from here is the machine path: flags, OVM_* env, or --yes.
+    if [[ -d "$INSTALL_DIR" ]]; then
+        render_fail "already installed" "$INSTALL_DIR — re-run with: $0 update"
+        exit 2
+    fi
+
+    check_root
     detect_os
     check_deps
 
-    # A bare interactive run goes through the wizard, which asks for the install
-    # mode as its first step. Scripts, flags and OVM_* env configuration keep
-    # the machine path untouched.
-    if can_prompt && [[ "$YES" -eq 0 ]]; then
-        wizard
-    else
-        : "${PORT:=$DEFAULT_PORT}"
-        if [[ "$PATH_SET" -eq 0 ]]; then
-            PATHPREFIX="$(rand_path)"
-        fi
-        : "${ADMIN_USER:=$DEFAULT_USER}"
-        : "${TLS_MODE:=self}"
-        : "${MODE:=native}"
+    : "${PORT:=$DEFAULT_PORT}"
+    if [[ "$PATH_SET" -eq 0 ]]; then
+        PATHPREFIX="$(rand_path)"
     fi
+    : "${ADMIN_USER:=$DEFAULT_USER}"
+    : "${TLS_MODE:=self}"
+    : "${MODE:=native}"
 
     validate_input
     do_install

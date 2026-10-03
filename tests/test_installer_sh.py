@@ -443,15 +443,19 @@ def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
 
 
 def _machine_path() -> str:
-    """The `else` branch of main() that runs when nothing can prompt.
+    """The block main() runs when nothing can prompt: flags, OVM_* env, --yes.
 
-    Sliced from `if can_prompt ... else:` to its closing `fi`, so a test
-    asserting the defaults cannot pass on text that merely appears elsewhere.
+    Sliced from the comment that introduces it to the `validate_input` that
+    follows, so a test asserting the defaults cannot pass on text that merely
+    appears elsewhere.
     """
     body = _installer_source()
-    start = body.index('    if can_prompt && [[ "$YES" -eq 0 ]]; then')
-    tail = body.index("\n    fi", start)
-    return body[body.index("\n    else", start) + len("\n    else") : tail]
+    # Anchored on main()'s own comment, not on the text: ": ${PORT:=...}"
+    # appears in do_update too, and slicing from the first match returned half
+    # the update path.
+    start = body.index("    # Everything from here is the machine path")
+    start = body.index('    : "${PORT:=$DEFAULT_PORT}"', start)
+    return body[start : body.index("    validate_input", start)]
 
 
 def test_default_install_generates_the_panel_path_and_no_credential():
@@ -730,15 +734,22 @@ def test_snapshot_rotation_keeps_two(tmp_path):
     assert r.stdout.strip() == "2", r.stdout
 
 
-def test_already_installed_menu_is_installer_only():
-    """The installer's already-installed menu offers update/uninstall/quit —
-    day-to-day ops moved to ovm."""
-    content = _installer_source()
-    assert "already_installed_menu" in content
-    assert 'update    "update to v${VERSION}"' in content
-    assert 'uninstall "uninstall"' in content
-    assert 'quit      "quit"' in content
-    assert "render_menu" in content
+def test_the_front_door_covers_every_action_the_installer_offers():
+    """One menu, not two.
+
+    There used to be a front door for the action and a second menu for the
+    already-installed case. They drifted: one said "update", the other said
+    "install", for the same host. Both are the front door now, and the
+    already-installed one carries `uninstall` because there is something to
+    uninstall.
+    """
+    menu = _extract_function("start_menu")
+    assert "already_installed_menu" not in _installer_source(), "the second menu is back"
+    assert 'install    "install  ·  systemd on this host"' in menu
+    assert 'docker     "install  ·  containerized"' in menu
+    assert 'uninstall  "uninstall"' in menu
+    assert 'exit       "exit"' in menu
+    assert "render_menu" in menu
     # tui_select survives only as a one-line alias into render_menu; a caller
     # reaching for it is fine, a second implementation of it is not.
     prompt = inline_lib.section("prompt.sh")
@@ -826,23 +837,39 @@ def test_plain_http_flag_is_gone():
     assert "--tls-self" not in content
 
 
-def test_the_wizard_asks_the_mode_once_as_its_first_step():
-    """Install mode is Step 1 of the wizard, and there is no menu before it.
+def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
+    """Install mode is chosen at the front door, and nowhere else.
 
-    A front-door menu followed by a wizard that asked the same question again
-    let the two answers disagree — "containerized" on the menu and "native" in
-    the wizard was reachable. Asking once, as a numbered step with the two
-    options spelled out, is both the earlier arrangement and the safer one.
+    The menu asks it and the wizard must not: a wizard that asks the same
+    question again lets the two answers disagree, which is how "containerized"
+    on the menu and "native" in the wizard used to be reachable.
     """
-    source = _extract_function("wizard")
-    assert "Step 1/5 — Install mode" in source
-    assert "Native     systemd service on this host (recommended)" in source
-    assert "Docker     containerized, needs Docker Engine" in source
-    assert 'MODE="docker"' in source and 'MODE="native"' in source
-    assert "start_menu" not in _installer_source(), "the front-door menu is back"
-    # Asked once, and only when nothing already chose: a flag or OVM_MODE must
-    # not be overridden by a question.
-    assert '[[ -z "$MODE" ]]' in source, "the mode step ignores an answer already given"
+    menu = _extract_function("start_menu")
+    assert 'MODE="native"' in menu and 'MODE="docker"' in menu
+    wizard = _extract_function("wizard")
+    # TLS_MODE is a different question and appears legitimately; the install
+    # MODE must not. Match it whole so TLS_MODE does not read as a hit.
+    import re as _re
+
+    assert not _re.search(r"(?<![A-Z_])MODE", wizard), "the wizard must not ask for the install mode"
+    assert "Install mode" not in wizard
+
+
+def test_the_menu_only_offers_uninstall_when_there_is_something_to_uninstall():
+    """A destructive action is not on the menu beside the ordinary ones.
+
+    Offering `uninstall` on a clean host would put it one keystroke from
+    `install`, which is not a risk worth taking for a line that saves nothing.
+    """
+    menu = _extract_function("start_menu")
+    assert '[[ -d "$INSTALL_DIR" ]]' in menu, "the uninstall entry is not conditional"
+    # Two render_menu calls: the installed one carries uninstall, the clean one
+    # does not. Anything else would offer it unconditionally.
+    assert menu.count("render_menu") == 2, "expected an installed menu and a clean one"
+    installed = menu[menu.index('if [[ -d "$INSTALL_DIR" ]]') :]
+    clean = menu[installed.index("else") :]
+    assert 'uninstall  "uninstall"' in installed
+    assert "uninstall" not in clean, "uninstall is offered on a host with no install"
 
 
 def test_no_bundled_node_offer():
@@ -969,6 +996,7 @@ def test_recommended_defaults_never_touch_a_password():
     rand_path() {{ echo generatedpath; }}
     rand_pass() {{ echo generated-password-123; }}
     DEFAULT_PORT=2095; DEFAULT_USER=admin
+    INSTALL_DIR=/opt/ovmanager; DATA_DIR=/var/lib/ovmanager
     MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
     ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
     {machine}
@@ -1178,7 +1206,7 @@ def test_every_wizard_step_says_what_its_options_mean():
     assert "Let's Encrypt (this IP)    short-lived cert, no domain needed" in source
     assert "Custom key + cert          bring your own PEM files" in source
     # Every option in a step explains itself, so no step is a bare list of words.
-    for step in ("Step 1/5", "Step 2/5", "Step 3/5", "Step 4/5", "Step 5/5"):
+    for step in ("Step 1/4", "Step 2/4", "Step 3/4", "Step 4/4"):
         assert step in source, f"missing {step}"
 
 
@@ -1317,9 +1345,8 @@ def test_installer_design_language_matches_node():
         "render_menu",
         "render_banner",
         "render_card",
-        "Step 1/5 — Install mode",
-        "Native     systemd service on this host (recommended)",
-        "Docker     containerized, needs Docker Engine",
+        "install  ·  systemd on this host",
+        "install  ·  containerized",
         "Self-signed (default)      encrypted; one browser warning to click through",
         "render_ok",
         "render_warn",
@@ -1334,11 +1361,9 @@ def test_installer_design_language_matches_node():
         "Choose every option yourself",
         # The renderer rewrite replaced the numbered steps with one cleared
         # screen per question and called this wording retired. The steps are
-        # back: the whole plan stays visible, the answers do not scroll away,
-        # and nothing clears under a fast typist. Only the four-step variant
-        # the rewrite invented is still retired — install mode is a step again,
-        # so the count is five.
-        "Step 1/4",
+        # back, and there are four of them: install mode moved out to the front
+        # door, so the wizard asks port, path, owner and certificate.
+        "Step 1/5",
         "Ready — claim your panel",
         # The rewrite collapsed four certificate choices into three and asked
         # "domain or this IP?" as its own question. The four-option step is
@@ -1358,7 +1383,7 @@ def test_the_tls_step_takes_the_digit_and_says_what_it_costs():
     for itself from what they type.
     """
     source = _extract_function("wizard")
-    assert "Step 5/5 — Certificate (always encrypted)" in source
+    assert "Step 4/4 — Certificate (always encrypted)" in source
     assert 'tls="$(ask "TLS" "1")"' in source, "the TLS step must answer through ask"
     assert '1) TLS_MODE="self" ;;' in source, "1 no longer selects self-signed"
     assert '2) TLS_MODE="le";' in source, "2 no longer selects Let's Encrypt by domain"
