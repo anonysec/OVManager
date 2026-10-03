@@ -735,24 +735,33 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
 
 
 def test_the_menu_is_one_renderer():
-    """render_menu owns the pointer, the digits and the arrow.
+    """render_menu owns the numbering and the read.
 
     A menu drawn in two places is how they disagree: whiptail on boxes that
     have it, hand-rolled printf everywhere else. The old tui_select branched on
     `command -v whiptail` and rendered two different menus with two different
-    selections. There is now one renderer and one keystroke reader.
+    selections. There is now one renderer.
+
+    It is also numbers only. The arrow-key version redrew the menu in place on
+    a separate fd and read single keystrokes from /dev/tty under a two-second
+    timeout, so a paste, a closed terminal or a tmux that lost its pane could
+    strand a half-drawn frame — and each of those timeouts was a branch to get
+    right. `ask` already reads the answer, so the keystroke reader had no reason
+    to exist.
     """
     content = _installer_source()
     code = "\n".join(ln for ln in content.splitlines() if not ln.lstrip().startswith("#"))
     assert "whiptail" not in code, "the whiptail branch is back"
     assert "tui_select() { render_menu" in content
-    render = inline_lib.section("render.sh")
-    # The pointer and the visible number are updated together in the same case
-    # arm: that is the invariant, and it is only checkable in one place.
-    assert "_MENU_CUR=$(( _MENU_CUR - 1 ))" in render
-    assert "_MENU_CUR=$(( _MENU_CUR + 1 ))" in render
-    assert "_MENU_CUR=$(( 10#$ch - 1 ))" in render
-    assert "reply=$(( _MENU_CUR + 1 )); break" in render
+    # Scoped to the function, not the section: render_ask and the progress block
+    # have their own /dev/tty and cursor handling, which this is not about.
+    menu = inline_lib.section("render.sh")
+    menu = menu[menu.index("render_menu() {") :]
+    menu = menu[: menu.index("\n}")]
+    menu_code = "\n".join(ln for ln in menu.splitlines() if not ln.lstrip().startswith("#"))
+    assert "/dev/tty" not in menu_code, "the menu reads keystrokes from /dev/tty again"
+    assert "read -rsn1" not in menu_code, "the keystroke reader is back"
+    assert "ask" in menu_code, "the menu must answer through ask"
 
 
 def test_update_without_install_dir_fails(tmp_path):
