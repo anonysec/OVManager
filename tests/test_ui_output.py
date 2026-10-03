@@ -515,13 +515,13 @@ def test_the_menu_draws_numbers():
     """
     rows = screen(
         run(
-            'render_menu "" native "install  ·  systemd" docker "install  ·  containerized" quit "exit"',
+            'render_menu "" native "install" docker "install with docker" quit "exit"',
             tty=False,
         )
     )
     text = "\n".join(rows)
-    assert "1  install  ·  systemd" in text
-    assert "2  install  ·  containerized" in text
+    assert "1  install" in text
+    assert "2  install with docker" in text
     assert "3  exit" in text
 
 

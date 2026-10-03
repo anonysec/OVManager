@@ -745,8 +745,8 @@ def test_the_front_door_covers_every_action_the_installer_offers():
     """
     menu = _extract_function("start_menu")
     assert "already_installed_menu" not in _installer_source(), "the second menu is back"
-    assert 'install    "install  ·  systemd on this host"' in menu
-    assert 'docker     "install  ·  containerized"' in menu
+    assert 'install    "install"' in menu
+    assert 'docker     "install with docker"' in menu
     assert 'uninstall  "uninstall"' in menu
     assert 'exit       "exit"' in menu
     assert "render_menu" in menu
@@ -1345,8 +1345,7 @@ def test_installer_design_language_matches_node():
         "render_menu",
         "render_banner",
         "render_card",
-        "install  ·  systemd on this host",
-        "install  ·  containerized",
+        "install with docker",
         "Self-signed (default)      encrypted; one browser warning to click through",
         "render_ok",
         "render_warn",

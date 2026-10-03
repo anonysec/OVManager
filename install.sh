@@ -2724,8 +2724,8 @@ start_menu() {
         render_line "  ${GY}OVManager is already installed at ${INSTALL_DIR}${NC}"
         render_blank
         tag="$(render_menu "" \
-            install    "install  ·  systemd on this host" \
-            docker     "install  ·  containerized" \
+            install    "install" \
+            docker     "install with docker" \
             uninstall  "uninstall" \
             exit       "exit")"
         if [[ "$tag" == "uninstall" ]]; then
@@ -2735,8 +2735,8 @@ start_menu() {
         fi
     else
         tag="$(render_menu "" \
-            install    "install  ·  systemd on this host" \
-            docker     "install  ·  containerized" \
+            install    "install" \
+            docker     "install with docker" \
             exit       "exit")"
     fi
 
