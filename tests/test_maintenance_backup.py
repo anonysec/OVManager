@@ -166,6 +166,13 @@ def test_restore_keeps_the_database_readable_by_the_service_account(monkeypatch,
     # Pretend the live database belongs to some unprivileged account that is
     # not the user running the restore. This is the real arrangement: the panel
     # never runs as the user invoking `ovm restore`.
+    #
+    # Only root may hand a file to another account, so this is a root-only
+    # assertion. CI runs the suite unprivileged and would fail the whole file on
+    # a PermissionError here — the check is worth having, but not at the price of
+    # a red build for a developer who cannot chown to a uid they do not hold.
+    if os.geteuid() != 0:
+        pytest.skip("changing a file's owner requires root")
     service_uid, service_gid = 4242, 4242
     os.chown(scratch, service_uid, service_gid)
 

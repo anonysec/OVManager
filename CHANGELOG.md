@@ -1,5 +1,97 @@
 # Changelog
 
+## 1.0.43 — 2026-10-03
+
+The installer works offline, and a restore no longer bricks the panel.
+
+**Fixed**
+
+`ovm restore` left the panel crash-looping on `sqlite3.OperationalError:
+unable to open database file`, and the one-line chown that recovers it hides
+how much the restore path had been silently corrupting.
+
+The cause is ownership, not the restore. The candidate that gets activated
+comes from `mkstemp`, so it belongs to whoever ran the command — root, for
+`ovm restore` — and `os.replace` keeps the *candidate's* owner rather than the
+live file's. Install-time `chown` put the database on the service account, so
+that is the owner the panel needs; the restore threw it away. The file came
+back `root:root 0600` while the panel runs as an unprivileged account, and a
+database it cannot open is a panel that will not boot.
+
+The owner is captured from the live database before anything is replaced and
+re-applied to the activated file. Capturing rather than hardcoding is the
+point: the same code is correct for the native service account and for uid
+1000 under Docker, which needs no configuration here. The rollback path had
+the same defect and gets the same treatment — a restore that fails after
+activation used to leave the panel unable to read the file it rolled back to.
+
+The chown is best-effort and warns rather than aborting: under Docker the file
+is already uid 1000, and a failure there must not discard a restore that has
+already passed its integrity check.
+
+Every install also printed this in the middle of a working download:
+
+    line 472: /tmp/tmp.XXXX/ovmanager-1.0.4.tar.gz: No such file or directory
+
+`fetch_to_file` measures the growing file every 0.4s to drive the progress bar,
+and on the first poll curl has not created it yet. The line read
+
+    have="$(wc -c < "$out" 2>/dev/null || printf 0)"
+
+`2>/dev/null` never covered it. Bash applies redirections left to right, so the
+input redirect failed first and printed to the real stderr before anything was
+redirected. The count was always right — the `|| printf 0` fallback caught it —
+so this was noise dressed as a failure, in the one step an operator is already
+watching for signs of trouble.
+
+**Changed**
+
+The installer helpers are inline in `install.sh` and `manager.sh`, and
+`scripts/lib/` is gone. They were fetched over the network at startup so a
+`curl | bash` one-liner could find them, and a fetch means the installer's own
+behaviour comes from a git tag — so between a push and a release, `install.sh`
+on main drew its output and asked its questions with the *previous* version of
+that code. On a box with a flaky resolver or a proxy that blocks
+raw.githubusercontent.com it could not start at all. Neither program downloads
+anything now except the payload it installs, which is a checksummed release
+archive.
+
+`manager.sh` carries the same block byte for byte. The two are different
+programs with different dispatchers, so each holds its own copy deliberately;
+`test_lib_sourcing.py` asserts a helper is defined once per program, that the
+two blocks are byte-identical, and that the eight sections are present by
+banner name.
+
+Removing the stderr noise surfaced a test that had been passing for six
+releases without testing anything. `test_install_rejects_placeholder_password_fast`
+asserted that a placeholder password is rejected — behaviour deleted at v1.0.0
+when the owner password moved to the browser and `-p` became an accepted
+no-op. Its assertion was `"placeholder" in r.stderr or "root" in r.stderr`,
+and the stray path above lands in a directory named after the pytest tmpdir,
+`/tmp/pytest-of-root/...`. So "root" matched the tmpdir name: the assertion
+was satisfied by the very bug it sat next to. It now asserts what the
+installer actually does — warns that `-p` is deprecated, says the password is
+set in the browser, and never echoes the value back.
+
+**Tests**
+
+The byte counter behind the progress bar now has coverage. Fixing the stderr
+leak left a gap: the `-f` guard that quietened the poll is also what gates the
+measurement, and only the quiet half was tested — so a guard returning early,
+or a fallback always printing 0, would have passed and left the bar frozen for
+the whole download. A 5000-byte file must report 5000; an absent file must
+report a bare integer 0, because the caller divides by it.
+
+Nineteen test files each carried a helper byte-identical to the copy next
+door; those moved to `conftest.py` — 153 lines out, 123 in, now in one place
+instead of nineteen. Only bodies hashed identical in *every* file defining
+them were moved: the same names recur elsewhere with different behaviour
+(`_owner_headers` alone has nine variants across fourteen files), and merging
+those would have changed what those tests assert while leaving them green.
+Three small bot files and the two login files became one each.
+
+909 pass.
+
 ## 1.0.4 — 2026-10-02
 
 The release scan goes green.
