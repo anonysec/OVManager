@@ -1860,6 +1860,70 @@ def test_the_download_progress_loop_stays_quiet_before_the_file_exists(tmp_path)
     assert str(out) not in r.stderr, f"the poll leaked the download path:\n{r.stderr}"
 
 
+def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
+    """Run the real fetch_to_file, recording every (have, total, rate) it reports.
+
+    `_render_bytes` is stubbed to echo its three arguments one poll per line, so
+    the numbers the progress bar is actually driven by are inspectable rather
+    than inferred. The stub is what makes this test about the counter: silence
+    on stderr is a separate assertion, and a change that quiets the loop by
+    breaking the count would pass that one alone.
+    """
+    out = tmp_path / out_name
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        "set -Eeuo pipefail\n"
+        "_render_now() { date +%s%N; }\n"
+        '_render_bytes() { printf "%s|%s|%s\\n" "$1" "${2:-}" "${3:-}" >&2; }\n'
+        f"curl() {{\n{curl_body}\n}}\n"
+        f"{_extract_function_sh('fetch_to_file', INSTALLER_PATH)}\n"
+        f'fetch_to_file https://example.invalid/payload "{out}"\n',
+        encoding="utf-8",
+    )
+    r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    polls = []
+    for line in r.stderr.splitlines():
+        parts = line.split("|")
+        if len(parts) == 3 and parts[0].isdigit():
+            polls.append(parts)
+    assert polls, f"no poll was recorded; stderr was:\n{r.stderr}"
+    return polls
+
+
+def test_the_download_counter_reads_a_real_byte_count(tmp_path):
+    """A file that exists is measured, not assumed to be zero.
+
+    The `-f` guard that stopped the stderr leak also gates the measurement, so
+    "quiet on a missing file" and "counts a real one" have to be asserted
+    together: a guard that returned early, or a fallback that always printed 0,
+    would satisfy the silence test and leave the progress bar frozen at zero for
+    the whole download.
+    """
+    payload = tmp_path / "out.bin"
+    payload.write_bytes(b"x" * 5000)
+
+    # curl never runs here: the file is already in place, so every poll measures
+    # the same 5000 bytes. The count must be that number on every poll.
+    polls = _probe_fetch(tmp_path, "return 0", "out.bin")
+
+    for have, _total, _rate in polls:
+        assert have == "5000", f"counter reported {have} bytes for a 5000-byte file; polls={polls}"
+
+
+def test_the_download_counter_starts_at_zero_when_the_file_is_absent(tmp_path):
+    """A file curl has not created yet counts zero, and stays an integer.
+
+    This is the window the `-f` guard exists for. Zero is the honest reading —
+    the download has produced nothing so far — and the value must reach
+    `_render_bytes` as a bare integer, because the caller divides by it:
+    `rate=$(( have / elapsed / 1024 ))` would abort on anything else.
+    """
+    polls = _probe_fetch(tmp_path, "sleep 1", "never-written.bin")
+    for have, _total, _rate in polls:
+        assert have == "0", f"expected 0 bytes before the file exists, got {have}; polls={polls}"
+
+
 def test_no_installer_pipes_a_remote_script_into_a_root_shell():
     """install.sh runs as root; a piped `curl | sh` executes whatever answered.
 
