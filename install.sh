@@ -1423,7 +1423,6 @@ release_checksum_url() {
         "$REPO" "$VERSION" "$(release_base)"
 }
 
-
 # Pinpoint trap: any future failure (real or environmental) reports the exact
 # command and line instead of surfacing as a mystery message elsewhere.
 trap 'render_warn "Command failed near line $LINENO (running: ${BASH_COMMAND:0:80})"' ERR
@@ -2180,7 +2179,19 @@ wizard() {
         case "${tls:-1}" in
             1) TLS_MODE="self" ;;
             2) TLS_MODE="le"; TLS_DOMAIN="$(ask "Domain" "${TLS_DOMAIN:-}")"
-               [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt" ;;
+               [[ -n "$TLS_DOMAIN" ]] || die "Domain required for Let's Encrypt"
+               # Say what the name resolves to before spending a rate-limited
+               # issuance on it. A wrong record fails the request and burns one
+               # of Let's Encrypt's weekly attempts, which is the expensive way
+               # to learn a typo.
+               local here resolved
+               here="$(public_ip || true)"
+               resolved="$(resolve_host "$TLS_DOMAIN")"
+               if [[ -z "$resolved" ]]; then
+                   render_warn "$TLS_DOMAIN does not resolve yet — DNS has to point here before the certificate can be issued"
+               elif [[ -n "$here" && "$resolved" != "$here" ]]; then
+                   render_warn "$TLS_DOMAIN resolves to $resolved, not $here — Let's Encrypt will refuse it"
+               fi ;;
             3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
             4) TLS_MODE="custom"
                TLS_CERT="$(ask "Cert file" "${TLS_CERT:-}")"
@@ -2190,38 +2201,6 @@ wizard() {
         esac
     fi
 
-    return 0
-}
-
-ask_lets_encrypt() {
-    local here detected others
-    here="$(public_ip || true)"
-    detected="${TLS_DOMAIN:-${here:-}}"
-    others="$(public_ips)"
-    if [[ -n "$others" && "$others" != "$here "* && "$others" != "$here" ]]; then
-        render_ask_note "this box answers on ${others// /, }"
-    fi
-    render_ask_note "Let's Encrypt sees whatever you type here — an IP gets a short-lived cert, a name gets a normal one"
-    local answer
-    answer="$(ask "ip or domain" "$detected")"
-    [[ -n "$answer" ]] || answer="$detected"
-    [[ -n "$answer" ]] || die "Let's Encrypt needs an IP or a domain"
-
-    if is_ip_literal "$answer"; then
-        TLS_MODE="le-ip"; TLS_DOMAIN="$answer"
-        return 0
-    fi
-    TLS_MODE="le"; TLS_DOMAIN="$answer"
-    # Say what the name resolves to before spending a rate-limited issuance on
-    # it. A wrong record fails the request and burns one of Let's Encrypt's
-    # weekly attempts, which is the expensive way to learn a typo.
-    local resolved
-    resolved="$(resolve_host "$answer")"
-    if [[ -z "$resolved" ]]; then
-        render_warn "$answer does not resolve yet — DNS has to point here before the certificate can be issued"
-    elif [[ -n "$here" && "$resolved" != "$here" ]]; then
-        render_warn "$answer resolves to $resolved, not $here — Let's Encrypt will refuse it"
-    fi
     return 0
 }
 
@@ -2780,7 +2759,6 @@ start_menu() {
     validate_input
     do_install
 }
-
 
 # manager.sh is installed as "ovmanager" (+ "ovm" alias), so day-to-day ops
 # live outside this installer. Refreshed on every update, which auto-swaps

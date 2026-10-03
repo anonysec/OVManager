@@ -1718,16 +1718,6 @@ is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
 # operators read as a frozen installer. Bound the wait, then force the unit.
 STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
 
-service_autostart_status() {
-    if is_docker_mode; then
-        local policy
-        policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' ovmanager 2>/dev/null || true)"
-        [[ -n "$policy" && "$policy" != "no" ]] && printf 'enabled' || printf 'disabled'
-    else
-        systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null && printf 'enabled' || printf 'disabled'
-    fi
-}
-
 service_action() {  # start|stop|restart|enable|disable
     if is_docker_mode; then
         command -v docker >/dev/null 2>&1 || die "Docker not found on this host"
@@ -2385,7 +2375,6 @@ cmd_logs() {  # journalctl/docker logs do not exist inside the container
 
 cmd_backup() { _cli_py backup ${BACKUP_KEEP:+--keep "$BACKUP_KEEP"}; }
 cmd_restore() { _cli_py restore "$@"; }
-cmd_tls_status() { _cli_py tls-status; }
 cmd_doctor() {
     # Forwards --all, as cmd_status always has. Without this the flag parsed,
     # was ignored, and the help's "detail: ovm doctor --all" pointed at a command
