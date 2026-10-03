@@ -1894,7 +1894,7 @@ show_auth_state() {
     render_kv "Claimed" "$claimed"
     render_blank
     if [[ "$claimed" == "no" ]]; then
-        render_kv "Key"    "ovm auth key — paste it at the panel's /setup page"
+        render_kv "Key"    "ovm auth key — paste it at the panel's /claim page"
     else
         render_kv "Reset"  "ovm auth reset — set a new owner password"
         render_line "  the key is spent; change the password in the panel or here"

@@ -2184,15 +2184,23 @@ def test_the_setup_key_is_the_second_line_of_the_card():
     assert 'render_card "ready" "setup key" "$key"' in source
 
 
-def test_install_prints_the_setup_url_and_never_a_password():
-    """The card points at the browser setup page, and prints no credential."""
+def test_install_prints_the_claim_url_and_never_a_password():
+    """The card points at the claim page, and prints no credential.
+
+    /claim, not /setup. The setup wizard sits inside the authenticated block of
+    the router, so an operator with no owner yet was redirected to /login — a
+    page they cannot get past, with no route back to the form that would let
+    them. The first screen after a fresh install must be the one reachable
+    without a credential.
+    """
     source = _extract_function("success_card")
     assert "setup key" in source
     assert "Password" not in source
-    assert "/setup" in source, "the card opens the setup page, not the login page"
+    assert "/claim" in source, "the card must open the claim page, which needs no credential"
+    assert "$url/setup" not in source, "the card points at the authenticated /setup page"
     # The URL the operator must open is a url row, not plain text: it is the
     # thing they copy.
-    assert '"panel|$url/setup"' in source
+    assert '"panel|$url/claim"' in source
 
 
 def test_the_card_says_how_to_remove_the_install():

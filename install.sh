@@ -2227,8 +2227,16 @@ success_card() {
         key="$(printf '%snot written%s  %s(run: ovm auth key)%s' "$RD" "$NC" "$GY" "$NC")"
         note=""
     fi
+    # /claim, not /setup. The setup wizard lives at /setup and sits inside the
+    # authenticated block of the router, so an unauthenticated operator
+    # following this line was redirected to /login — with no owner yet, no way
+    # to sign in, and no route back to the claim form. The first screen after a
+    # fresh install has to be the one reachable without a credential.
+    #
+    # (Kept out of the argument list on purpose: render_card takes its rows
+    # positionally, and a comment inside the continuation turns into one.)
     render_card "ready" "setup key" "$key" \
-        "panel|$url/setup" \
+        "panel|$url/claim" \
         "user|$ADMIN_USER — password set by you, in the browser" \
         "tls|$(tls_summary)" \
         "logs|$CLI_ALIAS logs -f" \
