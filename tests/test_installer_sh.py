@@ -866,8 +866,11 @@ def test_the_menu_only_offers_uninstall_when_there_is_something_to_uninstall():
     # Two render_menu calls: the installed one carries uninstall, the clean one
     # does not. Anything else would offer it unconditionally.
     assert menu.count("render_menu") == 2, "expected an installed menu and a clean one"
+    # The installed menu is the one inside the guard; the clean menu is the one
+    # after it. Sliced on the guard's closing `fi` rather than an `else`, which
+    # the restructure removed when the installed branch became a full case.
     installed = menu[menu.index('if [[ -d "$INSTALL_DIR" ]]') :]
-    clean = menu[installed.index("else") :]
+    clean = menu[menu.rindex("fi") :]
     assert 'uninstall  "uninstall"' in installed
     assert "uninstall" not in clean, "uninstall is offered on a host with no install"
 

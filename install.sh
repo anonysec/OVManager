@@ -2728,18 +2728,46 @@ start_menu() {
             docker     "install with docker" \
             uninstall  "uninstall" \
             exit       "exit")"
-        if [[ "$tag" == "uninstall" ]]; then
-            check_root
-            do_uninstall
-            return 0
-        fi
-    else
-        tag="$(render_menu "" \
-            install    "install" \
-            docker     "install with docker" \
-            exit       "exit")"
+        case "$tag" in
+            uninstall)
+                check_root
+                do_uninstall
+                return 0
+                ;;
+            install|docker)
+                # Installing over an existing panel is an update: it keeps the
+                # database, the URL path, the certificate and the owner's
+                # credential. Going through do_update rather than a fresh
+                # do_install is what makes that true — a fresh install would
+                # hand out a new claim key and a new secret path, and the owner
+                # would be locked out of the panel they were trying to reach.
+                check_root
+                detect_os
+                check_deps
+                if ! confirm "Update it to v${VERSION} now?" "y"; then
+                    # They declined the update, which usually means they wanted
+                    # a clean slate. Say how, rather than leaving them to guess
+                    # at the flag.
+                    render_blank
+                    render_line "  $(printf '%bto reinstall from scratch:%s' "$B" "$NC")"
+                    render_line "    bash <(curl -sSL https://raw.githubusercontent.com/${REPO}/${BRANCH}/install.sh) uninstall --purge -y"
+                    render_blank
+                    return 0
+                fi
+                do_update
+                return 0
+                ;;
+            *)
+                render_line "  nothing was changed"
+                return 0
+                ;;
+        esac
     fi
 
+    tag="$(render_menu "" \
+        install    "install" \
+        docker     "install with docker" \
+        exit       "exit")"
     case "$tag" in
         install) MODE="native" ;;
         docker)  MODE="docker" ;;
