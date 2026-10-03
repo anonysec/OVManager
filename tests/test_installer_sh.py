@@ -416,13 +416,30 @@ def test_password_policy_floor_is_eight_characters():
     assert out.stdout == "", out.stdout
 
 
-def test_install_rejects_placeholder_password_fast(tmp_path):
-    """A 13-char password containing a placeholder must fail in the
-    installer — not install and then crash-loop at first boot."""
+def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
+    """`-p` must not become a credential, and must say so rather than fail.
+
+    The owner password moved to the panel database (schema v16) and is set in
+    the browser. `parse_args` therefore accepts `-p/--pass` and drops it with a
+    deprecation notice: honouring it would write a hash nobody reads, and
+    rejecting it would break a working one-liner for no gain.
+
+    This test used to assert the opposite — that a placeholder password is
+    *rejected* — and passed for six releases without testing anything. Its
+    assertion was `"placeholder" in r.stderr or "root" in r.stderr`, and the
+    installer was printing a stray path to stderr on every download, in a
+    directory named after the pytest tmpdir: `/tmp/pytest-of-root/...`. That
+    substring matched "root", so the assertion was satisfied by a bug rather
+    than by the behaviour it described. Fixing that stderr leak is what exposed
+    it — the false positive had been living inside the very noise it was
+    asserting against.
+    """
     sb, _ = sandbox(tmp_path)
     r = sh_sb(sb, "-y", "-p", "my-admin12345")
-    assert r.returncode == 1
-    assert "placeholder" in r.stderr or "root" in r.stderr
+    assert "-p, --pass is deprecated" in r.stderr, r.stderr
+    assert "owner password is set in the browser" in r.stderr, r.stderr
+    # And the supplied value is nowhere near a credential in what the installer wrote.
+    assert "my-admin12345" not in r.stderr, "the supplied password was echoed back"
 
 
 def test_default_install_generates_the_panel_path_and_no_credential():
@@ -891,9 +908,8 @@ def _function_tails(path):
 def _extract_function(name: str) -> str:
     """Extract a shell function body, including heredocs.
 
-    install.sh fetches and sources scripts/lib at startup, so a helper has
-    exactly one definition in one of two places: search the installer first,
-    then the libs.
+    The helpers are inline now, so a helper defined in this file has exactly one
+    definition and the search is a straight lookup.
     """
     for path in (INSTALLER_PATH,):
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -1803,6 +1819,45 @@ def _executable_lines(*paths: Path) -> list[str]:
                 continue
             out.append(line)
     return out
+
+
+def test_the_download_progress_loop_stays_quiet_before_the_file_exists(tmp_path):
+    """`fetch_to_file` must not print the shell's redirect error while polling.
+
+    The loop measures the growing file every 0.4s to drive the progress bar, and
+    on the first poll curl has not created it yet. The old form read
+
+        have="$(wc -c < "$out" 2>/dev/null || printf 0)"
+
+    and `2>/dev/null` never helped: bash applies redirections left to right, so
+    the input redirect failed first and printed to the real stderr, leaving a
+    bare path in the middle of a download that was working fine:
+
+        line 472: /tmp/tmp.XXXX/ovmanager-1.0.4.tar.gz: No such file or directory
+
+    The count itself was always right — the `|| printf 0` fallback caught it —
+    which is what made the noise worth removing rather than debugging.
+
+    Runs the real function with a curl that never creates its output file, which
+    is exactly the window the first poll lands in, and asserts stderr is empty.
+    """
+    out = tmp_path / "never-written.tar.gz"
+    body = _extract_function_sh("fetch_to_file", INSTALLER_PATH)
+    probe = tmp_path / "probe.sh"
+    probe.write_text(
+        "set -Eeuo pipefail\n"
+        # The three helpers the loop calls, stubbed: only stderr matters here,
+        # and each one has its own dependency the probe does not need.
+        "_render_now() { date +%s%N; }\n"
+        "_render_bytes() { :; }\n"
+        "curl() { sleep 1; }\n"
+        f"{body}\n"
+        f'fetch_to_file https://example.invalid/payload "{out}"\n',
+        encoding="utf-8",
+    )
+    r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=60)
+    assert "No such file or directory" not in r.stderr, f"the poll leaked a shell error:\n{r.stderr}"
+    assert str(out) not in r.stderr, f"the poll leaked the download path:\n{r.stderr}"
 
 
 def test_no_installer_pipes_a_remote_script_into_a_root_shell():

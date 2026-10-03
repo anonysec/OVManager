@@ -1869,7 +1869,19 @@ fetch_to_file() {
     pid=$!
     while kill -0 "$pid" 2>/dev/null; do
         local have
-        have="$(wc -c < "$out" 2>/dev/null || printf 0)"
+        # 2>/dev/null comes FIRST, before the input redirect. Bash applies
+        # redirections left to right, so `wc -c < "$out" 2>/dev/null` leaves
+        # the first one to fail on its own and print the shell's error before
+        # anything is redirected: curl has not created $out yet on the first
+        # poll, and the install showed a bare
+        #   line 472: /tmp/tmp.XXXX/ovmanager-1.0.4.tar.gz: No such file or directory
+        # in the middle of a download that was in fact fine.
+        #
+        # The -e test says the same thing without leaning on redirect order: no
+        # file yet means zero bytes so far, which is the honest reading for a
+        # progress count.
+        have=0
+        [[ -f "$out" ]] && have="$(wc -c < "$out" 2>/dev/null || printf 0)"
         have="${have// /}"
         elapsed=$(( $(( $(_render_now) - started )) / 1000000 ))
         (( elapsed < 1 )) && elapsed=1
