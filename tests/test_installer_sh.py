@@ -2184,23 +2184,51 @@ def test_the_setup_key_is_the_second_line_of_the_card():
     assert 'render_card "ready" "setup key" "$key"' in source
 
 
-def test_install_prints_the_claim_url_and_never_a_password():
-    """The card points at the claim page, and prints no credential.
+def test_install_prints_the_setup_url_and_never_a_password():
+    """The card points at the setup page, and prints no credential.
 
-    /claim, not /setup. The setup wizard sits inside the authenticated block of
-    the router, so an operator with no owner yet was redirected to /login — a
-    page they cannot get past, with no route back to the form that would let
-    them. The first screen after a fresh install must be the one reachable
-    without a credential.
+    panel_url() already ends in "/", so the suffix joins onto it. A card that
+    appends "/setup" instead prints "…/86eb59b8//setup": a working URL in the
+    worst possible place, on the one line an operator copies by hand.
     """
     source = _extract_function("success_card")
     assert "setup key" in source
     assert "Password" not in source
-    assert "/claim" in source, "the card must open the claim page, which needs no credential"
-    assert "$url/setup" not in source, "the card points at the authenticated /setup page"
+    assert "/setup" in source, "the card must open the setup page"
     # The URL the operator must open is a url row, not plain text: it is the
     # thing they copy.
-    assert '"panel|$url/claim"' in source
+    assert '"panel|${url}setup"' in source, "the suffix must join onto panel_url's trailing slash"
+    assert "$url/setup" not in source, "that yields a doubled slash in the printed URL"
+
+
+def test_panel_url_ends_in_a_single_slash():
+    """panel_url() owns the trailing slash; the card appends to it.
+
+    Both consumers depend on the shape: the card joins `setup` straight onto
+    the result, and `ovm status` prints the bare URL with its slash. Dropping
+    the slash here would break the first; letting the card add one would break
+    the second and print `…/86eb59b8//setup`.
+
+    Run rather than parsed: the assertion is about the URL the operator reads,
+    not about how the format string is spelled.
+    """
+    body = _extract_function("panel_url")
+    harness = f"""set -Eeuo pipefail
+    scheme_of() {{ printf 'https'; }}
+    hostname() {{ printf '10.0.0.5 10.0.0.6'; }}
+    PORT=2095
+    PATHPREFIX=abc123
+{body}
+    panel_url
+"""
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "https://10.0.0.5:2095/abc123/", r.stdout
+
+    # And with no prefix it is the bare origin, still one slash.
+    harness_no = harness.replace("PATHPREFIX=abc123", "PATHPREFIX=")
+    r2 = subprocess.run(["bash", "-c", harness_no], capture_output=True, text=True, timeout=30)
+    assert r2.stdout.strip() == "https://10.0.0.5:2095/", r2.stdout
 
 
 def test_the_card_says_how_to_remove_the_install():

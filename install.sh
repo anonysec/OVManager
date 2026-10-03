@@ -2227,16 +2227,16 @@ success_card() {
         key="$(printf '%snot written%s  %s(run: ovm auth key)%s' "$RD" "$NC" "$GY" "$NC")"
         note=""
     fi
-    # /claim, not /setup. The setup wizard lives at /setup and sits inside the
-    # authenticated block of the router, so an unauthenticated operator
-    # following this line was redirected to /login — with no owner yet, no way
-    # to sign in, and no route back to the claim form. The first screen after a
-    # fresh install has to be the one reachable without a credential.
+    # panel_url() ends in "/", so the suffix joins without a separator of its
+    # own. Appending "/setup" to it produced "…/86eb59b8//setup" — a URL that
+    # works but is not what anyone would type, on the one line an operator
+    # copies by hand.
     #
-    # (Kept out of the argument list on purpose: render_card takes its rows
-    # positionally, and a comment inside the continuation turns into one.)
+    # (The comment above stays out of the argument list on purpose:
+    # render_card takes its rows positionally, and a comment inside the
+    # continuation becomes one.)
     render_card "ready" "setup key" "$key" \
-        "panel|$url/claim" \
+        "panel|${url}setup" \
         "user|$ADMIN_USER — password set by you, in the browser" \
         "tls|$(tls_summary)" \
         "logs|$CLI_ALIAS logs -f" \
