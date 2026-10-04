@@ -1372,3 +1372,24 @@ def test_owner_claim_is_quiet_when_the_panel_cannot_answer(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "already has an owner" not in r.stderr, r.stderr
     assert (data / "owner-claim.key").is_file()
+
+
+def test_url_set_root_is_accepted():
+    """`ovm url set /` must be able to serve at the root.
+
+    The slashes are stripped before the character check, so `/` becomes the
+    empty string — and "" is exactly what the panel's own reset writes to mean
+    "serve at the root". A {1,64} quantifier rejects it, so the error message
+    advertised `/` and the one command that could not do it was the one that
+    named it.
+    """
+    src = (REPO / "manager.sh").read_text(encoding="utf-8")
+    # Capture every line of the guard, not just the first — a comment sits
+    # between the strip and the check, so a single-line match reads the comment.
+    m = re.search(
+        r'value="\$\{want#/\}"; value="\$\{value%/\}"\n(.*?\n)*?.*?\|\| die "url path',
+        src,
+    )
+    assert m, "manager.sh no longer strips the slashes before validating"
+    check = m.group(0)
+    assert '-z "$value"' in check, 'the empty prefix must be accepted: / strips to "", and that is what serving at the root means'

@@ -1938,7 +1938,11 @@ cmd_url() {
         value="$(_rand_urlpath)"
     else
         value="${want#/}"; value="${value%/}"
-        [[ "$value" =~ ^[A-Za-z0-9_-]{1,64}$ ]] \
+        # Empty is a value: `/` strips to "", and "" IS "serve at the root" —
+        # the panel's own reset writes exactly that. The {1,64} quantifier alone
+        # rejected it, so the error promised `/` worked and `ovm url set /` was
+        # the one command that could not do it.
+        [[ -z "$value" || "$value" =~ ^[A-Za-z0-9_-]{1,64}$ ]] \
             || die "url path: letters, digits, dash and underscore only (or / for the root)"
     fi
 
