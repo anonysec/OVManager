@@ -806,5 +806,9 @@
   "showLess": "收起",
   "nodeTlsAlways": "连接始终加密（TLS）。自签名节点在首次连接时通过指纹验证。",
   "pwaOpenTls": "打开 TLS 设置",
-  "setupComplete": "设置完成——面板已就绪。"
+  "setupComplete": "设置完成——面板已就绪。",
+  "resetUsage": "重置流量",
+  "deleteUser": "删除用户",
+  "deleteAdmin": "删除管理员",
+  "deleted": "已删除"
 }

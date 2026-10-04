@@ -96,8 +96,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [logout]);
 
   // Keep auth state in sync across browser tabs (e.g. logout in one tab).
+  // userRole is watched as well as the token: a login in tab B writes both,
+  // and a tab that took only the token authenticated with userRole=null, so
+  // the owner-only routes were never registered and stayed missing until a
+  // reload.
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'userRole') {
+        setUserRole(e.newValue);
+        return;
+      }
       if (e.key === 'authToken') {
         setToken(e.newValue);
         if (!e.newValue) setUserRole(null);

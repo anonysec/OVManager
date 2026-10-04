@@ -806,5 +806,9 @@
   "showLess": "Show less",
   "nodeTlsAlways": "Connection is always encrypted (TLS). Self-signed nodes verify with a fingerprint on first connect.",
   "pwaOpenTls": "Open TLS settings",
-  "setupComplete": "Setup complete — your panel is ready."
+  "setupComplete": "Setup complete — your panel is ready.",
+  "resetUsage": "Reset usage",
+  "deleteUser": "Delete user",
+  "deleteAdmin": "Delete admin",
+  "deleted": "Deleted"
 }
