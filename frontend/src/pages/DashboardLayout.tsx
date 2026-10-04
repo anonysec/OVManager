@@ -1,6 +1,7 @@
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { loadLanguage } from '../i18n';
 import {
   FiBell, FiMoon, FiSun, FiSearch, FiCommand, FiMonitor,
   FiCompass, FiArrowRight, FiX,
@@ -93,6 +94,11 @@ const SetupBanner = () => {
     </div>
   );
 };
+
+// loadLanguage fetches the code-split bundle BEFORE switching. Calling
+// i18n.changeLanguage directly flips the language with no fa/ru/cn resources
+// loaded, so every string stayed English while the direction flipped to RTL.
+const switchLanguage = (lng: string) => { void loadLanguage(lng); };
 
 const DashboardLayout = () => {
   const { userRole, logout } = useAuth();
@@ -412,22 +418,22 @@ const DashboardLayout = () => {
                     <LangIcon size={18} />
                   </button>
                   <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
-                    <button className={`lang-option${i18n.language === 'fa' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('fa'); document.documentElement.dir = 'rtl'; localStorage.setItem('ovmanager-lang', 'fa'); setLangOpen(false); }}>
+                    <button className={`lang-option${i18n.language === 'fa' ? ' active' : ''}`} onClick={() => { switchLanguage('fa'); setLangOpen(false); }}>
                       <FaFlagIcon />
                       <span>فارسی</span>
                       {i18n.language === 'fa' && <span className="lang-check">✓</span>}
                     </button>
-                    <button className={`lang-option${i18n.language === 'en' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('en'); document.documentElement.dir = 'ltr'; localStorage.setItem('ovmanager-lang', 'en'); setLangOpen(false); }}>
+                    <button className={`lang-option${i18n.language === 'en' ? ' active' : ''}`} onClick={() => { switchLanguage('en'); setLangOpen(false); }}>
                       <EnFlagIcon />
                       <span>English</span>
                       {i18n.language === 'en' && <span className="lang-check">✓</span>}
                     </button>
-                    <button className={`lang-option${i18n.language === 'ru' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('ru'); document.documentElement.dir = 'ltr'; localStorage.setItem('ovmanager-lang', 'ru'); setLangOpen(false); }}>
+                    <button className={`lang-option${i18n.language === 'ru' ? ' active' : ''}`} onClick={() => { switchLanguage('ru'); setLangOpen(false); }}>
                       <RuFlagIcon />
                       <span>Русский</span>
                       {i18n.language === 'ru' && <span className="lang-check">✓</span>}
                     </button>
-                    <button className={`lang-option${i18n.language === 'cn' ? ' active' : ''}`} onClick={() => { i18n.changeLanguage('cn'); document.documentElement.dir = 'ltr'; localStorage.setItem('ovmanager-lang', 'cn'); setLangOpen(false); }}>
+                    <button className={`lang-option${i18n.language === 'cn' ? ' active' : ''}`} onClick={() => { switchLanguage('cn'); setLangOpen(false); }}>
                       <ChinaFlagIcon />
                       <span>中文</span>
                       {i18n.language === 'cn' && <span className="lang-check">✓</span>}
