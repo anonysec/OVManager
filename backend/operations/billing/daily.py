@@ -129,8 +129,18 @@ def _apply_user_traffic(db, user_id: int, expected_used, expected_state: str, ne
     return True
 
 
-async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | None = None) -> bool:
+async def _collect_node_traffic(
+    node,
+    all_users: dict,
+    db,
+    id_to_name: dict | None = None,
+    stale: set | None = None,
+) -> bool:
     """Collect traffic data from a single node and update user records.
+
+    `stale` carries, across the node loop, which users this run has already
+    written. Their session objects are one write behind, so the next node must
+    re-read before building on them; see the refresh below.
 
     Billing prefers the node's lifetime `totals` (banked + live): growth of
     one cumulative counter per (node, user) captures short sessions,
@@ -152,6 +162,7 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
     id_to_name = id_to_name or {}
     known = set(all_users)
     pending: dict[int, dict] = {}
+    stale = stale if stale is not None else set()
     for client_key in set(per_user_total) | set(totals_map):
         username = _extract_username(client_key, node.name, known)
         user = all_users.get(username)
@@ -163,6 +174,16 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
             continue
 
         entry = pending.get(user.id)
+        if entry is None and user in stale:
+            # This user's row was written by an earlier node in this same run,
+            # through a Core UPDATE the session never sees (expire_on_commit is
+            # False). Re-read only in that case, so node 2 sees node 1's
+            # counters instead of rebuilding node_usage from a pre-node-1 map
+            # and dropping its bytes. A user untouched by this run keeps its
+            # loaded values — which is what lets a reset landing mid-tick win
+            # the conditional UPDATE below rather than being rebaselined onto.
+            db.refresh(user, attribute_names=["used", "node_usage"])
+            stale.discard(user)
         node_usage = entry["node_usage"] if entry else _load_node_usage(user)
         state = node_usage.get(node.name)
         totals_now = totals_map.get(client_key)
@@ -211,6 +232,10 @@ async def _collect_node_traffic(node, all_users: dict, db, id_to_name: dict | No
                 "Traffic update skipped for %s: counters changed concurrently (reset or delete)",
                 user.name,
             )
+        else:
+            # The row now differs from what this session holds; a later node in
+            # the same run must re-read before building on it.
+            stale.add(user)
 
     db.commit()
     return True
@@ -233,9 +258,12 @@ async def check_user_used_traffic():
         id_to_name = dict(crud.get_user_id_name_pairs(db))
 
         any_updated = False
+        # One set for the whole loop: a user written for one node must be
+        # re-read before the next node adds to them.
+        stale: set = set()
         for node in nodes:
             try:
-                any_updated = (await _collect_node_traffic(node, all_users, db, id_to_name)) or any_updated
+                any_updated = (await _collect_node_traffic(node, all_users, db, id_to_name, stale)) or any_updated
             except Exception as e:
                 db.rollback()
                 logger.error(
