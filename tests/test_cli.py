@@ -69,6 +69,10 @@ def test_status_collect_healthy(monkeypatch, tmp_path):
     monkeypatch.setattr(status, "fetch_health", lambda url, timeout=5.0, cafile=None: (True, "1.0.8"))
     monkeypatch.setattr(status, "service_state", lambda compose: ("native", "active"))
     monkeypatch.setattr(status, "primary_ip", lambda: "10.0.0.1")
+    # The panel serves at the root here (the settings row has no prefix), so
+    # the printed URL must be the root one — not the URLPATH=abc seed left in
+    # .env, which is exactly the stale URL an operator used to be shown.
+    monkeypatch.setattr(Install, "live_path_prefix", lambda self: "")
     data = status.collect(install)
     assert data == {
         "ok": True,
@@ -77,7 +81,7 @@ def test_status_collect_healthy(monkeypatch, tmp_path):
         "service": "active",
         "health": "ok",
         "version": "1.0.8",
-        "url": "http://10.0.0.1:2095/abc/",
+        "url": "http://10.0.0.1:2095/",
         "install_dir": str(tmp_path / "opt"),
         "data_dir": str(tmp_path / "data"),
         "port": 2095,
@@ -491,3 +495,35 @@ def test_config_perms_is_not_chmodded_back_after_the_migration(tmp_path, monkeyp
         "Config perms undid the grant the migration had just made, so the panel could not read its own configuration"
     )
     assert results["Config perms"].ok, results["Config perms"].detail
+
+
+def test_reset_password_revokes_sessions(tmp_path):
+    """Resetting a compromised account must evict whoever is already in.
+
+    The password is the one thing the operator can change; leaving existing
+    sessions alive means the intruder keeps a valid token, and the sliding idle
+    timeout refreshes it on every request so it never expires on its own.
+    """
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.auth.hash import hash_password
+    from backend.db.engine import Base
+    from backend.db.models import Admin, AuthSession
+    from cli import password as pw
+
+    data = tmp_path / "data"
+    data.mkdir()
+    db_path = data / "ovmanager.db"
+    eng = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(eng)
+    db = sessionmaker(bind=eng)()
+    db.add(Admin(username="admin", password="old", disabled=False))
+    db.add(AuthSession(token_hash="a" * 64, username="admin", role="owner", created_at=0, expires_at=9e9, last_seen_at=0))
+    db.commit()
+
+    r = pw._write_owner_hash(str(data), hash_password("a-brand-new-password"), "admin")
+    assert r["ok"] is True, r
+    assert r["sessions_revoked"] == 1
+    assert db.query(AuthSession).filter(AuthSession.username == "admin").count() == 0
+    db.close()

@@ -33,7 +33,7 @@ def collect(install: Install, service: str | None = None, public_ip: str | None 
         "service": service,
         "health": health,
         "version": version,
-        "url": install.public_url(public_ip or primary_ip()),
+        "url": install.public_url(public_ip or primary_ip(), live=True),
         "install_dir": install.install_dir,
         "data_dir": install.data_dir,
         "port": install.port,

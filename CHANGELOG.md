@@ -1,5 +1,92 @@
 # Changelog
 
+## 1.0.44 — 2026-10-04
+
+An unauthenticated file read, a way to hand your panel to a stranger, and
+multi-node traffic that was never billed.
+
+**Security**
+
+`GET /assets//<path>` returned the contents of any file the panel could read,
+with no authentication. The double slash survives into the request path, so the
+relative part began with `/`, and `os.path.join(base, "/etc/passwd")` discards
+the base entirely — the `..` test was decoration rather than a boundary. Paths
+are now confined by real path, which also refuses a symlink out of the tree.
+
+The owner could `DELETE` their own account. The owner row is what makes a panel
+claimed, and the one-time claim key outlives the install that printed it —
+only a successful claim unlinks it. Deleting yourself therefore handed the
+panel to whoever ever saw that key. Changing the owner's status was already
+refused; deleting was not.
+
+Both login rate-limit buckets keyed on the source address, so a proxy pool was
+handed a fresh 5-attempt and a fresh 20-attempt bucket on every request and the
+owner's password could be tried without limit. Added a per-username bucket with
+no address in its key.
+
+`/health` returned the exact panel version to every internet client: the
+gate read the direct peer, which behind nginx is always loopback, so "is this
+local?" was true for everyone.
+
+`ovm auth reset` changed the password and left every existing session valid.
+An operator resetting a compromised account kept the intruder — the token is
+still in the sessions table and the sliding idle timeout refreshes it on every
+request, so it never expires. The panel's own reset already revoked; the two
+paths disagreed for the same intent.
+
+**Fixed**
+
+A panel with two or more nodes billed the first node's traffic and discarded
+every other node's, silently. `check_user_used_traffic` loads its user list once
+and reuses it per node, and the write is a Core `UPDATE` the session never sees,
+so the second node read counters from before the first wrote, rebuilt its
+per-node map from that stale copy, and had its conditional write rejected
+outright. A two-node panel billed 1000 bytes for 6000 real ones.
+
+`ovm url reset` reverted on the next boot. The settings seeder ran on every
+migration rather than only on a fresh install and treated a blank prefix as
+unset, so it restored `.env`'s `URLPATH` over the operator's reset. An empty
+prefix is a value — it means "serve at the root" — and this is the documented
+way out of a forgotten prefix, so `ovm restart` put you straight back in.
+
+`ovm status` printed the `.env` seed rather than the prefix being served, so
+the URL it told you to open returned a blank 404 the moment the prefix changed.
+
+Switching the panel's language to Persian, Russian or Chinese loaded nothing:
+all five pickers called `i18n.changeLanguage` directly instead of the
+`loadLanguage` helper that fetches the code-split bundle first. The page flipped
+to RTL with every string still in English.
+
+Four keys used by confirmation dialogs (`resetUsage`, `deleteUser`,
+`deleteAdmin`, `deleted`) existed in no locale, so those dialogs rendered the
+raw camelCase identifier to the operator. Added to all four.
+
+Logging in from a second browser tab left the first tab authenticated with no
+role, so the owner-only pages were never registered and stayed missing until a
+reload.
+
+The installer's menu waited forever when stdin was a pipe and a terminal was
+reachable — `echo 1 | bash install.sh` from a terminal, or any CI runner with a
+pty. The numbered rewrite dropped the timeout the old keystroke reader had.
+Answers on stdin are now read with a bounded window.
+
+A failed package install ended the installer instead of falling back: the three
+documented fallbacks behind that call were unreachable, and silently so, since
+the caller discards its output.
+
+The Let's Encrypt IP option took the first `hostname -I` field, which on a host
+with a docker bridge or a cloud metadata NIC ahead of the public address is a
+private IP that Let's Encrypt refuses.
+
+The Ready card pointed at a page behind the authentication guard, so a first-run
+operator holding a claim key was bounced to the login page with no way to claim.
+`/claim` is gone: `/setup` now serves the claim form to an unauthenticated
+visitor and the setup checklist to the owner.
+
+The installer no longer asks for an owner username. It asked for one, took no
+password, and wrote the answer to `.env` — where the claim endpoint was already
+reading `ADMIN_USERNAME` from. It changed nothing.
+
 ## 1.0.43 — 2026-10-03
 
 The installer works offline, and a restore no longer bricks the panel.

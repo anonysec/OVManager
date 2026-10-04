@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 
+from backend.logger import logger
 from cli import render
 
 
@@ -136,13 +137,31 @@ def _write_owner_hash(data_dir: str, hashed: str, owner: str) -> dict:
             row.password = hashed
             row.disabled = False
         db.commit()
+
+        # A reset is what an operator reaches for when they think the account is
+        # compromised. Leaving existing sessions alive leaves the intruder in:
+        # the token is still in auth_sessions and the sliding idle timeout keeps
+        # refreshing it on every request, so it never expires on its own. The
+        # panel's own reset already revokes; this path has to match it, or the
+        # same operator intent behaves two different ways.
+        # Best effort, and deliberately not fatal: the password is already
+        # changed by this point, so failing the whole command here would tell
+        # the operator their reset did not happen. A database too old to have
+        # sessions has nothing to revoke anyway.
+        try:
+            from backend.auth.sessions import revoke_user_sessions
+
+            revoked = revoke_user_sessions(db, owner)
+        except Exception:
+            logger.warning("password reset: could not revoke sessions for %s", owner)
+            revoked = None
     except Exception as exc:
         db.rollback()
         return {"ok": False, "error": f"Could not update the owner credential: {exc}"}
     finally:
         db.close()
         engine.dispose()
-    return {"ok": True, "username": owner}
+    return {"ok": True, "username": owner, "sessions_revoked": revoked}
 
 
 def render_text(data: dict) -> str:
@@ -153,9 +172,19 @@ def render_text(data: dict) -> str:
     # ADMIN_PASSWORD_HASH from old installs, so the operator's first question
     # after any password change is which of the two the panel now reads — and
     # the answer has been non-obvious before.
-    return render.block(
-        [
-            render.ok(f"owner password updated for {owner}"),
-            render.hint("stored in the panel database — .env is not edited"),
-        ]
-    )
+    rows = [
+        render.ok(f"owner password updated for {owner}"),
+        render.hint("stored in the panel database — .env is not edited"),
+    ]
+    # Say it, so an operator resetting a compromised account knows the intruder
+    # is out rather than assuming the password change covered it.
+    n = data.get("sessions_revoked")
+    if n is None:
+        rows.append(render.hint("could not confirm session revocation — check the panel logs"))
+    elif isinstance(n, int):
+        rows.append(
+            render.hint(f"revoked {n} active session{'s' if n != 1 else ''} — every device must sign in again")
+            if n
+            else render.hint("no active sessions to revoke")
+        )
+    return render.block(rows)

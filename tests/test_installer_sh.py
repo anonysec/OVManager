@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import inline_lib
@@ -442,6 +443,22 @@ def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
     assert "my-admin12345" not in r.stderr, "the supplied password was echoed back"
 
 
+def _machine_path() -> str:
+    """The block main() runs when nothing can prompt: flags, OVM_* env, --yes.
+
+    Sliced from the comment that introduces it to the `validate_input` that
+    follows, so a test asserting the defaults cannot pass on text that merely
+    appears elsewhere.
+    """
+    body = _installer_source()
+    # Anchored on main()'s own comment, not on the text: ": ${PORT:=...}"
+    # appears in do_update too, and slicing from the first match returned half
+    # the update path.
+    start = body.index("    # Everything from here is the machine path")
+    start = body.index('    : "${PORT:=$DEFAULT_PORT}"', start)
+    return body[start : body.index("    validate_input", start)]
+
+
 def test_default_install_generates_the_panel_path_and_no_credential():
     """The recommended flow generates the private URL path, and nothing else.
 
@@ -449,12 +466,24 @@ def test_default_install_generates_the_panel_path_and_no_credential():
     one-time claim key and the browser turns it into the credential (design
     decision 4). A generated password here would be a credential with no owner.
     """
-    source = _extract_function("panel_express_defaults")
-    assert 'PATHPREFIX="$(rand_path)"' in source
-    assert "ask " not in source
-    assert "ADMIN_PASS" not in source
-    assert "GENERATED_PASS" not in _installer_source(), "no install-time password survives"
-    assert "prompt_validate_admin_password" in _installer_source()  # reset-password still validates
+    # The machine path, not a helper: the wizard asks, and everything else
+    # falls through to these defaults.
+    machine = _machine_path()
+    assert 'PATHPREFIX="$(rand_path)"' in machine, "the URL path is not generated on the machine path"
+    assert ': "${ADMIN_USER:=$DEFAULT_USER}"' in machine
+    assert "TLS_MODE:=self" in machine
+    assert "ask " not in machine, "the machine path must not prompt"
+    body = _installer_source()
+    # ADMIN_PASS survives only in the reset-password prompt, which the manager
+    # reaches and the installer never calls, and in the deprecation notice for
+    # the retired flag. Neither may sit on an install path.
+    install_paths = _extract_function("do_install") + _extract_function("wizard") + _extract_function("write_env")
+    # Comments name ADMIN_PASSWORD to explain why .env holds none, so only live
+    # code can answer this.
+    install_code = "\n".join(ln for ln in install_paths.splitlines() if not ln.lstrip().startswith("#"))
+    assert "ADMIN_PASS" not in install_code, "an install path builds an owner credential"
+    assert "GENERATED_PASS" not in body, "no install-time password survives"
+    assert "prompt_validate_admin_password" in body  # reset-password still validates
 
 
 def test_unknown_option_fails():
@@ -706,15 +735,22 @@ def test_snapshot_rotation_keeps_two(tmp_path):
     assert r.stdout.strip() == "2", r.stdout
 
 
-def test_already_installed_menu_is_installer_only():
-    """The installer's already-installed menu offers update/uninstall/quit —
-    day-to-day ops moved to ovm."""
-    content = _installer_source()
-    assert "already_installed_menu" in content
-    assert 'update    "update to v${VERSION}"' in content
-    assert 'uninstall "uninstall"' in content
-    assert 'quit      "quit"' in content
-    assert "render_menu" in content
+def test_the_front_door_covers_every_action_the_installer_offers():
+    """One menu, not two.
+
+    There used to be a front door for the action and a second menu for the
+    already-installed case. They drifted: one said "update", the other said
+    "install", for the same host. Both are the front door now, and the
+    already-installed one carries `uninstall` because there is something to
+    uninstall.
+    """
+    menu = _extract_function("start_menu")
+    assert "already_installed_menu" not in _installer_source(), "the second menu is back"
+    assert 'install    "install"' in menu
+    assert 'docker     "install with docker"' in menu
+    assert 'uninstall  "uninstall"' in menu
+    assert 'exit       "exit"' in menu
+    assert "render_menu" in menu
     # tui_select survives only as a one-line alias into render_menu; a caller
     # reaching for it is fine, a second implementation of it is not.
     prompt = inline_lib.section("prompt.sh")
@@ -735,24 +771,33 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
 
 
 def test_the_menu_is_one_renderer():
-    """render_menu owns the pointer, the digits and the arrow.
+    """render_menu owns the numbering and the read.
 
     A menu drawn in two places is how they disagree: whiptail on boxes that
     have it, hand-rolled printf everywhere else. The old tui_select branched on
     `command -v whiptail` and rendered two different menus with two different
-    selections. There is now one renderer and one keystroke reader.
+    selections. There is now one renderer.
+
+    It is also numbers only. The arrow-key version redrew the menu in place on
+    a separate fd and read single keystrokes from /dev/tty under a two-second
+    timeout, so a paste, a closed terminal or a tmux that lost its pane could
+    strand a half-drawn frame — and each of those timeouts was a branch to get
+    right. `ask` already reads the answer, so the keystroke reader had no reason
+    to exist.
     """
     content = _installer_source()
     code = "\n".join(ln for ln in content.splitlines() if not ln.lstrip().startswith("#"))
     assert "whiptail" not in code, "the whiptail branch is back"
     assert "tui_select() { render_menu" in content
-    render = inline_lib.section("render.sh")
-    # The pointer and the visible number are updated together in the same case
-    # arm: that is the invariant, and it is only checkable in one place.
-    assert "_MENU_CUR=$(( _MENU_CUR - 1 ))" in render
-    assert "_MENU_CUR=$(( _MENU_CUR + 1 ))" in render
-    assert "_MENU_CUR=$(( 10#$ch - 1 ))" in render
-    assert "reply=$(( _MENU_CUR + 1 )); break" in render
+    # Scoped to the function, not the section: render_ask and the progress block
+    # have their own /dev/tty and cursor handling, which this is not about.
+    menu = inline_lib.section("render.sh")
+    menu = menu[menu.index("render_menu() {") :]
+    menu = menu[: menu.index("\n}")]
+    menu_code = "\n".join(ln for ln in menu.splitlines() if not ln.lstrip().startswith("#"))
+    assert "/dev/tty" not in menu_code, "the menu reads keystrokes from /dev/tty again"
+    assert "read -rsn1" not in menu_code, "the keystroke reader is back"
+    assert "ask" in menu_code, "the menu must answer through ask"
 
 
 def test_update_without_install_dir_fails(tmp_path):
@@ -793,27 +838,42 @@ def test_plain_http_flag_is_gone():
     assert "--tls-self" not in content
 
 
-def test_start_menu_is_install_or_docker():
-    """The front door uses beginner wording and generates secure defaults.
+def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
+    """Install mode is chosen at the front door, and nowhere else.
 
-    The mode is asked here and nowhere else. The wizard used to ask it again as
-    "Step 1/5", so the answer could be given twice and the two did not always
-    agree — choosing "install with docker" on the menu and "native" in the
-    wizard was a reachable state.
+    The menu asks it and the wizard must not: a wizard that asks the same
+    question again lets the two answers disagree, which is how "containerized"
+    on the menu and "native" in the wizard used to be reachable.
     """
-    source = _extract_function("start_menu")
-    assert "install  ·  systemd on this host" in source
-    assert "install  ·  containerized" in source
-    assert "Express" not in source
-    assert "Custom" not in source
-    assert 'MODE="native"; panel_express_defaults' in source
-    assert 'MODE="docker"; panel_express_defaults' in source
-    assert "render_menu" in source
-    # And the wizard must not ask again. TLS_MODE is a different question and
-    # appears legitimately; the install MODE must not.
+    menu = _extract_function("start_menu")
+    assert 'MODE="native"' in menu and 'MODE="docker"' in menu
     wizard = _extract_function("wizard")
-    assert "Install mode" not in wizard, "the wizard must not re-ask the install mode"
-    assert '"$MODE"' not in wizard
+    # TLS_MODE is a different question and appears legitimately; the install
+    # MODE must not. Match it whole so TLS_MODE does not read as a hit.
+    import re as _re
+
+    assert not _re.search(r"(?<![A-Z_])MODE", wizard), "the wizard must not ask for the install mode"
+    assert "Install mode" not in wizard
+
+
+def test_the_menu_only_offers_uninstall_when_there_is_something_to_uninstall():
+    """A destructive action is not on the menu beside the ordinary ones.
+
+    Offering `uninstall` on a clean host would put it one keystroke from
+    `install`, which is not a risk worth taking for a line that saves nothing.
+    """
+    menu = _extract_function("start_menu")
+    assert '[[ -d "$INSTALL_DIR" ]]' in menu, "the uninstall entry is not conditional"
+    # Two render_menu calls: the installed one carries uninstall, the clean one
+    # does not. Anything else would offer it unconditionally.
+    assert menu.count("render_menu") == 2, "expected an installed menu and a clean one"
+    # The installed menu is the one inside the guard; the clean menu is the one
+    # after it. Sliced on the guard's closing `fi` rather than an `else`, which
+    # the restructure removed when the installed branch became a full case.
+    installed = menu[menu.index('if [[ -d "$INSTALL_DIR" ]]') :]
+    clean = menu[menu.rindex("fi") :]
+    assert 'uninstall  "uninstall"' in installed
+    assert "uninstall" not in clean, "uninstall is offered on a host with no install"
 
 
 def test_no_bundled_node_offer():
@@ -934,21 +994,22 @@ def _extract_function(name: str) -> str:
 
 
 def test_recommended_defaults_never_touch_a_password():
-    """Recommended installation asks for nothing and mints no credential."""
-    source = _extract_function("panel_express_defaults")
+    """A non-interactive run asks for nothing and mints no credential."""
+    machine = _machine_path()
     harness = f"""set -Eeuo pipefail
     rand_path() {{ echo generatedpath; }}
     rand_pass() {{ echo generated-password-123; }}
     DEFAULT_PORT=2095; DEFAULT_USER=admin
-    EXPRESS=0; MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
+    INSTALL_DIR=/opt/ovmanager; DATA_DIR=/var/lib/ovmanager
+    MODE=""; PORT=""; PATH_SET=0; PATHPREFIX=""
     ADMIN_USER=""; TLS_MODE=""; ADMIN_PASS=""; GENERATED_PASS=0
-    {source}
-    panel_express_defaults
+    {machine}
     [[ -z "$ADMIN_PASS" ]]
     [[ "$GENERATED_PASS" -eq 0 ]]
     [[ "$PATHPREFIX" == generatedpath ]]
     [[ "$ADMIN_USER" == admin ]]
-    [[ "$PATH_SET" -eq 1 ]]
+    [[ "$PATH_SET" -eq 0 ]]
+    [[ "$TLS_MODE" == self ]]
     """
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
@@ -1136,23 +1197,26 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
     assert "STUB-BAD" in r.stdout and "REAL-OK" in r.stdout
 
 
-def test_installer_menu_copy_uses_new_tui():
-    """The front door offers two installs and an exit, and says what each is.
+def test_every_wizard_step_says_what_its_options_mean():
+    """Each step's options carry their consequence, not just a label.
 
-    The labels are lowercase verbs with the mode after a separator, because the
-    menu is drawn by render_menu and there is no "Setup" heading to attach a
-    capital to any more — the banner already says what is running.
+    This is the whole point of the numbered-step form: someone reading the
+    wizard cold learns what "self-signed" costs and what Let's Encrypt needs
+    before choosing, rather than picking a digit and finding out later.
     """
-    content = _installer_source()
-    source = _extract_function("start_menu")
-    assert "install  ·  systemd on this host" in source
-    assert "install  ·  containerized" in source
-    assert 'quit    "exit"' in source
-    assert "How do you want to install?" not in source
-    for retired in ("Setup${NC}", "1.${NC} Install", "0.${NC} Exit", "Ready — claim your panel"):
-        assert retired not in content, f"retired wording back: {retired}"
-    # Cancelling says what did not happen, not "Cancelled." with a full stop.
-    assert "nothing was changed" in source
+    source = _extract_function("wizard")
+    assert "Self-signed (default)      encrypted; one browser warning to click through" in source
+    assert "Let's Encrypt (domain)     needs a domain pointed here + free port 80" in source
+    assert "Let's Encrypt (this IP)    short-lived cert, no domain needed" in source
+    assert "Custom key + cert          bring your own PEM files" in source
+    # Every option in a step explains itself, so no step is a bare list of words.
+    for step in ("Step 1/3", "Step 2/3", "Step 3/3"):
+        assert step in source, f"missing {step}"
+    # The owner step is gone: the card prints a claim key and the browser
+    # collects the password, so a username prompt bought nothing — the claim
+    # endpoint mints the row against ADMIN_USERNAME whatever was typed here.
+    assert "Owner login" not in source
+    assert "Step 4/4" not in source
 
 
 def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
@@ -1290,9 +1354,8 @@ def test_installer_design_language_matches_node():
         "render_menu",
         "render_banner",
         "render_card",
-        "install  ·  systemd on this host",
-        "install  ·  containerized",
-        "1 self-signed · 2 lets encrypt · 3 custom",
+        "install with docker",
+        "Self-signed (default)      encrypted; one browser warning to click through",
         "render_ok",
         "render_warn",
         "render_fail",
@@ -1304,11 +1367,37 @@ def test_installer_design_language_matches_node():
         "1.${NC} Install",
         "How do you want to install?",
         "Choose every option yourself",
-        "Step 1/4",
+        # The renderer rewrite replaced the numbered steps with one cleared
+        # screen per question and called this wording retired. The steps are
+        # back, and there are four of them: install mode moved out to the front
+        # door, so the wizard asks port, path, owner and certificate.
+        "Step 1/5",
         "Ready — claim your panel",
-        "Let's Encrypt (domain)",
+        # The rewrite collapsed four certificate choices into three and asked
+        # "domain or this IP?" as its own question. The four-option step is
+        # back, so the label below is wanted wording again.
+        "1 self-signed · 2 lets encrypt · 3 custom",
     ):
         assert retired not in content, f"retired wording back: {retired}"
+
+
+def test_the_tls_step_takes_the_digit_and_says_what_it_costs():
+    """TLS is a numbered step again, and every option names its consequence.
+
+    This is the arrangement from before the renderer rewrite, where each
+    option carried what choosing it would mean rather than a bare digit. The
+    free-text field for Let's Encrypt came back too: "domain or this IP?" as its
+    own question made the operator decide a distinction the installer can make
+    for itself from what they type.
+    """
+    source = _extract_function("wizard")
+    assert "Step 3/3 — Certificate (always encrypted)" in source
+    assert 'tls="$(ask "TLS" "1")"' in source, "the TLS step must answer through ask"
+    assert '1) TLS_MODE="self" ;;' in source, "1 no longer selects self-signed"
+    assert '2) TLS_MODE="le";' in source, "2 no longer selects Let's Encrypt by domain"
+    assert '3) TLS_MODE="le-ip";' in source, "3 no longer selects Let's Encrypt by IP"
+    assert '4) TLS_MODE="custom"' in source, "4 no longer selects a custom pair"
+    assert '*) TLS_MODE="self" ;;' in source, "an unknown answer must fall back to self-signed"
 
 
 def test_the_output_vocabulary_is_shared_not_repeated():
@@ -1874,6 +1963,11 @@ def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
     probe.write_text(
         "set -Eeuo pipefail\n"
         "_render_now() { date +%s%N; }\n"
+        # render_note is the branch taken while the server's content-length is
+        # unknown; _render_bytes is the one taken once it is. These assert on
+        # the counter, so the probe's curl answers the HEAD request with a real
+        # content-length and the measured branch is the one exercised.
+        "render_note() { :; }\n"
         '_render_bytes() { printf "%s|%s|%s\\n" "$1" "${2:-}" "${3:-}" >&2; }\n'
         f"curl() {{\n{curl_body}\n}}\n"
         f"{_extract_function_sh('fetch_to_file', INSTALLER_PATH)}\n"
@@ -1903,9 +1997,19 @@ def test_the_download_counter_reads_a_real_byte_count(tmp_path):
     payload = tmp_path / "out.bin"
     payload.write_bytes(b"x" * 5000)
 
-    # curl never runs here: the file is already in place, so every poll measures
-    # the same 5000 bytes. The count must be that number on every poll.
-    polls = _probe_fetch(tmp_path, "return 0", "out.bin")
+    # The GET is a background call that must outlive the first poll check, or
+    # the loop never runs at all. The HEAD is a separate foreground call and is
+    # what supplies the content-length; without it the loop reports elapsed time
+    # instead of a bar, and there is no count here to assert.
+    #
+    # Matching on `*SLI*`, not `*-I*`: the flag string is `-fsSLI`, where the
+    # capital I follows an L rather than a dash, so a glob expecting `-I` never
+    # matches it and the HEAD silently returns nothing.
+    polls = _probe_fetch(
+        tmp_path,
+        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
+        "out.bin",
+    )
 
     for have, _total, _rate in polls:
         assert have == "5000", f"counter reported {have} bytes for a 5000-byte file; polls={polls}"
@@ -1919,7 +2023,11 @@ def test_the_download_counter_starts_at_zero_when_the_file_is_absent(tmp_path):
     `_render_bytes` as a bare integer, because the caller divides by it:
     `rate=$(( have / elapsed / 1024 ))` would abort on anything else.
     """
-    polls = _probe_fetch(tmp_path, "sleep 1", "never-written.bin")
+    polls = _probe_fetch(
+        tmp_path,
+        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
+        "never-written.bin",
+    )
     for have, _total, _rate in polls:
         assert have == "0", f"expected 0 bytes before the file exists, got {have}; polls={polls}"
 
@@ -2083,14 +2191,50 @@ def test_the_setup_key_is_the_second_line_of_the_card():
 
 
 def test_install_prints_the_setup_url_and_never_a_password():
-    """The card points at the browser setup page, and prints no credential."""
+    """The card points at the setup page, and prints no credential.
+
+    panel_url() already ends in "/", so the suffix joins onto it. A card that
+    appends "/setup" instead prints "…/86eb59b8//setup": a working URL in the
+    worst possible place, on the one line an operator copies by hand.
+    """
     source = _extract_function("success_card")
     assert "setup key" in source
     assert "Password" not in source
-    assert "/setup" in source, "the card opens the setup page, not the login page"
+    assert "/setup" in source, "the card must open the setup page"
     # The URL the operator must open is a url row, not plain text: it is the
     # thing they copy.
-    assert '"panel|$url/setup"' in source
+    assert '"panel|${url}setup"' in source, "the suffix must join onto panel_url's trailing slash"
+    assert "$url/setup" not in source, "that yields a doubled slash in the printed URL"
+
+
+def test_panel_url_ends_in_a_single_slash():
+    """panel_url() owns the trailing slash; the card appends to it.
+
+    Both consumers depend on the shape: the card joins `setup` straight onto
+    the result, and `ovm status` prints the bare URL with its slash. Dropping
+    the slash here would break the first; letting the card add one would break
+    the second and print `…/86eb59b8//setup`.
+
+    Run rather than parsed: the assertion is about the URL the operator reads,
+    not about how the format string is spelled.
+    """
+    body = _extract_function("panel_url")
+    harness = f"""set -Eeuo pipefail
+    scheme_of() {{ printf 'https'; }}
+    hostname() {{ printf '10.0.0.5 10.0.0.6'; }}
+    PORT=2095
+    PATHPREFIX=abc123
+{body}
+    panel_url
+"""
+    r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "https://10.0.0.5:2095/abc123/", r.stdout
+
+    # And with no prefix it is the bare origin, still one slash.
+    harness_no = harness.replace("PATHPREFIX=abc123", "PATHPREFIX=")
+    r2 = subprocess.run(["bash", "-c", harness_no], capture_output=True, text=True, timeout=30)
+    assert r2.stdout.strip() == "https://10.0.0.5:2095/", r2.stdout
 
 
 def test_the_card_says_how_to_remove_the_install():
@@ -2292,3 +2436,193 @@ def test_a_clean_box_says_there_is_nothing_to_do(tmp_path):
     out = r.stdout + r.stderr
     assert "no interrupted update needs recovery" in out, out[-500:]
     assert "Error" not in out, out[-500:]
+
+
+# ── Regression: a piped answer must never wedge the menu ──────────────────
+#
+# `ask` reaches for /dev/tty whenever stdin is not the terminal but the
+# terminal is openable — which is exactly `echo 1 | bash install.sh` from a
+# terminal, and any CI runner with a pty. That read used to be untimed, so the
+# installer waited on a terminal nobody was typing at and dropped the answers
+# already sitting on stdin. The fix bounds the terminal read and falls back.
+#
+# A real pty is the only way to reproduce it: without a controlling terminal
+# `_read_reply` takes a different branch and the test would pass against the
+# broken code, which is the failure mode this comment exists to prevent.
+
+_PTY_PROBE = r"""
+import os, pty, select, subprocess, sys, termios, fcntl, time
+
+def run(script, stdin_data, timeout=8.0):
+    m, s = pty.openpty()
+    def child():
+        os.setsid()
+        fd = os.open(os.ttyname(1), os.O_RDWR)
+        fcntl.ioctl(fd, termios.TIOCSCTTY, 0)
+    r_in, w_in = os.pipe()
+    os.write(w_in, stdin_data)
+    os.close(w_in)
+    p = subprocess.Popen(["bash", script], stdin=r_in, stdout=s, stderr=s, preexec_fn=child)
+    os.close(r_in)
+    start, out = time.time(), b""
+    while time.time() - start < timeout:
+        r, _, _ = select.select([m], [], [], 0.2)
+        if r:
+            try:
+                chunk = os.read(m, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            out += chunk
+        if p.poll() is not None:
+            break
+    hung = p.poll() is None
+    if hung:
+        p.kill()
+        p.wait()
+    os.close(m)
+    os.close(s)
+    return hung, time.time() - start, out.decode(errors="replace")
+
+hung, elapsed, out = run(sys.argv[1], sys.argv[2].encode())
+print("HUNG=%s ELAPSED=%.1f" % (hung, elapsed))
+print(out)
+sys.exit(1 if hung else 0)
+"""
+
+
+def _menu_probe(tmp_path, calls: str = "") -> str:
+    """A bash file with the real can_prompt/_masked_read/_read_reply/ask/render_menu.
+
+    Extraction is anchored at the start of a line on purpose: a plain substring
+    search for "ask() {" matches inside "render_ask() {", which produces a probe
+    where `ask` is never defined and every assertion passes for the wrong
+    reason.
+    """
+    import re as _re
+
+    src = INSTALLER_PATH.read_text(encoding="utf-8")
+    wanted = ("can_prompt", "_masked_read", "_read_reply", "ask", "render_ask", "render_menu")
+    parts = []
+    for name in wanted:
+        m = _re.search(rf"^{_re.escape(name)}\(\) \{{", src, _re.M)
+        assert m, f"install.sh has no {name}()"
+        depth, i = 0, src.index("{", m.start())
+        for j in range(i, len(src)):
+            if src[j] == "{":
+                depth += 1
+            elif src[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    parts.append(src[m.start() : j + 1])
+                    break
+        else:
+            raise AssertionError(f"{name}() has no closing brace")
+    script = (
+        "#!/usr/bin/env bash\nset -euo pipefail\n"
+        'B=""; NC=""; GY=""; YL=""; WH=""; RD=""; GR=""; OR=""\n'
+        + "\n\n".join(parts)
+        + "\n"
+        + 'tag="$(render_menu "" install "install" docker "install with docker" exit "exit")"\n'
+        + 'echo "GOT=[$tag]"\n'
+        + calls
+    )
+    path = tmp_path / "menu_probe.sh"
+    path.write_text(script, encoding="utf-8")
+    return str(path)
+
+
+def _run_under_pty(tmp_path, script: str, stdin_text: str) -> str:
+    """Feed `stdin_text` verbatim on a pipe, with a pty for the terminal."""
+    runner = tmp_path / "run_pty.py"
+    runner.write_text(_PTY_PROBE, encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(runner), script, stdin_text],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return r.stdout + r.stderr
+
+
+def _answer(text: str) -> str:
+    """One answer on a pipe, newline-terminated."""
+    return f"{text}\n"
+
+
+def test_the_menu_takes_a_piped_answer_instead_of_waiting_on_the_terminal(tmp_path):
+    """`echo 1 | bash install.sh` must not wedge on the first menu.
+
+    The old code read /dev/tty with no timeout, so it blocked forever and never
+    saw the digit already sitting on stdin. Every assertion below is also a
+    hang-failure: the probe exits non-zero if it has to be killed, and the test
+    fails on the timeout rather than reporting a green run against broken code.
+    """
+    probe = _menu_probe(tmp_path)
+    out = _run_under_pty(tmp_path, probe, _answer("1"))
+    assert "HUNG=False" in out, out
+    assert "GOT=[install]" in out, out
+
+
+def test_the_menu_survives_every_shape_of_answer(tmp_path):
+    """Out of range wraps, non-numeric defaults, and empty is the default."""
+    probe = _menu_probe(tmp_path)
+    for text, want in (
+        ("1", "install"),
+        ("2", "docker"),
+        ("3", "exit"),
+        ("0", "exit"),  # wraps backwards onto the last entry, not tags[-1] by accident
+        ("99", "exit"),
+        ("abc", "install"),
+        ("", "install"),
+    ):
+        out = _run_under_pty(tmp_path, probe, _answer(text))
+        assert "HUNG=False" in out, f"{text!r} hung: {out}"
+        assert f"GOT=[{want}]" in out, f"{text!r} -> {out}"
+
+
+def test_a_piped_answer_does_not_wedge_a_secret_prompt(tmp_path):
+    """The masked branch had the same untimed read and the same fix."""
+    probe = _menu_probe(
+        tmp_path,
+        calls='secret="$(ask "Admin password" "" h)"\necho "SECRET=[$secret]"\n',
+    )
+    # the menu takes the first line, the password prompt the second
+    out = _run_under_pty(tmp_path, probe, "1\nhunter2hunter2\n")
+    assert "HUNG=False" in out, out
+    assert "SECRET=[hunter2hunter2]" in out, out
+    assert "hunter2hunter2" not in out.split("SECRET=")[0], "the secret was echoed while typed"
+
+
+def test_reading_one_answer_leaves_the_next_one_on_the_pipe(tmp_path):
+    """A two-line pipe must feed two prompts; the peek must not eat both."""
+    probe = _menu_probe(
+        tmp_path,
+        calls='second="$(ask "URL path" "random")"\necho "SECOND=[$second]"\n',
+    )
+    out = _run_under_pty(tmp_path, probe, "2\nroot\n")
+    assert "HUNG=False" in out, out
+    assert "GOT=[docker]" in out, out
+    assert "SECOND=[root]" in out, f"the second answer was lost: {out}"
+
+
+def test_pkg_install_returns_failure_instead_of_killing_the_run():
+    """A failed package install must fall through, not end the installer.
+
+    ensure_uv chains three fallbacks behind pkg_install, and two of them are
+    the only route to uv on a box whose package index is unreachable. die here
+    ended the script before the first fallback ran — and silently, because
+    ensure_uv redirects this call's output to /dev/null.
+    """
+    source = _extract_function("pkg_install")
+    assert "die " not in source, (
+        "pkg_install must return non-zero so callers can fall back; a die here makes every `||` after it unreachable"
+    )
+
+    # The two callers that genuinely cannot continue now say so themselves.
+    check = _extract_function("check_deps")
+    assert 'pkg_install "${missing[@]}"' in check and "|| die" in check, (
+        "check_deps must fail loudly: without curl the release tarball and every fallback source are unreachable"
+    )
+    assert "die" in _extract_function("ensure_docker") or "PKG_INSTALL docker" in _extract_function("ensure_docker")

@@ -103,7 +103,7 @@ const LoginPage = () => {
           <button
             type="button"
             className="login-claim-link"
-            onClick={() => navigate('/claim')}
+            onClick={() => navigate('/setup')}
           >
             {t('loginClaimLink', 'Use the claim key from the installer')}
           </button>

@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.0.43"
+VERSION="1.0.44"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -319,8 +319,7 @@ fi
 # Deliberately NOT also gated on stdin: `curl -sSL URL | sudo bash -s -- --yes`
 # is the documented install path and its stdin is the pipe, yet its stderr is
 # the operator's terminal. Requiring a tty on stdin meant the most common way
-# to install the panel got the degraded output. The menu is the one thing that
-# genuinely needs keystrokes, and render_menu checks for /dev/tty itself.
+# to install the panel got the degraded output.
 # A dumb terminal honours no escapes at all — not SGR, not cursor motion — so
 # it gets the static form as well as no colour. NO_COLOR is narrower: it is a
 # request about colour specifically, and a terminal that declined colour still
@@ -423,14 +422,15 @@ render_screen() {
 
 # ── Menu ───────────────────────────────────────────────────────────────
 #
-# The pointer and the number on the input line are the same thing. Arrows do
-# not "select" separately: they move the cursor and rewrite the digits, and
-# Enter always reads back what is visible. One source of truth means no branch
-# where the pointer and the number disagree, which is the bug every hand-rolled
-# arrow menu grows.
+# Numbers only. The arrow-key version redrew the menu in place on a separate fd
+# and read single keystrokes from /dev/tty with a two-second timeout, so a
+# pasted line, a closed terminal or a tmux that lost the pane could leave a
+# half-drawn frame on screen — and every one of those timeouts was a branch to
+# get right. Typing a number needs none of it, and `ask` already reads the
+# answer. A person who reaches for the arrows loses the arrows and nothing
+# else; the menu is still a menu.
 #
 # render_menu <title> <tag> <label> [<tag> <label> ...] → prints the tag.
-# Falls back to a plain numbered read when there is no terminal to draw on.
 
 render_menu() {
     shift    # title is the caller's; the banner already said what this is
@@ -439,90 +439,21 @@ render_menu() {
     local count=${#tags[@]}
     [[ "$count" -gt 0 ]] || return 1
 
-    _menu_draw() {  # reads _MENU_TAGS/_MENU_LABELS/_MENU_CUR
-        local i=0 n=${#_MENU_TAGS[@]}
-        while (( i < n )); do
-            if (( i == _MENU_CUR )); then
-                printf '  %b%s%b  %b%d%b  %s\n' \
-                    "$OR" "$RENDER_POINTER" "$NC" "$B" "$(( i + 1 ))" "$NC" "${_MENU_LABELS[$i]}"
-            else
-                printf '    %b%d%b  %s\n' "$GY" "$(( i + 1 ))" "$NC" "${_MENU_LABELS[$i]}"
-            fi
-            i=$(( i + 1 ))
-        done
-    }
-
-    _MENU_TAGS=("${tags[@]}"); _MENU_LABELS=("${labels[@]}"); _MENU_CUR=0
-
-    if [[ "$RENDER_ANIMATE" -ne 1 || ! -e /dev/tty || ! -r /dev/tty ]]; then
-        _menu_draw >&2
-        local n
-        n="$(ask "choice" "1")"
-        [[ "$n" =~ ^[0-9]+$ ]] || n=1
-        printf '%s' "${tags[$(( (n - 1) % count ))]}"
-        return 0
-    fi
-
-    # Own fd for the drawing. The keystroke reader must not see the menu's own
-    # writes on the same descriptor, and the prompt line is rewritten in place,
-    # so the two are kept apart from here down.
-    exec 3>&2
-    local frame=$(( count + 3 )) ch c1 c2 reply="" digits=""
-    local hint='↑↓ move · ⏎ confirm'
-    [[ "$RENDER_SPINNER_UNICODE" -eq 1 ]] || hint='type a number · ↑↓ move'
-    while true; do
-        printf '\033[%dA\033[J' "$frame" >&3 2>/dev/null || true
-        _menu_draw >&3
-        printf '  %b%s%b\n' "$GY" "$hint" "$NC" >&3
-        printf '  %bchoice [%s%d%s]%b: ' "$NC" "$B" "$(( _MENU_CUR + 1 ))" "$NC" "$NC" >&3
-
-        # One keystroke, no Enter. Every read is timed: a pasted line, a closed
-        # terminal or a tmux that lost the pane must not wedge the installer
-        # mid-menu with a half-drawn frame on screen.
-        if ! IFS= read -rsn1 -t 2 ch < /dev/tty; then
-            # Timed out with nothing typed. Fall back to a plain line read so a
-            # keystroke-free session (a CI runner with a pty, a flaky tmux) still
-            # completes instead of redrawing forever.
-            # The newline ends the prompt line above, and `ask` would print that
-            # same prompt a second time — so every run that took the fallback
-            # showed "choice [1]:" twice, once with the cursor already past it.
-            # Read the line directly: the prompt is on screen and we have just
-            # moved off it, and the default is applied by the next line either
-            # way.
-            printf '\n' >&3
-            IFS= read -r digits || digits=""
-            [[ "$digits" =~ ^[0-9]+$ ]] || digits=$(( _MENU_CUR + 1 ))
-            reply=$(( (10#$digits - 1) % count + 1 ))
-            break
-        fi
-        # A bare newline comes back from `read -n1` as an empty string with a
-        # zero status: the delimiter was consumed and there was nothing left.
-        # Without this, Enter would redraw the menu and wait again.
-        [[ -z "$ch" ]] && ch=$'\n'
-        case "$ch" in
-            $'\n'|$'\r'|$'\x04')
-                reply=$(( _MENU_CUR + 1 )); break ;;
-            $'\033')
-                # CSI is three bytes: ESC [ <final>. Read the two that follow
-                # with a short timeout — an ESC alone (a bare Escape keypress)
-                # times out here and is ignored, which is the wanted behaviour.
-                if IFS= read -rsn1 -t 0.3 c1 < /dev/tty && IFS= read -rsn1 -t 0.3 c2 < /dev/tty; then
-                    case "$c2" in
-                        A) (( _MENU_CUR > 0 )) && _MENU_CUR=$(( _MENU_CUR - 1 )) ;;
-                        B) (( _MENU_CUR < count - 1 )) && _MENU_CUR=$(( _MENU_CUR + 1 )) ;;
-                    esac
-                fi ;;
-            $'\x7f'|$'\b')
-                digits="${digits%?}"
-                (( _MENU_CUR > 0 )) || _MENU_CUR=0 ;;
-            [0-9])
-                digits="$ch"
-                _MENU_CUR=$(( 10#$ch - 1 ))
-                (( _MENU_CUR >= count )) && _MENU_CUR=$(( count - 1 )) ;;
-        esac
+    local i=0
+    while (( i < count )); do
+        printf '  %b%d%b  %s\n' "$B" "$(( i + 1 ))" "$NC" "${labels[$i]}" >&2
+        i=$(( i + 1 ))
     done
-    exec 3>&-
-    printf '%s' "${tags[$(( reply - 1 ))]}"
+
+    local n
+    n="$(ask "choice" "1")"
+    [[ "$n" =~ ^[0-9]+$ ]] || n=1
+    # Wrap into range rather than crash on 0 or a stray large number. The
+    # modulo is done in bash's own arithmetic, where a negative operand keeps
+    # its sign: $(( (0 - 1) % 3 )) is -1, and indexing with -1 is the last
+    # element rather than the first. Adding the count first keeps it positive.
+    printf '%s' "${tags[$(( ((10#$n - 1) + count) % count ))]}"
+    return 0
 }
 
 # ── Progress ───────────────────────────────────────────────────────────
@@ -1010,10 +941,17 @@ has_tty() {
     return 1
 }
 
-# Reads stdin, so callers redirect /dev/tty when needed.
+# Reads stdin, so callers redirect /dev/tty when needed. The first read is
+# bounded so a caller can fall back when the far end has nothing to say; once
+# the first character lands the rest is untimed, because a person typing a
+# password legitimately pauses mid-word.
 _masked_read() {
-    local buf="" ch
-    while IFS= read -rsn1 ch; do
+    local buf="" ch got=0
+    local -a to=()
+    [[ "${1:-}" == "t" ]] && to=( -t 3 )
+    while IFS= read -rsn1 "${to[@]}" ch; do
+        to=()
+        got=1
         case "$ch" in
             ""|$'\n'|$'\r') break ;;
             $'\x7f'|$'\b')
@@ -1023,6 +961,10 @@ _masked_read() {
     done
     printf '\n' >&2
     printf '%s' "$buf"
+    # Non-zero only when the bounded first read timed out with nothing typed,
+    # so the caller can tell "nothing there" from a person who pressed Enter on
+    # an empty value. Both look identical on stdout.
+    (( got ))
 }
 
 _read_reply() {  # hidden? → prints the line on stdout
@@ -1031,8 +973,36 @@ _read_reply() {  # hidden? → prints the line on stdout
         if [[ "$hidden" == "h" ]]; then _masked_read; return 0; fi
         read -r buf
     elif [[ -e /dev/tty && -r /dev/tty ]]; then
-        if [[ "$hidden" == "h" ]]; then _masked_read </dev/tty; return 0; fi
-        read -r buf </dev/tty
+        # stdin is not the terminal but the terminal is reachable, so the prompt
+        # goes there. Both reads are bounded: `echo 1 | bash install.sh` from a
+        # terminal, or a CI runner with a pty, has the answers already on stdin
+        # and nobody typing at the terminal, and an untimed read on /dev/tty
+        # waits there forever and drops them. stdin is peeked at first so that
+        # case costs nothing; the terminal is asked second, for a person who is
+        # there; stdin is read last, for a pipe that was slow to deliver.
+        if [[ "$hidden" == "h" ]]; then
+            # A secret can be piped too, so it needs the same three-way ladder
+            # as a plain line — otherwise `echo pw | ...` masks the typed
+            # asterisks, times out on the terminal, and returns nothing at all,
+            # and the caller cannot tell that from the user choosing to be
+            # silent. The password is not echoed on the stdin path because
+            # there is no terminal to echo it to.
+            _masked_read t < /dev/tty && return 0
+            IFS= read -r buf || buf=""
+            printf '%s' "$buf"
+            return 0
+        fi
+        # `read -t 0` is not a peek: on a pipe it reports success with an
+        # empty string and consumes nothing, so a zero-width window silently
+        # swallowed the answer and every prompt fell back to its default. A
+        # real fractional window is what actually distinguishes "data is
+        # waiting" from "nothing yet".
+        if IFS= read -r -t 0.2 buf || IFS= read -r -t 3 buf < /dev/tty; then
+            :
+        else
+            buf=""
+            IFS= read -r buf || buf=""
+        fi
     else
         return 1
     fi
@@ -1205,29 +1175,6 @@ public_ip() {
         esac
     done
     return 1
-}
-
-# Every routable address on this host, for a box with more than one. The
-# Let's Encrypt prompt names them so an operator with several IPs can pick the
-# one the certificate should carry instead of guessing.
-public_ips() {
-    local ip out=""
-    for ip in $(hostname -I 2>/dev/null); do
-        case "$ip" in
-            *:*) continue ;;
-            127.*|10.*|192.168.*|169.254.*) continue ;;
-            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
-            *) out+="$ip " ;;
-        esac
-    done
-    printf '%s' "${out% }"
-}
-
-# Does this string look like a bare IP rather than a hostname? Decides whether
-# a Let's Encrypt request is the short-lived IP kind or the ordinary domain one,
-# so one free-text prompt can serve both.
-is_ip_literal() {
-    [[ "$1" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || [[ "$1" == *:* ]]
 }
 
 # Resolve and report, so a certificate attempt is not spent discovering a
@@ -1523,7 +1470,13 @@ setup_tls() {
             ;;
         le-ip)
             port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it (or --tls 1 for now)"
-            TLS_DOMAIN="${TLS_DOMAIN:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+            # public_ip, not the first `hostname -I` field: a host with docker
+            # bridges or a cloud metadata NIC can sort one ahead of the public
+            # address, and Let's Encrypt refuses a private IP outright. Reached
+            # with --tls 3 / OVM_TLS=le-ip and no domain, where nothing else
+            # gets to ask which address the operator meant.
+            TLS_DOMAIN="${TLS_DOMAIN:-$(public_ip || true)}"
+            [[ -n "$TLS_DOMAIN" ]] || die "Could not determine this host's public IP — set OVM_TLS_DOMAIN, or use OVM_TLS=self"
             issue_lets_encrypt "$TLS_DOMAIN" "1"
             TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
             TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
@@ -1630,7 +1583,6 @@ release_checksum_url() {
     printf 'https://github.com/%s/releases/download/v%s/%s.sha256' \
         "$REPO" "$VERSION" "$(release_base)"
 }
-
 # ── Flags (defaults) ───────────────────────────────────────────────────
 PORT="" ADMIN_PASS="" MODE="" PIN=""
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
@@ -1787,16 +1739,6 @@ is_docker_mode() { [[ -f "$COMPOSE_FILE" ]]; }
 # systemd waits up to TimeoutStopSec (90s default) for a stuck service, which
 # operators read as a frozen installer. Bound the wait, then force the unit.
 STOP_TIMEOUT="${OVM_STOP_TIMEOUT:-20}"
-
-service_autostart_status() {
-    if is_docker_mode; then
-        local policy
-        policy="$(docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' ovmanager 2>/dev/null || true)"
-        [[ -n "$policy" && "$policy" != "no" ]] && printf 'enabled' || printf 'disabled'
-    else
-        systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null && printf 'enabled' || printf 'disabled'
-    fi
-}
 
 service_action() {  # start|stop|restart|enable|disable
     if is_docker_mode; then
@@ -1974,7 +1916,7 @@ show_auth_state() {
     render_kv "Claimed" "$claimed"
     render_blank
     if [[ "$claimed" == "no" ]]; then
-        render_kv "Key"    "ovm auth key — paste it at the panel's /setup page"
+        render_kv "Key"    "ovm auth key — paste it on the page the URL below opens"
     else
         render_kv "Reset"  "ovm auth reset — set a new owner password"
         render_line "  the key is spent; change the password in the panel or here"
@@ -2030,8 +1972,11 @@ do_https() {
             [[ -n "$TLS_DOMAIN" ]] || die "Let's Encrypt for a domain needs --domain (or use --ip, or --self)"
             TLS_MODE="le"; chosen=1 ;;
         le-ip)
-            TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')"
-            [[ -n "$TLS_DOMAIN" ]] || die "Could not work out this host's IP for --ip"
+            # public_ip, not the first `hostname -I` field: a host with docker
+            # bridges or a cloud metadata NIC can sort one ahead of the public
+            # address, and Let's Encrypt refuses a private IP outright.
+            TLS_DOMAIN="$(public_ip || true)"
+            [[ -n "$TLS_DOMAIN" ]] || die "Could not work out this host's public IP for --ip — use --domain with a name pointed here"
             TLS_MODE="le-ip"; chosen=1 ;;
         custom)
             [[ -n "$TLS_KEY" && -n "$TLS_CERT" ]] || die "--key and --cert are both required"
@@ -2190,7 +2135,7 @@ do_owner_claim() {
         render_warn "To change the password instead: ovm auth reset"
     fi
     render_kv "Claim key" "${YL}${key}${NC}"
-    render_kv "Open"      "${WH}${url}claim${NC}"
+    render_kv "Open"      "${WH}${url}setup${NC}"
     render_kv "Expires"   "${GY}never — spent on the first successful claim${NC}"
     render_line ""
     render_note "Choose the owner password in the browser; it is stored hashed, never in .env."
@@ -2455,7 +2400,6 @@ cmd_logs() {  # journalctl/docker logs do not exist inside the container
 
 cmd_backup() { _cli_py backup ${BACKUP_KEEP:+--keep "$BACKUP_KEEP"}; }
 cmd_restore() { _cli_py restore "$@"; }
-cmd_tls_status() { _cli_py tls-status; }
 cmd_doctor() {
     # Forwards --all, as cmd_status always has. Without this the flag parsed,
     # was ignored, and the help's "detail: ovm doctor --all" pointed at a command

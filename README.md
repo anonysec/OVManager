@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-1.0.43-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-1.0.44-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](pyproject.toml)
@@ -152,12 +152,12 @@ The installer takes exactly three flags — `-y/--yes`, `--docker`, `-h/--help`.
 The install ends with a **Ready** card holding the panel URL and a one-time claim key:
 
 ```text
-Open      https://203.0.113.10:2095/a1b2c3d4/claim
-Claim key 9f1c8b2e…  (one-time)
-Login     admin
+panel          https://203.0.113.10:2095/a1b2c3d4/setup
+setup key      9f1c8b2e…  (one-time)
+user           admin — change it any time in Settings
 ```
 
-**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
+**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address shows the claim form; once claimed, the same address is the setup checklist. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
 
 **Where things live:**
 

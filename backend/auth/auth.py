@@ -26,6 +26,12 @@ logger = logging.getLogger("auth")
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
+# Per USERNAME, independent of source address. Both other buckets key on the IP,
+# so a botnet or proxy pool gave every request a brand-new pair of buckets and
+# the owner's password could be tried without limit. Deliberately generous: this
+# bucket is the one an attacker cannot avoid, so a low ceiling would also let
+# anyone lock a known account out by failing against it on purpose.
+_MAX_PER_USER = 60  # per username across all addresses per window
 _LOCKOUT_SECONDS = 300
 _CLEANUP_INTERVAL = 600
 _last_cleanup: float = 0.0
@@ -75,6 +81,11 @@ def _ip_hash(ip: str) -> str:
 def _rate_key(ip: str, username: str) -> str:
     """Per (IP, username) bucket — isolates users behind shared NAT/proxy."""
     return hashlib.sha256(f"{ip}\0{(username or '').lower()}".encode()).hexdigest()[:16]
+
+
+def _user_key(username: str) -> str:
+    """Per username, no address in the key — see _MAX_PER_USER."""
+    return hashlib.sha256(f"user\0{(username or '').lower()}".encode()).hexdigest()[:16]
 
 
 # A real bcrypt hash of a value nobody can supply, verified against on every
@@ -142,11 +153,13 @@ async def login(
     now = time.time()
     user_key = _rate_key(ip, form_data.username)
     ip_key = _ip_hash(ip)
+    name_key = _user_key(form_data.username)
 
     attempts = _get_bucket(user_key)
     ip_attempts = _get_bucket(ip_key)
+    name_attempts = _get_bucket(name_key)
 
-    if len(attempts) >= _MAX_ATTEMPTS or len(ip_attempts) >= _MAX_PER_IP:
+    if len(attempts) >= _MAX_ATTEMPTS or len(ip_attempts) >= _MAX_PER_IP or len(name_attempts) >= _MAX_PER_USER:
         from backend.operations.observability.audit import log_event
 
         log_event(db, "auth.lockout", actor=form_data.username, target=ip, detail="Too many login attempts")
@@ -162,6 +175,8 @@ async def login(
         _put_bucket(user_key, attempts)
         ip_attempts.append(now)
         _put_bucket(ip_key, ip_attempts)
+        name_attempts.append(now)
+        _put_bucket(name_key, name_attempts)
         from backend.operations.observability.audit import log_event
 
         log_event(db, "auth.login_fail", actor=form_data.username, target=ip, detail="Bad credentials")
@@ -172,6 +187,7 @@ async def login(
         )
 
     _login_attempts.pop(user_key, None)
+    _login_attempts.pop(name_key, None)
     return issue_session(request, db, admin["username"], admin["type"])
 
 

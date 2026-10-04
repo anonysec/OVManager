@@ -137,7 +137,15 @@ class AssetCacheMiddleware:
             await self.app(scope, receive, send)
             return
         base = os.path.join(self.frontend_dir, "assets" if path.startswith("/assets/") else "fonts")
-        cand = os.path.join(base, rel)
+        # A leading slash survives as scope["path"] (/assets//etc/passwd), and
+        # os.path.join(base, "/etc/passwd") DISCARDS base — so the ".." test
+        # above was not the boundary, it was decoration. Confine by real path:
+        # anything resolving outside the base (including via a symlink) falls
+        # through to the app, which 404s.
+        cand = os.path.realpath(os.path.join(base, rel.lstrip("/")))
+        if cand != os.path.realpath(base) and not cand.startswith(os.path.realpath(base) + os.sep):
+            await self.app(scope, receive, send)
+            return
 
         is_fonts_css = path.startswith("/fonts/") and rel.endswith(".css")
         if (

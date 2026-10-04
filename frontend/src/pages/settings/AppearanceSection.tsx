@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { getUiPref, setUiPref } from '../../utils/uiPrefs';
+import { loadLanguage } from '../../i18n';
 import { FiSun, FiMoon, FiMonitor, FiGlobe, FiDownload } from 'react-icons/fi';
 import apiClient from '../../services/api';
 import { Card } from './shared';
@@ -37,8 +38,10 @@ const AppearanceSection = () => {
   ];
 
   const changeLanguage = (id: string) => {
-    i18n.changeLanguage(id);
-    localStorage.setItem('ovmanager-lang', id);
+    // loadLanguage, not i18n.changeLanguage: fa/ru/cn are code-split and only
+    // `en` is in the initial resources, so switching without loading first left
+    // every string English while the page flipped to RTL.
+    void loadLanguage(id);
     setLang(id);
     // dir is set in DashboardLayout's effect, not here — that one also sets
     // html[lang] and body[dir], and mutating the DOM during render is what the

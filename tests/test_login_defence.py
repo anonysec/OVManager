@@ -183,3 +183,20 @@ def test_a_correct_login_still_succeeds(db_session):
 
     ok = auth_mod.authenticate_user(db_session, config.ADMIN_USERNAME, conftest.TEST_OWNER_PASSWORD)
     assert ok and ok["type"] == "owner"
+
+
+def test_rotating_source_address_cannot_beat_the_per_username_bucket():
+    """Both address-keyed buckets reset when the address changes.
+
+    An attacker with a proxy pool gets a fresh 5-attempt (IP, user) bucket AND
+    a fresh 20-attempt per-IP bucket for every request, so neither one bounds a
+    distributed attempt against a known account. The per-username bucket has no
+    address in its key and does.
+    """
+    from backend.auth import auth
+
+    assert "_ip_hash" not in auth._user_key("admin"), "the per-user bucket must not key on the address"
+    # distinct addresses, same account -> one shared bucket
+    assert auth._rate_key("1.2.3.4", "admin") != auth._rate_key("5.6.7.8", "admin")
+    assert auth._user_key("admin") == auth._user_key("ADMIN"), "case-insensitive, like the other keys"
+    assert auth._user_key("admin") != auth._user_key("bob")

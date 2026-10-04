@@ -118,10 +118,32 @@ function App({ onReady }: { onReady?: () => void }) {
             path="/login"
             element={isAuthenticated ? <Navigate to="/" /> : <Page name="login"><LoginPage /></Page>}
           />
+          {/* The installer's Ready card prints this URL, so it is the first
+              thing an operator opens, and now the only one: /claim is gone,
+              folded into the two states of this route. A visitor with no session
+              gets the claim form — the one person holding a claim key is
+              exactly who must not be sent somewhere else. An owner gets the
+              wizard inside DashboardLayout, because that layout is what
+              supplies the sidebar, breadcrumb, logout, theme cycle and language
+              picker; an owner part-way through setup could otherwise reach no
+              other page and could not log out.
+
+              The layout is rendered here rather than nesting this under path="/",
+              which would put the whole route behind that branch's isAuthenticated
+              guard and send the stranger to /login — the original bug. A sibling
+              top-level /setup was tried too and is wrong twice over: React
+              Router scores it above a nested one so it matches regardless of
+              auth, and rendering the wizard from outside the layout strips the
+              chrome. */}
           <Route
-            path="/claim"
-            element={isAuthenticated ? <Navigate to="/" /> : <Page name="claim"><ClaimPage /></Page>}
-          />
+            path="/setup"
+            element={
+              isAuthenticated
+                ? <DashboardLayout />
+                : <Page name="claim"><ClaimPage /></Page>
+            }>
+            <Route index element={<Page name="setup"><SetupWizard /></Page>} />
+          </Route>
           <Route
             path="/"
             element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
@@ -132,7 +154,6 @@ function App({ onReady }: { onReady?: () => void }) {
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
-            <Route path="setup" element={<Page name="setup"><SetupWizard /></Page>} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
         </Routes>
