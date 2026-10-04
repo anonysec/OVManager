@@ -2125,6 +2125,8 @@ validate_input() {
     # on the documented `curl ... | bash -s -- --docker --yes` one-liner failed
     # much later with a raw Docker "address already in use" error.
     port_available_or_die "$PORT"
+    # Not prompted for — the wizard has no owner step. Still validated, because
+    # OVM_ADMIN_USER can still supply one and it lands in .env verbatim.
     [[ -n "$ADMIN_USER" ]] || ADMIN_USER="$DEFAULT_USER"
     [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_.-]{3,64}$ ]] || die "Admin username: 3–64 letters, digits, . _ -"
     if [[ -n "$PATHPREFIX" ]]; then
@@ -2150,7 +2152,7 @@ validate_input() {
 # nothing clears under a fast typist.
 wizard() {
     if [[ -z "$PORT" ]]; then
-        render_line "$(printf '%bStep 1/4 — Panel port%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 1/3 — Panel port%s' "$B" "$NC")"
         render_line "  ${WH}1${NC}  Default: ${DEFAULT_PORT}"
         render_line "  ${WH}2${NC}  Custom"
         render_line "  ${WH}3${NC}  Random"
@@ -2167,7 +2169,7 @@ wizard() {
     fi
 
     if [[ "$PATH_SET" -eq 0 ]]; then
-        render_line "$(printf '%bStep 2/4 — Panel URL path%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 2/3 — Panel URL path%s' "$B" "$NC")"
         render_line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
         local path_default="random"
         local path_in
@@ -2181,16 +2183,12 @@ wizard() {
         render_line ""
     fi
 
-    if [[ -z "$ADMIN_USER" ]]; then
-        render_line "$(printf '%bStep 3/4 — Owner login%s' "$B" "$NC")"
-        render_line "  ${GY}No password is set here: the Ready card prints a one-time claim${NC}"
-        render_line "  ${GY}key, and you choose the owner password in the browser.${NC}"
-        ADMIN_USER="$(ask "Admin user" "${ADMIN_USER:-$DEFAULT_USER}")"
-        render_line ""
-    fi
-
+    # No owner step. The Ready card prints a one-time claim key and the browser
+    # collects the password, so asking for a username here bought nothing: the
+    # claim endpoint mints the row against ADMIN_USERNAME regardless of what is
+    # typed here, and a fixed default is what actually lands in the database.
     if [[ -z "$TLS_MODE" ]]; then
-        render_line "$(printf '%bStep 4/4 — Certificate (always encrypted)%s' "$B" "$NC")"
+        render_line "$(printf '%bStep 3/3 — Certificate (always encrypted)%s' "$B" "$NC")"
         render_line "  ${WH}1${NC}  Self-signed (default)      encrypted; one browser warning to click through"
         render_line "  ${WH}2${NC}  Let's Encrypt (domain)     needs a domain pointed here + free port 80"
         render_line "  ${WH}3${NC}  Let's Encrypt (this IP)    short-lived cert, no domain needed"
@@ -2259,7 +2257,7 @@ success_card() {
     # continuation becomes one.)
     render_card "ready" "setup key" "$key" \
         "panel|${url}setup" \
-        "user|$ADMIN_USER — password set by you, in the browser" \
+        "user|$ADMIN_USER — change it any time in Settings" \
         "tls|$(tls_summary)" \
         "logs|$CLI_ALIAS logs -f" \
         "data|$DATA_DIR"

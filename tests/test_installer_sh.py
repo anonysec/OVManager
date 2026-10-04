@@ -1210,8 +1210,13 @@ def test_every_wizard_step_says_what_its_options_mean():
     assert "Let's Encrypt (this IP)    short-lived cert, no domain needed" in source
     assert "Custom key + cert          bring your own PEM files" in source
     # Every option in a step explains itself, so no step is a bare list of words.
-    for step in ("Step 1/4", "Step 2/4", "Step 3/4", "Step 4/4"):
+    for step in ("Step 1/3", "Step 2/3", "Step 3/3"):
         assert step in source, f"missing {step}"
+    # The owner step is gone: the card prints a claim key and the browser
+    # collects the password, so a username prompt bought nothing — the claim
+    # endpoint mints the row against ADMIN_USERNAME whatever was typed here.
+    assert "Owner login" not in source
+    assert "Step 4/4" not in source
 
 
 def test_safety_backup_falls_back_without_maintenance_module(tmp_path):
@@ -1386,7 +1391,7 @@ def test_the_tls_step_takes_the_digit_and_says_what_it_costs():
     for itself from what they type.
     """
     source = _extract_function("wizard")
-    assert "Step 4/4 — Certificate (always encrypted)" in source
+    assert "Step 3/3 — Certificate (always encrypted)" in source
     assert 'tls="$(ask "TLS" "1")"' in source, "the TLS step must answer through ask"
     assert '1) TLS_MODE="self" ;;' in source, "1 no longer selects self-signed"
     assert '2) TLS_MODE="le";' in source, "2 no longer selects Let's Encrypt by domain"

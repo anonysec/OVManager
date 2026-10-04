@@ -154,10 +154,10 @@ The install ends with a **Ready** card holding the panel URL and a one-time clai
 ```text
 panel          https://203.0.113.10:2095/a1b2c3d4/setup
 setup key      9f1c8b2e…  (one-time)
-user           admin — password set by you, in the browser
+user           admin — change it any time in Settings
 ```
 
-**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address sends you straight to the claim page. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
+**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address shows the claim form; once claimed, the same address is the setup checklist. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
 
 **Where things live:**
 
