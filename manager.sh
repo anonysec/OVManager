@@ -1972,8 +1972,11 @@ do_https() {
             [[ -n "$TLS_DOMAIN" ]] || die "Let's Encrypt for a domain needs --domain (or use --ip, or --self)"
             TLS_MODE="le"; chosen=1 ;;
         le-ip)
-            TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')"
-            [[ -n "$TLS_DOMAIN" ]] || die "Could not work out this host's IP for --ip"
+            # public_ip, not the first `hostname -I` field: a host with docker
+            # bridges or a cloud metadata NIC can sort one ahead of the public
+            # address, and Let's Encrypt refuses a private IP outright.
+            TLS_DOMAIN="$(public_ip || true)"
+            [[ -n "$TLS_DOMAIN" ]] || die "Could not work out this host's public IP for --ip — use --domain with a name pointed here"
             TLS_MODE="le-ip"; chosen=1 ;;
         custom)
             [[ -n "$TLS_KEY" && -n "$TLS_CERT" ]] || die "--key and --cert are both required"

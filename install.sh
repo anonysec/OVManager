@@ -1728,10 +1728,13 @@ detect_os() {
     esac
 }
 
+# Returns non-zero on failure instead of dying. ensure_uv chains three
+# fallbacks behind this call, and a die here ended the script before the first
+# one ran — silently, since the callers redirect this call's output.
 pkg_install() {
     render_note "packages: $*"
     $PKG_UPDATE >/dev/null 2>&1 || true
-    $PKG_INSTALL "$@" >/dev/null 2>&1 || die "Failed to install: $*  ($PKG_INSTALL $*)"
+    $PKG_INSTALL "$@" >/dev/null 2>&1
 }
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
@@ -1768,7 +1771,9 @@ ensure_docker() {
                 || $PKG_INSTALL docker-ce >/dev/null 2>&1 \
                 || die "Could not install Docker. https://docs.docker.com/engine/install/"
         else
-            pkg_install docker docker-compose-plugin 2>/dev/null || pkg_install docker
+            pkg_install docker docker-compose-plugin 2>/dev/null \
+                || pkg_install docker \
+                || die "Could not install Docker. https://docs.docker.com/engine/install/"
         fi
         command -v docker >/dev/null 2>&1 || die "Docker binary not found"
     fi
@@ -1783,7 +1788,12 @@ check_deps() {
     for cmd in curl tar openssl git python3 sha256sum; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
-    [[ ${#missing[@]} -eq 0 ]] || pkg_install "${missing[@]}"
+    # Re-checked rather than assumed: pkg_install returns non-zero now, and a
+    # box missing curl cannot reach the release tarball or any fallback source.
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        pkg_install "${missing[@]}" \
+            || die "Could not install: ${missing[*]}  ($PKG_INSTALL ${missing[*]})"
+    fi
     render_done "system tools present"
 }
 

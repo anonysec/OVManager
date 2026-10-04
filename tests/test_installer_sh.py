@@ -2605,3 +2605,26 @@ def test_reading_one_answer_leaves_the_next_one_on_the_pipe(tmp_path):
     assert "HUNG=False" in out, out
     assert "GOT=[docker]" in out, out
     assert "SECOND=[root]" in out, f"the second answer was lost: {out}"
+
+
+def test_pkg_install_returns_failure_instead_of_killing_the_run():
+    """A failed package install must fall through, not end the installer.
+
+    ensure_uv chains three fallbacks behind pkg_install, and two of them are
+    the only route to uv on a box whose package index is unreachable. die here
+    ended the script before the first fallback ran — and silently, because
+    ensure_uv redirects this call's output to /dev/null.
+    """
+    source = _extract_function("pkg_install")
+    assert "die " not in source, (
+        "pkg_install must return non-zero so callers can fall back; a die here "
+        "makes every `||` after it unreachable"
+    )
+
+    # The two callers that genuinely cannot continue now say so themselves.
+    check = _extract_function("check_deps")
+    assert 'pkg_install "${missing[@]}"' in check and "|| die" in check, (
+        "check_deps must fail loudly: without curl the release tarball and "
+        "every fallback source are unreachable"
+    )
+    assert "die" in _extract_function("ensure_docker") or "PKG_INSTALL docker" in _extract_function("ensure_docker")
