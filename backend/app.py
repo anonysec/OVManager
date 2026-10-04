@@ -162,7 +162,17 @@ async def health_check(request: Request):
         html = _read_index_html()
         if html is not None:
             return HTMLResponse(html)
-    client = request.client.host if request.client else ""
+    # client_ip, not request.client.host: behind the documented nginx topology
+    # the peer is always loopback, so the direct check was true for every
+    # internet client and handed out the exact panel version to anyone. With
+    # TRUSTED_PROXY set it resolves the real address, so only a genuinely local
+    # caller sees the version.
+    from backend.client_ip import client_ip
+
+    try:
+        client = client_ip(request)
+    except Exception:  # never let a diagnostic field take /health down
+        client = request.client.host if request.client else ""
     data: dict = {"status": "ok"}
     if client in ("127.0.0.1", "::1", "localhost"):
         data["version"] = __version__

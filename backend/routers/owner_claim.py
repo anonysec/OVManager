@@ -27,6 +27,7 @@ from backend.config import config
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import Admin
+from backend.logger import logger
 from backend.validation import PASSWORD_MIN_LENGTH, password_problem
 
 router = APIRouter(tags=["Owner Claim"])
@@ -80,9 +81,12 @@ def read_claim_key() -> str | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
+        # Unauthenticated: name the problem, not the path. The data dir layout
+        # is the operator's to discover with `ovm auth key` on the box.
+        logger.warning("claim key unreadable: %s (%s)", path, exc.__class__.__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cannot read {path} ({exc.__class__.__name__}) — re-run: ovm auth key",
+            detail="Cannot read the claim key file — re-run on the host: ovm auth key",
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

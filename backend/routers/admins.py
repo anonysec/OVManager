@@ -143,6 +143,14 @@ async def delete_admin(
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
+    # Same guard set_admin_status carries, and for the same reason. The owner row
+    # is what makes this panel claimed; deleting it hands the panel back to
+    # whoever holds the one-time claim key, and that key outlives the install
+    # that printed it — only a successful claim unlinks it. So deleting your own
+    # account re-opens first-run claim to anyone who ever saw the key.
+    if username == config.ADMIN_USERNAME:
+        return ResponseModel(success=False, msg="The owner account cannot be deleted", data=None)
+
     from backend.auth.sessions import revoke_user_sessions
 
     revoke_user_sessions(db, username)
