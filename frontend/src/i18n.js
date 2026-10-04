@@ -59,8 +59,16 @@ i18n
 const loading = new Map();
 
 /** Safe to call repeatedly: in-flight loads are de-duplicated. */
+// Bumped on every call. A picker click is async — the bundle has to load before
+// the language changes — so two rapid picks could both be in flight, and
+// whichever chunk resolved last would have won. With one slow and one fast,
+// the FIRST click ended up on screen. The token makes the last click the only
+// one allowed to commit.
+let wanted = 0;
+
 export async function loadLanguage(lng) {
   if (!lng || lng === i18n.language) return;
+  const token = ++wanted;
 
   if (LAZY_LOCALES[lng] && !i18n.hasResourceBundle(lng, 'translation')) {
     if (!loading.has(lng)) {
@@ -86,7 +94,9 @@ export async function loadLanguage(lng) {
     }
   }
 
+  if (token !== wanted) return; // a newer pick superseded this one
   await i18n.changeLanguage(lng);
+  if (token !== wanted) return;
   writeStoredLang(lng);
 }
 
