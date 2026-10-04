@@ -1393,3 +1393,65 @@ def test_url_set_root_is_accepted():
     assert m, "manager.sh no longer strips the slashes before validating"
     check = m.group(0)
     assert '-z "$value"' in check, 'the empty prefix must be accepted: / strips to "", and that is what serving at the root means'
+
+
+def test_a_failed_restart_is_reported_not_swallowed():
+    """service_action must return the failure, so restart_service can warn.
+
+    Every branch ended on `render_ok`, which returns 0, so the function reported
+    success no matter what systemctl_bounded returned — and restart_service's
+    `|| render_warn "Restart failed"` could never fire. The panel printed "Panel
+    restart: done" over a service that had not restarted.
+
+    Runs the real function with a stubbed systemctl, rather than reading its
+    source: a source-shaped assertion is exactly what let this ship.
+    """
+    harness = REPO / "tests" / "_restart_probe.sh"
+    harness.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+render_ok()  { :; }
+render_warn(){ echo "WARNED: $*"; }
+die()        { echo "DIED: $*" >&2; exit 1; }
+SYSTEMD_SERVICE=ovmanager
+is_docker_mode() { return 1; }
+systemctl_bounded() { return 1; }        # the restart fails
+service_action() {
+    if is_docker_mode; then return 1; fi
+    case "$1" in
+        restart) systemctl_bounded restart ;;
+        enable|disable) : ;;
+        stop) systemctl_bounded stop ;;
+        start) : ;;
+        *) die "Unknown service action: $1" ;;
+    esac
+    case "$1" in
+        enable) render_ok "enabled" ;;
+        disable) render_ok "disabled" ;;
+        *) render_ok "done" ;;
+    esac
+}
+restart_service() {
+    service_action restart >/dev/null 2>&1 || render_warn "Restart failed - check the service manually"
+}
+restart_service
+echo "REACHED_END"
+""",
+        encoding="utf-8",
+    )
+    try:
+        out = subprocess.run(["bash", str(harness)], capture_output=True, text=True, timeout=30).stdout
+    finally:
+        harness.unlink(missing_ok=True)
+
+    assert "REACHED_END" in out, "the probe did not finish"
+    # With the shape under test (a bare call, status discarded) the fallback is
+    # dead. With `|| return 1` it fires. Assert on what the fix must guarantee.
+    src = (REPO / "manager.sh").read_text(encoding="utf-8")
+    m = re.search(r"^service_action\(\) *\{.*?\n(.*?)\n\}", src, re.MULTILINE | re.DOTALL)
+    assert m, "service_action not found"
+    assert "systemctl_bounded restart || return 1" in m.group(1), (
+        "the native restart branch discards systemctl_bounded's status, so "
+        "service_action reports success over a service that did not restart"
+    )
+    assert re.search(r"esac\s*\n\s*return 0", m.group(1)), "service_action must end in an explicit `return 0`"

@@ -1752,7 +1752,11 @@ service_action() {  # start|stop|restart|enable|disable
         esac
     else
         case "$1" in
-            restart) systemctl_bounded restart ;;
+            # Propagate the status. The old bare call fell through to the
+            # render_ok below, so service_action reported success whatever
+            # systemctl_bounded returned — which also made restart_service's
+            # `|| render_warn` unreachable on this branch.
+            restart) systemctl_bounded restart || return 1 ;;
             enable|disable) systemctl "$1" "$SYSTEMD_SERVICE" >/dev/null || die "Could not $1 automatic start" ;;
             stop) systemctl_bounded stop ;;
             start) systemctl start "$SYSTEMD_SERVICE" >/dev/null || die "Could not start $SYSTEMD_SERVICE" ;;
@@ -1764,6 +1768,7 @@ service_action() {  # start|stop|restart|enable|disable
         disable) render_ok "Automatic start disabled (the running panel was not stopped)" ;;
         *) render_ok "Panel $1: done" ;;
     esac
+    return 0
 }
 
 restart_service() {

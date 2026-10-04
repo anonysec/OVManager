@@ -444,17 +444,36 @@ def _certificate_matches_name(cert: x509.Certificate, expected: str) -> bool:
 
 
 def _detect_primary_ip() -> str:
-    """Best-effort primary IP, mirroring install.sh's ``hostname -I`` first field."""
+    """Best-effort public IPv4 for a certificate request, else a routable fallback.
+
+    Not simply the first ``hostname -I`` field: on a host with a docker bridge or
+    a cloud metadata NIC that sorts ahead of the public address, that field is a
+    private IP and Let's Encrypt refuses it outright. install.sh's public_ip and
+    manager.sh's --ip were both fixed for exactly this and the panel's own toggle
+    was missed. IPv6 is skipped — the LE paths here are v4.
+    """
+    routable: str | None = None
     try:
         result = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=5, check=False)
         if result.returncode == 0:
             for token in result.stdout.split():
                 try:
-                    return str(ipaddress.ip_address(token))
+                    addr = ipaddress.ip_address(token)
                 except ValueError:
                     continue
+                if addr.version != 4:
+                    continue
+                text_addr = str(addr)
+                if not addr.is_private and not addr.is_loopback and not addr.is_link_local:
+                    return text_addr
+                if routable is None and not addr.is_loopback and not addr.is_link_local:
+                    routable = text_addr
     except (OSError, subprocess.SubprocessError):
         pass
+    if routable is not None:
+        # Nothing public here. Better a private address that at least matches the
+        # host than the 127.0.0.1 below, and the caller surfaces the failure.
+        return routable
     try:
         return socket.gethostbyname(socket.gethostname())
     except OSError:
