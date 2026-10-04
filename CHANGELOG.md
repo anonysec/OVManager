@@ -52,6 +52,13 @@ way out of a forgotten prefix, so `ovm restart` put you straight back in.
 `ovm status` printed the `.env` seed rather than the prefix being served, so
 the URL it told you to open returned a blank 404 the moment the prefix changed.
 
+`ovm url set /` was the one command that could not do what its own error
+promised. Serving at the root is deliberate and the error names `/` as the way
+to ask, but the slashes were stripped before the character check, so `/` became
+the empty string and the length requirement rejected it. The panel's own reset
+writes that same empty value, so it was reachable from the backend and from
+nowhere in the CLI.
+
 Switching the panel's language to Persian, Russian or Chinese loaded nothing:
 all five pickers called `i18n.changeLanguage` directly instead of the
 `loadLanguage` helper that fetches the code-split bundle first. The page flipped
