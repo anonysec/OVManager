@@ -182,7 +182,22 @@ async def _collect_node_traffic(
             # and dropping its bytes. A user untouched by this run keeps its
             # loaded values — which is what lets a reset landing mid-tick win
             # the conditional UPDATE below rather than being rebaselined onto.
-            db.refresh(user, attribute_names=["used", "node_usage"])
+            #
+            # Guarded: the row can be gone. A delete between the load and here
+            # made the refresh raise, and an exception here escapes the loop and
+            # discards `pending` for the whole node — every OTHER user on it
+            # lost their traffic for the tick. A user deleted mid-tick is gone;
+            # there is nothing to bill and nothing to fail over.
+            try:
+                db.refresh(user, attribute_names=["used", "node_usage"])
+            except Exception:
+                stale.discard(user)
+                logger.info(
+                    "Traffic skipped for %s (node %s): the row is gone",
+                    username,
+                    node.name,
+                )
+                continue
             stale.discard(user)
         node_usage = entry["node_usage"] if entry else _load_node_usage(user)
         state = node_usage.get(node.name)
