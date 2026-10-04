@@ -2450,7 +2450,7 @@ def test_a_clean_box_says_there_is_nothing_to_do(tmp_path):
 # `_read_reply` takes a different branch and the test would pass against the
 # broken code, which is the failure mode this comment exists to prevent.
 
-_PTY_PROBE = r'''
+_PTY_PROBE = r"""
 import os, pty, select, subprocess, sys, termios, fcntl, time
 
 def run(script, stdin_data, timeout=8.0):
@@ -2489,7 +2489,7 @@ hung, elapsed, out = run(sys.argv[1], sys.argv[2].encode())
 print("HUNG=%s ELAPSED=%.1f" % (hung, elapsed))
 print(out)
 sys.exit(1 if hung else 0)
-'''
+"""
 
 
 def _menu_probe(tmp_path, calls: str = "") -> str:
@@ -2617,14 +2617,12 @@ def test_pkg_install_returns_failure_instead_of_killing_the_run():
     """
     source = _extract_function("pkg_install")
     assert "die " not in source, (
-        "pkg_install must return non-zero so callers can fall back; a die here "
-        "makes every `||` after it unreachable"
+        "pkg_install must return non-zero so callers can fall back; a die here makes every `||` after it unreachable"
     )
 
     # The two callers that genuinely cannot continue now say so themselves.
     check = _extract_function("check_deps")
     assert 'pkg_install "${missing[@]}"' in check and "|| die" in check, (
-        "check_deps must fail loudly: without curl the release tarball and "
-        "every fallback source are unreachable"
+        "check_deps must fail loudly: without curl the release tarball and every fallback source are unreachable"
     )
     assert "die" in _extract_function("ensure_docker") or "PKG_INSTALL docker" in _extract_function("ensure_docker")
