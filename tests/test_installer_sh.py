@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import inline_lib
@@ -2430,3 +2431,172 @@ def test_a_clean_box_says_there_is_nothing_to_do(tmp_path):
     out = r.stdout + r.stderr
     assert "no interrupted update needs recovery" in out, out[-500:]
     assert "Error" not in out, out[-500:]
+
+
+# ── Regression: a piped answer must never wedge the menu ──────────────────
+#
+# `ask` reaches for /dev/tty whenever stdin is not the terminal but the
+# terminal is openable — which is exactly `echo 1 | bash install.sh` from a
+# terminal, and any CI runner with a pty. That read used to be untimed, so the
+# installer waited on a terminal nobody was typing at and dropped the answers
+# already sitting on stdin. The fix bounds the terminal read and falls back.
+#
+# A real pty is the only way to reproduce it: without a controlling terminal
+# `_read_reply` takes a different branch and the test would pass against the
+# broken code, which is the failure mode this comment exists to prevent.
+
+_PTY_PROBE = r'''
+import os, pty, select, subprocess, sys, termios, fcntl, time
+
+def run(script, stdin_data, timeout=8.0):
+    m, s = pty.openpty()
+    def child():
+        os.setsid()
+        fd = os.open(os.ttyname(1), os.O_RDWR)
+        fcntl.ioctl(fd, termios.TIOCSCTTY, 0)
+    r_in, w_in = os.pipe()
+    os.write(w_in, stdin_data)
+    os.close(w_in)
+    p = subprocess.Popen(["bash", script], stdin=r_in, stdout=s, stderr=s, preexec_fn=child)
+    os.close(r_in)
+    start, out = time.time(), b""
+    while time.time() - start < timeout:
+        r, _, _ = select.select([m], [], [], 0.2)
+        if r:
+            try:
+                chunk = os.read(m, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            out += chunk
+        if p.poll() is not None:
+            break
+    hung = p.poll() is None
+    if hung:
+        p.kill()
+        p.wait()
+    os.close(m)
+    os.close(s)
+    return hung, time.time() - start, out.decode(errors="replace")
+
+hung, elapsed, out = run(sys.argv[1], sys.argv[2].encode())
+print("HUNG=%s ELAPSED=%.1f" % (hung, elapsed))
+print(out)
+sys.exit(1 if hung else 0)
+'''
+
+
+def _menu_probe(tmp_path, calls: str = "") -> str:
+    """A bash file with the real can_prompt/_masked_read/_read_reply/ask/render_menu.
+
+    Extraction is anchored at the start of a line on purpose: a plain substring
+    search for "ask() {" matches inside "render_ask() {", which produces a probe
+    where `ask` is never defined and every assertion passes for the wrong
+    reason.
+    """
+    import re as _re
+
+    src = INSTALLER_PATH.read_text(encoding="utf-8")
+    wanted = ("can_prompt", "_masked_read", "_read_reply", "ask", "render_ask", "render_menu")
+    parts = []
+    for name in wanted:
+        m = _re.search(rf"^{_re.escape(name)}\(\) \{{", src, _re.M)
+        assert m, f"install.sh has no {name}()"
+        depth, i = 0, src.index("{", m.start())
+        for j in range(i, len(src)):
+            if src[j] == "{":
+                depth += 1
+            elif src[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    parts.append(src[m.start() : j + 1])
+                    break
+        else:
+            raise AssertionError(f"{name}() has no closing brace")
+    script = (
+        "#!/usr/bin/env bash\nset -euo pipefail\n"
+        'B=""; NC=""; GY=""; YL=""; WH=""; RD=""; GR=""; OR=""\n'
+        + "\n\n".join(parts)
+        + "\n"
+        + 'tag="$(render_menu "" install "install" docker "install with docker" exit "exit")"\n'
+        + 'echo "GOT=[$tag]"\n'
+        + calls
+    )
+    path = tmp_path / "menu_probe.sh"
+    path.write_text(script, encoding="utf-8")
+    return str(path)
+
+
+def _run_under_pty(tmp_path, script: str, stdin_text: str) -> str:
+    """Feed `stdin_text` verbatim on a pipe, with a pty for the terminal."""
+    runner = tmp_path / "run_pty.py"
+    runner.write_text(_PTY_PROBE, encoding="utf-8")
+    r = subprocess.run(
+        [sys.executable, str(runner), script, stdin_text],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return r.stdout + r.stderr
+
+
+def _answer(text: str) -> str:
+    """One answer on a pipe, newline-terminated."""
+    return f"{text}\n"
+
+
+def test_the_menu_takes_a_piped_answer_instead_of_waiting_on_the_terminal(tmp_path):
+    """`echo 1 | bash install.sh` must not wedge on the first menu.
+
+    The old code read /dev/tty with no timeout, so it blocked forever and never
+    saw the digit already sitting on stdin. Every assertion below is also a
+    hang-failure: the probe exits non-zero if it has to be killed, and the test
+    fails on the timeout rather than reporting a green run against broken code.
+    """
+    probe = _menu_probe(tmp_path)
+    out = _run_under_pty(tmp_path, probe, _answer("1"))
+    assert "HUNG=False" in out, out
+    assert "GOT=[install]" in out, out
+
+
+def test_the_menu_survives_every_shape_of_answer(tmp_path):
+    """Out of range wraps, non-numeric defaults, and empty is the default."""
+    probe = _menu_probe(tmp_path)
+    for text, want in (
+        ("1", "install"),
+        ("2", "docker"),
+        ("3", "exit"),
+        ("0", "exit"),  # wraps backwards onto the last entry, not tags[-1] by accident
+        ("99", "exit"),
+        ("abc", "install"),
+        ("", "install"),
+    ):
+        out = _run_under_pty(tmp_path, probe, _answer(text))
+        assert "HUNG=False" in out, f"{text!r} hung: {out}"
+        assert f"GOT=[{want}]" in out, f"{text!r} -> {out}"
+
+
+def test_a_piped_answer_does_not_wedge_a_secret_prompt(tmp_path):
+    """The masked branch had the same untimed read and the same fix."""
+    probe = _menu_probe(
+        tmp_path,
+        calls='secret="$(ask "Admin password" "" h)"\necho "SECRET=[$secret]"\n',
+    )
+    # the menu takes the first line, the password prompt the second
+    out = _run_under_pty(tmp_path, probe, "1\nhunter2hunter2\n")
+    assert "HUNG=False" in out, out
+    assert "SECRET=[hunter2hunter2]" in out, out
+    assert "hunter2hunter2" not in out.split("SECRET=")[0], "the secret was echoed while typed"
+
+
+def test_reading_one_answer_leaves_the_next_one_on_the_pipe(tmp_path):
+    """A two-line pipe must feed two prompts; the peek must not eat both."""
+    probe = _menu_probe(
+        tmp_path,
+        calls='second="$(ask "URL path" "random")"\necho "SECOND=[$second]"\n',
+    )
+    out = _run_under_pty(tmp_path, probe, "2\nroot\n")
+    assert "HUNG=False" in out, out
+    assert "GOT=[docker]" in out, out
+    assert "SECOND=[root]" in out, f"the second answer was lost: {out}"

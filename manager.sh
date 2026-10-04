@@ -946,11 +946,12 @@ has_tty() {
 # the first character lands the rest is untimed, because a person typing a
 # password legitimately pauses mid-word.
 _masked_read() {
-    local buf="" ch
+    local buf="" ch got=0
     local -a to=()
     [[ "${1:-}" == "t" ]] && to=( -t 3 )
     while IFS= read -rsn1 "${to[@]}" ch; do
         to=()
+        got=1
         case "$ch" in
             ""|$'\n'|$'\r') break ;;
             $'\x7f'|$'\b')
@@ -960,6 +961,10 @@ _masked_read() {
     done
     printf '\n' >&2
     printf '%s' "$buf"
+    # Non-zero only when the bounded first read timed out with nothing typed,
+    # so the caller can tell "nothing there" from a person who pressed Enter on
+    # an empty value. Both look identical on stdout.
+    (( got ))
 }
 
 _read_reply() {  # hidden? → prints the line on stdout
@@ -976,7 +981,15 @@ _read_reply() {  # hidden? → prints the line on stdout
         # case costs nothing; the terminal is asked second, for a person who is
         # there; stdin is read last, for a pipe that was slow to deliver.
         if [[ "$hidden" == "h" ]]; then
-            _masked_read t < /dev/tty
+            # A secret can be piped too, so it needs the same three-way ladder
+            # as a plain line — otherwise `echo pw | ...` masks the typed
+            # asterisks, times out on the terminal, and returns nothing at all,
+            # and the caller cannot tell that from the user choosing to be
+            # silent. The password is not echoed on the stdin path because
+            # there is no terminal to echo it to.
+            _masked_read t < /dev/tty && return 0
+            IFS= read -r buf || buf=""
+            printf '%s' "$buf"
             return 0
         fi
         # `read -t 0` is not a peek: on a pipe it reports success with an
