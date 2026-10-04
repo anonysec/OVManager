@@ -159,11 +159,7 @@ async def login(
     ip_attempts = _get_bucket(ip_key)
     name_attempts = _get_bucket(name_key)
 
-    if (
-        len(attempts) >= _MAX_ATTEMPTS
-        or len(ip_attempts) >= _MAX_PER_IP
-        or len(name_attempts) >= _MAX_PER_USER
-    ):
+    if len(attempts) >= _MAX_ATTEMPTS or len(ip_attempts) >= _MAX_PER_IP or len(name_attempts) >= _MAX_PER_USER:
         from backend.operations.observability.audit import log_event
 
         log_event(db, "auth.lockout", actor=form_data.username, target=ip, detail="Too many login attempts")

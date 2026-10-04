@@ -103,7 +103,30 @@ class Install:
         """Installed certificate, for pinning the local health probe."""
         return self.env.get("SSL_CERTFILE") or None
 
-    def public_url(self, host: str) -> str:
+    def live_path_prefix(self) -> str:
+        """The prefix the panel is SERVING, which is not always .env's.
+
+        URLPATH in .env is only the seed: `ovm url set` and Settings -> General
+        both write the settings row, and nothing writes .env back. Printing the
+        seed showed an operator a URL that 404s the moment the prefix changed,
+        while `ovm urlpath-show` reported the correct one at the same moment.
+        Falls back to the seed if the database cannot be reached.
+        """
+        try:
+            from backend.urlpath import get_urlpath
+
+            return get_urlpath()
+        except Exception:
+            return self.path_prefix
+
+    def public_url(self, host: str, live: bool = False) -> str:
+        """host URL for this panel.
+
+        live=True uses the prefix the panel is actually serving; the default
+        keeps the .env seed, which is what the local health probe should keep
+        using since it must not depend on a database round-trip.
+        """
         host = host or "127.0.0.1"
         base = f"{self.scheme}://{host}:{self.port}"
-        return f"{base}/{self.path_prefix}/" if self.path_prefix else f"{base}/"
+        prefix = self.live_path_prefix() if live else self.path_prefix
+        return f"{base}/{prefix}/" if prefix else f"{base}/"

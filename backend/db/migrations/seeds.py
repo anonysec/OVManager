@@ -16,27 +16,35 @@ from backend.logger import logger
 
 
 def _seed_settings(db: Session) -> None:
-    """Ensure a settings row exists and carries the configured URLPATH.
+    """Ensure a settings row exists; seed the URLPATH only on a brand-new row.
 
     The row is created through the ORM rather than a raw INSERT: ``create_all()``
     emits no DEFAULT clause for Python-side defaults, so ``timezone``,
     ``bot_enabled`` and friends are NOT NULL with no SQL default, and a partial
     INSERT under ``INSERT OR IGNORE`` is discarded silently.
 
-    An existing row is never overwritten; the prefix is only filled in when it
-    is still empty.
+    An existing row is never touched. A prefix that is blank is a deliberate
+    value, not a missing one — see below.
     """
     from backend.config import config
     from backend.db.models import Settings
 
-    initial = (config.URLPATH or "").strip("/")
     settings = db.query(Settings).first()
     if settings is None:
         settings = Settings()
+        # The column defaults to "", which means "serve at the root". Only a
+        # brand-new row takes the configured prefix.
+        settings.urlpath = (config.URLPATH or "").strip("/")
         db.add(settings)
         db.flush()
-    if not (settings.urlpath or "").strip("/"):
-        settings.urlpath = initial
+    elif settings.urlpath is not None:
+        # Only ever seed a prefix that has never been set. An empty string is a
+        # VALUE — `ovm url reset` and the panel's own field both write it to mean
+        # "serve at the root" — so treating blank as unset made every restart
+        # restore .env's URLPATH and silently undo the documented recovery from
+        # a forgotten prefix. The operator who just asked for the root was
+        # locked out again on the next `ovm restart`, with nothing saying so.
+        return
 
 
 def _add_admin_user_defaults(db: Session) -> None:

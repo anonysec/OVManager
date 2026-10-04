@@ -5,6 +5,7 @@ node. The write is a conditional UPDATE the session never sees, so without a
 refresh the second node's WHERE clause expects the pre-first-node value and is
 rejected — a two-node panel silently billed 1000 bytes for 6000 real ones.
 """
+
 from datetime import date
 
 import pytest
@@ -23,9 +24,16 @@ class _FakeNode:
 @pytest.fixture
 def user_row():
     db = SessionLocal()
-    db.add(User(name="multinode-test", used=0, total=0,
-                expiry_date=date(2030, 1, 1), owner="n",
-                node_usage='{"n1": {"total": 100}, "n2": {"total": 200}}'))
+    db.add(
+        User(
+            name="multinode-test",
+            used=0,
+            total=0,
+            expiry_date=date(2030, 1, 1),
+            owner="n",
+            node_usage='{"n1": {"total": 100}, "n2": {"total": 200}}',
+        )
+    )
     db.commit()
     uid = db.query(User).filter(User.name == "multinode-test").one().id
     yield db
@@ -46,8 +54,7 @@ async def test_traffic_accumulates_across_two_nodes(user_row, monkeypatch):
 
     async def fake_get_users_used_traffic(node, db=None):
         total = {"n1": 1100, "n2": 5200}[node.name]
-        return {"users": {"multinode-test": total}, "totals": {"multinode-test": total},
-                "sessions": {}}
+        return {"users": {"multinode-test": total}, "totals": {"multinode-test": total}, "sessions": {}}
 
     monkeypatch.setattr(daily, "get_users_used_traffic", fake_get_users_used_traffic)
 
