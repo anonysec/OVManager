@@ -802,10 +802,16 @@ has_tty() {
     return 1
 }
 
-# Reads stdin, so callers redirect /dev/tty when needed.
+# Reads stdin, so callers redirect /dev/tty when needed. The first read is
+# bounded so a caller can fall back when the far end has nothing to say; once
+# the first character lands the rest is untimed, because a person typing a
+# password legitimately pauses mid-word.
 _masked_read() {
     local buf="" ch
-    while IFS= read -rsn1 ch; do
+    local -a to=()
+    [[ "${1:-}" == "t" ]] && to=( -t 3 )
+    while IFS= read -rsn1 "${to[@]}" ch; do
+        to=()
         case "$ch" in
             ""|$'\n'|$'\r') break ;;
             $'\x7f'|$'\b')
@@ -823,8 +829,28 @@ _read_reply() {  # hidden? → prints the line on stdout
         if [[ "$hidden" == "h" ]]; then _masked_read; return 0; fi
         read -r buf
     elif [[ -e /dev/tty && -r /dev/tty ]]; then
-        if [[ "$hidden" == "h" ]]; then _masked_read </dev/tty; return 0; fi
-        read -r buf </dev/tty
+        # stdin is not the terminal but the terminal is reachable, so the prompt
+        # goes there. Both reads are bounded: `echo 1 | bash install.sh` from a
+        # terminal, or a CI runner with a pty, has the answers already on stdin
+        # and nobody typing at the terminal, and an untimed read on /dev/tty
+        # waits there forever and drops them. stdin is peeked at first so that
+        # case costs nothing; the terminal is asked second, for a person who is
+        # there; stdin is read last, for a pipe that was slow to deliver.
+        if [[ "$hidden" == "h" ]]; then
+            _masked_read t < /dev/tty
+            return 0
+        fi
+        # `read -t 0` is not a peek: on a pipe it reports success with an
+        # empty string and consumes nothing, so a zero-width window silently
+        # swallowed the answer and every prompt fell back to its default. A
+        # real fractional window is what actually distinguishes "data is
+        # waiting" from "nothing yet".
+        if IFS= read -r -t 0.2 buf || IFS= read -r -t 3 buf < /dev/tty; then
+            :
+        else
+            buf=""
+            IFS= read -r buf || buf=""
+        fi
     else
         return 1
     fi
@@ -997,29 +1023,6 @@ public_ip() {
         esac
     done
     return 1
-}
-
-# Every routable address on this host, for a box with more than one. The
-# Let's Encrypt prompt names them so an operator with several IPs can pick the
-# one the certificate should carry instead of guessing.
-public_ips() {
-    local ip out=""
-    for ip in $(hostname -I 2>/dev/null); do
-        case "$ip" in
-            *:*) continue ;;
-            127.*|10.*|192.168.*|169.254.*) continue ;;
-            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
-            *) out+="$ip " ;;
-        esac
-    done
-    printf '%s' "${out% }"
-}
-
-# Does this string look like a bare IP rather than a hostname? Decides whether
-# a Let's Encrypt request is the short-lived IP kind or the ordinary domain one,
-# so one free-text prompt can serve both.
-is_ip_literal() {
-    [[ "$1" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || [[ "$1" == *:* ]]
 }
 
 # Resolve and report, so a certificate attempt is not spent discovering a
@@ -1315,7 +1318,13 @@ setup_tls() {
             ;;
         le-ip)
             port_in_use 80 && die "Port 80 is busy — Let's Encrypt standalone needs it (or --tls 1 for now)"
-            TLS_DOMAIN="${TLS_DOMAIN:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+            # public_ip, not the first `hostname -I` field: a host with docker
+            # bridges or a cloud metadata NIC can sort one ahead of the public
+            # address, and Let's Encrypt refuses a private IP outright. Reached
+            # with --tls 3 / OVM_TLS=le-ip and no domain, where nothing else
+            # gets to ask which address the operator meant.
+            TLS_DOMAIN="${TLS_DOMAIN:-$(public_ip || true)}"
+            [[ -n "$TLS_DOMAIN" ]] || die "Could not determine this host's public IP — set OVM_TLS_DOMAIN, or use OVM_TLS=self"
             issue_lets_encrypt "$TLS_DOMAIN" "1"
             TLS_KEY="/etc/letsencrypt/$TLS_DOMAIN/privkey.pem"
             TLS_CERT="/etc/letsencrypt/$TLS_DOMAIN/fullchain.pem"
@@ -2148,7 +2157,6 @@ wizard() {
         render_line "$(printf '%bStep 2/4 — Panel URL path%s' "$B" "$NC")"
         render_line "  ${GY}A secret path hides the panel from scanners (random is safest).${NC}"
         local path_default="random"
-        [[ "$PATH_SET" -eq 1 ]] && path_default="${PATHPREFIX:-root}"
         local path_in
         path_in="$(ask "URL path  (random / root / name)" "$path_default")"
         case "$path_in" in
@@ -2192,7 +2200,8 @@ wizard() {
                elif [[ -n "$here" && "$resolved" != "$here" ]]; then
                    render_warn "$TLS_DOMAIN resolves to $resolved, not $here — Let's Encrypt will refuse it"
                fi ;;
-            3) TLS_MODE="le-ip"; TLS_DOMAIN="$(hostname -I 2>/dev/null | awk '{print $1}')" ;;
+            3) TLS_MODE="le-ip"; TLS_DOMAIN="$(public_ip || true)"
+               [[ -n "$TLS_DOMAIN" ]] || die "Could not determine this host's public IP — use option 2 with a domain, or option 4 with your own certificate" ;;
             4) TLS_MODE="custom"
                TLS_CERT="$(ask "Cert file" "${TLS_CERT:-}")"
                TLS_KEY="$(ask "Key file" "${TLS_KEY:-}")"
@@ -2731,7 +2740,7 @@ start_menu() {
                 check_root
                 detect_os
                 check_deps
-                if ! confirm "Update it to v${VERSION} now?" "y"; then
+                if ! confirm "Update it to v${VERSION} now?" "n"; then
                     # They declined the update, which usually means they wanted
                     # a clean slate. Say how, rather than leaving them to guess
                     # at the flag.

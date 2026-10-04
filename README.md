@@ -152,12 +152,12 @@ The installer takes exactly three flags — `-y/--yes`, `--docker`, `-h/--help`.
 The install ends with a **Ready** card holding the panel URL and a one-time claim key:
 
 ```text
-Open      https://203.0.113.10:2095/a1b2c3d4/claim
-Claim key 9f1c8b2e…  (one-time)
-Login     admin
+panel          https://203.0.113.10:2095/a1b2c3d4/setup
+setup key      9f1c8b2e…  (one-time)
+user           admin — password set by you, in the browser
 ```
 
-**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
+**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address sends you straight to the claim page. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
 
 **Where things live:**
 

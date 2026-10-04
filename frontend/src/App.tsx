@@ -122,6 +122,21 @@ function App({ onReady }: { onReady?: () => void }) {
             path="/claim"
             element={isAuthenticated ? <Navigate to="/" /> : <Page name="claim"><ClaimPage /></Page>}
           />
+          {/* The installer's Ready card prints this URL, so it is the first
+              thing an operator opens — and on a fresh install they hold a claim
+              key and no session. Sitting inside the authenticated block, it
+              bounced them to /login with no way to reach the claim page, which
+              stranded the exact person who had just been handed a key. An
+              unauthenticated /setup goes to /claim; the wizard itself stays
+              owner-only, and the panel enforces that server-side regardless. */}
+          <Route
+            path="/setup"
+            element={
+              isAuthenticated
+                ? <Page name="setup"><SetupWizard /></Page>
+                : <Navigate to="/claim" replace />
+            }
+          />
           <Route
             path="/"
             element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
@@ -132,7 +147,6 @@ function App({ onReady }: { onReady?: () => void }) {
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
-            <Route path="setup" element={<Page name="setup"><SetupWizard /></Page>} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
         </Routes>
