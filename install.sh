@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.46"
+VERSION="1.0.47"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -1943,7 +1943,12 @@ grant_panel_access() {
     chgrp "$PANEL_USER" "$INSTALL_DIR/.env" 2>/dev/null || true
     chmod 640 "$INSTALL_DIR/.env"
     chown root:"$PANEL_USER" "$INSTALL_DIR"
-    chmod 750 "$INSTALL_DIR"
+    chmod 2775 "$INSTALL_DIR"
+    [[ -d "$INSTALL_DIR/ovmanager-${VERSION}" ]] && {
+        chown -R root:"$PANEL_USER" "$INSTALL_DIR/ovmanager-${VERSION}"
+        chmod 2775 "$INSTALL_DIR/ovmanager-${VERSION}"
+    } || true
+    install -d -o "$PANEL_USER" -g "$PANEL_USER" -m 700 "$DATA_DIR/.uv-cache"
     [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && { chgrp "$PANEL_USER" "$TLS_KEY" 2>/dev/null || true; chmod 640 "$TLS_KEY"; }
     # The venv is interpreter, not state: the panel user needs to read and
     # execute it, nothing more. Installs made while the umask leaked have it
@@ -2348,7 +2353,8 @@ do_install() {
         cd "$INSTALL_DIR"
         render_note "python packages"
         render_watch "uv sync"
-        "$UV_BIN" sync --frozen --no-dev --quiet >/dev/null 2>&1 \
+        sudo -u "$PANEL_USER" HOME="$DATA_DIR" UV_CACHE_DIR="$DATA_DIR/.uv-cache" \
+            "$UV_BIN" sync --frozen --no-dev --quiet >/dev/null 2>&1 \
             || die "Could not install the panel's Python packages"
         render_done "packages installed"
         grant_panel_access

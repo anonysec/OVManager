@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.46 — 2026-10-05
+## 1.0.47 — 2026-10-05
 
 Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
 single-use hooks and utils), centralised node-fanout concurrency into
@@ -412,7 +412,7 @@ First public release.
   if the new version does not come up. The database migrates on the next start.
 - Uninstall keeps your data. `--purge` takes a snapshot first, then deletes it.
 
-## 1.0.46 — 2026-10-05
+## 1.0.47 — 2026-10-05
 
 Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
 single-use hooks and utils), centralised node-fanout concurrency into
