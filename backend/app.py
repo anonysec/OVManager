@@ -155,11 +155,7 @@ api.add_middleware(
 @api.get("/health", tags=["Health"])
 async def health_check(request: Request):
     if request.headers.get("sec-fetch-mode") == "navigate" and "text/html" in request.headers.get("accept", ""):
-        from fastapi.responses import HTMLResponse
-
-        html = _read_index_html()
-        if html is not None:
-            return HTMLResponse(html)
+        return await _serve_react()
     from backend.client_ip import client_ip
 
     try:
