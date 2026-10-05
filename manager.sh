@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.0.59"
+VERSION="1.0.60"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -187,7 +187,8 @@ DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
-INSTALLER="$INSTALL_DIR/install.sh"
+INSTALLER="$INSTALL_DIR/ovmanager-$VERSION/install.sh"
+[[ -x "$INSTALLER" ]] || INSTALLER="$INSTALL_DIR/install.sh"
 # Installed command names (same as the installer used).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
