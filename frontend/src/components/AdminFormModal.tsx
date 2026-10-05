@@ -5,7 +5,7 @@ import Modal from './Modal';
 import Button from './ui/Button';
 import Field from './ui/Field';
 
-const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOpen?: any; onClose?: any; onSaved?: any }) => {
+const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: any; isOpen?: any; onClose?: any; onSaved?: any; isOwner?: boolean }) => {
   const isEdit = !!admin;
   const { t } = useTranslation();
   const empty: any = { username: '', password: '', telegram_id: '', username_prefix: '', default_days: '', default_traffic_gb: '', default_max_users: '' };
@@ -50,7 +50,7 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOp
     }
     setIsLoading(true);
     try {
-      const payload = {
+      const payload: any = {
         username: formData.username,
         password: formData.password,
         telegram_id: formData.telegram_id ? parseInt(formData.telegram_id, 10) : null,
@@ -59,6 +59,9 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOp
         default_traffic_gb: _intOrNull(formData.default_traffic_gb),
         default_max_users: _intOrNull(formData.default_max_users),
       };
+      if (isEdit && admin?.username) {
+        payload.current_username = admin.username;
+      }
       const response = isEdit
         ? await apiClient.put('/admin/', payload)
         : await apiClient.post('/admin/', payload);
@@ -84,7 +87,7 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOp
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('editAdmin')} — ${admin?.username || ''}` : t('addNewAdmin')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
-        <Field label={t('username')} required={!isEdit}>
+        <Field label={t('username')} required={!isEdit} hint={isOwner ? t('ownerUsernameLocked', 'Username is locked to the owner. Password can be changed.') : undefined}>
           {isEdit
             ? <input type="text" id="admin-username" name="username" value={formData.username} disabled readOnly />
             : <input type="text" id="admin-username" name="username" value={formData.username} onChange={handleChange} required />}

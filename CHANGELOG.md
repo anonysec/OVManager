@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 — 2026-10-05
+
+Two safety guards: the owner account's username can no longer be
+renamed or claimed by another admin (added `current_username` lookup
+in `update_admin` so renames look up the right row); the last remaining
+user can no longer be deleted (the server-side guard fires for the
+owner too, and the SPA's Delete button is disabled when only one
+user remains).
+
 ## 1.1.0 — 2026-10-05
 
 UX release. Frontend and backend copy/structure overhauled across every

@@ -64,6 +64,7 @@ class AdminCreate(BaseModel):
 
 class AdminUpdate(BaseModel):
     username: str
+    current_username: str | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)

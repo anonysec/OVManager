@@ -93,9 +93,23 @@ async def update_admin(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
-    existing_admin = crud.get_admin_by_username(db, username=admin.username)
+    incoming_username = admin.username or ""
+    if not incoming_username.strip():
+        return ResponseModel(success=False, msg="Username cannot be empty", data=None)
+    if incoming_username != incoming_username.strip():
+        return ResponseModel(success=False, msg="Username cannot have leading or trailing spaces", data=None)
+
+    lookup_username = admin.current_username or admin.username
+    existing_admin = crud.get_admin_by_username(db, username=lookup_username)
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
+
+    if existing_admin.username == config.ADMIN_USERNAME and admin.username != existing_admin.username:
+        return ResponseModel(success=False, msg="The owner account username cannot be changed", data=None)
+
+    conflict = crud.get_admin_by_username(db, username=admin.username)
+    if conflict is not None and conflict.username != existing_admin.username:
+        return ResponseModel(success=False, msg="Admin with this username already exists", data=None)
 
     if admin.password:
         existing_admin.password = hash_password(admin.password)

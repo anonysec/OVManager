@@ -551,6 +551,7 @@ const AdminManagement = () => {
         isOpen={isEditModalOpen}
         onClose={() => { setIsEditModalOpen(false); setSelectedAdmin(null); }}
         admin={selectedAdmin}
+        isOwner={selectedAdmin?.username === currentUsername}
         onSaved={async (msg: any) => {
           addToast(msg || t('adminUpdated', 'Admin updated'), 'success');
           setIsEditModalOpen(false);

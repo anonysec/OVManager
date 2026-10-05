@@ -8,6 +8,7 @@ import {
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
@@ -48,6 +49,7 @@ const statusLabel = (u: any, t: any) => {
 const UserManagement = () => {
   const { t } = useTranslation();
   const { addToast } = useToast();
+  const { userRole } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
   const [subSettings, setSubSettings] = useState<any>(null);
@@ -455,6 +457,9 @@ const UserManagement = () => {
     [users, selected],
   );
 
+  const keepOneUser = users.length <= 1;
+  const bulkDeletesAll = users.length > 0 && selected.size >= users.length;
+
   const openRowMenu = useCallback((e: ReactMouseEvent<HTMLButtonElement>, user: any) => {
     if (rowMenu?.uuid === String(user.uuid)) { setRowMenu(null); return; }
     const rect = e.currentTarget.getBoundingClientRect();
@@ -558,7 +563,7 @@ const UserManagement = () => {
       render: (u: any) => (
         <span className="dt-actions" role="group" aria-label={`${u.name} ${t('actions', 'Actions')}`}>
           <button type="button" className="dt-icon-btn" title={t('rowEdit', 'Edit')} aria-label={`${t('rowEdit', 'Edit')} ${u.name}`} onClick={() => handleEdit(u)}><FiEdit2 size={15} /></button>
-          <button type="button" className="dt-icon-btn is-danger" title={t('rowDelete', 'Delete')} aria-label={`${t('rowDelete', 'Delete')} ${u.name}`} onClick={() => handleDelete(u)}><FiTrash2 size={15} /></button>
+          <button type="button" className="dt-icon-btn is-danger" title={keepOneUser ? t('keepOneUser', 'You must keep at least one user') : t('rowDelete', 'Delete')} aria-label={`${t('rowDelete', 'Delete')} ${u.name}`} disabled={keepOneUser} onClick={() => handleDelete(u)}><FiTrash2 size={15} /></button>
           <button
             type="button"
             className="dt-icon-btn um-rowmenu-trigger"
@@ -573,7 +578,7 @@ const UserManagement = () => {
         </span>
       ),
     },
-  ], [t, rowMenu, openRowMenu, handleUserClick, handleEdit, handleDelete]);
+  ], [t, rowMenu, openRowMenu, handleUserClick, handleEdit, handleDelete, keepOneUser]);
 
   const allPageKeys = pagedUsers.map((u) => String(u.uuid));
   const allSelected = allPageKeys.length > 0 && allPageKeys.every((k) => selected.has(k));
@@ -675,7 +680,7 @@ const UserManagement = () => {
           <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={13} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={13} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
-          <Button size="sm" variant="danger" disabled={bulkBusy} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
+          <Button size="sm" variant="danger" disabled={bulkBusy || bulkDeletesAll} title={bulkDeletesAll ? t('keepOneUser', 'You must keep at least one user') : undefined} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t('clear', 'Clear')}</Button>
         </div>
       )}

@@ -306,6 +306,12 @@ async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Dep
     if db_user is None:
         return ResponseModel(success=False, msg="User not found", data=None)
     require_user_access(db_user, user)
+    if crud.count_users(db, owner=user["username"]) <= 1:
+        return ResponseModel(
+            success=False,
+            msg="You must keep at least one user — create another before deleting this one",
+            data=None,
+        )
 
     result = await delete_user_on_all_nodes(db_user.name, db_user.id, db)
     failed = result.get("failed", [])

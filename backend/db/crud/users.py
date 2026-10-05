@@ -37,6 +37,13 @@ def get_users_by_admin(db: Session, admin_username: str):
     return users
 
 
+def count_users(db: Session, owner: str | None = None) -> int:
+    query = db.query(User)
+    if owner is not None:
+        query = query.filter(User.owner == owner)
+    return query.count()
+
+
 def get_users_page(
     db: Session,
     *,
