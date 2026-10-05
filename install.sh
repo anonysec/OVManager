@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.55"
+VERSION="1.0.56"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2055,6 +2055,7 @@ Type=simple
 User=${PANEL_USER}
 Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}/ovmanager-${VERSION}
+EnvironmentFile=${INSTALL_DIR}/.env
 Environment="PATH=${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
 # The panel owns every file it writes (db, wal, logs) and no other service
