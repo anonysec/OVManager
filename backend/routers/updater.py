@@ -201,9 +201,6 @@ def run_update(user: dict = Depends(require_owner)):
     """Start the installer in the background, or explain the host-side command."""
     install_sh = _app_dir() / "install.sh"
     in_container = _in_container()
-    # The installer replaces the tree and restarts the unit: both need root, and
-    # the panel runs as an unprivileged service account, so it only runs the
-    # installer when it happens to have the privilege to do so.
     if not in_container and os.geteuid() == 0 and install_sh.is_file() and _has_systemctl():
         return _start_native_update(install_sh, user)
 
@@ -217,8 +214,6 @@ def run_update(user: dict = Depends(require_owner)):
         reason = "systemctl was not found, so the service cannot be restarted automatically."
     return ResponseModel(
         success=False,
-        # The native hint names ovm, which is what replaces the tree and
-        # restarts the unit; Docker keeps the compose/restart pair.
         msg=(
             f"{reason} From the host, run: {_HOST_COMPOSE_CMD} (or {_HOST_RESTART_CMD})."
             if in_container

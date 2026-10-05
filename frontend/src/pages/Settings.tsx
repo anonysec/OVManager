@@ -28,7 +28,6 @@ import MyActivitySection from './settings/MyActivitySection';
 import './Settings.css';
 import './SettingsPage.css';
 
-// Order is the render order.
 const SECTIONS = [
   { id: 'general',    icon: FiLink,      labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
   { id: 'appearance', icon: FiMonitor,   labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection },
@@ -48,13 +47,9 @@ const Settings = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { refreshTick } = useLive();
-  // Admins only get the local-only sections (appearance, alerts) — every
-  // server-backed section PUTs to owner-only endpoints.
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
 
-  // One shared load of /server/settings for the sections that need it
-  // (General/Defaults/Bot/Display); each keeps its own skeleton/error/retry UI.
   const [shared, setShared] = useState<{ data: any; loading: boolean; error: boolean }>({ data: null, loading: true, error: false });
   const reloadShared = useCallback(async () => {
     try {
@@ -66,7 +61,6 @@ const Settings = () => {
       setShared((s) => ({ ...s, loading: false, error: true }));
     }
   }, []);
-  // Stable object identity so sections only re-sync when the data changes.
   const sharedWithReload = useMemo(() => ({ ...shared, reload: reloadShared }), [shared, reloadShared]);
 
   useEffect(() => {
@@ -79,7 +73,6 @@ const Settings = () => {
     [isOwner],
   );
 
-  // Deep links (`#backup`) scroll the section into view.
   useEffect(() => {
     const hash = location.hash.replace(/^#/, '');
     if (!hash || !KNOWN_IDS.has(hash)) return;

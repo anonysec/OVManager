@@ -10,27 +10,29 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import ErrorBoundary from './components/ErrorBoundary';
-import { getUrlPath } from './utils/panelUrl';
 import { applyAccent } from './utils/uiPrefs';
 import './i18n';
 
-// Apply persisted UI preferences (custom accent) before first paint.
 try { applyAccent(); } catch { /* noop */ }
 
-// Production only — the dev server serves unbundled source files, and caching
-// them would break hot reload.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => { /* optional */ });
 }
 
-// Router basename comes from the <base href> the backend injects, e.g.
-// "/dashboard" when served at /dashboard/, "" when served at root. The
-// frontend never hard-codes or builds the prefix itself.
-const raw = getUrlPath();
+const raw = (() => {
+  const el = typeof document !== 'undefined' ? document.querySelector('base') : null;
+  const href = el?.getAttribute('href');
+  if (!href) return '';
+  let path: string;
+  try {
+    path = new URL(href, window.location.origin).pathname;
+  } catch {
+    path = href.startsWith('/') ? href : `/${href}`;
+  }
+  return path.replace(/^\/+|\/+$/g, '');
+})();
 const base = raw ? `/${raw}` : '';
 
-// Runnable from the root render callback, so the shell is only swapped out
-// once React has committed real content; any earlier would show a blank frame.
 function dismissBootSkeleton() {
   const shell = document.getElementById('app-skeleton');
   if (!shell) return;
@@ -44,7 +46,6 @@ function dismissBootSkeleton() {
   shell.style.transition = 'opacity .18s ease';
   shell.style.opacity = '0';
   shell.addEventListener('transitionend', () => shell.remove(), { once: true });
-  // Belt and braces: if the transition never fires (tab backgrounded), clean up.
   setTimeout(() => shell.remove(), 400);
 }
 

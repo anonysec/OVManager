@@ -3,10 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The phone layout is decided in two places that must agree: DashboardLayout's
-// `window.innerWidth < 768` (which drives the --mobile class modifiers) and the
-// CSS phone blocks. They drifted before — CSS used `max-width: 760px` while JS
-// switched at 768, so 761-767px got mobile JS state with no bottom navigation.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(here, p), 'utf8');
@@ -31,8 +27,6 @@ describe('responsive breakpoints', () => {
   it('no stylesheet keeps a stale phone breakpoint', () => {
     for (const file of ['index.css', 'styles.css']) {
       const css = read(file);
-      // 760px was the old phone value; a bare 768px double-fires at exactly
-      // 768 where the JS already reports desktop.
       expect(css, `${file} still uses max-width: 760px`).not.toMatch(/max-width:\s*760px/);
       expect(css, `${file} still uses max-width: 768px`).not.toMatch(/max-width:\s*768px/);
       expect(css, `${file} still uses min-width: 761px`).not.toMatch(/min-width:\s*761px/);
@@ -42,12 +36,8 @@ describe('responsive breakpoints', () => {
   it('phone blocks all use the single shared value', () => {
     for (const file of ['index.css', 'styles.css']) {
       const css = read(file);
-      // Only @media conditions. A bare `max-width:` scan also catches
-      // component sizing like `.modal-large { max-width: 720px }`.
       const phone = [...css.matchAll(/@media[^{]*?max-width:\s*([\d.]+)px/g)]
         .map((m) => Number(m[1]))
-        // only look at the phone/tablet band; component-level queries
-        // (360, 520, 900, 1180 ...) are intentionally separate
         .filter((v) => v > 700 && v < 800);
       expect(phone.length, `${file} has no phone-band query`).toBeGreaterThan(0);
       for (const v of phone) expect(v).toBe(PHONE_MAX);

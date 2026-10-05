@@ -8,10 +8,9 @@ import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight, FiCpu, FiDatabase, FiHardDrive, FiClock } from 'react-icons/fi';
 import { formatBytes } from '../utils/format';
-import { daysUntil, fmtDateTime } from '../utils/time';
+import { daysUntil, fmtDateTime, formatUptime } from '../utils/time';
 import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
-import { nodeMeta } from '../utils/geo.js';
-import FlagIcon from '../utils/FlagIcon';
+import { nodeMeta, FLAG_SVGS } from '../utils/geo.js';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,8 +24,6 @@ import TopUsers from '../components/dashboard/TopUsers';
 import StreamChart from '../components/dashboard/StreamChart';
 import './Dashboard.css';
 
-// Never flag a node as down before the per-node probe resolves — doing so
-// flashed every node as unreachable on first paint.
 type ServerNotif = { id: string; level: string; link: string; title: string };
 
 const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesReady, t }: { users: any[] | null; nodes: any[] | null; nodeStatus: Record<string, any>; serverNotifs: any[] | null; probesReady: boolean; t: any }) => {
@@ -87,26 +84,9 @@ const statusLabelFor = (u: any, t: any) => {
 
 const fmtUpdated = (date: Date | null) => {
   if (!date) return '—';
-  // Operator display timezone (not browser-local): consistent with every
-  // other timestamp in the panel. Seconds kept — this label ticks live.
   return fmtDateTime(date.toISOString(), { second: '2-digit' });
 };
 
-// Seconds -> "3d 4h" / "16h" / "42m" — compact for a stat card.
-const formatUptime = (seconds: number) => {
-  const s = Number(seconds);
-  if (!Number.isFinite(s) || s <= 0) return '—';
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-};
-
-// Growth of the cumulative "total_used" counter across the metrics window.
-// A usage reset makes one step negative; those clamp to zero so a reset never
-// shows up as negative traffic.
 const sumPositiveDeltas = (values: number[]) => {
   const list = (values || []).map(Number).filter(Number.isFinite);
   if (list.length < 2) return null;
@@ -121,8 +101,6 @@ const sumPositiveDeltas = (values: number[]) => {
 const ServerStats = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  // Normal admins get a scoped dashboard: node list, server info, metrics
-  // history and per-node probes are owner-only (backend 403s them).
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
 
@@ -145,7 +123,6 @@ const ServerStats = () => {
     if (!background) setLoading(true);
 
     const res: any = await settle({
-      // Owner-only reads live behind isOwner so admins never 403-spam.
       ...(isOwner ? {
         stats: apiClient.get('/server/info'),
         nodes: apiClient.get('/nodes/'),
@@ -268,7 +245,6 @@ const ServerStats = () => {
 
   const trafficToday = useMemo(() => sumPositiveDeltas(trafficSeries.bytes), [trafficSeries.bytes]);
 
-  // Resource percentages for the stat-card rings (ServerInfo payload).
   const cpuPercent = Number(stats?.cpu ?? 0);
   const memPercent = Number(stats?.memory_percent ?? 0);
   const diskPercent = Number(stats?.disk_percent ?? 0);
@@ -550,10 +526,14 @@ const ServerStats = () => {
                 <SkeletonTable rows={4} cols={4} label={t('loading', 'Loading…')} />
               ) : nodeHealthRows.length > 0 ? (
                 <ul className="ds-node-list">
-                  {nodeHealthRows.slice(0, 6).map(({ node, status, live, latency, meta }) => (
+                  {nodeHealthRows.slice(0, 6).map(({ node, status, live, latency, meta }) => {
+                    const flagHtml = meta.flagCode ? (FLAG_SVGS as Record<string, string>)[meta.flagCode] : null;
+                    return (
                     <li key={node.id} className="ds-node-row">
                       <span className="ds-node-name">
-                        {meta.flagCode && <FlagIcon code={meta.flagCode} />}
+                        {flagHtml && (
+                          <span className="flag-icon" dangerouslySetInnerHTML={{ __html: flagHtml }} />
+                        )}
                         <span title={node.name}>{node.name}</span>
                       </span>
                       <StatusBadge
@@ -571,7 +551,8 @@ const ServerStats = () => {
                         <FiArrowRight size={14} aria-hidden="true" />
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               ) : (
                 <EmptyState

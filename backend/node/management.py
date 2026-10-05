@@ -54,10 +54,6 @@ def node_version_compat(agent_version: object) -> dict:
     return {"verdict": verdict, "agent_version": agent_version, "panel_version": PANEL_VERSION}
 
 
-async def _run_bounded(fn, *args):
-    return await run_bounded(fn, *args)
-
-
 async def _resolve_pinned_ca(request: NodeCreate) -> str | None:
     """Fetch the node's certificate before any keyed request is sent.
 
@@ -158,8 +154,6 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or existing.key
 
-    # A failed re-fetch must keep the pin already on record: dropping it would
-    # silently downgrade the node to the unverified-TLS fallback on a blip.
     server_ca = await _resolve_pinned_ca(request) or getattr(existing, "server_ca", None)
 
     crud.update_node(db, node_id, request, geo)
@@ -275,7 +269,7 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(_run_bounded(nr.create_user, name, max_logins, uid))
+        tasks.append(run_bounded(nr.create_user, name, max_logins, uid))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
@@ -299,7 +293,7 @@ async def change_user_status_on_all_nodes(
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(_run_bounded(nr.change_user_status, name, status, max_logins, uid))
+        tasks.append(run_bounded(nr.change_user_status, name, status, max_logins, uid))
     if not tasks:
         return True
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -312,7 +306,7 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(_run_bounded(nr.set_user_limit, uid, int(max_logins or 0)))
+        tasks.append(run_bounded(nr.set_user_limit, uid, int(max_logins or 0)))
     if not tasks:
         return True
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -367,7 +361,7 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(_run_bounded(nr.delete_user, str(user_id)))
+        tasks.append(run_bounded(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
     return {"ok": not failed, "failed": failed}
@@ -387,7 +381,7 @@ async def reset_user_usage_on_all_nodes(user_id: int, db: Session) -> dict:
     tasks = []
     for n in nodes:
         nr = node_client(n)
-        tasks.append(_run_bounded(nr.reset_usage, str(user_id)))
+        tasks.append(run_bounded(nr.reset_usage, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
     return {"ok": not failed, "failed": failed}

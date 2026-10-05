@@ -150,9 +150,6 @@ def _atomic_write(path: Path, data: bytes, mode: int) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     resolved = path.resolve()
-    # The two declared files, plus the bookkeeping directory as a directory —
-    # not a set of the files already in it, which would refuse meta.json on the
-    # very first certificate and only allow it afterwards.
     allowed = {p.resolve() for p in (_key_path(), _cert_path())}
     state = _tls_dir().resolve()
     if resolved.parent == state or resolved == state:
@@ -471,8 +468,6 @@ def _detect_primary_ip() -> str:
     except (OSError, subprocess.SubprocessError):
         pass
     if routable is not None:
-        # Nothing public here. Better a private address that at least matches the
-        # host than the 127.0.0.1 below, and the caller surfaces the failure.
         return routable
     try:
         return socket.gethostbyname(socket.gethostname())

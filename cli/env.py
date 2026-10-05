@@ -32,10 +32,6 @@ def _read_env_file(path: str) -> dict[str, str]:
     return values
 
 
-# The keys the CLI resolves the install layout from. Inside a container these
-# arrive as environment variables (compose passes the host .env as env_file)
-# while the .env file itself is not mounted, so the environment is the only
-# source there. The file wins on a native install, where it is the real thing.
 _ENV_KEYS = (
     "PORT",
     "URLPATH",

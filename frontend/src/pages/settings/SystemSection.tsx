@@ -8,7 +8,7 @@ import { useLive } from '../../context/LiveContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 import { settle } from '../../hooks/useAsyncData';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiServer, FiZap, FiRefreshCw, FiDownload } from 'react-icons/fi';
 import { Card, Stat } from './shared';
@@ -63,7 +63,6 @@ const SystemSection = () => {
     try {
       setLoading(true);
       setLoadError(false);
-      // Independent: missing traffic history should not blank out server info.
       const res: any = await settle({
         info: apiClient.get('/server/info'),
         metrics: apiClient.get('/metrics/history?hours=24'),
@@ -80,7 +79,6 @@ const SystemSection = () => {
 
   useEffect(() => { load(); }, [load, refreshTick]);
 
-  // Owner-only endpoint: don't ask for admins (they would just get a 403).
   useEffect(() => {
     if (!isOwner) return undefined;
     let cancelled = false;
@@ -116,7 +114,6 @@ const SystemSection = () => {
     }
   };
 
-  // The installer restarts the panel: wait for it to go down and come back.
   const pollUntilOnline = async () => {
     const deadline = Date.now() + 5 * 60 * 1000;
     await sleep(5000);
@@ -140,7 +137,6 @@ const SystemSection = () => {
       const res = await apiClient.post('/updater/run');
       const body = res.data || {};
       if (!body.success) {
-        // Refusals (Docker, no installer) carry the host-side command in msg.
         setUpdateNote(body.msg || t('updateRefused', 'The panel cannot start the update automatically.'));
         return;
       }

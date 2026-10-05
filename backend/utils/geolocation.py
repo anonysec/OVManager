@@ -15,8 +15,6 @@ logger = logging.getLogger(__name__)
 _geo_cache: dict[str, dict] = {}
 _GEO_CACHE_TTL = 3600  # 1 hour
 _GEO_CACHE_MAX = 10_000
-_GEO_CACHE_HITS = 0
-_GEO_CACHE_MISSES = 0
 
 
 _TIMEOUT = 5.0

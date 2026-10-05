@@ -30,8 +30,6 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
 
   const isAdmin = userRole === 'owner';
 
-  // Ctrl/Cmd+K. The topbar trigger emits the same event, so keyboard and
-  // pointer users get the same search.
   useEffect(() => {
     const onKey = (e: any) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -54,7 +52,6 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
     try {
       const [u, n] = await Promise.all([
         apiClient.get('/users/'),
-        // Nodes are owner-only: don't 403-spam as an admin.
         ...(isAdmin ? [apiClient.get('/nodes/')] : [Promise.resolve(null)]),
       ]);
       setUsers(asList(u.data, 'users').slice(0, 50));

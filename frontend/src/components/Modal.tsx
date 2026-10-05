@@ -25,22 +25,15 @@ const FOCUSABLE = [
 const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: any; onClose?: any; title?: any; children?: any; size?: any }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
-  // Focus is restored to this element on close.
   const previousFocusRef = useRef<any>(null);
-  // Keeps the latest close handler available without re-running the focus
-  // effect below: a fresh closure every render would steal focus back to the
-  // header's close button while the user is typing.
   const onCloseRef = useRef<any>(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  // Runs once per open, never per re-render.
   useEffect(() => {
     if (!isOpen) return undefined;
 
-    // Prefer the first input field (a form should open ready to type); fall
-    // back to the first focusable element or the dialog itself.
     previousFocusRef.current = document.activeElement;
     const dialog = dialogRef.current;
     if (dialog) {
@@ -56,7 +49,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
         return;
       }
 
-      // Tab / Shift+Tab focus trap
       if (e.key !== 'Tab' || !dialog) return;
       const focusable: any[] = Array.from(dialog.querySelectorAll(FOCUSABLE)).filter(
         (el: any) => !el.closest('[aria-hidden="true"]')
@@ -76,7 +68,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      // Restore focus to the element that opened the modal
       if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
         previousFocusRef.current.focus();
       }

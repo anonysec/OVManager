@@ -169,7 +169,6 @@ describe('ServerStats resilience', () => {
     await waitFor(() => expect(container.querySelectorAll('.ds-kpi').length).toBeGreaterThanOrEqual(4));
     const buttons = container.querySelectorAll('button.ds-kpi');
     expect(buttons.length).toBeGreaterThanOrEqual(3);
-    // Click the online-users tile (first navigable KPI)
     const onlineBtn = Array.from(buttons).find((b) => b.getAttribute('aria-label')?.includes('Online'));
     fireEvent.click(onlineBtn as Element);
     expect(getPath()).toBe('/users?view=online');
@@ -238,7 +237,6 @@ describe('ServerStats admin scoping', () => {
     expect(calls).not.toContain('/nodes/');
     expect(calls.some((u: any) => u.includes('metrics'))).toBe(false);
     expect(calls.some((u: any) => u.includes('security'))).toBe(false);
-    // Owner-only widgets are gone; user widgets stay.
     expect(screen.queryByText('Online Nodes')).toBeNull();
     expect(screen.queryByText('Add node')).toBeNull();
     expect(screen.queryByText('Online Users')).toBeTruthy();

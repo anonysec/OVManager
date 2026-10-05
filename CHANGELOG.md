@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.46 — 2026-10-05
+
+Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
+single-use hooks and utils), centralised node-fanout concurrency into
+backend/node/fanout.py (`run_bounded`, `gather_nodes`, `gather_background`)
+removing every wrapper copy, and made the CSRF exempt set, sub-route bypass,
+and Swagger `tokenUrl` resolve from `get_urlpath()` so the panel stays
+prefix-agnostic under URLPATH.
+
+installer: `host_of()` extracts the host from a URL; uninstall `--purge`
+removes only panel-owned certs and skips shared `/etc/ssl/self-signed`.
+
+`pytest`: 953 pass. `make lint` clean. `npm run verify` clean.
+
 ## 1.0.45 — 2026-10-05
 
 Four live bugs the adversarial review of 1.0.44 found in 1.0.44's own fixes.
@@ -397,3 +411,17 @@ First public release.
 - Updates download and verify the release, stage it, and roll back automatically
   if the new version does not come up. The database migrates on the next start.
 - Uninstall keeps your data. `--purge` takes a snapshot first, then deletes it.
+
+## 1.0.46 — 2026-10-05
+
+Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
+single-use hooks and utils), centralised node-fanout concurrency into
+backend/node/fanout.py (`run_bounded`, `gather_nodes`, `gather_background`)
+removing every wrapper copy, and made the CSRF exempt set, sub-route bypass,
+and Swagger `tokenUrl` resolve from `get_urlpath()` so the panel stays
+prefix-agnostic under URLPATH.
+
+installer: `host_of()` extracts the host from a URL; uninstall `--purge`
+removes only panel-owned certs and skips shared `/etc/ssl/self-signed`.
+
+`pytest`: 953 pass. `make lint` clean. `npm run verify` clean.

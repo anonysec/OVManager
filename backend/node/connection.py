@@ -148,10 +148,6 @@ def healthy(node) -> bool:
         return True
 
 
-# How long to wait for a node we have already lost to. Not a cooldown: the
-# node is still probed on every cycle, just cheaply. A 30s wait for a node
-# known to be down is 30s of a blocked worker, and the collector polls every
-# 10s with a dashboard open, so it is most of a cycle.
 BROKEN_PROBE_TIMEOUT = 3.0
 
 

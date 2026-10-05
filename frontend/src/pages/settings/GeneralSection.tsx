@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink } from 'react-icons/fi';
 import { Card } from './shared';
@@ -48,7 +48,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
   useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
 
-  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const s = shared?.data;
     if (!s || synced.current) return;
@@ -66,8 +65,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
       const res = await apiClient.put('/server/settings/urlpath', { urlpath: v });
       setUrlPath(v); setEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
-      // The panel moves to the new prefix — the old URL stops serving the app
-      // (URLPathMiddleware hides non-matching paths), so redirect there now.
       const newBase = v ? `/${v}` : '';
       setTimeout(() => { window.location.assign(`${window.location.origin}${newBase}/settings`); }, 600);
       void res;
@@ -87,9 +84,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
 
   const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
 
-  // Anti-lockout: while editing, show where the panel WILL live and require
-  // an explicit acknowledgment that the operator saved the new URL. A typo
-  // here otherwise means mystery until --reset-urlpath saves the day.
   const editValueClean = editValue.trim().replace(/^\/+|\/+$/g, '');
   const pathChanged = editValueClean !== urlPath;
   const newPanelUrl = editValueClean ? `${window.location.origin}/${editValueClean}/` : `${window.location.origin}/`;

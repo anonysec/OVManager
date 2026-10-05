@@ -17,13 +17,6 @@ TIMEOUT = 10
 LONG_TIMEOUT = 30
 
 
-# Pinned-CA senders, one session per CA file: hostname checking is OFF but
-# chain verification is REQUIRED against exactly the pinned certificate.
-# That is the whole point of TOFU pinning — the node's self-signed cert
-# names 127.0.0.1 while the panel reaches it over its public IP, so the
-# name can never match; the identity proof is the exact cert, not its
-# subject. A MITM presenting any other cert still fails closed
-# (SSLError → None, no unverified retry).
 _pinned_sessions: dict[str, _req.Session] = {}
 
 
@@ -49,8 +42,6 @@ class _PinnedAdapter(_req.adapters.HTTPAdapter):
 
     def init_poolmanager(self, *args, **kwargs):
         kwargs["ssl_context"] = self._pinned_context
-        # urllib3 verifies hostnames itself on top of the context; the pin
-        # is the identity proof, not the subject name.
         kwargs["assert_hostname"] = False
         return super().init_poolmanager(*args, **kwargs)
 
@@ -84,8 +75,6 @@ def _pinned_sender(ca: str):
 _MAX_429_WAIT = 60.0
 
 _rpc_last_error: dict[tuple[str, str], str] = {}
-# Bounded like _tls_fallback_warned: keyed by (address, path), so a churning
-# address set (renamed or re-added nodes) would otherwise grow it forever.
 _RPC_ERROR_CAP = 10_000
 
 _tls_fallback_warned: dict[str, bool] = {}
@@ -161,8 +150,6 @@ class NodeRequests:
         self.headers = {"key": api_key}
         self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
         self._verify = "pinned"
-        # Kept so _request can record the outcome against this node; the client
-        # is built from a signature, not from the ORM row.
         self.node_id = _.get("node_id")
         if self.scheme == "https" and server_ca:
             from backend.node.pki import ca_file_for
@@ -171,11 +158,6 @@ class NodeRequests:
             if node_id is not None:
                 self._verify = ca_file_for(node_id, server_ca)
             elif _is_pem(server_ca):
-                # First add: the row does not exist yet, so there is no id to
-                # name the pinned file after. Verify this connection against
-                # the PEM itself; it reaches disk under the real id as soon as
-                # one exists. Without this, every TLS Add Node raised and the
-                # panel answered 500.
                 self._verify = server_ca
             else:
                 self._verify = None
@@ -264,10 +246,6 @@ class NodeRequests:
         if self.scheme != "https":
             return self._send_plain(method, path, require_success=require_success, **kw)
         if isinstance(self._verify, str) and self._verify != "pinned":
-            # Pinned CA: verify against that exact certificate via a session
-            # whose context requires the chain but skips the hostname (the
-            # cert names localhost while we dial the public IP). No fallback:
-            # a non-matching cert fails closed here.
             try:
                 result = self._send(method, path, require_success=require_success, sender=_pinned_sender(self._verify), **kw)
                 self.tls_verified = True
@@ -482,8 +460,6 @@ class NodeRequests:
                 logger.error("Node %s %s: %s", self.address, path, e)
                 return None
         elif isinstance(self._verify, str) and self._verify != "pinned":
-            # Pinned CA via the pinned session (chain required, hostname
-            # unchecked — same policy as _request). No fallback.
             try:
                 r = _pinned_sender(self._verify)("get", url, headers=headers, **kw)
                 self.tls_verified = True

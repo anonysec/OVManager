@@ -18,9 +18,6 @@ type ButtonProps = {
   [key: string]: any;
 };
 
-// Always a real <button>, so keyboard activation, form semantics and the
-// global focus ring come for free. `type` defaults to "button": an untyped
-// button inside a form submits it, which is never what a toolbar wants.
 
 const Button = ({
   variant = 'secondary',

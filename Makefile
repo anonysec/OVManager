@@ -43,8 +43,8 @@ check-bash:
 # the combined target made it fail on a missing @eslint/js rather than on
 # anything about the backend.
 lint-backend:
-	.venv/bin/ruff check backend cli main.py tests scripts/bench
-	.venv/bin/ruff format --check backend cli main.py tests scripts/bench
+	.venv/bin/ruff check backend cli main.py tests
+	.venv/bin/ruff format --check backend cli main.py tests
 	bash -n install.sh manager.sh scripts/lib/*.sh
 	git diff --check
 
@@ -57,13 +57,6 @@ verify: lint
 	cd frontend && npm run verify
 	.venv/bin/python scripts/export_openapi.py
 
-# Not a test: the figures depend on the machine's core count, so a fixed
-# assertion would test the runner rather than the code. The properties these
-# numbers justify are covered by tests/test_node_fanout_budget.py and
-# tests/test_worker_process.py. See scripts/bench/README.md.
-bench:
-	.venv/bin/python scripts/bench/node_fanout.py
-	.venv/bin/python scripts/bench/jobs_worker.py
 openapi:
 	.venv/bin/python scripts/export_openapi.py
 

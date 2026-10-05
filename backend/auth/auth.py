@@ -26,11 +26,6 @@ logger = logging.getLogger("auth")
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
-# Per USERNAME, independent of source address. Both other buckets key on the IP,
-# so a botnet or proxy pool gave every request a brand-new pair of buckets and
-# the owner's password could be tried without limit. Deliberately generous: this
-# bucket is the one an attacker cannot avoid, so a low ceiling would also let
-# anyone lock a known account out by failing against it on purpose.
 _MAX_PER_USER = 60  # per username across all addresses per window
 _LOCKOUT_SECONDS = 300
 _CLEANUP_INTERVAL = 600
@@ -88,11 +83,6 @@ def _user_key(username: str) -> str:
     return hashlib.sha256(f"user\0{(username or '').lower()}".encode()).hexdigest()[:16]
 
 
-# A real bcrypt hash of a value nobody can supply, verified against on every
-# failure path. Without this the unknown-username branch returns before bcrypt
-# runs, so a 401 costs microseconds for a name that does not exist and ~100ms
-# for one that does — which enumerates accounts through the login endpoint.
-# Generated rather than pasted so it cannot be mistaken for a real credential.
 _DUMMY_HASH = hash_password(secrets.token_urlsafe(32))
 
 
@@ -253,7 +243,24 @@ async def logout(request: Request):
     return resp
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login", auto_error=False)
+class _OAuth2PasswordBearer(OAuth2PasswordBearer):
+    """Resolve tokenUrl when the OpenAPI schema is built, so Swagger posts to
+    the path the browser actually sees behind URLPATH."""
+
+    @property
+    def model(self):
+        from backend.urlpath import get_urlpath
+
+        prefix = get_urlpath().strip("/")
+        self._model.flows.password.tokenUrl = f"/{prefix}/api/login" if prefix else "/api/login"
+        return self._model
+
+    @model.setter
+    def model(self, value):
+        self._model = value
+
+
+oauth2_scheme = _OAuth2PasswordBearer(tokenUrl="", scheme_name="OAuth2PasswordBearer", auto_error=False)
 
 
 @router.post("/refresh")

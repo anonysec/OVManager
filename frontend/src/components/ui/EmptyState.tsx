@@ -1,7 +1,6 @@
 import { FiInbox } from 'react-icons/fi';
 
 // The soft accent-tinted badge disc makes an empty region read as
-// "intentional" rather than "broken", and leads the eye to the headline.
 
 const EmptyState = ({ title, description, actionLabel, onAction }: { title?: any; description?: any; actionLabel?: any; onAction?: any }) => (
   <div className="empty-state">

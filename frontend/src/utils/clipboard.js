@@ -1,9 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Copy text to clipboard. Works even on non-secure (http) contexts where
-// navigator.clipboard is undefined/unavailable (common for panels served over
-// plain http on a public IP).
 export async function copyText(text) {
   if (text == null) return false;
   const value = String(text);

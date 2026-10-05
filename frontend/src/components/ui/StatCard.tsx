@@ -16,8 +16,6 @@ type StatCardProps = {
   [key: string]: any;
 };
 
-// Use `as="button"` when the tile navigates: button semantics buy keyboard
-// activation and the focus ring for free.
 
 const StatCard = ({
   as: Tag = 'div',

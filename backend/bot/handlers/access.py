@@ -45,30 +45,13 @@ async def require_actor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> A
     lang = lang_of(update, context)
     user = update.effective_user
     if user and not _rate_ok(user.id):
-        await _reply(update, t(lang, "rate_limited"))
+        await edit_or_reply(update, t(lang, "rate_limited"))
         return None
     actor = await actor_of(update, context)
     if actor is None:
-        await _reply(update, t(lang, "denied"))
+        await edit_or_reply(update, t(lang, "denied"))
         return None
     return actor
-
-
-async def _reply(update: Update, text: str) -> None:
-    query = update.callback_query
-    if query:
-        try:
-            await query.answer()
-        except Exception:
-            pass
-        try:
-            await query.edit_message_text(text)
-            return
-        except Exception:
-            pass
-    message = update.effective_message
-    if message:
-        await message.reply_text(text)
 
 
 async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
@@ -79,7 +62,6 @@ async def fetch_user(update, panel, uuid: str, lang: str) -> dict | None:
     """
     from backend.bot.i18n import t
     from backend.bot.keyboards import back_to_user
-    from backend.bot.ui import edit_or_reply
 
     user = await panel.get_user(uuid=uuid)
     if user:

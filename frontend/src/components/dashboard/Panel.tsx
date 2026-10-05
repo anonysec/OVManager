@@ -1,8 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Base card primitive for dashboard panels. `flush` drops body padding so the
-// consumer can render edge-to-edge (DataTable, ActivityFeed).
 
 import { useTranslation } from 'react-i18next';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
@@ -23,30 +21,27 @@ function Panel({ title, icon: Icon, action, flush = false, className = '', child
   );
 }
 
-// The inline error is the point: one failed panel must not swap the rest of
-// the dashboard for a wall of red.
 
-export function PanelState({ loading, error, isEmpty, onRetry, skeleton, children, t: tProp }: { loading?: any; error?: any; isEmpty?: any; onRetry?: any; skeleton?: any; children?: any; t?: any }) {
+export function PanelState({ loading, error, isEmpty, onRetry, skeleton, children }: { loading?: any; error?: any; isEmpty?: any; onRetry?: any; skeleton?: any; children?: any }) {
   const { t } = useTranslation();
-  const ti = tProp || t;
-  if (loading) return skeleton ?? <PanelSkeleton lines={3} label={ti('loading', 'Loading…')} />;
+  if (loading) return skeleton ?? <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (error) {
     return (
       <div className="ds-inline-error" role="alert">
         <FiAlertTriangle aria-hidden="true" />
         <div>
-          <strong>{ti('panelLoadFailed', 'Could not load this panel')}</strong>
-          <span>{ti('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
+          <strong>{t('panelLoadFailed', 'Could not load this panel')}</strong>
+          <span>{t('panelLoadFailedHint', 'Other sections are unaffected.')}</span>
         </div>
         {onRetry && (
-          <button type="button" className="btn btn-sm btn-secondary" onClick={onRetry} aria-label={ti('retry', 'Retry')}>
-            <FiRefreshCw size={12} aria-hidden="true" /> {ti('retry', 'Retry')}
+          <button type="button" className="btn btn-sm btn-secondary" onClick={onRetry} aria-label={t('retry', 'Retry')}>
+            <FiRefreshCw size={12} aria-hidden="true" /> {t('retry', 'Retry')}
           </button>
         )}
       </div>
     );
   }
-  if (isEmpty) return <EmptyState title={ti('noData')} description={ti('noDataDesc')} />;
+  if (isEmpty) return <EmptyState title={t('noData')} description={t('noDataDesc')} />;
   return typeof children === 'function' ? children() : children;
 }
 

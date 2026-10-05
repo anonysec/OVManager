@@ -11,10 +11,6 @@ const POLL_INTERVAL = 8000; // fallback polling while the stream is down
 const RECONNECT_MS = 20000; // SSE reconnect delay after a failure
 const RETRY_WHEN_LOGGED_OUT_MS = 5000;
 
-// A hand-rolled reader because the native EventSource API cannot set an
-// Authorization header, and this panel authenticates with Bearer tokens.
-// The wire format is just "event:/data:" lines in blank-line-separated blocks,
-// with ":..." heartbeat comments to ignore.
 
 async function readEventStream(body: any, onEvent: any) {
   const reader = body.getReader();
@@ -29,8 +25,6 @@ async function readEventStream(body: any, onEvent: any) {
       const block = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       if (!block || block.startsWith(':')) continue; // heartbeat / comment
-      // Forward the backend's invalidation topic (users/usage/nodes) so
-      // subscribers get a targeted refetch.
       let topic = null;
       for (const line of block.split('\n')) {
         const trimmed = line.trim();
@@ -44,9 +38,6 @@ async function readEventStream(body: any, onEvent: any) {
 }
 
 export const LiveProvider = ({ children }: { children?: any }) => {
-  // refreshTick is the public contract: any change tells consumers to refetch.
-  // The transport behind it is SSE with a transparent polling fallback —
-  // consumers never know the difference.
   const [refreshTick, setRefreshTick] = useState(0);
   const [streamConnected, setStreamConnected] = useState(false);
   const abortRef = useRef<any>(null);
@@ -74,25 +65,18 @@ export const LiveProvider = ({ children }: { children?: any }) => {
     publish('tick');
     if (topic) {
       publish(topic);
-      // Pages subscribe to the `.changed` form: "users" -> "users.changed".
       if (!topic.includes('.')) publish(`${topic}.changed`);
     }
   }, [publish]);
 
-  // ── SSE transport ───────────────────────────────────────────────────
   useEffect(() => {
     let stopped = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
     const connect = async () => {
       if (stopped) return;
-      // Must be the same key the api layer reads (`authToken`, not the
-      // JWT-era `access_token`), or the stream 401s and silently degrades to
-      // polling.
       const token = localStorage.getItem('authToken');
       if (!token) {
-        // Logged out: retry quietly rather than reconnect-storm; a fresh login
-        // will have set a token.
         retryTimer = setTimeout(connect, RETRY_WHEN_LOGGED_OUT_MS);
         return;
       }
@@ -108,8 +92,7 @@ export const LiveProvider = ({ children }: { children?: any }) => {
         await readEventStream(resp.body, (topic: string | null) => {
           if (!stopped) tickWithPublish(topic);
         });
-      } catch {
-        // Network failure, aborted (logout/unmount), or 401 — retry below.
+      } catch { /* retry below */
       }
       if (stopped) return;
       setStreamConnected(false);
@@ -124,16 +107,12 @@ export const LiveProvider = ({ children }: { children?: any }) => {
     };
   }, [tickWithPublish]);
 
-  // ── Polling fallback ──────────────────────────────────────────────────
-  // Runs only while SSE is unavailable (proxy buffering, older browser,
-  // backend without the live router), so the two never double-poll.
   useEffect(() => {
     if (streamConnected) return undefined;
     const id = setInterval(tickWithPublish, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [streamConnected, tickWithPublish]);
 
-  // A returning tab shows stale data immediately, so refresh on it.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') tickWithPublish();

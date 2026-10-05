@@ -27,8 +27,6 @@ const toIso = (value: string | number | null | undefined) => {
   return new Date(n * 1000).toISOString();
 };
 
-// Active bearer sessions for one admin, fetched from the owner-only
-// /admin/{username}/sessions endpoints.
 const AdminSessionsModal = ({ admin, onClose }: { admin: any; onClose: () => void }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
@@ -188,7 +186,6 @@ const AdminManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  // Default: newest first (`id` autoincrement = creation order), like Users/Nodes.
   const [sort, setSort] = useState<{ key: string; dir: string }>({ key: 'id', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
@@ -272,7 +269,6 @@ const AdminManagement = () => {
       t('confirmDeleteAdmin', 'Delete admin "{{name}}"? Their users will remain but become unassigned.', { name: admin.username }),
       async () => {
         try {
-          // Backend contract: DELETE /admin/{username} (not id).
           const res = await apiClient.delete(`/admin/${encodeURIComponent(admin.username)}`);
           addToast(res.data?.success ? t('deleted') : (res.data?.msg || t('error')), res.data?.success ? 'success' : 'error');
           setSelected((prev) => { const n = new Set(prev); n.delete(String(admin.username)); return n; });
@@ -300,7 +296,6 @@ const AdminManagement = () => {
         { status: enabled },
       );
       if (res.data?.success) {
-        // The backend also reports how many sessions it revoked on disable.
         const revoked = Number(res.data?.data?.revoked_sessions || 0);
         addToast(
           revoked > 0

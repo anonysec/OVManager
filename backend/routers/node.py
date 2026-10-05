@@ -10,8 +10,7 @@ from backend.auth.auth import get_current_user
 from backend.auth.authz import require_owner, require_user_access
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.node.requests import node_client
-from backend.node.task import (
+from backend.node.management import (
     add_node_handler,
     delete_node_handler,
     download_all_ovpn_clients_from_node,
@@ -20,6 +19,7 @@ from backend.node.task import (
     list_nodes_handler,
     update_node_handler,
 )
+from backend.node.requests import node_client
 from backend.operations.observability import live
 from backend.operations.observability.audit import log_event
 from backend.schema import NodeCreate, ResponseModel

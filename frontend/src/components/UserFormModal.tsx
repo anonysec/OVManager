@@ -40,11 +40,6 @@ const defaultExpiryDate = (days = 30) => {
 
 const DATE_SHORTCUTS: [string, number][] = [['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]];
 
-// mode="create" (user=null) or mode="edit". Fields are grouped into Account /
-// Validity / Limits so the form reads as three small decisions. Create
-// defaults come from Settings (30 days / 1 device unless configured), and a
-// successful create flips the modal into a handoff step: download the profile
-// or copy the subscription link without leaving the screen.
 const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, onDownloadUser }: { user?: any; isOpen?: any; onClose?: any; onSaved?: any; defaults?: any; linkForUser?: any; onDownloadUser?: any }) => {
   const isEdit = !!user;
   const days = Number(defaults?.days) || 30;
@@ -57,9 +52,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggest, setSuggest] = useState('');
-  // `null` = not usable for this account (no username prefix configured) or
-  // unreachable, so the button stays hidden rather than sitting there dead.
-  // Empty string = not fetched yet.
   const [suggestUnavailable, setSuggestUnavailable] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [createdUser, setCreatedUser] = useState<any>(null);
@@ -113,7 +105,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
     }
   }, []);
 
-  // Availability is probed once on open, so a dead button never renders.
   useEffect(() => {
     if (!isOpen || isEdit) return undefined;
     setSuggestLoading(true);

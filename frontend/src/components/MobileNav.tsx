@@ -7,8 +7,6 @@ const MobileNav = () => {
   const { userRole } = useAuth();
   const { t } = useTranslation();
 
-  // Primary destinations only — Admins/Audit live in the drawer's Advanced
-  // group, and Nodes/Health are owner-only. Owner sees 5 tabs, admin 3.
   const items = [
     { to: '/', label: t('navHome', 'Home'), icon: FiGrid, end: true },
     { to: '/users', label: t('navUsers', 'Users'), icon: FiUsers },

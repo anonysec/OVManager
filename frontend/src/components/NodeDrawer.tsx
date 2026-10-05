@@ -9,9 +9,6 @@ import { formatBytes } from '../utils/format';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
 
-// Slide-over detail panel for one node. Settings and Actions always print the
-// backend's own message: the node's answer is the only reliable record of what
-// actually happened.
 
 
 const apiError = (e: any, fallback: any) => {
@@ -502,8 +499,6 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
 
 const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
   const mode = status?.tls_mode;
-  // 'unknown' = never connected (offline or legacy response). Stay silent —
-  // the Online/Offline cell already covers it.
   if (!mode || mode === 'verified' || mode === 'unknown') return null;
   if (mode === 'plain') {
     return (
@@ -523,9 +518,6 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
 
 const CertExpiryChip = ({ expiry }: { expiry?: any }) => {
   const { t } = useTranslation();
-  // Time-dependent display value ("expires in N days" as of this render),
-  // never fed back into state, so there is no render-loop risk. The purity
-  // exemption is deliberate.
   // eslint-disable-next-line react-hooks/purity
   const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
   const cls = days < 0 ? 'is-expired' : days <= 7 ? 'is-critical' : days <= 30 ? 'is-soon' : 'is-ok';

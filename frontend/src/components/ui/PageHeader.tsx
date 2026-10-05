@@ -3,8 +3,6 @@
 
 import './PageHeader.css';
 
-// Owns the page's single <h1>. `meta` is a slot for badges/timestamps and
-// `actions` for buttons; on phones the actions wrap below the title.
 
 const PageHeader = ({
   title,

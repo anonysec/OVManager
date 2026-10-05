@@ -38,14 +38,8 @@ const AppearanceSection = () => {
   ];
 
   const changeLanguage = (id: string) => {
-    // loadLanguage, not i18n.changeLanguage: fa/ru/cn are code-split and only
-    // `en` is in the initial resources, so switching without loading first left
-    // every string English while the page flipped to RTL.
     void loadLanguage(id);
     setLang(id);
-    // dir is set in DashboardLayout's effect, not here — that one also sets
-    // html[lang] and body[dir], and mutating the DOM during render is what the
-    // lint rule objects to.
   };
 
   const ACCENTS = [
@@ -63,9 +57,6 @@ const AppearanceSection = () => {
     document.documentElement.style.setProperty('--accent-color', hex);
   };
 
-  // ── Install app (PWA) ──────────────────────────────────────────────────
-  // Chrome/Edge fire beforeinstallprompt; the event is stored and replayed
-  // from the button. Safari/iOS never fires it, so the card stays hidden there.
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [installHint, setInstallHint] = useState(true);
   const [installed, setInstalled] = useState(
@@ -91,8 +82,6 @@ const AppearanceSection = () => {
     };
   }, []);
 
-  // Phones refuse to install over an untrusted certificate, so ask the panel
-  // what it is serving and hide the hint when install cannot succeed.
   useEffect(() => {
     let cancelled = false;
     apiClient

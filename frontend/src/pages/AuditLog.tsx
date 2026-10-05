@@ -14,7 +14,6 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import './AuditLog.css';
 
-// Tone per action root. Unknown actions fall back to neutral.
 const ACTION_TONES: Record<string, string> = {
   user: 'info', node: 'accent', admin: 'warning',
   maintenance: 'warning', auth: 'danger', security: 'danger',
@@ -53,8 +52,6 @@ const AuditLog = () => {
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
   const [detailEvent, setDetailEvent] = useState<any>(null);
   const [copied, setCopied] = useState(false);
-  // Wall-clock seconds, updated on an interval. Kept in state so relative
-  // times and the time-range filter never call Date.now() during render.
   const [nowTs, setNowTs] = useState(0);
 
   const load = useCallback(async ({ background = false } = {}) => {
@@ -94,14 +91,11 @@ const AuditLog = () => {
     return () => u();
   }, [subscribe]);
 
-  // Localized "3h ago" via Intl (falls back to the shared English helper).
   const relative = useMemo(() => {
     let rtf: Intl.RelativeTimeFormat | null;
     try { rtf = new Intl.RelativeTimeFormat(i18n.language || 'en', { numeric: 'auto' }); } catch { rtf = null; }
     return (ts: any, now: number) => {
       if (!ts) return '—';
-      // `now` is 0 until the first effect pass — fall back so the first paint
-      // cannot show a nonsense distance.
       if (!rtf || !now) return fmtRelative(new Date(Number(ts) * 1000).toISOString());
       const diff = Math.round(Number(ts) - now);
       const abs = Math.abs(diff);

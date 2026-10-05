@@ -1,8 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// First-login checklist at /setup: node, user, config. Steps 1 and 2 self-check
-// from GET /health/setup; step 3 is manual — a download cannot be observed.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +35,6 @@ const SetupWizard = () => {
     setLoading(true);
     setError(false);
     try {
-      // Not wrapped in ResponseModel — the counters are the whole body.
       const res = await apiClient.get('/health/setup');
       setSetup(res.data || null);
     } catch {
@@ -79,8 +76,6 @@ const SetupWizard = () => {
     navigate('/');
   };
 
-  // Everything done: congratulate briefly, then get out of the way. The
-  // dismissal is stored so the Home banner stops asking too.
   useEffect(() => {
     if (loading || !allDone) return undefined;
     const id = setTimeout(() => {

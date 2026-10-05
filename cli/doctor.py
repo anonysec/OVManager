@@ -20,11 +20,13 @@ import shutil
 import stat
 import time
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from cli import render
 from cli.env import SYSTEMD_SERVICE, Install
 from cli.probes import fetch_health, service_state
+from cli.tls import cert_enddate
 
 
 @dataclass
@@ -103,8 +105,6 @@ def check_service_account(install: Install, in_container: bool = False) -> Check
 def check_env_perms(install: Install, in_container: bool = False) -> Check:
     path = os.path.join(install.install_dir, ".env")
     if in_container:
-        # The host .env is passed in as environment variables, not mounted, so
-        # there is no file here to stat. Its mode is the host manager's business.
         return Check("Config perms", True, "n/a (host-managed)", "")
     if not os.path.isfile(path):
         return Check("Config perms", False, ".env missing", "reinstall")
@@ -112,17 +112,8 @@ def check_env_perms(install: Install, in_container: bool = False) -> Check:
         return _check_env_shared_with_container(path)
     mode = stat.S_IMODE(os.stat(path).st_mode)
     gid = os.stat(path).st_gid
-    # 0600 is correct whatever the group: only the owner can read it. Keying
-    # this on gid == 0 looked harmless and was not — a file owned by a
-    # non-root group was reported as a misconfiguration, which is exactly what
-    # happened the moment the suite ran as nobody.
     if mode == 0o600:
         return Check("Config perms", True, f".env is {oct(mode)}", "")
-    # The native panel runs as a service account and reads .env through the
-    # group, so 0640 root:ovmanager is the correct arrangement, not a lax one:
-    # no local account other than that service can read the admin hash, the
-    # JWT key or the secret URL path. A group bit is only acceptable when the
-    # group is that account.
     service = _unit_user()
     if service is not None and mode == 0o640 and _group_name(gid) == service:
         return Check("Config perms", True, f"{oct(mode)}, shared with {service}", "")
@@ -150,8 +141,6 @@ def check_tls_key_perms(install: Install, in_container: bool = False) -> Check:
     `ovm doctor` reported no problems throughout.
     """
     if in_container:
-        # The container's own uid 1000 reads it through a read-only mount; the
-        # host file's mode is the host manager's business.
         return Check("TLS key", True, "n/a (container-mounted)", "")
     key = _env_file(install).get("SSL_KEYFILE", "").strip()
     if not key:
@@ -163,12 +152,7 @@ def check_tls_key_perms(install: Install, in_container: bool = False) -> Check:
     mode = stat.S_IMODE(info.st_mode)
     service = _unit_user()
     if service is None:
-        # Root, or a unit we cannot read: root opens anything, so there is
-        # nothing here to get wrong.
         return Check("TLS key", True, f"{oct(mode)} (panel runs as root)", "")
-    # Mode alone does not settle it. A 0600 key owned by some *other* account
-    # is unreadable by this one — that was the observed breakage — so the bit
-    # only counts when it is the bit that grants access to this account.
     if _owner_name(info.st_uid) == service and mode & 0o400:
         return Check("TLS key", True, f"{oct(mode)}, owner {service}", "")
     if _group_name(info.st_gid) == service and mode & 0o040:
@@ -283,7 +267,6 @@ def check_worker(install: Install) -> Check:
         except OSError:
             pid = ""
         return Check("Worker", True, f"running{f' (pid {pid})' if pid else ''}", "")
-    # We got the lock, so nobody holds it: the worker is gone and left the file.
     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
     handle.close()
     return Check(
@@ -311,7 +294,13 @@ def check_certificate(install: Install) -> Check:
     cert = install.cafile
     if not cert or not os.path.isfile(cert):
         return Check("Certificate", False, "not found", "ovm https")
-    days_left = _cert_days_left(cert)
+    try:
+        _expiry = parsedate_to_datetime(cert_enddate(cert) or "")
+        if _expiry is not None and _expiry.tzinfo is None:
+            _expiry = _expiry.replace(tzinfo=datetime.UTC)
+        days_left = int((_expiry - datetime.datetime.now(datetime.UTC)).total_seconds() // 86400)
+    except (TypeError, ValueError):
+        days_left = None
     if days_left is None:
         return Check("Certificate", False, "could not read expiry", "ovm https")
     if days_left > 30:
@@ -319,35 +308,6 @@ def check_certificate(install: Install) -> Check:
     if days_left > 0:
         return Check("Certificate", False, f"expires in {days_left}d", "ovm https")
     return Check("Certificate", False, "expired", "ovm https")
-
-
-def _cert_days_left(cert: str) -> int | None:
-    """Days until notAfter, or None when openssl cannot say."""
-    import re
-    import subprocess
-
-    try:
-        out = subprocess.run(
-            ["openssl", "x509", "-enddate", "-noout", "-in", cert],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except Exception:
-        return None
-    if out.returncode != 0:
-        return None
-    m = re.match(r"notAfter=(.*)", out.stdout.strip())
-    if not m:
-        return None
-    # openssl prints e.g. "Sep 22 01:30:24 2036 GMT"; email.utils handles it.
-    from email.utils import parsedate_to_datetime
-
-    try:
-        expiry = parsedate_to_datetime(m.group(1))
-    except (TypeError, ValueError):
-        return None
-    return int((expiry - datetime.datetime.now(datetime.UTC)).total_seconds() // 86400)
 
 
 def check_update_journal(install: Install) -> Check:
@@ -505,9 +465,6 @@ def fix(check: Check, install: Install, service: str | None = None) -> Check:
         if not key or account is None or not os.path.isfile(key):
             return check
         try:
-            # Group only: the owner is not ours to claim, and a group read is
-            # exactly what the service account needs. This is the same repair
-            # the installer's grant_panel_access performs.
             os.chown(key, -1, grp.getgrnam(account).gr_gid)
             os.chmod(key, 0o640)
         except (OSError, KeyError):
@@ -587,21 +544,9 @@ def fix_service_account(install: Install, check: Check) -> Check:
         )
     new_body = re.sub(r"^User=.*$", f"User={user}\nGroup={user}", body, count=1, flags=re.M)
 
-    # `uv run` re-resolves and rebuilds the project before starting it, which
-    # writes into the tree (egg-info, the lock) — so as an unprivileged account
-    # it cannot work, and it fails with "Cannot update time stamp of directory
-    # 'ovmanager.egg-info'". The venv's own interpreter needs no write access
-    # and is what uv ends up executing anyway.
-    #
-    # This is why the unit cannot simply keep its ExecStart: the panel has never
-    # actually run unprivileged before. An earlier feasibility check booted
-    # .venv/bin/python3 directly, so it passed without ever exercising the
-    # start command the unit actually used.
     venv_python = os.path.join(install.install_dir, ".venv", "bin", "python3")
     current = re.search(r"^ExecStart=(\S+)", new_body, re.M)
     program = current.group(1) if current else ""
-    # Already an interpreter from the venv: nothing to do, and no need to guess
-    # where uv lives on this box, which is not a fixed path.
     if not re.search(r"/\.venv/bin/python[0-9.]*$", program):
         new_body = re.sub(
             r"^ExecStart=.*$",
@@ -617,8 +562,6 @@ def fix_service_account(install: Install, check: Check) -> Check:
         with open(unit, "w", encoding="utf-8") as fh:
             fh.write(new_body)
         os.chmod(unit, 0o644)
-        # Group-read for the service, owner-only for everything else. 0600 on
-        # .env was never the point -- no other local account can read it was.
         _chown(os.path.join(install.install_dir, ".env"), 0, gid, 0o640)
         _chown(install.install_dir, 0, gid, 0o750)
         for path in _tls_paths(install):
@@ -631,14 +574,6 @@ def fix_service_account(install: Install, check: Check) -> Check:
         _run(["systemctl", "daemon-reload"])
         if not _run(["systemctl", "restart", SYSTEMD_SERVICE]):
             raise RuntimeError("systemctl restart failed")
-        # 60s, not 30. The first start as the service account is the slowest
-        # one there will ever be: the tree is root-owned, so the interpreter
-        # cannot write its bytecode cache and recompiles everything on every
-        # start, on a cold page cache. Measured at 6s warm, but the first
-        # `doctor --fix` on a freshly updated box timed out at 30s, rolled the
-        # migration back, and the immediate retry then succeeded — which is a
-        # bad way to learn that a window is too tight. This matches the
-        # installer's own wait_health timeout in do_update.
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if fetch_health(install.health_url, timeout=3.0, cafile=install.cafile)[0]:

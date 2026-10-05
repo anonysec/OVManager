@@ -3,6 +3,7 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from backend.data_paths import DATA_DIR
 
@@ -15,6 +16,7 @@ restore_lock = threading.Event()
 engine = create_engine(
     url=DATABASE_URL,
     connect_args={"check_same_thread": False, "timeout": 30},
+    poolclass=NullPool,
 )
 
 

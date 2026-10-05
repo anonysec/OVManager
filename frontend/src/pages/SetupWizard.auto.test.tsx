@@ -63,9 +63,7 @@ describe('SetupWizard auto-dismiss', () => {
         <ToastProvider><Probe /><SetupWizard /></ToastProvider>
       </MemoryRouter>,
     );
-    // The congratulations card renders first…
     expect(await screen.findByText(/all set/i)).toBeTruthy();
-    // …then the wizard dismisses itself and navigates home.
     await waitFor(() => expect(lastPath).toBe('/'), { timeout: 6000 });
     expect(store['ovmanager-setup-dismissed']).toBe('1');
   });

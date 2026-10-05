@@ -8,7 +8,6 @@ import { CODES } from '../utils/geo';
 import './NodeFormModal.css';
 
 const parseBundle = (raw: any, t: any) => {
-  // ovnode://<name>@<host>:<port>?key=<APIKEY>&tls=0|1  (printed by the node installer)
   const m = String(raw || '').trim().match(/^ovnode:\/\/([^@]+)@([^:/?#]+)(?::(\d+))?\?([^#]*)$/);
   if (!m) return { error: t('nodeBundleInvalid') };
   const [, name, address, port, query] = m;
@@ -26,8 +25,6 @@ const parseBundle = (raw: any, t: any) => {
   };
 };
 
-// New nodes default to UDP: it is the faster transport and what the node
-// installer sets up first. Edit keeps whatever the node record already has.
 const BLANK = {
   name: '', address: '', tunnel_address: '', protocol: 'udp',
   ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: true,
@@ -43,9 +40,6 @@ const errorText = (err: any, fallback: any) => {
   return fallback;
 };
 
-// mode="create" (node=null) or mode="edit". Fields are grouped into Quick
-// setup / Connection / VPN / Location / Security so each screen is a few small
-// decisions, with every problem reported next to the field that caused it.
 const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?: any; onClose?: any; onSaved?: any }) => {
   const isEdit = !!node;
   const { t } = useTranslation();
@@ -114,11 +108,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
       protocol: formData.protocol || 'udp',
       ovpn_port: Number(formData.ovpn_port),
       port: Number(formData.port),
-      // TLS is not optional for new nodes: the API key must never travel in
-      // cleartext. Edits keep the stored value, so a metadata change cannot
-      // silently downgrade a working node.
       use_tls: isEdit ? formData.use_tls !== false : true,
-      // Blank = auto-detect; the API rejects "" (pattern), so send null.
       country_code: (formData.country_code || '').trim() || null,
     };
     if (isEdit) {

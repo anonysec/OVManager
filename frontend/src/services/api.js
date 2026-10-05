@@ -1,14 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Minimal fetch-based API client replacing axios (same call-site contract):
-//   apiClient.get(url, { params, timeout, responseType, headers, validateStatus })
-//   apiClient.post/put(url, data, config) / apiClient.delete(url, config)
-// Resolves { data, status, headers, config } — rejects with an error carrying
-// .response { status, data }, .config { url } and .message, like axios did.
 
 const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
-// Exported for non-fetch consumers (the SSE live stream uses it directly).
 export const apiBase = basePath ? `/${basePath}/api` : '/api';
 
 export const urlPath = basePath ? `/${basePath}` : '';
@@ -46,8 +40,6 @@ async function parseBody(res, responseType) {
   }
 }
 
-// Pre-auth endpoints render their own errors: a global toast and an
-// "expired session" for a refused claim key both say the wrong thing.
 const isPreAuth = (url) => url.includes('/login') || url.includes('/owner-claim');
 
 function handleAuthExpired(requestUrl) {
@@ -85,7 +77,6 @@ async function request(method, url, data, config = {}) {
   let body;
   if (data !== undefined) {
     if (data instanceof FormData) {
-      // Let fetch set the multipart boundary itself.
       delete reqHeaders['Content-Type'];
       body = data;
     } else if (data instanceof URLSearchParams || typeof data === 'string') {

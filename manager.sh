@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.0.45"
+VERSION="1.0.46"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -1175,6 +1175,19 @@ public_ip() {
         esac
     done
     return 1
+}
+
+# The host part of a URL or a bare hostname, for locating a certificate
+# directory. Not a chain of trims: `%%.*` on "panel.example.com" yields
+# "panel", which points the purge at a directory that does not exist.
+host_of() {
+    local h="$1"
+    h="${h#*://}"          # scheme
+    h="${h%%/*}"           # path
+    h="${h%%\?*}"          # query
+    h="${h##*@}"           # userinfo
+    h="${h%%:*}"           # port
+    printf '%s' "$h"
 }
 
 # Resolve and report, so a certificate attempt is not spent discovering a

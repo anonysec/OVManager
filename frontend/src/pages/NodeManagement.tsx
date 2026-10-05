@@ -19,8 +19,6 @@ import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
 import './NodeManagement.css';
 
-// One row per OVNode; the heavy per-node actions (DNS/IPv6/ports, restart,
-// update, logs) live in NodeDrawer.
 
 const tlsMeta = (mode: any, t: any) => {
   if (mode === 'verified') return { tone: 'success', label: t('tlsVerified', 'Verified') };
@@ -80,8 +78,6 @@ const NodeManagement = () => {
 
   useEffect(() => { fetchNodes(); }, [fetchNodes]);
 
-  // Poll every node's live status. Re-armed whenever the node list changes so
-  // the refresh interval always covers the current set.
   useEffect(() => {
     if (nodes.length === 0) return undefined;
     let cancelled = false;
@@ -108,7 +104,6 @@ const NodeManagement = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  // Deep link ?node=<id> (command palette) opens the drawer on Overview.
   useEffect(() => {
     const nodeId = searchParams.get('node');
     if (!nodeId) return;

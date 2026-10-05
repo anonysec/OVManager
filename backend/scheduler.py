@@ -17,7 +17,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from backend.db.engine import SessionLocal
 from backend.logger import logger
-from backend.node.task import clean_stale_sessions_all_nodes, sync_all_user_limits
+from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.operations.observability.live import POLL_SECONDS, collect_live_snapshot
 
 _scheduler = None

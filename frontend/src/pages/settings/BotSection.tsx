@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiSend } from 'react-icons/fi';
 import { Card, Field } from './shared';
@@ -36,7 +36,6 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
   const load = shared?.reload ?? (() => {});
   const synced = useRef(false);
 
-  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const d = shared?.data;
     if (!d || synced.current) return;

@@ -42,13 +42,10 @@ const COUNTRY_ALIASES = {
 };
 
 const normalizeCountryCode = (node) => {
-  // Never guess from the node name: fuzzy matching once turned "node-1" into
-  // Netherlands (lowercase-stripped names matched country initials).
   const raw = String(node?.country_code || '').trim().toUpperCase();
   if (!raw) return null;
   if (CODES[raw]) return raw;
   if (COUNTRY_ALIASES[raw] && CODES[COUNTRY_ALIASES[raw]]) return COUNTRY_ALIASES[raw];
-  // Unknown-but-plausible ISO code: show the code text, no flag.
   return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
 };
 

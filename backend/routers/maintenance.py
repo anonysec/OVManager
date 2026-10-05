@@ -17,10 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
 from backend.db.engine import engine, get_db
-from backend.node.task import (
-    clean_stale_sessions_all_nodes,
-    sync_all_user_limits,
-)
+from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.operations.backup.bundle import (
     BUNDLE_SUFFIX,
     BackupBundleError,
@@ -319,18 +316,6 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
         rollback_db: Path | None = None
         safety_bundle: Path | None = None
         activated = False
-        # The live database's owner, read before anything is replaced. The
-        # panel's service account is what must be able to open this file after
-        # a restore — `ovm restore` runs as root, and the staged candidate it
-        # activates is root-owned, so without this the panel comes back unable
-        # to read its own database and crash-loops on `sqlite3.OperationalError:
-        # unable to open database file`.
-        #
-        # Ownership is captured rather than assumed so it matches whatever the
-        # running deployment set up: the service account natively, uid 1000
-        # under Docker. Re-applying the *previous* owner is correct in both and
-        # needs no configuration here. -1 means there was no live database to
-        # learn an owner from, so the activated file keeps the caller's.
         live_uid = live_gid = -1
         try:
             try:
@@ -356,14 +341,6 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
             candidate = None
             activated = True
             os.chmod(DB_PATH, 0o600)
-            # Re-apply the live database's owner to the activated file. The
-            # candidate came from `mkstemp` as the calling user (root, for
-            # `ovm restore`), and `os.replace` keeps the *candidate's* owner —
-            # so without this the panel's service account loses read access to
-            # its own database the moment a restore completes. Chown is best
-            # effort: under Docker the file is already uid 1000, and a chown
-            # failure there must not abort a restore that already passed its
-            # integrity check.
             if live_uid >= 0:
                 try:
                     os.chown(DB_PATH, live_uid, live_gid)
@@ -397,10 +374,6 @@ def _atomic_db_restore(src_path: Path, user: dict, detail: str) -> ResponseModel
                     copy2(rollback_db, tmp_path)
                     os.replace(tmp_path, DB_PATH)
                     os.chmod(DB_PATH, 0o600)
-                    # Same ownership question as the activation above: the
-                    # rollback copy is made by the calling user, so the service
-                    # account has to be put back on the file or the panel comes
-                    # back up unable to read its own database.
                     if live_uid >= 0:
                         try:
                             os.chown(DB_PATH, live_uid, live_gid)

@@ -6,8 +6,6 @@ from pydantic_settings import BaseSettings
 
 class Setting(BaseSettings):
     ADMIN_USERNAME: str = Field(min_length=1, max_length=64)
-    # Legacy, read-only: still declared so the v16 migration can import a
-    # pre-upgrade hash into the owner row. No authentication path reads these.
     ADMIN_PASSWORD_HASH: str = ""
     ADMIN_PASSWORD: str = ""
     URLPATH: str = ""  # Initial default for DB urlpath; runtime changes via web UI
@@ -43,10 +41,6 @@ class Setting(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Credentials live in the database, never here: ADMIN_USERNAME only
-        # names the `admins` row that is the owner. A pre-existing
-        # ADMIN_PASSWORD_HASH is imported into that row by the v16 migration;
-        # ADMIN_PASSWORD is ignored outright — no code path reads it.
         if self.ADMIN_PASSWORD or self.ADMIN_PASSWORD_HASH:
             import logging
 

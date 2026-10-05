@@ -1,13 +1,13 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// GET /users/traffic/top is tenancy-aware: admins get their own users.
 
 import { useTranslation } from 'react-i18next';
-import { EmptyState, Panel, PanelSkeleton, PanelState } from '../ui';
+import { EmptyState, PanelSkeleton } from '../ui';
+import { Panel, PanelState } from './Panel';
 import { formatBytes } from '../../utils/format';
 
-export default function TopUsers({ items, error, loading, onRetry, t: tProp }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
+export default function TopUsers({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
   const { t } = useTranslation();
   const rows: any[] = (items || []).slice(0, 5);
   const max = Math.max(1, ...rows.map((r: any) => r.bytes || 0));
@@ -15,7 +15,6 @@ export default function TopUsers({ items, error, loading, onRetry, t: tProp }: {
   return (
     <Panel title={t('topUsersCard', 'Top traffic — last 7 days')} icon={null} flush>
       <PanelState
-        t={tProp || t}
         loading={loading}
         error={error}
         onRetry={onRetry}

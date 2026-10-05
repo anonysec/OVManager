@@ -50,9 +50,6 @@ def acquire_single_instance_lock():
         path.parent.mkdir(parents=True, exist_ok=True)
         handle = path.open("a+")
     except OSError as exc:
-        # A read-only data dir must not stop the panel starting; without the
-        # lock the worst case is a duplicate worker, which is recoverable,
-        # whereas refusing to start the jobs at all is not.
         logger.warning("worker: cannot open %s (%s) — continuing without the single-instance lock", path, exc)
         return None
     try:
@@ -88,7 +85,7 @@ def register_worker_jobs(scheduler) -> None:
     jobs = (
         (check_user_used_traffic, CronTrigger(minute="*/5"), 60),
         (enforce_user_limits, CronTrigger(minute="*/10"), 60),
-        (collect_metrics, CronTrigger(minute="*/5"), 60),
+        (collect_metrics, CronTrigger(minute="2-59/5"), 60),
         (auto_sync_limits_job, CronTrigger(minute="*/30"), 60),
         (auto_clean_stale_job, CronTrigger(minute="*/15"), 60),
         (auto_prune_audit_job, CronTrigger(hour="*/6"), 300),
@@ -97,11 +94,6 @@ def register_worker_jobs(scheduler) -> None:
     for fn, trigger, grace in jobs:
         scheduler.add_job(fn, trigger, id=fn.__name__, replace_existing=True, misfire_grace_time=grace)
 
-    # The web process can no longer re-register this when an operator changes
-    # the backup time, because the job lives here. So the worker re-reads the
-    # settings itself, every minute: the cost is that a change takes up to a
-    # minute to apply, and the alternative is a control channel between two
-    # processes for one cron trigger.
     scheduler.add_job(
         reschedule_auto_backup,
         CronTrigger(minute="*"),
@@ -143,9 +135,6 @@ async def _run() -> None:
 
 
 def main() -> int:
-    # The module-level backend.logger import is what configures logging here —
-    # handlers are installed at import, so this child's lines land in the same
-    # app.log and on the same stderr as the panel's.
     try:
         asyncio.run(_run())
     except KeyboardInterrupt:  # pragma: no cover
@@ -156,8 +145,6 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-
-# ── Parent side: the web process supervises this child ────────────────────
 
 _worker: subprocess.Popen | None = None
 _monitor: asyncio.Task | None = None
@@ -174,8 +161,6 @@ def start_worker() -> None:
     if _worker is not None and _worker.poll() is None:
         return
     if os.environ.get("OVM_WORKER") == "0":
-        # Escape hatch: stops every lifespan test from spawning a second
-        # interpreter. tests/test_worker_process.py turns it back on.
         return
     _worker = subprocess.Popen(  # noqa: S603 - fixed argv, this interpreter
         [sys.executable, "-m", "backend.worker"],

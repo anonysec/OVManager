@@ -74,15 +74,10 @@ describe('UserManagement search debounce', () => {
   it('waits for a pause before pushing the query to the URL', async () => {
     const { getSearch } = renderPage(taggedUsers(2));
     const input = await screen.findByLabelText(/search/i);
-    // Deterministic debounce: real timers for render/findBy, then fake
-    // timers so the 275ms pause fires synchronously (parallel workers
-    // starve real timers — the historical flake).
     vi.useFakeTimers();
     fireEvent.change(input, { target: { value: 'user' } });
     fireEvent.change(input, { target: { value: 'user1' } });
-    // Rapid keystrokes must not rewrite the URL synchronously.
     expect(getSearch()).toBe('');
-    // Advance past the 275ms debounce and flush React's effect cycle.
     await act(async () => { await vi.advanceTimersByTimeAsync(300); });
     expect(getSearch()).toContain('q=user1');
     vi.useRealTimers();
@@ -109,7 +104,6 @@ describe('UserManagement tag chips', () => {
     renderPage(taggedUsers(10));
     const group = await screen.findByRole('group', { name: /user filters/i });
     const chipLabels = () => within(group).getAllByRole('button').map((b) => b.textContent);
-    // localeCompare sorts label-10 second, so the 8 visible are 1,10,2..7.
     await waitFor(() => expect(chipLabels().join(' ')).toContain('label-7'));
     expect(chipLabels().join(' ')).not.toContain('label-8');
     fireEvent.click(within(group).getByText('+2 more'));

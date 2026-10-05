@@ -13,8 +13,6 @@ from collections.abc import Awaitable, Callable
 
 MAX_CALLBACK_BYTES = 64
 
-# Panel UUIDs are uuid4 hex; be lenient (test doubles use short ids) but
-# reject anything that could smuggle a second callback inside.
 _UUID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 

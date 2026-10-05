@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../../context/LiveContext';
 import apiClient from '../../services/api';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiShield } from 'react-icons/fi';
 import { Card, Stat } from './shared';
@@ -65,8 +65,6 @@ const reasonLabel = (t: any, ev: SecEvent) => {
 
 const EventRow = ({ ev, t }: { ev: SecEvent; t: any }) => {
   const when = ev.time_local || (ev.ts ? new Date(ev.ts * 1000).toLocaleString() : t('secTimeUnknown', 'time unknown'));
-  // user_known === false means the identity exists in the log but not in the
-  // panel; a TLS failure from a bare peer has no identity to label.
   const who = ev.user_known === false
     ? `${ev.user || ev.cn || '—'} (${t('secNoSuchUser', 'no such user')})`
     : (ev.user || ev.cn || ev.peer || '—');

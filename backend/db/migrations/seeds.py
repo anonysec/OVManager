@@ -32,18 +32,10 @@ def _seed_settings(db: Session) -> None:
     settings = db.query(Settings).first()
     if settings is None:
         settings = Settings()
-        # The column defaults to "", which means "serve at the root". Only a
-        # brand-new row takes the configured prefix.
         settings.urlpath = (config.URLPATH or "").strip("/")
         db.add(settings)
         db.flush()
     elif settings.urlpath is not None:
-        # Only ever seed a prefix that has never been set. An empty string is a
-        # VALUE — `ovm url reset` and the panel's own field both write it to mean
-        # "serve at the root" — so treating blank as unset made every restart
-        # restore .env's URLPATH and silently undo the documented recovery from
-        # a forgotten prefix. The operator who just asked for the root was
-        # locked out again on the next `ovm restart`, with nothing saying so.
         return
 
 

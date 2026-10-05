@@ -7,8 +7,8 @@ import {
 import Modal from './Modal';
 import { Badge, Button } from './ui';
 import apiClient from '../services/api';
-import { formatTraffic } from '../utils/format';
-import { daysUntil, formatDate, fmtRelative } from '../utils/time';
+import { formatBytes } from '../utils/format';
+import { daysUntil, fmtDate, fmtRelative } from '../utils/time';
 import { copyText } from '../utils/clipboard';
 
 const statusOf = (user: any, t: any) => {
@@ -30,7 +30,7 @@ const TrafficHistory = ({ days, t }: { days?: any; t?: any }) => {
           <span
             key={d.day}
             className="ud-hist-bar"
-            title={`${d.day}: ${formatTraffic(d.bytes)}`}
+            title={`${d.day}: ${formatBytes(d.bytes)}`}
             style={{ height: `${Math.max(3, Math.round((Number(d.bytes || 0) / max) * 100))}%` }}
           />
         ))}
@@ -45,7 +45,6 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   const [qr, setQr] = useState('');
   const [history, setHistory] = useState<any>(null);
 
-  // Per-day billed bytes (last 14 days) for the traffic graph.
   useEffect(() => {
     if (!isOpen || !user?.uuid) {
       setHistory(null);
@@ -67,8 +66,6 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     };
   }, [isOpen, user?.uuid]);
 
-  // A plain dynamic import: lazy() is for React components, not for calling a
-  // library function directly.
   useEffect(() => {
     if (!subscriptionLink || !isOpen) return;
     let cancelled = false;
@@ -119,7 +116,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
           <div className="ud-usage-head">
             <span className="ud-label">{t('quotaLabel', 'Quota')}</span>
             <span className="ud-usage-value">
-              {formatTraffic(used)} / {unlimited ? t('unlimited') : formatTraffic(total)}
+              {formatBytes(used)} / {unlimited ? t('unlimited') : formatBytes(total)}
             </span>
           </div>
           <div
@@ -149,7 +146,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
             <span className="ud-ico" aria-hidden="true"><FiHardDrive /></span>
             <div>
               <dt className="ud-label">{t('th_dataUsed', 'Data Used')}</dt>
-              <dd className="ud-value">{formatTraffic(used)}</dd>
+              <dd className="ud-value">{formatBytes(used)}</dd>
             </div>
           </div>
           <div className="ud-cell">
@@ -157,7 +154,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
             <div>
               <dt className="ud-label">{t('th_expiryDate')}</dt>
               <dd className={`ud-value${expirySoon ? ' is-soon' : ''}`}>
-                {formatDate(user.expiry_date)}
+                {fmtDate(user.expiry_date)}
                 {d !== Infinity && (
                   <small className="ud-subline">
                     {d < 0

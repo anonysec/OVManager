@@ -90,8 +90,6 @@ async def lifespan(app: FastAPI):
         _db.close()
     if not (DATA_DIR / "update-maintenance").is_file():
         start_scheduler()
-        # The periodic database and node jobs run in a child process, so a job
-        # that wedges cannot stop this one serving /health or the login page.
         start_worker()
         start_bot()
     else:
@@ -162,11 +160,6 @@ async def health_check(request: Request):
         html = _read_index_html()
         if html is not None:
             return HTMLResponse(html)
-    # client_ip, not request.client.host: behind the documented nginx topology
-    # the peer is always loopback, so the direct check was true for every
-    # internet client and handed out the exact panel version to anyone. With
-    # TRUSTED_PROXY set it resolves the real address, so only a genuinely local
-    # caller sees the version.
     from backend.client_ip import client_ip
 
     try:

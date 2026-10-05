@@ -5,9 +5,6 @@ import Modal from './Modal';
 import Button from './ui/Button';
 import Field from './ui/Field';
 
-// mode="create" (admin=null) or mode="edit". Replaces AddAdminModal and
-// EditAdminModal, which differed only in title/endpoint and in edit's
-// username-disabled + password-required.
 const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOpen?: any; onClose?: any; onSaved?: any }) => {
   const isEdit = !!admin;
   const { t } = useTranslation();
@@ -58,7 +55,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOp
         password: formData.password,
         telegram_id: formData.telegram_id ? parseInt(formData.telegram_id, 10) : null,
         username_prefix: formData.username_prefix || null,
-        // null clears the override — the admin then inherits the owner global.
         default_days: _intOrNull(formData.default_days),
         default_traffic_gb: _intOrNull(formData.default_traffic_gb),
         default_max_users: _intOrNull(formData.default_max_users),
@@ -67,7 +63,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved }: { admin?: any; isOp
         ? await apiClient.put('/admin/', payload)
         : await apiClient.post('/admin/', payload);
       if (response.data.success) {
-        // Hand the backend message to the caller so it can surface it in a toast.
         onSaved(response.data.msg);
       } else {
         setError(response.data.msg || (isEdit ? t('unableToUpdateAdmin') : t('unableToCreateAdmin')));

@@ -39,8 +39,6 @@ describe('displayTimezone', () => {
   it('accepts a valid IANA zone and persists it', () => {
     expect(setDisplayTimezone('Asia/Tehran')).toBe('Asia/Tehran');
     expect(getDisplayTimezone()).toBe('Asia/Tehran');
-    // Persisted when storage exists; in storage-less envs the in-memory
-    // value above is what the UI reads.
     if (lsGet('ovTimezone') !== null || typeof localStorage !== 'undefined') {
       expect(lsGet('ovTimezone')).toBe('Asia/Tehran');
     }

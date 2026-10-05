@@ -41,9 +41,6 @@ def _global_flags(parser: argparse.ArgumentParser, *, copy: bool = False) -> arg
         help="override install dir (default: $OVM_APP_DIR or /opt/ovmanager)",
     )
     parser.add_argument("--data-dir", default=unset, help="override data dir")
-    # Set by manager.sh when it runs the CLI *inside* the panel container: the
-    # host .env is passed in as environment variables rather than mounted, and
-    # there is no docker CLI in there to ask about the service.
     parser.add_argument(
         "--in-container",
         action="store_true",
@@ -110,7 +107,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     install = Install.detect(install_dir=args.install_dir, data_dir=args.data_dir)
-    # Host facts manager.sh can see and we cannot (no docker CLI in here).
     service = getattr(args, "service_state", None)
     in_container = getattr(args, "in_container", False)
     public_ip = getattr(args, "public_ip", None)
@@ -141,8 +137,6 @@ def main(argv: list[str] | None = None) -> int:
         print(_backup.render_auto_backup_text(data), end="")
         return 0 if data.get("ok") else 1
     if args.command == "restore":
-        # No name is the listing: it reports what is available and changes
-        # nothing, so the operator can pick one.
         if not args.name:
             data = _restore.list_backups(install)
             print(_restore.render_list_text(data), end="")
@@ -151,8 +145,6 @@ def main(argv: list[str] | None = None) -> int:
         print(_restore.render_restore_text(data), end="")
         return 0 if data.get("ok") else 1
     if args.command == "reset-password":
-        # Flag, then environment (how the manager passes it, to keep the secret
-        # out of `ps` output), then an interactive prompt.
         password = args.admin_pass or os.environ.get("OVM_ADMIN_PASS")
         if not password:
             import getpass
@@ -182,8 +174,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if data.get("ok") else 1
     if args.command == "tls-migrate":
         data = _tls.migrate()
-        # Silent when there is nothing to do: this runs before every `ovm tls`,
-        # and a line saying "nothing happened" on every read is noise.
         print(_tls.render_migrate(data), end="")
         return 0 if data.get("ok") else 1
     return 2

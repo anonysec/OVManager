@@ -55,9 +55,8 @@ one at a time:
 | --- | --- |
 | `make setup` | `uv sync --frozen` and `npm ci`: exactly what the lock files pin. |
 | `make test` | The backend suite, `pytest -n auto`. Parallel is safe because each xdist worker imports `conftest`, which allocates its own throwaway data directory. |
-| `make lint` | `ruff check` and `ruff format --check` over backend, bot, cli, tests and bench; `bash -n` on the shell entrypoints; `git diff --check`; and `eslint src/` in the frontend. |
+| `make lint` | `ruff check` and `ruff format --check` over backend, bot, cli and tests; `bash -n` on the shell entrypoints; `git diff --check`; and `eslint src/` in the frontend. |
 | `make verify` | `lint`, then the frontend's `npm run verify` (build, design tokens, i18n key parity, RTL, eslint, types, vitest), then regenerates `scripts/openapi.json`. |
-| `make bench` | The node fan-out benchmarks in `scripts/bench/`. Not a test: the figures depend on the machine's core count. |
 
 `make verify` does **not** run the backend suite; that is `make test`. Run both
 before pushing. CI runs the same checks in three parallel jobs (`backend`,

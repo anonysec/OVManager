@@ -1,7 +1,6 @@
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 
 // Pairs with EmptyState: same badge geometry, different hue. Uses the danger
-// soft fill + danger-text foreground so it reads at AA in both themes.
 
 const ErrorState = ({ title, message, onRetry, retryLabel = 'Retry' }: { title?: any; message?: any; onRetry?: any; retryLabel?: any }) => (
   <div className="error-state" role="alert" aria-live="assertive">

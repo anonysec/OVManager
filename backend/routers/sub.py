@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.config import config
 from backend.db import crud
 from backend.db.engine import get_db
-from backend.node.task import download_ovpn_client_from_node
+from backend.node.management import download_ovpn_client_from_node
 from backend.operations.observability import live as live_ops
 
 templates = Jinja2Templates(directory="frontend/templates")

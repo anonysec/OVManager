@@ -27,7 +27,6 @@ const AlertsSection = () => {
       .then((res) => {
         if (cancelled) return;
         const data = res?.data?.data || {};
-        // Default to ON when the fields are absent (older backend build).
         setTelegram({
           notify_expiry: data.notify_expiry !== false,
           notify_traffic: data.notify_traffic !== false,

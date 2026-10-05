@@ -1,11 +1,11 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// The header's "View all" link points at the audit log.
 
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Panel, PanelState, EmptyState, PanelSkeleton } from '../ui';
+import { EmptyState, PanelSkeleton } from '../ui';
+import { Panel, PanelState } from './Panel';
 import { fmtDateTime, fmtRelative } from '../../utils/time';
 
 const actionTone = (action: any) => {
@@ -16,7 +16,7 @@ const actionTone = (action: any) => {
   return '';
 };
 
-export default function ActivityFeed({ items, error, loading, onRetry, t: tProp }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
+export default function ActivityFeed({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const rows: any[] = (items || []).slice(0, 8);
@@ -33,7 +33,6 @@ export default function ActivityFeed({ items, error, loading, onRetry, t: tProp 
       flush
     >
       <PanelState
-        t={tProp || t}
         loading={loading}
         error={error}
         isEmpty={!items}

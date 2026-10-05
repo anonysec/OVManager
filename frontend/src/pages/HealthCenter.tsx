@@ -19,9 +19,6 @@ import {
 import './HealthCenter.css';
 import './UpdateNotice.css';
 
-// GET /health/overview returns { checks: [{ id, status, summary, hint }], details };
-// one card per check. Refresh keeps the previous results on screen so a failing
-// re-check never blanks a page that was already telling the operator something.
 
 const STATUS_META = {
   ok: { tone: 'success', key: 'healthStatusOk', fallback: 'OK' },
@@ -73,7 +70,6 @@ const HealthCenter = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  // Owner-only endpoint: admins would just get a 403, so never ask for them.
   useEffect(() => {
     if (!isOwner) {
       setUpdateInfo(null);
@@ -91,7 +87,6 @@ const HealthCenter = () => {
     load();
   };
 
-  // The installer restarts the panel: wait for it to go down and come back.
   const pollUntilOnline = async () => {
     const deadline = Date.now() + 5 * 60 * 1000;
     await sleep(5000);
@@ -115,7 +110,6 @@ const HealthCenter = () => {
       const res = await apiClient.post('/updater/run');
       const body = res.data || {};
       if (!body.success) {
-        // Refusals (Docker, no installer) carry the host-side command in msg.
         setUpdateNote(body.msg || t('updateRefused', 'The panel cannot start the update automatically.'));
         return;
       }

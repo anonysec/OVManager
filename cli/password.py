@@ -138,16 +138,6 @@ def _write_owner_hash(data_dir: str, hashed: str, owner: str) -> dict:
             row.disabled = False
         db.commit()
 
-        # A reset is what an operator reaches for when they think the account is
-        # compromised. Leaving existing sessions alive leaves the intruder in:
-        # the token is still in auth_sessions and the sliding idle timeout keeps
-        # refreshing it on every request, so it never expires on its own. The
-        # panel's own reset already revokes; this path has to match it, or the
-        # same operator intent behaves two different ways.
-        # Best effort, and deliberately not fatal: the password is already
-        # changed by this point, so failing the whole command here would tell
-        # the operator their reset did not happen. A database too old to have
-        # sessions has nothing to revoke anyway.
         try:
             from backend.auth.sessions import revoke_user_sessions
 
@@ -168,16 +158,10 @@ def render_text(data: dict) -> str:
     if not data.get("ok"):
         return render.block([render.failed(data.get("error", "password not changed"))])
     owner = data.get("username", "the owner")
-    # "in the database, not .env" is not decoration. `.env` still carries
-    # ADMIN_PASSWORD_HASH from old installs, so the operator's first question
-    # after any password change is which of the two the panel now reads — and
-    # the answer has been non-obvious before.
     rows = [
         render.ok(f"owner password updated for {owner}"),
         render.hint("stored in the panel database — .env is not edited"),
     ]
-    # Say it, so an operator resetting a compromised account knows the intruder
-    # is out rather than assuming the password change covered it.
     n = data.get("sessions_revoked")
     if n is None:
         rows.append(render.hint("could not confirm session revocation — check the panel logs"))

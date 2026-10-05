@@ -20,6 +20,10 @@ async def edit_or_reply(update: Update, text: str, *, reply_markup=None, parse_m
     query = update.callback_query
     if query:
         try:
+            await query.answer()
+        except Exception:
+            pass
+        try:
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
             return
         except BadRequest as exc:

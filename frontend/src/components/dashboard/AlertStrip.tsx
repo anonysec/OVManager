@@ -1,8 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Past two items collapse into a "+N more" pill that opens the first
-// overflow target.
 
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

@@ -6,7 +6,6 @@ import {
 } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
-import { buildSubscriptionLink } from '../utils/subscription';
 import { useToast } from '../context/ToastContext';
 import { useLive } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
@@ -18,19 +17,13 @@ import ExtendUserModal from '../components/ExtendUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
 import UserSessionsModal from '../components/UserSessionsModal';
 import UserDetailModal from '../components/UserDetailModal';
-import UserStatCard from '../components/UserStatCard';
 import ConfirmModal from '../components/ConfirmModal';
-import { Button, DataTable, EmptyState, ErrorState, PageHeader, StatusBadge } from '../components/ui';
+import { Button, DataTable, EmptyState, ErrorState, PageHeader, StatCard, StatusBadge } from '../components/ui';
 import './UserManagement.css';
 
 const PAGE_SIZE_KEY = 'ovmanager-ui-users-pagesize';
-// A label per chip would overflow the filter row once labels pile up.
 const MAX_VISIBLE_TAGS = 8;
-// Bumped to v2 to roll out the newest-first default to browsers that cached
-// the old name-asc preference under v1.
 const SORT_KEY = 'ovmanager-ui-users-sort-v2';
-// Default: newest first. `id` is autoincrement = creation order (a reused id
-// after delete still belongs to a new row, so it sorts correctly on top).
 
 const statusOf = (u: any) => {
   const online = u.online || Number(u.active_connections || 0) > 0;
@@ -115,8 +108,6 @@ const UserManagement = () => {
     } catch { /* subscription links degrade to hidden, table still works */ }
   }, []);
 
-  // The plan that will actually apply: this admin's override, else the owner
-  // global. /server/settings is owner-only, so admins read their own here.
   const fetchMyDefaults = useCallback(async () => {
     try {
       const res = await apiClient.get('/admin/me/defaults');
@@ -183,8 +174,6 @@ const UserManagement = () => {
     mutate(next);
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-  // The input stays responsive while the URL (and the filtering it drives)
-  // only updates after the user pauses typing.
   const [draft, setDraft] = useState(searchTerm);
   useEffect(() => { setDraft(searchTerm); }, [searchTerm]);
   useEffect(() => {
@@ -196,8 +185,6 @@ const UserManagement = () => {
     return () => clearTimeout(id);
   }, [draft, searchTerm, patchParams]);
   const setSearchTerm = (value: string) => { setDraft(value); };
-  // One patchParams call: two in the same tick would rebuild from the same
-  // stale params, and the last write would clobber the first.
   const clearFilters = useCallback(() => {
     setDraft('');
     setPage(1);
@@ -276,7 +263,6 @@ const UserManagement = () => {
     });
   }, []);
 
-  // Deep-link ?user=<uuid> opens the detail modal (used by dashboard previews).
   useEffect(() => {
     const uuid = searchParams.get('user');
     if (!uuid || users.length === 0) return;
@@ -289,8 +275,12 @@ const UserManagement = () => {
   }, [searchParams, users, patchParams]);
 
   const getSubscriptionLink = useCallback((user: any) => {
-    if (!user?.uuid) return '';
-    return buildSubscriptionLink(subSettings, user.uuid);
+    if (!user?.uuid || !subSettings) return '';
+    const rawPrefix = subSettings.subscription_url_prefix || '';
+    const rawPath = (subSettings.subscription_path || 'sub').replace(/^\/+|\/+$/g, '') || 'sub';
+    if (!rawPrefix) return '';
+    const prefix = rawPrefix.endsWith('/') ? rawPrefix : `${rawPrefix}/`;
+    return `${prefix}${rawPath}/${user.uuid}`;
   }, [subSettings]);
 
   const handleToggleStatus = useCallback(async (user: any) => {
@@ -565,10 +555,10 @@ const UserManagement = () => {
       />
 
       <div className="um-stats" role="region" aria-label={t('userStats', 'User statistics')}>
-        <UserStatCard icon={<FiUsers aria-hidden="true" />} label={t('totalUsers')} value={userStats.total} tone="accent" hint={undefined} />
-        <UserStatCard icon={<FiCheck aria-hidden="true" />} label={t('activeUsers')} value={userStats.active} tone="success" hint={undefined} />
-        <UserStatCard icon={<FiWifi aria-hidden="true" />} label={t('onlineUsers')} value={userStats.online} tone="success" hint={undefined} />
-        <UserStatCard icon={<FiUserX aria-hidden="true" />} label={t('inactiveUsers')} value={userStats.inactive} tone="danger" hint={undefined} />
+        <StatCard className="um-stat" icon={<FiUsers aria-hidden="true" />} label={t('totalUsers')} value={userStats.total} tone="accent" hint={undefined} />
+        <StatCard className="um-stat" icon={<FiCheck aria-hidden="true" />} label={t('activeUsers')} value={userStats.active} tone="success" hint={undefined} />
+        <StatCard className="um-stat" icon={<FiWifi aria-hidden="true" />} label={t('onlineUsers')} value={userStats.online} tone="success" hint={undefined} />
+        <StatCard className="um-stat" icon={<FiUserX aria-hidden="true" />} label={t('inactiveUsers')} value={userStats.inactive} tone="danger" hint={undefined} />
       </div>
 
       <div className="um-toolbar">

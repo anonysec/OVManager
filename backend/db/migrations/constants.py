@@ -83,6 +83,4 @@ _EXTRA_DDL: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day)",
 )
 
-# Held for the whole of migrate(): two processes must not adopt the same
-# database at once.
 _lock = threading.Lock()

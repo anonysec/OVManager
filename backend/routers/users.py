@@ -14,16 +14,14 @@ from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import Node, User
 from backend.logger import logger
-from backend.node.requests import node_client
-from backend.node.task import (
+from backend.node.diagnostics import disconnect_user_on_all_nodes, get_active_connection_counts, get_user_session_diagnostics
+from backend.node.management import (
     change_user_status_on_all_nodes,
     delete_user_on_all_nodes,
-    disconnect_user_on_all_nodes,
-    get_active_connection_counts,
-    get_user_session_diagnostics,
     reset_user_usage_on_all_nodes,
     set_user_limit_on_all_nodes,
 )
+from backend.node.requests import node_client
 from backend.operations.observability import live as live_ops
 from backend.operations.observability.audit import log_event
 from backend.schema import CreateUser, ResponseModel, StatusToggle, UpdateUser, Users
@@ -341,9 +339,6 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     try:
         restored = crud.restore_user(db, snap)
     except Exception:
-        # DB-level exception text stays in the log: it can name columns, tables
-        # and internal paths, and every other router here answers with a fixed
-        # message. The operator still gets the correlation id from the log.
         logger.exception("Restore failed for %s", uuid)
         return ResponseModel(success=False, msg="Restore failed. Check the panel logs for details.", data=None)
     _deleted_users.pop(uuid, None)

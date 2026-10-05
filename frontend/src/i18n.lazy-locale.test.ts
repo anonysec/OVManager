@@ -18,15 +18,11 @@ describe('language pickers load the bundle before switching', () => {
   });
 
   it('every picker routes through loadLanguage, never changeLanguage', async () => {
-    // Imported as source, not via node:fs: the browser tsconfig has no node
-    // types, and importing the modules also proves they load.
     const pickers = await Promise.all([
       import('./pages/DashboardLayout'),
       import('./pages/settings/AppearanceSection'),
     ]);
     for (const mod of pickers) {
-      // The modules are imported for their side-effect-free load; the assertion
-      // below reads the source the bundler actually resolves.
       expect(mod).toBeTruthy();
     }
     const sources = await Promise.all(
@@ -45,7 +41,6 @@ describe('language pickers load the bundle before switching', () => {
   });
 
   it('loadLanguage translates, where changeLanguage alone would not', async () => {
-    // The behaviour the pickers now depend on.
     expect(i18n.t(KEY)).toBe('Username');
     await loadLanguage('fa');
     expect(i18n.t(KEY)).toBe('نام کاربری');
@@ -53,8 +48,6 @@ describe('language pickers load the bundle before switching', () => {
   });
 
   it('a click while a chunk is in flight still lands on the LAST choice', async () => {
-    // loadLanguage is async. Two rapid picks must not leave the first winning
-    // just because its chunk fetch happened to resolve second.
     await i18n.changeLanguage('en');
     const first = loadLanguage('ru');
     const second = loadLanguage('fa');

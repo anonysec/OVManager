@@ -1,9 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Front-end only (localStorage), toggled from Settings → "Alerts & Dashboard".
-// Every change dispatches `ovmanager-prefs-changed` so live components (topbar
-// notifications, dashboard polling) pick it up without a reload.
 
 
 const KEYS = {
@@ -22,9 +19,6 @@ const DEFAULTS = {
   quota: true,
 };
 
-// Single cadence for dashboard, bell and node lists; deliberately not
-// user-configurable, since the live stream already pushes immediacy and these
-// polls are background refreshes that never flash a loading state.
 export const DATA_REFRESH_SEC = 30;
 
 export const readPrefs = () => {

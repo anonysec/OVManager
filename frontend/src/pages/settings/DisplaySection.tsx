@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiClock, FiEdit2, FiCheck, FiX } from 'react-icons/fi';
 import { Card } from './shared';
@@ -40,7 +40,6 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
   const triggerRef = useRef(null);
   useInlineEditFocus(editing, inputRef, triggerRef);
 
-  // Mount-only sync: no refreshTick revalidation here.
   useEffect(() => {
     const tz = shared?.data?.timezone;
     if (!tz || synced.current) return;

@@ -13,31 +13,21 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Shared by login and the first-run claim, which return the same body.
 function storeSession(data: any, fallbackName = '') {
   const newToken = data.access_token;
   const refreshToken = data.refresh_token;
 
-  // Identity comes from the response body, not the token: the backend issues
-  // an OPAQUE session token (random bytes), and older builds that decoded it
-  // hit atob/JSON.parse on a non-JWT, so LoginPage reported every successful
-  // login as "Incorrect username or password".
   const role = data.role || null;
-  // Prefer the server's canonical spelling; fall back to what was typed.
   const resolvedName = data.username || fallbackName || '';
   if (!role) throw new Error('Login response did not include a role');
 
   localStorage.setItem('authToken', newToken);
-  // Refresh tokens are a JWT-era artifact — the backend now issues opaque
-  // sessions without one. Only persist if a server actually sends it.
   if (refreshToken) {
     localStorage.setItem('refreshToken', refreshToken);
   } else {
     localStorage.removeItem('refreshToken');
   }
   localStorage.setItem('userRole', role);
-  // The sidebar profile block used to read the JWT "sub" claim, which an
-  // opaque token does not have.
   if (resolvedName) localStorage.setItem('username', resolvedName);
   return { token: newToken, role };
 }
@@ -61,8 +51,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserRole(role);
   };
 
-  // First run: the claim key the installer printed plus the password the
-  // operator chooses. The owner row does not exist until this succeeds.
   const claim = async (claimKey: string, password: string) => {
     const response = await apiClient.post('/owner-claim', { claim_key: claimKey, password });
 
@@ -87,19 +75,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserRole(null);
   }, []);
 
-  // Resetting state here flips isAuthenticated, and App's routes send the user
-  // to the login page.
   useEffect(() => {
     const handleExpired = () => logout();
     window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, [logout]);
 
-  // Keep auth state in sync across browser tabs (e.g. logout in one tab).
-  // userRole is watched as well as the token: a login in tab B writes both,
-  // and a tab that took only the token authenticated with userRole=null, so
-  // the owner-only routes were never registered and stayed missing until a
-  // reload.
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'userRole') {
@@ -115,11 +96,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Session expiry is authoritative on the server: the token is opaque, so the
-  // client cannot inspect an exp claim. A previous implementation tried, and
-  // its catch treated any non-JWT as expired — logging every user out on load
-  // and again right after login. Staleness comes from the API layer's 401
-  // AUTH_EXPIRED_EVENT instead.
 
   const isAuthenticated = !!token;
 

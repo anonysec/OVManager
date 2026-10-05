@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.0.45",
+  "version": "1.0.46",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,6 @@
     "verify": "npm run build && npm run check:tokens && npm run check:i18n && npm run check:rtl && npx eslint src/ && npm run check:types && npx vitest run"
   },
   "dependencies": {
-    "dotenv": "^17.4.2",
     "i18next": "^26.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",

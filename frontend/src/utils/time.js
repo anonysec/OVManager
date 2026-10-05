@@ -1,15 +1,10 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Timestamps render in the operator display timezone from backend Settings
-// (see displayTimezone.js) unless the caller passes { timeZone }.
 
 import i18n from '../i18n';
 import { getDisplayTimezone } from './displayTimezone';
 
-// Display locale follows the UI language. Persian stays on the Gregorian
-// calendar with Latin digits so panel dates stay comparable with the
-// backend (which stores ISO Gregorian everywhere).
 function displayLocale() {
   const l = (i18n.language || '').toLowerCase();
   if (l.startsWith('fa')) return 'fa-u-ca-gregory-nu-latn';
@@ -64,15 +59,10 @@ export function fmtDate(iso, opts = {}) {
   }
 }
 
-export const formatDate = fmtDate;
-
-// Localized via Intl; the hand-rolled English path below covers environments
-// without ICU data.
 export function fmtRelative(iso) {
   if (!iso) return safeT('never', 'never');
   const d = new Date(iso);
   if (isNaN(d)) return safeT('never', 'never');
-  // Intl.RelativeTimeFormat signs past times NEGATIVE (ts - now).
   const diffMs = d.getTime() - Date.now();
   const abs = Math.abs(diffMs);
   if (abs < 30000) return safeT('justNow', 'just now');
@@ -95,7 +85,6 @@ export function fmtRelative(iso) {
   return fmtDate(iso);
 }
 
-// Days until a YYYY-MM-DD expiry date (negative = expired).
 export function daysUntil(expiry) {
   if (!expiry) return Infinity;
   const d = new Date(expiry);

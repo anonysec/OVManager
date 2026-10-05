@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.logger import logger
+from backend.node.fanout import run_bounded
 from backend.node.requests import node_client
 from backend.operations.observability.node_alerts import check_node_alerts
 
@@ -42,8 +43,8 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
     start = time.perf_counter()
     try:
         info, sessions = await asyncio.gather(
-            run_in_threadpool(node_client(node).get_node_info),
-            run_in_threadpool(node_client(node).get_sessions, None, 8),
+            run_bounded(node_client(node).get_node_info),
+            run_bounded(node_client(node).get_sessions, None, 8),
             return_exceptions=True,
         )
         latency_ms = round((time.perf_counter() - start) * 1000, 1)

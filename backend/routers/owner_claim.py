@@ -34,8 +34,6 @@ router = APIRouter(tags=["Owner Claim"])
 
 CLAIM_KEY_FILE = "owner-claim.key"
 
-# The key is 128 bits from /dev/urandom, so guessing is not the threat; the
-# limit is here so the endpoint cannot be used as a free bcrypt oracle.
 _FAILURES: dict[str, list[float]] = {}
 _MAX_FAILURES = 5
 _FAILURE_WINDOW = 300
@@ -81,8 +79,6 @@ def read_claim_key() -> str | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
-        # Unauthenticated: name the problem, not the path. The data dir layout
-        # is the operator's to discover with `ovm auth key` on the box.
         logger.warning("claim key unreadable: %s (%s)", path, exc.__class__.__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -151,7 +147,6 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No claim key on this host. Run: ovm auth key",
         )
-    # compare_digest, not ==: a timing oracle on the claim key.
     if not hmac.compare_digest(expected, payload.claim_key.strip()):
         _note_failure(rate)
         _audit(db, request, "auth.claim_fail", "Bad claim key")
@@ -171,8 +166,6 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not create the owner account"
         ) from exc
 
-    # One-shot: the key is spent the moment it works, so a copy of it that
-    # leaks later cannot claim anything.
     try:
         claim_key_path().unlink(missing_ok=True)
     except OSError:

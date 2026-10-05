@@ -137,11 +137,6 @@ class AssetCacheMiddleware:
             await self.app(scope, receive, send)
             return
         base = os.path.join(self.frontend_dir, "assets" if path.startswith("/assets/") else "fonts")
-        # A leading slash survives as scope["path"] (/assets//etc/passwd), and
-        # os.path.join(base, "/etc/passwd") DISCARDS base — so the ".." test
-        # above was not the boundary, it was decoration. Confine by real path:
-        # anything resolving outside the base (including via a symlink) falls
-        # through to the app, which 404s.
         real_base = os.path.realpath(base)
 
         def _inside(candidate: str) -> bool:
@@ -195,7 +190,6 @@ class CSRFProtectionMiddleware:
     """Reject state-changing requests that look like a cross-origin form post."""
 
     _MUTATING_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
-    _EXEMPT_PATHS = frozenset({"/api/login", "/api/logout", "/api/refresh"})
 
     def __init__(self, app):
         self.app = app
@@ -219,11 +213,14 @@ class CSRFProtectionMiddleware:
 
         from backend.urlpath import get_urlpath as _get_urlpath
 
-        path = scope.get("path", "")
         _up = _get_urlpath()
-        if _up and path.startswith(f"/{_up}/"):
-            path = path[len(f"/{_up}") :]
-        if path.startswith("/api/sub/") or path in self._EXEMPT_PATHS:
+        _prefix = f"/{_up}" if _up else ""
+        path = f"{_prefix}{scope.get('path', '')}"
+        if path.startswith(f"{_prefix}/api/sub/") or path in {
+            f"{_prefix}/api/login",
+            f"{_prefix}/api/logout",
+            f"{_prefix}/api/refresh",
+        }:
             await self.app(scope, receive, send)
             return
 

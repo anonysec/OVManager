@@ -20,8 +20,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-    // First visit follows the OS preference. Legacy "ultra" values are
-    // discarded so the panel only exposes light/dark modes.
     return 'system';
   });
 
@@ -38,7 +36,6 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
       root.dataset.theme = theme;
     }
 
-    // Smooth switch on user toggle only, never on initial mount.
     if (!isInitialMount.current) {
       root.classList.add('theme-transition');
       requestAnimationFrame(() => {

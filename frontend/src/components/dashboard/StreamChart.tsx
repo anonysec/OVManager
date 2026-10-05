@@ -1,13 +1,6 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Area chart fed by /metrics/history.
-//
-// Updates come from refresh-cadence polling, not from a per-chart SSE stream —
-// LiveContext's /live/stream invalidation bus is the single live source, and a
-// second DB-polling stream per chart was removed.
-//
-// Renders bare (no card chrome): the dashboard hero owns the surrounding card.
 
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import type { MouseEvent as ChartMouseEvent } from 'react';
@@ -17,7 +10,6 @@ import { DATA_REFRESH_SEC } from '../../utils/notifPrefs';
 import { formatBytes } from '../../utils/format';
 import { fmtDateTime } from '../../utils/time';
 
-// ≈ 1h at the 15s cadence; capped so long sessions do not bloat the DOM.
 const MAX_POINTS = 240;
 
 const tsToIso = (ts: number | string | null | undefined) => {
@@ -27,9 +19,6 @@ const tsToIso = (ts: number | string | null | undefined) => {
   return new Date(n * 1000).toISOString();
 };
 
-// Catmull-Rom -> cubic Bezier smoothing so spiky traffic reads as a calm
-// curve instead of a jagged polyline. Control points are clamped to the
-// viewBox so overshoot can never poke above the frame or below zero.
 const smoothPath = (pts: Array<{ x: number; y: number }>) => {
   if (pts.length < 2) return '';
   const clamp = (v: number) => Math.min(100, Math.max(0, v));
@@ -48,7 +37,7 @@ const smoothPath = (pts: Array<{ x: number; y: number }>) => {
   return d;
 };
 
-export default function StreamChart({ period: initialPeriod = '24h', hours: initialHours = 24 }) {
+export default function StreamChart({ period: initialPeriod = '24h' }) {
   const { t } = useTranslation();
   const [period, setPeriod] = useState(initialPeriod);
   const [metric, setMetric] = useState('traffic');
@@ -59,7 +48,7 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
   const svgRef = useRef<SVGSVGElement | null>(null);
   const gradId = useId().replace(/:/g, '');
 
-  const hours = period === '7d' ? 168 : initialHours;
+  const hours = period === '7d' ? 168 : 24;
 
   useEffect(() => {
     let cancelled = false;
@@ -77,8 +66,6 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
     return () => { cancelled = true; };
   }, [hours]);
 
-  // The user's dashboard cadence keeps the chart current without a second SSE
-  // stream.
   useEffect(() => {
     const id = setInterval(() => {
       apiClient.get(`/metrics/history?hours=${hours}`)
@@ -117,7 +104,6 @@ export default function StreamChart({ period: initialPeriod = '24h', hours: init
   };
 
   const linePath = smoothPath(points);
-  // All-zero data draws no curve — the overlay message explains instead.
   const hasCurve = points.length > 1 && peak > 0;
   const areaPath = hasCurve ? `${linePath} L100,100 L0,100 Z` : '';
   const last = points[points.length - 1];

@@ -185,12 +185,8 @@ async def collect_live_snapshot() -> None:
 
     def probe(node) -> tuple[object, dict]:
         req = node_client(node)
-        # A node we have already lost to gets a short timeout rather than the
-        # full 30s, so one unreachable node cannot hold up every cycle.
         return node, req.get_sessions(hours=1, timeout=probe_timeout(node))
 
-    # gather_background, not a bare gather: this shares a small default pool
-    # with the scheduled backup and alert jobs, and must not take all of it.
     results = await gather_background([partial(probe, n) for n in nodes])
 
     counts: dict[str, int] = {}

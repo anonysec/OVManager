@@ -20,9 +20,6 @@ import os
 from cli import render
 from cli.env import Install
 
-# What .env owns, and why. Ownership is by key name rather than by precedence:
-# a key declared here is authoritative, and nothing else declares the same one,
-# so there is no ordering to remember and no case where two sources disagree.
 BOOT_KEYS = (
     ("DATA_DIR", "found the database with it"),
     ("HOST", "the socket binds before anything is up"),
@@ -34,9 +31,6 @@ BOOT_KEYS = (
     ("ADMIN_USERNAME", "the owner login name"),
 )
 
-# The real setting names, not prose. An operator reading this has just come
-# from grepping .env, and the next thing they will do is grep for the thing that
-# was not in it — so these have to be greppable.
 RUNTIME_KEYS = (
     ("urlpath", "panel Settings → General, or `ovm url`"),
     ("owner", "the admins table, or `ovm auth reset`"),

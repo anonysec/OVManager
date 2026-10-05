@@ -17,8 +17,6 @@ type CardProps = {
   [key: string]: any;
 };
 
-// `as` lets a caller render a <section>/<article> when the card is a landmark
-// region; it defaults to <div> so cards can nest freely.
 
 const Card = ({
   as: Tag = 'div',

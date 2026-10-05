@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import ConfirmModal from '../../components/ConfirmModal';
-import PanelSkeleton from '../../components/ui/PanelSkeleton';
+import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { Badge, Button, Card, Field } from '../../components/ui';
 import {
@@ -25,7 +25,6 @@ import './TlsSection.css';
 const MAX_FILE_BYTES = 1024 * 1024;
 const PEM_ACCEPT = '.pem,.key,.crt,.cer';
 const PEM_RE = /\.(pem|key|crt|cer)$/i;
-// acme.sh issue (180s) + install (60s) can outlive the client's default timeout.
 const RENEW_TIMEOUT_MS = 250000;
 const RESTART_POLL_MS = 2500;
 const RESTART_POLL_ATTEMPTS = 20;
@@ -158,8 +157,6 @@ const TlsSection = () => {
   }, []);
   useEffect(() => clearPoll, [clearPoll]);
 
-  // After a restart the panel disconnects for a moment; poll the status
-  // endpoint until it answers again instead of asking the operator to reload.
   const pollForComeback = useCallback(function poll() {
     pollRef.current.attempts += 1;
     if (pollRef.current.attempts > RESTART_POLL_ATTEMPTS) {
@@ -207,7 +204,6 @@ const TlsSection = () => {
         text: env.msg || t('settingsTlsRestarting', 'Restarting the panel… this page will reconnect automatically in a few seconds.'),
       });
     } catch {
-      // The restart can cut the response off mid-flight; treat that as started.
       setArea('restart', {
         tone: 'info',
         text: t('settingsTlsRestarting', 'Restarting the panel… this page will reconnect automatically in a few seconds.'),

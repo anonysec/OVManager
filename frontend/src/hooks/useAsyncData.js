@@ -1,12 +1,6 @@
 // Resolve several independent requests without letting one failure sink the
 // rest; returns a keyed map of { data, error, ok }.
 //
-//   const r = await settle({ stats: api.get('/server/info'), users: api.get('/users/') });
-//   r.stats.ok ? r.stats.data : renderStatsError(r.stats.error)
-//
-// Pages used to fan out with `Promise.all([...])`, which is all-or-nothing: a
-// single 500 on `/security/summary` rendered the whole dashboard's error state
-// even though stats, users and nodes all came back fine.
 
 export async function settle(sources) {
   const keys = Object.keys(sources);
@@ -19,5 +13,3 @@ export async function settle(sources) {
     return acc;
   }, {});
 }
-
-export default settle;

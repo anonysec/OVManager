@@ -26,8 +26,6 @@ from __future__ import annotations
 import locale
 import os
 
-# render.sh's RENDER_LABEL_W. A label wider than this pushes its own value out of
-# the column, which is how "Service account" ended up misaligned.
 LABEL_W = 14
 INDENT = "   "
 

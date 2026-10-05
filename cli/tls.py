@@ -19,7 +19,7 @@ from cli import render
 from cli.env import Install
 
 
-def _enddate(cert: str) -> str | None:
+def cert_enddate(cert: str) -> str | None:
     """Parse a PEM cert's notAfter via openssl (one fork, 10s cap)."""
     try:
         out = subprocess.run(
@@ -41,7 +41,7 @@ def status(install: Install) -> dict:
     env = install.env
     key = env.get("SSL_KEYFILE") or ""
     cert = env.get("SSL_CERTFILE") or ""
-    expiry = _enddate(cert) if cert and os.path.isfile(cert) else None
+    expiry = cert_enddate(cert) if cert and os.path.isfile(cert) else None
     return {
         "ok": True,
         "tls": install.tls_mode != "none",

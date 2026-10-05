@@ -13,7 +13,6 @@ actually happens. It lives here now so every site shares one budget.
 
 import asyncio
 
-# Half of anyio's 40-thread limiter, so node RPCs can never take all of it.
 NODE_FANOUT_LIMIT = 20
 
 _semaphore: asyncio.Semaphore | None = None
@@ -42,16 +41,6 @@ async def run_bounded(fn, *args):
         return await run_in_threadpool(fn, *args)
 
 
-# A request that renders a page must not wait on every node, however many there
-# are or however dead they are. The worst case is a node just added and
-# unreachable: the short 3s timeout only applies once a node has been *recorded*
-# as broken, which cannot happen before it has been tried, so one misconfigured
-# node made the whole user list take half a minute.
-#
-# 10s sits above the healthy cases that matter and below the pathological ones.
-# Past roughly a hundred healthy nodes the request returns partial counts
-# instead of waiting, and the background collector — which has no deadline —
-# fills in the rest within one cycle.
 REQUEST_FANOUT_DEADLINE = 10.0
 
 
@@ -65,9 +54,6 @@ class FanoutDeadline(Exception):
     """
 
 
-# Tasks still running past the deadline. Held so they are not garbage collected
-# mid-flight: a task collected while awaiting a threadpool call can take the
-# thread's result with it.
 _inflight: set = set()
 
 
@@ -106,15 +92,6 @@ async def gather_nodes(calls, deadline: float = REQUEST_FANOUT_DEADLINE):
     return results
 
 
-# The live collector runs on asyncio's default executor, which is where the
-# scheduled jobs live too: create_panel_backup, push_offsite,
-# send_backup_document, run_daily_alerts, and the two prunes. That pool is
-# min(32, cpu_count + 4) — six workers on a two-core box — so probing every
-# node can take all of them and a backup stops running.
-#
-# Deliberately a fixed number rather than a share of the pool: the pool's
-# width scales with cpu_count, and what matters is leaving room for the
-# scheduled work on any machine.
 BACKGROUND_FANOUT_LIMIT = 4
 
 _background: asyncio.Semaphore | None = None

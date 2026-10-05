@@ -11,8 +11,6 @@ type ConfirmModalProps = {
   danger?: boolean;
 };
 
-// Reuses Modal for the focus trap, Escape handling, ARIA attributes and
-// backdrop click-to-cancel.
 
 const ConfirmModal = ({
   open,

@@ -8,8 +8,6 @@ import { SkeletonPanel, SkeletonBlock } from './components/ui/Skeleton';
 
 import favicon from './assets/ovmanager-character-clean.png';
 
-// Each factory is a named const so useRoutePrefetch can reuse it without
-// creating a second, separate chunk.
 const loadLogin = () => import('./pages/LoginPage');
 const loadClaim = () => import('./pages/ClaimPage');
 const loadDashboard = () => import('./pages/DashboardLayout');
@@ -40,8 +38,6 @@ link.type = 'image/png';
 link.href = favicon;
 document.head.appendChild(link);
 
-// A shaped skeleton reserves the same space as the real content, so route
-// changes do not shift layout.
 const PageLoader = () => {
   const { t } = useTranslation();
   return (
@@ -57,8 +53,6 @@ const PageLoader = () => {
   );
 };
 
-// requestIdleCallback keeps chunk warming off the critical path, so it never
-// competes with the current route's own data fetching.
 function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -67,10 +61,8 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
     const cancel = window.cancelIdleCallback || clearTimeout;
 
     const handle = idle(async () => {
-      // Ordered by likelihood of being visited from the dashboard.
       const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadHealth, loadSettings];
       if (userRole === 'owner') queue.push(loadAdmins);
-      // Chained sequentially so prefetching never saturates the connection pool.
       for (const load of queue) {
         try {
           await load();
@@ -84,8 +76,6 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
   }, [isAuthenticated, userRole]);
 }
 
-// Without this a deep scroll position carries over into the next page and it
-// looks like content is missing.
 function useScrollReset() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -93,8 +83,6 @@ function useScrollReset() {
   }, [pathname]);
 }
 
-// Named so a crash is scoped to one section: navigating to another page mounts
-// clean instead of leaving a sticky error screen.
 const Page = ({ name, children }: { name: string; children: React.ReactNode }) => (
   <SectionBoundary name={name}>
     <Suspense fallback={<PageLoader />}>{children}</Suspense>
@@ -107,7 +95,6 @@ function App({ onReady }: { onReady?: () => void }) {
   useRoutePrefetch(isAuthenticated, userRole);
   useScrollReset();
 
-  // Lets main.tsx drop the static boot shell once the app has committed.
   useEffect(() => { onReady?.(); }, [onReady]);
 
   return (

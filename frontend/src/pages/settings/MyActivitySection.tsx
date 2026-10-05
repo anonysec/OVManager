@@ -16,8 +16,6 @@ import './MyActivitySection.css';
 
 const LIMIT = 20;
 
-// Friendlier words for common action segments ("node.tls_unverified" becomes
-// "Node · TLS unverified"). Unknown segments are only title-cased.
 const ACTION_WORDS: Record<string, string> = {
   tls: 'TLS',
   tls_unverified: 'TLS unverified',
@@ -47,8 +45,6 @@ const MyActivitySection = () => {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  // Wall-clock seconds in state, so relative times never call Date.now()
-  // during render (same pattern as the AuditLog page).
   const [nowTs, setNowTs] = useState(0);
 
   const load = useCallback(async () => {
@@ -85,8 +81,6 @@ const MyActivitySection = () => {
     }
   }, [i18n.language]);
 
-  // Localized "5m ago"; falls back to the shared English helper before the
-  // first clock tick or on engines without RelativeTimeFormat.
   const timeAgo = (ts: number | string | null | undefined) => {
     if (!ts) return '—';
     const asIso = new Date(Number(ts) * 1000).toISOString();

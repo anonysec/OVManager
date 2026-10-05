@@ -1,7 +1,6 @@
 // GET /users/ and /nodes/ return `{ users|nodes, total, … }` inside a
 // `{ success, data }` envelope, but callers pass the payload at any of four
 // depths (fetch response, apiClient body, inner object, bare array). Walking
-// `.data` a few times keeps every consumer in sync.
 
 export function asList(payload, key) {
   let data = payload;

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-// Also listens for the `ovmanager:loading` event the dashboard refresh emits.
 
 const RouteProgress = () => {
   const location = useLocation();

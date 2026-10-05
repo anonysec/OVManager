@@ -28,21 +28,6 @@ HTTP_TIMEOUT_SECONDS = 10
 _last_sent_day: date | None = None
 
 
-def _decrypt_bot_token(stored: str | None) -> str | None:
-    """Return the bot token as stored, or ``None`` when unusable.
-
-    At-rest encryption was removed in 1.0.5. A legacy ``enc:`` row cannot be
-    read back without the retired key, so it is refused: ciphertext is never
-    sent to Telegram as a token. Same fail-closed rule as crud.decrypt_bot_token.
-    """
-    if not stored:
-        return None
-    if str(stored).startswith("enc:"):
-        logger.warning("Bot token is still encrypted (re-save it in Settings → Bot) — skipping alert")
-        return None
-    return stored
-
-
 def send_telegram(text: str, db=None) -> bool:
     """Send one HTML-escaped message to the configured owner.
 
@@ -61,7 +46,7 @@ def send_telegram(text: str, db=None) -> bool:
         owner_id = getattr(settings, "owner_telegram_id", None)
         if not owner_id:
             return False
-        token = _decrypt_bot_token(getattr(settings, "bot_token", None))
+        token = crud.decrypt_bot_token(getattr(settings, "bot_token", None))
         if not token:
             return False
 

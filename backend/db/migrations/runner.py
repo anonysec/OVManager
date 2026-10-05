@@ -47,9 +47,6 @@ def migrate(db: Session | None = None) -> int:
                 _reconcile_columns(session)
                 _seed_settings(session)
                 _seed_owner_and_first_user(session)
-                # The fresh path stamps itself at HEAD and skips STEPS, so v16
-                # would never run here and a manual install (git clone → .env →
-                # run) got an owner row with no password and no way in.
                 _import_owner_credential(session)
                 _stamp(session, SCHEMA_VERSION, "initial schema")
                 session.commit()

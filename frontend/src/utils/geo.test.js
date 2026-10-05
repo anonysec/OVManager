@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY_ALIASES, nodeMeta, normalizeCountryCode } from './geo.js';
 
-// Regression: node "node-1" (NULL country in DB) rendered as Netherlands
-// because the old fuzzy matcher compared the node NAME against country
-// initials. Only the stored ISO code counts now.
 describe('normalizeCountryCode', () => {
   it('returns null when there is no stored code, regardless of name', () => {
     expect(normalizeCountryCode({ country_code: null, name: 'node-1' })).toBeNull();

@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.45"
+VERSION="1.0.46"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -1036,6 +1036,19 @@ public_ip() {
         esac
     done
     return 1
+}
+
+# The host part of a URL or a bare hostname, for locating a certificate
+# directory. Not a chain of trims: `%%.*` on "panel.example.com" yields
+# "panel", which points the purge at a directory that does not exist.
+host_of() {
+    local h="$1"
+    h="${h#*://}"          # scheme
+    h="${h%%/*}"           # path
+    h="${h%%\?*}"          # query
+    h="${h##*@}"           # userinfo
+    h="${h%%:*}"           # port
+    printf '%s' "$h"
 }
 
 # Resolve and report, so a certificate attempt is not spent discovering a
@@ -2694,6 +2707,16 @@ do_uninstall() {
     confirm_word "delete the data as well? type purge" "purge" && PURGE=1
     confirm "remove the app and stop the service?" n || die "Cancelled."
 
+    # Read the certificate paths before the tree goes: purge has to know which
+    # Let's Encrypt directory belongs to this host, and that name only lives in
+    # the .env this block is about to delete.
+    local purge_domain=""
+    if [[ "$PURGE" -eq 1 && -f "$INSTALL_DIR/.env" ]]; then
+        purge_domain="$(awk -F= '/^TLS_DOMAIN=|^PUBLIC_URL=/ {gsub(/\r/, \"\", $2); if ($2 != \"\") {print $2; exit}}' "$INSTALL_DIR/.env" 2>/dev/null)"
+        purge_domain="$(host_of "$purge_domain")"
+        [[ "$purge_domain" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$ && "$purge_domain" != *..* ]] || purge_domain=""
+    fi
+
     render_begin "uninstall" 1
     systemctl_bounded stop
     systemctl disable "$SYSTEMD_SERVICE" 2>/dev/null || true
@@ -2708,6 +2731,22 @@ do_uninstall() {
     if [[ "$PURGE" -eq 1 ]]; then
         backup_dir "$DATA_DIR" "panel-pre-purge"
         rm -rf "$DATA_DIR"
+        # Certificates are not under $INSTALL_DIR or $DATA_DIR, so --purge left
+        # them: a working private key survived every uninstall, at a path the
+        # operator was told was gone. Only what this panel owns — /etc/ovmanager
+        # is written by `ovm https` and by nothing else.
+        #
+        # /etc/ssl/self-signed is deliberately NOT touched: OVNode writes the
+        # same path, and removing it on a panel uninstall would break a node
+        # that is still installed.
+        if [[ -d /etc/ovmanager ]]; then
+            rm -rf /etc/ovmanager
+            render_ok "certificate material removed   /etc/ovmanager"
+        fi
+        if [[ -n "$purge_domain" && -d "/etc/letsencrypt/$purge_domain" ]]; then
+            rm -rf "/etc/letsencrypt/$purge_domain"
+            render_ok "certificate material removed   /etc/letsencrypt/$purge_domain"
+        fi
         render_done "data removed"
     else
         render_done "app removed · data kept at $DATA_DIR"

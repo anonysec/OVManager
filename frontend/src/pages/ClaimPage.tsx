@@ -5,12 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
-// The pre-auth card, shared with the login page: same shell, same classes.
 import './LoginPage.css';
 
-// First-run owner claim: the installer prints a one-time key and no password.
-// Posting it with the chosen password creates the owner row; the key is spent
-// by the attempt.
 const ClaimPage = () => {
   const [claimKey, setClaimKey] = useState('');
   const [password, setPassword] = useState('');
@@ -32,8 +28,6 @@ const ClaimPage = () => {
       await claim(claimKey.trim(), password);
       navigate('/');
     } catch (err: any) {
-      // The server explains exactly what is wrong (already claimed, no key,
-      // key refused), and that message is more useful than a generic one.
       setError(err?.response?.data?.detail || t('claimError', 'The claim failed. Check the key and try again.'));
     } finally {
       setLoading(false);

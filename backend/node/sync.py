@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.db import crud
 from backend.db.models import Node
-from backend.node.fanout import gather_nodes
+from backend.node.fanout import gather_nodes, run_bounded
 from backend.node.requests import node_client
 
 
@@ -79,13 +79,7 @@ async def sync_all_user_limits(db: Session) -> dict:
         for start in range(0, len(pairs), _CHUNK):
             jobs.append((n, pairs[start : start + _CHUNK]))
 
-    _semaphore = asyncio.Semaphore(20)
-
-    async def bounded(job):
-        async with _semaphore:
-            return await run_in_threadpool(_push_limits_batch, *job)
-
-    raw = await asyncio.gather(*(bounded(j) for j in jobs), return_exceptions=True)
+    raw = await asyncio.gather(*(run_bounded(_push_limits_batch, *j) for j in jobs), return_exceptions=True)
     results = []
     for item in raw:
         if isinstance(item, Exception):

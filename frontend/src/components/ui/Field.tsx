@@ -7,7 +7,6 @@ import './Field.css';
 
 type FieldProps = {
   label?: any;
-  id?: any;
   inputId?: any;
   hint?: any;
   error?: any;
@@ -16,13 +15,9 @@ type FieldProps = {
   children?: ReactNode;
 };
 
-// The single child is cloned so the generated id, aria-describedby and
-// aria-invalid always match the rendered label — no caller has to remember the
-// plumbing.
 
 const Field = ({
   label,
-  id,
   inputId,
   hint,
   error,
@@ -33,7 +28,7 @@ const Field = ({
   const autoId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const child = isValidElement(children) ? (children as ReactElement<any>) : null;
   const childProps: any = (child?.props as any) || {};
-  const fieldId = childProps.id || id || inputId || `ui-field-${autoId}`;
+  const fieldId = childProps.id || inputId || `ui-field-${autoId}`;
   const showHint = Boolean(hint) && !error;
   const hintId = showHint ? `${fieldId}-hint` : undefined;
   const errorId = error ? `${fieldId}-error` : undefined;

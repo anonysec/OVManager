@@ -36,8 +36,6 @@ const Sidebar = () => {
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
 
-  // The session token is opaque, so there is no "sub" claim to decode;
-  // AuthContext stores the name from the login response instead.
   const username = useMemo(() => {
     try { return localStorage.getItem('username') || ''; }
     catch { return ''; }
@@ -54,8 +52,6 @@ const Sidebar = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Mobile drawer: Escape closes, focus moves in on open and returns to the
-  // hamburger on close.
   useEffect(() => {
     if (!mobileOpen) return undefined;
     drawerRef.current?.querySelector<HTMLElement>('a, button')?.focus();
@@ -101,7 +97,6 @@ const Sidebar = () => {
   };
   const isActiveClass = (item: NavItem) => isActive(item) ? 'sidebar-nav-link active' : 'sidebar-nav-link';
 
-  // Admins and Audit stay owner-only, pushed as secondary "Advanced" entries.
   const navItems: NavItem[] = [
     { to: '/',          label: t('navHome',     'Home'),     icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
     { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
@@ -119,9 +114,6 @@ const Sidebar = () => {
     );
   }
 
-  // Labels stay mounted in both modes: the collapsed rail hides them with CSS
-  // rather than unmounting, so the width tween stays smooth and focus survives
-  // the toggle.
   const renderNavItem = (item: NavItem, index: number) => (
     <li key={item.to} className="sidebar-nav-item">
       {(index === 0 || navItems[index - 1].group !== item.group) && (

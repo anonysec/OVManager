@@ -6,7 +6,8 @@ from sqlalchemy import text
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.logger import logger
-from backend.node.task import change_user_status_on_all_nodes, get_users_used_traffic
+from backend.node.management import change_user_status_on_all_nodes
+from backend.node.sync import get_users_used_traffic
 from backend.operations.billing.usage import record_daily_bytes
 from backend.operations.observability import live
 
@@ -175,19 +176,6 @@ async def _collect_node_traffic(
 
         entry = pending.get(user.id)
         if entry is None and user in stale:
-            # This user's row was written by an earlier node in this same run,
-            # through a Core UPDATE the session never sees (expire_on_commit is
-            # False). Re-read only in that case, so node 2 sees node 1's
-            # counters instead of rebuilding node_usage from a pre-node-1 map
-            # and dropping its bytes. A user untouched by this run keeps its
-            # loaded values — which is what lets a reset landing mid-tick win
-            # the conditional UPDATE below rather than being rebaselined onto.
-            #
-            # Guarded: the row can be gone. A delete between the load and here
-            # made the refresh raise, and an exception here escapes the loop and
-            # discards `pending` for the whole node — every OTHER user on it
-            # lost their traffic for the tick. A user deleted mid-tick is gone;
-            # there is nothing to bill and nothing to fail over.
             try:
                 db.refresh(user, attribute_names=["used", "node_usage"])
             except Exception:
@@ -248,8 +236,6 @@ async def _collect_node_traffic(
                 user.name,
             )
         else:
-            # The row now differs from what this session holds; a later node in
-            # the same run must re-read before building on it.
             stale.add(user)
 
     db.commit()
@@ -273,8 +259,6 @@ async def check_user_used_traffic():
         id_to_name = dict(crud.get_user_id_name_pairs(db))
 
         any_updated = False
-        # One set for the whole loop: a user written for one node must be
-        # re-read before the next node adds to them.
         stale: set = set()
         for node in nodes:
             try:
