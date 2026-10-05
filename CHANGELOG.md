@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.0.45 — 2026-10-05
+
+Four live bugs the adversarial review of 1.0.44 found in 1.0.44's own fixes.
+Two of them were introduced by 1.0.44 and are the reason this is a new version
+rather than a re-tag.
+
+**If you run more than one node, read the billing item first.** On 1.0.44 a
+single user deletion mid-tick could zero every other user's traffic for that
+tick, and every installed copy of 1.0.44 has that.
+
+**Fixed**
+
+A user deleted mid-tick cost every other user their traffic. The multi-node fix
+that made 1.0.44 bill more than the first node refreshes a stale session object
+before reading its counters; unguarded, that refresh raises when the row is
+already gone, and the exception escaped the per-user loop and discarded the
+whole node's batch. Measured: a bystander billed 3200 bytes before the fix and 0
+after, deterministically. A deleted user has nothing to bill, so the refresh now
+skips that row and carries on.
+
+The last language clicked did not win. `loadLanguage` fetches the code-split
+bundle before switching, so two rapid picks could both be in flight and the
+slower one to resolve decided the outcome — the first click reached the screen.
+
+The panel's own "request a certificate for this server's IP address" asked Let's
+Encrypt for a private address on any host whose docker bridge or metadata NIC
+sorts ahead of the public one. The installer had been fixed for exactly this and
+the panel's toggle was missed. It now skips the private, loopback and link-local
+ranges and IPv6.
+
+`ovm restart` reported success over a service that had not restarted.
+`service_action` ended every branch on a message that returns 0, so the warning
+beneath it could never fire. The same shape as the `pkg_install` bug fixed in
+1.0.44, in the sibling file.
+
+The asset cache's path confinement did not cover the gzip sibling. It checked the
+requested file but not the `.gz` file the compressed fast path actually opens, so
+a symlink planted at that name inside `assets/` was served — with 200 and the
+file's contents. Both are now confined by real path.
+
+**Tests**
+
+Three of 1.0.44's fixes had no working regression test, and could have been
+reverted without noticing:
+
+- The asset traversal test used a `..` payload that the pre-fix code already
+  rejected, so the suite was green against the vulnerable version.
+- The language test exercised `i18n.js`, which 1.0.44 did not change — it passed
+  identically whether the pickers called the fixed helper or not.
+- The Let's Encrypt IP fix had no test at all: reverting all four call sites still
+  passed the full suite.
+
+Each now fails against the code that precedes its fix.
+
 ## 1.0.44 — 2026-10-04
 
 An unauthenticated file read, a way to hand your panel to a stranger, and
