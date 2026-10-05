@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.53"
+VERSION="1.0.54"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2363,7 +2363,7 @@ do_install() {
         render_done "packages installed"
         chmod 700 "$DATA_DIR"
         grant_panel_access
-        [[ -d "$INSTALL_DIR/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
+        [[ -d "$INSTALL_DIR/ovmanager-${VERSION}/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
         render_note "frontend prebuilt"
         write_systemd_unit
         systemctl_bounded restart >/dev/null 2>&1 || die "Could not start $SYSTEMD_SERVICE"
