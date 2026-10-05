@@ -1,6 +1,21 @@
 # Changelog
 
+## 1.0.48 — 2026-10-05
+
+Installer: 1.0.47 still failed because `install -d … .uv-cache` ran
+*after* `uv sync`. Now the cache directory is created right before the
+sync step so the panel user can write to it from the start.
+
 ## 1.0.47 — 2026-10-05
+
+Installer: fresh installs failed at `uv sync` because `/opt/ovmanager`
+was mode 750 (no group write) and `uv` was invoked under sudo which made
+`HOME=/root`, leaving the cache unwritable for the panel user. Now the
+install dir is mode 2775 group-write, the version dir is chowned
+root:ovmanager 2775, and `uv sync` runs as the panel user with
+`UV_CACHE_DIR=$DATA_DIR/.uv-cache`.
+
+## 1.0.46 — 2026-10-05
 
 Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
 single-use hooks and utils), centralised node-fanout concurrency into
@@ -412,7 +427,7 @@ First public release.
   if the new version does not come up. The database migrates on the next start.
 - Uninstall keeps your data. `--purge` takes a snapshot first, then deletes it.
 
-## 1.0.47 — 2026-10-05
+## 1.0.48 — 2026-10-05
 
 Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
 single-use hooks and utils), centralised node-fanout concurrency into
