@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.50"
+VERSION="1.0.51"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2350,8 +2350,8 @@ do_install() {
         render_begin "runtime" 6
         ensure_uv
         cd "$INSTALL_DIR/ovmanager-${VERSION}"
+        chown root:"$PANEL_USER" "$DATA_DIR"
         chmod 750 "$DATA_DIR"
-        chgrp "$PANEL_USER" "$DATA_DIR"
         install -d -o "$PANEL_USER" -g "$PANEL_USER" -m 700 "$DATA_DIR/.uv-cache"
         render_note "python packages"
         render_watch "uv sync"
