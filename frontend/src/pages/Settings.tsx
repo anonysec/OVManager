@@ -137,7 +137,7 @@ const Settings = () => {
                 </section>
               );
             })}
-            <section className="sp-section" id="sp-section-activity">
+            <section className="sp-section">
               <MyActivitySection />
             </section>
           </div>

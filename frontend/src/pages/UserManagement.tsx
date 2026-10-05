@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   FiDownload, FiSearch, FiPlus, FiCheck, FiWifi, FiUsers,
-  FiEdit2, FiActivity, FiTrash2, FiClock, FiUserCheck, FiUserX, FiRefreshCw,
+  FiEdit2, FiActivity, FiTrash2, FiClock, FiUserCheck, FiUserX, FiRefreshCw, FiMoreHorizontal,
 } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
@@ -66,6 +67,7 @@ const UserManagement = () => {
   const [selected, setSelected] = useState(() => new Set<string>());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [lastDeleted, setLastDeleted] = useState<{ uuid: string; name: string } | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ uuid: string; user: any; left: number; top?: number; bottom?: number } | null>(null);
 
   const [sort, setSort] = useState<{ key: string; dir: string }>(() => {
     try {
@@ -448,6 +450,44 @@ const UserManagement = () => {
     );
   };
 
+  const anySelectedDisabled = useMemo(
+    () => users.some((u) => selected.has(String(u.uuid)) && u.is_active === false),
+    [users, selected],
+  );
+
+  const openRowMenu = useCallback((e: ReactMouseEvent<HTMLButtonElement>, user: any) => {
+    if (rowMenu?.uuid === String(user.uuid)) { setRowMenu(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = 200;
+    const openUp = rect.bottom + 240 + 8 > window.innerHeight;
+    setRowMenu({
+      uuid: String(user.uuid),
+      user,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      ...(openUp ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+    });
+  }, [rowMenu]);
+
+  useEffect(() => {
+    if (!rowMenu) return undefined;
+    const close = (e: Event) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.closest('.um-rowmenu-panel') || el.closest('.um-rowmenu-trigger'))) return;
+      setRowMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setRowMenu(null); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [rowMenu]);
+
   const columns = useMemo(() => [
     {
       key: 'name', label: t('th_username', 'Username'), sortable: true,
@@ -482,7 +522,9 @@ const UserManagement = () => {
             <span className="dt-usage-bar" aria-hidden="true">
               <span className={`dt-usage-fill${pct >= 95 ? ' is-danger' : pct >= 85 ? ' is-warn' : ''}`} style={{ width: `${total ? pct : 0}%` }} />
             </span>
-            <span className="dt-num">{formatBytes(used)} / {total ? formatBytes(total) : '∞'}</span>
+            <span className="dt-num">
+              {formatBytes(used)}{total ? ` / ${formatBytes(total)}` : <>{' '}<span className="um-data-total">of ∞</span></>}
+            </span>
           </span>
         );
       },
@@ -516,22 +558,22 @@ const UserManagement = () => {
       render: (u: any) => (
         <span className="dt-actions" role="group" aria-label={`${u.name} ${t('actions', 'Actions')}`}>
           <button type="button" className="dt-icon-btn" title={t('rowEdit', 'Edit')} aria-label={`${t('rowEdit', 'Edit')} ${u.name}`} onClick={() => handleEdit(u)}><FiEdit2 size={15} /></button>
-          <button type="button" className="dt-icon-btn" title={t('rowSessions', 'Sessions')} aria-label={`${t('rowSessions', 'Sessions')} ${u.name}`} onClick={() => handleShowSessions(u)}><FiActivity size={15} /></button>
-          <button type="button" className="dt-icon-btn" title={t('downloadConfig', 'Get Config')} aria-label={`${t('downloadConfig', 'Get Config')} ${u.name}`} onClick={() => handleOpenDownloadModal(u)}><FiDownload size={15} /></button>
-          <button type="button" className="dt-icon-btn" title={t('extend', 'Extend')} aria-label={`${t('extend', 'Extend')} ${u.name}`} onClick={() => { setSelectedUser(u); setIsExtendModalOpen(true); }}><FiClock size={15} /></button>
-          <button
-            type="button" className="dt-icon-btn" title={u.is_active ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
-            aria-label={`${u.is_active ? t('disableUser', 'Disable') : t('enableUser', 'Enable')} ${u.name}`}
-            onClick={() => handleToggleStatus(u)}
-          >
-            {u.is_active ? <FiUserX size={15} /> : <FiUserCheck size={15} />}
-          </button>
-          <button type="button" className="dt-icon-btn" title={t('resetUsageButton', 'Reset usage')} aria-label={`${t('resetUsageButton', 'Reset usage')} ${u.name}`} onClick={() => handleResetUsage(u)}><FiRefreshCw size={15} /></button>
           <button type="button" className="dt-icon-btn is-danger" title={t('rowDelete', 'Delete')} aria-label={`${t('rowDelete', 'Delete')} ${u.name}`} onClick={() => handleDelete(u)}><FiTrash2 size={15} /></button>
+          <button
+            type="button"
+            className="dt-icon-btn um-rowmenu-trigger"
+            aria-haspopup="menu"
+            aria-expanded={rowMenu?.uuid === String(u.uuid)}
+            title={t('moreActions', 'More actions')}
+            aria-label={`${t('moreActions', 'More actions')} ${u.name}`}
+            onClick={(e) => openRowMenu(e, u)}
+          >
+            <FiMoreHorizontal size={16} />
+          </button>
         </span>
       ),
     },
-  ], [t, handleUserClick, handleEdit, handleShowSessions, handleOpenDownloadModal, handleToggleStatus, handleResetUsage, handleDelete]);
+  ], [t, rowMenu, openRowMenu, handleUserClick, handleEdit, handleDelete]);
 
   const allPageKeys = pagedUsers.map((u) => String(u.uuid));
   const allSelected = allPageKeys.length > 0 && allPageKeys.every((k) => selected.has(k));
@@ -629,7 +671,7 @@ const UserManagement = () => {
       {selected.size > 0 && (
         <div className="um-bulkbar" role="toolbar" aria-label={t('bulkActions', 'Bulk actions')}>
           <strong>{t('selectedCount', '{{count}} selected', { count: selected.size })}</strong>
-          <Button size="sm" disabled={bulkBusy} icon={<FiClock size={13} aria-hidden="true" />} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}>{t('extend30d', 'Extend +30 days')}</Button>
+          <Button size="sm" disabled={bulkBusy || anySelectedDisabled} icon={<FiClock size={13} aria-hidden="true" />} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}>{t('extend30d', 'Extend +30 days')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={13} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={13} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
@@ -686,6 +728,23 @@ const UserManagement = () => {
           onPageSizeChange={(n) => { setPageSize(n); localStorage.setItem(PAGE_SIZE_KEY, String(n)); setPage(1); }}
           caption={t('users', 'Users')}
         />
+      )}
+
+      {rowMenu && (
+        <div
+          className="um-rowmenu-panel"
+          role="menu"
+          aria-label={t('moreActions', 'More actions')}
+          style={{ left: rowMenu.left, top: rowMenu.top, bottom: rowMenu.bottom }}
+        >
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleOpenDownloadModal(rowMenu.user); }}><FiDownload size={14} aria-hidden="true" /> {t('downloadConfig', 'Get Config')}</button>
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); setSelectedUser(rowMenu.user); setIsExtendModalOpen(true); }}><FiClock size={14} aria-hidden="true" /> {t('extend', 'Extend')}</button>
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleShowSessions(rowMenu.user); }}><FiActivity size={14} aria-hidden="true" /> {t('rowSessions', 'Sessions')}</button>
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleToggleStatus(rowMenu.user); }}>
+            {rowMenu.user.is_active ? <FiUserX size={14} aria-hidden="true" /> : <FiUserCheck size={14} aria-hidden="true" />} {rowMenu.user.is_active ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
+          </button>
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleResetUsage(rowMenu.user); }}><FiRefreshCw size={14} aria-hidden="true" /> {t('resetUsageButton', 'Reset usage')}</button>
+        </div>
       )}
 
       <ConfirmModal

@@ -277,6 +277,11 @@ html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
   gap: 10px;
   z-index: var(--z-toast);
 }
+@media (max-width: 767.98px) {
+  .toast-stack {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
 .toast {
   width: min(360px, calc(100vw - 40px));
   background: var(--panel);

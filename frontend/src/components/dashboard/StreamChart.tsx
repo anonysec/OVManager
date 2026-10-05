@@ -109,6 +109,7 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
   const last = points[points.length - 1];
   const halfVal = peak / 2;
   const firstTs = series.length ? tsToIso(series[0].ts) : null;
+  const isEmpty = loading || loadError || points.length < 2 || (!loadError && peak === 0);
 
   return (
     <div className="ds-chart-embed">
@@ -128,14 +129,22 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
           </div>
         </div>
         <span className="ds-chart-inline-stats">
-          <span>{t('trafficNow', 'Now')} <b>{fmt(lastVal)}</b></span>
-          <span>{t('trafficPeak', 'Peak')} <b>{fmt(peak)}</b></span>
-          <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
-          <span aria-live="polite">{loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}</span>
+          <span className="ds-chart-stat">
+            <span>{t('trafficNow', 'Now')}</span>
+            <b>{fmt(lastVal)}</b>
+          </span>
+          <span className="ds-chart-stat">
+            <span>{t('trafficPeak', 'Peak')}</span>
+            <b>{fmt(peak)}</b>
+          </span>
+          <span className="ds-chart-stat">
+            <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
+            <span aria-live="polite">{loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}</span>
+          </span>
         </span>
       </div>
       <figure className="ds-chart-figure">
-        <div className="ds-chart-wrap">
+        <div className={`ds-chart-wrap${isEmpty ? ' is-empty' : ''}`}>
           <svg
             ref={svgRef}
             className="ds-chart-svg"
@@ -179,7 +188,7 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
           {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmt(halfVal)}</span>}
           <span className="ds-chart-axis ds-chart-axis--min">0</span>
           {firstTs && <span className="ds-chart-axis ds-chart-axis--t0">{fmtDateTime(firstTs)}</span>}
-          {(loading || loadError || points.length < 2 || (!loadError && peak === 0)) && (
+          {isEmpty && (
             <div className="ds-chart-empty">
               {loading
                 ? t('loading', 'Loading…')

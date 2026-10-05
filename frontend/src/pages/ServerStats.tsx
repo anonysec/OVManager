@@ -409,7 +409,9 @@ const ServerStats = () => {
             value={errors.users ? '—' : String(totalUsers)}
             animate={errors.users ? undefined : totalUsers}
             ringPct={errors.users ? null : (totalUsers ? (activeTotal / totalUsers) * 100 : 0)}
-            chip={errors.users ? null : t('kpiActiveCount', '{{count}} active', { count: activeTotal })}
+            chip={errors.users ? null : (totalUsers > 0 && activeTotal === totalUsers
+              ? t('statusOnline', 'Online')
+              : t('kpiOnlineOf', '{{online}} of {{total}}', { online: activeTotal, total: totalUsers }))}
             to="/users"
           />
           <KpiCard
@@ -420,8 +422,8 @@ const ServerStats = () => {
             ringPct={activeTotal ? (onlineTotal / activeTotal) * 100 : 0}
             tone={onlineTotal ? 'ok' : null}
             chip={attentionUsers.length
-              ? t('heroUsersWarn', '{{count}} need attention', { count: attentionUsers.length })
-              : t('heroUsersOk', 'All clear')}
+              ? t('heroUsersWarn', 'Waiting {{count}}', { count: attentionUsers.length })
+              : t('heroUsersOk', 'All idle')}
             to="/users?view=online"
           />
           <KpiCard
@@ -443,8 +445,8 @@ const ServerStats = () => {
               ringPct={probesPending ? null : (nodes?.length ? (onlineNodes / nodes.length) * 100 : 0)}
               tone={offlineNodes ? 'warn' : 'ok'}
               chip={probesPending ? null : (offlineNodes
-                ? t('heroNodesWarn', '{{count}} offline', { count: offlineNodes })
-                : t('heroNodesOk', 'All reachable'))}
+                ? t('kpiOnlineOf', '{{online}} of {{total}}', { online: onlineNodes, total: nodes?.length || 0 })
+                : t('statusOnline', 'Online'))}
               to="/nodes"
             />
           ) : (
@@ -462,7 +464,7 @@ const ServerStats = () => {
                 label={t('panelCPU', 'CPU')}
                 value={errors.stats ? '—' : `${cpuPercent.toFixed(0)}%`}
                 ringPct={errors.stats ? null : cpuPercent}
-                tone={cpuPercent > 85 ? 'danger' : cpuPercent > 70 ? 'warn' : null}
+                tone={cpuPercent >= 95 ? 'danger' : cpuPercent >= 80 ? 'warn' : null}
               />
               <KpiCard
                 icon={FiDatabase}
@@ -626,12 +628,14 @@ const ServerStats = () => {
             />
           </div>
 
-          <TopUsers
-            items={topUsers}
-            error={errors.topUsers}
-            loading={loading}
-            onRetry={() => loadData()}
-          />
+          {topUsers && topUsers.length > 0 && (
+            <TopUsers
+              items={topUsers}
+              error={errors.topUsers}
+              loading={loading}
+              onRetry={() => loadData()}
+            />
+          )}
 
         </>
       )}

@@ -105,6 +105,7 @@ const DashboardLayout = () => {
   const [langOpen, setLangOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const langRef = useRef(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
   const gPending = useRef(false);
   const location = useLocation();
 
@@ -217,6 +218,10 @@ const DashboardLayout = () => {
       }
       if (key === 'Escape') {
         setHelpOpen(false);
+        if (notifOpen) {
+          setNotifOpen(false);
+          bellRef.current?.focus();
+        }
         gPending.current = false;
         return;
       }
@@ -239,7 +244,7 @@ const DashboardLayout = () => {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [navigate, userRole, logout]);
+  }, [navigate, userRole, logout, notifOpen]);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -418,7 +423,7 @@ const DashboardLayout = () => {
                   <ThemeIcon aria-hidden="true" />
                 </button>
                 <div className="notification-wrap">
-                  <button type="button" className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
+                  <button type="button" ref={bellRef} className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
                     <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
                   </button>
                   <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label={t('notifTitle')}>
@@ -473,7 +478,7 @@ const LangIcon = ({ size = 16 }) => (
 );
 
 const FaFlagIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="8" y="0" fill="#239f40" />
     <rect width="24" height="8" y="8" fill="#fff" />
     <rect width="24" height="8" y="16" fill="#da0000" />
@@ -490,7 +495,7 @@ const FaFlagIcon = () => (
 );
 
 const EnFlagIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="24" fill="#fff" />
     <rect width="24" height="2.4" y="0" fill="#b22234" />
     <rect width="24" height="2.4" y="4.8" fill="#b22234" />
@@ -509,7 +514,7 @@ const EnFlagIcon = () => (
 );
 
 const RuFlagIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="8" y="0" fill="#fff" />
     <rect width="24" height="8" y="8" fill="#0039a6" />
     <rect width="24" height="8" y="16" fill="#da291c" />
@@ -517,7 +522,7 @@ const RuFlagIcon = () => (
 );
 
 const ChinaFlagIcon = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="24" fill="#de2910" />
     <polygon points="5,4 6.2,7.2 9.6,7.2 6.8,9.2 7.8,12.4 5,10.3 2.2,12.4 3.2,9.2 0.4,7.2 3.8,7.2" fill="#ffde00" />
     <g transform="translate(12,12)">

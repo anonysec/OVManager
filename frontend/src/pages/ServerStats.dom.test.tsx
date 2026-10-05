@@ -215,7 +215,7 @@ describe('ServerStats resilience', () => {
 
   it('renders resource stat cards with danger tone for high CPU', async () => {
     baseMock((url) => {
-      if (url.includes('server/info')) return ok({ cpu: 92, memory_percent: 40, disk_percent: 20 });
+      if (url.includes('server/info')) return ok({ cpu: 97, memory_percent: 40, disk_percent: 20 });
       return undefined;
     });
     const { container } = renderStats();

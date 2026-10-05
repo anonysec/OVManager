@@ -61,14 +61,18 @@ def _fmt_age(seconds: float) -> str:
     """Human-friendly age string ("5 minutes", "3 hours", "2 days")."""
     seconds = max(0.0, float(seconds))
     if seconds < 60:
-        return f"{int(seconds)} seconds"
+        n = int(seconds)
+        return f"{n} second" if n == 1 else f"{n} seconds"
     minutes = seconds / 60
     if minutes < 60:
-        return f"{int(minutes)} minutes"
+        n = int(minutes)
+        return f"{n} minute" if n == 1 else f"{n} minutes"
     hours = minutes / 60
     if hours < 48:
-        return f"{int(hours)} hours"
-    return f"{int(hours / 24)} days"
+        n = int(hours)
+        return f"{n} hour" if n == 1 else f"{n} hours"
+    n = int(hours / 24)
+    return f"{n} day" if n == 1 else f"{n} days"
 
 
 def _check_panel(db: Session) -> dict:
@@ -93,7 +97,7 @@ def _check_database(db: Session) -> dict:
             "database",
             "error",
             f"The database file was not found at {DB_PATH}.",
-            "Restore a backup from the Maintenance page, or restart the panel so it can recreate the file.",
+            "Restore a backup from Settings → Backup, or restart the panel so it can recreate the file.",
             detail={"path": str(DB_PATH), "size_bytes": None, "quick_check": None},
         )
 
@@ -113,7 +117,7 @@ def _check_database(db: Session) -> dict:
         "database",
         "error",
         f"The database file is {_fmt_gb(size)} but SQLite reported a problem: {result_text}",
-        "The database may be damaged. Restore the newest backup from the Maintenance page, then restart the panel.",
+        "The database may be damaged. Restore the newest backup from Settings → Backup, then restart the panel.",
         detail=detail,
     )
 
@@ -287,7 +291,7 @@ def _check_disk(db: Session) -> dict:
     return _entry(
         "disk",
         "ok",
-        f"{free_gb:.1f} GB free of {total_gb:.1f} GB on the data disk.",
+        f"{total_gb - free_gb:.1f} GB used / {total_gb:.1f} GB total · {100 - percent_free:.0f}%",
         detail=detail,
     )
 
@@ -303,7 +307,7 @@ def _check_backups(db: Session) -> dict:
             "backups",
             "warn",
             "No database backup has been created yet.",
-            "Create a backup from the Maintenance page to protect your data.",
+            "Create a backup from Settings → Backup to protect your data.",
             detail=detail,
         )
 
@@ -318,7 +322,7 @@ def _check_backups(db: Session) -> dict:
             "backups",
             "warn",
             f"The newest backup ({newest.name}) is {_fmt_age(age)} old.",
-            "Backups older than a week may be out of date. Create a fresh backup from the Maintenance page.",
+            "Backups older than a week may be out of date. Create a fresh backup from Settings → Backup.",
             detail=detail,
         )
     return _entry(

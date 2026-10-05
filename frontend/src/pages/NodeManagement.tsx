@@ -24,7 +24,15 @@ const tlsMeta = (mode: any, t: any) => {
   if (mode === 'verified') return { tone: 'success', label: t('tlsVerified', 'Verified') };
   if (mode === 'plain') return { tone: 'danger', label: t('tlsPlain', 'Plain HTTP') };
   if (mode === 'unverified' || mode === 'self-signed') return { tone: 'warning', label: t('tlsSelfSigned', 'Self-signed') };
-  return null;
+  return { tone: 'neutral', label: t('tlsUnknown', 'Unknown') };
+};
+
+const isUrlAddress = (value: any) => /^[a-z][a-z0-9+.-]*:\/\//i.test(String(value || '').trim());
+
+const nodeEndpoint = (node: any) => {
+  const address = String(node.address || '').trim();
+  if (!address) return '';
+  return isUrlAddress(address) ? address : `${address}:${node.port}`;
 };
 
 const NodeManagement = () => {
@@ -347,7 +355,7 @@ const NodeManagement = () => {
                       {node.name}
                     </button>
                     <span className="nm-sub">
-                      {node.address}:{node.port}
+                      {nodeEndpoint(node)}
                       {meta.name ? ` · ${meta.name}` : ''}
                     </span>
                   </div>

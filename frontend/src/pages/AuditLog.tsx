@@ -273,10 +273,11 @@ const AuditLog = () => {
       </div>
 
       <div className="adt-filters">
-        <label className="search-field adt-search">
+        <label className="adt-filter adt-search">
+          <span className="adt-filter-label">{t('auditSearchLabel', 'Search')}</span>
           <input
             type="search"
-            className="search-input"
+            className="ui-input adt-select"
             placeholder={t('auditSearch', 'Search actor, action, target, detail…')}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPage(1); }}

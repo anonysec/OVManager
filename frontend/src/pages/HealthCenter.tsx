@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { fmtDateTime } from '../utils/time';
 import { FiActivity, FiAlertTriangle, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -146,7 +148,7 @@ const HealthCenter = () => {
   const overallMeta = statusMeta(overall);
 
   const lastChecked = checkedAt
-    ? t('healthLastChecked', 'Last checked {{time}}', { time: checkedAt.toLocaleTimeString() })
+    ? t('healthLastChecked', 'Last checked {{time}}', { time: fmtDateTime(checkedAt.toISOString()) })
     : null;
 
   return (
@@ -255,7 +257,11 @@ const HealthCenter = () => {
                     <Badge tone={meta.tone}>{t(meta.key, meta.fallback)}</Badge>
                   </div>
                   {showHint && (
-                    <p className={`health-check-hint health-check-hint--${check.status}`}>{check.hint}</p>
+                    <p className={`health-check-hint health-check-hint--${check.status}`}>
+                      {check?.id === 'backups' && isOwner
+                        ? <Link to="/settings#backup">{t('healthCreateBackup', 'Create a backup →')}</Link>
+                        : check.hint}
+                    </p>
                   )}
                 </Card>
               );

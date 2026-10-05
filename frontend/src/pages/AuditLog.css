@@ -122,6 +122,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+}
+
+html[dir='rtl'] .adt-detail {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 22px), transparent);
 }
 
 @media (max-width: 767.98px) {

@@ -8,7 +8,7 @@ import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiEye, FiEyeOff } from 'react-icons/fi';
 import { Card, Field } from './shared';
 
 /* ═══════════════════════════════════════════════════════
@@ -27,6 +27,7 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [token, setToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [ownerId, setOwnerId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -93,8 +94,15 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
         )}
 
         <Field label={t('botToken', 'Bot Token')} hint={t('botDesc', 'From @BotFather. Operators use the menu and typed search — /start is the only command. Leave blank to keep the current token.')} inputId="bot-token">
-          <input id="bot-token" className="sp-input" type="text" value={token} onChange={e => setToken(e.target.value)}
-            placeholder="123456789:ABC…" disabled={encryptKeyMissing} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input id="bot-token" className="sp-input" type={showToken ? 'text' : 'password'} value={token} onChange={e => setToken(e.target.value)}
+              placeholder="123456789:ABC…" disabled={encryptKeyMissing} style={{ flex: 1 }} />
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => setShowToken(v => !v)}
+              aria-label={showToken ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
+              title={showToken ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}>
+              {showToken ? <FiEyeOff aria-hidden="true" /> : <FiEye aria-hidden="true" />}
+            </button>
+          </div>
         </Field>
 
         <Field label={t('ownerTelegramId', 'Owner Telegram ID')} hint={t('ownerTelegramIdHint', 'Your numeric Telegram user ID. After saving, open the bot and tap Start.')} inputId="bot-owner-id">

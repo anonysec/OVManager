@@ -368,7 +368,7 @@ const AdminManagement = () => {
       key: 'telegram_id', label: t('adminsTelegram', 'Telegram'), hideOnMobile: true,
       render: (a: any) => (
         a.telegram_id == null || a.telegram_id === ''
-          ? <Badge tone="neutral">{t('adminsTelegramNotLinked', 'Not linked')}</Badge>
+          ? '—'
           : <Badge tone="success" dot>{t('adminsTelegramLinked', 'Linked')}</Badge>
       ),
     },
@@ -388,9 +388,7 @@ const AdminManagement = () => {
                 : t('adminsDisableAdminAria', 'Disable {{name}}', { name: a.username })}
             />
             <span className="adm-switch-track" aria-hidden="true"><span className="adm-switch-thumb" /></span>
-            <span className={`adm-switch-label${a.disabled ? '' : ' is-on'}`}>
-              {a.disabled ? t('disabled', 'Disabled') : t('enabled', 'Enabled')}
-            </span>
+            <span className="sr-only">{a.disabled ? t('disabled', 'Disabled') : t('enabled', 'Enabled')}</span>
           </label>
         );
       },

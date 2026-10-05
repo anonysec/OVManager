@@ -98,7 +98,6 @@
 }
 
 .adm-switch input:checked + .adm-switch-track .adm-switch-thumb {
-  background: var(--success);
   transform: translateX(16px);
 }
 
@@ -113,16 +112,6 @@ html[dir="rtl"] .adm-switch input:checked + .adm-switch-track .adm-switch-thumb 
 .adm-switch input:disabled + .adm-switch-track {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-.adm-switch-label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-muted);
-}
-
-.adm-switch-label.is-on {
-  color: var(--success-text);
 }
 
 /* ── Sessions modal ────────────────────────────────────────────────────── */
