@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.0.57"
+VERSION="1.0.58"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -2381,9 +2381,10 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
             --public-ip "$(hostname -I 2>/dev/null | awk '{print $1}')" "$@"
         return $?
     fi
-    local py="$INSTALL_DIR/.venv/bin/python"
+    local py="$INSTALL_DIR/ovmanager-$VERSION/.venv/bin/python"
+    [[ -x "$py" ]] || py="$INSTALL_DIR/.venv/bin/python"
     [[ -x "$py" ]] || die "Panel virtualenv missing ($py) — repair with: $CLI_NAME update"
-    ( cd "$INSTALL_DIR" && "$py" -m cli.main "$@" )
+    ( cd "$(dirname "$(dirname "$py")")" && "$py" -m cli.main "$@" )
 }
 
 # The same call, but a missing interpreter is a returned code rather than an
@@ -2391,12 +2392,13 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
 # with no subcommand has to list its options even on a box it cannot read, or
 # the one command that would explain the problem is the one that cannot run.
 _cli_py_soft() {
-    local py="$INSTALL_DIR/.venv/bin/python"
+    local py="$INSTALL_DIR/ovmanager-$VERSION/.venv/bin/python"
+    [[ -x "$py" ]] || py="$INSTALL_DIR/.venv/bin/python"
     if [[ ! -x "$py" ]]; then
         render_warn "cannot reach the panel interpreter at $py"
         return 1
     fi
-    ( cd "$INSTALL_DIR" && "$py" -m cli.main "$@" )
+    ( cd "$(dirname "$(dirname "$py")")" && "$py" -m cli.main "$@" )
 }
 
 # What the host can see and the container cannot: `docker ps`.
