@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.56"
+VERSION="1.0.57"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2853,7 +2853,8 @@ start_menu() {
 # live outside this installer. Refreshed on every update, which auto-swaps
 # boxes whose ovm is an old installer copy.
 install_cli() {
-    local src="${INSTALL_DIR}/manager.sh"
+    local src="${INSTALL_DIR}/ovmanager-${VERSION}/manager.sh"
+    [[ -f "$src" ]] || src="${INSTALL_DIR}/manager.sh"
     [[ -f "$src" ]] || return 0
     mkdir -p "$BIN_DIR" 2>/dev/null || { render_warn "Could not create $BIN_DIR"; return 0; }
     if cp -f "$src" "$BIN_DIR/$CLI_NAME" 2>/dev/null && chmod 0755 "$BIN_DIR/$CLI_NAME"; then
