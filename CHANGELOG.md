@@ -1,43 +1,51 @@
 # Changelog
 
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
+
+Installer: 1.0.54's systemd unit pointed at
+`${INSTALL_DIR}/.venv/bin/python3` but the venv lives in the version
+dir. The unit now uses
+`${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin/python3` with
+`WorkingDirectory=` and `PATH=` set to the version dir, so the
+service can actually start.
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.53 finally got uv sync to succeed but then failed at
 the `frontend/dist` precondition because install.sh was checking the
 wrong path (`$INSTALL_DIR/frontend/dist` instead of the version
 dir's `frontend/dist`). Now the check uses the version dir path.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.52 finally got DATA_DIR and HOME right but the version
 dir was still root:root 755, so `uv sync` could not create `.venv`
 there. Now both the install and version dirs are 2775 root:ovmanager
 before sync so the panel user can write the venv.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.51 still failed because uv also writes
 `$HOME/.local/share/uv/python`, and DATA_DIR was 0750 (no group
 write). Now DATA_DIR is 2775 root:ovmanager for the sync window so
 the panel user can populate both `.uv-cache` and `.local/`.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.50 chmod 0750 root:ovmanager on $DATA_DIR but did not
 chown, so it stayed root-owned. Now both `chown root:ovmanager` and
 `chmod 0750` happen before uv sync so the panel user can write to
 the cache and its local Python cache.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.49 still failed because `$DATA_DIR` was mode 0700
 root:root before uv sync ran, so the panel user could not traverse
 into `.uv-cache`. Now `$DATA_DIR` is opened 0750 root:ovmanager for
 the duration of `uv sync`, then re-tightened to 0700 root:ovmanager
 when the panel can serve it.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.48 still failed because `cd "$INSTALL_DIR"` left
 `uv sync` writing `.venv` into the install dir (root-owned 755),
 not the version dir. Now `cd "$INSTALL_DIR/ovmanager-${VERSION}"`
 before the synchronous sync so it lands where the panel can write.
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Installer: 1.0.47 still failed because `install -d … .uv-cache` ran
 *after* `uv sync`. Now the cache directory is created right before the
@@ -464,7 +472,7 @@ First public release.
   if the new version does not come up. The database migrates on the next start.
 - Uninstall keeps your data. `--purge` takes a snapshot first, then deletes it.
 
-## 1.0.54 — 2026-10-05
+## 1.0.55 — 2026-10-05
 
 Cleanup: dropped dead code (scripts/bench, redundant dashboard/UI components,
 single-use hooks and utils), centralised node-fanout concurrency into

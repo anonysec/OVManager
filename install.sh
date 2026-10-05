@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.0.54"
+VERSION="1.0.55"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2054,8 +2054,8 @@ Type=simple
 # the $PANEL_USER group, owns its data directory, and cannot update itself.
 User=${PANEL_USER}
 Group=${PANEL_USER}
-WorkingDirectory=${INSTALL_DIR}
-Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+WorkingDirectory=${INSTALL_DIR}/ovmanager-${VERSION}
+Environment="PATH=${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
 # The panel owns every file it writes (db, wal, logs) and no other service
 # reads them, so the database must be private from its very first byte
@@ -2065,7 +2065,7 @@ UMask=0077
 # rebuilds the project before starting it, writing egg-info and the lock into
 # the tree, which an unprivileged service account cannot do. The venv python
 # needs no write access and is what uv ends up executing anyway.
-ExecStart=${INSTALL_DIR}/.venv/bin/python3 main.py
+ExecStart=${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin/python3 main.py
 # uv exits 143 on SIGTERM: a clean 'ovm stop' must read as inactive,
 # not failed, so status and doctor report the truth.
 SuccessExitStatus=143
