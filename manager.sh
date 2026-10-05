@@ -2385,7 +2385,7 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
     local py="$INSTALL_DIR/ovmanager-$VERSION/.venv/bin/python"
     [[ -x "$py" ]] || py="$INSTALL_DIR/.venv/bin/python"
     [[ -x "$py" ]] || die "Panel virtualenv missing ($py) — repair with: $CLI_NAME update"
-    ( cd "$(dirname "$(dirname "$py")")" && set -a; [[ -f "$INSTALL_DIR/.env" ]] && . "$INSTALL_DIR/.env"; set +a; "$py" -m cli.main "$@" )
+    ( cd "$(dirname "$(dirname "$(dirname "$py")")")" && set -a; [[ -f "$INSTALL_DIR/.env" ]] && . "$INSTALL_DIR/.env"; set +a; "$py" -m cli.main "$@" )
 }
 
 # The same call, but a missing interpreter is a returned code rather than an
@@ -2399,7 +2399,7 @@ _cli_py_soft() {
         render_warn "cannot reach the panel interpreter at $py"
         return 1
     fi
-    ( cd "$(dirname "$(dirname "$py")")" && set -a; [[ -f "$INSTALL_DIR/.env" ]] && . "$INSTALL_DIR/.env"; set +a; "$py" -m cli.main "$@" )
+    ( cd "$(dirname "$(dirname "$(dirname "$py")")")" && set -a; [[ -f "$INSTALL_DIR/.env" ]] && . "$INSTALL_DIR/.env"; set +a; "$py" -m cli.main "$@" )
 }
 
 # What the host can see and the container cannot: `docker ps`.
