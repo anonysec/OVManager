@@ -142,8 +142,14 @@ class AssetCacheMiddleware:
         # above was not the boundary, it was decoration. Confine by real path:
         # anything resolving outside the base (including via a symlink) falls
         # through to the app, which 404s.
-        cand = os.path.realpath(os.path.join(base, rel.lstrip("/")))
-        if cand != os.path.realpath(base) and not cand.startswith(os.path.realpath(base) + os.sep):
+        real_base = os.path.realpath(base)
+
+        def _inside(candidate: str) -> bool:
+            resolved = os.path.realpath(candidate)
+            return resolved == real_base or resolved.startswith(real_base + os.sep)
+
+        cand = os.path.join(base, rel.lstrip("/"))
+        if not _inside(cand):
             await self.app(scope, receive, send)
             return
 
@@ -152,6 +158,7 @@ class AssetCacheMiddleware:
             accept
             and "gzip" in accept.lower()
             and os.path.splitext(cand)[1] in self._TEXT_EXTS
+            and _inside(cand + ".gz")
             and os.path.isfile(cand + ".gz")
             and (path.startswith("/assets/") or is_fonts_css)
         ):
