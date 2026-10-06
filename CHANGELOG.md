@@ -1,3 +1,11 @@
+## 1.2.3 — 2026-10-06
+
+Revert: v1.2.2 route-name prefixing (`r{i}_`) removed. Independent review
+confirmed no duplicate route names exist across routers — the rename solved
+a non-existent problem while destabilizing OpenAPI operationIds and
+`url_for` reverse lookups. Root cause of the earlier 404s was wrong probe
+paths (`/api/settings` vs real `/api/server/settings`), not route dedup.
+
 ## 1.2.2 — 2026-10-06
 
 Fix: FastAPI silently deduped routes that had overlapping ``name=`` attributes
