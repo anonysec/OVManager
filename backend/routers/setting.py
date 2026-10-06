@@ -23,6 +23,7 @@ _AUTO_BACKUP_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _AUTO_BACKUP_KEEP_MIN = 1
 _AUTO_BACKUP_KEEP_MAX = 500
 _AUTO_BACKUP_FIELDS = frozenset({"auto_backup_enabled", "auto_backup_time", "auto_backup_keep"})
+_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
 
 
 @router.get("/settings/", response_model=ResponseModel, include_in_schema=False)
@@ -58,6 +59,7 @@ async def get_settings(
         default_max_users=getattr(db_settings, "default_max_users", 1) or 1,
         owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
         urlpath=urlpath,
+        panel_domain=getattr(db_settings, "panel_domain", None) or None,
     )
     data = settings.model_dump()
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
@@ -106,6 +108,10 @@ class URLPathUpdate(BaseModel):
     urlpath: str = Field(default="", description="Panel URL path prefix. Empty = root. Alphanumeric, dashes, underscores only.")
 
 
+class DomainUpdate(BaseModel):
+    panel_domain: str | None = None
+
+
 @router.put("/settings/timezone", response_model=ResponseModel)
 async def update_timezone(
     payload: TimezoneUpdate,
@@ -147,6 +153,34 @@ async def update_subscription(
             "subscription_url_prefix": db_settings.subscription_url_prefix or "",
             "subscription_path": db_settings.subscription_path,
         },
+    )
+
+
+@router.put("/settings/domain", response_model=ResponseModel)
+async def update_panel_domain(
+    payload: DomainUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    """Set the domain clients use in generated .ovpn files.
+
+    Empty clears it and downloads fall back to node IPs. A bare hostname only —
+    scheme, port and path belong in the DNS record, not here.
+    """
+    domain = (payload.panel_domain or "").strip().lower().rstrip(".")
+    if domain and not _DOMAIN_RE.match(domain):
+        return ResponseModel(
+            success=False,
+            msg="Enter a bare domain name (e.g. vpn.example.com) — no scheme, port or path.",
+            data=None,
+        )
+    db_settings = crud.get_settings(db)
+    db_settings.panel_domain = domain or None
+    db.commit()
+    return ResponseModel(
+        success=True,
+        msg="VPN domain updated" if domain else "VPN domain cleared — .ovpn files will use node IPs",
+        data={"panel_domain": db_settings.panel_domain or ""},
     )
 
 

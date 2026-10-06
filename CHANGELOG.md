@@ -1,3 +1,12 @@
+## 1.2.0 — 2026-10-06
+
+(B2) `.ovpn` uses `remote <panel_domain>` first when set in Settings panel. Falls
+back to IP if no domain (with a warning hint). (B4) `.ovpn` lists every
+registered node's IP as a fallback `remote <ip> <port>` line — OpenVPN client
+tries each in order. (B5) Per-user traffic endpoint returns aggregated
+`total_used` + `per_node` breakdown across nodes. Settings panel gets a new
+"VPN Domain" field. Migration 18 (panel_domain column).
+
 ## 1.1.8 — 2026-10-06
 
 (v1.1.7) Add User modal polish. Dropped the modal title — page heading already

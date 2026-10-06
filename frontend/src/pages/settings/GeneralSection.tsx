@@ -8,7 +8,7 @@ import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink } from 'react-icons/fi';
+import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiGlobe } from 'react-icons/fi';
 import { Card } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
 
@@ -37,6 +37,10 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const [subPrefixEditing, setSubPrefixEditing] = useState(false);
   const [subPrefixValue, setSubPrefixValue] = useState('');
   const [subPrefixSaving, setSubPrefixSaving] = useState(false);
+  const [panelDomain, setPanelDomain] = useState('');
+  const [domainEditing, setDomainEditing] = useState(false);
+  const [domainValue, setDomainValue] = useState('');
+  const [domainSaving, setDomainSaving] = useState(false);
   const loading = shared?.loading ?? true;
   const loadError = shared?.error ?? false;
   const load = shared?.reload ?? (() => {});
@@ -45,8 +49,11 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const urlTriggerRef = useRef(null);
   const subInputRef = useRef(null);
   const subTriggerRef = useRef(null);
+  const domainInputRef = useRef(null);
+  const domainTriggerRef = useRef(null);
   useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
   useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
+  useInlineEditFocus(domainEditing, domainInputRef, domainTriggerRef);
 
   useEffect(() => {
     const s = shared?.data;
@@ -54,6 +61,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
     synced.current = true;
     setUrlPath(s.urlpath || '');
     setSubPrefix(s.subscription_url_prefix || '');
+    setPanelDomain(s.panel_domain || '');
   }, [shared]);
 
   const saveUrlPath = async () => {
@@ -80,6 +88,17 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
     finally { setSubPrefixSaving(false); }
+  };
+
+  const saveDomain = async () => {
+    setDomainSaving(true);
+    try {
+      const res = await apiClient.put('/server/settings/domain', { panel_domain: domainValue.trim() });
+      const saved = res.data?.data?.panel_domain ?? domainValue.trim();
+      setPanelDomain(saved); setDomainEditing(false);
+      addToast(res.data?.msg || t('saved', 'Saved.'), 'success');
+    } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
+    finally { setDomainSaving(false); }
   };
 
   const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
@@ -167,6 +186,28 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
           </div>
         )}
         <p className="sp-hint">{t('subscriptionLinkDesc', 'Override the base URL used in user subscription links. Leave empty to use the panel origin.')}</p>
+      </Card>
+
+      <Card title={t('panelDomain', 'VPN Domain')} icon={FiGlobe}>
+        <div className="sp-url-row">
+          <code className="sp-code sp-code--muted">{panelDomain || t('notSet', '(uses node IPs)')}</code>
+          {!domainEditing && (
+            <button ref={domainTriggerRef} className="sp-icon-btn" onClick={() => { setDomainValue(panelDomain); setDomainEditing(true); }} aria-label={t('panelDomain', 'VPN Domain')}>
+              <FiEdit2 size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {domainEditing && (
+          <div className="sp-inline-edit">
+            <label className="sr-only" htmlFor="general-domain">{t('panelDomain', 'VPN Domain')}</label>
+            <input id="general-domain" ref={domainInputRef} type="text" value={domainValue} placeholder="vpn.example.com" onChange={e => setDomainValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveDomain(); if (e.key === 'Escape') setDomainEditing(false); }} className="sp-input" />
+            <div className="sp-row-btns">
+              <LoadingButton className="btn btn-sm" isLoading={domainSaving} onClick={saveDomain}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
+              <button className="btn btn-sm btn-secondary" onClick={() => setDomainEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
+            </div>
+          </div>
+        )}
+        <p className="sp-hint">{t('panelDomainHint', 'Domain clients connect to. When set, generated .ovpn files use it instead of a node IP, so IP changes do not break existing configs. Leave empty to use node IPs.')}</p>
       </Card>
     </div>
   );

@@ -52,16 +52,16 @@ Drop modal title (page heading already says "Users"). Restructure 3 fieldsets �
 ### B1. Panel owns PKI — **shipped OVNode v1.2.0**
 `PUT /sync/users/{cn}` + `PUT /sync/pki` endpoints on node side. Panel pushes user certs + CA. Node stores passively. `create_user_on_server` writes request PEMs (no easy-rsa fork).
 
-### B2. `.ovpn` generated on panel, uses domain — **planned OVManager v1.2.0**
+### B2. `.ovpn` generated on panel, uses domain — **shipped OVManager v1.2.0**
 `remote <domain>` when panel has a domain configured. Falls back to IP with warning. Domain switch DNS A/AAAA → customers reconnect, same `.ovpn`. Wiped node → re-register → panel re-pushes user certs → customers reconnect.
 
 ### B3. Node = stateless executor — **shipped OVNode v1.2.0**
 `create_user_on_server` accepts pushed credentials. Legacy local generation kept as documented fallback. OpenVPN reload via management socket.
 
-### B4. Per-node fallback IPs in `.ovpn` — **planned OVManager v1.2.0**
+### B4. Per-node fallback IPs in `.ovpn` — **shipped OVManager v1.2.0**
 Panel lists every registered node IP as a `remote <ip> <port>` line in the `.ovpn`. OpenVPN client tries each in order. No DNS dependency.
 
-### B5. Bandwidth aggregation across nodes — **planned OVManager v1.2.0**
+### B5. Bandwidth aggregation across nodes — **shipped OVManager v1.2.0**
 Per-node `/sync/usage` already exists. Panel sums per-user bytes across nodes → single per-user total in UI.
 
 ---
@@ -84,6 +84,6 @@ Hot-path forks removed (`sanitize` bash builtin, `logger -t` → file append), d
 | ~~v1.1.6~~ | ~~A11 Add Node cert section, drop ovnode:// bundle~~ → shipped | done |
 
 | ~~v1.1.8~~ | ~~A12+A13 polish batch~~ → shipped | done |
-| **OVManager v1.2.0** | **B2+B4+B5 .ovpn domain, fallback IPs, bandwidth aggregation** | ~250 | last |
+| ~~v1.2.0~~ | ~~B2+B4+B5 .ovpn domain, fallback IPs, bandwidth aggregation~~ → shipped | done |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.

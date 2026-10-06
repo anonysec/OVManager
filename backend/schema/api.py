@@ -146,6 +146,7 @@ class Settings(BaseModel):
     default_max_users: int = 1
     owner_telegram_id: int | None = None
     urlpath: str = ""
+    panel_domain: str | None = None
 
 
 class Admins(BaseModel):

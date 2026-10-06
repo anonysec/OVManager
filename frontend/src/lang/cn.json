@@ -365,6 +365,8 @@
   "noActivity": "暂无活动记录。",
   "subscriptionLinkCard": "订阅链接",
   "subscriptionLinkDesc": "用户VPN订阅链接使用的基础URL和路径。",
+  "panelDomain": "VPN 域名",
+  "panelDomainHint": "客户端连接的域名。设置后，生成的 .ovpn 文件将使用该域名而非节点 IP，因此 IP 变更不会破坏现有配置。警告：留空则配置使用节点 IP，节点 IP 变更后配置将失效。",
   "urlInvalid": "输入有效URL（包含https://）。",
   "copyLink": "复制订阅链接",
   "saved": "已保存。",

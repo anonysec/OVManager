@@ -1,4 +1,5 @@
 import hmac
+import json
 import os
 import time as _time
 from collections.abc import Iterable
@@ -105,18 +106,51 @@ async def user_traffic_history(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Per-day billed bytes for one user (zero-filled), plus lifetime used."""
+    """Per-day billed bytes for one user (zero-filled), plus lifetime used.
+
+    ``per_node`` is the per-node breakdown of the banked usage counters;
+    ``total_used`` sums it so the UI shows one cross-node total.
+    """
     from backend.operations.billing.usage import user_daily_series
 
     db_user = crud.get_user_by_uuid(db, uuid)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     require_user_access(db_user, user)
+    total_used, per_node = _aggregate_node_usage(db, db_user)
     return ResponseModel(
         success=True,
         msg="User traffic history retrieved",
-        data={"days": user_daily_series(db, db_user.id, days=days), "used": db_user.used or 0, "total": db_user.total},
+        data={
+            "days": user_daily_series(db, db_user.id, days=days),
+            "used": db_user.used or 0,
+            "total_used": total_used,
+            "per_node": per_node,
+            "total": db_user.total,
+        },
     )
+
+
+def _aggregate_node_usage(db: Session, db_user: User) -> tuple[int, list[dict]]:
+    """Sum the per-node usage counters stored on the user row.
+
+    ``node_usage`` is a JSON map of node name → banked total. Falls back to
+    the row's lifetime ``used`` when no per-node state exists (legacy rows).
+    """
+    try:
+        usage = json.loads(db_user.node_usage or "{}")
+    except (ValueError, TypeError):
+        usage = {}
+    if not isinstance(usage, dict):
+        usage = {}
+    node_ids = {n.name: n.id for n in db.query(Node).all()}
+    per_node: list[dict] = []
+    total = 0
+    for name, state in usage.items():
+        used = int(state.get("total", 0) or 0) if isinstance(state, dict) else int(state or 0)
+        per_node.append({"node_id": node_ids.get(name), "name": name, "used": used})
+        total += used
+    return (total if per_node else (db_user.used or 0)), per_node
 
 
 @router.get("/", response_model=ResponseModel)

@@ -103,4 +103,5 @@ class Settings(Base):
     acme_email: Mapped[str | None] = mapped_column(nullable=True, default=None)
     cert_method: Mapped[str] = mapped_column(default="selfsigned", server_default="selfsigned")
     panel_url: Mapped[str | None] = mapped_column(nullable=True, default=None)
+    panel_domain: Mapped[str | None] = mapped_column(nullable=True, default=None)
     bot_owner_setup_complete: Mapped[bool] = mapped_column(default=False, server_default="0")

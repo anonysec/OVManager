@@ -5,13 +5,14 @@ deactivating users, deleting them, and downloading configs.
 """
 
 import asyncio
+import re
 import time
 import zipfile
 from tempfile import SpooledTemporaryFile
 from zipfile import ZIP_DEFLATED
 
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
@@ -332,13 +333,75 @@ async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, u
     return all(result is True for result in results)
 
 
+_REMOTE_LINE_RE = re.compile(r"^\s*remote\s+", re.IGNORECASE)
+
+
+def _remote_plan(node, db: Session) -> tuple[str | None, int, list[tuple[str, int]]]:
+    """Domain (or None), the node's own port, and the other nodes as fallbacks."""
+    settings = crud.get_settings(db)
+    domain = (getattr(settings, "panel_domain", None) or "").strip() or None
+    fallbacks = [
+        (n.address, int(n.ovpn_port or 0))
+        for n in crud.get_all_nodes(db)
+        if n.id != node.id
+    ]
+    return domain, int(node.ovpn_port or 0), fallbacks
+
+
+def _inject_remote_lines(
+    content: bytes,
+    domain: str | None,
+    primary_port: int,
+    fallbacks: list[tuple[str, int]],
+) -> bytes:
+    """Rewrite the ``remote`` block of a node-generated .ovpn.
+
+    Adds the panel domain (when configured) as the first remote and every
+    other registered node as a fallback, so clients fail over across nodes
+    and a node IP change no longer breaks existing configs. The node's own
+    remote lines (including extra ports) stay in place.
+    """
+    if not domain and not fallbacks:
+        return content
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+
+    lines = text.splitlines()
+    remote_idx = [i for i, line in enumerate(lines) if _REMOTE_LINE_RE.match(line)]
+    if not remote_idx:
+        return content
+
+    out = list(lines)
+    if domain:
+        out.insert(remote_idx[0], f"remote {domain} {primary_port}")
+        remote_idx = [i + 1 for i in remote_idx]
+    fallback_lines = [f"remote {addr} {port}" for addr, port in fallbacks]
+    if fallback_lines:
+        pos = remote_idx[-1] + 1
+        out[pos:pos] = fallback_lines
+
+    trailing = "\n" if text.endswith("\n") else ""
+    return ("\n".join(out) + trailing).encode("utf-8")
+
+
 async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session):
     node = crud.get_node_by_id(db, node_id)
     if not node:
         return None
 
+    plan = _remote_plan(node, db)
     nr = node_client(node)
-    return await run_in_threadpool(nr.download_ovpn_client, str(user_id))
+    content = await run_in_threadpool(nr.download_ovpn_bytes, str(user_id))
+    if content is None:
+        return None
+    content = _inject_remote_lines(content, *plan)
+    return Response(
+        content=content,
+        media_type="application/x-openvpn-profile",
+        headers={"Content-Disposition": f'attachment; filename="{user_id}.ovpn"'},
+    )
 
 
 async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> StreamingResponse | None:
@@ -347,14 +410,15 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
         return None
 
     users = crud.get_all_users(db)
+    plan = _remote_plan(node, db)
     nr = node_client(node)
 
     buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
         for user in users:
-            content = await run_in_threadpool(nr.download_ovpn_bytes, str(user.id))
-            if content:
-                zf.writestr(f"{user.name}.ovpn", content)
+            raw = await run_in_threadpool(nr.download_ovpn_bytes, str(user.id))
+            if raw:
+                zf.writestr(f"{user.name}.ovpn", _inject_remote_lines(raw, *plan))
 
     buf.seek(0)
     return StreamingResponse(

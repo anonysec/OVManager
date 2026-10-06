@@ -231,6 +231,14 @@ def _add_tls_and_setup_settings(db: Session) -> None:
         db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_panel_domain(db: Session) -> None:
+    """Add ``settings.panel_domain`` (v18): the domain used in generated .ovpn files."""
+    if "settings" not in table_names(db) or "panel_domain" in column_names(db, "settings"):
+        return
+    column = Base.metadata.tables["settings"].columns["panel_domain"]
+    db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -248,4 +256,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (15, "add node server_ca (TLS pinning)", _add_node_server_ca),
     (16, "move the owner credential into the database", _import_owner_credential),
     (17, "add TLS/ACME and Telegram wizard settings", _add_tls_and_setup_settings),
+    (18, "add panel domain setting", _add_panel_domain),
 )
