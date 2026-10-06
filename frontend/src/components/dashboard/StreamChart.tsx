@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useEffect, useRef, useState, useCallback, useId } from 'react';
+import { useEffect, useRef, useState, useCallback, useId, useLayoutEffect } from 'react';
 import type { MouseEvent as ChartMouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
@@ -45,7 +45,9 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [tipW, setTipW] = useState(0);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
   const gradId = useId().replace(/:/g, '');
 
   const hours = period === '7d' ? 168 : 24;
@@ -80,6 +82,10 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
 
   const valueAt = useCallback((p: any) => Number(metric === 'conns' ? p.active_connections || 0 : p.total_used || 0), [metric]);
   const fmt = useCallback((v: number) => (metric === 'conns' ? Math.round(Number(v || 0)).toLocaleString() : formatBytes(v)), [metric]);
+  const fmtAxis = useCallback(
+    (v: number) => (metric === 'conns' ? `${Math.round(Number(v || 0)).toLocaleString()} ${t('chartUnitSessions', 'sessions')}` : formatBytes(v)),
+    [metric, t],
+  );
 
   const points = (() => {
     if (series.length < 2) return [];
@@ -95,6 +101,35 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
   const lastVal = series.length ? valueAt(series[series.length - 1]) : 0;
   const peak = points.length ? Math.max(...points.map((p) => p.v)) : 0;
   const hovered = hoverIdx != null ? points[hoverIdx] : null;
+
+  useLayoutEffect(() => {
+    if (hovered && tipRef.current) setTipW(tipRef.current.offsetWidth);
+  }, [hovered]);
+
+  const delta = (() => {
+    if (series.length < 2) return null;
+    const lastPoint = series[series.length - 1];
+    const lastTs = Number(lastPoint.ts) * 1000;
+    const lastV = valueAt(lastPoint);
+    let base: number | null = null;
+    if (Number.isFinite(lastTs)) {
+      const target = lastTs - 24 * 60 * 60 * 1000;
+      let best: { ts: number; v: number } | null = null;
+      for (const p of series) {
+        const ts = Number(p.ts) * 1000;
+        if (!Number.isFinite(ts)) continue;
+        const v = valueAt(p);
+        if (best === null || Math.abs(ts - target) < Math.abs(best.ts - target)) best = { ts, v };
+      }
+      if (best && best.ts < lastTs && best.v > 0) base = best.v;
+    }
+    if (base === null) {
+      const firstV = valueAt(series[0]);
+      if (firstV > 0) base = firstV;
+    }
+    if (base === null) return null;
+    return Math.round(((lastV - base) / base) * 100);
+  })();
 
   const onMove = (e: ChartMouseEvent<SVGSVGElement>) => {
     if (!svgRef.current || points.length < 2) return;
@@ -119,27 +154,39 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
             <button type="button" className={metric === 'traffic' ? 'active' : ''} aria-pressed={metric === 'traffic'} onClick={() => setMetric('traffic')}>
               {t('chartMetricTraffic', 'Traffic')}
             </button>
-            <button type="button" className={metric === 'conns' ? 'active' : ''} aria-pressed={metric === 'conns'} onClick={() => setMetric('conns')}>
+            <button type="button" className={`ds-hide-mobile${metric === 'conns' ? ' active' : ''}`} aria-pressed={metric === 'conns'} onClick={() => setMetric('conns')}>
               {t('chartMetricConns', 'Sessions')}
             </button>
           </div>
           <div className="ds-segmented" role="group" aria-label={t('trafficChartPeriod', 'Period')}>
             <button type="button" className={period === '24h' ? 'active' : ''} aria-pressed={period === '24h'} onClick={() => setPeriod('24h')}>24h</button>
-            <button type="button" className={period === '7d' ? 'active' : ''} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>7d</button>
+            <button type="button" className={`ds-hide-mobile${period === '7d' ? ' active' : ''}`} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>7d</button>
           </div>
         </div>
         <span className="ds-chart-inline-stats">
           <span className="ds-chart-stat">
             <span>{t('trafficNow', 'Now')}</span>
-            <b>{fmt(lastVal)}</b>
+            <b>
+              {fmt(lastVal)}
+              {delta != null && (
+                <span
+                  className={`ds-chart-delta ${delta >= 0 ? 'is-up' : 'is-down'}`}
+                  title={t('chartDeltaVs', 'vs previous 24h')}
+                >
+                  {delta >= 0
+                    ? t('chartDeltaUp', '▲ {{pct}}%', { pct: Math.abs(delta) })
+                    : t('chartDeltaDown', '▼ {{pct}}%', { pct: Math.abs(delta) })}
+                </span>
+              )}
+            </b>
           </span>
           <span className="ds-chart-stat">
             <span>{t('trafficPeak', 'Peak')}</span>
             <b>{fmt(peak)}</b>
           </span>
-          <span className="ds-chart-stat">
-            <span className={`ds-chart-status ${loadError ? 'ds-chart-status--error' : ''}`} aria-hidden="true" />
-            <span aria-live="polite">{loadError ? t('chartOffline', 'Offline') : t('chartPolling', 'Polling')}</span>
+          <span className={`ds-chart-badge ${loadError ? 'ds-chart-badge--offline' : 'ds-chart-badge--live'}`} aria-live="polite">
+            <span className="ds-chart-badge-dot" aria-hidden="true" />
+            {loadError ? t('chartOffline', 'Offline') : t('chartLive', 'Live')}
           </span>
         </span>
       </div>
@@ -177,16 +224,17 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
           )}
           {hovered && (
             <div
+              ref={tipRef}
               className="ds-chart-tooltip"
-              style={{ left: `clamp(48px, ${hovered.x}%, calc(100% - 48px))` }}
+              style={{ left: `clamp(${tipW / 2}px, ${hovered.x}%, calc(100% - ${tipW / 2}px))` }}
             >
               <strong><i className="ds-chart-tip-dot" aria-hidden="true" />{fmt(hovered.v)}</strong>
               <span>{fmtDateTime(tsToIso(hovered.ts) || new Date().toISOString())}</span>
             </div>
           )}
-          <span className="ds-chart-axis ds-chart-axis--max">{fmt(peak)}</span>
-          {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmt(halfVal)}</span>}
-          <span className="ds-chart-axis ds-chart-axis--min">0</span>
+          <span className="ds-chart-axis ds-chart-axis--max">{fmtAxis(peak)}</span>
+          {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmtAxis(halfVal)}</span>}
+          <span className="ds-chart-axis ds-chart-axis--min">{fmtAxis(0)}</span>
           {firstTs && <span className="ds-chart-axis ds-chart-axis--t0">{fmtDateTime(firstTs)}</span>}
           {isEmpty && (
             <div className="ds-chart-empty">

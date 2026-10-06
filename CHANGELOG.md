@@ -1,3 +1,14 @@
+## 1.1.4 — 2026-10-06
+
+Three UI cleanups: (A7) alert strip rebuilt — three grouped rows by severity
+(errors / warnings / info), each with count + first message, expandable to full
+list with per-row Dismiss and Snooze 1h; (A8) AdminFormModal "New User Defaults"
+fields dropped (default_days / default_traffic_gb / default_max_users) — owners
+inherit global defaults; (A10) dashboard traffic chart restructured — header
+breathing room, axis units, Live/Offline badge, period-delta chip, mobile
+hides Sessions toggle and 7d period, tooltip width-clamped, SVG bounded with
+min/max-height + max-width. i18n parity maintained across en/fa/ru/cn.
+
 ## 1.1.3 — 2026-10-06
 
 Three panel-side cleanups: (A2) drop `use_tls` field — HTTPS is now mandatory

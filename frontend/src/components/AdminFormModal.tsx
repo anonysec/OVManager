@@ -8,7 +8,7 @@ import Field from './ui/Field';
 const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: any; isOpen?: any; onClose?: any; onSaved?: any; isOwner?: boolean }) => {
   const isEdit = !!admin;
   const { t } = useTranslation();
-  const empty: any = { username: '', password: '', telegram_id: '', username_prefix: '', default_days: '', default_traffic_gb: '', default_max_users: '' };
+  const empty: any = { username: '', password: '', telegram_id: '', username_prefix: '' };
   const [formData, setFormData] = useState<any>(empty);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,9 +20,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
         password: '',
         telegram_id: admin.telegram_id != null ? String(admin.telegram_id) : '',
         username_prefix: admin.username_prefix || '',
-        default_days: admin.default_days != null ? String(admin.default_days) : '',
-        default_traffic_gb: admin.default_traffic_gb != null ? String(admin.default_traffic_gb) : '',
-        default_max_users: admin.default_max_users != null ? String(admin.default_max_users) : '',
       });
     } else if (!isEdit) {
       setFormData(empty);
@@ -33,12 +30,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
   const handleChange = (event: any) => {
     const { name, value } = event.target;
     setFormData((prev: any) => ({ ...prev, [name]: value }));
-  };
-
-  const _intOrNull = (raw: any) => {
-    if (raw === '' || raw == null) return null;
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) ? n : null;
   };
 
   const handleSubmit = async (event: any) => {
@@ -55,9 +46,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
         password: formData.password,
         telegram_id: formData.telegram_id ? parseInt(formData.telegram_id, 10) : null,
         username_prefix: formData.username_prefix || null,
-        default_days: _intOrNull(formData.default_days),
-        default_traffic_gb: _intOrNull(formData.default_traffic_gb),
-        default_max_users: _intOrNull(formData.default_max_users),
       };
       if (isEdit && admin?.username) {
         payload.current_username = admin.username;
@@ -108,29 +96,6 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
         <Field label={t('usernamePrefix', 'Username Prefix')} hint={t('adminPrefixHint', 'Auto-generates user names such as 4201, 4202…')}>
           <input type="text" id="admin-username_prefix" name="username_prefix" value={formData.username_prefix} onChange={handleChange} placeholder="420" />
         </Field>
-        <p className="sp-hint sp-mb-6">
-          {t('adminDefaultsHint', 'New user defaults for this admin. Leave empty to inherit the global defaults from Settings → Defaults.')}
-        </p>
-        <div className="sp-two-col">
-          <Field label={t('defaultDays', 'Default expiry (days)')} inputId="admin-default-days">
-            <input id="admin-default-days" name="default_days" className="sp-input" type="number" min={1} max={3650} value={formData.default_days} onChange={handleChange} />
-          </Field>
-          <Field label={t('defaultTrafficGb', 'Default traffic (GB)')} inputId="admin-default-traffic">
-            <input id="admin-default-traffic" name="default_traffic_gb" className="sp-input" type="number" min={0} max={1000000} value={formData.default_traffic_gb} onChange={handleChange} />
-          </Field>
-        </div>
-        <Field label={t('defaultDevices', 'Default devices per user')} hint={t('defaultDevicesHint', 'Simultaneous logins allowed for each new user. 0 = unlimited.')} inputId="admin-default-devices">
-          <input id="admin-default-devices" name="default_max_users" className="sp-input" type="number" min={0} max={1000} value={formData.default_max_users} onChange={handleChange} />
-        </Field>
-        {isEdit && admin?.effective_defaults && (
-          <p className="sp-hint sp-mt-6">
-            {t('adminDefaultsEffective', 'Currently in effect: {{days}} days · {{traffic}} GB · {{devices}} devices', {
-              days: admin.effective_defaults.days,
-              traffic: admin.effective_defaults.traffic_gb,
-              devices: admin.effective_defaults.max_users,
-            })}
-          </p>
-        )}
         {error && <p className="modal-error" role="alert">{error}</p>}
         <div className="modal-footer">
           <Button variant="secondary" onClick={onClose}>{t('cancelButton')}</Button>

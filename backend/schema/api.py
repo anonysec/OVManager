@@ -63,9 +63,6 @@ class AdminCreate(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
-    default_days: int | None = Field(default=None, ge=1, le=3650)
-    default_traffic_gb: int | None = Field(default=None, ge=0, le=1000000)
-    default_max_users: int | None = Field(default=None, ge=0, le=1000)
 
 
 class AdminUpdate(BaseModel):
@@ -74,9 +71,6 @@ class AdminUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
     telegram_id: int | None = Field(default=None, ge=0)
     username_prefix: str | None = Field(default=None, max_length=20)
-    default_days: int | None = Field(default=None, ge=1, le=3650)
-    default_traffic_gb: int | None = Field(default=None, ge=0, le=1000000)
-    default_max_users: int | None = Field(default=None, ge=0, le=1000)
 
 
 class StatusToggle(BaseModel):

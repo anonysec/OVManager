@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.1.3"
+VERSION="1.1.4"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven

@@ -305,7 +305,7 @@ def _clear_overrides(username: str) -> None:
         db.close()
 
 
-def test_admin_defaults_inherit_owner_global_until_overridden():
+def test_admin_defaults_always_inherit_owner_global():
     _ensure_schema()
     name = "al_defaults"
     _ensure_admin(name)
@@ -320,6 +320,8 @@ def test_admin_defaults_inherit_owner_global_until_overridden():
         assert body["source"] == "owner"
         assert body["effective"] == {"days": 45, "traffic_gb": 55, "max_users": 2}
 
+        # Admin-level default fields are gone from the API; a stray payload
+        # must be ignored, never turned into an override.
         resp = client.put(
             "/api/admin/",
             json={"username": name, "default_days": 7, "default_max_users": 5},
@@ -329,22 +331,13 @@ def test_admin_defaults_inherit_owner_global_until_overridden():
 
         resp = client.get("/api/admin/me/defaults", headers=_auth(name, "admin"))
         body = resp.json()["data"]
-        assert body["source"] == "admin"
-        assert body["effective"] == {"days": 7, "traffic_gb": 55, "max_users": 5}
-
-        resp = client.put(
-            "/api/admin/",
-            json={"username": name, "default_days": None, "default_max_users": None},
-            headers=_owner_headers(),
-        )
-        assert resp.json()["success"] is True, resp.text
-        resp = client.get("/api/admin/me/defaults", headers=_auth(name, "admin"))
-        assert resp.json()["data"]["effective"] == {"days": 45, "traffic_gb": 55, "max_users": 2}
+        assert body["source"] == "owner"
+        assert body["effective"] == {"days": 45, "traffic_gb": 55, "max_users": 2}
     finally:
         _clear_overrides(name)
 
 
-def test_new_user_uses_creating_admins_effective_defaults():
+def test_new_user_uses_owner_global_defaults():
     _ensure_schema()
     name = "al_defcreate"
     _ensure_admin(name)
@@ -353,13 +346,6 @@ def test_new_user_uses_creating_admins_effective_defaults():
     client = TestClient(api)
 
     try:
-        resp = client.put(
-            "/api/admin/",
-            json={"username": name, "default_days": 9, "default_traffic_gb": 4},
-            headers=_owner_headers(),
-        )
-        assert resp.json()["success"] is True, resp.text
-
         resp = client.post(
             "/api/users/",
             json={"name": "al_defcreate_u1", "total": None, "max_logins": None},
@@ -370,7 +356,7 @@ def test_new_user_uses_creating_admins_effective_defaults():
 
         from datetime import date, timedelta
 
-        assert user["expiry_date"] == (date.today() + timedelta(days=9)).isoformat()
+        assert user["expiry_date"] == (date.today() + timedelta(days=11)).isoformat()
         assert user["max_logins"] == 3
     finally:
         from backend.db import crud
@@ -384,8 +370,8 @@ def test_new_user_uses_creating_admins_effective_defaults():
         _clear_overrides(name)
 
 
-def test_create_admin_persists_telegram_prefix_and_defaults():
-    """The create form sends all of these; they used to be dropped on the floor."""
+def test_create_admin_persists_telegram_and_prefix():
+    """The create form sends both; they used to be dropped on the floor."""
     _ensure_schema()
     name = "al_createfull"
     client = TestClient(api)
@@ -407,8 +393,6 @@ def test_create_admin_persists_telegram_prefix_and_defaults():
             "password": "short-pass-8",  # 8 chars: the documented floor
             "telegram_id": 4242,
             "username_prefix": "90",
-            "default_days": 3,
-            "default_max_users": 0,
         },
         headers=_owner_headers(),
     )
@@ -416,8 +400,6 @@ def test_create_admin_persists_telegram_prefix_and_defaults():
     data = resp.json()["data"]
     assert data["telegram_id"] == 4242
     assert data["username_prefix"] == "90"
-    assert data["default_days"] == 3
-    assert data["default_max_users"] == 0
     assert data["effective_defaults"]["traffic_gb"] > 0
 
     db = SessionLocal()
@@ -425,7 +407,7 @@ def test_create_admin_persists_telegram_prefix_and_defaults():
         row = crud.get_admin_by_username(db, name)
         assert row.telegram_id == 4242
         assert row.username_prefix == "90"
-        assert row.default_days == 3
+        assert row.default_days is None
         assert row.default_traffic_gb is None
     finally:
         db.close()

@@ -21,9 +21,6 @@ def create_admin(db: Session, admin: AdminCreate):
         password=hashed_password,
         telegram_id=admin.telegram_id,
         username_prefix=admin.username_prefix,
-        default_days=admin.default_days,
-        default_traffic_gb=admin.default_traffic_gb,
-        default_max_users=admin.default_max_users,
     )
     db.add(new_admin)
     db.commit()

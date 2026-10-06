@@ -117,11 +117,6 @@ async def update_admin(
         existing_admin.telegram_id = admin.telegram_id
     elif "telegram_id" in admin.model_dump(exclude_unset=True) and admin.telegram_id is None:
         existing_admin.telegram_id = None
-    provided = admin.model_dump(exclude_unset=True)
-    for attr in ("default_days", "default_traffic_gb", "default_max_users"):
-        if attr in provided:
-            setattr(existing_admin, attr, getattr(admin, attr))
-
     if admin.username_prefix is not None:
         existing_admin.username_prefix = admin.username_prefix
     elif "username_prefix" in admin.model_dump(exclude_unset=True) and admin.username_prefix is None:
