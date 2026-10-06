@@ -1,3 +1,13 @@
+## 1.1.3 — 2026-10-06
+
+Three panel-side cleanups: (A2) drop `use_tls` field — HTTPS is now mandatory
+for both panel and node, no HTTP fallback; (A3) NodeCreate address is host/IP
+only (validator rejects schemes/ports/paths), `port` stays separate; (A4) drop
+"Apply new VPN settings on the node" checkbox — Save always tests + applies
+or fails with a clear "node unreachable — install offline and configure after
+registration" message. Schema, DB column, frontend form, node client logic,
+tests, and every display site updated.
+
 ## 1.1.2 — 2026-10-06
 
 Install path flattened from `/opt/ovmanager/ovmanager-$VERSION/` to

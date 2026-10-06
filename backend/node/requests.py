@@ -121,7 +121,6 @@ def node_client(node, **kw) -> "NodeRequests":
             address=node.address,
             port=node.port,
             api_key=node.key or "",
-            use_tls=node.use_tls,
             server_ca=getattr(node, "server_ca", None),
             **kw,
         )
@@ -134,7 +133,7 @@ from backend.node.connection import get_connection as _get_connection  # noqa: E
 class NodeRequests:
     __slots__ = ("address", "headers", "scheme", "tls_verified", "_verify", "node_id")
 
-    def __init__(self, address: str, port: int, api_key: str, use_tls: bool = False, server_ca: str | None = None, **_):
+    def __init__(self, address: str, port: int, api_key: str, server_ca: str | None = None, **_):
         raw = str(address or "").strip()
         parsed = urlsplit(raw if "://" in raw else f"//{raw}")
         host = parsed.hostname
@@ -148,10 +147,10 @@ class NodeRequests:
         host_for_url = f"[{host}]" if ":" in host and not host.startswith("[") else host
         self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
-        self.scheme = parsed.scheme if parsed.scheme in ("http", "https") else ("https" if use_tls else "http")
+        self.scheme = "https"
         self._verify = "pinned"
         self.node_id = _.get("node_id")
-        if self.scheme == "https" and server_ca:
+        if server_ca:
             from backend.node.pki import ca_file_for
 
             node_id = self.node_id
@@ -167,10 +166,8 @@ class NodeRequests:
 
     @property
     def tls_mode(self) -> str:
-        """Connection security for the UI: plain / verified /
+        """Connection security for the UI: verified /
         unverified-self-signed / unknown (never connected)."""
-        if self.scheme != "https":
-            return "plain"
         if self.tls_verified is True:
             return "verified"
         if self.tls_verified is False:
@@ -243,8 +240,6 @@ class NodeRequests:
         """
         require_success = bool(kw.pop("require_success", True))
         kw.setdefault("timeout", TIMEOUT)
-        if self.scheme != "https":
-            return self._send_plain(method, path, require_success=require_success, **kw)
         if isinstance(self._verify, str) and self._verify != "pinned":
             try:
                 result = self._send(method, path, require_success=require_success, sender=_pinned_sender(self._verify), **kw)
@@ -277,13 +272,6 @@ class NodeRequests:
             except Exception as e2:
                 _rpc_failed(self.address, path, e2)
                 return None
-        except Exception as e:
-            _rpc_failed(self.address, path, e)
-            return None
-
-    def _send_plain(self, method: str, path: str, **kw) -> dict | None:
-        try:
-            return self._send(method, path, **kw)
         except Exception as e:
             _rpc_failed(self.address, path, e)
             return None
@@ -344,7 +332,6 @@ class NodeRequests:
         tunnel_address: str,
         protocol: str,
         ovpn_port: int,
-        set_new_setting: bool = True,
         dns1: str | None = None,
         dns2: str | None = None,
         enable_ipv6: bool | None = None,
@@ -369,7 +356,6 @@ class NodeRequests:
             "tunnel_address": tunnel_address or "",
             "protocol": protocol,
             "ovpn_port": int(ovpn_port),
-            "set_new_setting": bool(set_new_setting),
         }
         if dns1 is not None:
             payload["dns1"] = dns1
@@ -453,13 +439,7 @@ class NodeRequests:
         """
         url = self._url(path)
         headers = kw.pop("headers", self.headers)
-        if self.scheme != "https":
-            try:
-                r = _req.get(url, headers=headers, **kw)
-            except Exception as e:
-                logger.error("Node %s %s: %s", self.address, path, e)
-                return None
-        elif isinstance(self._verify, str) and self._verify != "pinned":
+        if isinstance(self._verify, str) and self._verify != "pinned":
             try:
                 r = _pinned_sender(self._verify)("get", url, headers=headers, **kw)
                 self.tls_verified = True

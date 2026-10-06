@@ -27,12 +27,10 @@ const tlsMeta = (mode: any, t: any) => {
   return { tone: 'neutral', label: t('tlsUnknown', 'Unknown') };
 };
 
-const isUrlAddress = (value: any) => /^[a-z][a-z0-9+.-]*:\/\//i.test(String(value || '').trim());
-
 const nodeEndpoint = (node: any) => {
   const address = String(node.address || '').trim();
   if (!address) return '';
-  return isUrlAddress(address) ? address : `${address}:${node.port}`;
+  return `https://${address}:${node.port}`;
 };
 
 const NodeManagement = () => {
@@ -196,8 +194,6 @@ const NodeManagement = () => {
         ovpn_port: Number(node.ovpn_port || 1194),
         port: Number(node.port || 2083),
         status: !node.status,
-        set_new_setting: false,
-        use_tls: Boolean(node.use_tls),
       };
       const res = await apiClient.put(`/nodes/${node.id}`, payload);
       if (res.data?.success) {

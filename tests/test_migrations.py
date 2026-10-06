@@ -142,8 +142,8 @@ def test_adoption_runs_numbered_steps(session, monkeypatch):
 
     session.execute(
         text(
-            "INSERT INTO nodes (name, address, protocol, ovpn_port, port, key, status, use_tls) "
-            "VALUES ('legacy-node', '203.0.113.5', 'udp', 1194, 2083, 'plaintext-key-123456', 1, 1)"
+            "INSERT INTO nodes (name, address, protocol, ovpn_port, port, key, status) "
+            "VALUES ('legacy-node', '203.0.113.5', 'udp', 1194, 2083, 'plaintext-key-123456', 1)"
         )
     )
     session.execute(text("DELETE FROM schema_version"))

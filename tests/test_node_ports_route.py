@@ -110,7 +110,6 @@ def test_ports_route_forwards_extra_ports(monkeypatch):
         assert call["tunnel_address"] == "vpn.example.com"
         assert call["protocol"] == "tcp"
         assert call["ovpn_port"] == 1194
-        assert call["set_new_setting"] is True
         ((action, kwargs),) = events
         assert action == "node.ports"
         assert kwargs["target"] == node.name

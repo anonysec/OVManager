@@ -40,8 +40,6 @@ class NodeCreate(BaseModel):
     port: int = 2083
     key: str | None = Field(default=None, min_length=16, max_length=128)
     status: bool = Field(default=True)
-    set_new_setting: bool = Field(default=False)
-    use_tls: bool = Field(default=True)
     country_code: str | None = Field(default=None, max_length=3, pattern=r"^[A-Za-z]{2,3}$")
 
     @field_validator("key", mode="before")
@@ -49,6 +47,14 @@ class NodeCreate(BaseModel):
     def _blank_key_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("address")
+    @classmethod
+    def _host_only(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(token in value for token in ("://", ":", "/")):
+            raise ValueError("Address must be a hostname or IP only — no scheme, port or path")
         return value
 
 

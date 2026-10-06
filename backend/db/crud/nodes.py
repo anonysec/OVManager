@@ -43,7 +43,6 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
         port=request.port,
         key=request.key,
         status=request.status,
-        use_tls=request.use_tls,
         country_code=manual or (geolocation.get("country_code") if geolocation else None),
         latitude=None if manual else (geolocation.get("latitude") if geolocation else None),
         longitude=None if manual else (geolocation.get("longitude") if geolocation else None),
@@ -76,7 +75,6 @@ def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dic
         node.latitude = geolocation.get("latitude")
         node.longitude = geolocation.get("longitude")
     node.status = request.status
-    node.use_tls = request.use_tls
 
     if request.key and request.key.strip():
         node.key = request.key.strip()

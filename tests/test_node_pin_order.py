@@ -248,6 +248,7 @@ async def test_add_node_with_tls_survives_pinning_before_the_row_exists(monkeypa
     # Keep the real constructor — it is the code under test — and stub only
     # the wire, so a network failure cannot stand in for a construction one.
     monkeypatch.setattr("backend.node.requests.NodeRequests.check_node", lambda self, **kw: True)
+    monkeypatch.setattr("backend.node.requests.NodeRequests.update_config", lambda self, **kw: True)
     monkeypatch.setattr(ops, "geolocate", lambda address: {})
     monkeypatch.setattr(ops, "_pin_node_certificate", real_pin)
     monkeypatch.setattr(ops.crud, "create_node", lambda db, req, geo: created.append(1) or RealRow())

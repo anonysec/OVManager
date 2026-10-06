@@ -60,7 +60,6 @@ def dead_node_and_user():
                 port=9,  # discard port: closed → instant refused
                 key="k" * 32,
                 status=True,
-                use_tls=False,
             )
         )
         db.flush()

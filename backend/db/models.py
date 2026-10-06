@@ -66,7 +66,6 @@ class Node(Base):
     port: Mapped[int] = mapped_column()
     key: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[bool] = mapped_column(default=True)
-    use_tls: Mapped[bool] = mapped_column(default=False)
     server_ca: Mapped[str | None] = mapped_column(nullable=True, default=None)
     country_code: Mapped[str] = mapped_column(nullable=True)
     latitude: Mapped[float] = mapped_column(nullable=True)

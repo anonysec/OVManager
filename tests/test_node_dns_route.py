@@ -91,7 +91,6 @@ def test_dns_route_forwards_node_settings(monkeypatch):
         assert call["tunnel_address"] == "vpn.example.com"
         assert call["protocol"] == "tcp"
         assert call["ovpn_port"] == 1194
-        assert call["set_new_setting"] is True
     finally:
         _delete_node(node)
 

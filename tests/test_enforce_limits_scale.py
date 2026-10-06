@@ -43,7 +43,6 @@ def _seed(seed_id: str) -> None:
                     port=2083,
                     key="k" * 32,
                     status=True,
-                    use_tls=False,
                 )
             )
         expired = dt.date.today() - dt.timedelta(days=1)

@@ -18,7 +18,7 @@ def test_node_client_maps_row_fields():
     assert isinstance(req, NodeRequests)
     assert req.address == "10.0.0.9:2083"
     assert req.headers == {"key": "plain-key"}
-    assert req.scheme == "http"
+    assert req.scheme == "https"
 
 
 def test_node_client_tls_scheme():

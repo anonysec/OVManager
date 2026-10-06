@@ -180,8 +180,6 @@ const NodeDrawer = ({
       ovpn_port: Number(node.ovpn_port || 1194),
       port: Number(node.port || 2083),
       status: next,
-      set_new_setting: false,
-      use_tls: Boolean(node.use_tls),
     });
     setResult('toggle', Boolean(res.data?.success), res.data?.msg || (next
       ? t('nodeEnabledToast', 'Node enabled.')
@@ -214,7 +212,7 @@ const NodeDrawer = ({
             <span className="avatar-xs">{String(node.name || '?').slice(0, 2).toUpperCase()}</span>
             <div>
               <strong>{node.name}</strong>
-              <small>{node.address}:{node.port}</small>
+              <small>https://{node.address}:{node.port}</small>
             </div>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={t('nodeClose', 'Close')}><FiX /></button>

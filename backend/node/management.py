@@ -59,22 +59,14 @@ async def _resolve_pinned_ca(request: NodeCreate) -> str | None:
 
     Trust-on-first-use is only worth anything if it happens first: the API key
     is the credential for every later call, so sending it over an unpinned
-    connection hands it to whoever answered. Returns None for plain HTTP or a
-    failed fetch (the caller then proceeds without a pin, as before).
+    connection hands it to whoever answered. Returns None for a failed fetch
+    (the caller then proceeds without a pin, as before).
     """
-    if not request.use_tls:
-        return None
     return await _pin_node_certificate(request.address, request.port)
 
 
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     geo = await run_in_threadpool(geolocate, request.address)
-    if not request.use_tls:
-        logger.warning(
-            "Node %s added without TLS — API key and traffic cross the network in cleartext. "
-            "Enable TLS on the node and set use_tls=true.",
-            request.address,
-        )
 
     server_ca = await _resolve_pinned_ca(request)
 
@@ -85,8 +77,6 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
         tunnel_address=request.tunnel_address or "",
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
-        set_new_setting=request.set_new_setting,
-        use_tls=request.use_tls,
         server_ca=server_ca,
     )
 
@@ -94,17 +84,15 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     if not ok:
         return False
 
-    if request.set_new_setting:
-        configured = await run_in_threadpool(
-            nr.update_config,
-            tunnel_address=request.tunnel_address or "",
-            protocol=request.protocol,
-            ovpn_port=request.ovpn_port,
-            set_new_setting=True,
-        )
-        if not configured:
-            logger.error("Node %s accepted health check but rejected configuration", request.address)
-            return False
+    configured = await run_in_threadpool(
+        nr.update_config,
+        tunnel_address=request.tunnel_address or "",
+        protocol=request.protocol,
+        ovpn_port=request.ovpn_port,
+    )
+    if not configured:
+        logger.error("Node %s accepted health check but rejected configuration", request.address)
+        return False
 
     node = crud.create_node(db, request, geo)
 
@@ -140,12 +128,12 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     """Update an existing node's configuration.
 
     DB changes are persisted first so metadata edits (rename, address/port
-    change, status toggle) always succeed even when the node is offline —
+    change, status toggle) are never lost even when the node is offline —
     e.g. when moving a node to a new IP the old address may be unreachable.
 
-    The live node sync (health check + optional config push) is best-effort:
-    failures are logged and surfaced in the message, but they do not roll back
-    the saved record.
+    Save always applies the VPN settings on the node. An unreachable node is
+    surfaced as an explicit error so the operator knows the live sync did not
+    happen; the saved record is kept and can be applied once the node is up.
     """
     existing = crud.get_node_by_id(db, node_id)
     if not existing:
@@ -158,9 +146,6 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
 
     crud.update_node(db, node_id, request, geo)
 
-    if not request.set_new_setting:
-        return True, "Node updated successfully"
-
     nr = NodeRequests(
         address=request.address,
         port=request.port,
@@ -168,22 +153,22 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         tunnel_address=request.tunnel_address or "",
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
-        set_new_setting=True,
-        use_tls=request.use_tls,
         server_ca=server_ca,
     )
 
     ok = await run_in_threadpool(nr.check_node)
     if not ok:
         logger.warning("Node %s updated in DB but unreachable for live sync", request.address)
-        return True, "Node updated. Live node is unreachable — changes will apply on next reconnect."
+        return False, (
+            "Node unreachable — the panel saved the record but could not apply the settings. "
+            "Configure after registration."
+        )
 
     configured = await run_in_threadpool(
         nr.update_config,
         tunnel_address=request.tunnel_address or "",
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
-        set_new_setting=True,
     )
     if not configured:
         logger.error("Node %s rejected configuration update", request.address)
@@ -214,7 +199,6 @@ async def list_nodes_handler(db: Session) -> list:
                 "ovpn_port": n.ovpn_port,
                 "port": n.port,
                 "status": n.status,
-                "use_tls": n.use_tls,
                 "country_code": n.country_code,
                 "latitude": n.latitude,
                 "longitude": n.longitude,

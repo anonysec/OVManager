@@ -41,7 +41,6 @@ def _seed(node_name="dup_node", user_name="dup_user"):
                 port=2083,
                 key="x" * 32,
                 status=True,
-                use_tls=False,
             )
             db.add(node)
         else:

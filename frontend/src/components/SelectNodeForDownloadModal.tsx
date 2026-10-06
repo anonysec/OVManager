@@ -140,7 +140,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
                   <span className="npi-ico"><FiServer /></span>
                   <span className="npi-body">
                     <span className="npi-name">{node.name}</span>
-                    <span className="npi-addr">{node.address}:{node.port}</span>
+                    <span className="npi-addr">https://{node.address}:{node.port}</span>
                   </span>
                   <span className="npi-chip">
                     <Badge tone="neutral">

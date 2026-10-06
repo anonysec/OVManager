@@ -80,8 +80,7 @@ async def add_node(
         success=new_node,
         msg="Node added successfully"
         if new_node
-        else "Failed to add node — the panel could not reach it. "
-        "Check address, port, API key and the TLS switch, or use Test connection first.",
+        else "Node unreachable — install offline and configure after registration.",
     )
 
 
@@ -105,7 +104,6 @@ async def test_node(
             address=request.address,
             port=request.port,
             api_key=request.key,
-            use_tls=request.use_tls,
         )
     except ValueError as e:
         return ResponseModel(success=False, msg=f"Invalid address: {e}")
@@ -115,8 +113,7 @@ async def test_node(
     return ResponseModel(
         success=False,
         msg="Node unreachable — check address (public IP, not 10.x/192.168.x unless shared LAN), "
-        "service port (2083, not the 1194 VPN port), exact API key, and that the TLS switch "
-        "matches the node (on for self-signed/LE, off only for None).",
+        "service port (2083, not the 1194 VPN port), and the exact API key.",
     )
 
 
@@ -197,7 +194,6 @@ async def set_node_dns(
         tunnel_address=node.tunnel_address or "",
         protocol=node.protocol,
         ovpn_port=node.ovpn_port,
-        set_new_setting=True,
         dns1=request.dns1,
         dns2=request.dns2,
     )
@@ -237,7 +233,6 @@ async def set_node_ipv6(
         tunnel_address=node.tunnel_address or "",
         protocol=node.protocol,
         ovpn_port=node.ovpn_port,
-        set_new_setting=True,
         enable_ipv6=request.enable_ipv6,
         ipv6_prefix=request.ipv6_prefix,
     )
@@ -280,7 +275,6 @@ async def set_node_ports(
         "tunnel_address": node.tunnel_address or "",
         "protocol": node.protocol,
         "ovpn_port": node.ovpn_port,
-        "set_new_setting": True,
         "extra_ports": request.extra_ports,
     }
     if _supports_return_envelope(req.update_config):

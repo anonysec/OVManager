@@ -49,7 +49,6 @@ def _seed():
             port=2083,
             key="x" * 32,
             status=True,
-            use_tls=False,
         )
         db.add(node)
         db.flush()

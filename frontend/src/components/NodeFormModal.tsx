@@ -20,14 +20,13 @@ const parseBundle = (raw: any, t: any) => {
       address,
       port: port ? Number(port) : 2083,
       key,
-      use_tls: params.get('tls') !== '0',
     },
   };
 };
 
 const BLANK = {
   name: '', address: '', tunnel_address: '', protocol: 'udp',
-  ovpn_port: 1194, port: 2083, key: '', status: true, set_new_setting: true, use_tls: true,
+  ovpn_port: 1194, port: 2083, key: '', status: true,
   country_code: '',
 };
 
@@ -58,8 +57,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
         name: node.name || '', address: node.address || '', tunnel_address: node.tunnel_address || '',
         protocol: node.protocol || 'udp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
         key: '', status: node.status === 'active' || node.status === true,
-        set_new_setting: false, // metadata edits must not require the node to be online
-        use_tls: node.use_tls === true,
         country_code: node.country_code || '',
       });
     } else if (!isEdit) {
@@ -108,7 +105,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
       protocol: formData.protocol || 'udp',
       ovpn_port: Number(formData.ovpn_port),
       port: Number(formData.port),
-      use_tls: isEdit ? formData.use_tls !== false : true,
       country_code: (formData.country_code || '').trim() || null,
     };
     if (isEdit) {
@@ -199,7 +195,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
               />
             </Field>
             <Field label={t('th_address')} required error={fieldErrors.address} hint={!isEdit ? t('nodeAddressHint', 'Public IP or hostname of the node server.') : undefined}>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} autoComplete="off" spellCheck={false} />
+              <input type="text" name="address" value={formData.address} onChange={handleChange} placeholder="e.g. node.example.com or 2.28.122.51" autoComplete="off" spellCheck={false} />
             </Field>
             <Field label={t('nodePort')} required error={fieldErrors.port} hint={!isEdit ? t('nodePortHint', 'Sync API port (2083 default) — not the OpenVPN port.') : undefined}>
               <input type="number" name="port" value={formData.port} onChange={handleChange} min="1" max="65535" step="1" inputMode="numeric" />
@@ -252,15 +248,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
               autoComplete="off" spellCheck={false}
             />
           </Field>
-          {isEdit && (
-            <label className="nf-check">
-              <input type="checkbox" name="set_new_setting" checked={formData.set_new_setting} onChange={handleChange} />
-              <span>
-                {t('applyNodeSettings', 'Apply new VPN settings on the node')}
-                <small>{t('applyNodeSettingsHint', 'Re-writes OpenVPN protocol/port/tunnel on the node. Leave off to only update this panel record — works even when the node is offline.')}</small>
-              </span>
-            </label>
-          )}
           {!isEdit && (
             <p className="nf-note">{t('nodeTlsAlways', 'Connection is always encrypted (TLS). Self-signed nodes verify with a fingerprint on first connect.')}</p>
           )}

@@ -43,7 +43,6 @@ def _node():
                 protocol="udp",
                 ovpn_port=1194,
                 port=2083,
-                use_tls=True,
             ),
         )
     finally:

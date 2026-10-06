@@ -194,6 +194,8 @@ def test_api_update_node_manual_country_wins(monkeypatch):
     # address that blackholes, so it waited the full 10s every run: 18% of the
     # suite's wall clock, spent learning something this test does not assert.
     monkeypatch.setattr("backend.node.pki.fetch_server_cert", lambda address, port, timeout=10.0: None)
+    monkeypatch.setattr("backend.node.requests.NodeRequests.check_node", lambda self, **kw: True)
+    monkeypatch.setattr("backend.node.requests.NodeRequests.update_config", lambda self, **kw: True)
     db = _db()
     try:
         node = crud.create_node(db, _node_payload(), None)
