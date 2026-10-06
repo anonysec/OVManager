@@ -39,6 +39,7 @@ class NodeCreate(BaseModel):
     ovpn_port: int = Field(default=1194)
     port: int = 2083
     key: str | None = Field(default=None, min_length=16, max_length=128)
+    cert: str | None = Field(default=None)
     status: bool = Field(default=True)
     country_code: str | None = Field(default=None, max_length=3, pattern=r"^[A-Za-z]{2,3}$")
 
@@ -47,6 +48,15 @@ class NodeCreate(BaseModel):
     def _blank_key_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("cert", mode="before")
+    @classmethod
+    def _validate_cert(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        if value is not None and ("-----BEGIN " not in value or "-----END " not in value):
+            raise ValueError("Certificate must be a PEM block with BEGIN/END markers")
         return value
 
     @field_validator("address")

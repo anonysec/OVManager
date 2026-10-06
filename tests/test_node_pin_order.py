@@ -219,6 +219,36 @@ def _real_self_signed_pem() -> str:
 
 
 @pytest.mark.anyio
+async def test_add_node_uses_provided_cert_without_fetching(seq, monkeypatch):
+    """A pasted PEM is the pin; no TOFU fetch is attempted."""
+    import backend.node.management as ops
+
+    row = FakeRow()
+    monkeypatch.setattr(ops.crud, "create_node", _fake_create_node(row))
+
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        await ops.add_node_handler(_payload(cert=CERT_PEM), db)
+    finally:
+        db.close()
+
+    assert row.server_ca == CERT_PEM
+    assert all(e[0] != "pin" for e in seq), "no TOFU fetch when the operator pasted a cert"
+    client_pins = [e[1] for e in seq if e[0] == "client"]
+    assert client_pins and all(pin == CERT_PEM for pin in client_pins)
+
+
+def test_cert_validator_requires_pem_markers():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _payload(cert="not a certificate")
+    assert _payload(cert="   ").cert is None
+
+
+@pytest.mark.anyio
 async def test_add_node_with_tls_survives_pinning_before_the_row_exists(monkeypatch):
     """The real client must accept the pin the handler fetches before create.
 

@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-1.1.5-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-1.1.6-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](pyproject.toml)
@@ -71,7 +71,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Device limits enforced on the node, from 1 (a new connection takes over) through N (the N+1th is rejected) to 0 (unlimited).
 
 ### 🌐 Nodes
-- Add a node with an address, port and API key, or paste its `ovnode://` bundle and let the form fill itself in.
+- Add a node with an address, port and API key, or paste its `the node installer output` bundle and let the form fill itself in.
 - Test connection before saving; the node row then shows reachability, agent and OpenVPN version, and session counts.
 - Per-node settings pushed from the panel: DNS servers, IPv6 pool and prefix, extra OpenVPN ports.
 - Node-down and node-recovered alerts over Telegram, throttled so a flapping node cannot page you every five minutes.

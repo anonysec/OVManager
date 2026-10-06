@@ -68,7 +68,7 @@ async def _resolve_pinned_ca(request: NodeCreate) -> str | None:
 async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     geo = await run_in_threadpool(geolocate, request.address)
 
-    server_ca = await _resolve_pinned_ca(request)
+    server_ca = request.cert or await _resolve_pinned_ca(request)
 
     nr = NodeRequests(
         address=request.address,
@@ -142,9 +142,13 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or existing.key
 
-    server_ca = await _resolve_pinned_ca(request) or getattr(existing, "server_ca", None)
+    server_ca = request.cert or await _resolve_pinned_ca(request) or getattr(existing, "server_ca", None)
 
     crud.update_node(db, node_id, request, geo)
+
+    if request.cert and getattr(existing, "server_ca", None) != request.cert:
+        existing.server_ca = request.cert
+        db.commit()
 
     nr = NodeRequests(
         address=request.address,

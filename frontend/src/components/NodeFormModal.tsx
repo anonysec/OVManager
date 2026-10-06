@@ -7,26 +7,9 @@ import { Button, Field } from './ui';
 import { CODES } from '../utils/geo';
 import './NodeFormModal.css';
 
-const parseBundle = (raw: any, t: any) => {
-  const m = String(raw || '').trim().match(/^ovnode:\/\/([^@]+)@([^:/?#]+)(?::(\d+))?\?([^#]*)$/);
-  if (!m) return { error: t('nodeBundleInvalid') };
-  const [, name, address, port, query] = m;
-  const params = new URLSearchParams(query);
-  const key = params.get('key') || '';
-  if (!name || !address || !key) return { error: t('nodeBundleMissing') };
-  return {
-    values: {
-      name,
-      address,
-      port: port ? Number(port) : 2083,
-      key,
-    },
-  };
-};
-
 const BLANK = {
   name: '', address: '', tunnel_address: '', protocol: 'udp',
-  ovpn_port: 1194, port: 2083, key: '', status: true,
+  ovpn_port: 1194, port: 2083, key: '', cert: '', status: true,
   country_code: '',
 };
 
@@ -43,8 +26,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
   const isEdit = !!node;
   const { t } = useTranslation();
   const [formData, setFormData] = useState<any>(BLANK);
-  const [bundle, setBundle] = useState('');
-  const [bundleError, setBundleError] = useState('');
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<any>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -56,13 +37,11 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
       setFormData({
         name: node.name || '', address: node.address || '', tunnel_address: node.tunnel_address || '',
         protocol: node.protocol || 'udp', ovpn_port: node.ovpn_port || 1194, port: node.port || 2083,
-        key: '', status: node.status === 'active' || node.status === true,
+        key: '', cert: '', status: node.status === 'active' || node.status === true,
         country_code: node.country_code || '',
       });
     } else if (!isEdit) {
       setFormData(BLANK);
-      setBundle('');
-      setBundleError('');
     }
     setError('');
     setFieldErrors({});
@@ -76,17 +55,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     setTestResult(null);
   };
 
-  const applyBundle = () => {
-    const parsed = parseBundle(bundle, t);
-    if (parsed.error) {
-      setBundleError(parsed.error);
-      return;
-    }
-    setBundleError('');
-    setFormData((prev: any) => ({ ...prev, ...parsed.values }));
-    setTestResult(null);
-  };
-
   const validate = () => {
     const errors: any = {};
     if (!String(formData.name || '').trim()) errors.name = t('nodeNameRequired', 'Enter a name for this node.');
@@ -96,6 +64,10 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     const vpnPort = Number(formData.ovpn_port);
     if (!Number.isInteger(vpnPort) || vpnPort < 1 || vpnPort > 65535) errors.ovpn_port = t('nodeOvpnPortInvalid', 'VPN port must be a whole number from 1 to 65535.');
     if (!isEdit && !String(formData.key || '').trim()) errors.key = t('nodeKeyRequired', "Paste the node's API key.");
+    const cert = String(formData.cert || '').trim();
+    if (cert && (!cert.includes('-----BEGIN ') || !cert.includes('-----END '))) {
+      errors.cert = t('certFieldInvalid', 'Certificate must be a PEM block with BEGIN/END markers.');
+    }
     return errors;
   };
 
@@ -110,6 +82,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     if (isEdit) {
       payload.status = Boolean(formData.status);
       if (!payload.key || payload.key.trim() === '') delete payload.key;
+      if (!payload.cert || payload.cert.trim() === '') delete payload.cert;
     }
     return payload;
   };
@@ -167,24 +140,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
       size="medium"
     >
       <form onSubmit={handleSubmit} className="nf-form" noValidate>
-        {!isEdit && (
-          <fieldset className="nf-section">
-            <legend className="nf-legend">{t('nodeSectionQuick', 'Quick setup')}</legend>
-            <Field label={t('nodeBundleLabel', 'Paste node bundle')} hint={t('nodeBundleHint', 'Printed by the node installer (“Bundle” on its Ready card). Fills every field below.')} error={bundleError}>
-              <input
-                type="text"
-                value={bundle}
-                onChange={(e) => { setBundle(e.target.value); setBundleError(''); }}
-                placeholder={t('nodeBundlePlaceholder', 'ovnode://node-1@203.0.113.10:2083?key=…&tls=1')}
-                spellCheck={false}
-              />
-            </Field>
-            <div className="nf-inline">
-              <Button variant="secondary" onClick={applyBundle}>{t('nodeBundleApply', 'Fill fields')}</Button>
-            </div>
-          </fieldset>
-        )}
-
         <fieldset className="nf-section">
           <legend className="nf-legend">{t('nodeSectionConnection', 'Connection')}</legend>
           <div className="nf-grid">
@@ -248,8 +203,19 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
               autoComplete="off" spellCheck={false}
             />
           </Field>
+          <Field
+            label={`${t('certFieldLabel', 'Certificate (PEM)')} (${t('optional', 'Optional')})`}
+            error={fieldErrors.cert}
+            hint={t('certFieldHint', 'Paste the full PEM from node install. Used for TLS verification.')}
+          >
+            <textarea
+              name="cert" value={formData.cert} onChange={handleChange} rows={5}
+              placeholder={isEdit ? t('keyKeepExistingHint', 'Leave blank to keep the current key') : t('certFieldPlaceholder', '-----BEGIN CERTIFICATE-----')}
+              autoComplete="off" spellCheck={false}
+            />
+          </Field>
           {!isEdit && (
-            <p className="nf-note">{t('nodeTlsAlways', 'Connection is always encrypted (TLS). Self-signed nodes verify with a fingerprint on first connect.')}</p>
+            <p className="nf-note">{t('nodeTlsAlways', 'Connection is always encrypted (TLS). Paste the node certificate to verify it — without one the panel cannot verify the node\'s TLS.')}</p>
           )}
         </fieldset>
 

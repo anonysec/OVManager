@@ -1,3 +1,11 @@
+## 1.1.6 — 2026-10-06
+
+(A11) Add Node form cert section. Dropped the `ovnode://` bundle URI from the
+Quick setup pane — PEM certs are ~2.3KB and too long for a paste URI. Form
+layout kept; new `cert` (PEM) textarea added under `api_key` in the Security
+section. Backend stores it as the node row's TOFU pin (nodes.server_ca).
+Node installer prints cert PEM + API key + IP/port separately (no URI bundle).
+
 ## 1.1.5 — 2026-10-06
 
 Three infrastructure + UI additions: (A5) scheduled stale-user cleanup — new
