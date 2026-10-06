@@ -144,6 +144,13 @@ const NodeDrawer = ({
     onChanged?.();
   });
 
+  const repinCert = () => run('repin', async () => {
+    const res = await apiClient.post(`/nodes/${node.id}/repin`);
+    const data = res.data || {};
+    setResult('repin', Boolean(data.success), data.msg || t('nodeRequestFailed', 'The panel could not reach the node.'));
+    if (data.success) { loadStatus(); onChanged?.(); }
+  });
+
   const updateSoftware = () => run('update', async () => {
     const res = await apiClient.post(`/nodes/${node.id}/update`);
     const data = res.data || {};
@@ -238,6 +245,7 @@ const NodeDrawer = ({
               </div>
 
               <TlsChip status={status} t={t} />
+              <CertPinSection pin={status?.cert_pin} onRepin={repinCert} busy={busy} result={results.repin} />
               {certExpiry && <CertExpiryChip expiry={certExpiry} />}
               {statusState === 'error' && <p className="nd-note">{t('nodeNoStatus', 'No live status yet — check the node.')}</p>}
 
@@ -511,6 +519,39 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
       <span aria-hidden="true">!</span>
       {t('tlsUnverified', "Unverified TLS (self-signed) — no MITM protection. Switch the node to Let's Encrypt.")}
     </div>
+  );
+};
+
+const CertPinSection = ({ pin, onRepin, busy, result }: { pin?: any; onRepin?: any; busy?: any; result?: any }) => {
+  const { t } = useTranslation();
+  if (!pin?.pinned) return null;
+  const tone = pin.match === true ? 'is-ok' : pin.match === false ? 'is-critical' : 'is-soon';
+  const label = pin.match === true
+    ? t('nodeTlsPinMatch', 'Pin matches the live certificate')
+    : pin.match === false
+      ? t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate')
+      : t('nodeTlsPinUnknown', 'Live certificate not checked');
+  return (
+    <section className="nd-section">
+      <h3 className="nd-section-title">{t('nodeTlsPinTitle', 'TLS certificate pin')}</h3>
+      <div className={`nd-cert ${tone}`}>
+        <span aria-hidden="true">◆</span>
+        {label}
+      </div>
+      <p className="nd-note ts-mono">{pin.fingerprint}</p>
+      {pin.issuer && <p className="nd-note">{t('nodeTlsPinIssuer', 'Issuer')}: {pin.issuer}</p>}
+      {pin.expiry && <p className="nd-note">{t('nodeTlsPinExpiry', 'Expires')}: {pin.expiry}</p>}
+      <div className="nd-section-foot">
+        <Button
+          size="sm" variant="secondary" loading={busy === 'repin'}
+          disabled={Boolean(busy) && busy !== 'repin'}
+          icon={<FiShield size={12} aria-hidden="true" />} onClick={onRepin}
+        >
+          {t('nodeRepinButton', 'Re-pin from current cert')}
+        </Button>
+      </div>
+      <ResultLine result={result} />
+    </section>
   );
 };
 

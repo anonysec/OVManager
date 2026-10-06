@@ -11,7 +11,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import { Badge, Button, Card, Field } from '../../components/ui';
 import {
   FiAlertCircle, FiCheckCircle, FiExternalLink, FiGlobe, FiInfo,
-  FiLock, FiRefreshCw, FiShield, FiUpload, FiZap,
+  FiLock, FiRefreshCw, FiUpload, FiZap,
 } from 'react-icons/fi';
 import './TlsSection.css';
 
@@ -54,6 +54,19 @@ interface TlsStatus {
   restart_required?: boolean;
   subject?: string;
   cert_path?: string;
+}
+
+interface TlsField {
+  db?: string | null;
+  env?: string | null;
+  effective?: string | null;
+  overridden?: boolean;
+}
+
+interface TlsSettingsData {
+  fields?: Record<string, TlsField>;
+  methods?: string[];
+  restart_required?: boolean;
 }
 
 type FeedbackValue = { tone: string; text: string } | null;
@@ -119,6 +132,17 @@ const TlsSection = () => {
   const [email, setEmail] = useState('');
   const [useIp, setUseIp] = useState(false);
 
+  const [tlsSettings, setTlsSettings] = useState<TlsSettingsData | null>(null);
+  const [tlsForm, setTlsForm] = useState({
+    cert_method: 'selfsigned',
+    cert_file: '',
+    key_file: '',
+    acme_domain: '',
+    acme_email: '',
+  });
+  const [tlsBusy, setTlsBusy] = useState('');
+  const [tlsFeedback, setTlsFeedback] = useState<FeedbackValue>(null);
+
   const [confirm, setConfirm] = useState<{ open: boolean; title: string; message: string; confirmLabel: string; onConfirm: (() => void) | null }>({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   const pollRef = useRef<{ attempts: number; timer: ReturnType<typeof setTimeout> | null }>({ attempts: 0, timer: null });
 
@@ -150,6 +174,75 @@ const TlsSection = () => {
   }, []);
 
   useEffect(() => { refreshStatus(); }, [refreshStatus]);
+
+  const refreshTlsSettings = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/tls/settings');
+      const data: TlsSettingsData | null = res.data?.data || null;
+      setTlsSettings(data);
+      const fields = data?.fields || {};
+      setTlsForm({
+        cert_method: fields.cert_method?.effective || 'selfsigned',
+        cert_file: fields.cert_file?.effective || '',
+        key_file: fields.key_file?.effective || '',
+        acme_domain: fields.acme_domain?.effective || '',
+        acme_email: fields.acme_email?.effective || '',
+      });
+    } catch {
+      setTlsSettings(null);
+    }
+  }, []);
+
+  useEffect(() => { refreshTlsSettings(); }, [refreshTlsSettings]);
+
+  const tlsField = (name: string) => tlsSettings?.fields?.[name];
+
+  const saveTlsSettings = async () => {
+    setTlsBusy('save');
+    setTlsFeedback(null);
+    try {
+      const res = await apiClient.put('/tls/settings', tlsForm);
+      const env = res.data || {};
+      if (env.success === false) {
+        setTlsFeedback({ tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
+      } else {
+        setTlsFeedback({
+          tone: 'success',
+          text: t('settingsTlsSavedRestart', 'Saved. Run `ovm restart` to apply.'),
+        });
+        setPendingRestart(true);
+        refreshTlsSettings();
+      }
+    } catch {
+      setTlsFeedback({ tone: 'error', text: t('settingsTlsRequestFailed', REQUEST_FAILED) });
+    } finally {
+      setTlsBusy('');
+    }
+  };
+
+  const renewFromSettings = async () => {
+    setTlsBusy('renewNow');
+    setTlsFeedback(null);
+    try {
+      const res = await apiClient.post(
+        '/tls/renew',
+        { domain: tlsForm.acme_domain, email: tlsForm.acme_email },
+        { timeout: RENEW_TIMEOUT_MS },
+      );
+      const env = res.data || {};
+      if (env.success === false) {
+        setTlsFeedback({ tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
+      } else {
+        setTlsFeedback({ tone: 'success', text: env.msg || t('saved', 'Saved.') });
+        setPendingRestart(true);
+        refreshStatus({ silent: true });
+      }
+    } catch {
+      setTlsFeedback({ tone: 'error', text: t('settingsTlsRenewLost', 'No answer from the server. Refresh the status above before retrying.') });
+    } finally {
+      setTlsBusy('');
+    }
+  };
 
   const clearPoll = useCallback(() => {
     if (pollRef.current.timer) clearTimeout(pollRef.current.timer);
@@ -270,34 +363,6 @@ const TlsSection = () => {
       setBusy('');
     }
   };
-
-  const doSelfSigned = async () => {
-    setBusy('selfSigned');
-    setArea('selfSigned', null);
-    setArea('restart', null);
-    try {
-      const res = await apiClient.post('/https/temporary', {}, { timeout: 60000 });
-      const env = res.data || {};
-      if (env.success === false) {
-        setArea('selfSigned', { tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
-      } else {
-        setArea('selfSigned', { tone: 'success', text: env.msg || t('saved', 'Saved.') });
-        setPendingRestart(true);
-        refreshStatus({ silent: true });
-      }
-    } catch {
-      setArea('selfSigned', { tone: 'error', text: t('settingsTlsRequestFailed', REQUEST_FAILED) });
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const askSelfSigned = () => askConfirm(
-    t('settingsTlsSelfSignedConfirmTitle', 'Replace the current certificate?'),
-    t('settingsTlsSelfSignedConfirm', 'A new self-signed certificate will replace the current one. Browsers will warn that the connection is not trusted until you accept it manually. Continue?'),
-    t('settingsTlsSelfSignedButton', 'Generate temporary certificate'),
-    doSelfSigned,
-  );
 
   const doRenew = async () => {
     setBusy('renew');
@@ -487,24 +552,106 @@ const TlsSection = () => {
         {feedback.upload?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
       </Card>
 
-      <Card title={t('settingsTlsSelfSignedTitle', 'Temporary Certificate')} icon={<FiShield aria-hidden="true" />}>
+      <Card title={t('settingsTlsMethodTitle', 'Certificate Method')} icon={<FiLock aria-hidden="true" />}>
         <p className="ts-hint">
-          {t('settingsTlsSelfSignedHint', "Creates a new certificate valid for 10 years for this server's primary IP. Because no public authority signs it, browsers show a security warning until you accept it.")}
+          {t('settingsTlsMethodHint', 'Saved to the panel database. Run `ovm restart` to apply. A field set in .env overrides the saved value.')}
         </p>
+        <div className="ts-renew-grid">
+          <Field label={t('settingsTlsMethodLabel', 'Method')}>
+            <select
+              value={tlsForm.cert_method}
+              disabled={tlsBusy !== ''}
+              onChange={(e) => setTlsForm((f) => ({ ...f, cert_method: e.target.value }))}
+            >
+              {['selfsigned', 'letsencrypt', 'none'].map((m) => (
+                <option key={m} value={m}>{t(`settingsTlsMethod_${m}`, m)}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="ts-renew-grid">
+          <Field
+            label={t('settingsTlsFieldCertFile', 'Certificate file')}
+            hint={tlsField('cert_file')?.overridden ? <Badge tone="warning">{t('settingsTlsOverrideBadge', 'Override via .env')}</Badge> : undefined}
+          >
+            <input
+              type="text"
+              value={tlsForm.cert_file}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={tlsField('cert_file')?.overridden || tlsBusy !== ''}
+              onChange={(e) => setTlsForm((f) => ({ ...f, cert_file: e.target.value }))}
+            />
+          </Field>
+          <Field
+            label={t('settingsTlsFieldKeyFile', 'Private key file')}
+            hint={tlsField('key_file')?.overridden ? <Badge tone="warning">{t('settingsTlsOverrideBadge', 'Override via .env')}</Badge> : undefined}
+          >
+            <input
+              type="text"
+              value={tlsForm.key_file}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={tlsField('key_file')?.overridden || tlsBusy !== ''}
+              onChange={(e) => setTlsForm((f) => ({ ...f, key_file: e.target.value }))}
+            />
+          </Field>
+        </div>
+        <div className="ts-renew-grid">
+          <Field
+            label={t('settingsTlsFieldAcmeDomain', 'ACME domain')}
+            hint={tlsField('acme_domain')?.overridden ? <Badge tone="warning">{t('settingsTlsOverrideBadge', 'Override via .env')}</Badge> : undefined}
+          >
+            <input
+              type="text"
+              value={tlsForm.acme_domain}
+              placeholder={t('settingsTlsDomainPlaceholder', 'panel.example.com')}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={tlsField('acme_domain')?.overridden || tlsBusy !== ''}
+              onChange={(e) => setTlsForm((f) => ({ ...f, acme_domain: e.target.value }))}
+            />
+          </Field>
+          <Field
+            label={t('settingsTlsFieldAcmeEmail', 'ACME email')}
+            hint={tlsField('acme_email')?.overridden ? <Badge tone="warning">{t('settingsTlsOverrideBadge', 'Override via .env')}</Badge> : undefined}
+          >
+            <input
+              type="email"
+              value={tlsForm.acme_email}
+              placeholder={t('settingsTlsEmailPlaceholder', 'you@example.com')}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={tlsField('acme_email')?.overridden || tlsBusy !== ''}
+              onChange={(e) => setTlsForm((f) => ({ ...f, acme_email: e.target.value }))}
+            />
+          </Field>
+        </div>
         <div className="ts-actions">
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
-            icon={<FiShield size={13} aria-hidden="true" />}
-            loading={busy === 'selfSigned'}
-            disabled={restarting || (busy !== '' && busy !== 'selfSigned')}
-            onClick={askSelfSigned}
+            icon={<FiLock size={13} aria-hidden="true" />}
+            loading={tlsBusy === 'save'}
+            disabled={restarting || (tlsBusy !== '' && tlsBusy !== 'save')}
+            onClick={saveTlsSettings}
           >
-            {t('settingsTlsSelfSignedButton', 'Generate temporary certificate')}
+            {t('settingsTlsSaveButton', 'Save')}
           </Button>
+          {tlsForm.cert_method === 'letsencrypt' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<FiGlobe size={13} aria-hidden="true" />}
+              loading={tlsBusy === 'renewNow'}
+              disabled={restarting || (tlsBusy !== '' && tlsBusy !== 'renewNow')}
+              onClick={renewFromSettings}
+            >
+              {t('settingsTlsRenewNow', 'Renew now')}
+            </Button>
+          )}
         </div>
-        {feedback.selfSigned && <Notice tone={feedback.selfSigned.tone}>{feedback.selfSigned.text}</Notice>}
-        {feedback.selfSigned?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
+        {tlsFeedback && <Notice tone={tlsFeedback.tone}>{tlsFeedback.text}</Notice>}
       </Card>
 
       <Card title={t('settingsTlsLetsEncryptTitle', "Automatic Certificate")} icon={<FiGlobe aria-hidden="true" />}>

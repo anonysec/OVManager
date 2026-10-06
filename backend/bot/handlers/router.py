@@ -74,6 +74,16 @@ async def _on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     flow = get_flow(context)
 
+    if flow and flow.get("kind") == "setup":
+        if action == "cancel":
+            clear_flow(context)
+            await show_home(update, context, actor)
+            return
+        from backend.bot.handlers.setup import handle_setup_text
+
+        await handle_setup_text(update, context, actor, text)
+        return
+
     if action == "cancel":
         clear_flow(context)
         await show_home(update, context, actor)

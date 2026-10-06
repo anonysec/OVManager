@@ -175,5 +175,15 @@
   "node_detail_cpu": "CPU: {cpu}",
   "node_detail_mem": "Память: {mem}",
   "node_detail_live": "Активных сессий: {live}",
-  "node_detail_version": "Агент: {version}"
+  "node_detail_version": "Агент: {version}",
+  "setup_welcome": "Добро пожаловать — это бот вашей панели. Давайте настроим его.",
+  "setup_ask_panel_url": "Укажите URL панели. (например, https://panel.example.com)",
+  "setup_ask_acme": "Включить автообновление ACME? (да/нет)",
+  "setup_ask_domain": "Домен?",
+  "setup_ask_email": "Email?",
+  "setup_done": "Готово — настройки сохранены. Запустите `ovm restart`, чтобы применить.",
+  "setup_invalid_url": "URL должен начинаться с http:// или https://. Повторите.",
+  "setup_invalid_email": "Похоже, email некорректен. Повторите.",
+  "setup_yes": "да",
+  "setup_no": "нет"
 }

@@ -1,3 +1,20 @@
+## 1.1.5 — 2026-10-06
+
+Three infrastructure + UI additions: (A5) scheduled stale-user cleanup — new
+`backend/scripts/cleanup_stale_users.py` (dry-run by default), systemd
+`ovmanager-cleanup.{service,timer}` runs daily, "Clean stale" button removed
+from Settings; (A6) TLS overhaul — DB-backed settings on existing Settings
+table (cols `ssl_cert_file`, `ssl_key_file`, `acme_domain`, `acme_email`,
+`cert_method`) with `.env` override detection per field, new
+`/api/tls/settings` + `/api/tls/renew` endpoints, new TlsSection component
+showing effective value + "Override via .env" badge + disabled input when
+overridden + Save + Renew now buttons, "Temporary Certificate" UI removed,
+cert pin shown per-node (colored chip — green/red/grey) with Re-pin button,
+`ovm tls` CLI extended with `get/renew/replace`, ACME weekly systemd timer +
+logrotate; (A8) Telegram owner welcome wizard — 4-step setup on first
+`/start` (panel URL → ACME yes/no → domain → email), persisted to Settings
+via migration v17. i18n parity across all locales + bot locales.
+
 ## 1.1.4 — 2026-10-06
 
 Three UI cleanups: (A7) alert strip rebuilt — three grouped rows by severity

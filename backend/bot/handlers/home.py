@@ -85,4 +85,8 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not has_lang(update, context):
         await show_languages(update, context, first=True)
         return
+    from backend.bot.handlers.setup import maybe_start_setup
+
+    if await maybe_start_setup(update, context):
+        return
     await show_home(update, context)

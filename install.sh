@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.1.4"
+VERSION="1.1.5"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -2084,6 +2084,66 @@ UNIT
     render_note "$SYSTEMD_SERVICE"
 }
 
+# Daily sweep of expired, disabled users. Templates live in the release so the
+# packaged unit and the installed one cannot drift; only the install-specific
+# paths are substituted.
+write_cleanup_units() {
+    local src="$INSTALL_DIR/backend/scripts"
+    [[ -f "$src/ovmanager-cleanup.service" ]] || return 0
+    sed -e "s|@PANEL_USER@|$PANEL_USER|g" \
+        -e "s|@INSTALL_DIR@|$INSTALL_DIR|g" \
+        -e "s|@DATA_DIR@|$DATA_DIR|g" \
+        "$src/ovmanager-cleanup.service" > "/etc/systemd/system/ovmanager-cleanup.service"
+    install -m 644 "$src/ovmanager-cleanup.timer" "/etc/systemd/system/ovmanager-cleanup.timer"
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl enable --now ovmanager-cleanup.timer >/dev/null 2>&1 || true
+    render_note "ovmanager-cleanup.timer"
+}
+
+# Weekly ACME renewal. acme.sh installs its own cron entry; the timer makes the
+# schedule visible to systemctl and survives a container/host without cron.
+write_acme_renew_units() {
+    cat > "/etc/systemd/system/ovmanager-acme-renew.service" << UNIT
+[Unit]
+Description=OVManager ACME certificate renewal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'if [ -x /root/.acme.sh/acme.sh ]; then /root/.acme.sh/acme.sh --cron --home /root/.acme.sh; elif command -v certbot >/dev/null 2>&1; then certbot renew --quiet --no-self-upgrade; fi'
+UNIT
+    cat > "/etc/systemd/system/ovmanager-acme-renew.timer" << UNIT
+[Unit]
+Description=Weekly OVManager ACME certificate renewal
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=ovmanager-acme-renew.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+    systemctl daemon-reload >/dev/null 2>&1
+    systemctl enable --now ovmanager-acme-renew.timer >/dev/null 2>&1 || true
+    render_note "ovmanager-acme-renew.timer"
+}
+
+# Rotate the panel log, plus the ACME client log when one is installed.
+setup_logrotate() {
+    [[ -d /etc/logrotate.d ]] || return 0
+    {
+        printf '%s\n' "$DATA_DIR/app.log {" \
+            "    weekly" "    rotate 4" "    compress" "    missingok" "    notifempty" "    copytruncate" "}"
+        if [[ -f /root/.acme.sh/acme.sh ]]; then
+            printf '%s\n' "/root/.acme.sh/acme.sh.log {" \
+                "    weekly" "    rotate 4" "    compress" "    missingok" "    notifempty" "    copytruncate" "}"
+        fi
+    } > /etc/logrotate.d/ovmanager
+    render_note "/etc/logrotate.d/ovmanager"
+}
+
 # ── Docker ─────────────────────────────────────────────────────────────
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
 
@@ -2369,6 +2429,9 @@ do_install() {
         [[ -d "$INSTALL_DIR/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
         render_note "frontend prebuilt"
         write_systemd_unit
+        write_cleanup_units
+        write_acme_renew_units
+        setup_logrotate
         systemctl_bounded restart >/dev/null 2>&1 || die "Could not start $SYSTEMD_SERVICE"
         render_done "active"
     fi

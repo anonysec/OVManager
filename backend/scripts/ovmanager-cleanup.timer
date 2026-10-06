@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily OVManager stale user cleanup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=ovmanager-cleanup.service
+
+[Install]
+WantedBy=timers.target

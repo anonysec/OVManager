@@ -175,5 +175,15 @@
   "node_detail_cpu": "پردازنده: {cpu}",
   "node_detail_mem": "حافظه: {mem}",
   "node_detail_live": "نشست‌های فعال: {live}",
-  "node_detail_version": "ایجنت: {version}"
+  "node_detail_version": "ایجنت: {version}",
+  "setup_welcome": "خوش آمدید — این ربات پنل شماست. بیایید آن را تنظیم کنیم.",
+  "setup_ask_panel_url": "نشانی پنل شما چیست؟ (مثلاً https://panel.example.com)",
+  "setup_ask_acme": "آیا تمدید خودکار ACME را می‌خواهید؟ (بله/خیر)",
+  "setup_ask_domain": "دامنه؟",
+  "setup_ask_email": "ایمیل؟",
+  "setup_done": "تمام شد — تنظیمات ذخیره شد. برای اعمال `ovm restart` را اجرا کنید.",
+  "setup_invalid_url": "نشانی باید با http:// یا https:// شروع شود. دوباره تلاش کنید.",
+  "setup_invalid_email": "این ایمیل نامعتبر به نظر می‌رسد. دوباره تلاش کنید.",
+  "setup_yes": "بله",
+  "setup_no": "خیر"
 }

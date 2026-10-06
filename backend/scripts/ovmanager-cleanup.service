@@ -1,0 +1,12 @@
+[Unit]
+Description=OVManager stale user cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+User=@PANEL_USER@
+Group=@PANEL_USER@
+WorkingDirectory=@INSTALL_DIR@
+Environment="PATH=@INSTALL_DIR@/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="DATA_DIR=@DATA_DIR@"
+ExecStart=@INSTALL_DIR@/.venv/bin/python3 @INSTALL_DIR@/backend/scripts/cleanup_stale_users.py

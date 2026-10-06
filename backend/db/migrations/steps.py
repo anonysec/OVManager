@@ -205,6 +205,32 @@ def _add_telegram_backup_enabled(db: Session) -> None:
     db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_tls_and_setup_settings(db: Session) -> None:
+    """Add the TLS/ACME and Telegram-wizard columns (v17).
+
+    DB is canonical for TLS settings; ``.env`` overrides a field only when the
+    operator uncomments it. The wizard flags share the row so the bot has one
+    place to read setup state from.
+    """
+    if "settings" not in table_names(db):
+        return
+    present = column_names(db, "settings")
+    columns = (
+        "ssl_cert_file",
+        "ssl_key_file",
+        "acme_domain",
+        "acme_email",
+        "cert_method",
+        "panel_url",
+        "bot_owner_setup_complete",
+    )
+    for name in columns:
+        if name in present:
+            continue
+        column = Base.metadata.tables["settings"].columns[name]
+        db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -221,4 +247,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (14, "decrypt stored secrets (at-rest encryption retired)", _decrypt_stored_secrets),
     (15, "add node server_ca (TLS pinning)", _add_node_server_ca),
     (16, "move the owner credential into the database", _import_owner_credential),
+    (17, "add TLS/ACME and Telegram wizard settings", _add_tls_and_setup_settings),
 )

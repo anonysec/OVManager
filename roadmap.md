@@ -22,10 +22,10 @@ Schema: `address: str` (host/IP), `port: int`. URL always `https://{address}:{po
 ### A4. Drop "Apply new VPN settings" checkbox — **shipped v1.1.3**
 Save = test + save + apply. Failed connectivity → explicit "node unreachable — configure later" error. New separate button "Save and configure later" for offline adds. ~10 lines.
 
-### A5. Scheduled stale cleanup (no UI button)
+### A5. Scheduled stale cleanup — **shipped v1.1.5**
 `backend/scripts/cleanup_stale_users.py` runs daily via systemd timer. Targets: expired users (`expiry_date < today` AND `is_active=False`). Old audit rows handled in A9. UI button removed.
 
-### A6. TLS settings overhaul (Settings UI + DB + .env)
+### A6. TLS settings overhaul — **shipped v1.1.5**
 
 **Storage model (locked):**
 - DB is canonical. Settings table carries `ssl_cert_file`, `ssl_key_file`, `acme_domain`, `acme_email`, `cert_method`, etc.
@@ -54,7 +54,7 @@ Save = test + save + apply. Failed connectivity → explicit "node unreachable �
 Three rows: errors (red), warnings (yellow), info (blue). Each row: count + first message. Click to expand full list with timestamp + dismiss + snooze. ~30 lines + 1 component.
 
 ### A8. Drop "New User Defaults" form fields — **shipped v1.1.4**
-Hardcoded: unlimited traffic, 30 days expiry, 1 max_logins. Override via Telegram bot. **Add:** owner welcome/setup wizard in Telegram bot on first `/start` — sets these defaults + links panel. Bot writes to panel via existing TLS /alerts-or-config endpoint.
+Hardcoded: unlimited traffic, 30 days expiry, 1 max_logins. Override via Telegram bot. **Added — shipped v1.1.5:** owner welcome/setup wizard in Telegram bot on first `/start`. 4-step flow (panel URL → ACME yes/no → domain → email). Persisted via migration v17.
 
 ### A9. No CSV anywhere
 Confirmed: no CSV endpoints, no buttons, no data shape with CSV in mind. Project stays CSV-free.
@@ -107,8 +107,8 @@ Already shipped: hot path forks removed (`sanitize` bash builtin, `logger -t` �
 
 | Version | Items | Est. lines |
 |---|---|---|
-| ~~v1.1.4~~ | ~~A7, A10, A8~~ → shipped | done |
-| **v1.1.5** | A5 script+timer, A6 DB+UI+override+ACME, A8 Telegram wizard | ~250 |
+| ~~v1.1.5~~ | ~~A5 script+timer, A6 DB+UI+override+ACME, A8 Telegram wizard~~ → shipped | done |
+| **OVNode v1.2.0** | B1 PUT /sync/users, B2 .ovpn domain, B3 node stateless, B4 fallback IPs, B5 bandwidth agg | ~300 |
 | **v1.1.4** | A7, A10, A8 form fields, B1 (`PUT /sync/users` endpoint) | ~120 |
 | **v1.1.5** | A6 UI (override badge, ACME timer), A5 timer, A8 Telegram wizard | ~200 |
 | **v1.2.0** | B2, B3, B4, B5 (PKI refactor — breaking; deserves major bump) | ~300 |

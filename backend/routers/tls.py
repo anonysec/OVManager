@@ -34,11 +34,14 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from backend import tls_paths
 from backend.auth.authz import require_owner
 from backend.config import config
 from backend.data_paths import DATA_DIR
+from backend.db.crud.settings import get_settings
+from backend.db.engine import get_db
 from backend.operations.observability.audit import log_event
 from backend.schema import ResponseModel
 from backend.validation import validate_domain, validate_email
@@ -63,6 +66,106 @@ class RenewRequest(BaseModel):
     domain: str | None = None
     email: str | None = None
     use_ip: bool = False
+
+
+class TlsSettingsUpdate(BaseModel):
+    cert_file: str | None = None
+    key_file: str | None = None
+    acme_domain: str | None = None
+    acme_email: str | None = None
+    cert_method: str | None = None
+
+
+CERT_METHODS = ("selfsigned", "letsencrypt", "none")
+
+# DB column → .env key. An uncommented line in .env wins over the DB value.
+_TLS_ENV_KEYS = {
+    "cert_file": "SSL_CERTFILE",
+    "key_file": "SSL_KEYFILE",
+    "acme_domain": "ACME_DOMAIN",
+    "acme_email": "ACME_EMAIL",
+    "cert_method": "CERT_METHOD",
+}
+
+
+def _env_file_values() -> dict[str, str]:
+    """Uncommented ``KEY=VALUE`` pairs from the panel's .env, if it exists."""
+    path = Path(str(config.model_config.get("env_file") or ""))
+    values: dict[str, str] = {}
+    if not path.is_file():
+        return values
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            values[key.strip()] = value.strip().strip("'\"")
+    except OSError:
+        return {}
+    return values
+
+
+@router.get("/settings", response_model=ResponseModel)
+def get_tls_settings(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Per-field TLS settings: DB value, .env override, and effective value.
+
+    The DB is canonical. An uncommented ``.env`` line for a field is the
+    operator's deliberate override, so that value wins and the UI disables the
+    input for it.
+    """
+    settings = get_settings(db)
+    env_values = _env_file_values()
+    fields = {}
+    for name, env_key in _TLS_ENV_KEYS.items():
+        db_value = getattr(settings, name, None)
+        env_value = env_values.get(env_key) or None
+        overridden = bool(env_value)
+        fields[name] = {
+            "db": db_value,
+            "env": env_value,
+            "effective": env_value if overridden else db_value,
+            "overridden": overridden,
+        }
+    return ResponseModel(
+        success=True,
+        msg="",
+        data={
+            "fields": fields,
+            "methods": list(CERT_METHODS),
+            "restart_required": _restart_required(str(_cert_path())),
+        },
+    )
+
+
+@router.put("/settings", response_model=ResponseModel)
+def put_tls_settings(
+    payload: TlsSettingsUpdate,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    """Write TLS settings to the DB. ``.env`` overrides still win at read time."""
+    settings = get_settings(db)
+    updates = payload.model_dump(exclude_unset=True)
+    method = updates.get("cert_method")
+    if method is not None and method not in CERT_METHODS:
+        return ResponseModel(success=False, msg=f"Unknown certificate method: {method}", data=None)
+    domain = updates.get("acme_domain")
+    if domain and not validate_domain(domain):
+        return ResponseModel(success=False, msg="That ACME domain is not valid.", data=None)
+    email = updates.get("acme_email")
+    if email and not validate_email(email):
+        return ResponseModel(success=False, msg="That ACME email is not valid.", data=None)
+    for name in _TLS_ENV_KEYS:
+        if name in updates:
+            setattr(settings, name, updates[name] or None)
+    db.commit()
+    log_event(None, "tls.settings", actor=user.get("username"), detail=",".join(sorted(updates)))
+    return ResponseModel(
+        success=True,
+        msg=f"TLS settings saved. {RESTART_HINT}",
+        data={"restart_required": True},
+    )
 
 
 def _tls_dir() -> Path:
@@ -562,12 +665,24 @@ def _run_acme(args: list[str], timeout: int) -> subprocess.CompletedProcess:
 
 
 @router.post("/renew", response_model=ResponseModel)
-def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)):
+def renew_certificate(
+    payload: RenewRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
     """Request a Let's Encrypt certificate through acme.sh (standalone mode)."""
     actor = user.get("username")
+    settings = get_settings(db)
+    method = getattr(settings, "cert_method", None)
     use_ip = bool(payload.use_ip)
-    domain = _detect_primary_ip() if use_ip else (payload.domain or "").strip()
+    domain = _detect_primary_ip() if use_ip else (payload.domain or settings.acme_domain or "").strip()
     if not domain:
+        if method == "selfsigned":
+            return ResponseModel(
+                success=False,
+                msg="Not applicable: the panel is set to a self-signed certificate.",
+                data=None,
+            )
         return ResponseModel(
             success=False,
             msg="Add the domain name to request a Let's Encrypt certificate, or select the IP-address option.",
@@ -590,7 +705,7 @@ def renew_certificate(payload: RenewRequest, user: dict = Depends(require_owner)
             msg="That domain name is not valid. Use letters, digits, dots and hyphens only.",
             data=None,
         )
-    email = (payload.email or "").strip()
+    email = (payload.email or settings.acme_email or "").strip()
     if email and not validate_email(email):
         return ResponseModel(
             success=False,

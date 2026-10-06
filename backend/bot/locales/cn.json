@@ -175,5 +175,15 @@
   "node_detail_cpu": "CPU：{cpu}",
   "node_detail_mem": "内存：{mem}",
   "node_detail_live": "在线会话：{live}",
-  "node_detail_version": "代理版本：{version}"
+  "node_detail_version": "代理版本：{version}",
+  "setup_welcome": "欢迎 — 这是您面板的机器人。让我们来设置它。",
+  "setup_ask_panel_url": "您的面板网址是什么？（例如 https://panel.example.com）",
+  "setup_ask_acme": "是否启用 ACME 自动续期？（是/否）",
+  "setup_ask_domain": "域名？",
+  "setup_ask_email": "邮箱？",
+  "setup_done": "完成 — 设置已保存。运行 `ovm restart` 以应用。",
+  "setup_invalid_url": "网址必须以 http:// 或 https:// 开头。请重试。",
+  "setup_invalid_email": "该邮箱似乎无效。请重试。",
+  "setup_yes": "是",
+  "setup_no": "否"
 }

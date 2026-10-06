@@ -216,15 +216,21 @@ async def get_node_status_handler(node_id: int, db: Session):
 
     started = time.perf_counter()
     nr_sessions = node_client(node)
-    info, sessions = await asyncio.gather(
+    info, sessions, cert_pin = await asyncio.gather(
         run_in_threadpool(nr.get_node_info),
         run_in_threadpool(nr_sessions.get_sessions, None, 8),
+        run_in_threadpool(_cert_pin_payload, node),
     )
     info = info if isinstance(info, dict) else {}
     sessions = sessions if isinstance(sessions, dict) else {}
 
     tls_verified = nr.tls_verified if nr.tls_verified is True else nr_sessions.tls_verified
     tls_mode = nr.tls_mode if nr.tls_verified is True else nr_sessions.tls_mode
+    if cert_pin.get("pinned"):
+        if tls_mode == "verified":
+            cert_pin["match"] = True
+        elif tls_mode == "unverified-self-signed":
+            cert_pin["match"] = False
 
     return {
         "node": {
@@ -240,7 +246,32 @@ async def get_node_status_handler(node_id: int, db: Session):
         "reachable": bool(info),
         "tls_verified": tls_verified,
         "tls_mode": tls_mode,
+        "cert_pin": cert_pin,
     }
+
+
+def _cert_pin_payload(node) -> dict:
+    """Pinned fingerprint/expiry/issuer parsed from the stored certificate.
+
+    The live-vs-pin verdict is filled in by the caller from the connection's
+    ``tls_mode``: a request that verified against the pin saw a matching
+    certificate, so no second TLS handshake is needed here.
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+
+    payload = {"pinned": False, "fingerprint": None, "expiry": None, "issuer": None, "match": None}
+    pinned = getattr(node, "server_ca", None)
+    if pinned and "BEGIN CERTIFICATE" in pinned:
+        try:
+            cert = x509.load_pem_x509_certificate(pinned.encode())
+            payload["pinned"] = True
+            payload["fingerprint"] = cert.fingerprint(hashes.SHA256()).hex(":").upper()
+            payload["expiry"] = cert.not_valid_after_utc.isoformat()
+            payload["issuer"] = cert.issuer.rfc4514_string()
+        except Exception:
+            pass
+    return payload
 
 
 async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, user_id: int = None):

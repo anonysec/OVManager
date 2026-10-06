@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.1.4"
+VERSION="1.1.5"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -1991,6 +1991,16 @@ do_https() {
             # apply: `--self` on a host that already has a pair (shared with
             # OVNode) would otherwise silently keep the old one.
             TLS_MODE="self"; TLS_REGENERATE=1; chosen=1 ;;
+        replace)
+            TLS_MODE="self"; TLS_REGENERATE=1; chosen=1 ;;
+        get)
+            # ACME fetch when a domain was given, self-signed otherwise.
+            if [[ -n "$TLS_DOMAIN" ]]; then TLS_MODE="le"; else TLS_MODE="self"; TLS_REGENERATE=1; fi
+            chosen=1 ;;
+        renew)
+            [[ -n "$TLS_DOMAIN" ]] || TLS_DOMAIN="$(env_get "$envfile" ACME_DOMAIN)"
+            [[ -n "$TLS_DOMAIN" ]] || die "ovm tls renew needs --domain (or ACME_DOMAIN in .env)"
+            TLS_MODE="le"; chosen=1 ;;
         le)
             [[ -n "$TLS_DOMAIN" ]] || die "Let's Encrypt for a domain needs --domain (or use --ip, or --self)"
             TLS_MODE="le"; chosen=1 ;;
@@ -2279,6 +2289,9 @@ parse_args() {
                 if [[ $# -ge 1 && "$1" != -* ]]; then
                     case "$1" in
                         selfsigned) HTTPS_MODE="self"; shift ;;
+                        get) HTTPS_MODE="get"; shift ;;
+                        renew) HTTPS_MODE="renew"; shift ;;
+                        replace) HTTPS_MODE="replace"; shift ;;
                         le) [[ $# -ge 2 ]] || die "ovm tls le needs an ip or a domain"
                             TLS_DOMAIN="$2"; shift 2 ;;
                         custom) [[ $# -ge 3 ]] || die "ovm tls custom needs CERT and KEY"
@@ -2453,6 +2466,9 @@ cmd_tls_options() {
     render_kv "Set"     "ovm tls selfsigned"
     render_kv "Encrypt" "ovm tls le IP|DOMAIN"
     render_kv "Custom"  "ovm tls custom CERT KEY"
+    render_kv "Get"     "ovm tls get [--domain D]"
+    render_kv "Renew"   "ovm tls renew [--domain D]"
+    render_kv "Replace" "ovm tls replace"
     render_line "  the paths come from .env — this writes the certificate, never the file"
 }
 

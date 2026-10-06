@@ -175,5 +175,15 @@
   "node_detail_cpu": "CPU: {cpu}",
   "node_detail_mem": "Memory: {mem}",
   "node_detail_live": "Live sessions: {live}",
-  "node_detail_version": "Agent: {version}"
+  "node_detail_version": "Agent: {version}",
+  "setup_welcome": "Welcome — this is your panel's bot. Let's set it up.",
+  "setup_ask_panel_url": "What's your panel URL? (e.g. https://panel.example.com)",
+  "setup_ask_acme": "Do you want ACME auto-renew? (yes/no)",
+  "setup_ask_domain": "Domain?",
+  "setup_ask_email": "Email?",
+  "setup_done": "Done — settings saved. Run `ovm restart` to apply.",
+  "setup_invalid_url": "That URL must start with http:// or https://. Try again.",
+  "setup_invalid_email": "That email looks invalid. Try again.",
+  "setup_yes": "yes",
+  "setup_no": "no"
 }

@@ -153,6 +153,27 @@ async def get_node_status(
     )
 
 
+@router.post("/{node_id}/repin", response_model=ResponseModel)
+async def repin_node_cert(
+    node_id: int,
+    db: Session = Depends(get_db),
+    user: dict = Depends(require_owner),
+):
+    """Re-fetch the node's current TLS certificate and store it as the pin."""
+    node = crud.get_node_by_id(db, node_id)
+    if node is None:
+        raise HTTPException(status_code=404, detail="Node not found")
+    from backend.node.management import _pin_node_certificate
+
+    pem = await _pin_node_certificate(node.address, node.port)
+    if not pem:
+        return ResponseModel(success=False, msg="Could not fetch the node's certificate.", data=None)
+    node.server_ca = pem
+    db.commit()
+    log_event(None, "node.repin", actor=user.get("username"), target=node.name, detail="certificate pin updated")
+    return ResponseModel(success=True, msg="Certificate pin updated.", data={"repinned": True})
+
+
 @router.get("/{node_id}/logs", response_model=ResponseModel)
 async def get_node_logs(
     node_id: int,
