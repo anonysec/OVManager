@@ -257,6 +257,7 @@ def test_update_config_payload_includes_ipv6_only_when_provided(monkeypatch):
 
     assert nr.update_config(tunnel_address="vpn.example.com", protocol="tcp", ovpn_port=1194) is True
     assert "enable_ipv6" not in seen["json"] and "ipv6_prefix" not in seen["json"]
+    assert seen["json"]["set_new_setting"] is True  # node requires it; missing → HTTP 422
 
     assert (
         nr.update_config(

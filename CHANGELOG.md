@@ -1,3 +1,11 @@
+## 1.2.4 — 2026-10-06
+
+Fix: panel `update_config()` now sends `set_new_setting: true` in the
+POST /sync/config payload. The node requires that field and answered
+HTTP 422 without it, so every Add Node / Save flow reported "Node
+unreachable" even though the node was reachable. Found live via Playwright
+follow-up testing; regression assertion added to the payload test.
+
 ## 1.2.3 — 2026-10-06
 
 Revert: v1.2.2 route-name prefixing (`r{i}_`) removed. Independent review

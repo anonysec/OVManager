@@ -356,6 +356,7 @@ class NodeRequests:
             "tunnel_address": tunnel_address or "",
             "protocol": protocol,
             "ovpn_port": int(ovpn_port),
+            "set_new_setting": True,
         }
         if dns1 is not None:
             payload["dns1"] = dns1
