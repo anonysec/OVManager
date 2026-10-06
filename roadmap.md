@@ -84,6 +84,7 @@ Hot-path forks removed (`sanitize` bash builtin, `logger -t` → file append), d
 | ~~v1.1.6~~ | ~~A11 Add Node cert section, drop ovnode:// bundle~~ → shipped | done |
 
 | ~~v1.1.8~~ | ~~A12+A13 polish batch~~ → shipped | done |
-| ~~v1.2.0~~ | ~~B2+B4+B5 .ovpn domain, fallback IPs, bandwidth aggregation~~ → shipped | done |
+| ~~v1.2.0~~ | ~~B2+B4+B5 panel-side PKI~~ → shipped | done |
+| **v1.2.1** | **Router dedup fix (route name uniqueness)** | **shipping now** |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.

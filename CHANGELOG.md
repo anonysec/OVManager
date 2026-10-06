@@ -1,3 +1,12 @@
+## 1.2.1 — 2026-10-06
+
+Fix: FastAPI silently deduped routes that had overlapping `name=` attributes
+across routers (e.g. `get_settings`, `update_user` declared by multiple
+modules with default func-name naming). Each router's routes are now tagged
+with the router's index prefix (`r0_`, `r1_`, …) so all routes register
+uniquely. Symptom: `/api/settings` and several other routes returned 404
+even though the source routers loaded correctly.
+
 ## 1.2.0 — 2026-10-06
 
 (B2) `.ovpn` uses `remote <panel_domain>` first when set in Settings panel. Falls
