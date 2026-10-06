@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.1.1"
+VERSION="1.1.2"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -1908,7 +1908,9 @@ fetch_release() {
     # --no-same-owner: an archive from an older release still carries whatever
     # uid built it, and extracting as root would restore that. The install runs
     # as root, so honouring the archive's numeric ids is exactly backwards.
-    tar --no-same-owner -xzf "$work/$base.tar.gz" -C "$dest" \
+    # The archive carries one top-level "ovmanager-<version>/" directory; strip
+    # it so the release lands flat in $dest instead of a nested version dir.
+    tar --no-same-owner --strip-components=1 -xzf "$work/$base.tar.gz" -C "$dest" \
         || { rm -rf "$work"; die "Extract failed"; }
     # Root-owned explicitly, so the tree does not depend on how it was built.
     # The root requirement below depends on this: a tree this user cannot
@@ -1944,9 +1946,9 @@ grant_panel_access() {
     chmod 640 "$INSTALL_DIR/.env"
     chown root:"$PANEL_USER" "$INSTALL_DIR"
     chmod 2775 "$INSTALL_DIR"
-    [[ -d "$INSTALL_DIR/ovmanager-${VERSION}" ]] && {
-        chown -R root:"$PANEL_USER" "$INSTALL_DIR/ovmanager-${VERSION}"
-        chmod 2775 "$INSTALL_DIR/ovmanager-${VERSION}"
+    [[ -d "$INSTALL_DIR" ]] && {
+        chown -R root:"$PANEL_USER" "$INSTALL_DIR"
+        chmod 2775 "$INSTALL_DIR"
     } || true
     [[ -n "$TLS_KEY" && -f "$TLS_KEY" ]] && { chgrp "$PANEL_USER" "$TLS_KEY" 2>/dev/null || true; chmod 640 "$TLS_KEY"; }
     # The venv is interpreter, not state: the panel user needs to read and
@@ -2054,9 +2056,9 @@ Type=simple
 # the $PANEL_USER group, owns its data directory, and cannot update itself.
 User=${PANEL_USER}
 Group=${PANEL_USER}
-WorkingDirectory=${INSTALL_DIR}/ovmanager-${VERSION}
+WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${INSTALL_DIR}/.env
-Environment="PATH=${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DATA_DIR=${DATA_DIR}"
 # The panel owns every file it writes (db, wal, logs) and no other service
 # reads them, so the database must be private from its very first byte
@@ -2066,7 +2068,7 @@ UMask=0077
 # rebuilds the project before starting it, writing egg-info and the lock into
 # the tree, which an unprivileged service account cannot do. The venv python
 # needs no write access and is what uv ends up executing anyway.
-ExecStart=${INSTALL_DIR}/ovmanager-${VERSION}/.venv/bin/python3 main.py
+ExecStart=${INSTALL_DIR}/.venv/bin/python3 main.py
 # uv exits 143 on SIGTERM: a clean 'ovm stop' must read as inactive,
 # not failed, so status and doctor report the truth.
 SuccessExitStatus=143
@@ -2350,9 +2352,9 @@ do_install() {
     else
         render_begin "runtime" 6
         ensure_uv
-        cd "$INSTALL_DIR/ovmanager-${VERSION}"
-        chown -R root:"$PANEL_USER" "$INSTALL_DIR/ovmanager-${VERSION}"
-        chmod 2775 "$INSTALL_DIR/ovmanager-${VERSION}"
+        cd "$INSTALL_DIR"
+        chown -R root:"$PANEL_USER" "$INSTALL_DIR"
+        chmod 2775 "$INSTALL_DIR"
         chown root:"$PANEL_USER" "$DATA_DIR"
         chmod 2775 "$DATA_DIR"
         install -d -o "$PANEL_USER" -g "$PANEL_USER" -m 700 "$DATA_DIR/.uv-cache"
@@ -2364,7 +2366,7 @@ do_install() {
         render_done "packages installed"
         chmod 700 "$DATA_DIR"
         grant_panel_access
-        [[ -d "$INSTALL_DIR/ovmanager-${VERSION}/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
+        [[ -d "$INSTALL_DIR/frontend/dist" ]] || die "Verified release is missing the prebuilt frontend"
         render_note "frontend prebuilt"
         write_systemd_unit
         systemctl_bounded restart >/dev/null 2>&1 || die "Could not start $SYSTEMD_SERVICE"
@@ -2853,8 +2855,7 @@ start_menu() {
 # live outside this installer. Refreshed on every update, which auto-swaps
 # boxes whose ovm is an old installer copy.
 install_cli() {
-    local src="${INSTALL_DIR}/ovmanager-${VERSION}/manager.sh"
-    [[ -f "$src" ]] || src="${INSTALL_DIR}/manager.sh"
+    local src="${INSTALL_DIR}/manager.sh"
     [[ -f "$src" ]] || return 0
     mkdir -p "$BIN_DIR" 2>/dev/null || { render_warn "Could not create $BIN_DIR"; return 0; }
     if cp -f "$src" "$BIN_DIR/$CLI_NAME" 2>/dev/null && chmod 0755 "$BIN_DIR/$CLI_NAME"; then

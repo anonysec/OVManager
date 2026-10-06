@@ -1,3 +1,10 @@
+## 1.1.2 — 2026-10-06
+
+Install path flattened from `/opt/ovmanager/ovmanager-$VERSION/` to
+`/opt/ovmanager/`. Atomic rollback mechanic (UPDATE_STAGE / UPDATE_PREVIOUS)
+unchanged. release.yml now adds `--prefix=ovmanager-${VER}/` to `git archive`
+to match the artifact shape that `fetch_release --strip-components=1` expects.
+
 # Changelog
 
 ## 1.1.1 — 2026-10-05

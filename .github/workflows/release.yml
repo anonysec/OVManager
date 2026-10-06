@@ -75,12 +75,14 @@ jobs:
         run: |
           VER="$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
           STAGE="$(mktemp -d)"
-          git archive HEAD | tar -x -C "$STAGE"
+          git archive --prefix="ovmanager-${VER}/" HEAD | tar -x -C "$STAGE"
           mkdir -p "$STAGE/frontend"
           cp -r frontend/dist "$STAGE/frontend/dist"
           # --owner/--group: the Actions runner is uid 1001, and plain tar
           # stores that, so extracting as root gave every install a tree owned
           # by a uid that does not exist on the target.
+          # --strip-components=1 in install.sh's fetch_release pairs with this
+          # --prefix so the installed tree lands flat at $INSTALL_DIR.
           tar --owner=0 --group=0 -czf "ovmanager-${VER}.tar.gz" -C "$STAGE" .
           sha256sum "ovmanager-${VER}.tar.gz" > "ovmanager-${VER}.sha256"
           echo "VER=${VER}" >> "$GITHUB_ENV"
