@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ovmanager"
-version = "1.2.1"
+version = "1.2.2"
 description = "An OpenVPN client management panel on the server"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,7 +40,7 @@ include = ["backend*"]
 [project.optional-dependencies]
 dev = [
     "pytest>=8.4.0",
-    "pytest-asyncio>=1.2.1",
+    "pytest-asyncio>=1.2.2",
     # Parallel test runs. Safe here because tests/conftest.py allocates its
     # throwaway data dir with tempfile.mkdtemp() at import time, so each worker
     # process gets its own database rather than sharing one.

@@ -217,8 +217,14 @@ async def pwa_service_worker():
     )
 
 
-for router in all_routers:
-    api.include_router(prefix="/api", router=router)
+# Avoid FastAPI silent dedup on overlapping route names across routers
+# (e.g. ``get_settings`` defined by more than one module with default func-name).
+# Each route's name is tagged with the router's index so all routes register.
+for _i, _r in enumerate(all_routers):
+    for _route in _r.routes:
+        if getattr(_route, "name", None):
+            _route.name = f"r{_i}_" + _route.name
+    api.include_router(prefix="/api", router=_r)
 
 api.include_router(subscription_router)
 
