@@ -890,7 +890,7 @@ def test_installer_deploys_the_manager():
     assert 'BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"' in content
     assert 'CLI_NAME="ovmanager"' in content
     assert 'CLI_ALIAS="ovm"' in content
-    assert "ovmanager-${VERSION}/manager.sh" in content
+    assert "${INSTALL_DIR}/manager.sh" in content
     assert content.count("install_cli") >= 3  # definition + do_install + do_update
     assert content.count("remove_cli") >= 2  # definition + do_uninstall
     assert "render_menu" in content

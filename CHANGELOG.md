@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1 — 2026-10-05
+## 1.1.2 — 2026-10-05
 
 Two safety guards: the owner account's username can no longer be
 renamed or claimed by another admin (added `current_username` lookup

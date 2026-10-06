@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.1.1"
+VERSION="1.1.2"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -187,8 +187,8 @@ DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 COMPOSE_FILE="$DATA_DIR/ovmanager-compose.yml"
-INSTALLER="$INSTALL_DIR/ovmanager-$VERSION/install.sh"
-[[ -x "$INSTALLER" ]] || INSTALLER="$INSTALL_DIR/install.sh"
+INSTALLER="$INSTALL_DIR/install.sh"
+[[ -x "$INSTALLER" ]] || INSTALLER="$INSTALL_DIR/ovmanager-$VERSION/install.sh"
 # Installed command names (same as the installer used).
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 CLI_NAME="ovmanager"
@@ -2382,8 +2382,7 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
             --public-ip "$(hostname -I 2>/dev/null | awk '{print $1}')" "$@"
         return $?
     fi
-    local py="$INSTALL_DIR/ovmanager-$VERSION/.venv/bin/python"
-    [[ -x "$py" ]] || py="$INSTALL_DIR/.venv/bin/python"
+    local py="$INSTALL_DIR/.venv/bin/python"
     [[ -x "$py" ]] || die "Panel virtualenv missing ($py) — repair with: $CLI_NAME update"
     ( cd "$(dirname "$(dirname "$(dirname "$py")")")" && set -a; [[ -f "$INSTALL_DIR/.env" ]] && . "$INSTALL_DIR/.env"; set +a; "$py" -m cli.main "$@" )
 }
@@ -2393,8 +2392,7 @@ _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
 # with no subcommand has to list its options even on a box it cannot read, or
 # the one command that would explain the problem is the one that cannot run.
 _cli_py_soft() {
-    local py="$INSTALL_DIR/ovmanager-$VERSION/.venv/bin/python"
-    [[ -x "$py" ]] || py="$INSTALL_DIR/.venv/bin/python"
+    local py="$INSTALL_DIR/.venv/bin/python"
     if [[ ! -x "$py" ]]; then
         render_warn "cannot reach the panel interpreter at $py"
         return 1
