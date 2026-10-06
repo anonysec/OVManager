@@ -39,10 +39,10 @@ Header breathing room, axis units, Live/Offline badge, period-delta chip, mobile
 ### A11. Add Node form cert section — **shipped v1.1.6**
 Drop the `ovnode://` bundle URI (single-paste UX was awkward for the ~2.3KB PEM). Keep current Add Node form layout. Drop the "Quick setup" subsection. Add `cert` textarea in Security section under `api_key`. PEM validated (`-----BEGIN…-----`). Stored as panel's TOFU pin in `node.server_ca`. Node installer prints cert PEM + API key + IP/port at end of install (separate lines, no URI bundle).
 
-### A12. UserManagement filter cleanup — **planned v1.1.8**
+### A12. UserManagement filter cleanup — **shipped v1.1.8**
 4 chips only: `[All] [Active] [Disabled] [Expiring]`. Drop `Online` (per-row indicator), `Near quota` (vague), `Unlimited` (default state). `Expiring` = users with 1–7 days remaining. Expired users surface via per-row badge + sort-by-expiry-ascending. x-ui / 3x-ui convention.
 
-### A13. Add User modal — **planned v1.1.7**
+### A13. Add User modal — **shipped v1.1.7**
 Drop modal title (page heading already says "Users"). Restructure 3 fieldsets → single 2-col grid (no ALL CAPS legends). Hero the username input + Suggest button. Devices = 3 clickable cards (1/2/∞), not tiny chips. Defaults inline as placeholders. Single primary CTA. Success state = single checkmark + Copy subscription link only (Download moves to row's "⋯" menu).
 
 ---
@@ -82,8 +82,8 @@ Hot-path forks removed (`sanitize` bash builtin, `logger -t` → file append), d
 | v1.1.5 | A5+A6+A8 wizard | ~300 | ✅ shipped |
 | OVNode v1.2.0 | B1+B3 panel-owned PKI | ~300 | ✅ shipped |
 | ~~v1.1.6~~ | ~~A11 Add Node cert section, drop ovnode:// bundle~~ → shipped | done |
-| **v1.1.7** | **A13 Add User modal polish** | ~150 | queued |
-| **v1.1.8** | **A12 UserManagement filter cleanup** | ~60 | queued |
+
+| ~~v1.1.8~~ | ~~A12+A13 polish batch~~ → shipped | done |
 | **OVManager v1.2.0** | **B2+B4+B5 .ovpn domain, fallback IPs, bandwidth aggregation** | ~250 | last |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.

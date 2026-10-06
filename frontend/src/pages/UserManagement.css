@@ -175,25 +175,13 @@
   gap: var(--space-5);
 }
 
-.uf-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  margin: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-1);
+.uf-username-hero {
+  grid-column: 1 / -1;
 }
 
-.uf-legend {
-  padding: 0 var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+.uf-username-hero .ui-input {
+  min-height: var(--control-h-lg);
+  font-size: var(--font-size-md);
 }
 
 .uf-name-row {
@@ -225,47 +213,52 @@
   gap: var(--space-2);
 }
 
-/* Device-count presets (1 / 2 / ∞) attach directly to the Devices field. */
-.uf-devices-chips {
-  display: inline-flex;
-  gap: 4px;
-  margin-top: 6px;
+.uf-devices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.uf-device-chip {
-  padding: 3px 12px;
+/* Device-count presets (1 / 2 / ∞) as three equal cards. */
+.uf-devices-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.uf-devices-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
   color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  line-height: 1.4;
+  font-family: inherit;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-.uf-device-chip:hover {
+.uf-devices-card:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
-.uf-device-chip.is-active {
+.uf-devices-card.is-active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent-text);
 }
 
-.uf-device-chip:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.uf-note {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-snug);
+.uf-devices-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
 }
 
 .uf-error {
@@ -567,8 +560,8 @@
 }
 
 .uf-created-icon {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   color: var(--success-text);
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { FiCheckCircle, FiCopy, FiDownload, FiPlus, FiZap } from 'react-icons/fi';
+import { FiCheckCircle, FiCopy, FiPlus, FiZap } from 'react-icons/fi';
 import Modal from './Modal';
 import { Button, Field } from './ui';
 import { copyText } from '../utils/clipboard';
@@ -40,7 +40,7 @@ const defaultExpiryDate = (days = 30) => {
 
 const DATE_SHORTCUTS: [string, number][] = [['1d', 1], ['7d', 7], ['1m', 30], ['2m', 60]];
 
-const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, onDownloadUser }: { user?: any; isOpen?: any; onClose?: any; onSaved?: any; defaults?: any; linkForUser?: any; onDownloadUser?: any }) => {
+const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }: { user?: any; isOpen?: any; onClose?: any; onSaved?: any; defaults?: any; linkForUser?: any }) => {
   const isEdit = !!user;
   const days = Number(defaults?.days) || 30;
   const defaultLogins = String(defaults?.maxLogins ?? 1);
@@ -192,7 +192,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={isEdit ? `${t('modal_editUserTitle', 'Edit User')} — ${user?.name || ''}` : t('modal_createUserTitle')}
       size="medium"
     >
       {createdUser && (
@@ -205,13 +204,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
           <div className="uf-created-actions">
             <Button
               variant="primary"
-              icon={<FiDownload size={14} aria-hidden="true" />}
-              onClick={() => { if (onDownloadUser) { onClose(); onDownloadUser(createdUser); } }}
-            >
-              {t('downloadConfig', 'Get Config')}
-            </Button>
-            <Button
-              variant="secondary"
               icon={<FiCopy size={14} aria-hidden="true" />}
               onClick={handleCopyLink}
               disabled={!createdLink}
@@ -226,9 +218,8 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
       )}
       {!createdUser && (
       <form onSubmit={handleSubmit} className="uf-form">
-        <fieldset className="uf-section">
-          <legend className="uf-legend">{t('formSectionAccount', 'Account')}</legend>
-          <div className="ui-field">
+        <div className="uf-grid">
+          <div className="ui-field uf-username-hero">
             <label className="ui-field-label" htmlFor="uf-username">
               {t('username')}
               {!isEdit && <span className="ui-field-required" aria-hidden="true">*</span>}
@@ -245,6 +236,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                 maxLength={64}
                 autoFocus={!isEdit}
                 disabled={isEdit}
+                placeholder={t('usernameHint', '3–64 characters.')}
                 aria-invalid={Boolean(error) || undefined}
                 aria-describedby={!isEdit ? 'uf-username-hint' : undefined}
               />
@@ -261,8 +253,9 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                 </Button>
               )}
             </div>
-            {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameHint', '3–64 characters.')}</p>}
+            {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameFootnote', 'Usernames can’t be changed after creation.')}</p>}
           </div>
+
           <Field
             label={t('userTag', 'Label')}
             hint={t('userTagHint', 'Optional — e.g. monthly, vip, reseller-a. Shown as a chip on the user row.')}
@@ -276,52 +269,45 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
               placeholder={t('userTagPlaceholder', 'monthly, vip, reseller-a…')}
             />
           </Field>
-          {!isEdit && (
-            <p className="uf-note">{t('createUserDefaults', 'New users start with {{days}} days and {{devices}} device(s) — change anything below.', { days, count: Number(defaultLogins) || 1 })}</p>
-          )}
-        </fieldset>
 
-        <fieldset className="uf-section">
-          <legend className="uf-legend">{t('formSectionValidity', 'Validity')}</legend>
           <Field label={t('modal_expiryDate')} required>
             <input
               type="date"
               value={expiryDate}
               onChange={(e) => setExpiryDate(e.target.value)}
-              className="uf-date"
+              className="ui-input uf-date"
+            />
+            <div className="uf-chips" role="group" aria-label={t('modal_expiryDate')}>
+              {DATE_SHORTCUTS.map(([label, days]) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + days);
+                    setExpiryDate(d.toISOString().split('T')[0]);
+                  }}
+                >
+                  +{label}
+                </Button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label={t('modal_totalTraffic')} hint={t('modal_totalTrafficHint')}>
+            <input
+              type="number"
+              value={totalTraffic}
+              onChange={(e) => setTotalTraffic(e.target.value)}
+              min="0"
+              step="0.01"
+              placeholder={t('modal_totalTrafficPlaceholder')}
+              title={t('modal_totalTrafficHint')}
             />
           </Field>
-          <div className="uf-chips" role="group" aria-label={t('modal_expiryDate')}>
-            {DATE_SHORTCUTS.map(([label, days]) => (
-              <Button
-                key={label}
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  const d = new Date();
-                  d.setDate(d.getDate() + days);
-                  setExpiryDate(d.toISOString().split('T')[0]);
-                }}
-              >
-                +{label}
-              </Button>
-            ))}
-          </div>
-        </fieldset>
 
-        <fieldset className="uf-section">
-          <legend className="uf-legend">{t('formSectionLimits', 'Limits')}</legend>
-          <div className="uf-grid">
-            <Field label={t('modal_totalTraffic')} hint={t('modal_totalTrafficHint')}>
-              <input
-                type="number"
-                value={totalTraffic}
-                onChange={(e) => setTotalTraffic(e.target.value)}
-                min="0"
-                step="0.01"
-                placeholder={t('modal_totalTrafficPlaceholder')}
-              />
-            </Field>
+          <div className="uf-devices">
             <Field label={t('modal_maxLogins')} hint={t('modal_maxLoginsHint')}>
               <input
                 type="number"
@@ -330,20 +316,21 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser, 
                 min="1"
                 step="1"
                 placeholder={t('modal_maxLoginsPlaceholder')}
+                title={t('modal_maxLoginsHint')}
               />
-              <div className="uf-devices-chips" role="group" aria-label={t('modal_maxLogins')}>
-                <button type="button" className={`uf-device-chip${maxLogins === '1' ? ' is-active' : ''}`} onClick={() => setMaxLogins('1')}>1</button>
-                <button type="button" className={`uf-device-chip${maxLogins === '2' ? ' is-active' : ''}`} onClick={() => setMaxLogins('2')}>2</button>
-                <button type="button" className={`uf-device-chip${maxLogins === '0' ? ' is-active' : ''}`} onClick={() => setMaxLogins('0')}>∞</button>
-              </div>
             </Field>
+            <div className="uf-devices-cards" role="group" aria-label={t('modal_maxLogins')}>
+              <button type="button" className={`uf-devices-card${maxLogins === '1' ? ' is-active' : ''}`} aria-pressed={maxLogins === '1'} onClick={() => setMaxLogins('1')}>1</button>
+              <button type="button" className={`uf-devices-card${maxLogins === '2' ? ' is-active' : ''}`} aria-pressed={maxLogins === '2'} onClick={() => setMaxLogins('2')}>2</button>
+              <button type="button" className={`uf-devices-card${maxLogins === '0' ? ' is-active' : ''}`} aria-pressed={maxLogins === '0'} onClick={() => setMaxLogins('0')}>∞</button>
+            </div>
           </div>
-        </fieldset>
+        </div>
 
         {error && <p className="uf-error" role="alert">{error}</p>}
 
         <div className="uf-footer">
-          <Button variant="secondary" onClick={handleClose}>{t('cancelButton')}</Button>
+          <Button variant="ghost" onClick={handleClose}>{t('cancelButton')}</Button>
           <Button type="submit" variant="primary" loading={isLoading} icon={<FiPlus size={14} aria-hidden="true" />}>
             {isEdit ? t('updateUserButton', 'Update User') : t('createUserButton')}
           </Button>

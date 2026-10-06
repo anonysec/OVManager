@@ -97,17 +97,19 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
         aria-labelledby={title ? 'modal-title' : undefined}
         tabIndex={-1}
       >
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-close modal-close--floating"
+            aria-label={t('closeModal', 'Close modal')}
+          >
+            <FiX size={20} />
+          </button>
+        )}
         {title && (
           <div className="modal-header">
             <h2 id="modal-title">{title}</h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="modal-close"
-              aria-label={t('closeModal', 'Close modal')}
-            >
-              <FiX size={20} />
-            </button>
           </div>
         )}
         <div className="modal-body">

@@ -1,3 +1,17 @@
+## 1.1.8 — 2026-10-06
+
+(v1.1.7) Add User modal polish. Dropped the modal title — page heading already
+says "Users". 3 stacked fieldsets → single 2-col grid (no legends). Username
+hero'd with inline Suggest button. Devices selector = 3 clickable cards
+(1 / 2 / ∞), not tiny chips. Defaults inline as placeholders. Single primary
+CTA. Success state = big check + Copy subscription link only (Download moved
+to user row's "⋯" menu). (v1.1.8) UserManagement filter cleanup. 6 chips → 4:
+[All] [Active] [Disabled] [Expiring]. Dropped Online / Near quota /
+Unlimited. Expiring = users with 1–7 days remaining. Active/Disabled exclude
+expired (they surface via per-row badge + sort-by-expiry-ascending). Modal
+close button now always renders (was hidden when title was dropped). i18n
+parity across all 4 locales.
+
 ## 1.1.6 — 2026-10-06
 
 (A11) Add Node form cert section. Dropped the `ovnode://` bundle URI from the

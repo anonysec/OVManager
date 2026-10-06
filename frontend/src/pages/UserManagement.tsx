@@ -8,7 +8,6 @@ import {
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { useToast } from '../context/ToastContext';
-import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
@@ -49,7 +48,6 @@ const statusLabel = (u: any, t: any) => {
 const UserManagement = () => {
   const { t } = useTranslation();
   const { addToast } = useToast();
-  const { userRole } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
   const [subSettings, setSubSettings] = useState<any>(null);
@@ -146,13 +144,12 @@ const UserManagement = () => {
 
   const filterCounts = useMemo(() => {
     const c = (fn: (u: any) => boolean) => users.filter(fn).length;
+    const notExpired = (u: any) => daysUntil(u.expiry_date) >= 0;
     return {
       all: users.length,
-      online: c((u: any) => u.online || Number(u.active_connections || 0) > 0),
-      expiring: c((u: any) => { const d = daysUntil(u.expiry_date); return d >= 0 && d <= 7; }),
-      quota: c((u: any) => Number(u.total) > 0 && (Number(u.used || 0) / Number(u.total)) >= 0.85),
-      disabled: c((u: any) => !u.is_active),
-      unlimited: c((u: any) => u.total === null || u.total === 0),
+      active: c((u: any) => Boolean(u.is_active) && notExpired(u)),
+      disabled: c((u: any) => !u.is_active && notExpired(u)),
+      expiring: c((u: any) => { const d = daysUntil(u.expiry_date); return d > 0 && d <= 7; }),
     };
   }, [users]);
 
@@ -203,11 +200,10 @@ const UserManagement = () => {
         const hay = `${user.name || ''} ${user.tag || ''} ${user.owner || ''}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
-      if (view === 'online' && !(user.online || Number(user.active_connections || 0) > 0)) return false;
-      if (view === 'expiring') { const d = daysUntil(user.expiry_date); if (!(d >= 0 && d <= 7)) return false; }
-      if (view === 'quota') { if (!(Number(user.total) > 0 && (Number(user.used || 0) / Number(user.total)) >= 0.85)) return false; }
-      if (view === 'disabled' && user.is_active) return false;
-      if (view === 'unlimited' && (user.total !== null && user.total !== 0)) return false;
+      const remaining = daysUntil(user.expiry_date);
+      if (view === 'active' && !(user.is_active && remaining >= 0)) return false;
+      if (view === 'expiring') { if (!(remaining > 0 && remaining <= 7)) return false; }
+      if (view === 'disabled' && !(!user.is_active && remaining >= 0)) return false;
       if (view.startsWith('tag:') && (user.tag || '') !== view.slice(4)) return false;
       return true;
     });
@@ -623,11 +619,9 @@ const UserManagement = () => {
         <div className="um-filters" role="group" aria-label={t('userFilters', 'User filters')}>
           {[
             { id: 'all', label: t('filterAll', 'All') },
-            { id: 'online', label: t('filterOnline', 'Online') },
-            { id: 'expiring', label: t('filterExpiring', 'Expiring soon') },
-            { id: 'quota', label: t('filterQuota', 'Near quota') },
+            { id: 'active', label: t('filterActive', 'Active') },
             { id: 'disabled', label: t('filterDisabled', 'Disabled') },
-            { id: 'unlimited', label: t('filterUnlimited', 'Unlimited') },
+            { id: 'expiring', label: t('filterExpiring', 'Expiring') },
           ].map((f) => (
             <button key={f.id} type="button" className={`um-chip${view === f.id ? ' is-active' : ''}`} aria-pressed={view === f.id} onClick={() => setView(f.id)}>
               {f.label} <span className="um-chip-count">{(filterCounts as Record<string, number>)[f.id] ?? 0}</span>
@@ -775,7 +769,6 @@ const UserManagement = () => {
           maxLogins: myDefaults?.max_users ?? subSettings?.default_max_users ?? 1,
         }}
         linkForUser={getSubscriptionLink}
-        onDownloadUser={handleOpenDownloadModal}
       />
       <UserFormModal
         isOpen={isEditModalOpen}
@@ -783,7 +776,6 @@ const UserManagement = () => {
         user={selectedUser}
         defaults={undefined}
         linkForUser={undefined}
-        onDownloadUser={undefined}
         onSaved={async () => {
           addToast(t('userUpdated', 'User updated'), 'success');
           setIsEditModalOpen(false);
