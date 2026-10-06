@@ -61,3 +61,8 @@ PROJECT_PLAN.md
 
 # graphify knowledge graph output (local trial, never publish)
 graphify-out/
+
+# AI tooling (never published)
+.opencode/
+AGENTS.md
+docs/superpowers/
