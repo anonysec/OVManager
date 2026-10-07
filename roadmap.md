@@ -142,7 +142,7 @@ health as columns; re-spam-once on crash ambiguity.
 | v1.2.9 | D2 threshold alerts (days-left, usage %, node down, CPU) + test | ~250 | ✅ shipped |
 | v1.3.0 | D1 subscription profile (title, support URL, announce, interval) | ~120 | ✅ shipped |
 | v1.3.1 | D6 cleanup page w/ dry-run | ~200 | ✅ shipped |
-| panel v1.4.0 + node v1.3.0 | F pairing + auth + nav + Health-delete (E backend after) | ~600 | planned |
+| panel v1.4.0 + node v1.3.0 | F pairing + auth + nav + Health-delete (E backend after) | ~600 | ✅ shipped |
 | panel v1.4.1 | E unified events (record_event, sent-markers, transitions) | ~300 | planned |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.
