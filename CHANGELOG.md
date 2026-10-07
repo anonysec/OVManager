@@ -1,3 +1,12 @@
+## 1.2.9 — 2026-10-07
+
+D2: threshold alert engine (Telegram only). Settings: days-left (3),
+usage % (80), CPU % (85) + per-event toggles, migration v19.
+Evaluation rides the existing 5-min metrics job — no second scheduler.
+De-dupe: first trip notifies, repeat runs silent, cleared-then-returned
+re-announces. `POST /server/alerts/test` + "Send test alert" button.
+Node-down and expiry reuse existing toggles.
+
 ## 1.2.8 — 2026-10-07
 
 D7: backup wiring fixes. `auto_backup` was registered in both web

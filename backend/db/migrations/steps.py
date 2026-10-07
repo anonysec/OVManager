@@ -239,6 +239,24 @@ def _add_panel_domain(db: Session) -> None:
     db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_threshold_settings(db: Session) -> None:
+    """Add the threshold-alert settings (v19): days-left, usage %, CPU %.
+
+    Node-down and expiry already have their toggles (``notify_node_down``,
+    ``notify_expiry``); only the numbers and the two new event switches are
+    missing. Existing rows get the model defaults, so an upgrade keeps the
+    documented 3 days / 80% / 85% behaviour.
+    """
+    if "settings" not in table_names(db):
+        return
+    present = column_names(db, "settings")
+    for name in ("alert_days_left", "alert_usage_enabled", "alert_usage_pct", "alert_cpu_enabled", "alert_cpu_pct"):
+        if name in present:
+            continue
+        column = Base.metadata.tables["settings"].columns[name]
+        db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -257,4 +275,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (16, "move the owner credential into the database", _import_owner_credential),
     (17, "add TLS/ACME and Telegram wizard settings", _add_tls_and_setup_settings),
     (18, "add panel domain setting", _add_panel_domain),
+    (19, "add threshold alert settings", _add_threshold_settings),
 )

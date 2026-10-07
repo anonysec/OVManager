@@ -44,7 +44,9 @@ const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesRea
     if (!s?.target && !s?.title) return;
     const key = `srv-${s.type || 'info'}-${s.target || s.title}`;
     if (out.some((n) => n.id === key)) return;
-    out.push({ id: key, level: s.level || 'warning', link: '/nodes', title: s.title });
+    // Threshold rows about users belong on the users page, not the nodes one.
+    const link = s.type === 'threshold_expiry' ? '/users' : '/nodes';
+    out.push({ id: key, level: s.level || 'warning', link, title: s.title });
   });
   (users || []).forEach((u: any) => {
     if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {

@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ovmanager"
-version = "1.2.8"
+version = "1.2.9"
 description = "An OpenVPN client management panel on the server"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,7 +18,7 @@ dependencies = [
     "requests>=2.32.5",
     "pydantic-settings>=2.11.0",
     "SQLAlchemy>=2.0.43,<2.1",
-    "python-dotenv>=1.2.8",
+    "python-dotenv>=1.2.9",
     "psutil>=7.1.0",
     # Used directly (see backend/auth/hash.py). passlib was removed: it is
     # unmaintained and incompatible with bcrypt >= 4.1.
@@ -40,7 +40,7 @@ include = ["backend*"]
 [project.optional-dependencies]
 dev = [
     "pytest>=8.4.0",
-    "pytest-asyncio>=1.2.8",
+    "pytest-asyncio>=1.2.9",
     # Parallel test runs. Safe here because tests/conftest.py allocates its
     # throwaway data dir with tempfile.mkdtemp() at import time, so each worker
     # process gets its own database rather than sharing one.

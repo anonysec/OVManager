@@ -14,6 +14,7 @@ from backend.logger import logger
 from backend.node.fanout import run_bounded
 from backend.node.requests import node_client
 from backend.operations.observability.node_alerts import check_node_alerts
+from backend.operations.observability.thresholds import check_threshold_alerts
 
 _tables_ready: bool = False
 
@@ -109,6 +110,13 @@ async def collect_metrics() -> None:
                 logger.info("metrics: node alerts sent: %s", sent)
         except Exception as e:
             logger.warning("metrics: node alert check failed: %s", e)
+
+        try:
+            sent_thresholds = await run_in_threadpool(check_threshold_alerts, db)
+            if sent_thresholds:
+                logger.info("metrics: threshold alerts sent: %s", sent_thresholds)
+        except Exception as e:
+            logger.warning("metrics: threshold alert check failed: %s", e)
 
         active_connections = sum(int(r.get("live_count") or 0) for r in clean_rows)
         auth_errors = sum(int(r.get("auth_errors") or 0) for r in clean_rows)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 
@@ -24,6 +25,30 @@ _AUTO_BACKUP_KEEP_MIN = 1
 _AUTO_BACKUP_KEEP_MAX = 500
 _AUTO_BACKUP_FIELDS = frozenset({"auto_backup_enabled", "auto_backup_time", "auto_backup_keep"})
 _DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
+# Threshold bounds: days-left covers a year, percentages are percentages.
+_THRESHOLD_BOUNDS = (("alert_days_left", 0, 365), ("alert_usage_pct", 1, 100), ("alert_cpu_pct", 1, 100))
+
+
+def _threshold_data(db_settings) -> dict:
+    """The threshold alert keys as served to the Settings UI.
+
+    A stored ``0`` (alert only for today) is a real value, so missing and
+    invalid are told apart by type rather than by truthiness.
+    """
+
+    def as_int(value, default: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "alert_days_left": as_int(getattr(db_settings, "alert_days_left", None), 3),
+        "alert_usage_enabled": bool(getattr(db_settings, "alert_usage_enabled", True)),
+        "alert_usage_pct": as_int(getattr(db_settings, "alert_usage_pct", None), 80),
+        "alert_cpu_enabled": bool(getattr(db_settings, "alert_cpu_enabled", True)),
+        "alert_cpu_pct": as_int(getattr(db_settings, "alert_cpu_pct", None), 85),
+    }
 
 
 @router.get("/settings/", response_model=ResponseModel, include_in_schema=False)
@@ -65,6 +90,7 @@ async def get_settings(
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
     data["notify_node_down"] = bool(getattr(db_settings, "notify_node_down", True))
+    data.update(_threshold_data(db_settings))
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
@@ -97,6 +123,11 @@ class BotConfigUpdate(BaseModel):
     notify_expiry: bool | None = None
     notify_traffic: bool | None = None
     notify_node_down: bool | None = None
+    alert_days_left: int | None = None
+    alert_usage_enabled: bool | None = None
+    alert_usage_pct: int | None = None
+    alert_cpu_enabled: bool | None = None
+    alert_cpu_pct: int | None = None
     auto_backup_enabled: bool | None = None
     auto_backup_time: str | None = None
     auto_backup_keep: int | None = None
@@ -210,6 +241,11 @@ async def update_bot_config(
         except InvalidTarget as exc:
             return ResponseModel(success=False, msg=str(exc), data=None)
 
+    for name, low, high in _THRESHOLD_BOUNDS:
+        value = getattr(payload, name, None)
+        if value is not None and not (low <= value <= high):
+            return ResponseModel(success=False, msg=f"{name} must be between {low} and {high}", data=None)
+
     if payload.telegram_backup_enabled:
         current = crud.get_settings(db)
         token = payload.bot_token or getattr(current, "bot_token", None)
@@ -235,6 +271,7 @@ async def update_bot_config(
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
     data["notify_traffic"] = bool(getattr(db_settings, "notify_traffic", True))
     data["notify_node_down"] = bool(getattr(db_settings, "notify_node_down", True))
+    data.update(_threshold_data(db_settings))
     data["auto_backup_enabled"] = bool(getattr(db_settings, "auto_backup_enabled", False))
     data["auto_backup_time"] = getattr(db_settings, "auto_backup_time", None) or "03:30"
     data["auto_backup_keep"] = int(getattr(db_settings, "auto_backup_keep", 50) or 50)
@@ -254,6 +291,40 @@ async def update_bot_config(
         success=True,
         msg="Bot config updated",
         data=data,
+    )
+
+
+class AlertTestUpdate(BaseModel):
+    channel: str = "telegram"
+
+
+@router.post("/alerts/test", response_model=ResponseModel)
+async def test_alert_channel(
+    payload: AlertTestUpdate | None = None,
+    user: str = Depends(require_owner),
+):
+    """Send one test message on a notification channel.
+
+    Telegram is the only channel in this release; anything else is refused
+    rather than silently ignored. The send runs off the event loop because
+    ``send_telegram`` blocks on HTTP.
+    """
+    channel = ((payload.channel if payload else None) or "telegram").strip().lower()
+    if channel != "telegram":
+        return ResponseModel(success=False, msg=f"Unsupported alert channel: {channel}", data=None)
+
+    from backend.operations.observability import notifier
+
+    sent = await asyncio.to_thread(
+        notifier.send_telegram,
+        "OVManager test alert — Telegram notifications are wired up.",
+    )
+    return ResponseModel(
+        success=bool(sent),
+        msg="Test alert sent to Telegram"
+        if sent
+        else "Telegram test failed — check the bot token, owner chat ID and that the bot is enabled",
+        data={"channel": "telegram", "sent": bool(sent)},
     )
 
 

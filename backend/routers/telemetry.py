@@ -21,6 +21,7 @@ from backend.db.engine import get_db
 from backend.operations.observability.audit import recent_events
 from backend.operations.observability.live import bus
 from backend.operations.observability.metrics import collect_metrics, history
+from backend.operations.observability.thresholds import INBOX_TYPES, threshold_items
 from backend.schema import ResponseModel
 
 activity_router = APIRouter(prefix="/activity", tags=["Activity"])
@@ -61,6 +62,9 @@ async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_
     for n in nodes:
         if not n.status:
             items.append({"level": "danger", "type": "node_offline", "title": f"Node {n.name} is offline", "target": n.name})
+    # Tripped thresholds feed the same inbox; usage rows stay out (the client
+    # already derives quota warnings with their own pref — see INBOX_TYPES).
+    items.extend(item for item in threshold_items(db) if item["type"] in INBOX_TYPES)
     return ResponseModel(success=True, msg="Notifications", data=items[:100])
 
 
