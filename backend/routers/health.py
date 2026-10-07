@@ -1,4 +1,4 @@
-"""Read-only health surface for the panel.
+"""Health surface for the panel.
 
 - ``/overview`` (owner only): a plain-English checklist covering the panel
   process, the SQLite database, node reachability (read from the in-memory
@@ -8,11 +8,17 @@
 
 Every check runs defensively: a failure inside one check becomes an
 ``"error"`` entry in that check's result, never a 500 for the whole endpoint.
+
+Check results are transitions, not ticks: ``/overview`` records an audit row
+via :func:`record_event` only when a check's status *changes* (the first
+observation only seeds state) and then promotes failed checks through
+:func:`promote_events`, which is what wires "failed checks auto-notify".
 """
 
 import os
 import shutil
 import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,6 +33,7 @@ from backend.config import config
 from backend.data_paths import DATA_DIR
 from backend.db.engine import get_db
 from backend.db.models import Node, User
+from backend.operations.observability.audit import promote_events, record_event
 from backend.operations.observability.live import get_node_online, last_poll_ts
 from backend.routers.tls import _cert_path, _classify_issuer, _key_path, _load_certificate
 from backend.schema import ResponseModel
@@ -40,6 +47,10 @@ BACKUP_DIR = DATA_DIR / "backups"
 _STARTED_AT = time.time()
 
 _SEVEN_DAYS = 7 * 24 * 60 * 60
+
+# Last observed status per check id; the first observation seeds it silently
+# (same rule as node_alerts), so a restart never re-pages an old failure.
+_check_state: dict[str, str] = {}
 
 
 def _entry(check_id: str, status: str, summary: str, hint: str = "", detail: dict | None = None) -> dict:
@@ -343,9 +354,34 @@ _CHECK_BUILDERS = (
 )
 
 
+def _record_check_transition(db: Session, entry: dict) -> None:
+    """Audit one check result — only when its status changed.
+
+    The first observation seeds :data:`_check_state` and writes nothing
+    (node-alerts rule: a restart never replays old state). A failing
+    transition is enrolled with a fresh ``event_key`` so the promoter pages
+    once; a recovery is recorded audit-only (info, no ``event_key``).
+    """
+    check_id, status = entry["id"], entry["status"]
+    prev = _check_state.get(check_id)
+    _check_state[check_id] = status
+    if prev is None or prev == status:
+        return  # seed or unchanged: never a row per probe tick
+    if status == "ok":
+        record_event(db, f"health.{check_id}", "info", entry["summary"], meta={"target": check_id})
+    else:
+        record_event(
+            db,
+            f"health.{check_id}",
+            "warning" if status == "warn" else "error",
+            entry["summary"],
+            meta={"event_key": uuid.uuid4().hex, "status": status, "target": check_id},
+        )
+
+
 @router.get("/overview")
 async def health_overview(db: Session = Depends(get_db), user: dict = Depends(require_owner)):
-    """Owner-only read-only overview. Never writes to the database."""
+    """Owner-only checklist. Writes audit rows only on check state changes."""
     checks = []
     details: dict[str, dict] = {}
     for check_id, builder in _CHECK_BUILDERS:
@@ -360,6 +396,8 @@ async def health_overview(db: Session = Depends(get_db), user: dict = Depends(re
             )
         checks.append({key: entry[key] for key in ("id", "status", "summary", "hint")})
         details[check_id] = entry.get("detail") or {}
+        _record_check_transition(db, entry)
+    promote_events(db)  # failed checks auto-notify; delivered markers keep repeats silent
     return {"checks": checks, "details": details}
 
 

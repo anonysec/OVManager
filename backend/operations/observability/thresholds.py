@@ -6,21 +6,25 @@ recomputes the conditions from the database: ``/notifications/`` reads
 :func:`threshold_items` too, which makes the inbox rows current by
 construction.
 
-Telegram needs a de-dupe on top: a condition that persists must page once,
-not every five minutes. The per-type signature kept in :data:`_notified` is
-the threshold equivalent of ``node_alerts._alerted_down`` — recorded only
-after Telegram accepts the message, dropped as soon as the condition clears.
-That gives exactly the required behaviour: second run silent, a failed send
-retried next tick, and a cleared-then-returned condition announced again.
+Telegram goes through the unified event pipeline: a *changed* condition set
+(signature) is recorded with :func:`record_event` and delivered once by
+:func:`promote_events`, which marks it in the ``delivered`` table only after
+Telegram accepts. An unchanged signature writes no row and stays silent, a
+cleared kind records an info row so a returning condition counts as a change
+again, and a failed send stays unmarked until it succeeds. The signature of
+the newest audit row per kind (via :func:`last_event_meta`) is the persisted
+replacement for the old in-memory ``_notified`` dict — restart-safe.
 
 Node-down is not repeated here: ``node_alerts`` already owns that event,
 toggled by ``settings.notify_node_down``. The expiry event is gated by
 ``settings.notify_expiry`` (same switch as the daily summary), usage and CPU
-carry their own ``alert_usage_enabled`` / ``alert_cpu_enabled`` flags.
+carry their own ``alert_usage_enabled`` / ``alert_cpu_enabled`` flags — all
+upstream in :func:`threshold_items`, so disabled events record nothing.
 """
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
@@ -29,6 +33,7 @@ from sqlalchemy.orm import Session
 from backend.db import crud
 from backend.db.migrations.schema import table_names
 from backend.logger import logger
+from backend.operations.observability.audit import last_event_meta, promote_events, record_event
 from backend.operations.observability.notifier import send_telegram
 
 DEFAULT_DAYS_LEFT = 3
@@ -36,8 +41,9 @@ DEFAULT_USAGE_PCT = 80
 DEFAULT_CPU_PCT = 85
 SUMMARY_LIMIT = 10  # titles per message; the rest collapse into "+N more"
 
-# Threshold type -> signature of the last condition set Telegram accepted.
-_notified: dict[str, str] = {}
+# Every kind threshold_items can emit; the loop also watches for a recorded
+# signature whose condition is gone (the "cleared" transition).
+ACTIVE_KINDS = ("threshold_expiry", "threshold_usage", "threshold_cpu")
 
 # Quota warnings already reach the inbox from the client's own derivation
 # (with their "Quota warnings (80%+)" pref), so usage rows are Telegram-only.
@@ -72,7 +78,8 @@ def threshold_items(db: Session) -> list[dict]:
     """One dict per tripped threshold: ``id``, ``type``, ``level``, ``title``, ``target``.
 
     Disabled events contribute nothing, so switching an event off also drops
-    its inbox rows and its Telegram de-dupe state (the next run forgets it).
+    its inbox rows; the next check records a clear transition, so a
+    re-enabled condition announces again.
     """
     settings = crud.get_settings(db)
     items: list[dict] = []
@@ -151,11 +158,14 @@ def _message(group: list[dict]) -> str:
 
 
 def check_threshold_alerts(db: Session) -> int:
-    """Send Telegram for every threshold type that just tripped (or changed).
+    """Record every threshold transition, then promote it to Telegram.
 
-    Returns the number of messages sent. A type whose condition set matches
-    the last accepted signature stays silent; state is only written after
-    Telegram says yes, so failures retry on the next tick.
+    Returns the number of messages sent. A signature matching the newest
+    audit row for its kind writes nothing and stays silent; a changed or new
+    signature records one row with a fresh ``event_key``; a kind whose
+    condition is gone records an info clear row (no ``event_key``, never
+    promoted). :func:`promote_events` sends whatever is enrolled and not yet
+    marked delivered, so a failed send simply retries on the next tick.
     """
     sent = 0
     try:
@@ -163,18 +173,34 @@ def check_threshold_alerts(db: Session) -> int:
         for item in threshold_items(db):
             groups.setdefault(item["type"], []).append(item)
 
-        for kind, group in groups.items():
-            # ids + levels: an unchanged set stays silent, an escalation
-            # (warning -> danger) is a change worth one more page.
-            signature = "|".join(sorted(f"{item['id']}:{item['level']}" for item in group))
-            if _notified.get(kind) == signature:
-                continue
-            if send_telegram(_message(group), db=db):
-                _notified[kind] = signature
-                sent += 1
+        # ids + levels: an unchanged set stays silent, an escalation
+        # (warning -> danger) is a change worth one more page.
+        for kind in dict.fromkeys([*ACTIVE_KINDS, *groups]):
+            group = groups.get(kind)
+            signature = "|".join(sorted(f"{item['id']}:{item['level']}" for item in group)) if group else ""
+            last = last_event_meta(db, kind)
+            last_signature = (last or {}).get("signature")
+            if signature:
+                if last_signature == signature:
+                    continue
+                level = "error" if any(item["level"] == "danger" for item in group) else "warning"
+                record_event(
+                    db,
+                    kind,
+                    level,
+                    _message(group),
+                    meta={
+                        "event_key": uuid.uuid4().hex,
+                        "signature": signature,
+                        "target": group[0]["target"] if len(group) == 1 else None,
+                    },
+                )
+            elif last_signature:
+                # condition cleared: persist the change so a returning
+                # condition announces again (its signature differs from "").
+                record_event(db, kind, "info", f"{kind} condition cleared", meta={"signature": ""})
 
-        for kind in [k for k in _notified if k not in groups]:
-            del _notified[kind]  # condition cleared: announce again if it returns
+        sent = promote_events(db, send=send_telegram)
     except Exception as exc:
         logger.error("Threshold alerts check failed (%s)", type(exc).__name__)
     return sent

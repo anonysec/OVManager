@@ -1,3 +1,13 @@
+## 1.4.1 — 2026-10-07
+
+Part E: unified audit-centric events. `record_event` writes every health
+transition and error as an audit row (severity + message + meta); the
+`promote_events` promoter notifies once per event key via persisted
+`delivered` sent-markers (migration v23) — replacing D2's in-memory
+de-dupe (now restart-safe, re-spam-once on crash). Transitions only,
+never per-tick rows; failed health checks auto-notify at `/overview`.
+Logs page renders event payloads as prose.
+
 ## 1.4.0 — 2026-10-07
 
 Part F, panel side. Cert required on Add Node (422), TOFU auto-fetch

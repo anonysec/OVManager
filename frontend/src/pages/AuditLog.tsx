@@ -33,8 +33,16 @@ const TIME_RANGES = [
 
 const fmtDetail = (d: any) => {
   if (d == null || d === '') return '—';
-  if (typeof d === 'string') return d;
-  try { return JSON.stringify(d); } catch { return String(d); }
+  let v = d;
+  if (typeof d === 'string') {
+    try { v = JSON.parse(d); } catch { return d; }
+  }
+  // Unified event rows store {"severity", "message", "meta"} — show them as prose.
+  if (v && typeof v === 'object' && !Array.isArray(v) && typeof v.message === 'string') {
+    return v.severity ? `[${v.severity}] ${v.message}` : v.message;
+  }
+  if (typeof v === 'string') return v;
+  try { return JSON.stringify(v); } catch { return String(v); }
 };
 
 const AuditLog = () => {

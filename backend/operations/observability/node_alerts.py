@@ -9,6 +9,12 @@ and never alerts. An outage is announced once, but a *failed* send is retried
 on the next tick — nothing marks the outage announced until Telegram accepts
 the message. A per-node cooldown keeps a flapping node from paging the owner
 every 5 minutes.
+
+Every real transition (down→up, up→down) also writes an audit row through
+:func:`record_event` — audit-only, no ``event_key``, because the Telegram
+send stays here (cooldown and ``notify`` gating live with it). Unchanged
+ticks never write a row; the latest reachable flag stays a column in
+``node_health_snapshots`` for cheap reads.
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ from __future__ import annotations
 import time
 
 from backend.logger import logger
+from backend.operations.observability.audit import record_event
 from backend.operations.observability.notifier import send_telegram
 
 DOWN_ALERT_COOLDOWN_SECONDS = 30 * 60
@@ -48,6 +55,16 @@ def check_node_alerts(rows: list[dict], *, notify: bool = True, now: float | Non
 
             if prev is None:
                 continue  # first tick after start: seed only
+
+            if prev != reachable:
+                # transition, not tick: one audit row per state change
+                record_event(
+                    None,
+                    f"node.{'down' if not reachable else 'up'}",
+                    "error" if not reachable else "info",
+                    f"🔴 Node {name} is unreachable." if not reachable else f"🟢 Node {name} is back online.",
+                    meta={"node_id": node_id, "target": name},
+                )
 
             if not reachable:
                 if node_id in _alerted_down:

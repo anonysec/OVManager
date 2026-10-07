@@ -31,11 +31,9 @@ def th_session(tmp_path):
     maker = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     db = maker()
     ensure_extra_tables(db)  # node_health_snapshots feeds the CPU threshold
-    thresholds._notified.clear()
     try:
         yield db
     finally:
-        thresholds._notified.clear()
         db.close()
         engine.dispose()
 
@@ -179,7 +177,8 @@ def test_th_failed_send_is_retried_next_run(th_session, th_settings, monkeypatch
     assert thresholds.check_threshold_alerts(th_session) == 0
     assert thresholds.check_threshold_alerts(th_session) == 1
     assert len(attempts) == 2
-    assert thresholds._notified.get("threshold_expiry") is not None
+    delivered = th_session.execute(text("SELECT COUNT(*) FROM delivered WHERE subscription = 'threshold_expiry'")).scalar()
+    assert delivered == 1, "the delivered marker is written only after Telegram accepts"
 
 
 def test_th_inbox_rows_carry_severity(th_session, th_settings, th_sent):

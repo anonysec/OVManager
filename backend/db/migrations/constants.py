@@ -6,7 +6,7 @@ import threading
 
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 VERSION_TABLE = "schema_version"
 
@@ -81,6 +81,15 @@ _EXTRA_DDL: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day)",
+    """
+    CREATE TABLE IF NOT EXISTS delivered (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subscription TEXT NOT NULL,
+        event_key TEXT NOT NULL,
+        ts REAL NOT NULL,
+        UNIQUE (subscription, event_key)
+    )
+    """,
 )
 
 _lock = threading.Lock()

@@ -316,6 +316,28 @@ def _add_admin_is_owner(db: Session) -> None:
         )
 
 
+def _add_event_delivered(db: Session) -> None:
+    """Add the ``delivered`` sent-marker table (v23): one Telegram send per event.
+
+    UNIQUE(subscription, event_key) is the de-dupe for the audit-centric event
+    pipeline: ``promote_events`` marks an event delivered only after Telegram
+    accepts it, so a restart or a failed send cannot re-notify silently.
+    """
+    db.execute(
+        text(
+            """
+        CREATE TABLE IF NOT EXISTS delivered (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription TEXT NOT NULL,
+            event_key TEXT NOT NULL,
+            ts REAL NOT NULL,
+            UNIQUE (subscription, event_key)
+        )
+        """
+        )
+    )
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -338,4 +360,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (20, "add subscription profile settings", _add_subscription_profile_settings),
     (21, "add panel identity (settings.panel_id)", _add_panel_id),
     (22, "add admin owner flag (admins.is_owner)", _add_admin_is_owner),
+    (23, "add event delivered markers (delivered)", _add_event_delivered),
 )
