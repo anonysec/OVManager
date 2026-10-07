@@ -13,7 +13,7 @@ from backend.db import crud
 from backend.db.models import User
 from backend.node.connection import probe_timeout
 from backend.node.fanout import gather_nodes
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 
 
 async def get_active_connection_counts(db: Session) -> dict[str, int]:
@@ -30,9 +30,10 @@ async def get_active_connection_counts(db: Session) -> dict[str, int]:
     counts: dict[str, int] = {}
 
     id_to_name = dict(crud.get_user_id_name_pairs(db))
+    pid = panel_id_for(db)
 
     def work(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         return node, req.get_sessions(hours=1, timeout=probe_timeout(node))
 
     raw = await gather_nodes([partial(work, n) for n in nodes])
@@ -58,9 +59,10 @@ async def get_user_session_diagnostics(user_id: int, db: Session, hours: int = 8
     nodes = crud.get_active_nodes(db)
     node_rows = []
     cn = str(user.id)
+    pid = panel_id_for(db)
 
     def work(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         return node, req.get_sessions(hours=hours)
 
     raw = await gather_nodes([partial(work, n) for n in nodes])
@@ -109,9 +111,10 @@ async def disconnect_user_on_all_nodes(name: str, user_id: int, db: Session) -> 
     nodes = crud.get_active_nodes(db)
     results = []
     cn = str(user_id)
+    pid = panel_id_for(db)
 
     def work(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         return {"node": node.name, "result": req.disconnect_user(cn)}
 
     raw = await gather_nodes([partial(work, n) for n in nodes])
@@ -134,9 +137,10 @@ async def login_health_summary(db: Session, hours: int = 8) -> dict:
     stale_counts: dict[str, int] = {}
     auth_counts: dict[str, int] = {}
     node_rows = []
+    pid = panel_id_for(db)
 
     def work(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         return node, req.get_sessions(hours=hours)
 
     raw = await gather_nodes([partial(work, n) for n in nodes])

@@ -167,7 +167,7 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
 def test_a_pin_works_before_the_node_row_exists(monkeypatch):
     """Add Node has no node id yet, so the PEM itself must pin the connection.
 
-    ``add_node_handler`` fetches the certificate and builds the keyed client
+    ``add_node_handler`` builds the keyed client with the pasted certificate
     *before* ``crud.create_node``, so there is no row and no id to name the
     pinned file after. The PEM is the only thing there is to verify against.
 
@@ -272,7 +272,7 @@ def test_active_connection_counts_asks_a_broken_node_cheaply(monkeypatch):
             sessions = [{"common_name": "7"}] if self.node.id == good.id else []
             return {"live_sessions": sessions}
 
-    monkeypatch.setattr(diagnostics, "node_client", lambda node: FakeClient(node))
+    monkeypatch.setattr(diagnostics, "node_client", lambda node, **kw: FakeClient(node))
     monkeypatch.setattr(diagnostics.crud, "get_active_nodes", lambda db: [good, bad])
     monkeypatch.setattr(diagnostics.crud, "get_user_id_name_pairs", lambda db: [("7", "alice")])
 

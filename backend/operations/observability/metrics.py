@@ -12,7 +12,7 @@ from backend.db import crud
 from backend.db.engine import SessionLocal
 from backend.logger import logger
 from backend.node.fanout import run_bounded
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 from backend.operations.observability.node_alerts import check_node_alerts
 from backend.operations.observability.thresholds import check_threshold_alerts
 
@@ -35,7 +35,7 @@ def ensure_metrics_tables(db: Session) -> None:
     _tables_ready = True
 
 
-async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
+async def _node_snapshot(node, panel_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """Probe one node (info + sessions). Returns (snapshot_row, sessions_data).
 
     The raw sessions payload is returned alongside so callers can derive
@@ -44,8 +44,8 @@ async def _node_snapshot(node) -> tuple[dict[str, Any], dict[str, Any]]:
     start = time.perf_counter()
     try:
         info, sessions = await asyncio.gather(
-            run_bounded(node_client(node).get_node_info),
-            run_bounded(node_client(node).get_sessions, None, 8),
+            run_bounded(node_client(node, panel_id=panel_id).get_node_info),
+            run_bounded(node_client(node, panel_id=panel_id).get_sessions, None, 8),
             return_exceptions=True,
         )
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
@@ -95,7 +95,10 @@ async def collect_metrics() -> None:
         ensure_metrics_tables(db)
         nodes = crud.get_all_nodes(db)
         users = crud.get_all_users(db)
-        probed = await asyncio.gather(*[_node_snapshot(node) for node in nodes], return_exceptions=True)
+        pid = panel_id_for(db)
+        probed = await asyncio.gather(
+            *[_node_snapshot(node, panel_id=pid) for node in nodes], return_exceptions=True
+        )
         clean = [p for p in probed if isinstance(p, tuple)]
         clean_rows = [row for row, _sessions in clean]
 

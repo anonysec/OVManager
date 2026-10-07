@@ -77,6 +77,7 @@ def _seed_owner_and_first_user(db: Session) -> None:
                 username=owner,
                 password="",
                 disabled=False,
+                is_owner=True,
             )
         )
         db.flush()

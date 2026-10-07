@@ -12,18 +12,18 @@ from sqlalchemy.orm import Session
 from backend.db import crud
 from backend.db.models import Node
 from backend.node.fanout import gather_nodes, run_bounded
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 
 
 async def get_users_used_traffic(node: Node, db: Session) -> dict:
-    nr = node_client(node)
+    nr = node_client(node, panel_id=panel_id_for(db))
     return await run_in_threadpool(nr.get_usage) or {}
 
 
 _last_pushed_limits: dict[tuple[int, int], int] = {}
 
 
-def _push_limits_batch(node, pairs: list[tuple[object, object, int]]) -> dict:
+def _push_limits_batch(node, pairs: list[tuple[object, object, int]], panel_id: str | None = None) -> dict:
     """Push one chunk of (user, cn, max_logins) to a node via /sync/users.
 
     Falls back to per-user PUTs only when the node predates the bulk
@@ -31,7 +31,7 @@ def _push_limits_batch(node, pairs: list[tuple[object, object, int]]) -> dict:
     """
     from backend.node.requests import LONG_TIMEOUT
 
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id)
     payload = {"users": [{"id": str(u.id), "max_logins": int(ml or 0)} for _, u, ml in pairs]}
     r = req._request("post", "/sync/users", json=payload, timeout=LONG_TIMEOUT, require_success=False)  # noqa: SLF001
     if r is None:
@@ -74,10 +74,11 @@ async def sync_all_user_limits(db: Session) -> dict:
     for n, u in todo:
         by_node.setdefault(n.id, (n, []))[1].append((n, u, desired[(n.id, u.id)]))
     _CHUNK = 500
-    jobs: list[tuple[object, list[tuple[object, object, int]]]] = []
+    pid = panel_id_for(db)
+    jobs: list[tuple[object, list[tuple[object, object, int]], str | None]] = []
     for n, pairs in by_node.values():
         for start in range(0, len(pairs), _CHUNK):
-            jobs.append((n, pairs[start : start + _CHUNK]))
+            jobs.append((n, pairs[start : start + _CHUNK], pid))
 
     raw = await asyncio.gather(*(run_bounded(_push_limits_batch, *j) for j in jobs), return_exceptions=True)
     results = []
@@ -89,7 +90,7 @@ async def sync_all_user_limits(db: Session) -> dict:
 
     kept = {pair: val for pair, val in _last_pushed_limits.items() if pair in desired}
     applied_total = 0
-    for (n, pairs), item in zip(jobs, raw, strict=True):
+    for (n, pairs, _pid), item in zip(jobs, raw, strict=True):
         if not isinstance(item, Exception) and item.get("success"):
             applied_total += int(item.get("applied") or 0)
             for _, u, ml in pairs:
@@ -114,9 +115,10 @@ async def clean_stale_sessions_all_nodes(db: Session) -> dict:
     one live session read as "full")."""
     nodes = crud.get_all_nodes(db)
     results = []
+    pid = panel_id_for(db)
 
     def work(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         data = req.get_sessions(hours=8)
         if not isinstance(data, dict):
             return {"node": node.name, "success": False, "error": "diagnostics unavailable", "removed": []}

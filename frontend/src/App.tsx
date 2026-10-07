@@ -14,7 +14,6 @@ const loadDashboard = () => import('./pages/DashboardLayout');
 const loadServerStats = () => import('./pages/ServerStats');
 const loadUsers = () => import('./pages/UserManagement');
 const loadNodes = () => import('./pages/NodeManagement');
-const loadHealth = () => import('./pages/HealthCenter');
 const loadSettings = () => import('./pages/Settings');
 const loadAudit = () => import('./pages/AuditLog');
 const loadAdmins = () => import('./pages/AdminManagement');
@@ -26,7 +25,6 @@ const DashboardLayout = lazy(loadDashboard);
 const ServerStats = lazy(loadServerStats);
 const UserManagement = lazy(loadUsers);
 const NodeManagement = lazy(loadNodes);
-const HealthCenter = lazy(loadHealth);
 const Settings = lazy(loadSettings);
 const AuditLog = lazy(loadAudit);
 const AdminManagement = lazy(loadAdmins);
@@ -61,7 +59,7 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
     const cancel = window.cancelIdleCallback || clearTimeout;
 
     const handle = idle(async () => {
-      const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadHealth, loadSettings];
+      const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadSettings];
       if (userRole === 'owner') queue.push(loadAdmins);
       for (const load of queue) {
         try {
@@ -131,13 +129,14 @@ function App({ onReady }: { onReady?: () => void }) {
             }>
             <Route index element={<Page name="setup"><SetupWizard /></Page>} />
           </Route>
+          {/* The Health page is gone; old links and bookmarks land on Home. */}
+          <Route path="/health" element={<Navigate to="/" />} />
           <Route
             path="/"
             element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
             <Route index element={<Page name="dashboard"><ServerStats /></Page>} />
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
             {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
-            <Route path="health" element={<Page name="health"><HealthCenter /></Page>} />
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             {userRole === 'owner' && <Route path="admins" element={<Page name="admins"><AdminManagement /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />

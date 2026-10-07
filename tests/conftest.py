@@ -128,10 +128,11 @@ def _ensure_schema(_disable_urlpath_for_tests):  # pylint: disable=redefined-out
         owner = (config.ADMIN_USERNAME or "admin").strip()
         row = db.query(Admin).filter(Admin.username == owner).first()
         if row is None:
-            db.add(Admin(username=owner, password=hash_password(TEST_OWNER_PASSWORD), disabled=False))
+            db.add(Admin(username=owner, password=hash_password(TEST_OWNER_PASSWORD), disabled=False, is_owner=True))
         else:
             row.password = hash_password(TEST_OWNER_PASSWORD)
             row.disabled = False
+            row.is_owner = True
         db.commit()
     finally:
         db.close()

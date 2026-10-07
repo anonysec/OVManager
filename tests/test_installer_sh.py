@@ -474,16 +474,16 @@ def test_default_install_generates_the_panel_path_and_no_credential():
     assert "TLS_MODE:=self" in machine
     assert "ask " not in machine, "the machine path must not prompt"
     body = _installer_source()
-    # ADMIN_PASS survives only in the reset-password prompt, which the manager
-    # reaches and the installer never calls, and in the deprecation notice for
-    # the retired flag. Neither may sit on an install path.
+    # ADMIN_PASS survives only in the never-called prompt helper of the shared
+    # policy block, and in the deprecation notice for the retired flag. Neither
+    # may sit on an install path.
     install_paths = _extract_function("do_install") + _extract_function("wizard") + _extract_function("write_env")
     # Comments name ADMIN_PASSWORD to explain why .env holds none, so only live
     # code can answer this.
     install_code = "\n".join(ln for ln in install_paths.splitlines() if not ln.lstrip().startswith("#"))
     assert "ADMIN_PASS" not in install_code, "an install path builds an owner credential"
     assert "GENERATED_PASS" not in body, "no install-time password survives"
-    assert "prompt_validate_admin_password" in body  # reset-password still validates
+    assert "prompt_validate_admin_password" in body  # kept for the byte-identical block
 
 
 def test_unknown_option_fails():
@@ -1480,7 +1480,8 @@ def test_generated_password_is_twelve_characters():
 
 def test_password_policy_minimum_is_eight():
     """Owner password policy is >= 8 characters in install.sh's helper block
-    (which reset-password uses), the shared validator, and the CLI."""
+    (kept byte-identical to manager.sh's, though no shell path calls it), the
+    shared validator, and the CLI."""
     lib_policy = inline_lib.section("policy.sh")
     for name, content in (
         ("install.sh policy section", lib_policy),

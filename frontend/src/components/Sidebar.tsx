@@ -4,7 +4,7 @@ import type { IconType } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight,
-  FiMenu, FiList, FiBarChart2, FiActivity,
+  FiMenu, FiList, FiBarChart2,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -97,22 +97,20 @@ const Sidebar = () => {
   };
   const isActiveClass = (item: NavItem) => isActive(item) ? 'sidebar-nav-link active' : 'sidebar-nav-link';
 
+  const isOwner = userRole === 'owner';
+
   const navItems: NavItem[] = [
     { to: '/',          label: t('navHome',     'Home'),     icon: FiHome,     end: true, group: t('navGroupOverview', 'Overview') },
     { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
-    ...(userRole === 'owner' ? [
+    ...(isOwner ? [
       { to: '/nodes',   label: t('navNodes',    'Nodes'),    icon: FiServer,             group: t('navGroupManage',   'Manage')   },
-      { to: '/health',  label: t('navHealth',   'Health'),   icon: FiActivity,           group: t('navGroupSystem',   'System')   },
+      { to: '/admins',  label: t('navAdmins',   'Admins'),   icon: FiList,               group: t('navGroupManage',   'Manage')   },
     ] : []),
     { to: '/settings',  label: t('navSettings', 'Settings'), icon: FiSettings,           group: t('navGroupSystem',   'System')   },
+    ...(isOwner ? [
+      { to: '/audit',   label: t('navAudit',    'Logs'),     icon: FiBarChart2,          group: t('navGroupSystem',   'System')   },
+    ] : []),
   ];
-
-  if (userRole === 'owner') {
-    navItems.push(
-      { to: '/admins', label: t('navAdmins', 'Admins'), icon: FiList, group: t('navGroupAdvanced', 'Advanced') },
-      { to: '/audit', label: t('navAudit', 'Audit Log'), icon: FiBarChart2, group: t('navGroupAdvanced', 'Advanced') },
-    );
-  }
 
   const renderNavItem = (item: NavItem, index: number) => (
     <li key={item.to} className="sidebar-nav-item">
@@ -132,8 +130,6 @@ const Sidebar = () => {
       </NavLink>
     </li>
   );
-
-  const isOwner = userRole === 'owner';
 
   const formatUsage = (bytes: number) => {
     if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -216,7 +212,7 @@ const Sidebar = () => {
             <button
               type="button"
               className="sidebar-logout-btn"
-              onClick={logout}
+              onClick={() => { if (window.confirm(t('logoutConfirm', 'Sign out of the panel?'))) logout(); }}
               aria-label={t('logout', 'Logout')}
               title={t('logout', 'Logout')}
             >

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   FiCheckCircle, FiDownload, FiEdit2, FiFileText, FiPlus, FiPower,
@@ -36,7 +36,6 @@ const nodeEndpoint = (node: any) => {
 const NodeManagement = () => {
   const { t } = useTranslation();
   const { addToast } = useToast();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [nodes, setNodes] = useState<any[]>([]);
@@ -313,9 +312,7 @@ const NodeManagement = () => {
       ) : nodes.length === 0 ? (
         <EmptyState
           title={t('nodeEmptyTitle', 'No nodes yet')}
-          description={t('nodeEmptyBody', 'Add your first OVNode to start. If a node will not connect, the Health page explains the usual causes.')}
-          actionLabel={t('nodeOpenHealth', 'Open Health page')}
-          onAction={() => navigate('/health')}
+          description={t('nodeEmptyBody', 'Add your first OVNode to start.')}
         />
       ) : filteredNodes.length === 0 ? (
         <EmptyState

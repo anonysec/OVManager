@@ -3,14 +3,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import ConfirmModal from '../../components/ConfirmModal';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { Badge, Button, Card, Field } from '../../components/ui';
 import {
-  FiAlertCircle, FiCheckCircle, FiExternalLink, FiGlobe, FiInfo,
+  FiAlertCircle, FiCheckCircle, FiGlobe, FiInfo,
   FiLock, FiRefreshCw, FiUpload, FiZap,
 } from 'react-icons/fi';
 import './TlsSection.css';
@@ -111,7 +110,6 @@ const RestartPrompt = ({ onRestart, busy, restarting }: any) => {
 
 const TlsSection = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   const [status, setStatus] = useState<TlsStatus | null>(null);
   const [summary, setSummary] = useState('');
@@ -482,14 +480,6 @@ const TlsSection = () => {
             onClick={() => refreshStatus()}
           >
             {t('refresh', 'Refresh')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            iconRight={<FiExternalLink size={13} aria-hidden="true" />}
-            onClick={() => navigate('/health')}
-          >
-            {t('settingsTlsOpenHealth', 'Open Health Center')}
           </Button>
         </div>
 

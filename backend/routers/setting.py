@@ -108,6 +108,7 @@ async def get_settings(
     data["offsite_backup_target"] = getattr(db_settings, "offsite_backup_target", None) or ""
     data["telegram_backup_enabled"] = bool(getattr(db_settings, "telegram_backup_enabled", False))
     data["telegram_backup_available"] = bool(getattr(db_settings, "bot_token", None))
+    data["panel_id"] = getattr(db_settings, "panel_id", None) or ""
     return ResponseModel(
         success=True,
         msg="Settings retrieved successfully",

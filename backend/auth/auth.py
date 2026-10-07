@@ -118,13 +118,18 @@ def authenticate_user(db: Session, username: str, password: str):
     except Exception:
         db.rollback()
 
-    role = "owner" if username == config.ADMIN_USERNAME else "admin"
+    role = "owner" if username == config.ADMIN_USERNAME or bool(getattr(admin, "is_owner", False)) else "admin"
     return {"username": admin.username, "type": role}
 
 
 def role_is_current(db: Session, username: str, role: str) -> bool:
     if role == "owner":
-        return username == config.ADMIN_USERNAME
+        # Name-match first so pre-rename sessions keep working; the flag is
+        # the durable identity once the owner has renamed the account.
+        if username == config.ADMIN_USERNAME:
+            return True
+        admin = crud.get_admin_by_username(db, username=username)
+        return admin is not None and bool(getattr(admin, "is_owner", False)) and not admin.disabled
     if role != "admin":
         return False
     admin = crud.get_admin_by_username(db, username=username)

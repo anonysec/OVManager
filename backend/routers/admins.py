@@ -1,6 +1,6 @@
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -104,12 +104,10 @@ async def update_admin(
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
-    if existing_admin.username == config.ADMIN_USERNAME and admin.username != existing_admin.username:
-        return ResponseModel(success=False, msg="The owner account username cannot be changed", data=None)
-
-    conflict = crud.get_admin_by_username(db, username=admin.username)
-    if conflict is not None and conflict.username != existing_admin.username:
-        return ResponseModel(success=False, msg="Admin with this username already exists", data=None)
+    old_username = existing_admin.username
+    renamed = admin.username != old_username
+    if renamed and crud.get_admin_by_username(db, username=admin.username) is not None:
+        raise HTTPException(status_code=409, detail="Admin with this username already exists")
 
     if admin.password:
         existing_admin.password = hash_password(admin.password)
@@ -122,13 +120,21 @@ async def update_admin(
     elif "username_prefix" in admin.model_dump(exclude_unset=True) and admin.username_prefix is None:
         existing_admin.username_prefix = None
 
-    db.commit()
-    db.refresh(existing_admin)
+    from backend.auth.sessions import revoke_user_sessions
 
-    if admin.password:
-        from backend.auth.sessions import revoke_user_sessions
-
+    if renamed:
+        # One transaction: the rename, the users.owner cascade and the
+        # session revocation land together (revoke commits the pending
+        # mutations), so no user is ever left owned by a name that no
+        # longer exists.
+        existing_admin.username = admin.username
+        db.query(_User).filter(_User.owner == old_username).update({"owner": admin.username})
+        revoke_user_sessions(db, old_username)
+    elif admin.password:
         revoke_user_sessions(db, existing_admin.username)
+    else:
+        db.commit()
+    db.refresh(existing_admin)
 
     log_event(db, "admin.update", actor=user.get("username"), target=existing_admin.username)
     data = Admins.model_validate(existing_admin)
@@ -152,7 +158,9 @@ async def delete_admin(
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
 
-    if username == config.ADMIN_USERNAME:
+    # The owner is the config-name row or the flagged row — after a self-rename
+    # the name check alone would let the owner account be deleted.
+    if username == config.ADMIN_USERNAME or bool(getattr(existing_admin, "is_owner", False)):
         return ResponseModel(success=False, msg="The owner account cannot be deleted", data=None)
 
     from backend.auth.sessions import revoke_user_sessions
@@ -174,12 +182,12 @@ async def set_admin_status(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
-    if username == config.ADMIN_USERNAME:
-        return ResponseModel(success=False, msg="The owner account status cannot be changed", data=None)
-
     existing_admin = crud.get_admin_by_username(db, username=username)
     if not existing_admin:
         return ResponseModel(success=False, msg="Admin not found", data=None)
+
+    if username == config.ADMIN_USERNAME or bool(getattr(existing_admin, "is_owner", False)):
+        return ResponseModel(success=False, msg="The owner account status cannot be changed", data=None)
 
     existing_admin.disabled = not payload.status
     db.commit()

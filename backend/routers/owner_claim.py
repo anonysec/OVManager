@@ -42,6 +42,8 @@ _FAILURE_WINDOW = 300
 class ClaimRequest(BaseModel):
     claim_key: str = Field(min_length=1, max_length=256)
     password: str = Field(min_length=PASSWORD_MIN_LENGTH, max_length=128)
+    # Optional owner username; blank or omitted keeps the fixed seed name.
+    username: str | None = Field(default=None, max_length=64)
 
     @field_validator("password")
     @classmethod
@@ -52,6 +54,17 @@ class ClaimRequest(BaseModel):
             raise ValueError(f"Owner password {problem}")
         return value
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def _blank_username_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+
+class ClaimVerifyRequest(BaseModel):
+    claim_key: str = Field(min_length=1, max_length=256)
+
 
 def claim_key_path():
     """Where the installer and ``ovm auth key`` put the key."""
@@ -59,9 +72,20 @@ def claim_key_path():
 
 
 def owner_is_claimed(db: Session) -> bool:
-    """True once the owner row carries a hash — a claim is then impossible."""
-    row = crud.it_is_admin(db, username=config.ADMIN_USERNAME)
-    return bool(row and row.password)
+    """True once the owner row carries a hash — a claim is then impossible.
+
+    Owner identity is the config-name row *or* any row flagged ``is_owner``
+    (the claim may have chosen another username). Other admins' passwords
+    say nothing about the owner.
+    """
+    from sqlalchemy import or_
+
+    rows = (
+        db.query(Admin)
+        .filter(or_(Admin.username == config.ADMIN_USERNAME, Admin.is_owner.is_(True)))
+        .all()
+    )
+    return any(row.password for row in rows)
 
 
 def read_claim_key() -> str | None:
@@ -125,6 +149,72 @@ async def claim_status(db: Session = Depends(get_db)):
     return {"claimable": not claimed and key_present}
 
 
+async def _recover_owner(payload: ClaimRequest, request: Request, db: Session):
+    """Reset owner credentials with a fresh setup key (`ovm auth reset`).
+
+    Same key validation as claim (400/401, rate-limit already checked by the
+    caller); on success the owner row gets the new username/password, users
+    cascade on rename, sessions are revoked, the key is consumed, and a
+    session is issued — the operator lands signed in.
+    """
+    expected = read_claim_key()
+    if expected is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No claim key on this host. Run: ovm auth reset",
+        )
+    if not hmac.compare_digest(expected, payload.claim_key.strip()):
+        _note_failure(_rate_key(request))
+        _audit(db, request, "auth.recover_fail", "Bad recovery key")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That setup key is not valid")
+
+    owner_row = db.query(Admin).filter(Admin.is_owner == True).first()  # noqa: E712
+    if owner_row is None:
+        owner_row = crud.it_is_admin(db, username=config.ADMIN_USERNAME)
+    if owner_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No owner row found. Sign in, or reinstall the panel.",
+        )
+    chosen = (payload.username or "").strip() or owner_row.username
+    conflict = crud.get_admin_by_username(db, username=chosen)
+    if conflict is not None and conflict.id != owner_row.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An admin with this username already exists",
+        )
+    try:
+        if chosen != owner_row.username:
+            from backend.db.models import User as _User
+
+            db.query(_User).filter(_User.owner == owner_row.username).update({"owner": chosen})
+            owner_row.username = chosen
+        owner_row.password = hash_password(payload.password)
+        owner_row.disabled = False
+        owner_row.is_owner = True
+        db.commit()
+        try:
+            from backend.auth.sessions import revoke_user_sessions
+
+            revoke_user_sessions(db, chosen)
+        except Exception:
+            logger.warning("owner recovery: could not revoke sessions for %s", chosen)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not reset the owner account"
+        ) from exc
+
+    try:
+        claim_key_path().unlink(missing_ok=True)
+    except OSError:
+        pass
+    _audit(db, request, "auth.recover", "Owner credentials reset via setup key")
+    return issue_session(request, db, chosen, "owner")
+
+
 @router.post("/owner-claim")
 async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Depends(get_db)):
     rate = _rate_key(request)
@@ -136,10 +226,7 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
         )
 
     if owner_is_claimed(db):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This panel already has an owner. Sign in, or use: ovm auth reset",
-        )
+        return await _recover_owner(payload, request, db)
 
     expected = read_claim_key()
     if expected is None:
@@ -152,13 +239,26 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
         _audit(db, request, "auth.claim_fail", "Bad claim key")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That claim key is not valid")
 
+    chosen = (payload.username or "").strip() or config.ADMIN_USERNAME
     row = crud.it_is_admin(db, username=config.ADMIN_USERNAME)
+    if crud.get_admin_by_username(db, username=chosen) is not None and (row is None or chosen != row.username):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An admin with this username already exists",
+        )
     try:
         if row is None:
-            db.add(Admin(username=config.ADMIN_USERNAME, password=hash_password(payload.password), disabled=False))
+            db.add(Admin(username=chosen, password=hash_password(payload.password), disabled=False, is_owner=True))
         else:
             row.password = hash_password(payload.password)
             row.disabled = False
+            row.is_owner = True
+            if chosen != row.username:
+                row.username = chosen
+                # Users seeded under the fixed name stay with the owner.
+                from backend.db.models import User as _User
+
+                db.query(_User).filter(_User.owner == config.ADMIN_USERNAME).update({"owner": chosen})
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -171,7 +271,29 @@ async def claim_owner(payload: ClaimRequest, request: Request, db: Session = Dep
     except OSError:
         pass
     _audit(db, request, "auth.claim", "Owner account created")
-    return issue_session(request, db, config.ADMIN_USERNAME, "owner")
+    return issue_session(request, db, chosen, "owner")
+
+
+@router.post("/owner-claim/verify")
+async def claim_verify(payload: ClaimVerifyRequest, request: Request, db: Session = Depends(get_db)):
+    """Check a claim key without spending it (same rate limit as claim).
+
+    Lets the browser validate the key the operator pasted before committing
+    a password. Consumes nothing: the key file stays, no session is issued.
+    """
+    rate = _rate_key(request)
+    if _too_many_failures(rate):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many attempts. Try again later.",
+            headers={"Retry-After": str(_FAILURE_WINDOW)},
+        )
+
+    expected = read_claim_key()
+    valid = bool(expected) and hmac.compare_digest(expected, payload.claim_key.strip())
+    if not valid:
+        _note_failure(rate)
+    return {"valid": valid}
 
 
 def _audit(db: Session, request: Request, action: str, detail: str) -> None:

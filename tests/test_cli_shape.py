@@ -411,6 +411,29 @@ def test_completion_offers_both_the_current_and_retired_names():
         assert old in words, old
 
 
+# ── auth reset mints a key, not a password ──────────────────────────────
+
+# `ovm auth reset` used to take `-p` and rewrite the owner credential from the
+# shell. The credential is chosen on the setup page now, so the flag would be a
+# silent no-op — the one outcome an operator cannot afford — and the help that
+# advertised it has to change with the behaviour.
+
+
+def test_auth_reset_takes_no_password_flag():
+    """`-p` is refused by name rather than dropped on the floor."""
+    out = run("auth", "reset", "-p", "long-enough-password", env={"CI": "1"})
+    combined = out.stdout + out.stderr
+    assert out.returncode == 1, combined
+    assert "takes no password" in combined, combined
+    assert "mints a fresh setup key" in combined, combined
+
+
+def test_the_full_reference_describes_the_key_mint():
+    text = help_text("help", "--all")
+    assert "Mint a fresh setup key" in text, "auth reset's help must say what it does now"
+    assert "new owner password" not in text, "help still advertises the retired password flag"
+
+
 # ── config ──────────────────────────────────────────────────────────────
 
 

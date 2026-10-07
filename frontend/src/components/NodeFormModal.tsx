@@ -65,6 +65,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     if (!Number.isInteger(vpnPort) || vpnPort < 1 || vpnPort > 65535) errors.ovpn_port = t('nodeOvpnPortInvalid', 'VPN port must be a whole number from 1 to 65535.');
     if (!isEdit && !String(formData.key || '').trim()) errors.key = t('nodeKeyRequired', "Paste the node's API key.");
     const cert = String(formData.cert || '').trim();
+    if (!isEdit && !cert) errors.cert = t('certRequired', "Paste the node's certificate (PEM).");
     if (cert && (!cert.includes('-----BEGIN ') || !cert.includes('-----END '))) {
       errors.cert = t('certFieldInvalid', 'Certificate must be a PEM block with BEGIN/END markers.');
     }
@@ -204,7 +205,8 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
             />
           </Field>
           <Field
-            label={`${t('certFieldLabel', 'Certificate (PEM)')} (${t('optional', 'Optional')})`}
+            label={t('certFieldLabel', 'Certificate (PEM)')}
+            required={!isEdit}
             error={fieldErrors.cert}
             hint={t('certFieldHint', 'Paste the full PEM from node install. Used for TLS verification.')}
           >

@@ -19,7 +19,7 @@ from backend.node.management import (
     list_nodes_handler,
     update_node_handler,
 )
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 from backend.operations.observability import live
 from backend.operations.observability.audit import log_event
 from backend.schema import NodeCreate, ResponseModel
@@ -65,6 +65,12 @@ async def add_node(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
+    # A node's certificate is the TLS pin every later keyed request verifies
+    # against, so an add without one would fall back to unverified TLS and
+    # hand the API key to whoever answered. Blank means "not provided" here;
+    # on update, blank means "keep the stored pin".
+    if not request.cert:
+        raise HTTPException(status_code=422, detail="A node certificate (PEM) is required to add a node")
 
     if crud.get_node_by_name(db, request.name) is not None:
         return ResponseModel(
@@ -72,21 +78,21 @@ async def add_node(
             msg=f"A node named '{request.name}' already exists. Choose a different name.",
         )
 
-    new_node = await add_node_handler(request, db)
-    if new_node:
+    ok, msg = await add_node_handler(request, db)
+    if ok:
         live.publish("nodes", {"op": "add"})
         log_event(db, "node.create", actor=user.get("username"), target=request.name)
+        return ResponseModel(success=True, msg="Node added successfully")
     return ResponseModel(
-        success=new_node,
-        msg="Node added successfully"
-        if new_node
-        else "Node unreachable — install offline and configure after registration.",
+        success=False,
+        msg=msg or "Node unreachable — install offline and configure after registration.",
     )
 
 
 @router.post("/test", response_model=ResponseModel)
 async def test_node(
     request: NodeCreate,
+    db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
     """Check connectivity to a node without saving it.
@@ -104,6 +110,7 @@ async def test_node(
             address=request.address,
             port=request.port,
             api_key=request.key,
+            panel_id=panel_id_for(db),
         )
     except ValueError as e:
         return ResponseModel(success=False, msg=f"Invalid address: {e}")
@@ -153,6 +160,26 @@ async def get_node_status(
     )
 
 
+async def _fetch_node_cert(address: str, port: int) -> str | None:
+    """Fetch the node's TLS certificate for a manual repin.
+
+    The address may carry a scheme; the fetch uses host:port only. This is
+    the only certificate fetch left in the panel — add/update never fetch.
+    """
+    from urllib.parse import urlsplit
+
+    from backend.node.pki import fetch_server_cert
+
+    raw = str(address or "").strip()
+    parsed = urlsplit(raw if "://" in raw else f"//{raw}")
+    host = parsed.hostname or raw
+    try:
+        port = int(parsed.port or port)
+    except (TypeError, ValueError):
+        return None
+    return await run_in_threadpool(fetch_server_cert, host, port)
+
+
 @router.post("/{node_id}/repin", response_model=ResponseModel)
 async def repin_node_cert(
     node_id: int,
@@ -163,9 +190,8 @@ async def repin_node_cert(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    from backend.node.management import _pin_node_certificate
 
-    pem = await _pin_node_certificate(node.address, node.port)
+    pem = await _fetch_node_cert(node.address, node.port)
     if not pem:
         return ResponseModel(success=False, msg="Could not fetch the node's certificate.", data=None)
     node.server_ca = pem
@@ -186,7 +212,7 @@ async def get_node_logs(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     data = await run_in_threadpool(req.get_logs, level, limit)
     return ResponseModel(success=True, msg="Node logs retrieved successfully", data=data)
 
@@ -209,7 +235,7 @@ async def set_node_dns(
         raise HTTPException(status_code=404, detail="Node not found")
     if request.dns1 is None and request.dns2 is None:
         return ResponseModel(success=False, msg="Provide dns1 and/or dns2.")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     applied = await run_in_threadpool(
         req.update_config,
         tunnel_address=node.tunnel_address or "",
@@ -248,7 +274,7 @@ async def set_node_ipv6(
         raise HTTPException(status_code=404, detail="Node not found")
     if request.enable_ipv6 is None and request.ipv6_prefix is None:
         return ResponseModel(success=False, msg="Provide enable_ipv6 and/or ipv6_prefix.")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     applied = await run_in_threadpool(
         req.update_config,
         tunnel_address=node.tunnel_address or "",
@@ -291,7 +317,7 @@ async def set_node_ports(
             success=False,
             msg="Provide extra_ports — a comma-separated port list, or an empty string to clear.",
         )
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     kwargs = {
         "tunnel_address": node.tunnel_address or "",
         "protocol": node.protocol,
@@ -347,7 +373,7 @@ async def restart_node_vpn(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     answer = await run_in_threadpool(req.restart_vpn)
     if not answer:
         return ResponseModel(success=False, msg="Node unreachable — the restart was not requested.")
@@ -381,7 +407,7 @@ async def renew_node_server_cert(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     answer = await run_in_threadpool(req.renew_server_cert)
     if not answer:
         return ResponseModel(success=False, msg="Node unreachable — nothing was renewed.")
@@ -416,7 +442,7 @@ async def update_node_software(
     node = crud.get_node_by_id(db, node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="Node not found")
-    req = node_client(node)
+    req = node_client(node, panel_id=panel_id_for(db))
     answer = await run_in_threadpool(req.trigger_update)
     if not answer:
         return ResponseModel(success=False, msg="Node unreachable — the update was not started.")

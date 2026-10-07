@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
-VERSION="1.3.1"
+VERSION="1.4.0"
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -74,7 +74,7 @@ usage_full() {
     ovm tls custom CERT KEY Use your own pair
     ovm auth                Owner credential and what to do next
     ovm auth key            Print the one-time setup key
-    ovm auth reset          Set a new owner password
+    ovm auth reset          Mint a fresh setup key (recovery)
     ovm url                 Panel URL, and where the prefix comes from
     ovm url set PREFIX      Set a custom path prefix
     ovm url reset           Generate a fresh random path
@@ -102,8 +102,8 @@ usage_full() {
     ovm recover-update     → ovm update (it recovers first)
 
   OPTIONS
-    -p, --pass PASS     auth reset: new owner password (min 8, not a
-                        common word or placeholder)
+    -p, --pass PASS     gone: auth reset takes no password — it mints
+                        a fresh setup key (the flag is rejected)
     -y, --yes           Never prompt
     --fix               doctor: apply safe automatic fixes
     -a, --all            status and doctor: include everything
@@ -116,7 +116,7 @@ usage_full() {
   ENVIRONMENT
     OVM_APP_DIR   installed tree (default /opt/ovmanager, tests override)
     OVM_DATA_DIR  data dir (default /var/lib/ovmanager, tests override)
-    OVM_PASS      same as --pass
+    OVM_PASS      same as --pass (also rejected)
     CI=true       implies -y
 
   .env
@@ -1664,67 +1664,6 @@ read_env_port() {
 
 # ── Actions ────────────────────────────────────────────────────────────
 
-# Recovery for a lost owner password: prompt for the new one (bash can talk to
-# a terminal; the CLI's getpass cannot be driven from here), hand it to the one
-# implementation — cli/password.py through `_cli_py` — then restart and wait for
-# /health. Never echoes the password.
-#
-# Nothing here writes .env, and nothing may: it used to write
-# ADMIN_PASSWORD_HASH into it, but backend/config.py ignores the field and
-# seeds.py imports it once on the fresh-install path, so the command printed
-# success while the old password kept working. The credential is the owner's row
-# in the panel database, and the CLI is its only writer.
-do_reset_password() {
-    if [[ -n "$ADMIN_PASS" ]]; then
-        validate_admin_password "$ADMIN_PASS"
-    else
-        can_prompt || die "No password given. Use: $0 auth reset -p 'new-password'  (or set OVM_PASS)"
-        render_line ""
-        local p1 p2
-        p1="$(ask "New password" "" "h")"
-        p2="$(ask "Confirm password" "" "h")"
-        [[ "$p1" == "$p2" ]] || die "Passwords do not match."
-        ADMIN_PASS="$p1"
-        validate_admin_password "$ADMIN_PASS"
-    fi
-    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
-    local envfile="$INSTALL_DIR/.env"
-    [[ -f "$envfile" ]] || die "Config not found: $envfile — install OVManager first."
-    read_env_port
-    : "${PORT:=$DEFAULT_PORT}"
-
-    # In the environment, not in argv: `ps` shows every process's arguments, so
-    # a password passed on the command line would be readable by any user on
-    # the box.
-    export OVM_ADMIN_PASS="$ADMIN_PASS"
-    _cli_py reset-password \
-        || die "Password not changed — the owner row in the panel database was not updated (see above)."
-    render_ok "Password updated  (bcrypt row in the panel database)"
-
-    # The panel reads that row on every login, so nothing has to be reloaded
-    # for the new password to be live; the restart is what `ovm reset-password`
-    # documents, and a failed one must not hide the successful change.
-    restart_service
-
-    local scheme url admin
-    scheme="$(scheme_of)"
-    wait_health "${scheme}://127.0.0.1:${PORT}/health" 12 \
-        || render_warn "No answer on /health yet — check the logs (ovm logs)"
-    # Same source as `status`: URLPATH from .env (a later Settings change
-    # lives in the DB, not here).
-    PATHPREFIX="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" | tr -d '\r')"
-    url="$(panel_url)"
-    admin="$(awk -F= '/^ADMIN_USERNAME=/{print $2; exit}' "$envfile" | tr -d '\r')"
-    [[ -n "$admin" ]] || admin="$DEFAULT_USER"
-    render_line ""
-    render_rule
-    render_kv "Password" "${GR}updated${NC}"
-    render_kv "Login"    "${WH}${admin}${NC}"
-    render_kv "Open"     "${WH}${url}${NC}"
-    render_rule
-    render_line ""
-}
-
 # Update and uninstall live in install.sh — delegate, one implementation.
 run_installer() {
     [[ -e "$INSTALL_DIR" ]] || [[ "$1" == "uninstall" ]] || die "Not installed ($INSTALL_DIR missing)"
@@ -1937,8 +1876,8 @@ show_auth_state() {
     if [[ "$claimed" == "no" ]]; then
         render_kv "Key"    "ovm auth key — paste it on the page the URL below opens"
     else
-        render_kv "Reset"  "ovm auth reset — set a new owner password"
-        render_line "  the key is spent; change the password in the panel or here"
+        render_kv "Reset"  "ovm auth reset — mint a fresh setup key for recovery"
+        render_line "  the key is spent; enter it on the setup page to reset the owner login"
     fi
 }
 
@@ -2097,6 +2036,33 @@ do_rollback() {
 }
 
 # ── Restore ────────────────────────────────────────────────────────────
+# Mint a fresh setup key for an already-claimed panel (recovery). The key is
+# single-use: the setup page spends it to reset the owner username/password,
+# no shell password handling, nothing in history or `ps`.
+do_auth_reset() {
+    # -p/--pass and OVM_PASS still parse (the flag predates this contract and
+    # every other verb shares the parser), so the value is refused here rather
+    # than dropped in silence: there is no password to set any more.
+    if [[ -n "$ADMIN_PASS" ]]; then
+        die "auth reset takes no password — it mints a fresh setup key (drop -p/--pass and OVM_PASS)"
+    fi
+    check_root
+    [[ -d "$INSTALL_DIR" ]] || die "Not installed ($INSTALL_DIR missing) — nothing to reset."
+    read_env_port
+    : "${PORT:=$DEFAULT_PORT}"
+    local url
+    url="$(panel_url)"
+    local key
+    key="$(mint_claim_key)" || die "Could not write $(claim_key_path)"
+    render_line ""
+    render_kv "Setup key" "${YL}${key}${NC}"
+    render_kv "Open"      "${WH}${url}setup?mode=recover${NC}"
+    render_kv "Expires"   "${GY}never — spent on the first successful recovery${NC}"
+    render_line ""
+    render_note "Enter the key on the recovery page to set a new owner username and password."
+    render_line ""
+}
+
 # Put a stored backup back over the live database. The CLI owns the transaction
 # (stage and verify a candidate, copy the live database aside, activate it, roll
 # back on failure); the host owns what the CLI cannot do: refuse without an
@@ -2376,20 +2342,17 @@ main() {
 # env_file) rather than as a file, and the data dir is the /app/data mount, so
 # `--in-container` plus a host-observed `--service-state` is all it needs.
 #
-# logs, reset-password and reset-urlpath cannot run in the container at all (no
+# logs and reset-urlpath cannot run in the container at all (no
 # docker CLI, no host .env to rewrite) and stay host-side.
 _cli_py() {  # _cli_py <command> [args...] → the CLI's exit code
     if is_docker_mode; then
         # --public-ip because a container only knows its own address, and the
         # operator needs the host's to reach the panel.
         #
-        # OVM_ADMIN_PASS by name only: `docker exec` starts from the container's
-        # environment, not this one, so the reset secret has to be named — and
-        # `-e NAME=value` would put the password in `ps` on this host, which is
-        # the one thing the CLI's environment contract exists to avoid.
-        local -a secret_env=()
-        [[ -n "${OVM_ADMIN_PASS:-}" ]] && secret_env=(-e OVM_ADMIN_PASS)
-        docker exec ${secret_env[@]+"${secret_env[@]}"} ovmanager /app/.venv/bin/python -m cli.main \
+        # No secret is forwarded: `ovm auth reset` mints the setup key on the
+        # host, and no manager command carries a password any more — so nothing
+        # has to be named to `docker exec` and nothing can land in `ps`.
+        docker exec ovmanager /app/.venv/bin/python -m cli.main \
             --install-dir /app --data-dir /app/data --in-container \
             --service-state "$(_host_service_state)" \
             --public-ip "$(hostname -I 2>/dev/null | awk '{print $1}')" "$@"
@@ -2536,14 +2499,7 @@ cmd_doctor_fix() {
             # you cannot open.
             if [[ "$AUTH_ACTION" == "state" ]]; then show_auth_state; exit 0; fi
             if [[ "$AUTH_ACTION" == "key" ]]; then do_owner_claim; exit $?; fi
-            check_root
-            # Validated before the root gate so bad input fails the same way for
-            # root and non-root callers, exactly as reset-password always did.
-            # One path for every install: -p/OVM_PASS, the interactive prompt,
-            # native and Docker. bash collects the password and restarts; the
-            # CLI writes the row.
-            [[ -n "$ADMIN_PASS" ]] && validate_admin_password "$ADMIN_PASS"
-            do_reset_password
+            do_auth_reset
             exit $? ;;
         url)
             check_root

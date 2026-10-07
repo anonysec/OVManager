@@ -250,7 +250,7 @@ const AuditLog = () => {
     <div id="audit-view" className="view adt-page">
       <div className="adt-head">
         <div>
-          <h2 className="adt-title"><FiActivity aria-hidden="true" /> {t('navAudit', 'Audit Log')}</h2>
+          <h2 className="adt-title"><FiActivity aria-hidden="true" /> {t('navAudit', 'Logs')}</h2>
           <p className="adt-subtitle">{t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}</p>
         </div>
         <div className="adt-head-actions">
@@ -368,7 +368,7 @@ const AuditLog = () => {
           total={sorted.length}
           onPageChange={setPage}
           onPageSizeChange={(n) => { setPageSize(n); localStorage.setItem(PAGE_SIZE_KEY, String(n)); setPage(1); }}
-          caption={t('navAudit', 'Audit Log')}
+          caption={t('navAudit', 'Logs')}
         />
       )}
 

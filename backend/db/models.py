@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import uuid4
 
 from sqlalchemy import BigInteger, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
@@ -30,6 +31,9 @@ class Admin(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     username: Mapped[str] = mapped_column(unique=True)
     password: Mapped[str] = mapped_column()
+    # Owner identity survives the owner renaming this row (name-match alone
+    # breaks after a self-rename); backfilled for the config-name row at v22.
+    is_owner: Mapped[bool] = mapped_column(default=False, server_default="0")
     telegram_id: Mapped[int] = mapped_column(nullable=True, unique=True)
     username_prefix: Mapped[str] = mapped_column(nullable=True)
     disabled: Mapped[bool] = mapped_column(default=False, server_default="0")
@@ -111,6 +115,9 @@ class Settings(Base):
     acme_domain: Mapped[str | None] = mapped_column(nullable=True, default=None)
     acme_email: Mapped[str | None] = mapped_column(nullable=True, default=None)
     cert_method: Mapped[str] = mapped_column(default="selfsigned", server_default="selfsigned")
+    # Panel identity sent as X-Panel-ID so the node can tell its panel apart;
+    # generated per row (migration backfills, ORM default covers fresh rows).
+    panel_id: Mapped[str] = mapped_column(nullable=False, default=lambda: str(uuid4()))
     panel_url: Mapped[str | None] = mapped_column(nullable=True, default=None)
     panel_domain: Mapped[str | None] = mapped_column(nullable=True, default=None)
     bot_owner_setup_complete: Mapped[bool] = mapped_column(default=False, server_default="0")

@@ -1,3 +1,16 @@
+## 1.4.0 — 2026-10-07
+
+Part F, panel side. Cert required on Add Node (422), TOFU auto-fetch
+deleted. Single-panel pairing: `settings.panel_id` UUID (migration v21)
++ `X-Panel-ID` on every node request; node 409s surface to the operator.
+Admin rename by owner incl. self: cascade `users.owner`, revoke sessions,
+409 on conflict (`is_owner` flag, migration v22, survives renames).
+Claim accepts username; `POST /owner-claim/verify`; claimed panel +
+fresh key = recovery (reset credentials, key spent). `ovm auth reset`
+mints a fresh setup key (password path removed from shell).
+Health page deleted (`/health` → `/`); nav is Manage (Users, Nodes,
+Admins) / System (Settings, Logs); logout confirms.
+
 ## 1.3.1 — 2026-10-07
 
 D6: manual cleanup lever (daily timer keeps running). Owner-only

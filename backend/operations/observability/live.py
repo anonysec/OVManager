@@ -159,7 +159,7 @@ async def collect_live_snapshot() -> None:
     from backend.db.engine import SessionLocal
     from backend.node.connection import probe_timeout
     from backend.node.fanout import gather_background
-    from backend.node.requests import node_client
+    from backend.node.requests import node_client, panel_id_for
 
     if not bus.has_subscribers():
         last = snapshot.last_poll_ts
@@ -170,6 +170,8 @@ async def collect_live_snapshot() -> None:
     try:
         nodes = crud.get_active_nodes(db)
         id_to_name = dict(crud.get_user_id_name_pairs(db))
+        # Read while the session is open — the probes below run after close.
+        pid = panel_id_for(db)
     except Exception as exc:
         logger.error("live collector: DB read failed: %s", exc)
         db.close()
@@ -184,7 +186,7 @@ async def collect_live_snapshot() -> None:
         return
 
     def probe(node) -> tuple[object, dict]:
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         return node, req.get_sessions(hours=1, timeout=probe_timeout(node))
 
     results = await gather_background([partial(probe, n) for n in nodes])

@@ -13,7 +13,7 @@ const PAGES = (t: any, isAdmin: any): any[] => [
   ...(isAdmin ? [
     { label: t('navNodes', 'Nodes'), path: '/nodes', icon: FiFileText, group: t('navGroupPages', 'Pages') },
     { label: t('navAdmins', 'Admins'), path: '/admins', icon: FiUserCheck, group: t('navGroupPages', 'Pages') },
-    { label: t('navAudit', 'Audit Log'), path: '/audit', icon: FiShield, group: t('navGroupPages', 'Pages') },
+    { label: t('navAudit', 'Logs'), path: '/audit', icon: FiShield, group: t('navGroupPages', 'Pages') },
     { label: t('addNewNode', 'Add node'), path: '/nodes?add=1', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   ] : []),
 ];

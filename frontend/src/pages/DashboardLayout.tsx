@@ -114,18 +114,16 @@ const DashboardLayout = () => {
       '/': t('navHome', 'Home'),
       '/users': t('navUsers', 'Users'),
       '/nodes': t('navNodes', 'Nodes'),
-      '/health': t('navHealth', 'Health'),
       '/admins': t('navAdmins', 'Admins'),
-      '/audit': t('navAudit', 'Audit Log'),
+      '/audit': t('navAudit', 'Logs'),
       '/settings': t('navSettings', 'Settings'),
       '/setup': t('setupTitle', 'Setup wizard'),
     };
     if (map[pathname]) return map[pathname];
     if (pathname.startsWith('/users')) return t('navUsers', 'Users');
     if (pathname.startsWith('/nodes')) return t('navNodes', 'Nodes');
-    if (pathname.startsWith('/health')) return t('navHealth', 'Health');
     if (pathname.startsWith('/admins')) return t('navAdmins', 'Admins');
-    if (pathname.startsWith('/audit')) return t('navAudit', 'Audit Log');
+    if (pathname.startsWith('/audit')) return t('navAudit', 'Logs');
     if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
     if (pathname.startsWith('/setup')) return t('setupTitle', 'Setup wizard');
     return t('navHome', 'Home');
@@ -228,7 +226,7 @@ const DashboardLayout = () => {
       const lower = key.toLowerCase();
       if (gPending.current) {
         gPending.current = false;
-        const routes: any = { d: '/', u: '/users', s: '/settings', h: '/health' };
+        const routes: any = { d: '/', u: '/users', s: '/settings' };
         if (userRole === 'owner') routes.a = '/admins';
         if (userRole === 'owner') routes.n = '/nodes';
         if (routes[lower]) {

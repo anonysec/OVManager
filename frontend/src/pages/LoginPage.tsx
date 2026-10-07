@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
+import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
 import './LoginPage.css';
@@ -16,6 +17,16 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
+
+  // Nobody has claimed this panel yet → the two-step setup is the real
+  // landing page. Any failure just leaves the login form alone.
+  useEffect(() => {
+    let alive = true;
+    apiClient.get('/owner-claim')
+      .then((res) => { if (alive && res.data?.claimable) navigate('/setup', { replace: true }); })
+      .catch(() => { /* stay on login */ });
+    return () => { alive = false; };
+  }, [navigate]);
 
   const clearError = () => { if (error) setError(''); };
 
@@ -99,13 +110,12 @@ const LoginPage = () => {
         </form>
 
         <p className="login-claim-hint">
-          {t('loginClaimHint', 'First time here?')}{' '}
           <button
             type="button"
             className="login-claim-link"
-            onClick={() => navigate('/setup')}
+            onClick={() => navigate('/setup?mode=recover')}
           >
-            {t('loginClaimLink', 'Use the claim key from the installer')}
+            {t('forgotPassword', 'Forgot password?')}
           </button>
         </p>
       </main>

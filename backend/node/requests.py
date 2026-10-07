@@ -109,31 +109,81 @@ def _retry_after_s(value: object) -> float:
     return min(wait, _MAX_429_WAIT)
 
 
-def node_client(node, **kw) -> "NodeRequests":
+def _conflict_message(r) -> str:
+    """The node's own explanation of a 409, with a safe fallback.
+
+    FastAPI's HTTPException envelope carries ``detail``; the node's own
+    ``success: false`` envelopes carry ``msg``. Either way the operator sees
+    the node's words, not a generic panel error.
+    """
+    try:
+        body = r.json()
+    except Exception:
+        body = None
+    if isinstance(body, dict):
+        msg = body.get("detail") or body.get("msg") or ""
+        if isinstance(msg, list):
+            msg = next((str(m) for m in msg if m), "")
+        if isinstance(msg, str) and msg.strip():
+            return msg.strip()
+    return "Node is paired with another panel."
+
+
+def node_client(node, panel_id: str | None = None, **kw) -> "NodeRequests":
     """Build a NodeRequests for a Node row (single construction site).
 
     Reuses the per-node connection (backend.node.connection) so repeated
     fan-outs don't pay transport setup per call. Extra kwargs pass through
     to NodeRequests (used by tests to stub clients).
+
+    ``panel_id`` is stamped as the ``X-Panel-ID`` header on the connection's
+    client — set here rather than passed as a construction kw, because a
+    fresh-construction kw would drop the cached path's ``node_id`` (health
+    recording) along with connection reuse. Test doubles without a headers
+    mapping are left alone.
     """
     if kw:
-        return NodeRequests(
+        client = NodeRequests(
             address=node.address,
             port=node.port,
             api_key=node.key or "",
             server_ca=getattr(node, "server_ca", None),
+            panel_id=panel_id,
             **kw,
         )
-    return _get_connection(node)
+        return client
+    client = _get_connection(node)
+    if panel_id:
+        headers = getattr(client, "headers", None)
+        if isinstance(headers, dict):
+            headers["X-Panel-ID"] = panel_id
+    return client
+
+
+def panel_id_for(db) -> str | None:
+    """This panel's identity for the ``X-Panel-ID`` header, or None.
+
+    Resolved from the settings row in the handler's own session; None when
+    the session is unusable (first-install paths, test doubles), in which
+    case the header is simply omitted — the node accepts a missing header.
+    """
+    if db is None:
+        return None
+    try:
+        from backend.db import crud
+
+        return getattr(crud.get_settings(db), "panel_id", None) or None
+    except Exception:
+        return None
 
 
 from backend.node.connection import get_connection as _get_connection  # noqa: E402
 
 
 class NodeRequests:
-    __slots__ = ("address", "headers", "scheme", "tls_verified", "_verify", "node_id")
+    __slots__ = ("address", "headers", "scheme", "tls_verified", "_verify", "node_id", "conflict_msg")
 
-    def __init__(self, address: str, port: int, api_key: str, server_ca: str | None = None, **_):
+    def __init__(self, address: str, port: int, api_key: str, server_ca: str | None = None, panel_id: str | None = None, **_):
         raw = str(address or "").strip()
         parsed = urlsplit(raw if "://" in raw else f"//{raw}")
         host = parsed.hostname
@@ -147,9 +197,12 @@ class NodeRequests:
         host_for_url = f"[{host}]" if ":" in host and not host.startswith("[") else host
         self.address = f"{host_for_url}:{target_port}"
         self.headers = {"key": api_key}
+        if panel_id:
+            self.headers["X-Panel-ID"] = panel_id
         self.scheme = "https"
         self._verify = "pinned"
         self.node_id = _.get("node_id")
+        self.conflict_msg: str | None = None
         if server_ca:
             from backend.node.pki import ca_file_for
 
@@ -286,7 +339,13 @@ class NodeRequests:
 
         ``sender`` overrides the transport: pinned-CA sessions pass
         ``session.request`` here so verification rides the pinned context.
+
+        A 409 (the node is leased by another panel) is never retried and
+        never taken over: the node's own message is recorded in
+        ``conflict_msg`` for the caller to surface, and — when the caller
+        opted into envelopes — returned as a conflict answer.
         """
+        self.conflict_msg = None
         transport = sender or getattr(_req, method)
         if sender is not None:
             r = transport(method, self._url(path), headers=self.headers, **kw)
@@ -305,6 +364,12 @@ class NodeRequests:
                 r = transport(method, self._url(path), headers=self.headers, **kw)
             else:
                 r = transport(self._url(path), headers=self.headers, **kw)
+        if r.status_code == 409:
+            self.conflict_msg = _conflict_message(r)
+            _rpc_failed(self.address, path, self.conflict_msg)
+            if not require_success:
+                return {"success": False, "conflict": True, "msg": self.conflict_msg}
+            return None
         if r.status_code != 200:
             _rpc_failed(self.address, path, f"HTTP {r.status_code}")
             return None

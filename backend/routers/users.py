@@ -22,7 +22,7 @@ from backend.node.management import (
     reset_user_usage_on_all_nodes,
     set_user_limit_on_all_nodes,
 )
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 from backend.operations.observability import live as live_ops
 from backend.operations.observability.audit import log_event
 from backend.schema import CreateUser, ResponseModel, StatusToggle, UpdateUser, Users
@@ -448,7 +448,7 @@ def _split_addr(addr: str) -> tuple[str, str]:
     return addr, ""
 
 
-def _fetch_node_usage(node) -> dict | None:
+def _fetch_node_usage(node, panel_id: str | None = None) -> dict | None:
     """Blocking usage fetch for one node (run in threadpool).
 
     Goes through :class:`NodeRequests` so the mlogin path shares the main
@@ -457,7 +457,7 @@ def _fetch_node_usage(node) -> dict | None:
     node and silently undercounted global sessions.
     """
     try:
-        req = node_client(node)
+        req = node_client(node, panel_id=panel_id)
         return req.get_usage(timeout=float(os.getenv("OVMANAGER_MLOGIN_NODE_TIMEOUT", "1.5"))) or None
     except Exception:
         return None
@@ -473,9 +473,10 @@ async def _live_sessions(username: str, db: Session) -> tuple[set[tuple], set[st
     from backend.db.crud import get_user_id_name_pairs
 
     id_to_name = dict(get_user_id_name_pairs(db))
+    pid = panel_id_for(db)
 
     async def check_node(node):
-        data = await run_in_threadpool(_fetch_node_usage, node)
+        data = await run_in_threadpool(_fetch_node_usage, node, pid)
         return node, data
 
     results = await asyncio.gather(*[check_node(n) for n in nodes], return_exceptions=True)

@@ -12,7 +12,7 @@ from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.db.models import User
-from backend.node.requests import node_client
+from backend.node.requests import node_client, panel_id_for
 from backend.schema import ResponseModel
 
 router = APIRouter(prefix="/security", tags=["Security"])
@@ -185,9 +185,10 @@ async def security_summary(hours: int = 8, db: Session = Depends(get_db), user: 
     panel_tz = _get_panel_tz(db)
     tz_name = str(panel_tz)
     id_to_name = _cn_to_username(db)
+    pid = panel_id_for(db)
 
     async def node_diag(node):
-        req = node_client(node)
+        req = node_client(node, panel_id=pid)
         data = await run_in_threadpool(req.get_sessions, None, hours)
         return node.name, data or {}
 

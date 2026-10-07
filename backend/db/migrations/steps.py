@@ -274,6 +274,48 @@ def _add_subscription_profile_settings(db: Session) -> None:
         db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_panel_id(db: Session) -> None:
+    """Add ``settings.panel_id`` (v21): the identity sent as ``X-Panel-ID``.
+
+    The node uses it to tell its panel apart from any other panel that
+    reaches it. Existing rows get a fresh UUID per row; fresh installs get
+    the model's Python-side default on first insert.
+    """
+    import uuid as uuid_mod
+
+    if "settings" not in table_names(db):
+        return
+    if "panel_id" not in column_names(db, "settings"):
+        column = Base.metadata.tables["settings"].columns["panel_id"]
+        db.execute(text(_add_column_sql("settings", column)))
+    rows = db.execute(text("SELECT id FROM settings WHERE panel_id IS NULL OR panel_id = ''")).fetchall()
+    for (row_id,) in rows:
+        db.execute(text("UPDATE settings SET panel_id = :p WHERE id = :i"), {"p": str(uuid_mod.uuid4()), "i": row_id})
+
+
+def _add_admin_is_owner(db: Session) -> None:
+    """Add ``admins.is_owner`` (v22): owner identity that survives a rename.
+
+    Ownership used to be ``username == config.ADMIN_USERNAME``, which breaks
+    the moment the owner renames the account (or claims it under a chosen
+    name), so the flag lives on the row instead. Backfilled for the
+    config-name row.
+    """
+    from backend.config import config
+
+    if "admins" not in table_names(db):
+        return
+    if "is_owner" not in column_names(db, "admins"):
+        column = Base.metadata.tables["admins"].columns["is_owner"]
+        db.execute(text(_add_column_sql("admins", column)))
+    owner = (config.ADMIN_USERNAME or "").strip()
+    if owner:
+        db.execute(
+            text("UPDATE admins SET is_owner = 1 WHERE username = :u AND is_owner = 0"),
+            {"u": owner},
+        )
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -294,4 +336,6 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (18, "add panel domain setting", _add_panel_domain),
     (19, "add threshold alert settings", _add_threshold_settings),
     (20, "add subscription profile settings", _add_subscription_profile_settings),
+    (21, "add panel identity (settings.panel_id)", _add_panel_id),
+    (22, "add admin owner flag (admins.is_owner)", _add_admin_is_owner),
 )

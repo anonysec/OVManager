@@ -35,18 +35,22 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
   const handleSubmit = async (event: any) => {
     event.preventDefault();
     setError('');
-    if (!formData.username || !formData.password) {
-      setError(isEdit ? t('passwordRequired') : t('fillAllFields'));
+    if (!String(formData.username || '').trim()) {
+      setError(t('fillAllFields'));
+      return;
+    }
+    if (!isEdit && !formData.password) {
+      setError(t('fillAllFields'));
       return;
     }
     setIsLoading(true);
     try {
       const payload: any = {
         username: formData.username,
-        password: formData.password,
         telegram_id: formData.telegram_id ? parseInt(formData.telegram_id, 10) : null,
         username_prefix: formData.username_prefix || null,
       };
+      if (formData.password) payload.password = formData.password;
       if (isEdit && admin?.username) {
         payload.current_username = admin.username;
       }
@@ -75,19 +79,17 @@ const AdminFormModal = ({ admin, isOpen, onClose, onSaved, isOwner }: { admin?: 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEdit ? `${t('editAdmin')} — ${admin?.username || ''}` : t('addNewAdmin')} size="medium">
       <form onSubmit={handleSubmit} className="modal-form">
-        <Field label={t('username')} required={!isEdit} hint={isOwner ? t('ownerUsernameLocked', 'Username is locked to the owner. Password can be changed.') : undefined}>
-          {isEdit
-            ? <input type="text" id="admin-username" name="username" value={formData.username} disabled readOnly />
-            : <input type="text" id="admin-username" name="username" value={formData.username} onChange={handleChange} required />}
+        <Field label={t('username')} required hint={isOwner ? t('ownerUsernameHint', 'Renaming the owner cascades to its users and logs you out.') : undefined}>
+          <input type="text" id="admin-username" name="username" value={formData.username} onChange={handleChange} required />
         </Field>
         <Field
           label={isEdit ? t('newPassword') : t('password')}
-          hint={t('minPasswordHint', 'Minimum 8 characters')}
-          required
+          hint={isEdit ? t('nodeKeepCurrentHint', 'Leave empty to keep the current value.') : t('minPasswordHint', 'Minimum 8 characters')}
+          required={!isEdit}
         >
           <input
-            type="password" id="admin-password" name="password" value={formData.password} onChange={handleChange} required
-            minLength={8} autoComplete={isEdit ? 'new-password' : undefined}
+            type="password" id="admin-password" name="password" value={formData.password} onChange={handleChange}
+            minLength={isEdit ? undefined : 8} autoComplete={isEdit ? 'new-password' : undefined}
           />
         </Field>
         <Field label={t('telegramId', 'Telegram ID')} hint={t('adminTelegramHint', 'Numeric Telegram user ID. Empty = no bot access.')}>

@@ -92,7 +92,7 @@ fact only the host has, or because it drives the system.
 | `ovm tls custom CERT KEY` | Install your own pair at the paths `.env` declares | yes | bash |
 | `ovm auth` | Owner credential state, then the applicable options | yes | bash |
 | `ovm auth key` | The one-time setup key, on an unclaimed panel | yes | bash |
-| `ovm auth reset [-p PASS]` | Set a new owner password — the way out when the panel is unreachable | yes² | CLI |
+| `ovm auth reset` | Mint a fresh setup key — the way back in when the panel is unreachable (spend it on the setup page) | yes² | bash |
 | `ovm url` | The live panel URL, the prefix, and where the prefix came from | yes | CLI + bash |
 | `ovm url set PREFIX` | Serve under a path of your choosing (`/` for the root) | yes | CLI |
 | `ovm url reset` | Generate a fresh random path | yes | CLI |
@@ -321,9 +321,7 @@ it does, and says nothing when there is nothing to move.
 sudo ovm url                              # the live panel URL, and where the prefix came from
 sudo ovm auth                             # credential state, then the applicable options
 sudo ovm auth key                         # the one-time setup key, on an unclaimed panel
-sudo ovm auth reset                       # prompts twice, hidden input
-sudo ovm auth reset -p 'new-long-password'
-OVM_PASS='new-long-password' sudo ovm auth reset
+sudo ovm auth reset                       # mint a fresh setup key, spend it on the setup page
 sudo ovm url set my-panel                 # serve under a path you choose
 sudo ovm url reset                        # a fresh random path
 ```
@@ -407,7 +405,7 @@ gates.
 | --- | --- |
 | `OVM_APP_DIR` | Installed tree to operate on. Default `/opt/ovmanager`; also where `cli/`, `.venv/`, `install.sh` and `.env` are read from. |
 | `OVM_DATA_DIR` | Data directory. Default `/var/lib/ovmanager`; holds `ovmanager-compose.yml` (whose presence marks a Docker install) and the operation lock. |
-| `OVM_PASS` | Same as `ovm auth reset -p` (used when no `-p` is given). |
+| `OVM_PASS` | Rejected by `ovm auth reset` (it mints a key and takes no password). |
 | `OVM_BIN_DIR` | Where `ovmanager`/`ovm` are installed (default `/usr/local/bin`); used when the backup timer units are written. |
 | `OVM_STOP_TIMEOUT` | Seconds before a `systemctl stop`/`restart` is force-killed (default 20). |
 | `CI=true`, `NONINTERACTIVE=1` | Imply `-y` (no prompts, confirmations auto-accepted). |

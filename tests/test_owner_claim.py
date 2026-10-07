@@ -135,11 +135,33 @@ def test_a_wrong_key_claims_nothing_and_is_audited(client, claim_key_file, uncla
         db.close()
 
 
-def test_an_already_claimed_panel_refuses_a_claim(client, claim_key_file):
-    """No takeover: the endpoint is dead once the owner exists."""
-    r = _post(client)
-    assert r.status_code == 409
-    assert claim_key_file.exists(), "a refused claim must not spend the key"
+def test_a_valid_key_on_a_claimed_panel_recovers_the_owner(client, claim_key_file):
+    """Recovery, not takeover refusal: a fresh setup key (`ovm auth reset`)
+    on a claimed panel resets the owner credential and spends the key."""
+    r = _post(client, password="recovered-in-the-browser-1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["username"] == config.ADMIN_USERNAME
+    assert body["role"] == "owner"
+    assert body["access_token"]
+    assert not claim_key_file.exists(), "a recovery key must be single-use"
+
+    from backend.auth.hash import verify_password
+    from backend.db.engine import SessionLocal
+    from backend.db.models import Admin
+
+    db = SessionLocal()
+    try:
+        row = db.query(Admin).filter(Admin.username == config.ADMIN_USERNAME).first()
+        assert verify_password("recovered-in-the-browser-1", row.password)
+    finally:
+        db.close()
+
+
+def test_a_wrong_key_on_a_claimed_panel_changes_nothing(client, claim_key_file):
+    r = _post(client, key="f" * 32)
+    assert r.status_code == 401
+    assert claim_key_file.exists(), "a refused recovery must not spend the key"
 
 
 def test_a_missing_key_file_says_how_to_mint_one(client, tmp_path, monkeypatch, unclaimed_owner):

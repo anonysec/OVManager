@@ -11,7 +11,6 @@ import pty
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import inline_lib
@@ -144,11 +143,11 @@ def sandbox(tmp_path, gate_root: bool = False):
 
 
 def mgr_sb_tty(env, app, *args: str, answers: str):
-    """Run the sandbox manager with a pty on stdin, so prompts can be answered.
+    """Run the sandbox manager with a pty on stdin, so a prompt could be answered.
 
-    `ovm reset-password` without -p asks for the password through a hidden
-    prompt that only runs when it has a terminal; a pty is the only way to
-    exercise the path an operator actually uses.
+    Nothing prompts any more — `ovm auth reset` mints the key without asking —
+    but the pty stays: it is what proves the absence of a prompt, because a
+    run without a terminal would hang or skip for the wrong reason.
     """
     master, slave = pty.openpty()
     try:
@@ -356,59 +355,103 @@ def test_update_requires_install_dir(tmp_path):
     assert "Not installed" in r.stderr
 
 
-def test_reset_password_rejects_weak_passwords(tmp_path):
-    """Same floor + placeholder block the panel applies at boot."""
+def _auth_reset_sandbox(tmp_path):
+    """A sandbox install whose data dir is where `auth reset` mints the key."""
     env, app = sandbox(tmp_path)
-    for weak, hint in (("short", "at least 8"), ("change-me-please-123", "placeholder")):
-        r = mgr_sb(env, app, "reset-password", "-p", weak)
-        assert r.returncode == 1, r.stderr
-        assert hint in r.stderr, r.stderr
+    data = tmp_path / "data"
+    env = {**env, "OVM_DATA_DIR": str(data)}
+    (app / ".env").write_text("PORT=2095\nADMIN_USERNAME=admin\n", encoding="utf-8")
+    return env, app, data
 
 
-@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password restarts the service (root only)")
-def test_reset_password_passes_the_secret_out_of_argv(tmp_path):
-    """The CLI does the rewrite, and the password never reaches argv.
+def test_auth_reset_mints_a_key_file_and_prints_the_recovery_url(tmp_path):
+    """`ovm auth reset` sets no password: it mints a fresh setup key.
 
-    `ps` shows every process's arguments, so a password passed as
-    `--admin-pass` would be readable by any user on the box. The manager hands
-    it over in the environment instead.
+    The credential is typed on the setup page in the browser, so the command
+    needs no flag, no prompt and no .env write. What it owes the operator is
+    the key — 0600 in the data dir, printed once — and the URL to spend it at.
     """
-    env, app = sandbox(tmp_path)
-    (app / ".env").write_text("ADMIN_PASSWORD=old-password-123\n", encoding="utf-8")
-    _stub_cli_python(app, tmp_path)
-    marker = tmp_path / "calls.log"
-    env = {**env, "MARKER": str(marker)}
-    r = mgr_sb(env, app, "reset-password", "-p", "brand-new-password")
+    env, app, data = _auth_reset_sandbox(tmp_path)
+    r = mgr_sb(env, app, "auth", "reset")
     assert r.returncode == 0, r.stderr
-    calls = marker.read_text(encoding="utf-8")
-    assert "reset-password" in calls, calls
-    assert "brand-new-password" not in calls, "the secret must not be an argument"
-    assert "brand-new-password" not in r.stdout + r.stderr
+    out = r.stdout + r.stderr
+    key_file = data / "owner-claim.key"
+    assert key_file.is_file()
+    assert key_file.stat().st_mode & 0o777 == 0o600, "the key must not be world-readable"
+    key = key_file.read_text(encoding="utf-8").strip()
+    assert len(key) == 32 and all(c in "0123456789abcdef" for c in key)
+    assert "Setup key" in out, out
+    assert key in out, "the key must be printed"
+    assert "setup?mode=recover" in out, out
 
 
-@pytest.mark.skipif(os.geteuid() != 0, reason="the root gate runs before the password prompt")
-def test_reset_password_without_a_flag_never_reaches_the_cli(tmp_path):
-    """No -p means there is no secret to hand over, so bash prompts instead.
-
-    The prompt cannot be driven from a sandbox (no terminal), so this pins the
-    only part that is observable: the CLI is not invoked without a password.
-    """
-    env, app = sandbox(tmp_path, gate_root=False)
-    (app / ".env").write_text("ADMIN_PASSWORD=old-password-123\n", encoding="utf-8")
-    _stub_cli_python(app, tmp_path)
-    marker = tmp_path / "calls.log"
-    env = {**env, "MARKER": str(marker)}
+def test_the_retired_reset_password_name_mints_the_same_key(tmp_path):
+    """`ovm reset-password` still dispatches — to the key mint, not a prompt."""
+    env, app, data = _auth_reset_sandbox(tmp_path)
+    first = mgr_sb(env, app, "auth", "reset")
+    assert first.returncode == 0, first.stderr
     r = mgr_sb(env, app, "reset-password")
-    assert "No password given" in r.stderr, r.stderr
-    assert not marker.exists(), "the CLI must not be called without a password"
+    assert r.returncode == 0, r.stderr
+    out = r.stdout + r.stderr
+    assert "Setup key" in out, out
+    minted = (data / "owner-claim.key").read_text(encoding="utf-8").strip()
+    assert minted not in (first.stdout + first.stderr), "a reprint must be a fresh key"
 
 
-def test_reset_password_db_write_is_covered_by_the_cli_tests():
-    """The credential is a database row since v16; the CLI tests must pin that."""
-    with open(Path(__file__).resolve().parent / "test_cli_accounts.py", encoding="utf-8") as fh:
-        accounts = fh.read()
-    assert "_write_owner_hash" in accounts, "the CLI tests must pin the database write"
-    assert 'read_text(encoding="utf-8") == before' in accounts, "and must prove .env is left untouched"
+def test_auth_reset_refuses_a_password_flag(tmp_path):
+    """`-p` and OVM_PASS are meaningless now, so they fail fast.
+
+    Ignoring the flag would leave an operator believing a password was set
+    while the owner row in the panel database never changed.
+    """
+    env, app, data = _auth_reset_sandbox(tmp_path)
+    for args in (
+        ("auth", "reset", "-p", "long-enough-password"),
+        ("reset-password", "-p", "long-enough-password"),
+        ("-p", "long-enough-password", "auth", "reset"),
+    ):
+        r = mgr_sb(env, app, *args)
+        assert r.returncode == 1, (args, r.stdout, r.stderr)
+        assert "takes no password" in r.stderr, r.stderr
+        assert "mints a fresh setup key" in r.stderr, r.stderr
+
+    r = mgr_sb(env, app, "auth", "reset", extra_env={"OVM_PASS": "long-enough-password"})
+    assert r.returncode == 1, r.stderr
+    assert "takes no password" in r.stderr, r.stderr
+
+    assert not (data / "owner-claim.key").exists(), "a refused reset must mint nothing"
+
+
+def test_the_old_password_reset_path_is_gone():
+    """Nothing in the shell handles a password any more.
+
+    No prompt, no policy check, no CLI call, no secret in the environment. What
+    remains password-shaped is the guard that refuses -p, plus the policy
+    helpers install.sh shares byte for byte (tests/test_lib_sourcing.py).
+    """
+    src = MANAGER_PATH.read_text(encoding="utf-8")
+    for gone in (
+        "do_reset_password",
+        "_cli_py reset-password",
+        "No password given",
+        "New password",
+        "Confirm password",
+        "Passwords do not match",
+        "Password updated",
+        "OVM_ADMIN_PASS",
+    ):
+        assert gone not in src, f"manager.sh still carries the old reset path: {gone}"
+
+
+def test_the_recovery_write_is_covered_by_the_backend_tests():
+    """The credential is a database row, and the panel writes it.
+
+    The shell only mints the key; the reset itself happens on the setup page,
+    which is where the write has to be pinned.
+    """
+    claim = (Path(__file__).resolve().parent / "test_owner_claim.py").read_text(encoding="utf-8")
+    assert "recovers_the_owner" in claim, "the backend recovery write must be pinned"
+    assert "ovm auth reset" in claim, "and named after the command that mints the key"
 
 
 def test_logs_command_runs_the_cli_on_a_native_install(tmp_path):
@@ -665,14 +708,14 @@ def test_dispatch_shape_matches_the_documented_split():
     for fn in ("cmd_logs()", "cmd_doctor_fix()"):
         body = content[content.index(fn) : content.index("\n}\n", content.index(fn))]
         assert "is_docker_mode" in body, f"{fn} must branch on the install mode"
-    # reset-password has one path for every install: bash prompts, the CLI (in
-    # the container when there is one) writes the row.
-    assert "_cli_py reset-password" in content, "the CLI is the only writer"
+    # The reset has one path for every install: the host mints the setup key,
+    # and the panel spends it — no CLI call, no container branch.
+    assert "_cli_py reset-password" not in content, "the shell must not write the credential"
     # `auth` replaced reset-password and owner-claim as one command with two
-    # actions, so the dispatch arm is named `auth` and both reach do_reset_password
+    # actions, so the dispatch arm is named `auth` and both reach do_auth_reset
     # and do_owner_claim respectively — one implementation each.
     dispatch = content[content.rindex("auth)") : content.rindex("url)")]
-    assert "do_reset_password" in dispatch, "the dispatch must reach the one reset path"
+    assert "do_auth_reset" in dispatch, "the dispatch must reach the one reset path"
     assert "do_owner_claim" in dispatch
     assert "is_docker_mode" not in dispatch and "cli.main" not in dispatch, (
         "the docker branch lives in _cli_py now; the dispatch must not fork again"
@@ -748,41 +791,33 @@ def test_cli_py_forwards_backup_keep(tmp_path):
     assert "backup --keep 30" in marker.read_text(encoding="utf-8")
 
 
-@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password restarts the service (root only)")
-def test_cli_py_restarts_panel_after_reset(tmp_path):
-    """The bash twin restarts the panel itself; a delegated reset must too.
+def test_auth_reset_touches_neither_the_cli_nor_the_service(tmp_path):
+    """The host mints the key itself: no Python, no restart, no health wait.
 
-    systemctl is stubbed on PATH so the assertion is about what manager.sh
-    asks the system to do, not about this machine's init."""
+    The old path restarted the panel so the new bcrypt row would be reloaded;
+    the key is re-read from disk on every recovery attempt, so there is nothing
+    to reload and nothing to wait for.
+    """
     env, app = sandbox(tmp_path)
     _stub_cli_python(app, tmp_path)
     marker = tmp_path / "calls.log"
-    (app / ".env").write_text("ADMIN_PASSWORD=placeholder\n", encoding="utf-8")
+    (app / ".env").write_text("PORT=2095\nADMIN_USERNAME=admin\n", encoding="utf-8")
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
     systemctl = stub_bin / "systemctl"
     systemctl.write_text('#!/bin/sh\necho "SYSTEMCTL $@" >> "$MARKER"\nexit 0\n', encoding="utf-8")
     systemctl.chmod(0o755)
-    env = {**env, "MARKER": str(marker), "PATH": f"{stub_bin}:{env['PATH']}"}
-    r = mgr_sb(env, app, "reset-password", "-p", "long-enough-password")
+    env = {
+        **env,
+        "MARKER": str(marker),
+        "OVM_DATA_DIR": str(tmp_path / "data"),
+        "PATH": f"{stub_bin}:{env['PATH']}",
+    }
+
+    r = mgr_sb(env, app, "auth", "reset")
     assert r.returncode == 0, r.stderr
-    calls = marker.read_text(encoding="utf-8")
-    assert "reset-password" in calls
-    assert "long-enough-password" not in calls, "the secret must travel in the environment"
-    assert "SYSTEMCTL restart ovmanager.service" in calls, calls
-
-
-@pytest.mark.skipif(os.geteuid() != 0, reason="reset-password is root-gated")
-def test_reset_password_without_flag_never_passes_secret_in_argv(tmp_path):
-    """No -p means the password is prompted for in bash, never echoed to argv."""
-    env, app = sandbox(tmp_path, gate_root=False)
-    _stub_cli_python(app, tmp_path)
-    marker = tmp_path / "calls.log"
-    (app / ".env").write_text("ADMIN_PASSWORD=placeholder\n", encoding="utf-8")
-    env = {**env, "MARKER": str(marker)}
-    r = mgr_sb(env, app, "reset-password")
-    assert "No password given" in r.stderr, r.stderr
-    assert not marker.exists(), "the twin must not be called without a password"
+    assert "Setup key" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert not marker.exists(), "the reset must reach neither the CLI nor systemctl"
 
 
 def test_cli_py_status_passes_only_the_requested_flags(tmp_path):
@@ -906,7 +941,7 @@ ROOT_GATED_VERBS = (
     "disable",
     "backup",
     "https --self",
-    "reset-password -p longenoughpassword",
+    "reset-password",
     "reset-urlpath",
     "update",
     "rollback",
@@ -1173,8 +1208,8 @@ def test_no_reset_path_writes_a_credential_to_env(tmp_path):
     offenders = [line.strip() for line in content.splitlines() if "ADMIN_PASSWORD" in line and not line.strip().startswith("#")]
     assert not offenders, offenders
 
-    # Docker mode whose container cannot answer: nothing may reach .env, and
-    # the command must fail loudly rather than report a change it did not make.
+    # A docker install, and the key is still minted on the host: the reset has
+    # no container half, so a container that cannot answer changes nothing.
     env, app = sandbox(tmp_path)
     data = tmp_path / "data"
     data.mkdir()
@@ -1187,20 +1222,19 @@ def test_no_reset_path_writes_a_credential_to_env(tmp_path):
     (stub_bin / "docker").chmod(0o755)
     env = {**env, "OVM_DATA_DIR": str(data), "PATH": f"{stub_bin}:{env['PATH']}"}
 
-    r = mgr_sb(env, app, "reset-password", "-p", "long-enough-password")
+    r = mgr_sb(env, app, "auth", "reset")
     body = (app / ".env").read_text(encoding="utf-8")
     assert body == before, "no reset path may write .env"
-    assert r.returncode != 0, "a docker exec that fails must fail the command"
-    assert "not changed" in r.stderr, r.stderr
+    assert r.returncode == 0, r.stderr
+    assert (data / "owner-claim.key").is_file(), "the key must still be minted"
 
 
-def test_the_docker_reset_runs_the_cli_where_the_database_is(tmp_path):
-    """Docker has no host venv, so the row is written from inside the container.
+def test_the_docker_reset_never_execs_into_the_container(tmp_path):
+    """Docker or not, the key is minted on the host.
 
-    The command has to reach /app/data — the mounted volume holding
-    ovmanager.db — and the secret has to travel by environment. `-e NAME` with
-    no value is the one form that keeps it out of `ps` on the host: docker
-    reads it from its own environment.
+    The old path forwarded OVM_ADMIN_PASS by name (`docker exec -e NAME`, no
+    value) so the secret stayed out of `ps` on the host. There is no secret
+    left to forward, and with it the whole exec is gone.
     """
     env, app = sandbox(tmp_path)
     data = tmp_path / "data"
@@ -1215,125 +1249,34 @@ def test_the_docker_reset_runs_the_cli_where_the_database_is(tmp_path):
         '#!/bin/sh\necho "DOCKER $*" >> "$MARKER"\n[ "$1" = ps ] && exit 1\nexit 0\n', encoding="utf-8"
     )
     (stub_bin / "docker").chmod(0o755)
-    stub_curl = stub_bin / "curl"
-    stub_curl.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    stub_curl.chmod(0o755)
-    systemctl = stub_bin / "systemctl"
-    systemctl.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    systemctl.chmod(0o755)
     env = {**env, "OVM_DATA_DIR": str(data), "MARKER": str(marker), "PATH": f"{stub_bin}:{env['PATH']}"}
 
-    r = mgr_sb(env, app, "reset-password", "-p", "long-enough-password")
+    r = mgr_sb(env, app, "auth", "reset")
     assert r.returncode == 0, r.stderr
-    calls = marker.read_text(encoding="utf-8")
-    exec_line = next(line for line in calls.splitlines() if line.startswith("DOCKER exec"))
-    assert "-e OVM_ADMIN_PASS" in exec_line, exec_line
-    assert "OVM_ADMIN_PASS=" not in exec_line, f"the secret must not be an argument: {exec_line}"
-    assert "ovmanager /app/.venv/bin/python -m cli.main" in exec_line, exec_line
-    assert "--install-dir /app --data-dir /app/data" in exec_line, exec_line
-    assert exec_line.endswith(" reset-password"), exec_line
-    assert "long-enough-password" not in calls, "the secret reached the docker command line"
-    assert "long-enough-password" not in r.stdout + r.stderr
+    assert (data / "owner-claim.key").is_file(), "the key is the host's job"
+    assert not marker.exists(), "the reset must not reach docker"
 
 
-def _sandbox_cli(app, data):
-    """An installed tree whose .venv runs the real CLI out of this repo.
+def test_auth_reset_prompts_for_nothing(tmp_path):
+    """No terminal input, ever: the prompting path is gone.
 
-    The CLI resolves its own imports (cli/, backend/) from the checkout, and
-    the install tree supplies .env, the data dir and the venv path manager.sh
-    insists on. Only the interpreter path is faked.
-    """
-    (app / ".venv" / "bin").mkdir(parents=True, exist_ok=True)
-    wrapper = app / ".venv" / "bin" / "python"
-    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
-    wrapper.chmod(0o755)
-    db = data / "ovmanager.db"
-    return db, {"PYTHONPATH": str(REPO)}
-
-
-def _seed_owner(db_path, username, password):
-    from sqlalchemy import create_engine
-
-    from backend.auth.hash import hash_password
-    from backend.db.models import Admin
-
-    engine = create_engine(f"sqlite:///{db_path}")
-    Admin.__table__.create(engine)
-    with engine.begin() as conn:
-        conn.execute(Admin.__table__.insert().values(username=username, password=hash_password(password), disabled=False))
-    engine.dispose()
-
-
-def _authenticates(db_path, username, password):
-    """The panel's own authentication against the row on disk."""
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    from backend.auth.auth import authenticate_user
-
-    engine = create_engine(f"sqlite:///{db_path}")
-    db = sessionmaker(bind=engine)()
-    try:
-        return authenticate_user(db, username, password) is not None
-    finally:
-        db.close()
-        engine.dispose()
-
-
-@pytest.mark.skipif(
-    os.geteuid() != 0,
-    reason="the interactive path is gated on root, so an unprivileged run dies before the prompt",
-)
-def test_reset_password_interactive_path_changes_the_row(tmp_path):
-    """The prompting path must change the credential, not merely exit 0.
-
-    This is the assertion whose absence let the bug ship: the prompt used to
-    hash into ADMIN_PASSWORD_HASH in .env, which nothing reads on an installed
-    panel, so `ovm reset-password` printed "updated" and the old password kept
-    working. Driven through a pty because the prompt needs a terminal, and then
-    authenticated against the real row — old password out, new password in.
+    Driven through a pty because that is what the old path needed — a hidden
+    password prompt, a confirmation, a mismatch to catch. Now nothing asks, and
+    the key is minted anyway.
     """
     env, app = sandbox(tmp_path)
     data = tmp_path / "data"
     data.mkdir()
-    db, extra = _sandbox_cli(app, data)
-    _seed_owner(db, "admin", "old-owner-password-123")
-    before = f"PORT=2095\nADMIN_USERNAME=admin\nDATA_DIR={data}\n"
-    (app / ".env").write_text(before, encoding="utf-8")
+    (app / ".env").write_text("PORT=2095\nADMIN_USERNAME=admin\n", encoding="utf-8")
+    env = {**env, "OVM_DATA_DIR": str(data)}
 
-    stub_bin = tmp_path / "bin"
-    stub_bin.mkdir()
-    for name, body in (("curl", "#!/bin/sh\nexit 0\n"), ("systemctl", "#!/bin/sh\nexit 0\n")):
-        stub = stub_bin / name
-        stub.write_text(body, encoding="utf-8")
-        stub.chmod(0o755)
-    env = {**env, **extra, "PATH": f"{stub_bin}:{env['PATH']}"}
-
-    rc, out, err = mgr_sb_tty(env, app, "reset-password", answers="new-owner-password-123\nnew-owner-password-123\n")
+    rc, out, err = mgr_sb_tty(env, app, "auth", "reset", answers="")
     assert rc == 0, err or out
-    assert _authenticates(db, "admin", "new-owner-password-123"), "the new password must work"
-    assert not _authenticates(db, "admin", "old-owner-password-123"), "the old password must be dead"
-    assert (app / ".env").read_text(encoding="utf-8") == before, ".env is not part of the credential path"
-
-
-@pytest.mark.skipif(
-    os.geteuid() != 0,
-    reason="the interactive path is gated on root, so an unprivileged run dies before the prompt",
-)
-def test_reset_password_interactive_mismatch_leaves_the_row_alone(tmp_path):
-    """A mistyped confirmation changes nothing — and says so."""
-    env, app = sandbox(tmp_path)
-    data = tmp_path / "data"
-    data.mkdir()
-    db, extra = _sandbox_cli(app, data)
-    _seed_owner(db, "admin", "old-owner-password-123")
-    (app / ".env").write_text(f"PORT=2095\nADMIN_USERNAME=admin\nDATA_DIR={data}\n", encoding="utf-8")
-    env = {**env, **extra}
-
-    rc, _, err = mgr_sb_tty(env, app, "reset-password", answers="new-owner-password-123\ntypo-owner-123\n")
-    assert rc != 0
-    assert "do not match" in err, err
-    assert _authenticates(db, "admin", "old-owner-password-123"), "a mismatch must not touch the row"
+    key_file = data / "owner-claim.key"
+    assert key_file.is_file()
+    combined = out + err
+    assert "Setup key" in combined, combined
+    assert "not match" not in combined, "there is no confirmation to mistype any more"
 
 
 def test_owner_claim_warns_when_the_panel_already_has_an_owner(tmp_path):

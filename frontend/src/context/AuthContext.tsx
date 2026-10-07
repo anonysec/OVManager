@@ -6,7 +6,7 @@ import apiClient, { AUTH_EXPIRED_EVENT } from '../services/api';
 type AuthContextValue = {
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
-  claim: (claimKey: string, password: string) => Promise<void>;
+  claim: (claimKey: string, password: string, username?: string) => Promise<void>;
   logout: () => void;
   userRole: string | null;
 };
@@ -51,8 +51,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserRole(role);
   };
 
-  const claim = async (claimKey: string, password: string) => {
-    const response = await apiClient.post('/owner-claim', { claim_key: claimKey, password });
+  const claim = async (claimKey: string, password: string, username?: string) => {
+    const response = await apiClient.post('/owner-claim', {
+      claim_key: claimKey,
+      password,
+      ...(username ? { username } : {}),
+    });
 
     const { token: newToken, role } = storeSession(response.data);
     setToken(newToken);

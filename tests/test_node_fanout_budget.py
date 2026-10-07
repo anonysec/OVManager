@@ -72,7 +72,7 @@ async def test_page_render_fanout_respects_the_shared_cap(monkeypatch):
             async with lock:
                 state["in_flight"] -= 1
 
-    monkeypatch.setattr(diagnostics, "node_client", lambda n: FakeClient(n))
+    monkeypatch.setattr(diagnostics, "node_client", lambda n, **kw: FakeClient(n))
     monkeypatch.setattr(diagnostics.crud, "get_active_nodes", lambda db: nodes)
     monkeypatch.setattr(diagnostics.crud, "get_user_id_name_pairs", lambda db: [])
     monkeypatch.setattr("fastapi.concurrency.run_in_threadpool", counting_run_in_threadpool)

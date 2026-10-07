@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { FiGrid, FiUsers, FiServer, FiSettings, FiActivity } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiServer, FiSettings } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +12,6 @@ const MobileNav = () => {
     { to: '/users', label: t('navUsers', 'Users'), icon: FiUsers },
     ...(userRole === 'owner' ? [
       { to: '/nodes', label: t('navNodes', 'Nodes'), icon: FiServer },
-      { to: '/health', label: t('navHealth', 'Health'), icon: FiActivity },
     ] : []),
     { to: '/settings', label: t('navSettings', 'Settings'), icon: FiSettings },
   ];

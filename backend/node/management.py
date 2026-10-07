@@ -19,7 +19,7 @@ from starlette.background import BackgroundTask
 from backend.db import crud
 from backend.logger import logger
 from backend.node.fanout import run_bounded
-from backend.node.requests import NodeRequests, node_client
+from backend.node.requests import NodeRequests, node_client, panel_id_for
 from backend.schema import NodeCreate
 from backend.utils.geolocation import geolocate
 from backend.version import __version__ as PANEL_VERSION
@@ -55,21 +55,17 @@ def node_version_compat(agent_version: object) -> dict:
     return {"verdict": verdict, "agent_version": agent_version, "panel_version": PANEL_VERSION}
 
 
-async def _resolve_pinned_ca(request: NodeCreate) -> str | None:
-    """Fetch the node's certificate before any keyed request is sent.
+async def add_node_handler(request: NodeCreate, db: Session) -> tuple[bool, str]:
+    """Register a new node. The certificate is required and comes only from
+    the request — there is no trust-on-first-use fetch anymore, so the API
+    key never crosses a connection whose pin was learned mid-flight.
 
-    Trust-on-first-use is only worth anything if it happens first: the API key
-    is the credential for every later call, so sending it over an unpinned
-    connection hands it to whoever answered. Returns None for a failed fetch
-    (the caller then proceeds without a pin, as before).
+    Returns (ok, message); a node-side 409 (paired with another panel)
+    surfaces the node's own message instead of the generic one.
     """
-    return await _pin_node_certificate(request.address, request.port)
-
-
-async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     geo = await run_in_threadpool(geolocate, request.address)
 
-    server_ca = request.cert or await _resolve_pinned_ca(request)
+    server_ca = request.cert
 
     nr = NodeRequests(
         address=request.address,
@@ -79,11 +75,12 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
         server_ca=server_ca,
+        panel_id=panel_id_for(db),
     )
 
     ok = await run_in_threadpool(nr.check_node)
     if not ok:
-        return False
+        return False, nr.conflict_msg or ""
 
     configured = await run_in_threadpool(
         nr.update_config,
@@ -93,7 +90,7 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
     )
     if not configured:
         logger.error("Node %s accepted health check but rejected configuration", request.address)
-        return False
+        return False, nr.conflict_msg or ""
 
     node = crud.create_node(db, request, geo)
 
@@ -101,28 +98,7 @@ async def add_node_handler(request: NodeCreate, db: Session) -> bool:
         node.server_ca = server_ca
         db.commit()
 
-    return True
-
-
-async def _pin_node_certificate(address: str, port: int) -> str | None:
-    """Fetch the node's TLS cert (TOFU) for storage on the node row.
-
-    The address may be a bare IP/hostname or carry a scheme; the cert fetch
-    uses the host:port pair only.
-    """
-    from urllib.parse import urlsplit
-
-    raw = str(address or "").strip()
-    parsed = urlsplit(raw if "://" in raw else f"//{raw}")
-    host = parsed.hostname or raw
-    try:
-        port = int(parsed.port or port)
-    except (TypeError, ValueError):
-        return None
-
-    from backend.node.pki import fetch_server_cert
-
-    return await run_in_threadpool(fetch_server_cert, host, port)
+    return True, "Node added successfully"
 
 
 async def update_node_handler(node_id: int, request: NodeCreate, db: Session) -> tuple[bool, str]:
@@ -135,6 +111,9 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     Save always applies the VPN settings on the node. An unreachable node is
     surfaced as an explicit error so the operator knows the live sync did not
     happen; the saved record is kept and can be applied once the node is up.
+
+    The certificate is blank-means-keep: only a pasted PEM replaces the pin,
+    and a node-side 409 surfaces the node's own message.
     """
     existing = crud.get_node_by_id(db, node_id)
     if not existing:
@@ -143,7 +122,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or existing.key
 
-    server_ca = request.cert or await _resolve_pinned_ca(request) or getattr(existing, "server_ca", None)
+    server_ca = request.cert or getattr(existing, "server_ca", None)
 
     crud.update_node(db, node_id, request, geo)
 
@@ -159,12 +138,13 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
         protocol=request.protocol,
         ovpn_port=request.ovpn_port,
         server_ca=server_ca,
+        panel_id=panel_id_for(db),
     )
 
     ok = await run_in_threadpool(nr.check_node)
     if not ok:
         logger.warning("Node %s updated in DB but unreachable for live sync", request.address)
-        return False, (
+        return False, nr.conflict_msg or (
             "Node unreachable — the panel saved the record but could not apply the settings. "
             "Configure after registration."
         )
@@ -217,10 +197,11 @@ async def get_node_status_handler(node_id: int, db: Session):
     if not node:
         return None
 
-    nr = node_client(node)
+    pid = panel_id_for(db)
+    nr = node_client(node, panel_id=pid)
 
     started = time.perf_counter()
-    nr_sessions = node_client(node)
+    nr_sessions = node_client(node, panel_id=pid)
     info, sessions, cert_pin = await asyncio.gather(
         run_in_threadpool(nr.get_node_info),
         run_in_threadpool(nr_sessions.get_sessions, None, 8),
@@ -286,9 +267,10 @@ async def create_user_on_all_nodes(name: str, db: Session, max_logins: int = 1, 
     """
     nodes = crud.get_active_nodes(db)
     uid = str(user_id) if user_id else None
+    pid = panel_id_for(db)
     tasks = []
     for n in nodes:
-        nr = node_client(n)
+        nr = node_client(n, panel_id=pid)
         tasks.append(run_bounded(nr.create_user, name, max_logins, uid))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
@@ -310,9 +292,10 @@ async def change_user_status_on_all_nodes(
     """
     nodes = crud.get_active_nodes(db) if nodes is None else nodes
     uid = str(user_id)
+    pid = panel_id_for(db)
     tasks = []
     for n in nodes:
-        nr = node_client(n)
+        nr = node_client(n, panel_id=pid)
         tasks.append(run_bounded(nr.change_user_status, name, status, max_logins, uid))
     if not tasks:
         return True
@@ -323,9 +306,10 @@ async def change_user_status_on_all_nodes(
 async def set_user_limit_on_all_nodes(name: str, max_logins: int, db: Session, user_id: int = None) -> bool:
     nodes = crud.get_active_nodes(db)
     uid = str(user_id) if user_id else name
+    pid = panel_id_for(db)
     tasks = []
     for n in nodes:
-        nr = node_client(n)
+        nr = node_client(n, panel_id=pid)
         tasks.append(run_bounded(nr.set_user_limit, uid, int(max_logins or 0)))
     if not tasks:
         return True
@@ -392,7 +376,7 @@ async def download_ovpn_client_from_node(user_id: int, node_id: int, db: Session
         return None
 
     plan = _remote_plan(node, db)
-    nr = node_client(node)
+    nr = node_client(node, panel_id=panel_id_for(db))
     content = await run_in_threadpool(nr.download_ovpn_bytes, str(user_id))
     if content is None:
         return None
@@ -411,7 +395,7 @@ async def download_all_ovpn_clients_from_node(node_id: int, db: Session) -> Stre
 
     users = crud.get_all_users(db)
     plan = _remote_plan(node, db)
-    nr = node_client(node)
+    nr = node_client(node, panel_id=panel_id_for(db))
 
     buf = SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     with zipfile.ZipFile(buf, "w", ZIP_DEFLATED) as zf:
@@ -442,8 +426,9 @@ async def delete_user_on_all_nodes(name: str, user_id: int, db: Session) -> dict
     if not nodes:
         return {"ok": True, "failed": []}
     tasks = []
+    pid = panel_id_for(db)
     for n in nodes:
-        nr = node_client(n)
+        nr = node_client(n, panel_id=pid)
         tasks.append(run_bounded(nr.delete_user, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
@@ -462,8 +447,9 @@ async def reset_user_usage_on_all_nodes(user_id: int, db: Session) -> dict:
     if not nodes:
         return {"ok": True, "failed": []}
     tasks = []
+    pid = panel_id_for(db)
     for n in nodes:
-        nr = node_client(n)
+        nr = node_client(n, panel_id=pid)
         tasks.append(run_bounded(nr.reset_usage, str(user_id)))
     results = await asyncio.gather(*tasks, return_exceptions=True)
     failed = [n.name for n, r in zip(nodes, results, strict=True) if r is not True]
