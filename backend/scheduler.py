@@ -9,6 +9,7 @@ call :func:`reschedule_auto_backup`.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,6 +22,7 @@ from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limi
 from backend.operations.observability.live import POLL_SECONDS, collect_live_snapshot
 
 _scheduler = None
+_in_worker = False  # True once this process's scheduler is the jobs worker's
 
 
 async def auto_sync_limits_job():
@@ -62,6 +64,23 @@ async def auto_prune_audit_job():
         db.close()
 
 
+async def _notify_backup_failure(detail: str, *, enabled: bool) -> None:
+    """Tell the owner when the scheduled backup did not happen.
+
+    Audit rows alone are invisible until someone looks; a silent missing
+    backup is the failure this notice exists for. Best-effort like the job
+    itself: never raises.
+    """
+    if not enabled:
+        return
+    try:
+        from backend.operations.observability.notifier import send_telegram
+
+        await asyncio.to_thread(send_telegram, f"OVManager scheduled backup failed: {detail}")
+    except Exception:
+        logger.exception("Backup failure notice could not be sent")
+
+
 async def auto_backup_job():
     """Run the scheduled panel database backup when enabled in settings.
 
@@ -92,11 +111,13 @@ async def auto_backup_job():
         except Exception as exc:
             logger.exception("Scheduled auto backup failed")
             log_event(None, "maintenance.backup", actor="auto", detail=f"Scheduled backup failed: {exc}")
+            await _notify_backup_failure(str(exc), enabled=telegram_backup_enabled)
             return
 
         if backup_path is None:
             logger.warning("Scheduled auto backup skipped: database file not found")
             log_event(None, "maintenance.backup", actor="auto", detail="Scheduled backup skipped: database file not found")
+            await _notify_backup_failure("database file not found", enabled=telegram_backup_enabled)
             return
 
         logger.info("Scheduled auto backup created: %s", backup_path.name)
@@ -144,10 +165,12 @@ def set_scheduler_instance(scheduler) -> None:
 
     The worker process runs this in its own interpreter, so it has to set the
     module global itself; without it reschedule_auto_backup() would find None
-    and silently never register the daily backup.
+    and silently never register the daily backup. Setting it also marks this
+    process as the jobs worker, which owns the daily backup.
     """
-    global _scheduler
+    global _scheduler, _in_worker
     _scheduler = scheduler
+    _in_worker = True
 
 
 def reschedule_auto_backup():
@@ -158,6 +181,13 @@ def reschedule_auto_backup():
     """
     scheduler = _scheduler
     if scheduler is None:
+        return
+    if not _in_worker and os.environ.get("OVM_WORKER") != "0":
+        # The worker process owns the daily backup (see backend.worker): the
+        # web scheduler registering it too would fire it twice a night — two
+        # bundles, two Telegram copies. The worker re-reads settings every
+        # minute, so a settings save reaches it within 60s. Without a worker
+        # (OVM_WORKER=0) this process is the only scheduler, so it owns it.
         return
     try:
         scheduler.remove_job("auto_backup")
@@ -211,9 +241,10 @@ def start_scheduler():
     """
     from backend.bot_supervisor import _watchdog_bot
 
-    global _scheduler
+    global _scheduler, _in_worker
     if _scheduler and _scheduler.running:
         return _scheduler
+    _in_worker = False
     scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
     scheduler.add_job(
         collect_live_snapshot,

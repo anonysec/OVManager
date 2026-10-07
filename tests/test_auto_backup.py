@@ -7,6 +7,8 @@ tests share the dev database and restore every setting they touch in a
 """
 
 import asyncio
+import os
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -53,13 +55,19 @@ def ab_client():
 
 @pytest.fixture(autouse=True)
 def ab_preserve_settings():
-    """Snapshot/restore the three auto-backup settings on the shared dev DB."""
+    """Snapshot/restore the backup settings on the shared dev DB."""
 
     def _snapshot():
         db = SessionLocal()
         try:
             row = db.query(Settings).first()
-            return (bool(row.auto_backup_enabled), str(row.auto_backup_time), int(row.auto_backup_keep))
+            return (
+                bool(row.auto_backup_enabled),
+                str(row.auto_backup_time),
+                int(row.auto_backup_keep),
+                bool(row.telegram_backup_enabled),
+                row.offsite_backup_target,
+            )
         finally:
             db.close()
 
@@ -70,19 +78,43 @@ def ab_preserve_settings():
         db = SessionLocal()
         try:
             row = db.query(Settings).first()
-            row.auto_backup_enabled, row.auto_backup_time, row.auto_backup_keep = before
+            (
+                row.auto_backup_enabled,
+                row.auto_backup_time,
+                row.auto_backup_keep,
+                row.telegram_backup_enabled,
+                row.offsite_backup_target,
+            ) = before
             db.commit()
         finally:
             db.close()
 
 
-def ab_set_settings(*, enabled: bool, time: str = "03:30", keep: int = 50):
+@pytest.fixture(autouse=True)
+def ab_audit_guard():
+    """Drop the ``actor='auto'`` rows a test wrote, so they never leak."""
+
+    before = ab_max_audit_id()
+    try:
+        yield
+    finally:
+        db = SessionLocal()
+        try:
+            db.execute(text("DELETE FROM audit_logs WHERE actor = 'auto' AND id > :i"), {"i": before})
+            db.commit()
+        finally:
+            db.close()
+
+
+def ab_set_settings(*, enabled: bool, time: str = "03:30", keep: int = 50, telegram: bool | None = None):
     db = SessionLocal()
     try:
         row = db.query(Settings).first()
         row.auto_backup_enabled = enabled
         row.auto_backup_time = time
         row.auto_backup_keep = keep
+        if telegram is not None:
+            row.telegram_backup_enabled = telegram
         db.commit()
     finally:
         db.close()
@@ -300,3 +332,139 @@ def test_ab_reschedule_registers_and_removes_job(monkeypatch):
 def test_ab_reschedule_is_noop_without_scheduler(monkeypatch):
     monkeypatch.setattr(sched_module, "_scheduler", None)
     sched_module.reschedule_auto_backup()  # must not raise
+
+
+# ── wiring: retention on the scheduled path, failure notice, ownership ────
+
+
+def test_ab_scheduled_run_prunes_to_the_keep_count(monkeypatch, tmp_path):
+    """``keep`` must prune on the scheduled path, not just cap a manual one."""
+    from sqlalchemy import create_engine
+
+    import backend.operations.backup.offsite as ob
+    import backend.operations.backup.telegram as tb
+
+    scratch = tmp_path / "live.db"
+    conn = sqlite3.connect(str(scratch))
+    conn.execute("CREATE TABLE probe (v TEXT)")
+    conn.commit()
+    conn.close()
+
+    fake_backups = tmp_path / "backups"
+    fake_backups.mkdir()
+    for i in range(5):
+        stale = fake_backups / f"ovmanager-backup-2024010{i}_000000-v1.ovmbak"
+        stale.write_bytes(b"stale")
+        os.utime(stale, (1_700_000_000 + i, 1_700_000_000 + i))
+
+    fake_engine = create_engine(f"sqlite:///{scratch}")
+    monkeypatch.setattr(maintenance, "DB_PATH", scratch)
+    monkeypatch.setattr(maintenance, "BACKUP_DIR", fake_backups)
+    monkeypatch.setattr(maintenance, "engine", fake_engine)
+    # whatever the dev DB has configured, the delivery legs stay offline
+    monkeypatch.setattr(tb, "send_backup_document", lambda *a, **k: tb.TelegramBackupResult(False, error="test"))
+    monkeypatch.setattr(ob, "push_offsite", lambda *a, **k: False)
+
+    ab_set_settings(enabled=True, keep=2)
+    try:
+        asyncio.run(app_module.auto_backup_job())
+
+        bundles = list(fake_backups.glob("ovmanager-backup-*.ovmbak"))
+        assert len(bundles) == 2, [b.name for b in bundles]
+        # the fresh bundle plus only the newest stale one survive the prune
+        fresh = max(bundles, key=lambda p: p.stat().st_mtime)
+        assert fresh.stat().st_mtime > 1_700_000_100
+    finally:
+        fake_engine.dispose()
+
+
+def test_ab_failure_notifies_the_owner_on_telegram(monkeypatch):
+    """A missed scheduled backup must reach the owner, not only the audit log."""
+    import backend.operations.observability.notifier as notifier
+
+    sent = []
+    monkeypatch.setattr(notifier, "send_telegram", lambda text, db=None: sent.append(text) or True)
+
+    def ab_boom(*args, **kwargs):
+        raise RuntimeError("disk on fire")
+
+    monkeypatch.setattr(maintenance, "create_panel_backup", ab_boom)
+
+    ab_set_settings(enabled=True, telegram=True)
+    asyncio.run(app_module.auto_backup_job())
+    assert len(sent) == 1, sent
+    assert "disk on fire" in sent[0]
+
+    # telegram_backup_enabled is the opt-in gate: no notice without it
+    sent.clear()
+    ab_set_settings(enabled=True, telegram=False)
+    asyncio.run(app_module.auto_backup_job())
+    assert sent == []
+
+
+def test_ab_reschedule_defers_to_the_worker_process(monkeypatch):
+    """With a worker running, the web scheduler must not own auto_backup."""
+    fake = ab_FakeScheduler()
+    monkeypatch.setattr(sched_module, "_scheduler", fake)
+    monkeypatch.setattr(sched_module, "_in_worker", False)
+    monkeypatch.delenv("OVM_WORKER", raising=False)
+
+    ab_set_settings(enabled=True, time="04:45")
+    sched_module.reschedule_auto_backup()
+    assert fake.added == [] and fake.removed == []
+
+
+def test_ab_reschedule_registers_without_a_worker(monkeypatch):
+    fake = ab_FakeScheduler()
+    monkeypatch.setattr(sched_module, "_scheduler", fake)
+    monkeypatch.setattr(sched_module, "_in_worker", False)
+    monkeypatch.setenv("OVM_WORKER", "0")
+
+    ab_set_settings(enabled=True, time="04:45")
+    sched_module.reschedule_auto_backup()
+    assert [job["id"] for job in fake.added] == ["auto_backup"]
+
+
+def test_ab_reschedule_registers_in_the_worker(monkeypatch):
+    fake = ab_FakeScheduler()
+    monkeypatch.setattr(sched_module, "_scheduler", fake)
+    monkeypatch.setattr(sched_module, "_in_worker", True)
+    monkeypatch.delenv("OVM_WORKER", raising=False)
+
+    ab_set_settings(enabled=True, time="04:45")
+    sched_module.reschedule_auto_backup()
+    assert [job["id"] for job in fake.added] == ["auto_backup"]
+
+
+@pytest.mark.asyncio
+async def test_ab_web_startup_leaves_the_daily_backup_to_the_worker(monkeypatch):
+    """Registration in both processes would fire it twice a night."""
+    monkeypatch.delenv("OVM_WORKER", raising=False)
+    ab_set_settings(enabled=True, time="04:45")
+    sched_module._scheduler = None
+    sched_module._in_worker = False
+    scheduler = sched_module.start_scheduler()
+    try:
+        ids = {job.id for job in scheduler.get_jobs()}
+        assert {"live_snapshot", "watchdog_bot"} <= ids
+        assert "auto_backup" not in ids
+    finally:
+        scheduler.shutdown(wait=False)
+        sched_module._scheduler = None
+        sched_module._in_worker = False
+
+
+@pytest.mark.asyncio
+async def test_ab_worker_re_syncs_the_schedule_every_minute():
+    """The settings-save → schedule channel: the worker re-reads each minute."""
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    from backend.worker import register_worker_jobs
+
+    scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
+    register_worker_jobs(scheduler)
+    scheduler.start()
+    try:
+        assert "reschedule_auto_backup" in {job.id for job in scheduler.get_jobs()}
+    finally:
+        scheduler.shutdown(wait=False)

@@ -1,3 +1,11 @@
+## 1.2.8 — 2026-10-07
+
+D7: backup wiring fixes. `auto_backup` was registered in both web
+scheduler and worker → fired twice nightly; ownership now goes to the
+worker (web registers only when no worker runs). Scheduled backup
+failure previously only wrote an audit row — now also sends the owner a
+Telegram notice (gated on `telegram_backup_enabled`, best-effort).
+
 ## 1.2.7 — 2026-10-07
 
 D10: in-panel Restart. Owner-only `POST /api/maintenance/restart`
