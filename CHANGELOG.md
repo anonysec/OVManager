@@ -1,3 +1,12 @@
+## 1.3.1 — 2026-10-07
+
+D6: manual cleanup lever (daily timer keeps running). Owner-only
+maintenance routes: `/cleanup/preview` (counts + name sample, deletes
+nothing), `/cleanup/run` (needs `confirm:true`, expired/disabled/all +
+older-than-days filter, audit rows), `/usage/reset-all` (confirm:true),
+`/usage/purge` (default keep 90 days). System → Maintenance card gains
+status select + days input + preview-first Delete + reset-all.
+
 ## 1.3.0 — 2026-10-07
 
 D1: subscription profile surface. New settings (migration v20):

@@ -3,20 +3,24 @@ import os
 import sqlite3
 import tempfile
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from shutil import copy2
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
-from sqlalchemy import create_engine
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, create_engine, or_
 from sqlalchemy import text as _text
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.auth.authz import require_owner
 from backend.data_paths import DATA_DIR
+from backend.db import crud
 from backend.db.engine import engine, get_db
+from backend.db.models import User
 from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limits
 from backend.operations.backup.bundle import (
     BUNDLE_SUFFIX,
@@ -25,6 +29,8 @@ from backend.operations.backup.bundle import (
     extract_database,
     verify_bundle,
 )
+from backend.operations.billing.usage import prune_daily
+from backend.operations.observability import live as live_ops
 from backend.operations.observability.audit import log_event
 from backend.routers.tls import (
     _docker_container_running,
@@ -559,3 +565,167 @@ def restart_panel(user: dict = Depends(require_owner)):
     log_event(None, "maintenance.restart", actor=user.get("username"), detail=" ".join(command))
     _spawn_detached(command)
     return ResponseModel(success=True, msg="Restarting panel…", data={"restarted": True, "command": command})
+
+
+# ── Manual cleanup (incident lever) ───────────────────────────────────────
+#
+# The daily ovmanager-cleanup.timer already sweeps expired AND disabled users
+# on its own. These owner-only routes are the on-demand version: preview
+# counts first, delete only on an explicit confirm.
+
+_SAMPLE_LIMIT = 20
+
+
+class CleanupRequest(BaseModel):
+    """Filter shared by /cleanup/preview and /cleanup/run."""
+
+    status: Literal["expired", "disabled", "all"] = "expired"
+    older_than_days: int = Field(default=0, ge=0, le=3650)
+    confirm: bool = False
+
+
+class ConfirmRequest(BaseModel):
+    confirm: bool = False
+
+
+class UsagePurgeRequest(BaseModel):
+    older_than_days: int = Field(default=90, ge=1, le=3650)
+    confirm: bool = False
+
+
+def _cleanup_filter(status: str, older_than_days: int):
+    """SQL filter for the manual cleanup.
+
+    ``expired``: expiry before today minus ``older_than_days`` (0 = anything
+    already expired, the same set the daily timer starts from).
+
+    ``disabled``: inactive and last seen before the cutoff; never-seen users
+    count as stale, so 0 days matches every disabled user.
+
+    ``all`` is the union of both. Deletion is panel-side only, like the daily
+    timer: expired and disabled credentials are already rejected on nodes.
+    """
+    cutoff_day = date.today() - timedelta(days=older_than_days)
+    cutoff_ts = datetime.now(UTC) - timedelta(days=older_than_days)
+    expired = User.expiry_date < cutoff_day
+    if status == "expired":
+        return expired
+    disabled = and_(User.is_active.is_(False), or_(User.last_online.is_(None), User.last_online < cutoff_ts))
+    if status == "disabled":
+        return disabled
+    return or_(expired, disabled)
+
+
+def _cleanup_candidates(db: Session, payload: CleanupRequest) -> list[User]:
+    # Newest first so the sample shows the users an incident just produced.
+    return db.query(User).filter(_cleanup_filter(payload.status, payload.older_than_days)).order_by(User.id.desc()).all()
+
+
+@router.post("/cleanup/preview", response_model=ResponseModel)
+async def cleanup_preview(payload: CleanupRequest, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Count matching users and show a sample. Deletes nothing."""
+
+    candidates = _cleanup_candidates(db, payload)
+    return ResponseModel(
+        success=True,
+        msg=f"{len(candidates)} user(s) match",
+        data={
+            "status": payload.status,
+            "older_than_days": payload.older_than_days,
+            "matched": len(candidates),
+            "sample": [u.name for u in candidates[:_SAMPLE_LIMIT]],
+            "truncated": len(candidates) > _SAMPLE_LIMIT,
+            "total_users": crud.count_users(db),
+        },
+    )
+
+
+@router.post("/cleanup/run", response_model=ResponseModel)
+async def cleanup_run(payload: CleanupRequest, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Delete matching users (owner only, explicit confirm).
+
+    The dry run is the preview route; without ``confirm`` this refuses and
+    touches nothing. Rows go through the same CRUD as the per-user delete
+    route, so their ``user_traffic_daily`` history is removed with them.
+    """
+
+    if not payload.confirm:
+        return ResponseModel(
+            success=False,
+            msg="Confirmation required — preview first, then resend with confirm=true",
+            data=None,
+        )
+
+    candidates = _cleanup_candidates(db, payload)
+    names = [u.name for u in candidates]
+    for name in names:
+        crud.delete_user(db, name)
+
+    actor = user.get("username")
+    for name in names:
+        log_event(
+            db,
+            "maintenance.cleanup_user",
+            actor=actor,
+            target=name,
+            detail=f"status={payload.status} older_than_days={payload.older_than_days}",
+        )
+    log_event(
+        db,
+        "maintenance.cleanup_run",
+        actor=actor,
+        detail=f"status={payload.status} older_than_days={payload.older_than_days} deleted={len(names)}",
+    )
+    if names:
+        live_ops.publish("users", {"op": "delete"})
+
+    return ResponseModel(
+        success=True,
+        msg=f"Deleted {len(names)} user(s)",
+        data={
+            "deleted": len(names),
+            "names": names,
+            "status": payload.status,
+            "older_than_days": payload.older_than_days,
+        },
+    )
+
+
+@router.post("/usage/reset-all", response_model=ResponseModel)
+async def usage_reset_all(payload: ConfirmRequest, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Zero every user's usage counters (owner only, explicit confirm).
+
+    Panel-side only: clearing ``node_usage`` makes the next collect rebaseline
+    against each node's cumulative total, so billing resumes at zero without
+    fanning out to nodes. Daily history rows are kept (see /usage/purge).
+    """
+
+    if not payload.confirm:
+        return ResponseModel(success=False, msg="Confirmation required — resend with confirm=true", data=None)
+
+    reset = db.query(User).update({"used": 0, "last_node_usage": 0, "node_usage": "{}"}, synchronize_session=False)
+    db.commit()
+    log_event(db, "maintenance.usage_reset_all", actor=user.get("username"), detail=f"reset={reset}")
+    live_ops.publish("users", {"op": "reset-usage"})
+    return ResponseModel(success=True, msg=f"Usage reset for {reset} user(s)", data={"reset": reset})
+
+
+@router.post("/usage/purge", response_model=ResponseModel)
+async def usage_purge(payload: UsagePurgeRequest, db: Session = Depends(get_db), user: dict = Depends(require_owner)):
+    """Drop daily usage history rows older than N days (owner only).
+
+    The scheduler already prunes at 90 days; this is the manual lever for a
+    bloated ``user_traffic_daily`` table. Rows for recent days are untouched.
+    """
+
+    if not payload.confirm:
+        return ResponseModel(success=False, msg="Confirmation required — resend with confirm=true", data=None)
+
+    removed = prune_daily(db, keep_days=payload.older_than_days)
+    log_event(
+        db,
+        "maintenance.usage_purge",
+        actor=user.get("username"),
+        detail=f"keep_days={payload.older_than_days} removed={removed}",
+    )
+    return ResponseModel(success=True, msg=f"Removed {removed} daily usage row(s)", data={"removed": removed})

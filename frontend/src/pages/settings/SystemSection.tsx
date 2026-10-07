@@ -10,8 +10,8 @@ import apiClient from '../../services/api';
 import { settle } from '../../hooks/useAsyncData';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiServer, FiZap, FiRefreshCw, FiDownload, FiPower } from 'react-icons/fi';
-import { Card, Stat } from './shared';
+import { FiServer, FiZap, FiRefreshCw, FiDownload, FiPower, FiTrash2 } from 'react-icons/fi';
+import { Card, Field, Stat } from './shared';
 import { formatBytes } from '../../utils/format';
 import { formatUptime } from '../../utils/time';
 import '../UpdateNotice.css';
@@ -184,6 +184,62 @@ const SystemSection = () => {
 
   const spin = <span className="button-spinner" aria-hidden="true" />;
 
+  /* ── Manual cleanup: preview first, delete only on confirm ── */
+  const [cleanStatus, setCleanStatus] = useState('expired');
+  const [cleanDays, setCleanDays] = useState('0');
+  const [cleanBusy, setCleanBusy] = useState(''); // 'preview' | 'run' | 'reset'
+  const [cleanNote, setCleanNote] = useState('');
+  const cleanKey = `${cleanStatus}:${cleanDays}`;
+  const [cleanPreviewed, setCleanPreviewed] = useState(''); // filter key of the last preview
+
+  const cleanBody = () => ({ status: cleanStatus, older_than_days: Number(cleanDays) || 0 });
+
+  const previewCleanup = async () => {
+    if (cleanBusy) return;
+    setCleanBusy('preview');
+    setCleanNote('');
+    try {
+      const res = await apiClient.post('/maintenance/cleanup/preview', cleanBody());
+      const body = res.data || {};
+      if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
+      const d = body.data || {};
+      const names: string[] = d.sample || [];
+      setCleanPreviewed(cleanKey);
+      setCleanNote(`${t('cleanupMatched', { count: d.matched ?? 0 })}${names.length ? ` · ${names.slice(0, 5).join(', ')}` : ''}`);
+    } catch (err) {
+      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+    } finally { setCleanBusy(''); }
+  };
+
+  const deleteCleanup = async () => {
+    if (cleanBusy || cleanPreviewed !== cleanKey) return;
+    if (!window.confirm(t('cleanupDeleteConfirm', 'Permanently delete the matching users and their usage rows? This cannot be undone.'))) return;
+    setCleanBusy('run');
+    try {
+      const res = await apiClient.post('/maintenance/cleanup/run', { ...cleanBody(), confirm: true });
+      const body = res.data || {};
+      if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
+      setCleanPreviewed(''); // counts changed; preview again before the next delete
+      setCleanNote(t('cleanupDeleted', { count: body.data?.deleted ?? 0 }));
+    } catch (err) {
+      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+    } finally { setCleanBusy(''); }
+  };
+
+  const resetAllUsage = async () => {
+    if (cleanBusy) return;
+    if (!window.confirm(t('cleanupResetConfirm', 'Zero the usage counters of every user? Daily history is kept.'))) return;
+    setCleanBusy('reset');
+    try {
+      const res = await apiClient.post('/maintenance/usage/reset-all', { confirm: true });
+      const body = res.data || {};
+      if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
+      setCleanNote(t('cleanupResetDone', { count: body.data?.reset ?? 0 }));
+    } catch (err) {
+      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+    } finally { setCleanBusy(''); }
+  };
+
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
   if (loadError && !sysInfo) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
@@ -254,6 +310,56 @@ const SystemSection = () => {
             {busy === '/maintenance/restart' ? spin : <><FiPower size={13} aria-hidden="true" /> {t('restartPanel', 'Restart panel')}</>}
           </button>
         </div>
+        {isOwner && (
+          <>
+            <p className="sp-hint sp-mt-18">{t('cleanupDesc', 'Bulk-delete expired or disabled users. Preview first — nothing is deleted until you confirm.')}</p>
+            <div className="sp-two-col">
+              <Field label={t('status', 'Status')} inputId="cleanup-status">
+                <select
+                  id="cleanup-status"
+                  className="sp-select"
+                  value={cleanStatus}
+                  disabled={!!cleanBusy}
+                  onChange={(e) => { setCleanStatus(e.target.value); setCleanPreviewed(''); }}
+                >
+                  <option value="expired">{t('expired', 'Expired')}</option>
+                  <option value="disabled">{t('disabled', 'Disabled')}</option>
+                  <option value="all">{t('cleanupAll', 'Expired or disabled')}</option>
+                </select>
+              </Field>
+              <Field label={t('cleanupOlderThan', 'Older than (days)')} inputId="cleanup-days">
+                <input
+                  id="cleanup-days"
+                  className="sp-input"
+                  type="number"
+                  min={0}
+                  max={3650}
+                  value={cleanDays}
+                  disabled={!!cleanBusy}
+                  onChange={(e) => { setCleanDays(e.target.value); setCleanPreviewed(''); }}
+                />
+              </Field>
+            </div>
+            <div className="sp-btn-group sp-mt-12">
+              <button className="btn btn-sm btn-secondary" disabled={!!cleanBusy} aria-busy={cleanBusy === 'preview'} onClick={previewCleanup}>
+                {cleanBusy === 'preview' ? spin : t('cleanupPreviewBtn', 'Preview')}
+              </button>
+              <button
+                className="btn btn-sm"
+                disabled={!!cleanBusy || cleanPreviewed !== cleanKey}
+                aria-busy={cleanBusy === 'run'}
+                title={cleanPreviewed !== cleanKey ? t('cleanupPreviewFirst', 'Preview the filter first.') : undefined}
+                onClick={deleteCleanup}
+              >
+                {cleanBusy === 'run' ? spin : <><FiTrash2 size={13} aria-hidden="true" /> {t('delete', 'Delete')}</>}
+              </button>
+              <button className="btn btn-sm btn-secondary" disabled={!!cleanBusy} aria-busy={cleanBusy === 'reset'} onClick={resetAllUsage}>
+                {cleanBusy === 'reset' ? spin : t('resetUsageButton', 'Reset Usage')}
+              </button>
+            </div>
+            {cleanNote && <p className="sp-hint sp-mt-12" role="status">{cleanNote}</p>}
+          </>
+        )}
       </Card>
     </div>
   );
