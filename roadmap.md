@@ -115,10 +115,10 @@ without RBAC to gate it).
 | ~~v1.1.8~~ | ~~A12+A13 polish batch~~ → shipped | done |
 | ~~v1.2.0~~ | ~~B2+B4+B5 panel-side PKI~~ → shipped | done |
 | **v1.2.1** | **Router dedup fix (route name uniqueness)** | **shipping now** |
-| v1.2.6 | D10 in-panel ops (restart, update check, geo refresh) | ~120 | planned |
-| v1.2.7 | D7 backup schedule + retention + TG notify | ~150 | planned |
-| v1.2.8 | D2 threshold alerts (days-left, usage %, node down, CPU) + test | ~250 | planned |
-| v1.2.9 | D1 subscription profile (title, support URL, announce, interval) | ~120 | planned |
-| v1.3.0 | D6 cleanup page w/ dry-run (only if timer proves insufficient) | ~200 | maybe |
+| v1.2.7 | D10 in-panel restart button (update check UI exists; geo dropped — no geo files in product) | ~80 | planned |
+| v1.2.8 | D7 backup schedule + retention + TG notify wiring gaps | ~150 | planned |
+| v1.2.9 | D2 threshold alerts (days-left, usage %, node down, CPU) + test | ~250 | planned |
+| v1.3.0 | D1 subscription profile (title, support URL, announce, interval) | ~120 | planned |
+| v1.3.1 | D6 cleanup page w/ dry-run (only if timer proves insufficient) | ~200 | maybe |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.
