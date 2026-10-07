@@ -30,7 +30,7 @@ const tlsMeta = (mode: any, t: any) => {
 const nodeEndpoint = (node: any) => {
   const address = String(node.address || '').trim();
   if (!address) return '';
-  return `https://${address}:${node.port}`;
+  return `${address}:${node.port}`;
 };
 
 const NodeManagement = () => {

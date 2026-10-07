@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -729,7 +730,7 @@ const UserManagement = () => {
         />
       )}
 
-      {rowMenu && (
+      {rowMenu && createPortal(
         <div
           className="um-rowmenu-panel"
           role="menu"
@@ -743,7 +744,8 @@ const UserManagement = () => {
             {rowMenu.user.is_active ? <FiUserX size={14} aria-hidden="true" /> : <FiUserCheck size={14} aria-hidden="true" />} {rowMenu.user.is_active ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
           </button>
           <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleResetUsage(rowMenu.user); }}><FiRefreshCw size={14} aria-hidden="true" /> {t('resetUsageButton', 'Reset usage')}</button>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <ConfirmModal

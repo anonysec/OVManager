@@ -1,3 +1,11 @@
+## 1.2.5 — 2026-10-07
+
+Fix: Users "More actions" menu rendered off-screen — the `.view.um-page`
+ancestor carries a `transform`, which traps `position:fixed` descendants.
+The row-menu panel now renders via portal to `document.body`.
+Change: Nodes list shows `address:port` (`2.28.122.51:2083`) instead of
+`https://address:port`.
+
 ## 1.2.4 — 2026-10-06
 
 Fix: panel `update_config()` now sends `set_new_setting: true` in the
