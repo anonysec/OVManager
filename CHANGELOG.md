@@ -1,3 +1,11 @@
+## 1.2.7 — 2026-10-07
+
+D10: in-panel Restart. Owner-only `POST /api/maintenance/restart`
+(detached `systemctl`/`docker` restart, same pattern as TLS restart),
+"Restart panel" button in Settings → System → Maintenance with confirm
+and back-online poll. Update check + run UI already existed; geo refresh
+dropped (no geo files in product — geolocation is live ip-api lookup).
+
 ## 1.2.6 — 2026-10-07
 
 Remove: VPN Domain card dropped from Settings → General. A single global

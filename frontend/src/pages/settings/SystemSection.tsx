@@ -10,7 +10,7 @@ import apiClient from '../../services/api';
 import { settle } from '../../hooks/useAsyncData';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiServer, FiZap, FiRefreshCw, FiDownload } from 'react-icons/fi';
+import { FiServer, FiZap, FiRefreshCw, FiDownload, FiPower } from 'react-icons/fi';
 import { Card, Stat } from './shared';
 import { formatBytes } from '../../utils/format';
 import { formatUptime } from '../../utils/time';
@@ -156,6 +156,32 @@ const SystemSection = () => {
     }
   };
 
+  const restartPanel = async () => {
+    if (busy) return;
+    if (!window.confirm(t('restartConfirm', 'The panel will restart briefly and may be unavailable for up to a minute. Continue?'))) return;
+    setBusy('/maintenance/restart');
+    try {
+      const res = await apiClient.post('/maintenance/restart');
+      const body = res.data || {};
+      if (!body.success) {
+        addToast(body.msg || t('error', 'Failed'), 'error');
+        return;
+      }
+      addToast(body.msg || t('restartStarted', 'Restarting panel…'), 'success');
+      const backOnline = await pollUntilOnline();
+      if (backOnline) {
+        addToast(t('restartFinished', 'The panel is back online.'), 'success');
+        await load();
+      } else {
+        addToast(t('restartTimeout', 'The panel did not answer in time. Check the server logs.'), 'error');
+      }
+    } catch (err) {
+      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const spin = <span className="button-spinner" aria-hidden="true" />;
 
   if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
@@ -223,6 +249,9 @@ const SystemSection = () => {
           </button>
           <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/sync-limits'} onClick={() => run('/maintenance/sync-limits', t('syncLimits', 'Limits'))}>
             {busy === '/maintenance/sync-limits' ? spin : <><FiRefreshCw size={13} aria-hidden="true" /> {t('syncLimits', 'Sync limits')}</>}
+          </button>
+          <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/restart'} onClick={restartPanel}>
+            {busy === '/maintenance/restart' ? spin : <><FiPower size={13} aria-hidden="true" /> {t('restartPanel', 'Restart panel')}</>}
           </button>
         </div>
       </Card>

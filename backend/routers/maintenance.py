@@ -26,6 +26,11 @@ from backend.operations.backup.bundle import (
     verify_bundle,
 )
 from backend.operations.observability.audit import log_event
+from backend.routers.tls import (
+    _docker_container_running,
+    _spawn_detached,
+    _systemd_unit_exists,
+)
 from backend.schema import ResponseModel
 
 logger = logging.getLogger(__name__)
@@ -528,3 +533,29 @@ async def clean_stale(db: Session = Depends(get_db), user: dict = Depends(requir
     data = await clean_stale_sessions_all_nodes(db)
     log_event(db, "maintenance.clean_stale", actor=user.get("username"), detail=f"removed={data.get('removed_total')}")
     return ResponseModel(success=True, msg="Stale sessions cleaned", data=data)
+
+
+@router.post("/restart", response_model=ResponseModel)
+def restart_panel(user: dict = Depends(require_owner)):
+    """Restart the panel (owner only).
+
+    The restart is spawned detached (``sh -c 'sleep 1; …'``), so this returns
+    before the process goes down — same helper TLS uses after a cert change.
+    """
+    if _systemd_unit_exists():
+        command = ["systemctl", "restart", "ovmanager"]
+    elif _docker_container_running():
+        command = ["docker", "restart", "ovmanager"]
+    else:
+        log_event(None, "maintenance.restart", actor=user.get("username"), detail="no restart target found")
+        return ResponseModel(
+            success=False,
+            msg=(
+                "Could not restart the panel automatically. Run 'systemctl restart ovmanager' on a native "
+                "install, or 'docker restart ovmanager' for Docker."
+            ),
+            data={"restarted": False},
+        )
+    log_event(None, "maintenance.restart", actor=user.get("username"), detail=" ".join(command))
+    _spawn_detached(command)
+    return ResponseModel(success=True, msg="Restarting panel…", data={"restarted": True, "command": command})
