@@ -70,9 +70,38 @@ Per-node `/sync/usage` already exists. Panel sums per-user bytes across nodes �
 
 Hot-path forks removed (`sanitize` bash builtin, `logger -t` → file append), dedicated `ovnode-openvpn.service`, daily session marker purge, fail-closed CN sanity check.
 
+## Part D — Operator settings (OpenVPN focus, lightweight, no reseller scope)
+
+Picked from the 3x-ui / PasarGuard audit. Only items 1, 2, 6, 7, 10.
+No RBAC, no 2FA, no HWID, no SMTP/Discord — selling lives in another project.
+
+### D1. Subscription surface — profile, not just URL
+Sub page gets: profile title, support URL, announce text, update interval.
+`.ovpn` keeps working as-is; this is the customer-facing text around it.
+Skip: UA→format rules, per-format toggles, app catalog (Xray-world, not ours).
+
+### D2. Threshold alert engine (Telegram only)
+Per-event toggles + thresholds, all Telegram, each with test button:
+days-left (default 3), usage % (default 80), node down, CPU load.
+Today's severity groups stay as the inbox; D2 is the trigger layer above them.
+
+### D6. Cleanup page (maybe)
+Bulk delete expired / disabled with date filter + dry-run preview,
+reset-all-usage, purge usage tables. Today's daily timer keeps running;
+this is the manual lever for incidents. Ship only if timer proves insufficient.
+
+### D7. Backup as a real story
+Schedule + retention count + Telegram notify (DB file shipped on cron).
+Settings-backed, no new deps (sqlite file copy + existing bot).
+
+### D10. In-panel ops
+Restart panel, update check, geo-file refresh from Settings → System.
+Kills the last SSH-only routine tasks. No reset-to-default (too destructive
+without RBAC to gate it).
+
 ---
 
-## Ship order
+## Ship order (append)
 
 | Version | Items | Est. lines | Status |
 |---|---|---|---|
@@ -86,5 +115,10 @@ Hot-path forks removed (`sanitize` bash builtin, `logger -t` → file append), d
 | ~~v1.1.8~~ | ~~A12+A13 polish batch~~ → shipped | done |
 | ~~v1.2.0~~ | ~~B2+B4+B5 panel-side PKI~~ → shipped | done |
 | **v1.2.1** | **Router dedup fix (route name uniqueness)** | **shipping now** |
+| v1.2.6 | D10 in-panel ops (restart, update check, geo refresh) | ~120 | planned |
+| v1.2.7 | D7 backup schedule + retention + TG notify | ~150 | planned |
+| v1.2.8 | D2 threshold alerts (days-left, usage %, node down, CPU) + test | ~250 | planned |
+| v1.2.9 | D1 subscription profile (title, support URL, announce, interval) | ~120 | planned |
+| v1.3.0 | D6 cleanup page w/ dry-run (only if timer proves insufficient) | ~200 | maybe |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.
