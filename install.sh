@@ -32,7 +32,7 @@ DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="1.2.5"
+VERSION="1.2.6"
 IMAGE_REPO="ghcr.io/${REPO,,}"
 ACTIVE_IMAGE_VERSION="$VERSION"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
@@ -1709,7 +1709,7 @@ trap operation_end EXIT
 [[ "${CI:-}" == "true" || "${NONINTERACTIVE:-}" == "1" ]] && YES=1
 
 # A release version: MAJOR.MINOR.PATCH, optionally with a pre-release or build
-# suffix (1.2.5-rc1, 1.2.5+build5), and an optional leading v. The tag it
+# suffix (1.2.6-rc1, 1.2.6+build5), and an optional leading v. The tag it
 # resolves to is "v" + this (see release_url), so both spellings work.
 valid_release_version() {
     [[ "$1" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]
@@ -3111,7 +3111,7 @@ main() {
     apply_env
     if [[ -n "$PIN" ]]; then
         valid_release_version "$PIN" \
-            || die "Bad --version '$PIN' (use 1.2.5, v1.2.5, 1.2.5-rc1)"
+            || die "Bad --version '$PIN' (use 1.2.6, v1.2.6, 1.2.6-rc1)"
         VERSION="${PIN#v}"
     fi
     # Before the banner and before root: "which installer did you actually

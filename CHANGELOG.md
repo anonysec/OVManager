@@ -1,3 +1,12 @@
+## 1.2.6 — 2026-10-07
+
+Remove: VPN Domain card dropped from Settings → General. A single global
+domain does not fit multi-node setups — every generated `.ovpn` got it as
+first remote, steering all users to one node. Per-node entry points now
+come from each node's tunnel address (IP or domain); with tunnel empty the
+node address is used. Backend `PUT /server/settings/domain` kept as
+API-only; existing values should be cleared (empty = node IPs).
+
 ## 1.2.5 — 2026-10-07
 
 Fix: Users "More actions" menu rendered off-screen — the `.view.um-page`
