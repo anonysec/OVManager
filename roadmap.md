@@ -99,6 +99,28 @@ Restart panel, update check, geo-file refresh from Settings → System.
 Kills the last SSH-only routine tasks. No reset-to-default (too destructive
 without RBAC to gate it).
 
+## Part E — Unified events (audit-centric)
+
+`record_event` → audit is the single event store (CRUD, logins, health
+transitions, errors). Notifications = filtered view with `delivered`
+sent-marker de-dupe (PasarGuard pattern). Transitions not ticks; latest
+health as columns; re-spam-once on crash ambiguity.
+
+## Part F — Pairing + auth + nav (v1.4.0 / node v1.3.0)
+
+- Cert required on Add Node (frontend + 422), TOFU auto-fetch deleted.
+- Single-panel pairing: `settings.panel_id` UUID + `X-Panel-ID` header;
+  node 409s foreign panels; 30-min lease expiry; `ovn auth disconnect`;
+  no panel-side takeover button.
+- Delete Health page (`/health` → `/`); update-check lives in System only.
+- Nav: Manage (Users, Nodes, Admins), System (Settings, Logs); no Advanced.
+- Logout confirm. Admin rename by owner (self incl.): cascade
+  `users.owner`, revoke sessions, re-login on self-rename.
+- Auth flow: no login hint, auto-redirect to setup when unclaimed;
+  "setup key" wording; 2-step setup (verify key → username/password);
+  claim accepts username; `ovm auth reset` = fresh setup key;
+  "Forgot password?" → recovery via setup key (single-use).
+
 ---
 
 ## Ship order (append)
@@ -120,5 +142,7 @@ without RBAC to gate it).
 | v1.2.9 | D2 threshold alerts (days-left, usage %, node down, CPU) + test | ~250 | ✅ shipped |
 | v1.3.0 | D1 subscription profile (title, support URL, announce, interval) | ~120 | ✅ shipped |
 | v1.3.1 | D6 cleanup page w/ dry-run | ~200 | ✅ shipped |
+| panel v1.4.0 + node v1.3.0 | F pairing + auth + nav + Health-delete (E backend after) | ~600 | planned |
+| panel v1.4.1 | E unified events (record_event, sent-markers, transitions) | ~300 | planned |
 
 Each version = one PR, one CDN release, one smoke test. No bulk reformat, no v2.
