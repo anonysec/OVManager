@@ -257,6 +257,23 @@ def _add_threshold_settings(db: Session) -> None:
         db.execute(text(_add_column_sql("settings", column)))
 
 
+def _add_subscription_profile_settings(db: Session) -> None:
+    """Add the subscription-page profile columns (v20): title, support, announce, refresh.
+
+    The customer-facing subscription page is OpenVPN-only, so these shape the
+    page itself rather than any client format. Defaults: branded page title,
+    no support link, no announcement banner, 12h refresh.
+    """
+    if "settings" not in table_names(db):
+        return
+    present = column_names(db, "settings")
+    for name in ("sub_profile_title", "sub_support_url", "sub_announce", "sub_update_interval_hours"):
+        if name in present:
+            continue
+        column = Base.metadata.tables["settings"].columns[name]
+        db.execute(text(_add_column_sql("settings", column)))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -276,4 +293,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (17, "add TLS/ACME and Telegram wizard settings", _add_tls_and_setup_settings),
     (18, "add panel domain setting", _add_panel_domain),
     (19, "add threshold alert settings", _add_threshold_settings),
+    (20, "add subscription profile settings", _add_subscription_profile_settings),
 )

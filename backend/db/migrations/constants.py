@@ -6,7 +6,7 @@ import threading
 
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 VERSION_TABLE = "schema_version"
 

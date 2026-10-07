@@ -191,6 +191,15 @@ async def get_subscription(
         if node.name in up_nodes:
             ovpn_download_links[node.name] = str(request.url_for("download_ovpn", uuid=uuid, node_name=node.name))
 
+    db_settings = crud.get_settings(db)
+    sub_profile_title = (getattr(db_settings, "sub_profile_title", None) or "").strip()
+    sub_support_url = (getattr(db_settings, "sub_support_url", None) or "").strip()
+    sub_announce = (getattr(db_settings, "sub_announce", None) or "").strip()
+    try:
+        sub_update_interval_hours = int(getattr(db_settings, "sub_update_interval_hours", 12) or 12)
+    except (TypeError, ValueError):
+        sub_update_interval_hours = 12
+
     return templates.TemplateResponse(
         request,
         "subscription.html",
@@ -203,6 +212,10 @@ async def get_subscription(
             "used": user.used,
             "is_active": user.is_active,
             "ovpn_download_links": ovpn_download_links,
+            "sub_profile_title": sub_profile_title,
+            "sub_support_url": sub_support_url,
+            "sub_announce": sub_announce,
+            "sub_update_interval_hours": sub_update_interval_hours,
         },
     )
 

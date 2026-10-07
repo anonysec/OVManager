@@ -25,6 +25,13 @@ _AUTO_BACKUP_KEEP_MIN = 1
 _AUTO_BACKUP_KEEP_MAX = 500
 _AUTO_BACKUP_FIELDS = frozenset({"auto_backup_enabled", "auto_backup_time", "auto_backup_keep"})
 _DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$")
+# Subscription page profile (D1): only http(s) links reach clients, and the
+# two free-text fields are capped so a banner cannot swallow the page.
+_SUB_SUPPORT_RE = re.compile(r"^https?://", re.IGNORECASE)
+_SUB_TITLE_MAX = 64
+_SUB_ANNOUNCE_MAX = 500
+_SUB_UPDATE_HOURS_MIN = 1
+_SUB_UPDATE_HOURS_MAX = 168
 # Threshold bounds: days-left covers a year, percentages are percentages.
 _THRESHOLD_BOUNDS = (("alert_days_left", 0, 365), ("alert_usage_pct", 1, 100), ("alert_cpu_pct", 1, 100))
 
@@ -85,6 +92,10 @@ async def get_settings(
         owner_telegram_id=getattr(db_settings, "owner_telegram_id", None) or None,
         urlpath=urlpath,
         panel_domain=getattr(db_settings, "panel_domain", None) or None,
+        sub_profile_title=getattr(db_settings, "sub_profile_title", None) or "",
+        sub_support_url=getattr(db_settings, "sub_support_url", None) or "",
+        sub_announce=getattr(db_settings, "sub_announce", None) or "",
+        sub_update_interval_hours=int(getattr(db_settings, "sub_update_interval_hours", 12) or 12),
     )
     data = settings.model_dump()
     data["notify_expiry"] = bool(getattr(db_settings, "notify_expiry", True))
@@ -111,6 +122,10 @@ class TimezoneUpdate(BaseModel):
 class SubscriptionUpdate(BaseModel):
     subscription_url_prefix: str | None = None
     subscription_path: str | None = None
+    sub_profile_title: str | None = None
+    sub_support_url: str | None = None
+    sub_announce: str | None = None
+    sub_update_interval_hours: int | None = None
 
 
 class BotConfigUpdate(BaseModel):
@@ -164,6 +179,37 @@ async def update_subscription(
     db: Session = Depends(get_db),
     user: dict = Depends(require_owner),
 ):
+    # Validate the whole payload before anything is written, so a rejected
+    # value can never leave a half-applied row behind.
+    if payload.sub_profile_title is not None and len(payload.sub_profile_title.strip()) > _SUB_TITLE_MAX:
+        return ResponseModel(
+            success=False,
+            msg=f"Subscription title must be at most {_SUB_TITLE_MAX} characters",
+            data=None,
+        )
+    if payload.sub_announce is not None and len(payload.sub_announce.strip()) > _SUB_ANNOUNCE_MAX:
+        return ResponseModel(
+            success=False,
+            msg=f"Announcement must be at most {_SUB_ANNOUNCE_MAX} characters",
+            data=None,
+        )
+    if payload.sub_support_url is not None:
+        support_url = payload.sub_support_url.strip()
+        if support_url and not _SUB_SUPPORT_RE.match(support_url):
+            return ResponseModel(
+                success=False,
+                msg="Support link must start with http:// or https://",
+                data=None,
+            )
+    if payload.sub_update_interval_hours is not None and not (
+        _SUB_UPDATE_HOURS_MIN <= payload.sub_update_interval_hours <= _SUB_UPDATE_HOURS_MAX
+    ):
+        return ResponseModel(
+            success=False,
+            msg=f"sub_update_interval_hours must be between {_SUB_UPDATE_HOURS_MIN} and {_SUB_UPDATE_HOURS_MAX}",
+            data=None,
+        )
+
     db_settings = crud.get_settings(db)
     if payload.subscription_url_prefix is not None:
         db_settings.subscription_url_prefix = payload.subscription_url_prefix.strip()
@@ -176,6 +222,15 @@ async def update_subscription(
                 data={"subscription_path": config.SUBSCRIPTION_PATH.strip("/")},
             )
         db_settings.subscription_path = requested_path
+
+    if payload.sub_profile_title is not None:
+        db_settings.sub_profile_title = payload.sub_profile_title.strip()
+    if payload.sub_support_url is not None:
+        db_settings.sub_support_url = payload.sub_support_url.strip()
+    if payload.sub_announce is not None:
+        db_settings.sub_announce = payload.sub_announce.strip()
+    if payload.sub_update_interval_hours is not None:
+        db_settings.sub_update_interval_hours = payload.sub_update_interval_hours
     db.commit()
     return ResponseModel(
         success=True,
@@ -183,6 +238,10 @@ async def update_subscription(
         data={
             "subscription_url_prefix": db_settings.subscription_url_prefix or "",
             "subscription_path": db_settings.subscription_path,
+            "sub_profile_title": db_settings.sub_profile_title or "",
+            "sub_support_url": db_settings.sub_support_url or "",
+            "sub_announce": db_settings.sub_announce or "",
+            "sub_update_interval_hours": db_settings.sub_update_interval_hours,
         },
     )
 

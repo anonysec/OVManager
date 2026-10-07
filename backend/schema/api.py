@@ -147,6 +147,10 @@ class Settings(BaseModel):
     owner_telegram_id: int | None = None
     urlpath: str = ""
     panel_domain: str | None = None
+    sub_profile_title: str = "OVManager VPN"
+    sub_support_url: str = ""
+    sub_announce: str = ""
+    sub_update_interval_hours: int = 12
 
 
 class Admins(BaseModel):

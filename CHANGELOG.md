@@ -1,3 +1,11 @@
+## 1.3.0 — 2026-10-07
+
+D1: subscription profile surface. New settings (migration v20):
+sub_profile_title, sub_support_url, sub_announce, sub_update_interval_hours
+(1–168, default 12). Rendered on the subscription page (brand title,
+support link, announce banner, refresh note); Settings → General gains a
+"Subscription Page" card. Empty values keep existing behavior.
+
 ## 1.2.9 — 2026-10-07
 
 D2: threshold alert engine (Telegram only). Settings: days-left (3),

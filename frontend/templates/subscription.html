@@ -466,6 +466,23 @@
 
         .hint b { color: var(--text-primary); font-weight: 700; }
 
+        /* ── Subscription profile (Settings → Subscription) ──────── */
+        .announce { white-space: pre-wrap; color: var(--text-primary); }
+
+        .profile-note {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px 14px;
+            flex-wrap: wrap;
+            margin: 14px 20px 0;
+            font-size: 0.73rem;
+            color: var(--text-muted);
+        }
+
+        .profile-link { color: var(--accent); font-weight: 700; text-decoration: none; }
+        .profile-link:hover, .profile-link:focus-visible { text-decoration: underline; }
+
         /* ── Downloads ───────────────────────────────────────────── */
         .section-label {
             display: block;
@@ -637,7 +654,7 @@
                         </svg>
                     </div>
                     <div class="brand-name">
-                        OVManager
+                        {{ sub_profile_title or "OVManager" }}
                         <small id="brand-sub">Secure Access</small>
                     </div>
                 </div>
@@ -714,6 +731,11 @@
                     </div>
                 </div>
             </div>
+
+            {% if sub_announce %}
+            <!-- Operator announcement (Settings → Subscription): rendered only when set -->
+            <div class="hint announce" id="announce-banner">{{ sub_announce }}</div>
+            {% endif %}
 
             <!-- Identity + expiry + traffic -->
             <div class="stats">
@@ -799,6 +821,18 @@
                     <span id="client-text">Get the OpenVPN App</span>
                 </a>
             </div>
+
+            {% if sub_support_url or sub_update_interval_hours %}
+            <!-- Support link + refresh interval (Settings → Subscription) -->
+            <div class="profile-note" id="profile-note">
+                {% if sub_support_url %}
+                <a class="profile-link" id="support-link" href="{{ sub_support_url }}" target="_blank" rel="noopener noreferrer">Support</a>
+                {% endif %}
+                {% if sub_update_interval_hours %}
+                <span id="update-interval">Refreshes every {{ sub_update_interval_hours }} hours</span>
+                {% endif %}
+            </div>
+            {% endif %}
 
             <div class="footer-note" id="footer-note">
                 This is your personal OpenVPN config. Keep it private — anyone with this file can use your connection.

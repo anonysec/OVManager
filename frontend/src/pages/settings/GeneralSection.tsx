@@ -8,8 +8,8 @@ import apiClient from '../../services/api';
 import LoadingButton from '../../components/LoadingButton';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink } from 'react-icons/fi';
-import { Card } from './shared';
+import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiInfo } from 'react-icons/fi';
+import { Card, Field } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
 
 /* ═══════════════════════════════════════════════════════
@@ -37,6 +37,8 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const [subPrefixEditing, setSubPrefixEditing] = useState(false);
   const [subPrefixValue, setSubPrefixValue] = useState('');
   const [subPrefixSaving, setSubPrefixSaving] = useState(false);
+  const [profile, setProfile] = useState({ title: '', support: '', announce: '', interval: '12' });
+  const [profileSaving, setProfileSaving] = useState(false);
   const loading = shared?.loading ?? true;
   const loadError = shared?.error ?? false;
   const load = shared?.reload ?? (() => {});
@@ -54,6 +56,12 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
     synced.current = true;
     setUrlPath(s.urlpath || '');
     setSubPrefix(s.subscription_url_prefix || '');
+    setProfile({
+      title: s.sub_profile_title ?? '',
+      support: s.sub_support_url ?? '',
+      announce: s.sub_announce ?? '',
+      interval: String(s.sub_update_interval_hours ?? 12),
+    });
   }, [shared]);
 
   const saveUrlPath = async () => {
@@ -80,6 +88,26 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
     finally { setSubPrefixSaving(false); }
+  };
+
+  const saveProfile = async () => {
+    const hours = Number(profile.interval);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
+      addToast(t('subIntervalInvalid', 'Update interval must be between 1 and 168 hours.'), 'error');
+      return;
+    }
+    setProfileSaving(true);
+    try {
+      const res = await apiClient.put('/server/settings/subscription', {
+        sub_profile_title: profile.title.trim(),
+        sub_support_url: profile.support.trim(),
+        sub_announce: profile.announce.trim(),
+        sub_update_interval_hours: hours,
+      });
+      if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
+      addToast(t('saved', 'Saved.'), 'success');
+    } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || (e as Error).message || t('error', 'Error'), 'error'); }
+    finally { setProfileSaving(false); }
   };
 
   const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
@@ -167,6 +195,29 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
           </div>
         )}
         <p className="sp-hint">{t('subscriptionLinkDesc', 'Override the base URL used in user subscription links. Leave empty to use the panel origin.')}</p>
+      </Card>
+
+      <Card title={t('subProfileCard', 'Subscription Page')} icon={FiInfo}>
+        <p className="sp-hint sp-mb-14">{t('subProfileDesc', 'Title, support link, announcement and refresh interval shown on the client subscription page.')}</p>
+        <div className="sp-two-col">
+          <Field label={t('subProfileTitle', 'Page title')} inputId="sub-profile-title">
+            <input id="sub-profile-title" className="sp-input" type="text" maxLength={64} value={profile.title} placeholder="OVManager VPN" onChange={e => setProfile({ ...profile, title: e.target.value })} />
+          </Field>
+          <Field label={t('subUpdateInterval', 'Update interval (hours)')} hint={t('subUpdateIntervalHint', 'Shown to clients as the refresh cadence (1–168).')} inputId="sub-profile-interval">
+            <input id="sub-profile-interval" className="sp-input" type="number" min={1} max={168} value={profile.interval} onChange={e => setProfile({ ...profile, interval: e.target.value })} />
+          </Field>
+        </div>
+        <Field label={t('subSupportUrl', 'Support link')} hint={t('subSupportUrlHint', 'Shown on the subscription page. Must start with http:// or https://. Leave empty to hide.')} inputId="sub-profile-support">
+          <input id="sub-profile-support" className="sp-input" type="url" value={profile.support} placeholder="https://t.me/your_support" onChange={e => setProfile({ ...profile, support: e.target.value })} />
+        </Field>
+        <Field label={t('subAnnounce', 'Announcement')} hint={t('subAnnounceHint', 'Banner shown above the account details. Leave empty to hide.')} inputId="sub-profile-announce">
+          <textarea id="sub-profile-announce" className="sp-input" rows={3} maxLength={500} value={profile.announce} onChange={e => setProfile({ ...profile, announce: e.target.value })} />
+        </Field>
+        <div className="sp-btn-group sp-mt-18">
+          <LoadingButton className="btn btn-sm" isLoading={profileSaving} onClick={saveProfile}>
+            <FiCheck size={13} /> {t('save', 'Save')}
+          </LoadingButton>
+        </div>
       </Card>
     </div>
   );
