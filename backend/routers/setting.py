@@ -65,7 +65,7 @@ async def get_settings(
     db: Session = Depends(get_db),
     user: str = Depends(require_owner),
 ):
-    db_settings = crud.get_settings(db)
+    db_settings = crud.get_cached_settings(db)
     urlpath = _get_urlpath()
 
     db_prefix = getattr(db_settings, "subscription_url_prefix", None)
@@ -233,6 +233,7 @@ async def update_subscription(
     if payload.sub_update_interval_hours is not None:
         db_settings.sub_update_interval_hours = payload.sub_update_interval_hours
     db.commit()
+    crud.refresh_settings(db)
     return ResponseModel(
         success=True,
         msg="Subscription link settings updated",
@@ -268,6 +269,7 @@ async def update_panel_domain(
     db_settings = crud.get_settings(db)
     db_settings.panel_domain = domain or None
     db.commit()
+    crud.refresh_settings(db)
     return ResponseModel(
         success=True,
         msg="VPN domain updated" if domain else "VPN domain cleared — .ovpn files will use node IPs",

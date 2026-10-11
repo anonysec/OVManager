@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from backend.config import settings_cache
 from backend.db.models import Settings
 from backend.logger import logger
 
@@ -42,6 +43,7 @@ def update_bot_config(db: Session, **kwargs):
             setattr(s, k, v)
     db.commit()
     db.refresh(s)
+    refresh_settings(db)
     return s
 
 
@@ -57,6 +59,26 @@ def get_settings(db: Session):
     return settings
 
 
+def refresh_settings(db: Session):
+    """Re-read the settings row and replace the process-local cache entry.
+
+    ``populate_existing`` forces the row's attributes to be re-populated from
+    the database: a session that already loaded the row would otherwise hand
+    back its stale in-memory copy.
+    """
+    settings = db.query(Settings).populate_existing().first()
+    if settings is None:
+        settings = get_settings(db)
+    settings_cache.set(settings)
+    return settings
+
+
+def get_cached_settings(db: Session):
+    """Read-through access: cached row on hits, SELECT + cache on the first read."""
+    cached = settings_cache.get()
+    return cached if cached is not None else refresh_settings(db)
+
+
 def update_setting_timezone(db: Session, timezone: str):
     settings = db.query(Settings).first()
     if not settings:
@@ -67,6 +89,7 @@ def update_setting_timezone(db: Session, timezone: str):
         db.refresh(settings)
     settings.timezone = timezone
     db.commit()
+    refresh_settings(db)
     return settings
 
 

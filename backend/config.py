@@ -1,4 +1,5 @@
 import os
+import threading
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
@@ -52,3 +53,31 @@ class Setting(BaseSettings):
 
 
 config = Setting()
+
+
+class SettingsCache:
+    """Process-local cache of the single-row settings table.
+
+    Single worker, so one dict is enough. Writers must replace the entry via
+    ``refresh_settings`` (backend.db.crud.settings) after they commit;
+    readers never mutate the row.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._row = None
+
+    def get(self):
+        with self._lock:
+            return self._row
+
+    def set(self, row) -> None:
+        with self._lock:
+            self._row = row
+
+    def clear(self) -> None:
+        with self._lock:
+            self._row = None
+
+
+settings_cache = SettingsCache()
