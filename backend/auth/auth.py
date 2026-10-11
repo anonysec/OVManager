@@ -28,6 +28,7 @@ _MAX_ATTEMPTS = 5  # per (IP, username) per window
 _MAX_PER_IP = 20  # per IP across usernames per window
 _MAX_PER_USER = 60  # per username across all addresses per window
 _LOCKOUT_SECONDS = 300
+_MAX_BUCKETS = 10000  # ponytail: in-memory only, Redis when multi-instance
 _CLEANUP_INTERVAL = 600
 _last_cleanup: float = 0.0
 
@@ -41,14 +42,25 @@ def _get_bucket(key_hash: str) -> list[float]:
     return fresh
 
 
+def _enforce_bucket_cap() -> None:
+    overflow = len(_login_attempts) - _MAX_BUCKETS
+    if overflow <= 0:
+        return
+    oldest = sorted(_login_attempts, key=lambda k: _login_attempts[k][-1] if _login_attempts[k] else 0.0)
+    for key in oldest[:overflow]:
+        del _login_attempts[key]
+
+
 def _put_bucket(key_hash: str, times: list[float]) -> None:
     _login_attempts[key_hash] = times
+    _enforce_bucket_cap()
 
 
 def _purge_stale_attempts() -> None:
     """Remove buckets with no recent attempts to bound memory growth."""
     global _last_cleanup
     now = time.time()
+    _enforce_bucket_cap()
     if now - _last_cleanup < _CLEANUP_INTERVAL:
         return
     _last_cleanup = now

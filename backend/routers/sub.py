@@ -19,6 +19,7 @@ router = APIRouter(prefix=f"/{config.SUBSCRIPTION_PATH}", tags=["Subscription"])
 _SUB_ATTEMPTS: dict[str, list[float]] = {}
 _SUB_MAX = 30
 _SUB_WINDOW = 60
+_SUB_MAX_BUCKETS = 10000
 _sub_last_cleanup = 0.0
 
 
@@ -28,9 +29,19 @@ def _sub_client_ip(request: Request) -> str:
     return client_ip(request)
 
 
+def _enforce_sub_bucket_cap() -> None:
+    overflow = len(_SUB_ATTEMPTS) - _SUB_MAX_BUCKETS
+    if overflow <= 0:
+        return
+    oldest = sorted(_SUB_ATTEMPTS, key=lambda k: _SUB_ATTEMPTS[k][-1] if _SUB_ATTEMPTS[k] else 0.0)
+    for key in oldest[:overflow]:
+        del _SUB_ATTEMPTS[key]
+
+
 def _sub_purge_stale(now: float) -> None:
     """Drop idle buckets so the dict cannot grow without bound."""
     global _sub_last_cleanup
+    _enforce_sub_bucket_cap()
     if now - _sub_last_cleanup < _SUB_WINDOW:
         return
     _sub_last_cleanup = now
@@ -48,9 +59,11 @@ def _sub_rate_limited(request: Request) -> bool:
     hits = [t for t in _SUB_ATTEMPTS.get(key, []) if now - t < _SUB_WINDOW]
     if len(hits) >= _SUB_MAX:
         _SUB_ATTEMPTS[key] = hits
+        _enforce_sub_bucket_cap()
         return True
     hits.append(now)
     _SUB_ATTEMPTS[key] = hits
+    _enforce_sub_bucket_cap()
     return False
 
 
