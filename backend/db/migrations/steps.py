@@ -9,6 +9,7 @@ from backend.db import models as _models  # noqa: F401
 from backend.db.engine import Base
 from backend.db.migrations.schema import (
     _add_column_sql,
+    _create_extra_tables,
     column_names,
     table_names,
 )
@@ -364,6 +365,28 @@ def _single_admin_schema(db: Session) -> None:
         logger.info("migrations v24: dropped multi-admin schema (single owner only)")
 
 
+def _create_traffic_ledger_and_kv(db: Session) -> None:
+    """Create the v25 tables and backfill the ledger from daily history (v25).
+
+    The ledger starts as a one-time projection of ``user_traffic_daily``: one
+    row per (user, day) becomes one ``kind='backfill'`` delta at the day's
+    UTC midnight, ``node_id`` NULL because no single node owns it. Running in
+    the same transaction as the stamp keeps the backfill atomic: a failed
+    migration rolls the rows back with the version.
+    """
+    _create_extra_tables(db)
+    if "user_traffic_daily" not in table_names(db):
+        return
+    db.execute(
+        text(
+            "INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) "
+            "SELECT user_id, CAST(strftime('%s', day) AS REAL), NULL, 'backfill', bytes, '{}' "
+            "FROM user_traffic_daily"
+        )
+    )
+    logger.info("migrations v25: backfilled traffic_ledger from user_traffic_daily")
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -388,4 +411,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (22, "add admin owner flag (admins.is_owner)", _add_admin_is_owner),
     (23, "add event delivered markers (delivered)", _add_event_delivered),
     (24, "single-admin cut (drop multi-admin columns)", _single_admin_schema),
+    (25, "add traffic ledger and settings kv", _create_traffic_ledger_and_kv),
 )

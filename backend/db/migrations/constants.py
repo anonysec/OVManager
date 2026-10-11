@@ -6,7 +6,7 @@ import threading
 
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 VERSION_TABLE = "schema_version"
 
@@ -88,6 +88,26 @@ _EXTRA_DDL: tuple[str, ...] = (
         event_key TEXT NOT NULL,
         ts REAL NOT NULL,
         UNIQUE (subscription, event_key)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS traffic_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts REAL NOT NULL,
+        user_id INTEGER NOT NULL,
+        node_id TEXT,
+        kind TEXT NOT NULL,
+        delta_bytes INTEGER NOT NULL,
+        meta_json TEXT NOT NULL DEFAULT '{}',
+        UNIQUE (user_id, ts, kind, node_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_traffic_ledger_user_ts ON traffic_ledger(user_id, ts)",
+    """
+    CREATE TABLE IF NOT EXISTS settings_kv (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '{}',
+        updated_at REAL NOT NULL DEFAULT 0
     )
     """,
 )
