@@ -80,6 +80,7 @@ def register_worker_jobs(scheduler) -> None:
         auto_prune_audit_job,
         auto_sync_limits_job,
         reschedule_auto_backup,
+        single_flight,
     )
 
     jobs = (
@@ -91,8 +92,12 @@ def register_worker_jobs(scheduler) -> None:
         (auto_prune_audit_job, CronTrigger(hour="*/6"), 300),
         (auto_daily_alerts_job, CronTrigger(hour=9, minute=15), 3600),
     )
+    # The four heavy jobs also guard themselves: a run that outlives its
+    # trigger (fan-out over unreachable nodes, a slow prune) must not pile up.
+    guarded = {"check_user_used_traffic", "enforce_user_limits", "collect_metrics", "auto_prune_audit_job"}
     for fn, trigger, grace in jobs:
-        scheduler.add_job(fn, trigger, id=fn.__name__, replace_existing=True, misfire_grace_time=grace)
+        job = single_flight(fn) if fn.__name__ in guarded else fn
+        scheduler.add_job(job, trigger, id=fn.__name__, replace_existing=True, misfire_grace_time=grace)
 
     scheduler.add_job(
         reschedule_auto_backup,
