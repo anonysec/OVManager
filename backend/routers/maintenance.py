@@ -658,6 +658,7 @@ async def usage_purge(payload: UsagePurgeRequest, db: Session = Depends(get_db),
         return ResponseModel(success=False, msg="Confirmation required — resend with confirm=true", data=None)
 
     removed = prune_daily(db, keep_days=payload.older_than_days)
+    db.commit()
     log_event(
         db,
         "maintenance.usage_purge",

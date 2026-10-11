@@ -82,5 +82,4 @@ def prune_daily(db: Session, keep_days: int = 90) -> int:
         ensure_daily_table(db)
     cutoff = (dt.datetime.now(dt.UTC).date() - dt.timedelta(days=max(1, int(keep_days or 90)))).strftime("%Y-%m-%d")
     result = db.execute(text("DELETE FROM user_traffic_daily WHERE day < :cutoff"), {"cutoff": cutoff})
-    db.commit()
     return int(result.rowcount or 0)

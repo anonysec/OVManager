@@ -58,6 +58,7 @@ async def auto_prune_audit_job():
         if removed:
             logger.info("Pruned %s audit log row(s) older than 90 days", removed)
         removed_daily = await asyncio.to_thread(prune_daily, db)
+        db.commit()
         if removed_daily:
             logger.info("Pruned %s daily usage row(s) older than 90 days", removed_daily)
     finally:
