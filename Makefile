@@ -45,7 +45,7 @@ check-bash:
 lint-backend:
 	.venv/bin/ruff check backend cli main.py tests
 	.venv/bin/ruff format --check backend cli main.py tests
-	bash -n install.sh manager.sh scripts/lib/*.sh
+	bash -n install.sh && bash -n manager.sh
 	git diff --check
 
 lint-frontend:
