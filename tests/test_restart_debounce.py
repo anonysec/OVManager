@@ -46,9 +46,7 @@ def test_consumer_success_clears_flag(monkeypatch):
     from backend.db import crud
     from backend.db.engine import SessionLocal
 
-    monkeypatch.setattr(
-        crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="ok2")]
-    )
+    monkeypatch.setattr(crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="ok2")])
 
     db = SessionLocal()
     try:
@@ -75,9 +73,7 @@ def test_consumer_partial_failure_keeps_flag(monkeypatch):
     from backend.db import crud
     from backend.db.engine import SessionLocal
 
-    monkeypatch.setattr(
-        crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="down1")]
-    )
+    monkeypatch.setattr(crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="down1")])
 
     db = SessionLocal()
     try:
@@ -134,9 +130,7 @@ def test_retry_hits_only_the_nodes_that_failed(monkeypatch):
     from backend.db.engine import SessionLocal
 
     names = ["hb_ok1", "hb_down", "hb_ok2"]
-    monkeypatch.setattr(
-        crud, "get_active_nodes", lambda db: [SimpleNamespace(name=n) for n in names]
-    )
+    monkeypatch.setattr(crud, "get_active_nodes", lambda db: [SimpleNamespace(name=n) for n in names])
 
     calls: dict[str, int] = dict.fromkeys(names, 0)
     down = {"hb_down"}
@@ -191,16 +185,19 @@ def test_retry_hits_only_the_nodes_that_failed(monkeypatch):
         db.close()
 
 
-def test_stale_flag_retried_at_startup():
+def test_max_backoff_survives_a_worker_restart():
+    """A flag inside its capped backoff window must keep backing off (Gate 2 #5).
+
+    Restart is simulated by rewinding updated_at far past any stale age while
+    next_retry_at is still in the future.
+    """
     from backend.db.engine import SessionLocal
 
     db = SessionLocal()
     try:
-        # a flag that has been stuck past the stale window, with a long backoff
-        rd._write_flag(db, 1, "stale", 3, time.time() + 3600)
-        # rewind updated_at to 10 minutes ago
+        rd._write_flag(db, 1, "stuck", 5, time.time() + rd.MAX_BACKOFF_SECONDS, done=["ok1"])
         payload = json.loads(rd._read_raw(db))
-        payload["updated_at"] = time.time() - rd.STALE_SECONDS - 1
+        payload["updated_at"] = time.time() - 400  # written long ago
         from sqlalchemy import text
 
         db.execute(
@@ -209,9 +206,25 @@ def test_stale_flag_retried_at_startup():
         )
         db.commit()
 
-        assert rd.retry_stale_restart_flag(db) is True, "a stale flag must be re-queued at startup"
+        assert rd.retry_stale_restart_flag(db) is False, "a pending backoff must survive a restart"
         flag = rd.read_restart_flag(db)
-        assert flag["flag"] == 1
+        assert flag["next_retry_at"] > time.time(), "the backoff must stay scheduled"
+        assert flag["done"] == ["ok1"], "the done list must survive the restart"
+    finally:
+        db.close()
+
+
+def test_due_flag_requeued_at_startup():
+    """A flag whose retry is already owed gets its backoff cleared."""
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        rd._write_flag(db, 1, "due", 3, time.time() - 1, done=["ok1"])
+
+        assert rd.retry_stale_restart_flag(db) is True, "a due flag must be re-queued at startup"
+        flag = rd.read_restart_flag(db)
         assert flag["next_retry_at"] == 0, "startup must clear the backoff so the next run retries now"
+        assert flag["done"] == ["ok1"], "re-queue must not forget the succeeded nodes"
     finally:
         db.close()

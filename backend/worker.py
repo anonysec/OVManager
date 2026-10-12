@@ -155,8 +155,8 @@ async def _run() -> None:
     scheduler.start()
     logger.info("worker: started with %d jobs", len(scheduler.get_jobs()))
 
-    # A restart flag stuck past the stale window (worker died mid-backoff)
-    # gets its backoff cleared so the first consumer run retries it now.
+    # A restart flag whose retry is already due (worker was down when it came
+    # due) gets its backoff cleared so the first consumer run retries it now.
     try:
         from backend.db.engine import SessionLocal
         from backend.operations.restart_debounce import retry_stale_restart_flag

@@ -20,7 +20,6 @@ from backend.logger import logger
 from backend.node.requests import node_client, panel_id_for
 
 RESTART_FLAG_KEY = "sync.restart_debounce"
-STALE_SECONDS = 300  # a flag pending this long is re-queued at startup
 RETRY_BASE_SECONDS = 30
 MAX_BACKOFF_SECONDS = 300  # 5m cap on the retry delay
 
@@ -69,18 +68,18 @@ def clear_restart_flag(db) -> None:
 
 
 def retry_stale_restart_flag(db) -> bool:
-    """At startup, re-queue a flag stuck past the stale window.
+    """At startup, re-queue a pending flag whose retry is already due.
 
-    A worker that died mid-backoff (or a bug that pushed ``next_retry_at`` far
-    out) would otherwise leave a pending restart unanswered; the next consumer
-    run then retries it immediately.
+    Judged by ``next_retry_at`` (when the retry is owed), not by ``updated_at``
+    age: a flag still inside its capped backoff window must keep backing off
+    across a worker restart. The consumer's own due-check fires on its first
+    run either way — this only clears a backoff that is already past due.
     """
     flag = read_restart_flag(db)
     if not flag:
         return False
-    updated = float(flag.get("updated_at", 0) or 0)
-    if time.time() - updated > STALE_SECONDS:
-        _write_flag(db, 1, flag.get("reason", ""), int(flag.get("attempts", 0) or 0), 0)
+    if time.time() >= float(flag.get("next_retry_at", 0) or 0):
+        _write_flag(db, 1, flag.get("reason", ""), int(flag.get("attempts", 0) or 0), 0, done=flag.get("done"))
         return True
     return False
 
