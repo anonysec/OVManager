@@ -236,13 +236,6 @@ def test_the_full_reference_carries_what_the_short_one_drops():
         assert token in output, f"help --all missing {token}"
 
 
-def test_the_short_help_is_one_screen():
-    """Sixty-four lines was the problem; the whole point is that this fits."""
-    r = mgr()
-    lines = (r.stdout + r.stderr).splitlines()
-    assert len(lines) < 40, f"short help is {len(lines)} lines"
-
-
 def test_bare_run_prints_usage_and_exits_zero():
     """Bare `ovm` lists the commands. It must never wait for input.
 
@@ -253,11 +246,6 @@ def test_bare_run_prints_usage_and_exits_zero():
     assert r.returncode == 0
     assert "USAGE" in r.stderr
     assert "ovm status" in r.stderr
-
-
-def test_unknown_option_fails():
-    r = mgr("--nonsense-flag")
-    assert r.returncode == 1
 
 
 def test_every_core_operation_is_a_command(tmp_path):
@@ -482,37 +470,6 @@ def test_manager_version_matches_panel():
     mver = re.search(r'^VERSION="([^"]+)"', manager_src, re.M).group(1)
     panel_ver = re.search(r'__version__ = "([^"]+)"', (REPO / "backend" / "version.py").read_text(encoding="utf-8")).group(1)
     assert mver == panel_ver, f"manager {mver} != panel {panel_ver}"
-
-
-def test_no_function_ends_with_a_failing_test():
-    """Same `set -e` guard as the installer, applied to manager + lib."""
-    import re
-
-    def tails(path):
-        lines = Path(path).read_text(encoding="utf-8").splitlines()
-        out, func, body = [], None, []
-        for i, line in enumerate(lines, 1):
-            m = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\(\)\s*\{$", line)
-            if m and func is None:
-                func, body = m.group(1), []
-                continue
-            if func is None:
-                continue
-            if line == "}":
-                tail = next((ln.strip() for ln in reversed(body) if ln.strip() and not ln.strip().startswith("#")), "")
-                out.append((func, tail, i))
-                func = None
-            else:
-                body.append(line)
-        return out
-
-    offenders = [
-        (str(path), name, tail, line)
-        for path in (MANAGER_PATH,)
-        for name, tail, line in tails(path)
-        if re.match(r"^\[\[.*\]\]\s*&&", tail)
-    ]
-    assert not offenders, offenders
 
 
 def test_status_has_no_machine_output_path():

@@ -168,6 +168,18 @@ def test_restore_works_for_admin_and_owner():
     assert resp.status_code == 200 and resp.json()["success"]
 
 
+def test_settings_mutations_require_auth():
+    """The three settings mutations refuse an anonymous caller (was test_smoke)."""
+    client = TestClient(api)
+    for path, payload in (
+        ("/api/server/settings/subscription", {}),
+        ("/api/server/settings/timezone", {"timezone": "UTC"}),
+        ("/api/server/settings/urlpath", {"urlpath": "test"}),
+    ):
+        res = client.put(path, json=payload)
+        assert res.status_code in (401, 403), f"{path} allowed anonymous PUT: {res.status_code}"
+
+
 def test_urlpath_rejects_reserved_prefixes():
     from backend.urlpath import set_urlpath
 

@@ -491,6 +491,49 @@ def test_unknown_option_fails():
     assert r.returncode == 1
 
 
+# ── die paths: exit 1, reason on stderr, nothing on stdout ─────────────
+# The installer has four documented exit codes — 0 ok, 1 error, 2 already
+# installed/cancelled, 130 interrupted — and scripts branch on them. Failures
+# report on stderr; stdout carries the ready card and nothing else, so a
+# caller that captures stdout never has to strip a diagnostic out of it.
+# These paths all exit before check_root(), so nothing on the host is touched.
+# `--tls 9` and `--bogus-flag` are already pinned above by
+# test_bad_tls_number_fails_fast / test_unknown_option_fails.
+DIE_CASES = [
+    ("--tls",),
+    ("--mode",),
+    ("-p",),
+    ("--version", "not-a-version"),
+    ("install",),
+    ("status",),
+]
+
+
+@pytest.mark.parametrize("args", DIE_CASES, ids=lambda a: " ".join(a))
+def test_die_paths_exit_one_with_the_reason_on_stderr(args):
+    r = sh(*args)
+    assert r.returncode == 1, r.stderr
+    assert r.stderr.strip(), args
+    assert r.stdout == "", f"a failure must not write to stdout: {r.stdout!r}"
+
+
+def test_failure_keeps_the_human_framing_on_stderr():
+    """The diagnostic names the cause and the run, and never leaks to stdout."""
+    r = sh("--bogus-flag")
+    assert "Unknown option: --bogus-flag" in r.stderr
+    assert "Error:" in r.stderr
+    assert "Run ID:" in r.stderr
+    assert "\033[" not in r.stdout
+    assert r.stdout == ""
+
+
+def test_removed_json_flag_is_rejected():
+    """The machine-output flag was removed: it must fail, not parse."""
+    r = sh("--json")
+    assert r.returncode == 1
+    assert "Unknown option: --json" in r.stderr
+
+
 # ── The three-flag surface, as a deprecation release ───────────────────
 # Decision 3 keeps -y/--yes, --docker, -h/--help. Everything else still works
 # for now, and each says one line naming what replaces it. The flags are cut in

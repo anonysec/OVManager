@@ -43,19 +43,16 @@ def test_text_spot_matches_the_package_version(relative, pattern):
 
 
 def test_pyproject_matches():
+    """pyproject and the two frontend manifests carry the same version.
+
+    ``npm ci`` fails on a lock that disagrees with package.json, but nothing
+    else ties the frontend pair to the backend, and the built bundle carries
+    the frontend version into the UI.
+    """
     data = tomllib.loads(_read("pyproject.toml"))
     assert data["project"]["version"] == __version__
-
-
-def test_frontend_package_json_matches():
-    """The built bundle carries this version into the UI."""
     package = json.loads(_read("frontend/package.json"))
     assert package["version"] == __version__
-
-
-def test_frontend_package_lock_matches_in_both_places():
-    """`npm ci` fails on a lock that disagrees with package.json, and the two
-    version fields inside the lock can drift from each other."""
     lock = json.loads(_read("frontend/package-lock.json"))
     assert lock["version"] == __version__, "package-lock root version"
     assert lock["packages"][""]["version"] == __version__, 'package-lock packages[""]'

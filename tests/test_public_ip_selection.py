@@ -75,7 +75,16 @@ BRIDGES_FIRST = (
 )
 
 
-@pytest.mark.parametrize("shell", ["install.sh", "manager.sh"])
+# manager.sh carries two of install.sh's four cases: its public_ip lives in the
+# byte-identical helper block (tests/test_lib_sourcing.py), so the private-IP
+# filter only needs a spot-check here, not the full matrix twice.
+MANAGER_PARAMS = [
+    ("169.254.169.254 203.0.113.7\n", "203.0.113.7"),
+    ("172.17.0.1 172.18.0.1 198.51.100.9\n", "198.51.100.9"),
+]
+
+
+@pytest.mark.parametrize("shell", ["install.sh"])
 @pytest.mark.parametrize(
     ("hostname_output", "expected"),
     [
@@ -91,6 +100,17 @@ def test_public_ip_names_a_routable_address(shell, hostname_output, expected):
     assert got == expected, (
         f"{shell}: public_ip returned {got!r} for {hostname_output!r} — a private or IPv6 address is refused by Let's Encrypt"
     )
+
+
+@pytest.mark.parametrize("shell", ["manager.sh"])
+@pytest.mark.parametrize(
+    ("hostname_output", "expected"),
+    MANAGER_PARAMS,
+    ids=["metadata-first", "bridges-first"],
+)
+def test_manager_public_ip_names_a_routable_address(shell, hostname_output, expected):
+    got = _public_ip_from(shell, hostname_output)
+    assert got == expected, f"{shell}: public_ip returned {got!r} for {hostname_output!r}"
 
 
 @pytest.mark.parametrize("shell", ["install.sh", "manager.sh"])
