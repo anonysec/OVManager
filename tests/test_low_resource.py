@@ -273,6 +273,40 @@ def test_flag_on_still_spawns_a_configured_bot(monkeypatch):
     assert len(spawned) == 1
 
 
+def test_the_watchdog_starts_the_bot_once_the_operator_enables_it(monkeypatch):
+    """Suppression is re-evaluated every tick — never latched at startup.
+
+    Low mode with no bot configured skips the spawn; the operator who then
+    turns the bot on must get it started on the next watchdog tick, without
+    a panel restart.
+    """
+    import backend.bot_supervisor as sup
+
+    with _bot_settings(enabled=False, token=None):
+        _flag_on(monkeypatch)
+        spawned = _record_popen(monkeypatch)
+        sup._bot_process = None
+        sup._watchdog_bot()
+        assert spawned == [], "still suppressed → the tick spawns nothing"
+
+        with _bot_settings(enabled=True, token="123:abc"):
+            sup._watchdog_bot()
+            assert len(spawned) == 1, "enabled mid-run → the next tick must start the bot"
+            assert sup._bot_process is not None
+
+
+def test_the_watchdog_leaves_the_first_spawn_to_the_lifespan_when_flag_off(monkeypatch):
+    """Flag off: unchanged — the lifespan owns the first spawn, watchdog only restarts."""
+    import backend.bot_supervisor as sup
+
+    with _bot_settings(enabled=True, token="123:abc"):
+        _flag_off(monkeypatch)
+        spawned = _record_popen(monkeypatch)
+        sup._bot_process = None
+        sup._watchdog_bot()
+    assert spawned == []
+
+
 # ── the flag itself ─────────────────────────────────────────────────────────
 
 

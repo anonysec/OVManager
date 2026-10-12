@@ -77,9 +77,18 @@ def _watchdog_bot():
     """Restart the bot process if it has died. Called by scheduler every minute."""
     global _bot_process, _bot_disabled_until
     if _bot_process is None:
-        return  # Bot was never started (no bot.main.py, or low mode skipped it)
+        # Nothing to watch — and suppression is re-evaluated on every tick,
+        # never latched from startup: with the flag on and no bot configured
+        # the tick spawns nothing, but an operator who turns the bot on later
+        # gets it started on the next minute, no panel restart. Flag off:
+        # unchanged, the lifespan owns the first spawn.
+        from backend.config import low_resource_enabled
+
+        if low_resource_enabled() and _bot_would_run():
+            start_bot()
+        return
     if _suppressed():
-        return  # low mode, bot not configured: do not resurrect it
+        return  # low mode, bot no longer configured: do not resurrect it
     rc = _bot_process.poll()
     if rc is None:
         _bot_disabled_until = None
