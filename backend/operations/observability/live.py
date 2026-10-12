@@ -23,6 +23,13 @@ POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_POLL_SECONDS", "10"))
 
 IDLE_POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_IDLE_POLL_SECONDS", "300"))
 
+GRACE_SECONDS = float(os.getenv("OVMANAGER_LIVE_GRACE_SECONDS", "20"))
+
+SNAPSHOT_MAX_NODES = 50
+SNAPSHOT_MAX_NODES_KEY = "telemetry.snapshot_max_nodes"
+
+_grace_until: dict[str, float] = {}  # node name → monotonic deadline while a fresh failure is held up
+
 
 @dataclass
 class LiveEvent:
@@ -98,10 +105,14 @@ class LiveSnapshot:
         self._connections: dict[str, int] = {}
         self._nodes: dict[str, bool] = {}
         self._last_poll_ts: float = 0.0
+        self._cap: int = SNAPSHOT_MAX_NODES
 
-    def update(self, connections: dict[str, int], nodes: dict[str, bool]) -> tuple[bool, bool]:
+    def update(self, connections: dict[str, int], nodes: dict[str, bool], cap: int | None = None) -> tuple[bool, bool]:
         """Store a new snapshot. Returns (connections_changed, nodes_changed)."""
         with self._lock:
+            if cap and len(nodes) > cap:
+                nodes = dict(sorted(nodes.items())[:cap])
+            self._cap = cap or SNAPSHOT_MAX_NODES
             counts_changed = connections != self._connections
             nodes_changed = nodes != self._nodes
             self._connections = dict(connections)
@@ -116,6 +127,10 @@ class LiveSnapshot:
     def get_nodes(self) -> dict[str, bool]:
         with self._lock:
             return dict(self._nodes)
+
+    def get_cap(self) -> int:
+        with self._lock:
+            return self._cap
 
     @property
     def last_poll_ts(self) -> float:
@@ -138,8 +153,35 @@ def last_poll_ts() -> float:
     return snapshot.last_poll_ts
 
 
+def get_snapshot_cap() -> int:
+    return snapshot.get_cap()
+
+
 def publish(topic: str, data: dict | None = None) -> None:
     bus.publish(topic, data)
+
+
+def _apply_grace(online: dict[str, bool], prev: dict[str, bool], now: float) -> dict[str, bool]:
+    """Hold a node that just went down as up until the grace window expires.
+
+    A node that was up and now fails (empty answer or probe exception) stays
+    visible for GRACE_SECONDS so a single blip does not flash the whole panel
+    offline. A node that was already down gets no grace.
+    """
+    for name in set(prev) | set(online):
+        if online.get(name, False):
+            _grace_until.pop(name, None)
+            online[name] = True
+            continue
+        until = _grace_until.get(name)
+        if until is None and prev.get(name, False):
+            until = _grace_until[name] = now + GRACE_SECONDS
+        if until is not None and now >= until:
+            _grace_until.pop(name, None)
+            online[name] = False
+        else:
+            online[name] = until is not None
+    return online
 
 
 async def collect_live_snapshot() -> None:
@@ -161,10 +203,11 @@ async def collect_live_snapshot() -> None:
     from backend.node.fanout import gather_background
     from backend.node.requests import node_client, panel_id_for
 
-    if not bus.has_subscribers():
-        last = snapshot.last_poll_ts
-        if last > 0 and (time.monotonic() - last) < IDLE_POLL_SECONDS:
-            return
+    if not bus.has_subscribers() and snapshot.last_poll_ts > 0:
+        return
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
 
     db = SessionLocal()
     try:
@@ -172,6 +215,11 @@ async def collect_live_snapshot() -> None:
         id_to_name = dict(crud.get_user_id_name_pairs(db))
         # Read while the session is open — the probes below run after close.
         pid = panel_id_for(db)
+        try:
+            cap_row = db.execute(text("SELECT value FROM settings_kv WHERE key = :k"), {"k": SNAPSHOT_MAX_NODES_KEY}).scalar()
+            cap = int(cap_row)
+        except (OperationalError, TypeError, ValueError):
+            cap = SNAPSHOT_MAX_NODES
     except Exception as exc:
         logger.error("live collector: DB read failed: %s", exc)
         db.close()
@@ -180,7 +228,7 @@ async def collect_live_snapshot() -> None:
         db.close()
 
     if not nodes:
-        counts_changed, nodes_changed = snapshot.update({}, {})
+        counts_changed, nodes_changed = snapshot.update({}, {}, cap=cap)
         if nodes_changed:
             publish("nodes", {"op": "snapshot"})
         return
@@ -208,7 +256,8 @@ async def collect_live_snapshot() -> None:
             if username:
                 counts[username] = counts.get(username, 0) + 1
 
-    counts_changed, nodes_changed = snapshot.update(counts, online)
+    online = _apply_grace(online, snapshot.get_nodes(), time.monotonic())
+    counts_changed, nodes_changed = snapshot.update(counts, online, cap=cap)
     if nodes_changed:
         publish("nodes", {"op": "status"})
     if counts_changed:

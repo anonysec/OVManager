@@ -19,7 +19,7 @@ from backend.auth.authz import require_owner
 from backend.db import crud
 from backend.db.engine import get_db
 from backend.operations.observability.audit import recent_events
-from backend.operations.observability.live import bus
+from backend.operations.observability.live import bus, get_snapshot_cap
 from backend.operations.observability.metrics import collect_metrics, history
 from backend.operations.observability.thresholds import INBOX_TYPES, threshold_items
 from backend.schema import ResponseModel
@@ -96,7 +96,7 @@ async def live_stream(user: dict = Depends(get_current_user)):
 
     async def generate():
         try:
-            yield _format_event("ready", {"ts": time.time()})
+            yield _format_event("ready", {"ts": time.time(), "cap": get_snapshot_cap()})
             while True:
                 try:
                     evt = await asyncio.wait_for(q.get(), timeout=_HEARTBEAT_SECONDS)

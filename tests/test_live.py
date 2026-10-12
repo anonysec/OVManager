@@ -166,6 +166,7 @@ def _reset_snapshot():
     live.snapshot._connections = {}
     live.snapshot._nodes = {}
     live.snapshot._last_poll_ts = 0.0
+    live._grace_until.clear()
 
 
 def _install_fake_probes(monkeypatch, calls: list):
