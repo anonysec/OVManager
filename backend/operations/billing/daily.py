@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 
 from sqlalchemy import text
 
@@ -8,7 +9,7 @@ from backend.db.engine import get_db
 from backend.logger import logger
 from backend.node.management import change_user_status_on_all_nodes
 from backend.node.sync import get_users_used_traffic
-from backend.operations.billing.usage import record_daily_bytes
+from backend.operations.billing.usage import record_daily_bytes, write_ledger_batch
 from backend.operations.observability import live
 
 
@@ -211,9 +212,11 @@ async def _collect_node_traffic(
 
         delta = max(int(delta), 0)
         if entry is None:
-            entry = {"user": user, "delta": 0, "node_usage": node_usage}
+            entry = {"user": user, "delta": 0, "node_usage": node_usage, "node_deltas": []}
             pending[user.id] = entry
         entry["delta"] += delta
+        if delta:
+            entry["node_deltas"].append((node.name, delta))
 
         logger.debug(
             "[%s] node=%s total=%s delta=%d",
@@ -223,6 +226,8 @@ async def _collect_node_traffic(
             delta,
         )
 
+    ledger_rows: list[dict] = []
+    ledger_ts = time.time()
     for user_id, entry in pending.items():
         user = entry["user"]
         old_used = user.used or 0
@@ -237,7 +242,20 @@ async def _collect_node_traffic(
             )
         else:
             stale.add(user)
+            for node_name, node_delta in entry["node_deltas"]:
+                ledger_rows.append(
+                    {
+                        "user_id": user_id,
+                        "ts": ledger_ts,
+                        "node_id": node_name,
+                        "kind": "poll",
+                        "delta_bytes": node_delta,
+                        "meta_json": "{}",
+                    }
+                )
 
+    if ledger_rows:
+        write_ledger_batch(db, ledger_rows)
     db.commit()
     return True
 
