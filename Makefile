@@ -16,10 +16,8 @@ setup:
 # --dist loadfile pins each file to one worker, which keeps a file's own module
 # state (and its pty fixtures) together.
 #
-# Known flake: two tests in test_installer_sh.py hardcode port 20950. Run
-# concurrently, the loser fails with "Port 20950 is already in use" inside a
-# test about password validation, so the message blames the wrong thing. It is
-# not fixed yet — see the plan — and it fires on maybe one run in three.
+# Flake fixed: test_installer_sh.py now allocates a free port per test
+# (_free_port); a residual TOCTOU window is documented at the helper.
 test:
 	.venv/bin/python -m pytest tests/ -q -n auto
 

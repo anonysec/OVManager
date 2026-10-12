@@ -157,6 +157,7 @@ def reset_urlpath() -> bool:
             settings = crud.get_settings(db)
             settings.urlpath = ""
             db.commit()
+            crud.refresh_settings(db)
         finally:
             db.close()
     except Exception as exc:

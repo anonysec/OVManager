@@ -72,3 +72,21 @@ def test_set_urlpath_refreshes_settings_cache():
     finally:
         settings_cache.clear()
         db.close()
+
+
+def test_reset_urlpath_refreshes_settings_cache():
+    from backend.urlpath import reset_urlpath, set_urlpath
+
+    db = SessionLocal()
+    try:
+        get_cached_settings(db)  # populate from this session
+        original = db.execute(text("SELECT urlpath FROM settings")).scalar() or ""
+        try:
+            set_urlpath("resetprobe")
+            assert reset_urlpath() is True
+            assert get_cached_settings(db).urlpath == "", "reset_urlpath must invalidate the settings cache"
+        finally:
+            set_urlpath(original)
+    finally:
+        settings_cache.clear()
+        db.close()
