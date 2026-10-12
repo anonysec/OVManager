@@ -108,3 +108,25 @@ def get_setting(key: str, default=None):
         return getattr(get_cached_settings(db), key, default)
     finally:
         db.close()
+
+
+def low_resource_enabled() -> bool:
+    """Is `perf.low_resource` on? Off by default, and off when unsure.
+
+    One flag for the small-box profile: stretched job intervals, a slower live
+    poll, a smaller SQLite page cache, no bot spawn for a bot that is not
+    configured. ``OVMANAGER_LOW_RESOURCE`` in .env overrides the row so an
+    operator can set it before the database exists (and so the suite can run
+    the whole profile with one variable). Any database failure reads as off —
+    a missing table must never block startup.
+    """
+    env = os.getenv("OVMANAGER_LOW_RESOURCE", "").strip().lower()
+    if env:
+        return env in ("1", "true", "yes", "on")
+    try:
+        raw = get_setting("perf.low_resource", False)
+    except Exception:
+        return False
+    if isinstance(raw, str):  # KV stores text; "false" must not be truthy
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return bool(raw)

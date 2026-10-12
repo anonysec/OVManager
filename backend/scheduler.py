@@ -21,7 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from backend.db.engine import SessionLocal
 from backend.logger import logger
 from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limits
-from backend.operations.observability.live import POLL_SECONDS, collect_live_snapshot
+from backend.operations.observability.live import collect_live_snapshot, poll_seconds
 
 _scheduler = None
 _in_worker = False  # True once this process's scheduler is the jobs worker's
@@ -288,7 +288,7 @@ def start_scheduler():
     scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
     scheduler.add_job(
         collect_live_snapshot,
-        IntervalTrigger(seconds=POLL_SECONDS),
+        IntervalTrigger(seconds=poll_seconds()),
         id="live_snapshot",
         replace_existing=True,
         next_run_time=datetime.now(tz=UTC),

@@ -134,6 +134,7 @@ async def test_guard_releases_after_a_crash():
 def test_worker_registers_the_four_heavy_jobs_with_guards():
     from apscheduler.schedulers.background import BackgroundScheduler
 
+    from backend.config import low_resource_enabled
     from backend.operations.billing.daily import check_user_used_traffic, enforce_user_limits
     from backend.operations.observability.metrics import collect_metrics
     from backend.scheduler import auto_prune_audit_job
@@ -147,6 +148,11 @@ def test_worker_registers_the_four_heavy_jobs_with_guards():
         "collect_metrics": collect_metrics,
         "auto_prune_audit_job": auto_prune_audit_job,
     }
+    if low_resource_enabled():
+        # Low mode has no enforce cron to guard: it runs inline after the
+        # traffic poll, which is itself single-flight guarded.
+        del guarded["enforce_user_limits"]
+        assert scheduler.get_job("enforce_user_limits") is None
     for job_id, original in guarded.items():
         func = scheduler.get_job(job_id).func
         assert func is not original, f"{job_id} must be wrapped in the single-flight guard"

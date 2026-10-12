@@ -93,6 +93,7 @@ def register_worker_jobs(scheduler) -> None:
     from apscheduler.triggers.cron import CronTrigger
     from apscheduler.triggers.interval import IntervalTrigger
 
+    from backend.config import low_resource_enabled
     from backend.operations.billing.daily import check_user_used_traffic, enforce_user_limits
     from backend.operations.observability.metrics import collect_metrics
     from backend.operations.restart_debounce import process_restart_debounce
@@ -105,17 +106,22 @@ def register_worker_jobs(scheduler) -> None:
         single_flight,
     )
 
-    jobs = (
+    # LOW_RESOURCE stretches the chatty jobs and folds enforce_user_limits into
+    # the 5-minute traffic poll (it already runs inline there). Nothing is
+    # dropped: prune, sync, alerts and the nightly prune keep their cadence.
+    low = low_resource_enabled()
+    jobs = [
         (check_user_used_traffic, CronTrigger(minute="*/5"), 60),
-        (enforce_user_limits, CronTrigger(minute="*/10"), 60),
-        (collect_metrics, CronTrigger(minute="2-59/5"), 60),
+        (collect_metrics, CronTrigger(minute="2-59/15" if low else "2-59/5"), 60),
         (auto_sync_limits_job, CronTrigger(minute="*/30"), 60),
         (auto_clean_stale_job, CronTrigger(minute="*/15"), 60),
         (auto_prune_audit_job, CronTrigger(hour="*/6"), 300),
         (auto_prune_daily_job, CronTrigger(hour=3, minute=0), 300),
         (auto_daily_alerts_job, CronTrigger(hour=9, minute=15), 3600),
-        (process_restart_debounce, IntervalTrigger(seconds=30), 60),
-    )
+        (process_restart_debounce, IntervalTrigger(seconds=60 if low else 30), 60),
+    ]
+    if not low:
+        jobs.insert(1, (enforce_user_limits, CronTrigger(minute="*/10"), 60))
     # The heavy jobs also guard themselves: a run that outlives its
     # trigger (fan-out over unreachable nodes, a slow prune) must not pile up.
     guarded = {
@@ -132,7 +138,7 @@ def register_worker_jobs(scheduler) -> None:
 
     scheduler.add_job(
         reschedule_auto_backup,
-        CronTrigger(minute="*"),
+        CronTrigger(minute="*/15" if low else "*"),
         id="reschedule_auto_backup",
         replace_existing=True,
         misfire_grace_time=60,

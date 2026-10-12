@@ -69,6 +69,7 @@ async def test_the_heavy_periodic_jobs_are_registered_in_the_worker():
     """These are the jobs that fan out to nodes and touch the database."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+    from backend.config import low_resource_enabled
     from backend.worker import register_worker_jobs
 
     scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
@@ -76,16 +77,20 @@ async def test_the_heavy_periodic_jobs_are_registered_in_the_worker():
     scheduler.start()  # get_jobs() on an unstarted scheduler raises
     ids = _job_ids(scheduler)
 
-    for expected in (
+    # enforce_user_limits is a cron of its own except in low-resource mode,
+    # where it runs inline after the 5-minute traffic poll instead.
+    expected = [
         "check_user_used_traffic",
-        "enforce_user_limits",
         "collect_metrics",
         "auto_sync_limits_job",
         "auto_clean_stale_job",
         "auto_prune_audit_job",
         "auto_daily_alerts_job",
-    ):
-        assert expected in ids, f"{expected} is not registered in the worker"
+    ]
+    if not low_resource_enabled():
+        expected.insert(1, "enforce_user_limits")
+    for job in expected:
+        assert job in ids, f"{job} is not registered in the worker"
 
     # The two in-process jobs must NOT be here, or they would publish into a
     # bus with no subscribers and watchdog a process this one never started.

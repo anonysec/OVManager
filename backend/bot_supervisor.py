@@ -16,12 +16,42 @@ _bot_disabled_until: float | None = None
 _BOT_DISABLED_RETRY_SECONDS = 3600
 
 
+def _bot_would_run() -> bool:
+    """Would the bot child actually poll? Same rules bot/main.py applies.
+
+    A fresh probe config rather than the module singleton: the supervisor must
+    not decide on a token/flag state the bot process loaded earlier.
+    """
+    from backend.bot.config import BotConfig
+
+    probe = BotConfig()
+    probe.load_from_env()
+    probe.load_from_db()
+    return bool(probe.token and probe.bot_enabled)
+
+
+def _suppressed() -> bool:
+    """Low-resource mode skips a bot that cannot run anyway.
+
+    On a small box with no Telegram bot configured, the spawn plus the
+    per-minute watchdog is pure overhead: the child would exit 0 immediately
+    and the watchdog would throttle its retries to hourly. A configured bot is
+    untouched — start it, watch it, restart it.
+    """
+    from backend.config import low_resource_enabled
+
+    return low_resource_enabled() and not _bot_would_run()
+
+
 def start_bot():
     """Start one supervised Telegram bot subprocess from the app root."""
     global _bot_process
     import subprocess
     import sys
 
+    if _suppressed():
+        _bot_process = None
+        return None
     app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     bot_path = os.path.join(app_root, "backend", "bot", "main.py")
     if not os.path.exists(bot_path):
@@ -47,7 +77,9 @@ def _watchdog_bot():
     """Restart the bot process if it has died. Called by scheduler every minute."""
     global _bot_process, _bot_disabled_until
     if _bot_process is None:
-        return  # Bot was never started (no bot.main.py)
+        return  # Bot was never started (no bot.main.py, or low mode skipped it)
+    if _suppressed():
+        return  # low mode, bot not configured: do not resurrect it
     rc = _bot_process.poll()
     if rc is None:
         _bot_disabled_until = None

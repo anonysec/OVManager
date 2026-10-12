@@ -21,6 +21,8 @@ from backend.logger import logger
 
 POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_POLL_SECONDS", "10"))
 
+LOW_RESOURCE_POLL_SECONDS = 30.0
+
 IDLE_POLL_SECONDS = float(os.getenv("OVMANAGER_LIVE_IDLE_POLL_SECONDS", "300"))
 
 GRACE_SECONDS = float(os.getenv("OVMANAGER_LIVE_GRACE_SECONDS", "20"))
@@ -29,6 +31,21 @@ SNAPSHOT_MAX_NODES = 50
 SNAPSHOT_MAX_NODES_KEY = "telemetry.snapshot_max_nodes"
 
 _grace_until: dict[str, float] = {}  # node name → monotonic deadline while a fresh failure is held up
+
+
+def poll_seconds() -> float:
+    """Collector cadence: an explicit .env wins, else 10s (30s in low mode).
+
+    Read per call rather than at import: the flag lives in the database, which
+    does not exist yet when this module is first imported, and an .env edit
+    should not need a code reload to take effect.
+    """
+    env = os.getenv("OVMANAGER_LIVE_POLL_SECONDS")
+    if env:
+        return float(env)
+    from backend.config import low_resource_enabled
+
+    return LOW_RESOURCE_POLL_SECONDS if low_resource_enabled() else POLL_SECONDS
 
 
 @dataclass
