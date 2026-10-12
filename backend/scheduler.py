@@ -12,6 +12,7 @@ import asyncio
 import functools
 import os
 from datetime import UTC, datetime
+from weakref import WeakKeyDictionary
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -24,29 +25,38 @@ from backend.operations.observability.live import POLL_SECONDS, collect_live_sna
 
 _scheduler = None
 _in_worker = False  # True once this process's scheduler is the jobs worker's
-_running: set[str] = set()  # jobs with a run in flight (single-flight guard)
+# Per running loop: a test suite (or a restart path) creates new loops, and a
+# Lock must never be reused across loops. Weak keys drop entries with the loop.
+_locks: WeakKeyDictionary = WeakKeyDictionary()
+
+
+def _job_lock(name: str) -> asyncio.Lock:
+    per_name = _locks.setdefault(asyncio.get_running_loop(), {})
+    lock = per_name.get(name)
+    if lock is None:
+        lock = per_name[name] = asyncio.Lock()
+    return lock
 
 
 def single_flight(fn):
     """Skip a run while a previous run of the same job is still in flight.
 
     ``max_instances=1`` stops APScheduler from scheduling overlaps; this also
-    covers direct or queued invocations of the job function. The check and the
-    add both run before the first await, so on one event loop no lock is
-    needed.
+    covers direct or queued invocations of the job function. The busy check
+    and the lock acquisition happen without an await between them, so a
+    concurrent fire on the same loop can never slip in; ``async with``
+    releases the name on normal return, on error and on cancellation.
     """
 
     @functools.wraps(fn)
     async def guarded(*args, **kwargs):
         name = fn.__name__
-        if name in _running:
+        lock = _job_lock(name)
+        if lock.locked():
             logger.debug("single-flight: skipping %s (previous run still in flight)", name)
             return None
-        _running.add(name)
-        try:
+        async with lock:
             return await fn(*args, **kwargs)
-        finally:
-            _running.discard(name)
 
     return guarded
 

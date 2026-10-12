@@ -4,14 +4,14 @@ import asyncio
 
 import pytest
 
-from backend.scheduler import _running, single_flight
+from backend.scheduler import _locks, single_flight
 
 
 @pytest.fixture(autouse=True)
 def _clean_running():
-    _running.clear()
+    _locks.clear()
     yield
-    _running.clear()
+    _locks.clear()
 
 
 @pytest.mark.asyncio
@@ -39,6 +39,79 @@ async def test_second_fire_skips_while_first_run_is_in_flight():
 
     await guarded()
     assert len(calls) == 2, "guard must release after the run finishes"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_fires_enter_the_body_exactly_once():
+    calls: list[int] = []
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def body():
+        calls.append(1)
+        entered.set()
+        await release.wait()
+        return "ran"
+
+    guarded = single_flight(body)
+    tasks = [asyncio.create_task(guarded()) for _ in range(5)]
+    await entered.wait()
+    await asyncio.sleep(0)  # let every other fire run its guard check
+
+    assert len(calls) == 1, f"five concurrent fires must enter once, entered {len(calls)} times"
+
+    release.set()
+    results = await asyncio.gather(*tasks)
+    assert len(calls) == 1, f"skipped fires must never enter the body, ran {len(calls)} times"
+    assert [r for r in results if r is not None] == ["ran"]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_holder_frees_the_name():
+    calls: list[int] = []
+
+    async def body():
+        calls.append(1)
+        if len(calls) == 1:
+            await asyncio.Event().wait()  # first run blocks until cancelled
+        return "ran"
+
+    guarded = single_flight(body)
+    holder = asyncio.create_task(guarded())
+    await asyncio.sleep(0)
+    assert len(calls) == 1
+
+    holder.cancel()
+    await asyncio.gather(holder, return_exceptions=True)
+
+    assert await guarded() == "ran", "a cancelled run must not keep the name latched"
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiter_does_not_wedge_the_name():
+    calls: list[int] = []
+    release = asyncio.Event()
+
+    async def body():
+        calls.append(1)
+        await release.wait()
+        return "ran"
+
+    guarded = single_flight(body)
+    first = asyncio.create_task(guarded())
+    await asyncio.sleep(0)
+    second = asyncio.create_task(guarded())
+    await asyncio.sleep(0)
+
+    second.cancel()
+    await asyncio.gather(second, return_exceptions=True)
+
+    release.set()
+    await asyncio.gather(first)
+
+    assert await guarded() == "ran", "name must be free after the holder finished"
+    assert len(calls) == 2, f"holder + next fire only — the cancelled fire must never enter, ran {len(calls)} times"
 
 
 @pytest.mark.asyncio
