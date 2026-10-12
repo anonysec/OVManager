@@ -81,3 +81,30 @@ class SettingsCache:
 
 
 settings_cache = SettingsCache()
+
+
+def get_setting(key: str, default=None):
+    """Read one setting: settings_kv wins, then the legacy settings column.
+
+    Deferred imports: backend.db.engine imports this module, so the DB stack
+    cannot be pulled in at import time. A KV value is returned JSON-decoded
+    when it parses ("100" → 100, '{"a": 1}' → dict) and as the raw string
+    otherwise. A key that is neither in KV nor a settings column yields
+    ``default``.
+    """
+    import json
+
+    from backend.db.crud.settings import get_cached_settings, get_kv
+    from backend.db.engine import SessionLocal
+
+    db = SessionLocal()
+    try:
+        raw = get_kv(db, key)
+        if raw is not None:
+            try:
+                return json.loads(raw)
+            except ValueError:
+                return raw
+        return getattr(get_cached_settings(db), key, default)
+    finally:
+        db.close()
