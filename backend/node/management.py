@@ -20,6 +20,7 @@ from backend.db import crud
 from backend.logger import logger
 from backend.node.fanout import run_bounded
 from backend.node.requests import NodeRequests, node_client, panel_id_for
+from backend.operations.restart_debounce import mark_restart_pending
 from backend.schema import NodeCreate
 from backend.utils.geolocation import geolocate
 from backend.version import __version__ as PANEL_VERSION
@@ -119,6 +120,16 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     if not existing:
         return False, "Node not found"
 
+    # Structural fields need a node restart to take effect; a pure metadata
+    # edit (rename, address) must not queue one. Read before crud.update_node
+    # mutates the row.
+    structural = (
+        (request.tunnel_address or "") != (existing.tunnel_address or "")
+        or request.protocol != existing.protocol
+        or request.ovpn_port != existing.ovpn_port
+        or bool(request.cert and request.cert != getattr(existing, "server_ca", None))
+    )
+
     geo = await run_in_threadpool(geolocate, request.address)
     api_key = request.key or existing.key
 
@@ -129,6 +140,11 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     if request.cert and getattr(existing, "server_ca", None) != request.cert:
         existing.server_ca = request.cert
         db.commit()
+
+    if structural:
+        # One flag for N edits; the worker's consumer fans the restart out
+        # (and retries an unreachable node) instead of this handler blocking.
+        mark_restart_pending(db, f"node:{existing.name or node_id} config change")
 
     nr = NodeRequests(
         address=request.address,

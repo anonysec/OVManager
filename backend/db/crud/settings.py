@@ -6,11 +6,31 @@ the owner-held server and 0600 DB perms are the trust boundary).
 
 from __future__ import annotations
 
+import time
+
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.config import settings_cache
 from backend.db.models import Settings
 from backend.logger import logger
+
+
+def get_kv(db: Session, key: str, default: str | None = None) -> str | None:
+    """Read a raw settings_kv value (None when the key is absent)."""
+    row = db.execute(text("SELECT value FROM settings_kv WHERE key = :k"), {"k": key}).scalar()
+    return row if row is not None else default
+
+
+def set_kv(db: Session, key: str, value: str) -> None:
+    """Upsert a raw settings_kv value. Caller owns the commit."""
+    db.execute(
+        text(
+            "INSERT INTO settings_kv (key, value, updated_at) VALUES (:k, :v, :t) "
+            "ON CONFLICT(key) DO UPDATE SET value = :v, updated_at = :t"
+        ),
+        {"k": key, "v": value, "t": time.time()},
+    )
 
 
 def decrypt_bot_token(stored: str | None) -> str | None:

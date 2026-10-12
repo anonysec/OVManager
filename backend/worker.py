@@ -71,9 +71,11 @@ def register_worker_jobs(scheduler) -> None:
     state belongs in ``backend.scheduler.start_scheduler``.
     """
     from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.triggers.interval import IntervalTrigger
 
     from backend.operations.billing.daily import check_user_used_traffic, enforce_user_limits
     from backend.operations.observability.metrics import collect_metrics
+    from backend.operations.restart_debounce import process_restart_debounce
     from backend.scheduler import (
         auto_clean_stale_job,
         auto_daily_alerts_job,
@@ -91,10 +93,17 @@ def register_worker_jobs(scheduler) -> None:
         (auto_clean_stale_job, CronTrigger(minute="*/15"), 60),
         (auto_prune_audit_job, CronTrigger(hour="*/6"), 300),
         (auto_daily_alerts_job, CronTrigger(hour=9, minute=15), 3600),
+        (process_restart_debounce, IntervalTrigger(seconds=30), 60),
     )
     # The four heavy jobs also guard themselves: a run that outlives its
     # trigger (fan-out over unreachable nodes, a slow prune) must not pile up.
-    guarded = {"check_user_used_traffic", "enforce_user_limits", "collect_metrics", "auto_prune_audit_job"}
+    guarded = {
+        "check_user_used_traffic",
+        "enforce_user_limits",
+        "collect_metrics",
+        "auto_prune_audit_job",
+        "process_restart_debounce",
+    }
     for fn, trigger, grace in jobs:
         job = single_flight(fn) if fn.__name__ in guarded else fn
         scheduler.add_job(job, trigger, id=fn.__name__, replace_existing=True, misfire_grace_time=grace)
@@ -123,6 +132,21 @@ async def _run() -> None:
     set_scheduler_instance(scheduler)
     scheduler.start()
     logger.info("worker: started with %d jobs", len(scheduler.get_jobs()))
+
+    # A restart flag stuck past the stale window (worker died mid-backoff)
+    # gets its backoff cleared so the first consumer run retries it now.
+    try:
+        from backend.db.engine import SessionLocal
+        from backend.operations.restart_debounce import retry_stale_restart_flag
+
+        db = SessionLocal()
+        try:
+            if retry_stale_restart_flag(db):
+                logger.info("worker: stale restart flag re-queued for immediate retry")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("worker: startup restart-flag check failed: %s", exc)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
