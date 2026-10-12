@@ -64,6 +64,26 @@ def acquire_single_instance_lock():
     return handle
 
 
+async def auto_prune_daily_job():
+    """Nightly prune of daily-usage and traffic-ledger rows (90-day keep).
+
+    Separate from the 6h audit sweep so a change there cannot silently drop
+    the table prune, and a huge backlog lands in one nightly window.
+    """
+    from backend.db.engine import SessionLocal
+    from backend.operations.billing.usage import prune_daily, prune_ledger
+
+    db = SessionLocal()
+    try:
+        removed_daily = await asyncio.to_thread(prune_daily, db)
+        removed_ledger = await asyncio.to_thread(prune_ledger, db)
+        db.commit()
+        if removed_daily or removed_ledger:
+            logger.info("Pruned %s daily / %s ledger row(s)", removed_daily, removed_ledger)
+    finally:
+        db.close()
+
+
 def register_worker_jobs(scheduler) -> None:
     """Register every job that does not need the web process's own state.
 
@@ -92,16 +112,18 @@ def register_worker_jobs(scheduler) -> None:
         (auto_sync_limits_job, CronTrigger(minute="*/30"), 60),
         (auto_clean_stale_job, CronTrigger(minute="*/15"), 60),
         (auto_prune_audit_job, CronTrigger(hour="*/6"), 300),
+        (auto_prune_daily_job, CronTrigger(hour=3, minute=0), 300),
         (auto_daily_alerts_job, CronTrigger(hour=9, minute=15), 3600),
         (process_restart_debounce, IntervalTrigger(seconds=30), 60),
     )
-    # The four heavy jobs also guard themselves: a run that outlives its
+    # The heavy jobs also guard themselves: a run that outlives its
     # trigger (fan-out over unreachable nodes, a slow prune) must not pile up.
     guarded = {
         "check_user_used_traffic",
         "enforce_user_limits",
         "collect_metrics",
         "auto_prune_audit_job",
+        "auto_prune_daily_job",
         "process_restart_debounce",
     }
     for fn, trigger, grace in jobs:

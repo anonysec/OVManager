@@ -95,6 +95,24 @@ async def test_the_heavy_periodic_jobs_are_registered_in_the_worker():
 
 
 @pytest.mark.asyncio
+async def test_the_daily_prune_job_is_registered_at_3am():
+    """Daily-usage and ledger rows must prune nightly even if the 6h audit sweep changes."""
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    from backend.worker import register_worker_jobs
+
+    scheduler = AsyncIOScheduler(job_defaults={"coalesce": True, "max_instances": 1})
+    register_worker_jobs(scheduler)
+    scheduler.start()
+    try:
+        job = scheduler.get_job("auto_prune_daily_job")
+        assert job is not None, "the nightly prune job must be registered in the worker"
+        assert str(job.trigger) == "cron[hour='3', minute='0']", "prune must run daily at 03:00"
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
 async def test_no_job_is_registered_in_both_places():
     """A job in both processes would run twice — two backups a night."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
