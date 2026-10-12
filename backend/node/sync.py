@@ -31,7 +31,11 @@ _last_pushed_limits: dict[tuple[int, int], int] = {}
 
 
 def _push_hash(uid: str, name: str, max_logins: int) -> str:
-    """sha256 over the state this sweep pushes for one user on one node."""
+    """sha256 over the state this sweep pushes for one user on one node.
+
+    Scope: limits sweeps only — PKI pushes (certificate pins, renewals) are
+    intentionally unhashed and always go out in full.
+    """
     return hashlib.sha256(f"{uid}|{name}|{int(max_logins or 0)}".encode()).hexdigest()
 
 

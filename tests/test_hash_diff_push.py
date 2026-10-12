@@ -187,6 +187,60 @@ def test_reset_preserves_push_hash_so_next_sync_pushes_nothing(monkeypatch):
         _cleanup(node_id, name)
 
 
+def test_pki_repin_path_is_unaffected_by_hash_skip(monkeypatch):
+    """The hash skip gates limits sweeps only — PKI pushes always go out.
+
+    After a sweep stored the push hash (user pushes now silent), the repin
+    endpoint must still reach the node and store the certificate pin.
+    """
+    import backend.routers.node as node_router
+
+    class FakeRequests:
+        def __init__(self, address, port, api_key, use_tls=True):
+            pass
+
+        def _request(self, method, path, **kw):
+            return {"success": True, "data": {"applied": len(kw["json"]["users"]), "failed": []}}
+
+    monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
+    node_id, user_id, name = _seed(node_usage=json.dumps({"tnode": {"total": 1}}))
+    _only_seeded_node(monkeypatch, node_id)
+    try:
+        _run_sync()  # stores the push hash; the user sweep is now silent
+
+        fetched = []
+
+        async def fake_cert(address, port):
+            fetched.append((address, port))
+            return "-----BEGIN CERTIFICATE-----"
+
+        monkeypatch.setattr(node_router, "_fetch_node_cert", fake_cert)
+
+        from backend.db.engine import SessionLocal
+
+        db = SessionLocal()
+        try:
+            out = asyncio.run(node_router.repin_node_cert(node_id, db=db, user={"username": "tester"}))
+        finally:
+            db.close()
+
+        assert fetched == [("127.0.0.1", 2083)], "the PKI path must still reach the node"
+        assert out.data == {"repinned": True}
+
+        db = SessionLocal()
+        try:
+            from backend.db.models import Node, User
+
+            node = db.query(Node).filter(Node.id == node_id).first()
+            assert node.server_ca == "-----BEGIN CERTIFICATE-----", "the pin must be stored"
+            row = db.query(User).filter(User.id == user_id).first()
+            assert json.loads(row.node_usage)["push_hash"], "the hash must still be intact"
+        finally:
+            db.close()
+    finally:
+        _cleanup(node_id, name)
+
+
 def test_bulk_push_chunks_at_batch_size_under_1mb(monkeypatch):
     """5000 users with sync.batch_size=100 → 50 chunks, each payload <1MB."""
     from backend.app import _run_migrations
