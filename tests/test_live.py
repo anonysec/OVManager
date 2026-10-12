@@ -121,6 +121,40 @@ async def test_live_stream_sends_ready_event():
     assert b"event: ready" in body
 
 
+async def test_the_stream_carries_invalidations_and_never_snapshot_payload():
+    """Diet-gate 5 ruling: SSE is invalidation-only, and that is enough.
+
+    Every event the frontend receives bumps its refresh tick and refetches
+    through REST (frontend/src/context/LiveContext.tsx: tickWithPublish), with
+    an 8s fallback poll while the stream is down and a refetch on visibility —
+    so freshness is decided at the REST layer (snapshot_fresh → DB fallback),
+    never on the wire. Nothing stale can be served over the stream because the
+    stream carries no data to be stale.
+    """
+    import json
+
+    from backend.routers.telemetry import live_stream
+
+    _reset_snapshot()
+    live.snapshot.update({"ghost": 7}, {"n1": True})  # payload sitting in the snapshot
+    try:
+        resp = await live_stream(user={"type": "owner", "username": "admin"})
+        frames = resp.body_iterator
+        ready = await asyncio.wait_for(frames.__anext__(), timeout=5)
+        assert "event: ready" in ready, ready
+
+        live.publish("users", {"op": "connections"})
+        frame = await asyncio.wait_for(frames.__anext__(), timeout=5)
+        assert frame.startswith("event: users"), frame
+        data = json.loads(frame.split("data: ", 1)[1])
+        assert data["op"] == "connections"
+        assert set(data) <= {"op", "ts"}, f"the stream must carry invalidations only, got {data}"
+        assert "ghost" not in frame and "n1" not in frame, "snapshot payload must never travel over SSE"
+        await frames.aclose()
+    finally:
+        _reset_snapshot()
+
+
 def test_users_list_uses_live_connection_cache(monkeypatch):
     from backend.app import _run_migrations
 
