@@ -73,7 +73,11 @@ rsync -a --delete \
     --exclude .pytest_cache \
     --exclude .slim \
     --exclude .env \
+    --exclude /data \
     "$SRC/" "$DEST/"
+
+# Recreate the venv the rsync exclude drops (frozen lockfile, no dev deps).
+(cd "$DEST" && uv sync --frozen --no-dev)
 
 mkdir -p "$DEST/data"
 if [[ ! -f "$DEST/.env" ]]; then
