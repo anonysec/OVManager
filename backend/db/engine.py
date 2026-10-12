@@ -1,4 +1,3 @@
-import os
 import threading
 from pathlib import Path
 
@@ -14,36 +13,35 @@ DATABASE_URL = f"sqlite:///{DATA_DIR / 'ovmanager.db'}"
 
 restore_lock = threading.Event()
 
-_TRUTHY = ("1", "true", "yes", "on")
+# Resolved once per process, at import — the connect hook below runs while a
+# connection is being established and must not open another reader: a nested
+# SQLAlchemy session deadlocks against the write migrate() holds (seen as a
+# suite hang), and a bare sqlite3 handle was the same bet pointed elsewhere.
+# The flag is a startup setting, like the worker's triggers: flipping it in
+# the panel applies on the next restart, when this is read again.
+_low_resource = False
+
+
+def load_low_resource_flag() -> bool:
+    """Read ``perf.low_resource`` once through the normal session and store it.
+
+    The startup read every process shares (web, worker, CLI): env override
+    first, then settings_kv, through ``config.low_resource_enabled`` — one
+    code path for the parse, and no table yet just reads as the default.
+    """
+    global _low_resource
+    try:
+        from backend.config import low_resource_enabled
+
+        _low_resource = bool(low_resource_enabled())
+    except Exception:  # no database / no table yet: the default stands
+        _low_resource = False
+    return _low_resource
 
 
 def _low_resource_cache_size() -> int:
-    """Page cache: 32MiB normally, 8MiB on a 1GB box (perf.low_resource).
-
-    Read with a bare sqlite3 connection and never with SessionLocal: this runs
-    inside the connect event, where a second SQLAlchemy connection deadlocks
-    against the one being established (migrate() holds its first write, the
-    nested reader waits on it, and the connect never finishes). Same key and
-    truthy parse as ``backend.config.low_resource_enabled``; a miss, a missing
-    table or a busy database all read as the default — the pragma must never
-    stop a connection from opening.
-    """
-    import sqlite3
-
-    env = os.getenv("OVMANAGER_LOW_RESOURCE", "").strip().lower()
-    if env:
-        return -8192 if env in _TRUTHY else -32768
-    try:
-        conn = sqlite3.connect(str(DATA_DIR / "ovmanager.db"), timeout=1.0)
-        try:
-            row = conn.execute("SELECT value FROM settings_kv WHERE key = 'perf.low_resource'").fetchone()
-        finally:
-            conn.close()
-    except Exception:
-        return -32768
-    if row is None:
-        return -32768
-    return -8192 if str(row[0]).strip().lower() in _TRUTHY else -32768
+    """Page cache: 32MiB normally, 8MiB on a 1GB box (perf.low_resource)."""
+    return -8192 if _low_resource else -32768
 
 
 engine = create_engine(
@@ -77,3 +75,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Startup read: import is the one point every process has in common, and it
+# happens after SessionLocal/Base exist, so the read can use the normal stack.
+load_low_resource_flag()

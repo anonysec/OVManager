@@ -45,6 +45,21 @@ def _flag_off(monkeypatch) -> None:
     monkeypatch.setattr(config, "low_resource_enabled", lambda: False)
 
 
+@pytest.fixture
+def flag_cache():
+    """Reload the engine's startup flag cache; restore it after the test.
+
+    The cache is resolved once per process, so a test that wants to see the
+    other value reads it the way startup does — then the fixture puts the
+    original back so the rest of the worker keeps what it booted with.
+    """
+    from backend.db import engine as engine_mod
+
+    previous = engine_mod._low_resource
+    yield engine_mod.load_low_resource_flag
+    engine_mod._low_resource = previous
+
+
 # ── the schedule ────────────────────────────────────────────────────────────
 
 
@@ -87,42 +102,74 @@ def test_flag_on_stretches_the_chatty_jobs(monkeypatch):
 # ── memory ──────────────────────────────────────────────────────────────────
 
 
-def test_the_page_cache_is_trimmed_only_when_the_flag_is_on(monkeypatch):
-    from backend.db.engine import engine
+def test_the_page_cache_is_trimmed_only_when_the_flag_is_on(monkeypatch, flag_cache):
+    from backend.db import engine as engine_mod
 
+    # The flag is resolved once at startup (env/KV, through the normal
+    # session); every connection then reads the cached value in its hook.
     monkeypatch.delenv("OVMANAGER_LOW_RESOURCE", raising=False)
-    with engine.connect() as conn:
+    flag_cache()
+    with engine_mod.engine.connect() as conn:
         assert conn.exec_driver_sql("PRAGMA cache_size").scalar() <= -32768
 
-    # The pragma is read at connect time from env/KV directly: this runs inside
-    # the connect event, where opening a session would deadlock the connection.
     monkeypatch.setenv("OVMANAGER_LOW_RESOURCE", "1")
-    with engine.connect() as conn:
+    flag_cache()
+    with engine_mod.engine.connect() as conn:
         assert conn.exec_driver_sql("PRAGMA cache_size").scalar() == -8192
 
 
-def test_the_page_cache_follows_the_kv_flag(monkeypatch):
+def test_the_page_cache_follows_the_kv_flag(monkeypatch, flag_cache):
     from sqlalchemy import text
 
     from backend.db import crud
-    from backend.db.engine import SessionLocal, engine
+    from backend.db import engine as engine_mod
 
     monkeypatch.delenv("OVMANAGER_LOW_RESOURCE", raising=False)
-    db = SessionLocal()
+    db = engine_mod.SessionLocal()
     try:
         crud.set_kv(db, "perf.low_resource", "true")
         db.commit()
-        with engine.connect() as conn:
+        flag_cache()
+        with engine_mod.engine.connect() as conn:
             assert conn.exec_driver_sql("PRAGMA cache_size").scalar() == -8192
 
         crud.set_kv(db, "perf.low_resource", "false")
         db.commit()
-        with engine.connect() as conn:
+        flag_cache()
+        with engine_mod.engine.connect() as conn:
             assert conn.exec_driver_sql("PRAGMA cache_size").scalar() <= -32768
     finally:
         db.execute(text("DELETE FROM settings_kv WHERE key = 'perf.low_resource'"))
         db.commit()
         db.close()
+
+
+def test_the_connect_hook_reads_the_cached_flag_and_nothing_else(monkeypatch, flag_cache):
+    """The connect event must not open a reader of its own.
+
+    It runs while the connection is being established: a nested SQLAlchemy
+    reader deadlocks against the write migrate() holds, and a bare sqlite3
+    handle was the same bet. The flag is resolved once at startup instead,
+    and the hook only spends it — so every connection keeps its full pragma
+    profile.
+    """
+    import sqlite3
+
+    from backend.db import engine as engine_mod
+
+    flag_cache()
+    expected = -8192 if engine_mod._low_resource else -32768
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("the connect hook must not open a connection or re-read the flag")
+
+    monkeypatch.setattr(sqlite3, "connect", forbidden)
+    monkeypatch.setattr(config, "low_resource_enabled", forbidden)
+
+    with engine_mod.engine.connect() as conn:
+        assert conn.exec_driver_sql("PRAGMA cache_size").scalar() == expected
+        assert conn.exec_driver_sql("PRAGMA journal_mode").scalar() == "wal"
+        assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
 
 
 # ── live poll cadence ───────────────────────────────────────────────────────
