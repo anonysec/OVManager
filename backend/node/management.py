@@ -124,9 +124,9 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     # edit (rename, address) must not queue one. Read before crud.update_node
     # mutates the row.
     structural = (
-        (request.tunnel_address or "") != (existing.tunnel_address or "")
-        or request.protocol != existing.protocol
-        or request.ovpn_port != existing.ovpn_port
+        (request.tunnel_address or "") != (getattr(existing, "tunnel_address", None) or "")
+        or request.protocol != getattr(existing, "protocol", None)
+        or request.ovpn_port != getattr(existing, "ovpn_port", None)
         or bool(request.cert and request.cert != getattr(existing, "server_ca", None))
     )
 
@@ -144,7 +144,7 @@ async def update_node_handler(node_id: int, request: NodeCreate, db: Session) ->
     if structural:
         # One flag for N edits; the worker's consumer fans the restart out
         # (and retries an unreachable node) instead of this handler blocking.
-        mark_restart_pending(db, f"node:{existing.name or node_id} config change")
+        mark_restart_pending(db, f"node:{getattr(existing, 'name', None) or node_id} config change")
 
     nr = NodeRequests(
         address=request.address,

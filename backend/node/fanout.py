@@ -15,6 +15,29 @@ import asyncio
 
 NODE_FANOUT_LIMIT = 20
 
+
+def chunk_by_size(items: list, batch_size: int, max_bytes: int, item_bytes) -> list[list]:
+    """Split items into chunks of at most batch_size items and max_bytes total.
+
+    ``item_bytes(item)`` estimates one item's serialized size. A single item
+    over max_bytes still forms its own chunk — nothing smaller exists without
+    changing the payload shape.
+    """
+    chunks: list[list] = []
+    current: list = []
+    current_bytes = 0
+    for item in items:
+        size = item_bytes(item)
+        if current and (len(current) >= batch_size or current_bytes + size > max_bytes):
+            chunks.append(current)
+            current, current_bytes = [], 0
+        current.append(item)
+        current_bytes += size
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 _semaphore: asyncio.Semaphore | None = None
 _loop: asyncio.AbstractEventLoop | None = None
 
