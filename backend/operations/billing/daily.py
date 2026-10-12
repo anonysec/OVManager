@@ -236,28 +236,69 @@ async def _collect_node_traffic(
         if entry["delta"] == 0 and new_state == old_state:
             continue
         if not _apply_user_traffic(db, user_id, old_used, old_state, old_used + entry["delta"], new_state, entry["delta"]):
-            logger.info(
-                "Traffic update skipped for %s: counters changed concurrently (reset or delete)",
-                user.name,
+            # OCC miss: recompute against the fresh row and retry once, so a
+            # concurrent reset / delete / other-node bump never drops the tick.
+            entry = _recompute_entry(db, user, entry, polled=node.name)
+            if entry is None:
+                logger.info("Traffic dropped for user %s: the row is gone", user_id)
+                continue
+            old_used = user.used or 0
+            old_state = user.node_usage or "{}"
+            new_state = json.dumps(entry["node_usage"])
+            if entry["delta"] == 0 and new_state == old_state:
+                continue
+            if not _apply_user_traffic(db, user_id, old_used, old_state, old_used + entry["delta"], new_state, entry["delta"]):
+                logger.warning("Traffic still conflicting after recompute for %s — dropped", user.name)
+                continue
+        stale.add(user)
+        for node_name, node_delta in entry["node_deltas"]:
+            ledger_rows.append(
+                {
+                    "user_id": user_id,
+                    "ts": ledger_ts,
+                    "node_id": node_name,
+                    "kind": "poll",
+                    "delta_bytes": node_delta,
+                    "meta_json": "{}",
+                }
             )
-        else:
-            stale.add(user)
-            for node_name, node_delta in entry["node_deltas"]:
-                ledger_rows.append(
-                    {
-                        "user_id": user_id,
-                        "ts": ledger_ts,
-                        "node_id": node_name,
-                        "kind": "poll",
-                        "delta_bytes": node_delta,
-                        "meta_json": "{}",
-                    }
-                )
 
     if ledger_rows:
         write_ledger_batch(db, ledger_rows)
     db.commit()
     return True
+
+
+def _recompute_entry(db, user, entry, polled: str) -> dict | None:
+    """Rebuild one pending entry against the freshly refreshed row.
+
+    An OCC miss means the row moved under us (concurrent reset, delete, or
+    another node's bump). Refreshing and recomputing the polled node's delta
+    against the fresh cursor preserves this tick's delta — an unrelated bump
+    keeps it, a reset legitimately leaves the cursor wiped for the next poll
+    to re-baseline. Returns None when the row is gone.
+    """
+    try:
+        db.refresh(user, attribute_names=["used", "node_usage"])
+    except Exception:
+        return None
+    fresh = _load_node_usage(user)
+    node_deltas = []
+    total = 0
+    new_node_state = entry["node_usage"].get(polled)
+    if isinstance(new_node_state, dict):
+        prev_state = fresh.get(polled)
+        prev = prev_state.get("total") if isinstance(prev_state, dict) else None
+        cur = new_node_state.get("total")
+        if cur is not None and isinstance(prev, (int, float)):
+            delta = max(int(cur) - int(prev), 0)
+            if delta:
+                node_deltas.append((polled, delta))
+                total = delta
+            fresh[polled] = new_node_state
+        # No fresh cursor (reset or first sight): leave it wiped — the next
+        # poll re-baselines, same as a reset outside any tick.
+    return {"user": user, "delta": total, "node_usage": fresh, "node_deltas": node_deltas}
 
 
 async def check_user_used_traffic():
