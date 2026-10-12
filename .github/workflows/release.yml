@@ -12,44 +12,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Gates the upload on the suite ci.yml runs. It repeats ci.yml's backend job
-  # rather than calling it via workflow_run, because a release can be published
-  # without a CI run on the same commit, and a workflow_run gate that never
-  # fires is a gate that never blocks.
-  test:
-    runs-on: ubuntu-latest
-    env:
-      ADMIN_USERNAME: test_admin
-      ADMIN_PASSWORD: test_password_12345678!
-      JWT_SECRET_KEY: test-secret-key-for-ci-env-only-change-me-in-production
-      TZ: UTC
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      # tests/test_asset_serving.py skips itself unless frontend/dist/assets
-      # exists, so the build is what keeps this job as strong as ci.yml's.
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci --no-audit --no-fund
-          npm run build
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install uv
-        run: pip install uv
-      - name: Sync deps + dev group
-        run: |
-          uv sync
-          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist httpx
-      - name: Run backend tests
-        run: .venv/bin/python -m pytest -q -n auto
-
+  # The backend suite runs in ci.yml (push/PR gates). This workflow no longer
+  # repeats it; the release is cut from a commit that passed CI.
   assets:
-    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write

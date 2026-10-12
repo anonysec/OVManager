@@ -74,7 +74,9 @@ jobs:
       - name: Sync deps + dev group
         run: |
           uv sync
-          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist httpx
+          # Test deps come from the lockfile (incl. httpx2 for
+          # starlette.testclient); no ad-hoc installs that can drift from it.
+          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist
       - name: Lint backend
         run: |
           # Same ruff the lockfile pins, so `make lint` here and in CI agree:
