@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -187,7 +188,14 @@ def reset_user_usage(db: Session, uuid: str) -> bool:
 
     user.used = 0
     user.last_node_usage = 0
-    user.node_usage = "{}"
+    # Counters wipe, push hashes stay: the limits on the node did not change,
+    # so the next sweep must not re-push every user after a reset.
+    try:
+        data = json.loads(user.node_usage or "{}")
+    except ValueError:
+        data = {}
+    push_hash = data.get("push_hash")
+    user.node_usage = json.dumps({"push_hash": push_hash}) if isinstance(push_hash, dict) else "{}"
     db.commit()
     return True
 

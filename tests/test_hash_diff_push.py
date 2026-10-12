@@ -148,6 +148,45 @@ def test_unchanged_user_makes_zero_node_calls_after_restart(monkeypatch):
         _cleanup(node_id, name)
 
 
+def test_reset_preserves_push_hash_so_next_sync_pushes_nothing(monkeypatch):
+    """reset-usage wipes counters but must not force a full user re-push."""
+    calls: list = []
+
+    class FakeRequests:
+        def __init__(self, address, port, api_key, use_tls=True):
+            pass
+
+        def _request(self, method, path, **kw):
+            for item in kw["json"]["users"]:
+                calls.append((item["id"], item["max_logins"]))
+            return {"success": True, "data": {"applied": len(kw["json"]["users"]), "failed": []}}
+
+    monkeypatch.setattr(sync_mod, "node_client", lambda node, **kw: FakeRequests("x", 1, "k"))
+    node_id, user_id, name = _seed(node_usage=json.dumps({"tnode": {"total": 42}}))
+    _only_seeded_node(monkeypatch, node_id)
+    try:
+        _run_sync()
+        assert [c for c in calls if c[0] == str(user_id)] == [(str(user_id), 1)], "first sweep must push"
+
+        from backend.db import crud
+        from backend.db.engine import SessionLocal
+        from backend.db.models import User
+
+        db = SessionLocal()
+        try:
+            row = db.query(User).filter(User.id == user_id).first()
+            assert crud.reset_user_usage(db, row.uuid) is True
+        finally:
+            db.close()
+
+        sync_mod._last_pushed_limits.clear()  # simulated panel restart
+        calls.clear()
+        _run_sync()
+        assert [c for c in calls if c[0] == str(user_id)] == [], "a reset must not cost a re-push"
+    finally:
+        _cleanup(node_id, name)
+
+
 def test_bulk_push_chunks_at_batch_size_under_1mb(monkeypatch):
     """5000 users with sync.batch_size=100 → 50 chunks, each payload <1MB."""
     from backend.app import _run_migrations
