@@ -42,7 +42,7 @@ from backend import tls_paths
 from backend.auth.authz import require_owner
 from backend.config import config
 from backend.data_paths import DATA_DIR
-from backend.db.crud.settings import get_settings
+from backend.db.crud.settings import get_settings, refresh_settings
 from backend.db.engine import get_db
 from backend.logger import logger
 from backend.operations.observability.audit import log_event
@@ -165,6 +165,7 @@ def put_tls_settings(
         if name in updates:
             setattr(settings, column, updates[name] or None)
     db.commit()
+    refresh_settings(db)
     log_event(None, "tls.settings", actor=user.get("username"), detail=",".join(sorted(updates)))
     return ResponseModel(
         success=True,
@@ -680,6 +681,7 @@ def ensure_serving_pair() -> tuple[str, str]:
                 settings.ssl_cert_file = str(cert_path)
                 settings.cert_method = "selfsigned"
                 db.commit()
+                refresh_settings(db)
             except Exception:
                 db.rollback()
                 logger.warning("TLS: pair generated, but the settings record could not be updated", exc_info=True)
@@ -740,6 +742,7 @@ def generate_self_signed(db: Session = Depends(get_db), user: dict = Depends(req
     except Exception as exc:
         log_event(None, "tls.self_signed", actor=user.get("username"), detail=f"failed: {exc}")
         return ResponseModel(success=False, msg=f"Could not create a self-signed certificate: {exc}", data=None)
+    refresh_settings(db)
     log_event(
         None,
         "tls.self_signed",
@@ -903,6 +906,7 @@ def renew_certificate(
         )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+    refresh_settings(db)
     log_event(None, "tls.renew", actor=actor, detail=f"Let's Encrypt certificate renewed for {domain}")
     return ResponseModel(
         success=True,
