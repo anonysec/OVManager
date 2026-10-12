@@ -1,5 +1,9 @@
 """v25 migration: traffic_ledger + settings_kv, with the one-time backfill."""
 
+import datetime as dt
+import os
+import time
+
 import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -22,8 +26,37 @@ def session(tmp_path):
         engine.dispose()
 
 
+@pytest.fixture()
+def non_utc_tz():
+    """Run the test in a far-from-UTC timezone, restore the process TZ after."""
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "Pacific/Auckland"
+    time.tzset()
+    yield
+    if previous is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = previous
+    time.tzset()
+
+
 def _tables(db) -> set[str]:
     return set(inspect(db.bind).get_table_names())
+
+
+def _rewind_to_stamped_16(db, rows) -> None:
+    """Migrate at HEAD, plant daily rows, then rewind to the stamped-16 fixture."""
+    migrations.migrate(db)
+    for user_id, day, size in rows:
+        db.execute(
+            text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (:u, :d, :b)"),
+            {"u": user_id, "d": day, "b": size},
+        )
+    db.execute(text("DROP TABLE traffic_ledger"))
+    db.execute(text("DROP TABLE settings_kv"))
+    db.execute(text("DELETE FROM schema_version"))
+    db.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (16, 0, 'stamped-16 fixture')"))
+    db.commit()
 
 
 def test_fresh_database_stamps_25_with_new_tables(session):
@@ -35,18 +68,8 @@ def test_fresh_database_stamps_25_with_new_tables(session):
 
 def test_backfill_matches_daily_from_stamped_16(session):
     """A checked-in db stamped 16 must migrate 17-25 and backfill exactly."""
-    migrations.migrate(session)
     rows = [(1, "2030-01-01", 100), (1, "2030-01-02", 200), (2, "2030-01-01", 50)]
-    for user_id, day, size in rows:
-        session.execute(
-            text("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (:u, :d, :b)"),
-            {"u": user_id, "d": day, "b": size},
-        )
-    session.execute(text("DROP TABLE traffic_ledger"))
-    session.execute(text("DROP TABLE settings_kv"))
-    session.execute(text("DELETE FROM schema_version"))
-    session.execute(text("INSERT INTO schema_version (version, applied_at, note) VALUES (16, 0, 'stamped-16 fixture')"))
-    session.commit()
+    _rewind_to_stamped_16(session, rows)
 
     assert migrations.migrate(session) == SCHEMA_VERSION
 
@@ -64,9 +87,29 @@ def test_backfill_matches_daily_from_stamped_16(session):
             {"u": user_id, "b": size},
         ).fetchone()
         assert row is not None, f"missing backfill row for user {user_id} day {day}"
-        assert row[0] == session.execute(text("SELECT CAST(strftime('%s', :d) AS REAL)"), {"d": day}).scalar()
+        utc_midnight = dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.UTC).timestamp()
+        assert row[0] == utc_midnight, f"backfill ts must be UTC midnight of {day}, got {row[0]}"
         assert row[1] == size
         assert row[2] is None
+
+
+def test_backfill_ts_is_utc_midnight_under_non_utc_tz(session, non_utc_tz):
+    """The day key is a UTC day; its ledger ts must be that day's UTC midnight.
+
+    Live rows carry ``time.time()`` instants, so a backfilled row that lands on
+    local midnight would sit 13 hours off the poll that recorded it for an
+    Auckland operator (any non-UTC TZ, worst at the date boundary).
+    """
+    rows = [(1, "2030-01-01", 100)]
+    _rewind_to_stamped_16(session, rows)
+
+    migrations.migrate(session)
+
+    ts = session.execute(text("SELECT ts FROM traffic_ledger WHERE kind = 'backfill'")).scalar()
+    utc_midnight = dt.datetime(2030, 1, 1, tzinfo=dt.UTC).timestamp()
+    local_midnight = time.mktime(time.strptime("2030-01-01", "%Y-%m-%d"))
+    assert local_midnight != utc_midnight, "TZ fixture failed: local midnight equals UTC midnight"
+    assert ts == utc_midnight, f"want UTC midnight {utc_midnight}, got {ts}"
 
 
 def test_unique_rejects_duplicate_key(session):
