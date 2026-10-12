@@ -55,3 +55,20 @@ def test_writes_and_refresh_show_new_values():
         db.execute(text("UPDATE settings SET timezone = 'UTC'"))
         db.commit()
         db.close()
+
+
+def test_set_urlpath_refreshes_settings_cache():
+    from backend.urlpath import set_urlpath
+
+    db = SessionLocal()
+    try:
+        get_cached_settings(db)  # populate from this session
+        original = db.execute(text("SELECT urlpath FROM settings")).scalar() or ""
+        try:
+            set_urlpath("gate6probe")
+            assert get_cached_settings(db).urlpath == "gate6probe", "set_urlpath must invalidate the settings cache"
+        finally:
+            set_urlpath(original)
+    finally:
+        settings_cache.clear()
+        db.close()

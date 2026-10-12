@@ -83,6 +83,7 @@ def set_urlpath(value: str) -> str:
             s = crud.get_settings(db)
             s.urlpath = value
             db.commit()
+            crud.refresh_settings(db)
         finally:
             db.close()
     except Exception as exc:
