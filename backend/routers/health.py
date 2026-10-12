@@ -34,7 +34,7 @@ from backend.data_paths import DATA_DIR
 from backend.db.engine import get_db
 from backend.db.models import Node, User
 from backend.operations.observability.audit import promote_events, record_event
-from backend.operations.observability.live import get_node_online, last_poll_ts
+from backend.operations.observability.live import get_node_online, last_poll_ts, snapshot_fresh
 from backend.routers.tls import _cert_path, _classify_issuer, _key_path, _load_certificate
 from backend.schema import ResponseModel
 from backend.version import __version__
@@ -136,7 +136,10 @@ def _check_database(db: Session) -> dict:
 def _check_nodes(db: Session) -> dict:
     nodes = db.query(Node).order_by(Node.id).all()
     total = len(nodes)
-    online = get_node_online()
+    fresh = snapshot_fresh()
+    # A stale snapshot is unknown, not "everything down": only a fresh one
+    # may decide a node's reachability.
+    online = get_node_online() if fresh else {}
 
     node_list = []
     reachable = 0
@@ -167,6 +170,15 @@ def _check_nodes(db: Session) -> dict:
             "warn",
             "No nodes are configured yet.",
             "Add your first node on the Nodes page so users can connect.",
+            detail=detail,
+        )
+    if not fresh:
+        return _entry(
+            "nodes",
+            "warn",
+            "The live node data is stale — reachability is unknown.",
+            "The live collector has not polled within its idle window. Open the Nodes page to test "
+            "each node, or wait for the next poll.",
             detail=detail,
         )
     if reachable == 0:

@@ -309,7 +309,7 @@ async def check_user_used_traffic():
     db = next(get_db())
 
     try:
-        nodes = crud.get_all_nodes(db)
+        nodes = crud.get_active_nodes(db)
         if not nodes:
             logger.warning("No nodes found")
             return

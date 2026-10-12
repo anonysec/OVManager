@@ -69,16 +69,25 @@ async def test_down_node_stays_visible_through_the_grace_window(monkeypatch):
     assert live.get_node_online() == {"n1": False}, "grace must expire into down"
 
 
-async def test_collector_probes_nothing_without_a_subscriber_once_seeded(monkeypatch):
+async def test_the_idle_panel_refreshes_once_the_window_passes(monkeypatch):
+    """No watcher: the collector backs off to the idle window — not forever.
+
+    A snapshot nobody refreshes is how the public /sub/ page ends up serving
+    last week's counts, so past the window the poll runs again anyway.
+    """
     calls: list = []
     _reset()
     _install(monkeypatch, calls)
     await live.collect_live_snapshot()
     assert len(calls) == 1, "the first poll seeds the snapshot for /sub/ and health"
 
+    live.snapshot._last_poll_ts = time.monotonic() - live.IDLE_POLL_SECONDS + 10
+    await live.collect_live_snapshot()
+    assert len(calls) == 1, "inside the idle window an idle panel must not re-probe"
+
     live.snapshot._last_poll_ts = time.monotonic() - live.IDLE_POLL_SECONDS - 1
     await live.collect_live_snapshot()
-    assert len(calls) == 1, "an idle panel must not re-probe nodes with no watcher"
+    assert len(calls) == 2, "a snapshot past the idle window must be refreshed, not served frozen"
 
 
 async def test_snapshot_caps_the_node_list(monkeypatch):

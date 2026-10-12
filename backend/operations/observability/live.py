@@ -170,6 +170,17 @@ def last_poll_ts() -> float:
     return snapshot.last_poll_ts
 
 
+def snapshot_fresh() -> bool:
+    """Has the collector polled within the idle window?
+
+    Past IDLE_POLL_SECONDS the counts and node states are treated as unknown
+    by every reader: a frozen snapshot is how a panel keeps showing users
+    online and nodes up long after the collector stopped.
+    """
+    ts = snapshot.last_poll_ts
+    return ts > 0 and (time.monotonic() - ts) <= IDLE_POLL_SECONDS
+
+
 def get_snapshot_cap() -> int:
     return snapshot.get_cap()
 
@@ -220,8 +231,8 @@ async def collect_live_snapshot() -> None:
     from backend.node.fanout import gather_background
     from backend.node.requests import node_client, panel_id_for
 
-    if not bus.has_subscribers() and snapshot.last_poll_ts > 0:
-        return
+    if not bus.has_subscribers() and snapshot_fresh():
+        return  # idle and current — /sub/ and health are already served
 
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError

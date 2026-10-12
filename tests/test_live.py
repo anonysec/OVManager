@@ -141,7 +141,7 @@ def test_users_list_uses_live_connection_cache(monkeypatch):
         db.close()
 
     monkeypatch.setattr(live, "get_connection_counts", lambda: {"livecache_qa_user": 3})
-    monkeypatch.setattr(live, "last_poll_ts", lambda: 1.0)
+    monkeypatch.setattr(live, "snapshot_fresh", lambda: True)
 
     client = TestClient(api)
     resp = client.get("/api/users/", headers=_owner_headers())

@@ -93,7 +93,7 @@ async def collect_metrics() -> None:
     now = time.time()
     try:
         ensure_metrics_tables(db)
-        nodes = crud.get_all_nodes(db)
+        nodes = crud.get_active_nodes(db)
         users = crud.get_all_users(db)
         pid = panel_id_for(db)
         probed = await asyncio.gather(*[_node_snapshot(node, panel_id=pid) for node in nodes], return_exceptions=True)

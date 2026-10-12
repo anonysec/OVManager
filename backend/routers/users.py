@@ -144,7 +144,7 @@ async def get_all_users(
     page_size = page_size or 100
     needle = search.strip() if search and search.strip() else None
 
-    if live_ops.last_poll_ts() > 0:
+    if live_ops.snapshot_fresh():
         active_counts = live_ops.get_connection_counts()
     else:
         active_counts = await get_active_connection_counts(db)

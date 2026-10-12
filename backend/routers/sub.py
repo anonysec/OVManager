@@ -196,7 +196,7 @@ async def get_subscription(
     ovpn_download_links = {}
 
     up_nodes: set[str] = set()
-    if live_ops.last_poll_ts() > 0:
+    if live_ops.snapshot_fresh():
         online = live_ops.get_node_online()
         up_nodes = {n.name for n in nodes if online.get(n.name)}
 
