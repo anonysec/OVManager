@@ -94,6 +94,13 @@ EOF
     fi
 fi
 chmod 600 "$DEST/.env"
+# Claim key is create-once like .env: reruns must never invalidate it.
+if [[ ! -f "$DEST/data/owner-claim.key" ]]; then
+    key="$(openssl rand -hex 32 2>/dev/null | cut -c1-32 || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)"
+    ( umask 077; printf '%s\n' "$key" > "$DEST/data/owner-claim.key" )
+    chmod 600 "$DEST/data/owner-claim.key"
+    echo "install-local: setup key (shown once, then claim in the panel): $key"
+fi
 PORT="$(awk -F= '/^PORT=/{print $2; exit}' "$DEST/.env" | tr -d '\r')"
 PORT="${PORT:-2095}"
 

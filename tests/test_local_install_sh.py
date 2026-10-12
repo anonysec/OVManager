@@ -77,3 +77,9 @@ def test_no_curl_pipe_sh_or_github_urls():
     body = SCRIPT.read_text(encoding="utf-8")
     assert "| sh" not in body and "| bash" not in body
     assert "github.com" not in body
+
+
+def test_claim_key_minted_once_with_strict_perms():
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert '[[ ! -f "$DEST/data/owner-claim.key" ]]' in body, "reruns must never invalidate the key"
+    assert 'chmod 600 "$DEST/data/owner-claim.key"' in body
