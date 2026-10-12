@@ -85,7 +85,7 @@ async def auto_daily_alerts_job():
 
 
 async def auto_prune_audit_job():
-    from backend.operations.billing.usage import prune_daily
+    from backend.operations.billing.usage import prune_daily, prune_ledger
     from backend.operations.observability.audit import prune_audit_logs
 
     db = SessionLocal()
@@ -94,9 +94,12 @@ async def auto_prune_audit_job():
         if removed:
             logger.info("Pruned %s audit log row(s) older than 90 days", removed)
         removed_daily = await asyncio.to_thread(prune_daily, db)
+        removed_ledger = await asyncio.to_thread(prune_ledger, db)
         db.commit()
         if removed_daily:
             logger.info("Pruned %s daily usage row(s) older than 90 days", removed_daily)
+        if removed_ledger:
+            logger.info("Pruned %s traffic ledger row(s) older than 90 days", removed_ledger)
     finally:
         db.close()
 

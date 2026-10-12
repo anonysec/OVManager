@@ -22,7 +22,7 @@ from backend.db import crud
 from backend.db.engine import engine, get_db
 from backend.db.models import User
 from backend.node.sync import clean_stale_sessions_all_nodes, sync_all_user_limits
-from backend.operations.billing.usage import prune_daily
+from backend.operations.billing.usage import prune_daily, prune_ledger
 from backend.operations.observability import live as live_ops
 from backend.operations.observability.audit import log_event
 from backend.routers.tls import (
@@ -658,11 +658,16 @@ async def usage_purge(payload: UsagePurgeRequest, db: Session = Depends(get_db),
         return ResponseModel(success=False, msg="Confirmation required — resend with confirm=true", data=None)
 
     removed = prune_daily(db, keep_days=payload.older_than_days)
+    removed_ledger = prune_ledger(db, keep_days=payload.older_than_days)
     db.commit()
     log_event(
         db,
         "maintenance.usage_purge",
         actor=user.get("username"),
-        detail=f"keep_days={payload.older_than_days} removed={removed}",
+        detail=f"keep_days={payload.older_than_days} removed={removed} removed_ledger={removed_ledger}",
     )
-    return ResponseModel(success=True, msg=f"Removed {removed} daily usage row(s)", data={"removed": removed})
+    return ResponseModel(
+        success=True,
+        msg=f"Removed {removed} daily usage row(s)",
+        data={"removed": removed, "removed_ledger": removed_ledger},
+    )

@@ -8,6 +8,7 @@ aggregate snapshots. Sparse by design: only days with billed bytes get rows.
 from __future__ import annotations
 
 import datetime as dt
+import time
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -83,3 +84,57 @@ def prune_daily(db: Session, keep_days: int = 90) -> int:
     cutoff = (dt.datetime.now(dt.UTC).date() - dt.timedelta(days=max(1, int(keep_days or 90)))).strftime("%Y-%m-%d")
     result = db.execute(text("DELETE FROM user_traffic_daily WHERE day < :cutoff"), {"cutoff": cutoff})
     return int(result.rowcount or 0)
+
+
+def write_ledger_batch(db: Session, rows: list[dict]) -> int:
+    """Insert ledger rows sorted by (user_id, node_id) in one executemany.
+
+    The caller owns the commit, so a whole tick's worth of deltas lands in a
+    single transaction. Rows are sorted first so the insert walks the UNIQUE
+    (user_id, ts, kind, node_id) index in order and duplicates surface as a
+    constraint error instead of a mid-batch surprise.
+    """
+    if not rows:
+        return 0
+    ordered = sorted(rows, key=lambda r: (int(r["user_id"]), r["node_id"]))
+    db.execute(
+        text(
+            "INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) "
+            "VALUES (:user_id, :ts, :node_id, :kind, :delta_bytes, :meta_json)"
+        ),
+        [
+            {
+                "user_id": int(r["user_id"]),
+                "ts": float(r["ts"]),
+                "node_id": r["node_id"],
+                "kind": r["kind"],
+                "delta_bytes": int(r["delta_bytes"]),
+                "meta_json": r.get("meta_json", "{}"),
+            }
+            for r in ordered
+        ],
+    )
+    return len(ordered)
+
+
+def prune_ledger(db: Session, keep_days: int = 90, batch: int = 5000) -> int:
+    """Delete ledger rows older than keep_days in LIMIT batches. No inner commit.
+
+    Batched so a very old backlog does not hold one long DELETE lock. The
+    caller commits, matching prune_daily.
+    """
+    if not _table_ready:
+        ensure_daily_table(db)
+    cutoff = time.time() - max(1, int(keep_days or 90)) * 86400
+    batch = max(1, int(batch or 5000))
+    total = 0
+    while True:
+        result = db.execute(
+            text("DELETE FROM traffic_ledger WHERE id IN (SELECT id FROM traffic_ledger WHERE ts < :cutoff LIMIT :batch)"),
+            {"cutoff": cutoff, "batch": batch},
+        )
+        removed = int(result.rowcount or 0)
+        total += removed
+        if removed < batch:
+            break
+    return total
