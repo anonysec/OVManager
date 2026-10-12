@@ -25,7 +25,7 @@ RETRY_BASE_SECONDS = 30
 MAX_BACKOFF_SECONDS = 300  # 5m cap on the retry delay
 
 
-def _write_flag(db, flag: int, reason: str, attempts: int, next_retry_at: float) -> None:
+def _write_flag(db, flag: int, reason: str, attempts: int, next_retry_at: float, done: list[str] | None = None) -> None:
     payload = json.dumps(
         {
             "flag": flag,
@@ -33,6 +33,7 @@ def _write_flag(db, flag: int, reason: str, attempts: int, next_retry_at: float)
             "attempts": attempts,
             "updated_at": time.time(),
             "next_retry_at": next_retry_at,
+            "done": sorted(done or []),
         }
     )
     crud.set_kv(db, RESTART_FLAG_KEY, payload)
@@ -84,17 +85,25 @@ def retry_stale_restart_flag(db) -> bool:
     return False
 
 
-async def _restart_all(nodes, pid: str | None) -> bool:
-    """Fan a restart out to every node; True only when all report success."""
+async def _restart_all(nodes, pid: str | None) -> list[str]:
+    """Fan a restart out to every given node; return the names that succeeded."""
     results = await asyncio.gather(
         *[node_client(n, panel_id=pid).restart_vpn() for n in nodes],
         return_exceptions=True,
     )
-    return all((not isinstance(r, Exception)) and bool(r) and bool(r.get("success")) for r in results)
+    return [
+        n.name
+        for n, r in zip(nodes, results, strict=True)
+        if (not isinstance(r, Exception)) and bool(r) and bool(r.get("success"))
+    ]
 
 
 async def process_restart_debounce() -> None:
-    """Consume the restart flag: fan out, clear on all-success, back off otherwise."""
+    """Consume the restart flag: fan out to the owed nodes only, clear on all-success.
+
+    The flag payload remembers which node names already succeeded (``done``),
+    so a partial failure retries only the nodes that are still down.
+    """
     db = SessionLocal()
     try:
         flag = read_restart_flag(db)
@@ -103,16 +112,23 @@ async def process_restart_debounce() -> None:
         now = time.time()
         if now < float(flag.get("next_retry_at", 0) or 0):
             return  # a failed fan-out is still backing off
-        nodes = crud.get_active_nodes(db)
+        done = set(flag.get("done") or [])
+        nodes = [n for n in crud.get_active_nodes(db) if n.name not in done]
         pid = panel_id_for(db)
-        ok = await _restart_all(nodes, pid)
-        if ok:
+        succeeded = await _restart_all(nodes, pid)
+        done.update(succeeded)
+        if len(succeeded) == len(nodes):
             clear_restart_flag(db)
             logger.info("restart-debounce: %s applied on all nodes", flag.get("reason", ""))
         else:
             attempts = int(flag.get("attempts", 0) or 0) + 1
             delay = min(MAX_BACKOFF_SECONDS, RETRY_BASE_SECONDS * (2 ** (attempts - 1)))
-            _write_flag(db, 1, flag.get("reason", ""), attempts, now + delay)
-            logger.warning("restart-debounce: partial failure for %s, retry in %ds", flag.get("reason", ""), delay)
+            _write_flag(db, 1, flag.get("reason", ""), attempts, now + delay, done=sorted(done))
+            logger.warning(
+                "restart-debounce: %d node(s) still down for %s, retry in %ds",
+                len(nodes) - len(succeeded),
+                flag.get("reason", ""),
+                delay,
+            )
     finally:
         db.close()

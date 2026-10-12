@@ -41,7 +41,14 @@ def test_n_edits_collapse_to_one_flag():
 
 
 def test_consumer_success_clears_flag(monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.db import crud
     from backend.db.engine import SessionLocal
+
+    monkeypatch.setattr(
+        crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="ok2")]
+    )
 
     db = SessionLocal()
     try:
@@ -50,7 +57,7 @@ def test_consumer_success_clears_flag(monkeypatch):
         db.close()
 
     async def fake_all_ok(nodes, pid):
-        return True
+        return [n.name for n in nodes]
 
     monkeypatch.setattr(rd, "_restart_all", fake_all_ok)
     asyncio.run(rd.process_restart_debounce())
@@ -63,7 +70,14 @@ def test_consumer_success_clears_flag(monkeypatch):
 
 
 def test_consumer_partial_failure_keeps_flag(monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.db import crud
     from backend.db.engine import SessionLocal
+
+    monkeypatch.setattr(
+        crud, "get_active_nodes", lambda db: [SimpleNamespace(name="ok1"), SimpleNamespace(name="down1")]
+    )
 
     db = SessionLocal()
     try:
@@ -72,7 +86,7 @@ def test_consumer_partial_failure_keeps_flag(monkeypatch):
         db.close()
 
     async def fake_partial(nodes, pid):
-        return False
+        return ["ok1"]  # only one of the two succeeded
 
     monkeypatch.setattr(rd, "_restart_all", fake_partial)
     asyncio.run(rd.process_restart_debounce())
@@ -82,6 +96,7 @@ def test_consumer_partial_failure_keeps_flag(monkeypatch):
         flag = rd.read_restart_flag(db)
         assert flag is not None and flag["flag"] == 1, "a partial failure must keep the flag"
         assert flag["next_retry_at"] > time.time(), "a failed fan-out must schedule a capped retry"
+        assert flag["done"] == ["ok1"], "the succeeded node must not be retried"
     finally:
         db.close()
 
@@ -102,13 +117,78 @@ def test_consumer_respects_backoff(monkeypatch):
 
     async def fake_all(nodes, pid):
         called.append(1)
-        return True
+        return [n.name for n in nodes]
 
     monkeypatch.setattr(rd, "_restart_all", fake_all)
     asyncio.run(rd.process_restart_debounce())
     assert called == [], "a pending backoff must hold the consumer off"
 
     assert raw is not None  # keep the intermediate read honest
+
+
+def test_retry_hits_only_the_nodes_that_failed(monkeypatch):
+    """1 down + 2 healthy: the retry must reach only the down node (Gate 2 #2)."""
+    from types import SimpleNamespace
+
+    from backend.db import crud
+    from backend.db.engine import SessionLocal
+
+    names = ["hb_ok1", "hb_down", "hb_ok2"]
+    monkeypatch.setattr(
+        crud, "get_active_nodes", lambda db: [SimpleNamespace(name=n) for n in names]
+    )
+
+    calls: dict[str, int] = dict.fromkeys(names, 0)
+    down = {"hb_down"}
+
+    class FakeClient:
+        def __init__(self, node, panel_id=None):
+            self.node = node
+
+        async def restart_vpn(self):
+            calls[self.node.name] += 1
+            return {"success": self.node.name not in down}
+
+    monkeypatch.setattr(rd, "node_client", FakeClient)
+
+    db = SessionLocal()
+    try:
+        rd.mark_restart_pending(db, "tunnel-change")
+    finally:
+        db.close()
+
+    asyncio.run(rd.process_restart_debounce())
+    assert calls == {"hb_ok1": 1, "hb_down": 1, "hb_ok2": 1}
+
+    db = SessionLocal()
+    try:
+        flag = rd.read_restart_flag(db)
+        assert flag is not None
+        assert set(flag["done"]) == {"hb_ok1", "hb_ok2"}, "the healthy nodes must be remembered"
+        # backoff elapsed: force the retry due, keeping the done list
+        rd._write_flag(db, 1, "tunnel-change", 1, 0, done=flag["done"])
+    finally:
+        db.close()
+
+    asyncio.run(rd.process_restart_debounce())
+    assert calls == {"hb_ok1": 1, "hb_down": 2, "hb_ok2": 1}, "only the down node is retried"
+
+    # the down node recovers → the retry clears the flag
+    down.clear()
+    db = SessionLocal()
+    try:
+        flag = rd.read_restart_flag(db)
+        rd._write_flag(db, 1, "tunnel-change", 2, 0, done=flag["done"])
+    finally:
+        db.close()
+
+    asyncio.run(rd.process_restart_debounce())
+    assert calls == {"hb_ok1": 1, "hb_down": 3, "hb_ok2": 1}
+    db = SessionLocal()
+    try:
+        assert rd.read_restart_flag(db) is None, "full success must clear the flag"
+    finally:
+        db.close()
 
 
 def test_stale_flag_retried_at_startup():
