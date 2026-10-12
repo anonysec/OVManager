@@ -90,7 +90,7 @@ def test_backfill_matches_daily_from_stamped_16(session):
         utc_midnight = dt.datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=dt.UTC).timestamp()
         assert row[0] == utc_midnight, f"backfill ts must be UTC midnight of {day}, got {row[0]}"
         assert row[1] == size
-        assert row[2] is None
+        assert row[2] == ""
 
 
 def test_backfill_ts_is_utc_midnight_under_non_utc_tz(session, non_utc_tz):
@@ -110,6 +110,47 @@ def test_backfill_ts_is_utc_midnight_under_non_utc_tz(session, non_utc_tz):
     local_midnight = time.mktime(time.strptime("2030-01-01", "%Y-%m-%d"))
     assert local_midnight != utc_midnight, "TZ fixture failed: local midnight equals UTC midnight"
     assert ts == utc_midnight, f"want UTC midnight {utc_midnight}, got {ts}"
+
+
+def test_null_node_id_is_rejected(session):
+    """NULL node_id would defeat the UNIQUE key — NULLs are distinct in SQLite."""
+    migrations.migrate(session)
+    null_insert = text(
+        "INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes) VALUES (1, 1700000000.0, NULL, 'poll', 10)"
+    )
+    with pytest.raises(IntegrityError):
+        session.execute(null_insert)
+        session.commit()
+    session.rollback()
+
+    bare = text("INSERT INTO traffic_ledger (user_id, ts, kind, delta_bytes) VALUES (1, 1700000000.0, 'poll', 10)")
+    session.execute(bare)  # omitted node_id → default sentinel ''
+    session.commit()
+    with pytest.raises(IntegrityError):
+        session.execute(bare)  # same (user, ts, kind, sentinel) must collide
+        session.commit()
+    session.rollback()
+
+    assert session.execute(text("SELECT COUNT(*) FROM traffic_ledger")).scalar() == 1
+
+
+def test_backfill_rows_carry_sentinel_and_reject_duplicates(session):
+    rows = [(1, "2030-01-01", 100)]
+    _rewind_to_stamped_16(session, rows)
+    migrations.migrate(session)
+
+    user_id, ts, node_id = session.execute(
+        text("SELECT user_id, ts, node_id FROM traffic_ledger WHERE kind = 'backfill'")
+    ).fetchone()
+    assert node_id == "", f"backfill rows must use the '' sentinel, got {node_id!r}"
+
+    with pytest.raises(IntegrityError):
+        session.execute(
+            text("INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes) VALUES (:u, :t, '', 'backfill', 100)"),
+            {"u": user_id, "t": ts},
+        )
+        session.commit()
+    session.rollback()
 
 
 def test_unique_rejects_duplicate_key(session):

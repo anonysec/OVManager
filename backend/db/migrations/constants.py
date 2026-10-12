@@ -95,7 +95,7 @@ _EXTRA_DDL: tuple[str, ...] = (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ts REAL NOT NULL,
         user_id INTEGER NOT NULL,
-        node_id TEXT,
+        node_id TEXT NOT NULL DEFAULT '',
         kind TEXT NOT NULL,
         delta_bytes INTEGER NOT NULL,
         meta_json TEXT NOT NULL DEFAULT '{}',

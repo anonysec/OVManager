@@ -372,9 +372,11 @@ def _create_traffic_ledger_and_kv(db: Session) -> None:
     row per (user, day) becomes one ``kind='backfill'`` delta at the day's
     **UTC** midnight — ``day`` is a UTC day key (see ``usage._today``), and the
     ``T00:00:00Z`` suffix spells the UTC assumption out instead of relying on
-    SQLite's bare-date-is-UTC parsing rule. ``node_id`` is NULL because no
-    single node owns it. Running in the same transaction as the stamp keeps the
-    backfill atomic: a failed migration rolls the rows back with the version.
+    SQLite's bare-date-is-UTC parsing rule. ``node_id`` is '' (not NULL) —
+    no single node owns a backfilled day, and NULLs are distinct in SQLite,
+    which would defeat the UNIQUE key. Running in the same
+    transaction as the stamp keeps the backfill atomic: a failed migration
+    rolls the rows back with the version.
     """
     _create_extra_tables(db)
     if "user_traffic_daily" not in table_names(db):
@@ -382,7 +384,7 @@ def _create_traffic_ledger_and_kv(db: Session) -> None:
     db.execute(
         text(
             "INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) "
-            "SELECT user_id, CAST(strftime('%s', day || 'T00:00:00Z') AS REAL), NULL, 'backfill', bytes, '{}' "
+            "SELECT user_id, CAST(strftime('%s', day || 'T00:00:00Z') AS REAL), '', 'backfill', bytes, '{}' "
             "FROM user_traffic_daily"
         )
     )
