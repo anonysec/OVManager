@@ -32,7 +32,16 @@ def _manual_country(request: NodeCreate) -> str | None:
     return raw or None
 
 
+def _require_name(request: NodeCreate) -> str:
+    """Blank names blank the ledger target — refuse before touching the row."""
+    name = (request.name or "").strip()
+    if not name:
+        raise ValueError("Node name is required") from None
+    return request.name
+
+
 def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
+    _require_name(request)
     manual = _manual_country(request)
     new_node = Node(
         name=request.name,
@@ -55,6 +64,7 @@ def create_node(db: Session, request: NodeCreate, geolocation: dict = None):
 
 
 def update_node(db: Session, node_id: int, request: NodeCreate, geolocation: dict = None):
+    _require_name(request)
     node = db.query(Node).filter(Node.id == node_id).first()
     if not node:
         raise NotFoundError("Node", str(node_id)) from None

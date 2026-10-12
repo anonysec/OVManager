@@ -43,6 +43,15 @@ class NodeCreate(BaseModel):
     status: bool = Field(default=True)
     country_code: str | None = Field(default=None, max_length=3, pattern=r"^[A-Za-z]{2,3}$")
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def _require_name(cls, value):
+        # Ledger/audit targets fall back to `name or str(node_id)`; a blank
+        # name makes events indistinguishable. Trim-cursor: reject, don't strip.
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("Node name is required")
+        return value
+
     @field_validator("key", mode="before")
     @classmethod
     def _blank_key_to_none(cls, value):
