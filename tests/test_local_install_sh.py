@@ -83,3 +83,9 @@ def test_claim_key_minted_once_with_strict_perms():
     body = SCRIPT.read_text(encoding="utf-8")
     assert '[[ ! -f "$DEST/data/owner-claim.key" ]]' in body, "reruns must never invalidate the key"
     assert 'chmod 600 "$DEST/data/owner-claim.key"' in body
+
+
+def test_never_copies_source_env_credentials():
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert 'cp "$SRC/.env"' not in body, "dev .env hash would claim the panel with an unknown password"
+    assert "ADMIN_PASSWORD=" not in body, "generated .env must carry no credential"
