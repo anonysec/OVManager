@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { readPrefs, writePref } from '../../utils/notifPrefs';
+import { errorMessageOf } from '../../utils/errorMessage';
 import apiClient from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import LoadingButton from '../../components/LoadingButton';
@@ -21,8 +22,7 @@ type Thresholds = { alert_days_left: string; alert_usage_pct: string; alert_cpu_
 
 const DEFAULT_THRESHOLDS: Thresholds = { alert_days_left: '3', alert_usage_pct: '80', alert_cpu_pct: '85' };
 
-const apiMsg = (e: any, fallback: string) =>
-  e?.response?.data?.msg || e?.response?.data?.detail || e?.message || fallback;
+const apiMsg = (e: any, fallback: string) => errorMessageOf(e, fallback);
 
 const AlertsSection = () => {
   const { t } = useTranslation();

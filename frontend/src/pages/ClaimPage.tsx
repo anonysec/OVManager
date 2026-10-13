@@ -6,6 +6,7 @@ import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
+import { errorMessageOf } from '../utils/errorMessage';
 import './LoginPage.css';
 
 const ClaimPage = () => {
@@ -26,7 +27,7 @@ const ClaimPage = () => {
   const clearError = () => { if (error) setError(''); };
 
   const claimErrorOf = (err: any) =>
-    err?.response?.data?.detail || t('claimError', 'The claim failed. Check the key and try again.');
+    errorMessageOf(err, t('claimError', 'The claim failed. Check the key and try again.'));
 
   // Step 1 — prove the holder of the setup key before asking for credentials.
   const handleVerify = async (e: any) => {

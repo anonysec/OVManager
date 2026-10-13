@@ -10,6 +10,7 @@ import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiUserPlus, FiCheck } from 'react-icons/fi';
 import { Card, Field } from './shared';
+import { errorMessageOf } from '../../utils/errorMessage';
 
 /* ═══════════════════════════════════════════════════════
    DEFAULTS — new user defaults (used by the Telegram bot)
@@ -54,7 +55,7 @@ const DefaultsSection = ({ shared }: { shared?: SharedState }) => {
       addToast(t('saved', 'Defaults saved.'), 'success');
     } catch (e) {
       const err = e as DefaultsApiError;
-      addToast(err.response?.data?.msg || err.response?.data?.detail || t('error', 'Error'), 'error');
+      addToast(errorMessageOf(err, t('error', 'Error')), 'error');
     } finally { setSaving(false); }
   };
 

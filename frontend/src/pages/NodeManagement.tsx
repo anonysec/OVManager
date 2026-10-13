@@ -12,6 +12,7 @@ import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo';
+import { errorMessageOf } from '../utils/errorMessage';
 import {
   Badge, Button, Card, EmptyState, ErrorState, PageHeader, StatCard, StatusBadge,
 } from '../components/ui';
@@ -151,8 +152,7 @@ const NodeManagement = () => {
       if (response.data?.data) setNodeInfo((prev) => ({ ...prev, [node.id]: response.data.data }));
       addToast(response.data?.msg || t('nodeStatusCheckDone', 'Status check complete.'), 'success');
     } catch (e) {
-      const err = e as any;
-      addToast(err.response?.data?.detail || t('nodeStatusCheckFailed', 'Failed to check node status.'), 'error');
+      addToast(errorMessageOf(e, t('nodeStatusCheckFailed', 'Failed to check node status.')), 'error');
     } finally {
       markBusy(key, false);
     }
@@ -174,8 +174,7 @@ const NodeManagement = () => {
       window.URL.revokeObjectURL(url);
       addToast(t('nodeDownloadStarted', 'Download started.'), 'success');
     } catch (e) {
-      const errDl = e as any;
-      addToast(errDl.response?.data?.detail || t('nodeExportFailed', 'Could not download the configs.'), 'error');
+      addToast(errorMessageOf(e, t('nodeExportFailed', 'Could not download the configs.')), 'error');
     } finally {
       markBusy(key, false);
     }
@@ -202,8 +201,7 @@ const NodeManagement = () => {
         addToast(res.data?.msg || t('failedToggleNode', 'Failed to toggle node.'), 'error');
       }
     } catch (e) {
-      const errT = e as any;
-      addToast(errT.response?.data?.detail || t('failedToggleNode', 'Failed to toggle node.'), 'error');
+      addToast(errorMessageOf(e, t('failedToggleNode', 'Failed to toggle node.')), 'error');
     } finally {
       markBusy(key, false);
     }
@@ -219,8 +217,7 @@ const NodeManagement = () => {
           addToast(res.data?.success ? t('nodeDeletedSuccess', 'Node deleted successfully.') : (res.data?.msg || t('error', 'Error')), res.data?.success ? 'success' : 'error');
           fetchNodes({ background: true });
         } catch (e) {
-          const errDel = e as any;
-          addToast(errDel.response?.data?.detail || t('error', 'Error'), 'error');
+          addToast(errorMessageOf(e, t('error', 'Error')), 'error');
         }
       },
     );

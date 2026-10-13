@@ -10,6 +10,7 @@ import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiSend, FiEye, FiEyeOff } from 'react-icons/fi';
 import { Card, Field } from './shared';
+import { errorMessageOf } from '../../utils/errorMessage';
 
 /* ═══════════════════════════════════════════════════════
    BOT — Telegram bot configuration (compact)
@@ -20,8 +21,6 @@ type SharedState = {
   reload?: () => void;
   data?: any;
 };
-
-type BotApiError = { response?: { data?: { detail?: string; msg?: string } } };
 
 const BotSection = ({ shared }: { shared?: SharedState }) => {
   const { t } = useTranslation();
@@ -64,7 +63,7 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
         setToken(''); // token is write-only
       }
     } catch (e) {
-      const msg = (e as BotApiError).response?.data?.detail || (e as BotApiError).response?.data?.msg || t('error', 'Error');
+      const msg = errorMessageOf(e, t('error', 'Error'));
       if (msg.toLowerCase().includes('encrypt')) setEncryptKeyMissing(true);
       addToast(msg, 'error');
     } finally { setSaving(false); }
@@ -76,7 +75,7 @@ const BotSection = ({ shared }: { shared?: SharedState }) => {
       await apiClient.put('/server/settings/bot', { bot_token: null, bot_enabled: false });
       setEnabled(false); setToken('');
       addToast(t('tokenCleared', 'Bot token cleared.'), 'success');
-    } catch (e) { addToast((e as BotApiError).response?.data?.detail || t('error', 'Error'), 'error'); }
+    } catch (e) { addToast(errorMessageOf(e, t('error', 'Error')), 'error'); }
     finally { setSaving(false); }
   };
 

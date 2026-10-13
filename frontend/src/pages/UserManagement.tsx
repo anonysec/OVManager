@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import { formatBytes } from '../utils/format';
+import { errorMessageOf } from '../utils/errorMessage';
 import UserFormModal from '../components/UserFormModal';
 import ExtendUserModal from '../components/ExtendUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
@@ -300,8 +301,7 @@ const UserManagement = () => {
       }
       fetchUsers({ background: true });
     } catch (e) {
-      const errAny = e as any;
-      addToast(errAny.response?.data?.detail || t('error'), 'error');
+      addToast(errorMessageOf(e, t('error')), 'error');
     }
   }, [addToast, fetchUsers, t]);
 
@@ -339,8 +339,7 @@ const UserManagement = () => {
         addToast(res.data?.msg || t('undoFailed', 'Undo failed — user could not be restored.'), 'error');
       }
     } catch (e) {
-      const errUndo = e as any;
-      addToast(errUndo.response?.data?.detail || t('undoFailed', 'Undo failed — user could not be restored.'), 'error');
+      addToast(errorMessageOf(e, t('undoFailed', 'Undo failed — user could not be restored.')), 'error');
     }
   }, [lastDeleted, addToast, fetchUsers, t]);
 
@@ -364,8 +363,7 @@ const UserManagement = () => {
       const res = await apiClient.get(`/users/${user.uuid}/sessions`);
       setSessionDiagnostics(res.data?.data || res.data);
     } catch (e) {
-      const errSess = e as any;
-      setSessionError(errSess.response?.data?.detail || errSess.message || t('error'));
+      setSessionError(errorMessageOf(e, t('error')));
     } finally {
       setSessionLoading(false);
     }
@@ -379,8 +377,7 @@ const UserManagement = () => {
       const refreshed = await apiClient.get(`/users/${selectedUser.uuid}/sessions`).catch(() => null);
       if (refreshed) setSessionDiagnostics(refreshed.data?.data || refreshed.data);
     } catch (e) {
-      const errAny = e as any;
-      addToast(errAny.response?.data?.detail || t('error'), 'error');
+      addToast(errorMessageOf(e, t('error')), 'error');
     }
   }, [selectedUser, addToast, t]);
 

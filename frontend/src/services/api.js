@@ -1,6 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
+import { detailMessage } from '../utils/errorMessage';
 
 const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
 export const apiBase = basePath ? `/${basePath}/api` : '/api';
@@ -52,15 +53,7 @@ function handleAuthExpired(requestUrl) {
 
 function reportError(status, data, message, requestUrl) {
   if (isPreAuth(requestUrl)) return;
-  const detail = data?.detail;
-  let out;
-  if (Array.isArray(detail)) {
-    out = detail.map((d) => d.msg || JSON.stringify(d)).join(', ');
-  } else if (typeof detail === 'object' && detail !== null) {
-    out = JSON.stringify(detail);
-  } else {
-    out = detail || data?.msg || message || 'Request failed';
-  }
+  const out = detailMessage(data?.detail) || data?.msg || message || 'Request failed';
   window.dispatchEvent(new CustomEvent(API_ERROR_EVENT, {
     detail: { status, message: out, url: requestUrl },
   }));

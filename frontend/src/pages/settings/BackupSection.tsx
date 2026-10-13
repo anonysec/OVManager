@@ -12,13 +12,12 @@ import EmptyState from '../../components/ui/EmptyState';
 import { FiArchive, FiDatabase, FiUpload, FiDownload, FiRefreshCw, FiClock } from 'react-icons/fi';
 import { Card, Field } from './shared';
 import { formatBytes } from '../../utils/format';
+import { errorMessageOf } from '../../utils/errorMessage';
 import './BackupSection.css';
 
 const MIN_KEEP = 1;
 const MAX_KEEP = 500;
 const DEFAULT_TIME = '03:30';
-
-type ApiError = { response?: { data?: { detail?: string; msg?: string } } };
 
 interface BackupItem {
   name: string;
@@ -116,8 +115,7 @@ const BackupSection = () => {
         setAutoMsg({ type: 'success', text: r?.data?.msg || t('backupAutoSaved', 'Automatic backup settings saved.') });
       }
     } catch (e) {
-      const err = e as ApiError;
-      setAutoMsg({ type: 'error', text: err.response?.data?.detail || err.response?.data?.msg || t('error', 'Failed') });
+      setAutoMsg({ type: 'error', text: errorMessageOf(e, t('error', 'Failed')) });
     } finally {
       setAutoSaving(false);
     }
@@ -140,7 +138,7 @@ const BackupSection = () => {
       const r = await apiClient.post('/maintenance/backup');
       addToast(r.data?.msg || t('createBackup', 'Backup created'), 'success');
       load();
-    } catch (e) { addToast((e as ApiError).response?.data?.detail || (e as ApiError).response?.data?.msg || t('error', 'Failed'), 'error'); }
+    } catch (e) { addToast(errorMessageOf(e, t('error', 'Failed')), 'error'); }
     finally { setBusy(''); }
   };
 
@@ -169,7 +167,7 @@ const BackupSection = () => {
       } else {
         addToast(r.data?.msg || t('error', 'Restore failed'), 'error');
       }
-    } catch (e) { addToast((e as ApiError).response?.data?.detail || (e as ApiError).response?.data?.msg || t('error', 'Restore failed'), 'error'); }
+    } catch (e) { addToast(errorMessageOf(e, t('error', 'Restore failed')), 'error'); }
     finally { setBusy(''); }
   };
 

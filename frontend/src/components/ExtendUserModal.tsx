@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import LoadingButton from './LoadingButton';
+import { errorMessageOf } from '../utils/errorMessage';
 
 const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOpen?: any; onClose?: any; onExtend?: any }) => {
   const { t } = useTranslation();
@@ -40,7 +41,7 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
       await onExtend?.(user, { days: Math.floor(d), bytes });
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err.message || t('error'));
+      setError(errorMessageOf(err, t('error')));
     } finally {
       setBusy(false);
     }
