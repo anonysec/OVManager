@@ -18,8 +18,10 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
-  // Nobody has claimed this panel yet → the two-step setup is the real
-  // landing page. Any failure just leaves the login form alone.
+  // Fallback: AuthContext already probed /owner-claim at mount and the router
+  // only shows this page when the answer was "not claimable". This re-check
+  // stays for the case where that probe failed while the backend was still
+  // starting. Any failure just leaves the login form alone.
   useEffect(() => {
     let alive = true;
     apiClient.get('/owner-claim')

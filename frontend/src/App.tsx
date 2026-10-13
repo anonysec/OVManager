@@ -85,7 +85,18 @@ const Page = ({ name, children }: { name: string; children: React.ReactNode }) =
 );
 
 function App({ onReady }: { onReady?: () => void }) {
-  const { isAuthenticated, userRole } = useAuth();
+  const { isAuthenticated, userRole, claimable, claimPending } = useAuth();
+
+  // Unauthenticated visitor: hold on the loader while the one-shot
+  // /owner-claim check is in flight (no /login flash), then send a first-run
+  // panel straight to /setup. null means "render the route as before".
+  const firstRun = isAuthenticated
+    ? null
+    : claimPending
+      ? <PageLoader />
+      : claimable
+        ? <Navigate to="/setup" replace />
+        : null;
 
   useRoutePrefetch(isAuthenticated, userRole);
   useScrollReset();
@@ -98,7 +109,9 @@ function App({ onReady }: { onReady?: () => void }) {
         <Routes>
           <Route
             path="/login"
-            element={isAuthenticated ? <Navigate to="/" /> : <Page name="login"><LoginPage /></Page>}
+            element={
+              firstRun ?? (isAuthenticated ? <Navigate to="/" /> : <Page name="login"><LoginPage /></Page>)
+            }
           />
           {/* The installer's Ready card prints this URL, so it is the first
               thing an operator opens, and now the only one: /claim is gone,
@@ -130,14 +143,16 @@ function App({ onReady }: { onReady?: () => void }) {
           <Route path="/health" element={<Navigate to="/" />} />
           <Route
             path="/"
-            element={isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />}>
+            element={
+              firstRun ?? (isAuthenticated ? <DashboardLayout /> : <Navigate to="/login" />)
+            }>
             <Route index element={<Page name="dashboard"><ServerStats /></Page>} />
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
             {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
           </Route>
-          <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
+          <Route path="*" element={firstRun ?? <Navigate to={isAuthenticated ? "/" : "/login"} />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

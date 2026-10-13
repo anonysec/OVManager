@@ -9,6 +9,10 @@ type AuthContextValue = {
   claim: (claimKey: string, password: string, username?: string) => Promise<void>;
   logout: () => void;
   userRole: string | null;
+  /** /owner-claim said nobody owns this panel yet → first run wants /setup. */
+  claimable: boolean;
+  /** true until the one mount-time claim check settles; gates the redirects. */
+  claimPending: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -36,6 +40,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const [token, setToken] = useState(localStorage.getItem('authToken'));
   const [userRole, setUserRole] = useState(localStorage.getItem('userRole'));
+  // No session at mount → find out whether setup still owns this panel, once.
+  const [claimable, setClaimable] = useState(false);
+  const [claimPending, setClaimPending] = useState(() => !localStorage.getItem('authToken'));
 
   const login = async (username: string, password: string) => {
     const formData = new URLSearchParams();
@@ -85,6 +92,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, [logout]);
 
+  // First-run probe: one GET at mount, only when there is no session to check
+  // it against. Resolves claimPending either way so the router never waits on
+  // a hung request — failure means "not claimable", i.e. today's /login.
+  useEffect(() => {
+    if (localStorage.getItem('authToken')) return;
+    let alive = true;
+    apiClient.get('/owner-claim')
+      .then((res) => { if (alive) setClaimable(!!res.data?.claimable); })
+      .catch(() => { /* no answer → plain /login, as before */ })
+      .finally(() => { if (alive) setClaimPending(false); });
+    return () => { alive = false; };
+  }, []);
+
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'userRole') {
@@ -104,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isAuthenticated = !!token;
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, claim, logout, userRole }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, claim, logout, userRole, claimable, claimPending }}>
       {children}
     </AuthContext.Provider>
   );
