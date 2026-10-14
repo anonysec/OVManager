@@ -556,6 +556,9 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-wrap {
+  /* stretch to the flex-column cross axis: margin-inline:auto alone shrinks
+     the wrap to fit the SVG's intrinsic 1:1 viewBox, centering a square. */
+  width: 100%;
   position: relative;
   height: 200px;
   min-height: 160px;
