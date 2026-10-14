@@ -41,54 +41,18 @@ const useCountUp = (target: any) => {
   return value;
 };
 
-const TONE_VAR: Record<string, string> = {
-  ok: 'var(--success)',
-  warn: 'var(--warning)',
-  danger: 'var(--danger)',
-  default: 'var(--accent-color, var(--info))',
-};
-
-const RING_SIZE = 38;
-const STROKE = 4;
-
-function Ring({ value, tone = 'default', label }: { value: number | string; tone?: string; label?: string }) {
-  const pct = Math.min(100, Math.max(0, Number(value) || 0));
-  const r = (RING_SIZE - STROKE) / 2;
-  const c = 2 * Math.PI * r;
-  const filled = (pct / 100) * c;
-  const color = TONE_VAR[tone] || TONE_VAR.default;
-
+/* Capacity meter — same 3px rail as the top-users bars. Reads at a glance
+   without the ink of a donut, and the number above it stays the hero. */
+function Meter({ pct, label }: { pct: number | string; label?: string }) {
+  const value = Math.min(100, Math.max(0, Number(pct) || 0));
   return (
-    <svg
-      className="ds-ring"
-      width={RING_SIZE}
-      height={RING_SIZE}
-      viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+    <span
+      className="ds-kpi-meter"
       role="img"
-      aria-label={label || `${Math.round(pct)}%`}
-      focusable="false"
+      aria-label={label || `${Math.round(value)}%`}
     >
-      <circle
-        className="ds-ring-track"
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={r}
-        fill="none"
-        strokeWidth={STROKE}
-      />
-      <circle
-        className="ds-ring-fill"
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={r}
-        fill="none"
-        strokeWidth={STROKE}
-        stroke={color}
-        strokeLinecap="round"
-        strokeDasharray={`${filled} ${c - filled}`}
-        transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-      />
-    </svg>
+      <span className="ds-kpi-meter-fill" style={{ width: `${value}%` }} />
+    </span>
   );
 }
 
@@ -154,15 +118,15 @@ export default function KpiCard({ icon: Icon, label, sub, value, animate, format
           </span>
         )}
         <span className="ds-kpi-label">{label}</span>
-        {ringPct !== undefined && ringPct !== null ? (
-          <Ring value={ringPct} tone={tone || 'default'} label={`${label}: ${Math.round(Number(ringPct))}%`} />
-        ) : null}
       </div>
       <div className="ds-kpi-value-row">
         <strong className="ds-kpi-value" aria-hidden={animated}>{display}</strong>
         {animated && <span className="sr-only">{srValue}</span>}
         {chip && <span className="ds-kpi-chip">{chip}</span>}
       </div>
+      {ringPct !== undefined && ringPct !== null ? (
+        <Meter pct={ringPct} label={`${label}: ${Math.round(Number(ringPct))}%`} />
+      ) : null}
       {animated && !chip && <span className="sr-only"> ({String(t((TONE_SR as any)[tone] || '', tone as any))})</span>}
       {sub && <span className="ds-kpi-sub">{sub}</span>}
       {spark && spark.length > 1 && (

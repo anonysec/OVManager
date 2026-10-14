@@ -51,11 +51,18 @@
   50% { box-shadow: 0 0 0 8px transparent; }
 }
 
-/* ── Stat cards — 1/2/4 columns. ─────────────────────────────────── */
+/* ── Meter bridge ─────────────────────────────────────────────────
+   One continuous rail of metric cells, not four floating cards.
+   `gap: 1px` over a --border background paints hairlines that stay
+   correct at any column count, with no per-row border gymnastics.  */
 .ds-stats-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -71,12 +78,12 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: var(--space-3);
+  min-height: 104px;
+  padding: var(--space-4) var(--space-4) var(--space-3);
   background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  border: 0;
+  border-radius: 0;
   font: inherit;
   color: inherit;
   text-align: start;
@@ -85,39 +92,24 @@
 
 button.ds-kpi {
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-button.ds-kpi::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to right, color-mix(in srgb, var(--accent-color, var(--info)) 10%, transparent), transparent 65%);
-  opacity: 0;
-  transition: opacity var(--transition-normal);
-  pointer-events: none;
+  transition: background var(--transition-fast);
 }
 
 button.ds-kpi:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface-2);
 }
 
-button.ds-kpi:hover::before {
-  opacity: 1;
-}
-
+/* Inset ring: the grid clips its own overflow, so an outset ring would vanish. */
 .ds-kpi:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring-shadow);
-  border-color: var(--focus-ring);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
   z-index: 1;
 }
 
 .ds-kpi-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -126,26 +118,7 @@ button.ds-kpi:hover::before {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-soft, color-mix(in srgb, var(--accent-color, var(--info)) 12%, transparent));
-  color: var(--accent-text, var(--text-secondary));
-}
-
-.ds-kpi--ok .ds-kpi-icon {
-  background: var(--success-soft);
-  color: var(--success-text);
-}
-
-.ds-kpi--warn .ds-kpi-icon {
-  background: var(--warning-soft);
-  color: var(--warning-text);
-}
-
-.ds-kpi--danger .ds-kpi-icon {
-  background: var(--danger-soft);
-  color: var(--danger-text);
+  color: var(--text-muted);
 }
 
 .ds-kpi-arrow {
@@ -158,48 +131,31 @@ button.ds-kpi:hover::before {
 button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-kpi-label {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ds-kpi-head .ds-ring {
-  margin-inline-start: auto;
-  flex: none;
-}
-
-.ds-ring-track {
-  stroke: var(--surface-3);
-}
-
-.ds-ring-fill {
-  transition: stroke-dasharray var(--transition-normal);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ds-ring-fill { transition: none; }
-}
-
 .ds-kpi-value-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .ds-kpi-value {
   direction: ltr;
   unicode-bidi: isolate;
-  font-size: 1.45rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: 1.1;
   font-family: var(--font-display);
   min-width: 0;
   overflow: hidden;
@@ -217,13 +173,13 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: 7px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -240,35 +196,53 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-kpi-sub {
-  font-size: 0.78rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 
+/* Capacity meter — same 3px rail as the top-users bars, the strip's motif. */
+.ds-kpi-meter {
+  display: block;
+  height: 3px;
+  margin-top: var(--space-2);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.ds-kpi-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent-text);
+  transition: width var(--transition-normal);
+}
+
+.ds-kpi--ok .ds-kpi-meter-fill { background: var(--success); }
+.ds-kpi--warn .ds-kpi-meter-fill { background: var(--warning); }
+.ds-kpi--danger .ds-kpi-meter-fill { background: var(--danger); }
+
 .ds-kpi-spark {
-  height: 26px;
+  height: 24px;
   margin-top: 2px;
 }
 
+/* Static placeholder — a blinking block reads as a glitch, not a loader. */
 .ds-kpi--loading {
-  min-height: 108px;
+  min-height: 104px;
   pointer-events: none;
-  animation: ds-blink 1.2s ease-in-out infinite;
 }
 
-@keyframes ds-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
+.ds-kpi--loading > * { visibility: hidden; }
 
-/* ── Alert strip ─────────────────────────────────────────────────── */
+/* ── Alert rail ────────────────────────────────────────────────────
+   One frame; severity is a 2px inline-start bar, not a coloured box. */
 .ds-alerts {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-radius: 10px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  background: transparent;
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
   font-size: 0.85rem;
   flex-wrap: nowrap;
   overflow: hidden;
@@ -277,68 +251,63 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-alerts--has-items {
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  padding: 12px 14px;
-  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
-  background: color-mix(in srgb, var(--warning) 7%, var(--surface-1));
+  gap: var(--space-3);
 }
 
 .ds-alerts--clear {
-  border-color: var(--border);
-  background: var(--surface-1);
-  padding: 12px 16px;
-  border-radius: 12px;
   color: var(--text-secondary);
 }
 
 .ds-alerts-icon {
   display: inline-flex;
   flex: none;
+  color: var(--text-muted);
 }
 
-.ds-alerts--has-items .ds-alerts-icon { color: var(--warning); }
 .ds-alerts--clear .ds-alerts-icon { color: var(--success); }
 
 .ds-alerts-groups {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
 }
 
 .ds-alert-group {
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-1);
-  overflow: hidden;
+  border-inline-start: 2px solid var(--border-strong);
+  background: transparent;
 }
 
-.ds-alert-group--error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
-.ds-alert-group--warning { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); }
-.ds-alert-group--info { border-color: color-mix(in srgb, var(--info) 40%, var(--border)); }
+.ds-alert-group--error { border-inline-start-color: var(--danger); }
+.ds-alert-group--warning { border-inline-start-color: var(--warning); }
+.ds-alert-group--info { border-inline-start-color: var(--info); }
+
+.ds-alert-group + .ds-alert-group {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
 
 .ds-alert-group-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: var(--space-2);
+  padding: 4px var(--space-3);
   min-width: 0;
 }
 
 .ds-alert-group-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: none;
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 6px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
 }
 
 .ds-alert-group-toggle:focus-visible {
@@ -350,25 +319,31 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-2);
   border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.68rem;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
   flex: none;
+  background: var(--surface-3);
+  color: var(--text-secondary);
 }
 
 .ds-alert-badge--error { background: var(--danger-soft); color: var(--danger-text); }
 .ds-alert-badge--warning { background: var(--warning-soft); color: var(--warning-text); }
 .ds-alert-badge--info { background: var(--info-soft); color: var(--info-text); }
 
-.ds-alert-group-icon { flex: none; }
+.ds-alert-group-icon { flex: none; color: var(--text-muted); }
 .ds-alert-group--error .ds-alert-group-icon { color: var(--danger); }
 .ds-alert-group--warning .ds-alert-group-icon { color: var(--warning); }
 .ds-alert-group--info .ds-alert-group-icon { color: var(--info); }
 
-.ds-alert-group-label { white-space: nowrap; }
+.ds-alert-group-label {
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
 
 .ds-alert-chevron { flex: none; transition: transform var(--transition-fast); }
 .ds-alert-chevron.is-open { transform: rotate(180deg); }
@@ -379,15 +354,14 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
   text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 6px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
 }
 
 .ds-alert-group-msg:hover { color: var(--text-primary); }
@@ -397,18 +371,20 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--border);
 }
 
 .ds-alert-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--border);
+  min-height: var(--row-h);
 }
 
 .ds-alert-row:last-child { border-bottom: none; }
+
+.ds-alert-row:hover { background: var(--surface-2); }
 
 .ds-alert-row-time {
   flex: none;
@@ -423,26 +399,26 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   text-align: start;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 6px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
 }
 
 .ds-alert-row-title:hover { color: var(--accent-text); }
 .ds-alert-row-title:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
-.ds-alert-row-actions { display: inline-flex; gap: 4px; flex: none; }
+.ds-alert-row-actions { display: inline-flex; gap: var(--space-1); flex: none; }
 
 .ds-alert-action {
   font-size: 0.7rem;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 6px;
+  font-weight: var(--font-weight-semibold);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-secondary);
@@ -454,11 +430,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-alerts-more {
   flex: none;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   cursor: pointer;
@@ -480,12 +456,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   color: var(--text-primary);
 }
 
-/* ── Card primitive ──────────────────────────────────────────────── */
+/* ── Panel primitive (legacy; no current importers) ──────────────── */
 .ds-card {
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -493,15 +468,16 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 20px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
-  min-height: 56px;
+  min-height: 40px;
+  background: var(--surface-2);
 }
 
 .ds-card-title {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   margin: 0;
 }
@@ -509,12 +485,12 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-card-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: none;
 }
 
 .ds-card-body {
-  padding: 20px;
+  padding: var(--space-4);
 }
 
 .ds-card-body--flush {
@@ -525,14 +501,14 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 /* ── Streaming chart ─────────────────────────────────────────────── */
 .ds-chart-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -541,18 +517,18 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   padding: 2px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   gap: 2px;
 }
 
 .ds-segmented button {
-  padding: 4px 10px;
+  padding: 3px var(--space-2);
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 6px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: color var(--transition-fast), background var(--transition-fast);
 }
@@ -560,7 +536,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-segmented button.active {
   background: var(--surface-1);
   color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
 }
 
 .ds-segmented button:focus-visible {
@@ -577,12 +552,12 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ds-chart-wrap {
   position: relative;
-  height: 240px;
+  height: 200px;
   min-height: 160px;
   max-height: 320px;
   max-width: 960px;
@@ -613,12 +588,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-chart-line {
   fill: none;
-  stroke: var(--info);
-  stroke-width: 2.5;
+  stroke: var(--accent);
+  stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
   transition: d 0.4s ease;
-  filter: drop-shadow(0 3px 8px rgb(0 0 0 / 0.18));
 }
 
 .ds-chart-live-dot {
@@ -626,8 +600,8 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent-color, var(--info));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color, var(--info)) 25%, transparent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -646,8 +620,8 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow);
@@ -655,28 +629,28 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   white-space: nowrap;
   max-width: min(240px, 92%);
   z-index: 2;
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
 }
 
 .ds-chart-tooltip strong {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .ds-chart-tip-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--info);
+  background: var(--accent);
   flex: none;
 }
 
 .ds-chart-tooltip span {
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 }
 
@@ -684,7 +658,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   direction: ltr;
   unicode-bidi: isolate;
   position: absolute;
-  font-size: 0.7rem;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -705,15 +679,15 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   place-items: center;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .ds-chart-data-toggle {
-  font-size: 0.82rem;
-  color: var(--accent);
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  color: var(--accent-text);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 
 .ds-chart-data-toggle:focus-visible {
@@ -724,26 +698,26 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 /* ── Reason badges (needs attention) ─────────────────────────────── */
 .ds-reasons {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
 .ds-reason {
   display: inline-flex;
   align-items: center;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  padding: 2px var(--space-2);
   border-radius: 999px;
   background: var(--warning-soft);
   color: var(--warning-text);
-  border: 1px solid var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
 }
 
 .ds-reason--danger {
   background: var(--danger-soft);
   color: var(--danger-text);
-  border-color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
 }
 
 /* ── Activity feed ───────────────────────────────────────────────── */
@@ -756,35 +730,38 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-feed-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border);
   font-size: 0.88rem;
+  min-height: var(--row-h);
 }
 
 .ds-feed-item:last-child {
   border-bottom: none;
 }
 
+.ds-feed-item:hover { background: var(--surface-2); }
+
 .ds-feed-avatar {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: 700;
-  font-size: 0.75rem;
+  background: var(--surface-3);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+  font-size: 0.7rem;
   flex: none;
 }
 
 .ds-feed-action {
   font-family: ui-monospace, 'SF Mono', monospace;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: var(--font-weight-semibold);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   color: var(--text-secondary);
   flex: none;
@@ -793,18 +770,18 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-feed-body {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
   color: var(--text-primary);
 }
 
 .ds-feed-actor {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .ds-feed-target {
-  color: var(--accent);
+  color: var(--text-secondary);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -815,7 +792,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-feed-arrow { color: var(--text-muted); }
 
 .ds-feed-time {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   flex: none;
@@ -825,11 +802,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-inline-error {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
   background: var(--danger-soft);
-  border: 1px solid var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
   color: var(--danger-text);
   font-size: 0.88rem;
 }
@@ -843,30 +820,28 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-inline-error strong {
   color: var(--danger-text);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .ds-inline-error span {
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
 }
 
 /* ── Footer meta (table previews) ────────────────────────────────── */
 .ds-panel-foot {
-  padding: 10px 20px;
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border);
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
   background: var(--surface-2);
 }
 
 /* ── Node health summary ─────────────────────────────────────────── */
-.ds-node-list {
-
 .ds-node-list {
   display: flex;
   flex-direction: column;
@@ -880,12 +855,15 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: var(--space-3);
-  padding: 10px 0;
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border);
   font-size: var(--font-size-sm);
+  min-height: var(--row-h);
 }
 
 .ds-node-row:last-child { border-bottom: none; }
+
+.ds-node-row:hover { background: var(--surface-2); }
 
 .ds-node-name {
   display: flex;
@@ -911,8 +889,8 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-node-arrow {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -921,7 +899,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-node-arrow:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
   color: var(--accent-text);
 }
 
@@ -932,13 +910,13 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 /* ── Chart card — the bare chart lives in a plain card shell ─────── */
 .ds-chart-card .ds-chart-embed {
-  padding: 10px 16px 12px;
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .ds-chart-embed {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -946,16 +924,18 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: 14px 0 8px;
+  padding: var(--space-3) 0;
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
 }
 
 .ds-chart-inline-stats {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
-  font-size: 0.78rem;
+  gap: var(--space-4);
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -966,14 +946,15 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   font-weight: 700;
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .ds-chart-delta {
   font-size: 0.68rem;
-  font-weight: 700;
-  padding: 1px 6px;
+  font-weight: var(--font-weight-semibold);
+  padding: 1px var(--space-2);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ds-chart-delta.is-up {
@@ -989,18 +970,19 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-chart-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
   border: 1px solid var(--border);
   background: var(--surface-2);
+  color: var(--text-secondary);
 }
 
 .ds-chart-badge-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex: none;
 }
@@ -1038,41 +1020,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   padding: var(--space-5) var(--space-2);
 }
 
-/* ── Responsive ──────────────────────────────────────────────────── */
-@media (max-width: 1100px) {
-  .ds-grid-2 { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 767.98px) {
-  .ds-page { gap: 16px; padding-bottom: 32px; }
-  .ds-node-row { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .ds-node-metric { display: none; }
-  .ds-card-body { padding: 16px; }
-  .ds-card-head { padding: 12px 16px; }
-  .ds-feed-item { padding: 10px 16px; }
-  .ds-kpi-value { font-size: 1.3rem; }
-  .ds-kpi-chip { max-width: 55%; font-size: 0.68rem; }
-  .ds-kpi-label { font-size: 0.72rem; }
-  .ds-chart-wrap { height: 200px; }
-  .ds-chart-card .ds-chart-embed { padding: 8px 12px 10px; }
-  .ds-chart-inline-stats { gap: 10px; }
-  .ds-hide-mobile { display: none; }
-  .ds-alerts-groups { grid-template-columns: 1fr; }
-  .ds-kpi-head .ds-ring { width: 28px; height: 28px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ds-live-dot,
-  .ds-kpi--loading,
-  .ds-chart-badge--live {
-    animation: none;
-  }
-  .ds-chart-line,
-  .ds-chart-area {
-    transition: none;
-  }
-}
-
 /* ── Top users (traffic leaders) ─────────────────────────────────── */
 .ds-topusers {
   display: flex;
@@ -1082,15 +1029,18 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-topusers-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border);
-  font-size: 0.88rem;
+  font-size: var(--font-size-sm);
+  min-height: var(--row-h);
 }
 
 .ds-topusers-row:last-child {
   border-bottom: none;
 }
+
+.ds-topusers-row:hover { background: var(--surface-2); }
 
 .ds-topusers-name {
   flex: none;
@@ -1098,14 +1048,14 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
 }
 
 .ds-topusers-bar {
   flex: 1;
-  height: 8px;
-  border-radius: 4px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -1113,7 +1063,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-topusers-fill {
   display: block;
   height: 100%;
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--accent);
 }
 
@@ -1121,4 +1071,42 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   flex: none;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .ds-grid-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 767.98px) {
+  .ds-page { gap: var(--space-4); padding-bottom: var(--space-6); }
+  .ds-node-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .ds-node-metric { display: none; }
+  .ds-card-body { padding: var(--space-3); }
+  .ds-card-head { padding: var(--space-3); }
+  .ds-feed-item { padding: var(--space-2) var(--space-3); }
+  .ds-topusers-row { padding: var(--space-2) var(--space-3); }
+  .ds-topusers-name { width: 88px; }
+  .ds-kpi-value { font-size: var(--font-size-lg); }
+  .ds-kpi-chip { max-width: 55%; }
+  .ds-chart-wrap { height: 180px; }
+  .ds-chart-card .ds-chart-embed { padding: 0 var(--space-3) var(--space-3); }
+  .ds-chart-inline-stats { gap: var(--space-3); }
+  .ds-hide-mobile { display: none; }
+  .ds-alerts { padding: var(--space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-live-dot,
+  .ds-chart-badge--live {
+    animation: none;
+  }
+  .ds-chart-line,
+  .ds-chart-area,
+  .ds-kpi-meter-fill {
+    transition: none;
+  }
+  .ds-alert-chevron {
+    transition: none;
+  }
 }

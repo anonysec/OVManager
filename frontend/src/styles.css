@@ -831,41 +831,35 @@ html[data-theme="light"] .btn-secondary:hover {
 }
 
 /* ===== EmptyState (shared) polish =====
-   Badge geometry mirrors the error state so the three placeholders (skeleton /
-   error / empty) read as one family. The icon sits in a soft accent disc and
-   the headline stays primary text, so the message carries the meaning. */
+   Placeholder family: skeleton / error / empty. The glyph is a bare muted
+   marker — a tinted disc would out-shout the message it introduces. */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 48px 24px;
-  gap: 14px;
+  padding: var(--space-6) var(--space-4);
+  gap: var(--space-3);
   color: var(--text-secondary);
 }
 .empty-state-badge {
   display: inline-grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  box-shadow: inset 0 0 0 1px var(--accent-border);
+  color: var(--text-muted);
 }
 .empty-state-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   max-width: 420px;
 }
 .empty-state h3 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-tight);
   color: var(--text-primary);
 }
 .empty-state p {
@@ -2398,25 +2392,25 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .sp-two-col {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .sp-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .sp-stat {
-  padding: 10px 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   display: flex;
   flex-direction: column;
@@ -2425,15 +2419,15 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 }
 
 .sp-stat > span {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
 }
 
 .sp-stat > strong {
-  font-size: 1.05rem;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
 }
@@ -2447,7 +2441,7 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-section-header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .sp-section-header > div {
@@ -2567,20 +2561,22 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 /* Hours toggle (Security section). */
 .sp-hours-toggle {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .sp-hour-btn {
-  padding: 5px 10px;
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-h-sm);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .sp-hour-btn:hover {
@@ -2604,25 +2600,30 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .sp-node-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+  min-height: var(--row-h);
 }
 
 .sp-node-row:last-child {
   border-bottom: none;
 }
 
+.sp-node-row:hover {
+  background: var(--surface-2);
+}
+
 .sp-node-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2632,10 +2633,10 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
   background: var(--surface-3);
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -2708,18 +2709,19 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-backup-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .sp-backup-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
-  font-size: 0.82rem;
+  font-size: var(--font-size-sm);
+  min-height: var(--row-h);
   min-width: 0;
 }
 
@@ -2746,22 +2748,24 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 /* Language / alert option rows (Appearance / Alerts sections). */
 .sp-lang-row {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .sp-lang-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-h-sm);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .sp-lang-btn:hover {
@@ -2783,20 +2787,27 @@ html[dir="rtl"] .sk-block::after { animation-name: sk-shine-rtl; }
 .sp-alert-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .sp-alert-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   flex-wrap: wrap;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  min-height: var(--row-h);
+}
+
+.sp-alert-row:last-child {
+  border-bottom: none;
 }
 
 .sp-alert-label {
   flex: 1;
   min-width: 160px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
 }
 

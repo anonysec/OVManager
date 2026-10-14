@@ -5,7 +5,7 @@ import { FiInbox } from 'react-icons/fi';
 const EmptyState = ({ title, description, actionLabel, onAction }: { title?: any; description?: any; actionLabel?: any; onAction?: any }) => (
   <div className="empty-state">
     <span className="empty-state-badge" aria-hidden="true">
-      <FiInbox size={28} />
+      <FiInbox size={20} />
     </span>
     <div className="empty-state-body">
       <h3>{title}</h3>

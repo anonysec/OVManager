@@ -163,6 +163,8 @@
   --control-h-sm: 30px;
   --control-h-md: 38px;
   --control-h-lg: 44px;
+  /* Dense list/table row — node rows, feed rows, top-user rows, settings rows. */
+  --row-h: 34px;
 
   /* Typography scale. */
   --font-size-2xs: 10px;

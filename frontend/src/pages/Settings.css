@@ -1,113 +1,120 @@
 /* Copyright (c) 2026 anonysec
  * SPDX-License-Identifier: MIT */
 
+/* Settings chrome. Form controls deliberately mirror the shared
+   `.ui-field` / `.ui-input` / `.ui-btn` metrics so Settings has no private
+   dialect — see components/ui/Field.css and Button.css. */
+
 .sp-page {
   max-width: 960px;
   margin: 0 auto;
-  padding-bottom: 32px;
-  animation: fadeUp .2s ease both;
+  padding-bottom: var(--space-6);
 }
 
 /* ── Jump navigation bar ─────────────────── */
 .sp-jumpnav {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 20px;
-  padding: 8px 11px;
+  gap: 2px;
+  margin-bottom: var(--space-5);
+  padding: var(--space-1) var(--space-2);
   background: var(--surface-1, var(--panel));
   border: 1px solid var(--border, var(--line));
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .sp-jumpnav-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 9px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   color: var(--text-secondary, var(--muted));
-  font: 600 11px/1 var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
   text-decoration: none;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .sp-jumpnav-link:hover {
-  background: rgba(255,255,255,.05);
+  background: var(--surface-2);
   color: var(--text-primary, var(--text));
-  border-color: var(--border, var(--line));
 }
 
 /* ── Sections ─────────────────────────────── */
+/* Sections are beats in one document, not a stack of boxes: a hairline
+   does the separating, so the page stops looking like nested cards. */
 .sp-sections {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .sp-section {
   margin: 0;
 }
 
+.sp-section + .sp-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border, var(--line));
+}
+
 .sp-section-header {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-3);
 }
 
 .sp-section-icon {
-  color: var(--accent-color, var(--orange));
+  color: var(--text-muted, var(--muted));
   flex-shrink: 0;
 }
 
 .sp-section-header h2 {
   margin: 0 0 2px;
   font-size: var(--font-size-md);
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   color: var(--text-primary, var(--text));
-  letter-spacing: -.02em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .sp-section-header p {
   margin: 0;
   font-size: var(--font-size-xs);
   color: var(--text-muted, var(--muted));
-  line-height: 1.4;
+  line-height: var(--line-height-snug);
 }
 
 /* ── Card ──────────────────────────────────── */
+/* A settings card is a static container: it never lifts on hover, and it
+   never washes accent across its top edge. */
 .sp-card {
   background: var(--surface-1, var(--panel));
   border: 1px solid var(--border, var(--line));
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  transition: border-color .12s, box-shadow .12s;
-}
-
-.sp-card:hover {
-  border-color: color-mix(in srgb, var(--accent-color) 35%, var(--border, var(--line)));
-  box-shadow: 0 3px 14px rgba(0,0,0,.15);
 }
 
 .sp-card-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border, var(--line));
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary, var(--text));
+  background: var(--surface-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary, var(--muted));
 }
 
-.sp-card-head svg { color: var(--accent-color, var(--orange)); }
+.sp-card-head svg { color: var(--text-muted, var(--muted)); }
 
 .sp-card-body {
-  padding: 14px;
+  padding: var(--space-4);
 }
 
 /* ── Fields ──────────────────────────────── */
 .sp-field {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-4);
 }
 
 .sp-field:last-child { margin-bottom: 0; }
@@ -115,96 +122,85 @@
 .sp-field--h {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .sp-field--h .sp-label { margin-bottom: 0; }
 
+/* Sentence case at the shared label size — an all-caps eyebrow above every
+   control is noise, and it shouted over the value it labelled. */
 .sp-label {
   display: block;
-  margin-bottom: 4px;
-  font-size: var(--font-size-2xs);
-  font-weight: 700;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
   color: var(--text-secondary, var(--muted));
-  text-transform: uppercase;
-  letter-spacing: .04em;
 }
 
 .sp-label-xs {
-  font-size: var(--font-size-2xs);
-  font-weight: 800;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-muted, var(--muted));
-  text-transform: uppercase;
-  letter-spacing: .06em;
 }
 
-.sp-input {
+.sp-input,
+.sp-select {
   width: 100%;
-  padding: 8px 11px;
+  min-height: var(--control-h-md);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border, var(--line));
-  border-radius: 7px;
-  background: var(--bg, #0e1116);
+  border-radius: var(--radius-md);
+  background: var(--input-bg, var(--bg));
   color: var(--text-primary, var(--text));
   font-size: var(--font-size-sm);
   font-family: inherit;
-  transition: border-color .12s, box-shadow .12s;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.sp-input:focus {
+.sp-input:focus,
+.sp-select:focus {
   outline: none;
-  border-color: var(--accent-color, var(--orange));
-  box-shadow: 0 0 0 3px rgba(252,122,30,.14);
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring-shadow);
 }
 
 .sp-input::placeholder { color: var(--text-muted, var(--muted)); opacity: .8; }
-.sp-input:disabled { opacity: .45; cursor: not-allowed; background: var(--surface-2, var(--panel)); }
 
-/* ── Select ──────────────────────────────── */
+.sp-input:disabled,
+.sp-select:disabled { opacity: .45; cursor: not-allowed; background: var(--surface-2, var(--panel)); }
+
 .sp-select {
-  width: 100%;
-  padding: 8px 11px;
-  border: 1px solid var(--border, var(--line));
-  border-radius: 7px;
-  background: var(--bg, #0e1116);
-  color: var(--text-primary, var(--text));
-  font-size: var(--font-size-sm);
-  font-family: inherit;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-inline-end: 36px;
-  transition: border-color .12s, box-shadow .12s;
 }
-
-.sp-select:focus {
-  outline: none;
-  border-color: var(--accent-color, var(--orange));
-  box-shadow: 0 0 0 3px rgba(252,122,30,.14);
-}
-
-.sp-select:disabled { opacity: .45; cursor: not-allowed; background: var(--surface-2, var(--panel)); }
 
 /* ── Toggle switch ───────────────────────── */
-.sp-toggle { display: inline-flex; align-items: center; cursor: pointer; gap: 8px; }
+.sp-toggle { display: inline-flex; align-items: center; cursor: pointer; gap: var(--space-2); }
 .sp-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sp-toggle input:focus-visible ~ .sp-toggle-track { box-shadow: var(--focus-ring-shadow); }
 .sp-toggle-track {
   width: 38px; height: 20px;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   background: var(--border, var(--line));
   position: relative;
-  transition: background .18s;
+  transition: background var(--transition-fast);
   flex-shrink: 0;
 }
-.sp-toggle input:checked ~ .sp-toggle-track { background: var(--accent-color); }
+/* Fill tone, not --accent-color: that token is the text tone and is too
+   dark to read as an "on" track against a light page. */
+.sp-toggle input:checked ~ .sp-toggle-track { background: var(--accent); }
 .sp-toggle-thumb {
   position: absolute;
   top: 2px; inset-inline-start: 2px;
   width: 16px; height: 16px;
   border-radius: 50%;
   background: #fff;
-  transition: transform .18s;
+  transition: transform var(--transition-fast);
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
 }
 .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(18px); }
@@ -213,39 +209,41 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-toggle input:disabled ~ .sp-toggle-track { opacity: .45; cursor: not-allowed; }
 .accent-swatch {
   width: 24px; height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 2px solid transparent;
   cursor: pointer;
-  transition: transform .12s, border-color .12s, box-shadow .12s;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .accent-swatch:hover { transform: scale(1.08); }
-.accent-swatch.active { border-color: var(--text-primary, var(--text)); box-shadow: 0 0 0 2px var(--accent-color, var(--orange)); }
+.accent-swatch.active { border-color: var(--text-primary, var(--text)); box-shadow: 0 0 0 2px var(--accent); }
 
 /* ── Theme/Style pills ───────────────────── */
-.sp-theme-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.sp-theme-pills { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .sp-theme-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: var(--control-h-sm);
   border: 1px solid var(--border, var(--line));
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary, var(--muted));
-  font: 600 11px/1 var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.sp-theme-pill:hover { background: rgba(255,255,255,.04); color: var(--text-primary, var(--text)); }
+.sp-theme-pill:hover { background: var(--surface-2); color: var(--text-primary, var(--text)); }
 .sp-theme-pill.active {
-  background: var(--accent-color-transparent, rgba(252,122,30,.14));
-  border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border, var(--line)));
-  color: var(--accent-color, var(--orange));
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border, var(--line)));
+  color: var(--accent-text, var(--orange));
 }
 
 /* ── Button row ──────────────────────────── */
-.sp-btn-group { display: inline-flex; gap: 8px; }
+.sp-btn-group { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
 
 /* ── Buttons ─────────────────────────────── */
 /* Scoped to .sp-page: these used to be bare `.btn` rules in a lazily-loaded
@@ -258,36 +256,84 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: var(--space-2);
+  height: var(--control-h-md);
+  padding: 0 var(--space-4);
   border: 1px solid var(--border, var(--line));
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary, var(--muted));
-  font: 600 12px/1 var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
   cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.sp-page .btn:hover { background: rgba(255,255,255,.05); color: var(--text-primary, var(--text)); border-color: var(--accent-color, var(--orange)); }
-.sp-page .btn:focus-visible { outline: 2px solid var(--accent-color, var(--orange)); outline-offset: 2px; }
+.sp-page .btn:hover { background: var(--surface-2); color: var(--text-primary, var(--text)); border-color: var(--border-strong); }
+.sp-page .btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .sp-page .btn:disabled { opacity: .45; cursor: not-allowed; }
 
+/* --accent (fill tone), not --accent-color (text tone): on the light theme
+   --accent-color is #b04f07 and --accent-contrast ink over it is 3.5:1. */
 .sp-page .btn-primary {
-  background: var(--accent-color, var(--orange));
-  border-color: var(--accent-color, var(--orange));
-  /* Token, not #fff: --accent-color resolves to the dark-theme TEXT tone
-     (#ff6a1a) and white on it is 2.6:1. */
+  background: var(--accent);
+  border-color: var(--accent);
   color: var(--accent-contrast);
 }
-.sp-page .btn-primary:hover { filter: brightness(1.06); }
-.sp-page .btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
+.sp-page .btn-primary:hover { filter: brightness(1.06); background: var(--accent); border-color: var(--accent); }
+.sp-page .btn-primary:disabled { background: var(--accent); opacity: .5; }
 
-.sp-page .btn-sm { padding: 6px 10px; font-size: var(--font-size-xs); }
-.sp-hint { margin: 6px 0 0; font-size: var(--font-size-2xs); color: var(--text-muted, var(--muted)); line-height: 1.4; }
+.sp-page .btn-sm { height: var(--control-h-sm); padding: 0 var(--space-3); }
+
+.sp-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted, var(--muted));
+  line-height: var(--line-height-snug);
+}
+
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
 /* ── Error / Empty states ────────────────── */
-.sp-error { padding: 24px; text-align: center; color: var(--danger-text, var(--danger)); font-weight: 600; }
+/* Inline field error, not a centred banner: its only job is to sit under
+   the control that failed. */
+.sp-error {
+  margin: 0;
+  padding: 0;
+  text-align: start;
+  font-size: var(--font-size-xs);
+  color: var(--danger-text, var(--danger));
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Section-level load/save failure (BotSection). Previously unstyled — no
+   `.settings-alert` rule existed anywhere, so errors rendered as bare text. */
+.settings-alert {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+}
+
+.settings-alert--error {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border, var(--line)));
+  color: var(--danger-text);
+}
+
+.settings-alert p {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-snug);
+  color: var(--text-secondary);
+}
+
+/* Jump-nav focus target: a programmatic focus lands here with no indicator. */
+.sp-section:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 6px;
+  border-radius: var(--radius-sm);
+}

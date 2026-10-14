@@ -27,7 +27,7 @@
 .ma-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -36,12 +36,13 @@
 .ma-row {
   display: grid;
   grid-template-columns: max-content minmax(0, 1.1fr) minmax(0, 1fr);
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
-  padding: 7px 0;
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-subtle);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-snug);
+  min-height: var(--row-h);
 }
 
 .ma-row:last-child {
