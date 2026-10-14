@@ -4,10 +4,10 @@
 .ds-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-5);
   max-width: var(--content-max);
   margin: 0 auto;
-  padding-bottom: 32px;
+  padding-bottom: var(--space-7);
 }
 
 /* The page grid owns the rhythm; PageHeader must not add its own bottom gap. */
@@ -972,7 +972,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-chart-delta {
   font-size: 0.68rem;
   font-weight: 700;
-  font-family: var(--font-body);
   padding: 1px 6px;
   border-radius: 999px;
 }

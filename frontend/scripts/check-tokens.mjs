@@ -89,6 +89,10 @@ const PAIRS = [
   ['--warning-text', '--surface-1'],
   ['--info-text', '--surface-1'],
   ['--accent-contrast', '--accent'],
+  /* Filled danger/success buttons — the dark-theme fills are pale, so these
+     are the pair that keeps white-off-pink/mint from shipping again. */
+  ['--danger-contrast', '--danger-text'],
+  ['--success-contrast', '--success-text'],
 ];
 const AA = 4.5;
 let failures = 0;
@@ -148,6 +152,28 @@ if (strays.length) {
   failures += strays.length;
 } else {
   console.log('Token blocks live only in tokens.css: pass');
+}
+
+/* ---------- every fallback-less var() must resolve ---------- */
+// A `var(--x)` with no fallback and no declaration is dropped by the browser
+// entirely — the property silently vanishes. This script reads token
+// *declarations*, so it never saw `font-size: var(--text-sm)` shipping dead.
+const declared = new Set(Object.keys(merged));
+const deadRefs = [];
+for (const f of walk(srcDir).filter((p) => p.endsWith('.css'))) {
+  const text = readFileSync(f, 'utf8');
+  for (const m of text.matchAll(/var\(\s*(--[a-z0-9-]+)\s*(,|\))/g)) {
+    if (m[2] === ',') continue;              // has a fallback: degrades on purpose
+    if (declared.has(m[1])) continue;
+    const line = text.slice(0, m.index).split('\n').length;
+    deadRefs.push(`${f.slice(root.length + 1)}:${line} ${m[1]}`);
+  }
+}
+if (deadRefs.length) {
+  console.log(`\nFAIL var() with no declaration and no fallback:\n  ${deadRefs.join('\n  ')}`);
+  failures += deadRefs.length;
+} else {
+  console.log('Every fallback-less var() resolves to a token: pass');
 }
 
 console.log(failures === 0 ? '\nAll token checks passed.' : `\n${failures} check(s) failed.`);

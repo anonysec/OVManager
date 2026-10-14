@@ -77,6 +77,12 @@
   --danger: #ff5368;
   --danger-text: #ff7a8a;
   --danger-soft: rgba(255, 83, 104, 0.16);
+  /* Ink for a FILLED danger/success button. Same reasoning as
+     --accent-contrast: the dark-theme fills are pale (salmon / mint), so
+     white lands at 2.5:1 and 2.0:1 — both FAIL. Near-black clears 7.5:1 and
+     9.5:1. Light-theme fills are deep, so they flip back to white. */
+  --danger-contrast: #15110a;
+  --success-contrast: #15110a;
 
   --warning: #ffb454;
   --warning-text: #ffb454;
@@ -316,6 +322,9 @@ html[data-theme="light"] {
   --danger: #dc2626;
   --danger-text: #c0392b;
   --danger-soft: rgba(220, 38, 38, 0.12);
+  /* Deep fills in light mode: white clears AA, near-black does not. */
+  --danger-contrast: #ffffff;
+  --success-contrast: #ffffff;
 
   --warning: #e08a00;
   --warning-text: #8a5200;

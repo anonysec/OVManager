@@ -12,6 +12,7 @@ import DataTable from '../components/ui/DataTable';
 import Modal from '../components/Modal';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
+import PageHeader from '../components/ui/PageHeader';
 import './AuditLog.css';
 
 const ACTION_TONES: Record<string, string> = {
@@ -256,29 +257,34 @@ const AuditLog = () => {
 
   return (
     <div id="audit-view" className="view adt-page">
-      <div className="adt-head">
-        <div>
-          <h2 className="adt-title"><FiActivity aria-hidden="true" /> {t('navAudit', 'Logs')}</h2>
-          <p className="adt-subtitle">{t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}</p>
-        </div>
-        <div className="adt-head-actions">
-          <Button
-            variant="secondary" size="sm"
-            icon={<FiDownload size={13} aria-hidden="true" />}
-            onClick={handleExportCsv}
-            disabled={filtered.length === 0}
-          >
-            {t('exportCsv', 'CSV')}
-          </Button>
-          <Button
-            variant="secondary" size="sm"
-            icon={<FiRefreshCw size={13} aria-hidden="true" />}
-            onClick={() => load()}
-          >
-            {t('refresh', 'Refresh')}
-          </Button>
-        </div>
-      </div>
+      {/* Same header as every other page: PageHeader owns the h1, the icon
+          tile and the action row. This used to be a one-off <h2> at a smaller
+          size, which left Audit as the only page with a wrong heading level
+          and a visibly lower title than Users / Nodes / Settings. */}
+      <PageHeader
+        title={t('navAudit', 'Logs')}
+        icon={<FiActivity aria-hidden="true" />}
+        subtitle={t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}
+        actions={(
+          <>
+            <Button
+              variant="secondary" size="sm"
+              icon={<FiDownload size={13} aria-hidden="true" />}
+              onClick={handleExportCsv}
+              disabled={filtered.length === 0}
+            >
+              {t('exportCsv', 'CSV')}
+            </Button>
+            <Button
+              variant="secondary" size="sm"
+              icon={<FiRefreshCw size={13} aria-hidden="true" />}
+              onClick={() => load()}
+            >
+              {t('refresh', 'Refresh')}
+            </Button>
+          </>
+        )}
+      />
 
       <div className="adt-filters">
         <label className="adt-filter adt-search">

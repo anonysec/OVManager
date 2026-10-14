@@ -7,45 +7,8 @@
   max-width: var(--content-max);
 }
 
-.adt-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin: 2px 0 var(--space-5);
-}
-
-.adt-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-tight);
-  color: var(--text-primary);
-}
-
-.adt-title svg {
-  color: var(--accent-text);
-}
-
-.adt-subtitle {
-  margin: var(--space-2) 0 0;
-  max-width: 68ch;
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  color: var(--text-secondary);
-}
-
-.adt-head-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
+/* Page header comes from the shared <PageHeader /> component (ui/PageHeader.css);
+   only the filters and cells are owned here. */
 
 .adt-filters {
   display: flex;

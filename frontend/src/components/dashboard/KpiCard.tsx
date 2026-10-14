@@ -15,7 +15,9 @@ const useCountUp = (target: any) => {
   useEffect(() => {
     const from = prevRef.current;
     const to = Number(target) || 0;
-    if (from === to) {
+    // Reduced motion: jump straight to the value instead of easing over it.
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (from === to || reduce) {
       setValue(to);
       prevRef.current = to;
       return;

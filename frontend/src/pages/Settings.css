@@ -248,7 +248,13 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-btn-group { display: inline-flex; gap: 8px; }
 
 /* ── Buttons ─────────────────────────────── */
-.btn {
+/* Scoped to .sp-page: these used to be bare `.btn` rules in a lazily-loaded
+   stylesheet, so once Settings was visited they were appended to <head> last
+   and re-skinned EVERY `.btn` in the app (modals, empty states, section
+   error bars) — shrinking them to 12px and turning filled buttons into grey
+   ghosts. Settings keeps its compact rhythm; everything else keeps the
+   shared component styles from index.css. */
+.sp-page .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -262,19 +268,21 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   cursor: pointer;
   transition: background .12s, color .12s, border-color .12s;
 }
-.btn:hover { background: rgba(255,255,255,.05); color: var(--text-primary, var(--text)); border-color: var(--accent-color, var(--orange)); }
-.btn:focus-visible { outline: 2px solid var(--accent-color, var(--orange)); outline-offset: 2px; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+.sp-page .btn:hover { background: rgba(255,255,255,.05); color: var(--text-primary, var(--text)); border-color: var(--accent-color, var(--orange)); }
+.sp-page .btn:focus-visible { outline: 2px solid var(--accent-color, var(--orange)); outline-offset: 2px; }
+.sp-page .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-.btn-primary {
+.sp-page .btn-primary {
   background: var(--accent-color, var(--orange));
   border-color: var(--accent-color, var(--orange));
-  color: #fff;
+  /* Token, not #fff: --accent-color resolves to the dark-theme TEXT tone
+     (#ff6a1a) and white on it is 2.6:1. */
+  color: var(--accent-contrast);
 }
-.btn-primary:hover { filter: brightness(1.06); }
-.btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
+.sp-page .btn-primary:hover { filter: brightness(1.06); }
+.sp-page .btn-primary:disabled { background: var(--accent-color, var(--orange)); opacity: .5; }
 
-.btn-sm { padding: 6px 10px; font-size: var(--font-size-xs); }
+.sp-page .btn-sm { padding: 6px 10px; font-size: var(--font-size-xs); }
 .sp-hint { margin: 6px 0 0; font-size: var(--font-size-2xs); color: var(--text-muted, var(--muted)); line-height: 1.4; }
 @keyframes shimmer {
   0% { background-position: 200% 0; }
