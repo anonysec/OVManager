@@ -199,9 +199,11 @@ describe('ServerStats resilience', () => {
       return undefined;
     });
     renderStats();
-    await waitFor(() => expect(screen.getByText('100 B')).toBeTruthy());
+    // Head "Now" stat carries the series value (the data-table fallback is gone).
+    const now = () => document.querySelector('.ds-chart-stat b')?.firstChild?.textContent;
+    await waitFor(() => expect(now()).toBe('300 B'));
     fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
-    await waitFor(() => expect(screen.getByText('2')).toBeTruthy());
+    await waitFor(() => expect(now()).toBe('5'));
   });
 
   it('shows the chart error with retry instead of empty state', async () => {

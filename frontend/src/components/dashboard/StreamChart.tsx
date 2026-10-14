@@ -262,27 +262,6 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
             </div>
           )}
         </div>
-        <details>
-          <summary className="ds-chart-data-toggle">{t('chartDataTable', 'Data table')}</summary>
-          <div className="ds-chart-data" style={{ maxHeight: 240, overflow: 'auto', marginTop: 8 }}>
-            <table className="dt-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t('th_lastOnline', 'Time')}</th>
-                  <th scope="col">{metric === 'conns' ? t('th_sessions', 'Sessions') : t('totalTraffic', 'Traffic')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {series.slice(-48).map((p, i) => (
-                  <tr key={p.ts ?? i}>
-                    <td className="dt-num">{fmtDateTime(tsToIso(p.ts) || '')}</td>
-                    <td className="dt-num">{fmt(valueAt(p))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
       </figure>
     </div>
   );

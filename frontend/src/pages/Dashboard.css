@@ -58,6 +58,9 @@
 .ds-stats-grid {
   display: grid;
   grid-template-columns: 1fr;
+  /* Rows auto-size to their tallest cell, so cells in different rows come
+     out different heights. Equal fr rows make every cell the same box. */
+  grid-auto-rows: 1fr;
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
@@ -739,19 +742,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   text-align: center;
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
-}
-
-.ds-chart-data-toggle {
-  font-size: var(--font-size-xs);
-  color: var(--accent-text);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  padding: var(--space-1) 0;
-}
-
-.ds-chart-data-toggle:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 /* ── Reason badges (needs attention) ─────────────────────────────── */
