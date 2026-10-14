@@ -225,6 +225,15 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   margin-top: 2px;
 }
 
+/* The svg carries only a viewBox, so it needs explicit box sizing or it
+   falls back to the replaced-element default (300x150) and the card's
+   overflow clip turns the area fill into a solid block. */
+.ds-spark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* Static placeholder — a blinking block reads as a glitch, not a loader. */
 .ds-kpi--loading {
   min-height: 104px;

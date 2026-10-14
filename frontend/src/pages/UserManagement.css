@@ -75,7 +75,7 @@
   gap: 6px;
   padding: 6px var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   background: var(--surface-1);
   color: var(--text-secondary);
   font-family: inherit;
@@ -103,7 +103,7 @@
 
 .um-chip-count {
   padding: 0 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
   color: var(--text-secondary);
   font-size: var(--font-size-2xs);
@@ -329,8 +329,6 @@
   color: var(--text-muted);
   font-size: var(--font-size-2xs);
   font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
 }
 
 .ud-usage {

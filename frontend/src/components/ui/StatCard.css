@@ -11,7 +11,6 @@
   border-radius: var(--radius-lg);
   background: var(--surface-1);
   color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
   text-align: start;
 }
 
@@ -22,24 +21,23 @@
   gap: var(--space-3);
 }
 
+/* Same micro-label treatment as the dashboard KPI cells: sentence case,
+   no shouting. The label strings are title case already; the old
+   uppercase transform was the tell. */
 .ui-stat-card-label {
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
 }
 
+/* Bare glyph, like the KPI icons and PageHeader — no tile. Tones color
+   the glyph itself, they no longer paint a background swatch. */
 .ui-stat-card-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
   flex: 0 0 auto;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .ui-stat-card-value {
@@ -77,21 +75,17 @@
 }
 
 .ui-stat-card--success .ui-stat-card-icon {
-  background: var(--success-soft);
   color: var(--success-text);
 }
 
 .ui-stat-card--warning .ui-stat-card-icon {
-  background: var(--warning-soft);
   color: var(--warning-text);
 }
 
 .ui-stat-card--danger .ui-stat-card-icon {
-  background: var(--danger-soft);
   color: var(--danger-text);
 }
 
 .ui-stat-card--accent .ui-stat-card-icon {
-  background: var(--accent-soft);
   color: var(--accent-text);
 }
