@@ -565,15 +565,24 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-wrap {
-  /* stretch to the flex-column cross axis: margin-inline:auto alone shrinks
-     the wrap to fit the SVG's intrinsic 1:1 viewBox, centering a square. */
+  /* Full-bleed in the card — no max-width cap: the old 960px cap +
+     margin-inline:auto left dead gutters at 1280–1920. width:100% is still
+     load-bearing (margin auto alone shrinks the wrap to the SVG's intrinsic
+     1:1 viewBox, centering a square). Gutter widths below (80px inline-end,
+     20px block-end) reserve room for axis labels; keep the mobile overrides
+     in sync. */
   width: 100%;
   position: relative;
-  height: 200px;
-  min-height: 160px;
-  max-height: 320px;
-  max-width: 960px;
-  margin-inline: auto;
+  height: clamp(200px, 26vh, 320px);
+}
+
+/* Plot box = wrap minus the axis gutters; the SVG, live dot and tooltip all
+   live here so their percentage math shares one coordinate space. */
+.ds-chart-plot {
+  position: absolute;
+  inset-block: 0 20px;
+  inset-inline-start: 0;
+  inset-inline-end: 80px;
 }
 
 .ds-chart-svg {
@@ -584,13 +593,33 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 .ds-chart-grid-line {
+  /* Hairline, not dashed: the dash pattern scaled with the stretched
+     viewBox and read chunky/dated. non-scaling-stroke keeps it 1px. */
   stroke: var(--border);
-  stroke-dasharray: 3 4;
   stroke-width: 1;
+  opacity: 0.7;
+  vector-effect: non-scaling-stroke;
 }
 
-.ds-chart-wrap.is-empty .ds-chart-grid-line {
+.ds-chart-baseline {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.ds-chart-wrap.is-empty .ds-chart-grid-line,
+.ds-chart-wrap.is-empty .ds-chart-baseline {
   display: none;
+}
+
+/* Micro-ticks bridging the plot edge into the label gutter, one per y row. */
+.ds-chart-tick {
+  position: absolute;
+  inset-inline-end: -7px;
+  width: 7px;
+  height: 1px;
+  background: var(--border-strong);
+  transform: translateY(-50%);
 }
 
 .ds-chart-area {
@@ -618,11 +647,26 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   pointer-events: none;
 }
 
+/* Live-state pulse: one slow ring, nothing more. */
+.ds-chart-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  animation: ds-chart-pulse 2.4s ease-out infinite;
+}
+
+@keyframes ds-chart-pulse {
+  0% { transform: scale(0.6); opacity: 0.7; }
+  70%, 100% { transform: scale(2.2); opacity: 0; }
+}
+
 .ds-chart-hover-line {
-  stroke: var(--text-secondary);
+  stroke: var(--text-muted);
   stroke-width: 1;
-  stroke-dasharray: 2 3;
-  opacity: 0.5;
+  opacity: 0.45;
+  vector-effect: non-scaling-stroke;
 }
 
 .ds-chart-tooltip {
@@ -633,8 +677,9 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   flex-direction: column;
   gap: 2px;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-3) 94%, transparent);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow);
   pointer-events: none;
@@ -673,11 +718,13 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.ds-chart-axis--max { top: 0; inset-inline-end: 4px; }
-.ds-chart-axis--mid { top: 50%; inset-inline-end: 4px; transform: translateY(-50%); }
-.ds-chart-axis--min { bottom: 0; inset-inline-end: 4px; }
+/* Rows align with the plot box (bottom strip = 20px). */
+.ds-chart-axis--max { top: 0; inset-inline-end: 2px; }
+.ds-chart-axis--mid { top: 50%; inset-inline-end: 2px; transform: translateY(-50%); }
+.ds-chart-axis--min { bottom: 20px; inset-inline-end: 2px; }
 .ds-chart-axis--t0 {
   bottom: 0;
   inset-inline-start: 2px;
@@ -1102,6 +1149,9 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   .ds-kpi-value { font-size: var(--font-size-lg); }
   .ds-kpi-chip { max-width: 55%; }
   .ds-chart-wrap { height: 180px; }
+  /* Keep the mobile gutters in sync with .ds-chart-plot's defaults. */
+  .ds-chart-plot { inset-block-end: 18px; inset-inline-end: 56px; }
+  .ds-chart-axis--min { bottom: 18px; }
   .ds-chart-card .ds-chart-embed { padding: 0 var(--space-3) var(--space-3); }
   .ds-chart-inline-stats { gap: var(--space-3); }
   .ds-hide-mobile { display: none; }
@@ -1110,7 +1160,8 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
   .ds-live-dot,
-  .ds-chart-badge--live {
+  .ds-chart-badge--live,
+  .ds-chart-live-dot::after {
     animation: none;
   }
   .ds-chart-line,

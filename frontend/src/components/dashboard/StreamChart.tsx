@@ -139,9 +139,13 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
   };
 
   const linePath = smoothPath(points);
-  const hasCurve = points.length > 1 && peak > 0;
-  const areaPath = hasCurve ? `${linePath} L100,100 L0,100 Z` : '';
   const last = points[points.length - 1];
+  const hasCurve = points.length > 1 && peak > 0;
+  // Close at the first/last point (same as KpiCard), not the viewBox corners,
+  // so the fill doesn't leave a wedge past the live dot.
+  const areaPath = hasCurve
+    ? `${linePath} L${last.x.toFixed(2)},100 L${points[0].x.toFixed(2)},100 Z`
+    : '';
   const halfVal = peak / 2;
   const firstTs = series.length ? tsToIso(series[0].ts) : null;
   const isEmpty = loading || loadError || points.length < 2 || (!loadError && peak === 0);
@@ -192,46 +196,58 @@ export default function StreamChart({ period: initialPeriod = '24h' }) {
       </div>
       <figure className="ds-chart-figure">
         <div className={`ds-chart-wrap${isEmpty ? ' is-empty' : ''}`}>
-          <svg
-            ref={svgRef}
-            className="ds-chart-svg"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            onMouseMove={onMove}
-            onMouseLeave={() => setHoverIdx(null)}
-          >
-            <defs>
-              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.30" />
-                <stop offset="60%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.08" />
-                <stop offset="100%" stopColor="var(--accent-color, var(--info))" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {[25, 50, 75].map((y) => (
-              <line key={y} className="ds-chart-grid-line" x1="0" y1={y} x2="100" y2={y} />
-            ))}
-            {areaPath && <path className="ds-chart-area" d={areaPath} fill={`url(#${gradId})`} />}
-            {hasCurve && <path className="ds-chart-line" d={linePath} vectorEffect="non-scaling-stroke" />}
-            {hovered && (
-              <line className="ds-chart-hover-line" x1={hovered.x} y1="0" x2={hovered.x} y2="100" />
-            )}
-          </svg>
-          {/* The current point is a DOM dot — an SVG circle would stretch into
-              an ellipse under preserveAspectRatio="none". */}
-          {hasCurve && last && (
-            <span className="ds-chart-live-dot" style={{ left: `${last.x}%`, top: `${last.y}%` }} aria-hidden="true" />
-          )}
-          {hovered && (
-            <div
-              ref={tipRef}
-              className="ds-chart-tooltip"
-              style={{ left: `clamp(${tipW / 2}px, ${hovered.x}%, calc(100% - ${tipW / 2}px))` }}
+          {/* Plot box reserves the axis gutters; svg, live dot and tooltip
+              share its coordinate space so % positions stay in sync. */}
+          <div className="ds-chart-plot">
+            <svg
+              ref={svgRef}
+              className="ds-chart-svg"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              onMouseMove={onMove}
+              onMouseLeave={() => setHoverIdx(null)}
             >
-              <strong><i className="ds-chart-tip-dot" aria-hidden="true" />{fmt(hovered.v)}</strong>
-              <span>{fmtDateTime(tsToIso(hovered.ts) || new Date().toISOString())}</span>
-            </div>
-          )}
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.18" />
+                  <stop offset="60%" stopColor="var(--accent-color, var(--info))" stopOpacity="0.05" />
+                  <stop offset="100%" stopColor="var(--accent-color, var(--info))" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {[25, 50, 75].map((y) => (
+                <line key={y} className="ds-chart-grid-line" x1="0" y1={y} x2="100" y2={y} />
+              ))}
+              {areaPath && <path className="ds-chart-area" d={areaPath} fill={`url(#${gradId})`} />}
+              {hasCurve && <path className="ds-chart-line" d={linePath} vectorEffect="non-scaling-stroke" />}
+              {hasCurve && <line className="ds-chart-baseline" x1="0" y1="100" x2="100" y2="100" />}
+              {hovered && (
+                <line className="ds-chart-hover-line" x1={hovered.x} y1="0" x2={hovered.x} y2="100" />
+              )}
+            </svg>
+            {/* The current point is a DOM dot — an SVG circle would stretch into
+                an ellipse under preserveAspectRatio="none". */}
+            {hasCurve && last && (
+              <span className="ds-chart-live-dot" style={{ left: `${last.x}%`, top: `${last.y}%` }} aria-hidden="true" />
+            )}
+            {hasCurve && (
+              <>
+                <span className="ds-chart-tick" style={{ top: '0%' }} aria-hidden="true" />
+                <span className="ds-chart-tick" style={{ top: '50%' }} aria-hidden="true" />
+                <span className="ds-chart-tick" style={{ top: '100%' }} aria-hidden="true" />
+              </>
+            )}
+            {hovered && (
+              <div
+                ref={tipRef}
+                className="ds-chart-tooltip"
+                style={{ left: `clamp(${tipW / 2}px, ${hovered.x}%, calc(100% - ${tipW / 2}px))` }}
+              >
+                <strong><i className="ds-chart-tip-dot" aria-hidden="true" />{fmt(hovered.v)}</strong>
+                <span>{fmtDateTime(tsToIso(hovered.ts) || new Date().toISOString())}</span>
+              </div>
+            )}
+          </div>
           <span className="ds-chart-axis ds-chart-axis--max">{fmtAxis(peak)}</span>
           {points.length > 1 && <span className="ds-chart-axis ds-chart-axis--mid">{fmtAxis(halfVal)}</span>}
           <span className="ds-chart-axis ds-chart-axis--min">{fmtAxis(0)}</span>
