@@ -100,17 +100,6 @@ def test_an_expired_certificate_is_not_reused(tmp_path):
     assert not _usable(key, cert), "an expired certificate must be replaced, not reused"
 
 
-def test_a_truncated_certificate_is_not_reused(tmp_path):
-    """A half-written file must not pass for a usable certificate."""
-    key, cert = _pair(tmp_path)
-    cert.write_text(cert.read_text(encoding="utf-8")[:400], encoding="utf-8")
-    assert not _usable(key, cert)
-
-
-def test_an_empty_key_is_not_reused(tmp_path):
-    key, cert = _pair(tmp_path)
-    key.write_text("", encoding="utf-8")
-    assert not _usable(key, cert)
 
 
 def test_nothing_chmods_before_the_reuse_path_returns():

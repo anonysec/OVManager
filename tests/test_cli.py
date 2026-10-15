@@ -44,19 +44,6 @@ def test_env_detect_reads_port_prefix_tls():
         assert install.health_url == "https://127.0.0.1:2095/health"
 
 
-def test_env_detect_defaults_without_env():
-    import tempfile
-    from pathlib import Path
-
-    with tempfile.TemporaryDirectory() as td:
-        install_dir = Path(td) / "opt"
-        install_dir.mkdir()
-        data_dir = Path(td) / "data"
-        data_dir.mkdir()
-        install = Install.detect(install_dir=str(install_dir), data_dir=str(data_dir))
-        assert install.port == 2095
-        assert install.scheme == "http"
-
 
 def test_status_collect_uninstalled(tmp_path):
     install = Install.detect(install_dir=str(tmp_path / "missing"), data_dir=str(tmp_path))
@@ -90,39 +77,6 @@ def test_status_collect_healthy(monkeypatch, tmp_path):
     assert "active" in text and "v1.0.8" in text and "Mode" in text
 
 
-def test_logs_command_selection(tmp_path):
-    _install(tmp_path)
-    assert logs.build_command(str(tmp_path / "opt"), str(tmp_path / "data" / "nope"), "100") == [
-        "journalctl",
-        "-u",
-        "ovmanager.service",
-        "-n",
-        "100",
-        "--no-pager",
-    ]
-    assert logs.build_command(str(tmp_path / "opt"), str(tmp_path / "data" / "nope"), "-f") == [
-        "journalctl",
-        "-u",
-        "ovmanager.service",
-        "-n",
-        "100",
-        "-f",
-    ]
-    (tmp_path / "data" / "ovmanager-compose.yml").write_text("x", encoding="utf-8")
-    assert logs.build_command(str(tmp_path / "opt"), str(tmp_path / "data" / "ovmanager-compose.yml"), "50") == [
-        "docker",
-        "logs",
-        "--tail",
-        "50",
-        "ovmanager",
-    ]
-
-
-def test_doctor_checks_shape(monkeypatch, tmp_path, hold_worker_lock):
-    install = _install(tmp_path)
-    # A healthy install has a running worker; the lock is how doctor knows.
-    hold_worker_lock(tmp_path / "data")
-    _shape_and_all_ok(monkeypatch, tmp_path, install)
 
 
 def _shape_and_all_ok(monkeypatch, tmp_path, install):
@@ -201,19 +155,6 @@ def test_doctor_flags_bad_env_perms(monkeypatch, tmp_path):
     assert "chmod 640" in as_service.fix, as_service.fix
     assert "chgrp ovmanager" in as_service.fix, as_service.fix
 
-
-def test_main_status_prints_the_human_table(monkeypatch, tmp_path, capsys):
-    install = _install(tmp_path)
-    monkeypatch.setattr(status, "fetch_health", lambda url, timeout=5.0, cafile=None: (True, "1.0.8"))
-    monkeypatch.setattr(status, "service_state", lambda compose: ("native", "active"))
-    monkeypatch.setattr(status, "primary_ip", lambda: "10.0.0.1")
-    import cli.main as m
-
-    monkeypatch.setattr(m, "Install", type("I", (), {"detect": staticmethod(lambda **kw: install)}))
-    rc = main(["--install-dir", str(tmp_path / "opt"), "--data-dir", str(tmp_path / "data"), "status"])
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "Version" in out and "v1.0.8" in out
 
 
 def test_global_flags_work_on_either_side_of_the_subcommand():

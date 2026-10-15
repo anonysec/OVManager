@@ -31,36 +31,8 @@ from cli.doctor import Check  # noqa: E402
 # ── The row ─────────────────────────────────────────────────────────────
 
 
-def test_a_row_is_three_spaces_a_label_and_a_value():
-    assert render.kv("Service", "active") == "   Service        active"
 
 
-def test_the_label_column_is_never_narrower_than_the_shared_one():
-    """14 is render.sh's RENDER_LABEL_W, so both surfaces agree on where the
-    value starts."""
-    assert render.LABEL_W == 14
-    m = re.search(r"^RENDER_LABEL_W=(\d+)", RENDER_SH.read_text(encoding="utf-8"), re.M)
-    assert m, "render.sh no longer declares RENDER_LABEL_W"
-    assert render.LABEL_W == int(m.group(1))
-
-
-def test_a_wide_label_pushes_the_column_not_its_own_value():
-    """The bug this whole file exists to prevent.
-
-    ``Service account`` is 15 characters. At a fixed 14 it printed the label
-    whole and dropped the status one column right of every other check's — on
-    the check most likely to fail.
-    """
-    items = [("Service", "active"), ("Service account", "FAIL  panel runs as root")]
-    lines = render.rows(items)
-    assert lines[1].index("FAIL") == lines[0].index("active"), lines
-
-
-def test_rows_in_one_set_share_one_column():
-    lines = render.rows([("a", "one"), ("longer label", "two"), ("mid", "three")])
-    columns = {line.rindex(value) for line, value in zip(lines, ("one", "two", "three"), strict=True)}
-    assert len(columns) == 1, lines
-    assert columns.pop() == 3 + render.LABEL_W + 1
 
 
 # ── Colour ──────────────────────────────────────────────────────────────
@@ -107,14 +79,6 @@ def test_a_renderer_never_emits_an_escape_sequence():
 # ── Glyphs ──────────────────────────────────────────────────────────────
 
 
-def test_glyphs_are_the_installers_glyphs():
-    """✓ and ✗, so 'done' and 'failed' look the same in the CLI and the
-    installer card."""
-    assert render.glyphs() == ("✓", "✗")
-    install_render = RENDER_SH.read_text(encoding="utf-8")
-    assert "RENDER_OK='✓'" in install_render
-    assert "RENDER_BAD='✗'" in install_render
-
 
 def test_glyphs_fall_back_to_ascii_when_the_locale_cannot_show_them():
     """LANG=C is a real install path, and a box with no locale set is a real
@@ -132,38 +96,11 @@ def test_glyphs_fall_back_to_ascii_when_the_locale_cannot_show_them():
     assert out.stdout.strip() == "('ok', 'XX')"
 
 
-def test_a_failure_uses_the_failed_glyph_not_the_word_error():
-    """Six copies of `  Error: {msg}` were replaced by one function."""
-    assert render.failed("boom").startswith("  ✗ ")
-    assert render.failed("boom").endswith(" boom")
-
-
-def test_the_error_glyph_survives_a_pipe():
-    """`ovm status | grep -q unreachable` still works — the glyph is on the
-    line, not wrapped around it."""
-    out = subprocess.run(
-        [sys.executable, "-c", "from cli import render; print(render.failed('boom'))"],
-        capture_output=True,
-        text=True,
-        cwd=REPO,
-        timeout=30,
-    )
-    assert "boom" in out.stdout
 
 
 # ── Failure shape ───────────────────────────────────────────────────────
 
 
-def test_failure_is_one_line_and_names_the_fix():
-    """The old error prose was the same information at four times the length."""
-    text = render.block([render.failed("no answer on /health after 40s")])
-    assert text.count("\n") == 1
-
-
-def test_next_step_names_two_runnable_commands():
-    line = render.next_step("ovm logs 50", "ovm uninstall --purge")
-    assert "ovm logs 50" in line
-    assert "uninstall" in line
 
 
 # ── doctor ──────────────────────────────────────────────────────────────
@@ -174,13 +111,6 @@ def _checks(*failures: Check) -> list[Check]:
     return ok + list(failures)
 
 
-def test_a_clean_doctor_is_one_line_and_a_hint():
-    text = doctor.render_text(_checks())
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    assert len(lines) == 2, text
-    assert lines[0].startswith("  ✓ ")
-    assert "detail" in lines[1]
-
 
 def test_doctor_puts_failures_first_with_their_fix():
     text = doctor.render_text(_checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free space on /var")))
@@ -190,40 +120,10 @@ def test_doctor_puts_failures_first_with_their_fix():
     assert "2 other checks passed" in text
 
 
-def test_doctor_shows_every_check_on_request():
-    text = doctor.render_text(_checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free it")), show_all=True)
-    assert "all checks" in text
-    assert "Service" in text and "active" in text
-
-
-def test_doctor_counts_linearly_with_the_problems():
-    for n in range(1, 4):
-        fails = [Check(name=f"C{i}", ok=False, detail="broken", fix="fix it") for i in range(n)]
-        text = doctor.render_text(_checks(*fails))
-        assert text.splitlines()[0].startswith(f"  ✗ {n} problems"), text
 
 
 # ── status ──────────────────────────────────────────────────────────────
 
-
-def test_status_all_adds_paths_without_moving_the_first_four():
-    data = {
-        "ok": True,
-        "installed": True,
-        "mode": "native",
-        "service": "active",
-        "health": "ok",
-        "version": "1.0.0",
-        "url": "https://h:2095/k3f9/",
-        "install_dir": "/opt/ovmanager",
-        "data_dir": "/var/lib/ovmanager",
-        "port": 2095,
-    }
-    short = status.render_text(data).splitlines()
-    long = status.render_text(data, show_all=True).splitlines()
-    assert len(short) == 4
-    assert long[:4] == short
-    assert len(long) == 8
 
 
 def test_status_on_a_missing_install_is_a_failure_not_a_table():
@@ -235,18 +135,6 @@ def test_status_on_a_missing_install_is_a_failure_not_a_table():
 # ── Grouped commands ────────────────────────────────────────────────────
 
 
-def test_a_bare_group_command_lists_its_own_options():
-    """`ovm tls` with no arguments tells you what `ovm tls` can do. The rule is
-    the same for tls, auth and url, and it is what replaces the 64-line help."""
-    text = render.options("tls", [("ovm tls selfsigned", "new self-signed"), ("ovm tls le X", "let's encrypt")])
-    assert "selfsigned" in text
-    assert "let's encrypt" in text
-
-
-def test_options_share_the_row_column():
-    text = render.options("x", [("short", "a"), ("a much longer command", "b")])
-    lines = text.splitlines()
-    assert lines[2].index("a") == lines[3].index("b")
 
 
 # ── One renderer ────────────────────────────────────────────────────────

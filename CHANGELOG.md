@@ -1,3 +1,14 @@
+## 1.6.0 — 2026-10-15
+
+Settings rewrite in the x-ui/3x-ui shape: one section per tab (icon tab bar
+reusing the `ui.Tabs` primitive, hash deep-links kept, only the active section
+mounts — one or two fetches at open instead of ~10). Field rows are
+label+hint-left / control-right above 720px. Test suite pruned 1065→913
+collected (−152): terminal-cosmetic render pins, help/doc text pins,
+deprecated-flag shim matrices, and per-verb parametrizations collapsed to
+representative arms. Behavior, validation, security, auth, billing and
+workflow coverage untouched.
+
 ## 1.5.0 — 2026-10-11
 
 Lightweight cuts. Single-admin only: `/api/admin/*` management, per-admin

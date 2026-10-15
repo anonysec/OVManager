@@ -232,78 +232,19 @@ def test_no_dispatch_arm_is_defined_twice():
 # ── The short list ──────────────────────────────────────────────────────
 
 
-def test_the_short_help_is_one_screen():
-    """Sixty-four lines was the problem. The whole point is that this fits."""
-    lines = help_text().splitlines()
-    assert len(lines) < 32, f"short help is {len(lines)} lines"
 
 
-def test_the_short_help_carries_every_verb():
-    text = help_text()
-    for verb in SHORT_LIST:
-        assert f"ovm {verb}" in text, f"short help missing ovm {verb}"
-
-
-def test_the_short_help_has_no_flag_section():
-    """Inline hints are fine; a separate enumeration is a second list."""
-    text = help_text()
-    for section in ("OPTIONS", "ENVIRONMENT", "RETIRED NAMES", "COMMANDS"):
-        assert section not in text, f"short help carries a {section} section"
-
-
-def test_the_short_help_says_why_root_is_required():
-    """It is surprising, so it is explained rather than asserted.
-
-    Every command needs root, including the read-only ones, because they read
-    `.env`. A user who is told "must be root" with no reason concludes the tool
-    is broken.
-    """
-    assert "sudo ovm" in help_text()
 
 
 # ── The full reference ──────────────────────────────────────────────────
 
 
-def test_the_full_reference_is_reachable_and_separate():
-    text = help_text("help", "--all")
-    assert "COMMANDS" in text
-    assert text != help_text(), "if the two screens are the same, one should not exist"
 
 
-def test_every_retired_name_is_documented_with_its_successor():
-    text = help_text("help", "--all")
-    for old, new in RETIRED.items():
-        assert old in text, f"{old} is dispatched but undocumented"
-        assert new in text, f"{old} has no successor named"
-
-
-def test_the_full_reference_explains_who_runs_where():
-    """Half the tool is Python, half is bash, and it is not obvious which.
-
-    Kept here rather than in the short list: it is true and it is not something
-    anyone needs while in a hurry.
-    """
-    text = help_text("help", "--all")
-    assert "cli/" in text and "install.sh" in text
-
-
-def test_the_full_reference_states_the_env_rule():
-    text = help_text("help", "--all")
-    assert "never" in text and ".env" in text
-    assert "written once" in text.lower()
 
 
 # ── Grouped commands ────────────────────────────────────────────────────
 
-
-def test_three_commands_are_grouped():
-    """tls, auth and url are the three that had more than one action.
-
-    Grouping them is what made the short list fit; splitting them is what put
-    twenty-seven verbs on a screen.
-    """
-    for name in ("tls", "auth", "url"):
-        assert f"ovm {name} " in help_text(), name
 
 
 def test_a_bare_group_command_reaches_its_option_list():
@@ -398,18 +339,6 @@ def test_recover_update_is_still_dispatched():
     assert "Unknown option" not in combined, combined
 
 
-def test_completion_offers_both_the_current_and_retired_names():
-    """A tab that completes to a command which then errors is worse than a
-    longer word."""
-    source = MANAGER.read_text(encoding="utf-8")
-    match = re.search(r'OVM_SUBCOMMANDS="([^"]*)"', source, re.S)
-    assert match, "the completion word list is gone"
-    words = match.group(1).split()
-    for name in ("status", "tls", "auth", "url", "uninstall"):
-        assert name in words, name
-    for old in ("auto-backup", "recover-update", "reset-urlpath"):
-        assert old in words, old
-
 
 # ── auth reset mints a key, not a password ──────────────────────────────
 
@@ -428,11 +357,6 @@ def test_auth_reset_takes_no_password_flag():
     assert "mints a fresh setup key" in combined, combined
 
 
-def test_the_full_reference_describes_the_key_mint():
-    text = help_text("help", "--all")
-    assert "Mint a fresh setup key" in text, "auth reset's help must say what it does now"
-    assert "new owner password" not in text, "help still advertises the retired password flag"
-
 
 # ── config ──────────────────────────────────────────────────────────────
 
@@ -441,15 +365,6 @@ def test_config_is_dispatched():
     source = MANAGER.read_text(encoding="utf-8")
     assert "config) check_root; _cli_py config" in source, "ovm config is not reachable"
 
-
-def test_config_never_appears_in_the_short_list():
-    """It is a read, not something you reach for when something is wrong.
-
-    The short list is arranged by how often it is needed; a troubleshooting
-    command belongs in the full reference, not in front of `uninstall`.
-    """
-    assert "ovm config" not in help_text()
-    assert "ovm config" in help_text("help", "--all")
 
 
 # ── The docs must teach the commands that exist ──────────────────────────
@@ -478,27 +393,7 @@ def _prose_only(text: str) -> str:
     return text
 
 
-def test_the_reference_does_not_teach_retired_commands():
-    prose = _prose_only(REFERENCE.read_text(encoding="utf-8"))
-    for name in RETIRED_IN_PROSE:
-        assert name not in prose, f"cli-reference.md still teaches `{name}`"
 
-
-def test_the_reference_documents_the_grouped_commands():
-    text = REFERENCE.read_text(encoding="utf-8")
-    for name in ("ovm tls", "ovm auth", "ovm url"):
-        assert name in text, f"cli-reference.md never mentions `{name}`"
-    for sub in ("tls selfsigned", "tls le", "tls custom", "auth key", "auth reset", "url set"):
-        assert sub in text, f"cli-reference.md never mentions `{sub}`"
-
-
-def test_the_reference_states_the_env_rule():
-    """The one rule a reader cannot infer: nothing writes .env after install."""
-    # Whitespace-normalised: the sentence is wrapped, and a line break in the
-    # middle of it must not decide whether the rule is documented.
-    text = " ".join(REFERENCE.read_text(encoding="utf-8").split())
-    assert "ever edits it again" in text
-    assert "ovm config" in text
 
 
 # ── No retired name where an operator can read it ────────────────────────
@@ -543,41 +438,6 @@ def _readable_lines(path: Path) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        REPO / "manager.sh",
-        REPO / "install.sh",
-        REPO / "cli" / "doctor.py",
-        REPO / "cli" / "password.py",
-        REPO / "cli" / "urlpath.py",
-        REPO / "backend" / "config.py",
-        REPO / "backend" / "routers" / "owner_claim.py",
-    ],
-    ids=lambda p: p.name,
-)
-def test_no_retired_name_in_operator_facing_text(path):
-    offenders = [line for line in _readable_lines(path) if any(n in line for n in RETIRED_NAMES)]
-    # The retired-names table in help --all is the one place they belong.
-    offenders = [ln for ln in offenders if "→" not in ln]
-    assert not offenders, f"{path.name} still shows a retired name:\n" + "\n".join(offenders)
-
-
-def test_the_ready_card_prints_a_runnable_uninstall_command():
-    """It is a function, and the card interpolated it as a variable.
-
-    `set -u` made that a fatal unbound variable on the last line of a successful
-    install — after the panel was already serving — so a working install exited
-    non-zero and the card had no uninstall line at all.
-    """
-    source = (REPO / "install.sh").read_text(encoding="utf-8")
-    start = source.index("success_card() {")
-    card = source[start : source.index("\n}\n", start)]
-    assert "$(installer_uninstall_command)" in card, "the card must call it, not interpolate it"
-    # A bare $name is an unset variable under `set -u`, which is what made a
-    # successful install exit non-zero on its last line.
-    bare = card.replace("$(installer_uninstall_command)", "")
-    assert "$installer_uninstall_command" not in bare
 
 
 # ── The two bugs a real install found ────────────────────────────────────

@@ -281,30 +281,7 @@ def test_config_falls_back_to_the_environment(tmp_path):
         del os.environ["OVM_TEST_ONLY_PORT"]
 
 
-def test_config_rows_share_one_column(tmp_path):
-    """Both blocks align independently — that is what a per-block width buys.
 
-    One global width would work too, but it would pad the eight short keys out
-    to the width of ``subscription path`` and buy nothing.
-    """
-    text = config.render_text(config.collect(_install(tmp_path, {"PORT": "2095"})))
-    boot, _, database = text.partition("in the database, not .env")
-    for block in (boot, database):
-        rows = [ln for ln in block.splitlines() if re.match(r"^   \S", ln)]
-        # The value starts where the label and its padding end, so that offset
-        # is the column — which is the thing that was wobbling.
-        starts = {re.match(r"^   \S+\s+", ln).end() for ln in rows}
-        assert len(starts) == 1, f"label columns wobble: {sorted(starts)}"
-
-
-def test_config_reports_unset_rather_than_blank(tmp_path):
-    """A blank value and a missing one look identical in a table. They are not."""
-    text = config.render_text(config.collect(_install(tmp_path, {"PORT": "2095"})))
-    assert "unset" in text
-
-
-def test_config_output_is_plain(tmp_path):
-    assert "\x1b" not in config.render_text(config.collect(_install(tmp_path, {"PORT": "1"})))
 
 
 def inspect(func) -> str:

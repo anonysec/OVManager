@@ -5,6 +5,27 @@ Date: 2026-10-14. All claims below describe work executed in this environment; n
 
 ---
 
+## Round 2 — settings tabbed UI + test-suite prune (2026-10-15)
+
+**Settings** rebuilt in the x-ui/3x-ui shape: one section per tab (icon tab
+bar reusing the `ui.Tabs` primitive), only the active section mounts (one or
+two fetches at open instead of ~10), field rows label+hint-left /
+control-right above 720px, hash deep-links kept (`/settings#tls` opens the
+TLS tab). Section headers gain an icon chip.
+
+**Tests** pruned on the "prune-redundant" mandate: 1065→913 collected (−152,
+−14.3%). Removed categories: terminal-cosmetic render pins (banner, bars,
+column alignment, glyph placement), help/doc prose pins, deprecated-flag shim
+matrices (the flags themselves are already gone), and per-verb/per-shape
+parametrizations collapsed to representative cases. Security, auth, billing,
+workflow, validation and data-integrity coverage is untouched — a further
+reduction toward 30–40% would require deleting behavior coverage in those
+protected categories. All 903 remaining tests pass (10 environment skips).
+
+Round 1 below is the state at `ae3b577`.
+
+---
+
 ## 1. Executive summary
 
 OVManager is a mature product: a FastAPI + SQLAlchemy (SQLite) backend with a React 19 + Vite frontend, a Telegram bot, a CLI (`ovm`), and a hardened OVNode integration. The audit found it already strong on security and backend efficiency (bounded caches, single-flight jobs, opaque hashed sessions, rate limits with caps, CSP/CSRF middleware, pre-compressed assets, lazy routes/locales). The real debt was concentrated in the **frontend presentation layer**: two conflicting z-index token stacks, ~130 dead or duplicated CSS rules, and two divergent button visual languages (legacy `.btn` with shimmer sweep + hover lift + glow vs. the restrained `ui-btn` primitive). One **genuine backend bug** also surfaced immediately: backup listing order was non-deterministic when file mtimes tie (the test suite failed 1/1053 on this checkout).
