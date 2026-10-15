@@ -517,6 +517,38 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 }
 
 /* ── Streaming chart ─────────────────────────────────────────────── */
+.ds-chart-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ds-chart-title-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft, color-mix(in srgb, var(--accent-color, var(--info)) 12%, transparent));
+  color: var(--accent-color, var(--info));
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.ds-chart-title-text {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.ds-chart-title-sub {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
 .ds-chart-controls {
   display: flex;
   align-items: center;
@@ -564,174 +596,197 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .ds-chart-wrap {
-  /* Full-bleed in the card — no max-width cap: the old 960px cap +
-     margin-inline:auto left dead gutters at 1280–1920. width:100% is still
-     load-bearing (margin auto alone shrinks the wrap to the SVG's intrinsic
-     1:1 viewBox, centering a square). Gutter widths below (80px inline-end,
-     20px block-end) reserve room for axis labels; keep the mobile overrides
-     in sync. */
+  /* Full-bleed in the card. width:100% is load-bearing (margin auto alone
+     shrinks the wrap to the SVG's intrinsic 1:1 viewBox). The inline-end
+     gutter (72px) reserves room for the y labels, the block-end gutter (22px)
+     for the x tick row; keep the mobile overrides in sync. */
   width: 100%;
   position: relative;
-  height: clamp(200px, 26vh, 320px);
+  height: clamp(210px, 28vh, 320px);
 }
 
-/* Plot box = wrap minus the axis gutters; the SVG, live dot and tooltip all
+/* Plot box = wrap minus the axis gutters; bars, svg, live dot and tooltip all
    live here so their percentage math shares one coordinate space. */
 .ds-chart-plot {
   position: absolute;
-  inset-block: 0 20px;
+  inset-block: 0 22px;
   inset-inline-start: 0;
-  inset-inline-end: 80px;
+  inset-inline-end: 72px;
+  cursor: crosshair;
 }
 
 .ds-chart-svg {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
 
 .ds-chart-grid-line {
-  /* Hairline, not dashed: the dash pattern scaled with the stretched
-     viewBox and read chunky/dated. non-scaling-stroke keeps it 1px. */
   stroke: var(--border);
   stroke-width: 1;
-  opacity: 0.7;
+  stroke-dasharray: 3 4;
   vector-effect: non-scaling-stroke;
 }
 
-.ds-chart-baseline {
-  stroke: var(--border-strong);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
+.ds-chart-wrap.is-empty .ds-chart-grid-line {
+  opacity: 0.4;
 }
 
-.ds-chart-wrap.is-empty .ds-chart-grid-line,
-.ds-chart-wrap.is-empty .ds-chart-baseline {
-  display: none;
-}
-
-/* Micro-ticks bridging the plot edge into the label gutter, one per y row. */
-.ds-chart-tick {
+/* Traffic mode: per-bucket transfer bars. DOM elements so the rounded tops
+   stay circular (rx in a stretched viewBox would not). */
+.ds-chart-bars {
   position: absolute;
-  inset-inline-end: -7px;
-  width: 7px;
-  height: 1px;
-  background: var(--border-strong);
-  transform: translateY(-50%);
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(1px, 0.35vw, 4px);
 }
 
+.ds-chart-bar {
+  flex: 1;
+  min-width: 0;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-color, var(--info)) 85%, transparent) 0%,
+    color-mix(in srgb, var(--accent-color, var(--info)) 32%, transparent) 100%
+  );
+  transition: opacity var(--transition-fast);
+}
+
+.ds-chart-bar.is-live {
+  background: var(--accent-color, var(--info));
+}
+
+.ds-chart-bar.is-hover {
+  background: var(--accent-color, var(--info));
+  opacity: 1;
+}
+
+.ds-chart-plot:hover .ds-chart-bar:not(.is-hover) {
+  opacity: 0.55;
+}
+
+/* Sessions mode: smoothed area + line over the same grid. */
 .ds-chart-area {
-  opacity: 0.9;
-  transition: d 0.4s ease;
+  transition: opacity var(--transition-fast);
 }
 
 .ds-chart-line {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--accent-color, var(--info));
   stroke-width: 2;
-  stroke-linejoin: round;
   stroke-linecap: round;
-  transition: d 0.4s ease;
+  stroke-linejoin: round;
+  transition: opacity var(--transition-fast);
 }
 
 .ds-chart-live-dot {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
-  transform: translate(-50%, -50%);
+  background: var(--accent-color, var(--info));
+  border: 2px solid var(--surface-1);
   pointer-events: none;
 }
 
-/* Live-state pulse: one slow ring, nothing more. */
 .ds-chart-live-dot::after {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -3px;
   border-radius: 50%;
-  border: 1px solid var(--accent);
+  border: 1.5px solid color-mix(in srgb, var(--accent-color, var(--info)) 55%, transparent);
   animation: ds-chart-pulse 2.4s ease-out infinite;
 }
 
 @keyframes ds-chart-pulse {
-  0% { transform: scale(0.6); opacity: 0.7; }
-  70%, 100% { transform: scale(2.2); opacity: 0; }
+  0% { transform: scale(0.7); opacity: 1; }
+  100% { transform: scale(2.1); opacity: 0; }
 }
 
 .ds-chart-hover-line {
-  stroke: var(--text-muted);
-  stroke-width: 1;
-  opacity: 0.45;
-  vector-effect: non-scaling-stroke;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-inline-start: 1px dashed color-mix(in srgb, var(--text-muted) 65%, transparent);
+  pointer-events: none;
 }
 
 .ds-chart-tooltip {
   position: absolute;
-  top: 4px;
+  top: -4px;
   transform: translateX(-50%);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md, 0 8px 20px rgb(0 0 0 / 0.18));
+  padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface-3) 94%, transparent);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow);
   pointer-events: none;
   white-space: nowrap;
-  max-width: min(240px, 92%);
   z-index: 2;
-  font-size: var(--font-size-sm);
 }
 
 .ds-chart-tooltip strong {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .ds-chart-tip-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-color, var(--info));
   flex: none;
 }
 
 .ds-chart-tooltip span {
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
-.ds-chart-axis {
-  direction: ltr;
-  unicode-bidi: isolate;
+/* Axis label columns: y labels hug the wrap's inline-end gutter, x labels
+   sit in the block-end gutter and spread across the plot width. */
+.ds-chart-ylabels {
   position: absolute;
-  font-size: var(--font-size-xs);
+  inset-block: 0 22px;
+  inset-inline-end: 0;
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-inline-start: var(--space-2);
+  font-size: 0.68rem;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-/* Rows align with the plot box (bottom strip = 20px). */
-.ds-chart-axis--max { top: 0; inset-inline-end: 2px; }
-.ds-chart-axis--mid { top: 50%; inset-inline-end: 2px; transform: translateY(-50%); }
-.ds-chart-axis--min { bottom: 20px; inset-inline-end: 2px; }
-.ds-chart-axis--t0 {
+.ds-chart-xlabels {
+  position: absolute;
+  inset-inline: 0 72px;
   bottom: 0;
-  inset-inline-start: 2px;
+  display: flex;
+  justify-content: space-between;
   font-size: 0.68rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .ds-chart-empty {
@@ -740,8 +795,10 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: grid;
   place-items: center;
   text-align: center;
-  color: var(--text-secondary);
+  padding: 0 var(--space-4);
+  color: var(--text-muted);
   font-size: var(--font-size-sm);
+  background: color-mix(in srgb, var(--surface-1) 72%, transparent);
 }
 
 /* ── Reason badges (needs attention) ─────────────────────────────── */
@@ -965,7 +1022,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-chart-embed {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -996,24 +1053,6 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-2);
-}
-
-.ds-chart-delta {
-  font-size: 0.68rem;
-  font-weight: var(--font-weight-semibold);
-  padding: 1px var(--space-2);
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ds-chart-delta.is-up {
-  color: var(--danger-text);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-}
-
-.ds-chart-delta.is-down {
-  color: var(--success-text);
-  background: color-mix(in srgb, var(--success) 14%, transparent);
 }
 
 .ds-chart-badge {
@@ -1138,10 +1177,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   .ds-topusers-name { width: 88px; }
   .ds-kpi-value { font-size: var(--font-size-lg); }
   .ds-kpi-chip { max-width: 55%; }
-  .ds-chart-wrap { height: 180px; }
+  .ds-chart-wrap { height: 185px; }
   /* Keep the mobile gutters in sync with .ds-chart-plot's defaults. */
-  .ds-chart-plot { inset-block-end: 18px; inset-inline-end: 56px; }
-  .ds-chart-axis--min { bottom: 18px; }
+  .ds-chart-plot { inset-block-end: 20px; inset-inline-end: 58px; }
+  .ds-chart-ylabels { inset-block-end: 20px; width: 50px; }
+  .ds-chart-xlabels { inset-inline-end: 58px; }
   .ds-chart-card .ds-chart-embed { padding: 0 var(--space-3) var(--space-3); }
   .ds-chart-inline-stats { gap: var(--space-3); }
   .ds-hide-mobile { display: none; }

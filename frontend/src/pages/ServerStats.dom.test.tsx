@@ -199,9 +199,11 @@ describe('ServerStats resilience', () => {
       return undefined;
     });
     renderStats();
-    // Head "Now" stat carries the series value (the data-table fallback is gone).
+    // Head's first stat carries the headline value (the data-table fallback is gone).
+    // Traffic plots per-bucket transfers (counter deltas), not the cumulative
+    // counter: 300 - 100 = 200 B moved across the two samples.
     const now = () => document.querySelector('.ds-chart-stat b')?.firstChild?.textContent;
-    await waitFor(() => expect(now()).toBe('300 B'));
+    await waitFor(() => expect(now()).toBe('200 B'));
     fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
     await waitFor(() => expect(now()).toBe('5'));
   });
