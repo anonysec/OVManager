@@ -1,8 +1,9 @@
-"""With URLPATH set, the framework endpoints stay reachable — the rest does not.
+"""With URLPATH set, the panel's real framework endpoints stay reachable — the rest does not.
 
-The real URLPathMiddleware (mounted on a default FastAPI, which owns the
-/docs /redoc /openapi.json routes) with URLPATH monkeypatched on: exemption
-and prefix rewrite run against genuine ASGI code, no DB write, no cache games.
+The real URLPathMiddleware (mounted on an app shaped like ``backend.app.api``:
+Swagger UI at ``/doc`` per ``app.py docs_url``, schema at ``/openapi.json``,
+no default-FastAPI ``/docs``) with URLPATH monkeypatched on: exemption and
+prefix rewrite run against genuine ASGI code, no DB write, no cache games.
 """
 
 from fastapi import FastAPI
@@ -16,15 +17,20 @@ def test_exempt_routes_pass_and_others_need_the_prefix(monkeypatch):
 
     monkeypatch.setattr(urlpath_mod, "get_urlpath", lambda: "hidden")
 
-    app = FastAPI()
+    # the panel's own shape, not FastAPI's defaults: app.py documents at /doc
+    app = FastAPI(docs_url="/doc", openapi_url="/openapi.json")
 
     @app.get("/api/whoami")
     async def whoami():
         return {"ok": True}
 
+    route_paths = {getattr(route, "path", None) for route in app.routes}
+    assert {"/doc", "/openapi.json"} <= route_paths, route_paths
+    assert "/docs" not in route_paths, "the panel serves Swagger UI at /doc, never /docs"
+
     client = TestClient(URLPathMiddleware(app))
 
-    for path in ("/openapi.json", "/docs", "/redoc"):
+    for path in ("/openapi.json", "/doc"):
         resp = client.get(path)
         assert resp.status_code == 200, f"{path} must bypass URLPATH, got {resp.status_code}"
 
