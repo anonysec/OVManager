@@ -4,6 +4,7 @@ Every method builds a URL, sends, and checks the response; ``_request``
 and ``_get_raw`` carry the TLS policy for all of them.
 """
 
+import ipaddress
 import time as _time
 import warnings as _warnings
 from urllib.parse import urlsplit
@@ -17,7 +18,7 @@ TIMEOUT = 10
 LONG_TIMEOUT = 30
 
 
-_pinned_sessions: dict[str, _req.Session] = {}
+_pinned_sessions: dict[tuple[str, bool], _req.Session] = {}
 
 
 def _is_pem(value: str) -> bool:
@@ -32,43 +33,72 @@ def _is_pem(value: str) -> bool:
 
 
 class _PinnedAdapter(_req.adapters.HTTPAdapter):
-    def __init__(self, ca: str, *args, **kwargs):
+    def __init__(self, ca: str, check_hostname: bool, *args, **kwargs):
         import ssl
 
         context = ssl.create_default_context(cadata=ca) if _is_pem(ca) else ssl.create_default_context(cafile=ca)
-        context.check_hostname = False
+        context.check_hostname = check_hostname
         self._pinned_context = context
+        self._check_hostname = check_hostname
         super().__init__(*args, **kwargs)
 
     def init_poolmanager(self, *args, **kwargs):
         kwargs["ssl_context"] = self._pinned_context
-        kwargs["assert_hostname"] = False
+        if not self._check_hostname:
+            # urllib3 switches off the context's own hostname check whenever
+            # assert_hostname is set, so it is passed only for the dials that
+            # have no name to verify (IP literal, unknown target).
+            kwargs["assert_hostname"] = False
         return super().init_poolmanager(*args, **kwargs)
 
     def proxy_manager_for(self, *args, **kwargs):
         kwargs["ssl_context"] = self._pinned_context
-        kwargs["assert_hostname"] = False
+        if not self._check_hostname:
+            kwargs["assert_hostname"] = False
         return super().proxy_manager_for(*args, **kwargs)
 
 
-def _new_pinned_session(ca: str) -> _req.Session:
+def _check_hostname_for(address: str) -> bool:
+    """Whether the certificate must also name the dial target.
+
+    A named host is checked on top of the pin. An IP literal is not: the
+    installer's self-signed node certificate carries only a CN (no SAN),
+    which OpenSSL ignores, and nodes are routinely dialed by IP. An
+    addressless call has no name to check either. The pin decides trust in
+    every case — the check only adds the name on top of it.
+    """
+    host = urlsplit(f"//{address}").hostname if address else None
+    if not host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return False
+
+
+def _new_pinned_session(ca: str, check_hostname: bool) -> _req.Session:
     session = _req.Session()
-    session.mount("https://", _PinnedAdapter(ca))
+    session.mount("https://", _PinnedAdapter(ca, check_hostname))
     return session
 
 
-def _pinned_sender(ca: str):
+def _pinned_sender(ca: str, address: str = ""):
     """Request sender verifying against exactly ``ca`` (no fallback).
 
-    CA files are cached one session per path. PEM text is not: it only
-    arrives on a first add, so those sessions would never be reused, and
-    caching them would grow the table by one entry per add attempt.
+    ``address`` is the dial target (``host[:port]``) and decides whether the
+    certificate must also carry its name; see ``_check_hostname_for``. CA
+    files are cached one session per (pin, check) pair. PEM text is not: it
+    only arrives on a first add, so those sessions would never be reused,
+    and caching them would grow the table by one entry per add attempt.
     """
+    check_hostname = _check_hostname_for(address)
     if _is_pem(ca):
-        return _new_pinned_session(ca).request
-    session = _pinned_sessions.get(ca)
+        return _new_pinned_session(ca, check_hostname).request
+    key = (ca, check_hostname)
+    session = _pinned_sessions.get(key)
     if session is None:
-        session = _pinned_sessions[ca] = _new_pinned_session(ca)
+        session = _pinned_sessions[key] = _new_pinned_session(ca, check_hostname)
     return session.request
 
 
@@ -281,8 +311,9 @@ class NodeRequests:
 
     def _request_inner(self, method: str, path: str, **kw) -> dict | None:
         """TLS policy: with a pinned ``server_ca``, HTTPS is verified against
-        exactly that certificate and an SSL failure fails closed (a MITM
-        between panel and node must not get the API key). Without a pin
+        exactly that certificate (and against the target's name when it dials
+        a hostname) and an SSL failure fails closed (a MITM between panel and
+        node must not get the API key). Without a pin
         (legacy self-signed node not yet pinned), verified-first with one
         unverified retry and a ONE-TIME loud warning. ``tls_verified``
         records which path was used so the UI can show it.
@@ -295,7 +326,9 @@ class NodeRequests:
         kw.setdefault("timeout", TIMEOUT)
         if isinstance(self._verify, str) and self._verify != "pinned":
             try:
-                result = self._send(method, path, require_success=require_success, sender=_pinned_sender(self._verify), **kw)
+                result = self._send(
+                    method, path, require_success=require_success, sender=_pinned_sender(self._verify, self.address), **kw
+                )
                 self.tls_verified = True
                 return result
             except _req.exceptions.SSLError as e:
@@ -507,7 +540,7 @@ class NodeRequests:
         headers = kw.pop("headers", self.headers)
         if isinstance(self._verify, str) and self._verify != "pinned":
             try:
-                r = _pinned_sender(self._verify)("get", url, headers=headers, **kw)
+                r = _pinned_sender(self._verify, self.address)("get", url, headers=headers, **kw)
                 self.tls_verified = True
             except _req.exceptions.SSLError as e:
                 logger.error(

@@ -210,6 +210,11 @@ class URLPathMiddleware:
             "/manifest.webmanifest",
             "/sw.js",
             "/icons/",
+            # Framework endpoints, not panel surfaces: they stay reachable
+            # whatever URLPATH hides, so a client can still fetch the schema.
+            "/openapi.json",
+            "/docs",
+            "/redoc",
         )
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
