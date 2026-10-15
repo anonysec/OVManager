@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,9 +10,9 @@ import apiClient from '../services/api';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import {
   FiServer, FiShield, FiArchive, FiSend, FiLink, FiUserPlus,
-  FiClock, FiMonitor, FiBell, FiLock, FiSettings,
+  FiClock, FiMonitor, FiBell, FiLock, FiSettings, FiActivity,
 } from 'react-icons/fi';
-import { Card, PageHeader } from '../components/ui';
+import { Card, PageHeader, Tabs } from '../components/ui';
 import { SectionHeader } from './settings/shared';
 import DefaultsSection from './settings/DefaultsSection';
 import BotSection from './settings/BotSection';
@@ -39,6 +39,7 @@ const SECTIONS = [
   { id: 'security',   icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
   { id: 'display',    icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
   { id: 'system',     icon: FiServer,    labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
+  { id: 'activity',   icon: FiActivity,  labelKey: 'activityCard',       label: 'My activity', descKey: 'activityDesc',          desc: 'Your latest actions on this panel.', Component: MyActivitySection, bare: true },
 ];
 
 const KNOWN_IDS = new Set(SECTIONS.map((s) => s.id));
@@ -46,6 +47,7 @@ const KNOWN_IDS = new Set(SECTIONS.map((s) => s.id));
 const Settings = () => {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const { refreshTick } = useLive();
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
@@ -69,22 +71,19 @@ const Settings = () => {
   }, [reloadShared, refreshTick, isOwner]);
 
   const activeSections = useMemo(
-    () => (isOwner ? SECTIONS : SECTIONS.filter((s) => s.id === 'alerts' || s.id === 'appearance')),
+    () => (isOwner ? SECTIONS : SECTIONS.filter((s) => s.id === 'alerts' || s.id === 'appearance' || s.id === 'activity')),
     [isOwner],
   );
 
-  useEffect(() => {
-    const hash = location.hash.replace(/^#/, '');
-    if (!hash || !KNOWN_IDS.has(hash)) return;
-    const el = document.getElementById(`sp-section-${hash}`);
-    if (!el) return;
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const id = setTimeout(() => {
-      el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
-      el.focus({ preventScroll: true });
-    }, 0);
-    return () => clearTimeout(id);
-  }, [location.hash]);
+  // One section mounted at a time: the active tab is the URL hash, so links
+  // like /settings#tls still deep-link. Sections hold only unsaved-edit state,
+  // and every one of them saves explicitly — same contract as the reference
+  // panels, where switching tabs drops unsaved input.
+  const hashId = location.hash.replace(/^#/, '');
+  const activeId = KNOWN_IDS.has(hashId) ? hashId : activeSections[0].id;
+  const active = activeSections.find((s) => s.id === activeId) || activeSections[0];
+
+  const openTab = (id: string) => navigate({ hash: `#${id}` }, { replace: true });
 
   return (
     <div className="sp-page">
@@ -106,39 +105,40 @@ const Settings = () => {
         </Card>
       ) : (
         <>
-          <nav className="sp-jumpnav" aria-label={t('settingsNavigation', 'Settings sections')}>
-            {activeSections.map((s) => (
-              <Link key={s.id} to={`#${s.id}`} replace className="sp-jumpnav-link">
-                <s.icon size={14} aria-hidden="true" />
-                <span>{t(s.labelKey, s.label)}</span>
-              </Link>
-            ))}
-          </nav>
+          <div className="sp-tabbar">
+            <Tabs
+              ariaLabel={t('settingsNavigation', 'Settings sections')}
+              value={active.id}
+              onChange={openTab}
+              tabs={activeSections.map((s) => ({
+                id: s.id,
+                icon: <s.icon size={14} aria-hidden="true" />,
+                label: t(s.labelKey, s.label),
+              }))}
+            />
+          </div>
 
           <div className="sp-sections">
-            {activeSections.map((sec) => {
-              const Component = sec.Component;
-              const sharedProp: any = sec.shared ? { shared: sharedWithReload } : {};
-              return (
-                <section
-                  key={sec.id}
-                  className="sp-section"
-                  id={`sp-section-${sec.id}`}
-                  tabIndex={-1}
-                  aria-labelledby={`sp-heading-${sec.id}`}
-                >
+            <section
+              key={active.id}
+              className="sp-section"
+              id={`sp-section-${active.id}`}
+              tabIndex={-1}
+              aria-labelledby={active.bare ? undefined : `sp-heading-${active.id}`}
+            >
+              {active.bare ? (
+                <active.Component />
+              ) : (
+                <>
                   <SectionHeader
-                    headingId={`sp-heading-${sec.id}`}
-                    icon={sec.icon}
-                    label={t(sec.labelKey, sec.label)}
-                    description={t(sec.descKey, sec.desc)}
+                    headingId={`sp-heading-${active.id}`}
+                    icon={active.icon}
+                    label={t(active.labelKey, active.label)}
+                    description={t(active.descKey, active.desc)}
                   />
-                  <Component {...sharedProp} />
-                </section>
-              );
-            })}
-            <section className="sp-section">
-              <MyActivitySection />
+                  <active.Component {...(active.shared ? { shared: sharedWithReload } : {})} />
+                </>
+              )}
             </section>
           </div>
         </>

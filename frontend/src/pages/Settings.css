@@ -11,35 +11,17 @@
   padding-bottom: var(--space-6);
 }
 
-/* ── Jump navigation bar ─────────────────── */
-.sp-jumpnav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+/* ── Tab bar (one section at a time) ─────── */
+.sp-tabbar {
   margin-bottom: var(--space-5);
-  padding: var(--space-1) var(--space-2);
-  background: var(--surface-1, var(--panel));
-  border: 1px solid var(--border, var(--line));
+  padding: 0 var(--space-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
 
-.sp-jumpnav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary, var(--muted));
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
-  text-decoration: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.sp-jumpnav-link:hover {
-  background: var(--surface-2);
-  color: var(--text-primary, var(--text));
+.sp-tabbar .ui-tabs {
+  border-bottom: none;
 }
 
 /* ── Sections ─────────────────────────────── */
@@ -54,19 +36,23 @@
   margin: 0;
 }
 
-.sp-section + .sp-section {
-  margin-top: var(--space-6);
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border, var(--line));
-}
-
 .sp-section-header {
-  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .sp-section-icon {
-  color: var(--text-muted, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .sp-section-header h2 {
@@ -118,6 +104,50 @@
 }
 
 .sp-field:last-child { margin-bottom: 0; }
+
+.sp-field-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sp-field-control > .sp-input,
+.sp-field-control > .sp-select,
+.sp-field-control > input,
+.sp-field-control > select,
+.sp-field-control > textarea {
+  flex: 1 1 220px;
+}
+
+/* Label + hint left, control right — the dense reference-panel row. On
+   narrow screens the grid collapses to the stacked form it used to be. */
+@media (min-width: 720px) {
+  .sp-field:not(.sp-field--h) {
+    display: grid;
+    grid-template-columns: minmax(190px, 30%) 1fr;
+    column-gap: var(--space-5);
+    align-items: center;
+  }
+
+  .sp-field:not(.sp-field--h) .sp-label {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  .sp-field:not(.sp-field--h) .sp-hint {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 2px 0 0;
+  }
+
+  .sp-field:not(.sp-field--h) .sp-field-control {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
 
 .sp-field--h {
   display: flex;
