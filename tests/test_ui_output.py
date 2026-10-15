@@ -177,7 +177,6 @@ def screen(raw: str) -> list[str]:
 # ── Banner ──────────────────────────────────────────────────────────────
 
 
-
 def test_the_rule_is_ascii_without_a_utf8_locale():
     out = strip(run('render_banner "OVNode" "v2.0.0"', tty=False, LANG="C", LC_ALL="C"))
     assert "─" not in out
@@ -191,7 +190,6 @@ render_begin "preflight" 3; render_done "debian 12 · 14G free" 412
 render_begin "release" 3;   render_done "38.0 MB · sha256 ok" 9100
 render_begin "health" 3;    render_done "200 in 41ms" 6900
 """
-
 
 
 def test_the_glyph_says_what_the_colour_says():
@@ -213,8 +211,6 @@ def test_ascii_output_keeps_the_meaning():
         assert "✓" not in ln
 
 
-
-
 def test_the_total_grows_rather_than_overcounting():
     """A step the caller did not count must not print [4/3].
 
@@ -228,12 +224,6 @@ def test_the_total_grows_rather_than_overcounting():
     out = strip(run(script, tty=False))
     assert "[3/3]" in out
     assert "[3/2]" not in out
-
-
-
-
-
-
 
 
 # ── Transfers ───────────────────────────────────────────────────────────
@@ -258,10 +248,6 @@ def _transfer_row(**env) -> str:
     return next(r for r in rows if "[2/2]" in r)
 
 
-
-
-
-
 def test_the_bar_is_ascii_without_utf8():
     line = _transfer_row(have="13002342", total="38002342", rate="4100", LC_ALL="C")
     assert "#" in line and "." in line
@@ -271,12 +257,10 @@ def test_the_bar_is_ascii_without_utf8():
 # ── Failure ─────────────────────────────────────────────────────────────
 
 
-
 def test_failure_is_ascii_too():
     out = strip(run('render_begin "v" 1; render_fail "v" "boom"', tty=False, LC_ALL="C"))
     assert "XX" in out
     assert "boom" in out
-
 
 
 # ── Card ────────────────────────────────────────────────────────────────
@@ -285,15 +269,7 @@ def test_failure_is_ascii_too():
 CARD = 'render_card "ready" "setup key" "4f9c-2a71" "panel|https://h:2095/setup" "logs|ovm logs -f"'
 
 
-
-
-
 # ── Ask ─────────────────────────────────────────────────────────────────
-
-
-
-
-
 
 
 def test_a_typed_number_selects_that_item():
@@ -321,11 +297,9 @@ def test_colour_is_gated_on_stderr_being_a_terminal():
     assert "\x1b[" not in raw
 
 
-
 def test_dumb_terminal_gets_no_colour():
     raw = run_pty(STEPS, TERM="dumb")
     assert "\x1b[" not in raw
-
 
 
 def test_a_pipe_gets_no_animation():

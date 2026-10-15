@@ -230,19 +230,10 @@ def test_no_dispatch_arm_is_defined_twice():
 # ── The short list ──────────────────────────────────────────────────────
 
 
-
-
-
-
 # ── The full reference ──────────────────────────────────────────────────
 
 
-
-
-
-
 # ── Grouped commands ────────────────────────────────────────────────────
-
 
 
 def test_a_bare_group_command_reaches_its_option_list():
@@ -337,7 +328,6 @@ def test_recover_update_is_still_dispatched():
     assert "Unknown option" not in combined, combined
 
 
-
 # ── auth reset mints a key, not a password ──────────────────────────────
 
 # `ovm auth reset` used to take `-p` and rewrite the owner credential from the
@@ -355,14 +345,12 @@ def test_auth_reset_takes_no_password_flag():
     assert "mints a fresh setup key" in combined, combined
 
 
-
 # ── config ──────────────────────────────────────────────────────────────
 
 
 def test_config_is_dispatched():
     source = MANAGER.read_text(encoding="utf-8")
     assert "config) check_root; _cli_py config" in source, "ovm config is not reachable"
-
 
 
 # ── The docs must teach the commands that exist ──────────────────────────
@@ -389,9 +377,6 @@ def _prose_only(text: str) -> str:
     if "### Retired names" in text:
         return text.split("### Retired names")[0] + text.split("## Status and service")[-1]
     return text
-
-
-
 
 
 # ── No retired name where an operator can read it ────────────────────────
@@ -434,8 +419,6 @@ def _readable_lines(path: Path) -> list[str]:
             continue
         out.append(f"{i}: {line}")
     return out
-
-
 
 
 # ── The two bugs a real install found ────────────────────────────────────

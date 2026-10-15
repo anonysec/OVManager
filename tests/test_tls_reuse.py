@@ -100,8 +100,6 @@ def test_an_expired_certificate_is_not_reused(tmp_path):
     assert not _usable(key, cert), "an expired certificate must be replaced, not reused"
 
 
-
-
 def test_nothing_chmods_before_the_reuse_path_returns():
     """Reuse is only safe if the pair is judged before permissions are touched.
 

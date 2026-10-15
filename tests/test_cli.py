@@ -42,7 +42,6 @@ def test_env_detect_reads_port_prefix_tls():
         assert install.health_url == "https://127.0.0.1:2095/health"
 
 
-
 def test_status_collect_uninstalled(tmp_path):
     install = Install.detect(install_dir=str(tmp_path / "missing"), data_dir=str(tmp_path))
     data = status.collect(install)
@@ -73,8 +72,6 @@ def test_status_collect_healthy(monkeypatch, tmp_path):
     }
     text = status.render_text(data, show_all=True)
     assert "active" in text and "v1.0.8" in text and "Mode" in text
-
-
 
 
 def _shape_and_all_ok(monkeypatch, tmp_path, install):
@@ -152,7 +149,6 @@ def test_doctor_flags_bad_env_perms(monkeypatch, tmp_path):
     assert as_service.ok is False
     assert "chmod 640" in as_service.fix, as_service.fix
     assert "chgrp ovmanager" in as_service.fix, as_service.fix
-
 
 
 def test_global_flags_work_on_either_side_of_the_subcommand():
