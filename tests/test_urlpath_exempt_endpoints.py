@@ -25,12 +25,14 @@ def test_exempt_routes_pass_and_others_need_the_prefix(monkeypatch):
         return {"ok": True}
 
     route_paths = {getattr(route, "path", None) for route in app.routes}
-    assert {"/doc", "/openapi.json"} <= route_paths, route_paths
+    # fixture uses FastAPI's default redoc_url="/redoc" — app.py passes no
+    # redoc_url either, so the real table has /redoc whenever DOC=True
+    assert {"/doc", "/redoc", "/openapi.json"} <= route_paths, route_paths
     assert "/docs" not in route_paths, "the panel serves Swagger UI at /doc, never /docs"
 
     client = TestClient(URLPathMiddleware(app))
 
-    for path in ("/openapi.json", "/doc"):
+    for path in ("/openapi.json", "/doc", "/redoc"):
         resp = client.get(path)
         assert resp.status_code == 200, f"{path} must bypass URLPATH, got {resp.status_code}"
 
