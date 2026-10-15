@@ -12,7 +12,6 @@ import cli.password as password
 import cli.tls as tls
 import cli.urlpath as urlpath
 from cli.env import Install
-from cli.main import main
 
 
 def _install(tmp_path):

@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parent.parent
 RENDER_SH = inline_lib.path("render.sh")
 
 
-from cli import doctor, render, status, tls  # noqa: E402
+from cli import doctor, status, tls  # noqa: E402
 from cli.doctor import Check  # noqa: E402
 
 # ── The row ─────────────────────────────────────────────────────────────

@@ -9,7 +9,6 @@ from pathlib import Path as _Path
 
 import cli.password as password
 import cli.urlpath as urlpath
-from cli.main import main
 
 
 def _install(tmp_path, env="ADMIN_USERNAME=admin\n"):

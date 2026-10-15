@@ -10,10 +10,8 @@ from pathlib import Path
 import pytest
 
 import cli.doctor as doctor
-import cli.logs as logs
 import cli.status as status
 from cli.env import Install
-from cli.main import main
 
 
 def _install(tmp_path, env_lines=(), data=True):

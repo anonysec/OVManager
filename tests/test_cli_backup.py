@@ -6,7 +6,6 @@
 import re
 import shutil
 import sqlite3
-import sys
 from pathlib import Path
 
 from conftest import probe_value as _value
