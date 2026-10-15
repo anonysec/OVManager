@@ -5,6 +5,94 @@ Date: 2026-10-14. All claims below describe work executed in this environment; n
 
 ---
 
+## Round 3 — full project review + brand-new traffic chart (2026-10-15)
+
+### 3.1 What shipped
+
+**Dashboard traffic chart, brand new** (`4678d9e`). Review of the old chart
+found two real data defects behind the bad looks:
+
+1. The "traffic" series plotted `total_used` — a **cumulative counter** — so
+   the curve was always a monotonic ramp and carried no information about
+   when traffic actually moved.
+2. The 7d period **showed barely 20 hours**: the component sliced the last
+   240 raw points, and the collector samples every 5 minutes.
+
+The replacement plots **per-bucket transfers** (sum of positive counter
+deltas; a counter reset from deleted users contributes 0, never a negative
+spike) over the whole requested window: 48 half-hour buckets for 24h, 56
+three-hour buckets for 7d. Traffic renders as rounded transfer bars;
+sessions render as a smoothed area with a pulsing live dot and carry the
+previous peak through collection gaps. Header = title + window caption with
+icon chip, metric/period segmented controls, Total/Peak/Current strip,
+Live/Offline badge. Dashed grid, right-hand y labels, 4-tick time axis,
+crosshair hover with tooltip. No new dependencies; gutter geometry synced
+across desktop/mobile. New keys (chartTotal/chartAvg/chartWindow24h/
+chartWindow7d) translated in all four locales; chartDelta* removed.
+
+### 3.2 Verification matrix (all executed)
+
+| Gate | Result |
+|---|---|
+| `pytest tests/ -n auto` (full suite) | **903 passed, 0 failed, 10 skipped** |
+| `vitest run` | **67/67 passed** |
+| `npm run verify` (build, tokens, i18n budget 0, RTL guard, eslint, tsc) | pass |
+| `ruff check` (pinned 0.16.5) | pass (after fixing prune leftovers, see 3.3.5) |
+| `pip-audit` | no known vulnerabilities |
+| `npm audit --omit=dev` | 0 vulnerabilities |
+
+### 3.3 Findings
+
+Fixed in this round:
+
+1. **Chart 7d window bug** (correctness) — 7d showed ~20h of data. Fixed by
+   client-side bucketing over the full window (no more `slice(-240)`).
+2. **Cumulative-counter chart** (UX/data) — the curve was a hockey stick by
+   construction. Now per-bucket transfers, which is what "traffic" means.
+3. **`pyproject.toml` drifts from `uv.lock`** (build integrity) — `jinja2`,
+   `pydantic-settings` and `requests` are imported by the backend
+   (`backend/routers/sub.py`, `backend/config.py`, four RPC/notifier modules)
+   and appear in `uv.lock`'s project requirements, but were **missing from
+   `pyproject.toml`**. `uv sync --frozen` masked the drift (CI installs from
+   the lock); any fresh `pip install -e .` or re-lock would break at import.
+   The three lines are restored with the lock's own specifiers.
+4. **Version parity broken** (release) — CHANGELOG's newest heading (1.6.0)
+   disagreed with the shipped version (1.5.0). Coordinated bump to 1.6.0
+   across all six locked sources (`backend/version.py`, `install.sh`,
+   `manager.sh`, `pyproject.toml`, `frontend/package.json` +
+   `package-lock.json`, README badge); `test_version_parity` enforces this
+   set and is green.
+5. **Test-prune lint leftovers** (hygiene) — the prune left 8 unused imports
+   in `tests/test_cli*.py`; the prune turn ran pytest but never `make lint`.
+   Removed; ruff clean.
+
+Documented, deliberately not acted on:
+
+- **Python 3.12 unverifiable here** — the declared range is `>=3.12,<3.14`
+  but this sandbox cannot download interpreters (TLS interception to the
+  GitHub release host); the suite runs green on the system 3.11.2. CI should
+  keep exercising 3.12; re-run locally on 3.12 before release if possible.
+- **`uv lock --check` cannot run here** (same network limit); the manifest
+  now matches the lock's `requires-dist` table by direct comparison.
+- **No real-browser pixels** for the new chart — verified via DOM tests,
+  build/token/i18n/RTL gates and CSS cascade reasoning only (Round-1 §9.1
+  limitation, unchanged).
+- **`StreamChart.buildBuckets` has no unit test** — the counter-delta rule is
+  exercised through the DOM test (300→200 B semantics); a dedicated unit
+  test would be cheap if the function ever moves to a shared util.
+- **In-memory rate limits reset on restart** (Round-1 §5 accepted design).
+
+### 3.4 Scope honesty
+
+This review covered: the dashboard data path end to end (collector →
+`/metrics/history` → chart), dependency/lockfile integrity, version-source
+parity, full test/lint/audit gates, and a consistency pass over docs vs
+code (roadmap ship table is fully shipped; nothing outstanding). The
+Round-1 security review stands unchanged — no auth, session, TLS or
+node-protocol code was touched in rounds 2–3.
+
+---
+
 ## Round 2 — settings tabbed UI + test-suite prune (2026-10-15)
 
 **Settings** rebuilt in the x-ui/3x-ui shape: one section per tab (icon tab
