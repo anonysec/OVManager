@@ -91,7 +91,7 @@ def _create_panel_backup_unlocked(keep: int | None = None, *, label: str = "back
 
     all_backups = sorted(
         BACKUP_DIR.glob(f"ovmanager-{label}-*.db"),
-        key=lambda p: p.stat().st_mtime,
+        key=_backup_sort_key,
         reverse=True,
     )
     for old in all_backups[max_backups:]:
@@ -129,12 +129,23 @@ def backup_database(user: dict = Depends(require_owner)):
         return ResponseModel(success=False, msg=f"Backup failed: {e}", data=None)
 
 
+def _backup_sort_key(p: Path) -> tuple[float, str]:
+    """Newest-first ordering that is deterministic when timestamps tie.
+
+    Filesystems with coarse mtime granularity (or same-tick writes) hand out
+    identical mtimes; sorting on mtime alone then falls back to ``iterdir()``
+    order, which is arbitrary. The name breaks the tie: backup names embed a
+    ``YYYYmmdd_HHMMSS`` stamp, so within a label they sort chronologically.
+    """
+    return (p.stat().st_mtime, p.name)
+
+
 def _backup_files() -> list[Path]:
     if not BACKUP_DIR.exists():
         return []
     return sorted(
         (p for p in BACKUP_DIR.iterdir() if p.is_file() and p.suffix == ".db" and not p.name.startswith("restore_")),
-        key=lambda p: p.stat().st_mtime,
+        key=_backup_sort_key,
         reverse=True,
     )
 

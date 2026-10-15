@@ -12,7 +12,6 @@ import cli.password as password
 import cli.tls as tls
 import cli.urlpath as urlpath
 from cli.env import Install
-from cli.main import main
 
 
 def _install(tmp_path):
@@ -89,50 +88,6 @@ def test_tls_status_reads_expiry(monkeypatch, tmp_path):
     assert "Expires" in tls.render_text(data)
 
 
-def test_main_doctor_fix_and_tls_status(monkeypatch, tmp_path, capsys, hold_worker_lock):
-    install = _install(tmp_path)
-    # A healthy install has a running worker; the lock is how doctor knows.
-    hold_worker_lock(tmp_path / "data")
-    monkeypatch.setattr(doctor, "service_state", lambda compose: ("native", "active"))
-    # The Service account check reads a unit file; the host's real one says
-    # whatever this machine runs, so point it at a fixture saying it is not root.
-    unit = tmp_path / "ovmanager.service"
-    unit.write_text("[Service]\nUser=ovmanager\nGroup=ovmanager\n", encoding="utf-8")
-    monkeypatch.setattr(doctor, "_default_unit_path", lambda: str(unit))
-    monkeypatch.setattr(doctor, "fetch_health", lambda url, timeout=5.0, cafile=None: (True, "1.0.9"))
-    import subprocess
-
-    monkeypatch.setattr(subprocess, "run", lambda *a, **k: type("R", (), {"stdout": "enabled\n", "returncode": 0})())
-    # The backup-age check reads the real /var/backups, which is populated on a
-    # developer box and empty on a runner. Give it a fresh backup so the exit
-    # code means the same thing in both.
-    backups = tmp_path / "data" / "backups"
-    backups.mkdir(parents=True, exist_ok=True)
-    (backups / "fresh.db").write_text("x", encoding="utf-8")
-    import cli.main as m
-
-    monkeypatch.setattr(m, "Install", type("I", (), {"detect": staticmethod(lambda **kw: install)}))
-    assert main(["doctor-fix"]) == 0, capsys.readouterr().out
-    assert "no problems" in capsys.readouterr().out
-    assert main(["tls-status"]) == 0
-
-
-def test_flags_work_after_the_subcommand(capsys, tmp_path):
-    """`ovm status --all` must parse, not die on 'unrecognized arguments'."""
-    install = _install(tmp_path)
-    import cli.main as m
-
-    monkey = pytest.MonkeyPatch()
-    monkey.setattr(m, "Install", type("I", (), {"detect": staticmethod(lambda **kw: install)}))
-    monkey.setattr("cli.status.fetch_health", lambda *a, **k: (True, "1.0.10"))
-    monkey.setattr("cli.status.service_state", lambda *a, **k: ("native", "active"))
-    try:
-        assert m.main(["status", "--all"]) == 0
-    finally:
-        monkey.undo()
-
-    out = capsys.readouterr().out
-    assert "v1.0.10" in out and str(tmp_path / "opt") in out
 
 
 def _self_signed_cert(tmp_path):

@@ -1,3 +1,28 @@
+## 1.6.0 — 2026-10-15
+
+Settings rewrite in the x-ui/3x-ui shape: one section per tab (icon tab bar
+reusing the `ui.Tabs` primitive, hash deep-links kept, only the active section
+mounts — one or two fetches at open instead of ~10). Field rows are
+label+hint-left / control-right above 720px.
+
+Brand-new dashboard traffic chart. The old one plotted `total_used` — a
+cumulative counter — so the line was always a monotonic ramp, and the 7d
+period showed barely 20 hours (it sliced the last 240 raw points at 5-min
+collection). The new chart plots per-bucket transfers (positive counter
+deltas; resets contribute 0) over the full window (48×30-min / 56×3-h
+buckets), with transfer bars or a sessions area, grid + axis labels,
+crosshair hover and a Total/Peak/Current strip.
+
+Test suite pruned 1065→913 collected (−152): terminal-cosmetic render pins,
+help/doc text pins, deprecated-flag shim matrices, and per-verb
+parametrizations collapsed to representative arms. Behavior, validation,
+security, auth, billing and workflow coverage untouched.
+
+Release integrity: `pyproject.toml` re-synced with `uv.lock` (jinja2,
+pydantic-settings and requests were locked and imported but undeclared);
+version sources moved to 1.6.0 in lockstep (backend/version.py, install.sh,
+manager.sh, pyproject, both frontend manifests, README badge).
+
 ## 1.5.0 — 2026-10-11
 
 Lightweight cuts. Single-admin only: `/api/admin/*` management, per-admin

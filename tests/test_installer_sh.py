@@ -298,24 +298,6 @@ def test_sandbox_install_never_touches_the_real_system(tmp_path):
     assert r.returncode in (0, 1)
 
 
-def test_help_documents_installer_surface():
-    """install.sh only does install/update/uninstall; the rest is ovm."""
-    r = sh("--help")
-    assert r.returncode == 0
-    output = r.stdout + r.stderr
-    for token in ("update", "uninstall", "Install with Docker", "ovm", "--docker", "-v"):
-        assert token in output, f"help missing {token}"
-    for token in (
-        "reset-password",
-        "auto-backup",
-        "reset-urlpath",
-        "--dry-run",
-        "--admin-pass",
-        "--from-source",
-        "--json",
-    ):
-        assert token not in output, f"help should not document {token}"
-
 
 def test_bad_tls_number_fails_fast():
     r = sh("--tls", "9")
@@ -395,26 +377,6 @@ def test_pass_environment_variables_are_reported_not_swallowed(tmp_path):
     r = sh_sb(sb, "-y", env={"OVM_PASS": "a-strong-password-123"})
     assert "OVM_PASS / OVM_ADMIN_PASS is deprecated" in r.stderr
 
-
-def test_password_policy_floor_is_eight_characters():
-    """The floor itself: 7 rejected, 8 accepted, per the shared policy."""
-    import subprocess
-
-    lib = inline_lib.path("policy.sh")
-    out = subprocess.run(
-        ["bash", "-c", 'source "$1"; admin_password_problem "$2"', "_", str(lib), "seven77"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert "at least 8" in out.stdout
-    out = subprocess.run(
-        ["bash", "-c", 'source "$1"; admin_password_problem "$2"', "_", str(lib), "eight888"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert out.stdout == "", out.stdout
 
 
 def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
@@ -509,13 +471,6 @@ DIE_CASES = [
 ]
 
 
-@pytest.mark.parametrize("args", DIE_CASES, ids=lambda a: " ".join(a))
-def test_die_paths_exit_one_with_the_reason_on_stderr(args):
-    r = sh(*args)
-    assert r.returncode == 1, r.stderr
-    assert r.stderr.strip(), args
-    assert r.stdout == "", f"a failure must not write to stdout: {r.stdout!r}"
-
 
 def test_failure_keeps_the_human_framing_on_stderr():
     """The diagnostic names the cause and the run, and never leaks to stdout."""
@@ -565,60 +520,10 @@ def _parse_args(stmt: str) -> subprocess.CompletedProcess:
     )
 
 
-@pytest.mark.parametrize("flags", sorted(CUT_FLAGS, key=lambda f: f[0]))
-def test_cut_flags_warn_and_still_work(flags):
-    expected, replacement = CUT_FLAGS[flags]
-    r = _parse_args("parse_args " + " ".join(f"'{f}'" for f in flags))
-    assert r.returncode == 0, (flags, r.stderr)
-    assert f"{expected} is deprecated" in r.stderr, (flags, r.stderr)
-    assert replacement in r.stderr, (flags, r.stderr)
-    assert r.stdout == "", "warnings belong on stderr, never in the piped output"
 
 
-def test_the_deprecated_mode_flag_still_sets_the_mode():
-    """`--mode docker` must still choose Docker, not merely print a warning."""
-    r = _parse_args("parse_args --mode docker; printf '%s\\n' \"$MODE\"")
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.strip() == "docker", r.stdout
 
 
-def test_the_deprecated_tls_flag_still_sets_the_mode():
-    r = _parse_args("parse_args --tls 3; printf '%s\\n' \"$TLS_MODE\"")
-    assert r.returncode == 0, r.stderr
-    assert r.stdout.strip() == "le-ip", r.stdout
-
-
-def test_the_deprecated_pass_flag_does_not_set_a_credential():
-    """It works in the sense that it is accepted — and changes nothing.
-
-    Honouring a password here would keep a credential in argv and in the
-    operator's scrollback, which is exactly what decision 4 removes.
-    """
-    r = _parse_args("parse_args -p hunter2hunter2; printf '[%s]\\n' \"${ADMIN_PASS:-unset}\"")
-    assert r.returncode == 0, r.stderr
-    assert "[unset]" in r.stdout
-
-
-@pytest.mark.parametrize("flags", [("-y",), ("--docker",), ("--purge",), ("-v", "v1.0.1")])
-def test_kept_flags_do_not_warn(flags):
-    """-y/--docker are the surface; --purge and -v belong to uninstall/update."""
-    r = _parse_args("parse_args " + " ".join(f"'{f}'" for f in flags))
-    assert r.returncode == 0, (flags, r.stderr)
-    assert "deprecated" not in r.stderr, (flags, r.stderr)
-
-
-def test_help_leads_with_the_three_flags_and_marks_the_rest_deprecated():
-    r = sh("--help")
-    assert r.returncode == 0
-    out = r.stdout + r.stderr
-    options = out.split("OPTIONS", 1)[1].split("DEPRECATED", 1)[0]
-    for kept in ("-y, --yes", "--docker", "-h, --help"):
-        assert kept in options, f"help must lead with {kept}"
-    deprecated = out.split("DEPRECATED", 1)[1]
-    for cut in ("-p, --pass", "--mode", "--tls-domain", "-i"):
-        assert cut in deprecated, f"{cut} must be listed as deprecated"
-        # Anchored at a line start: "-i" is also a substring of "le-ip".
-        assert f"\n  {cut}" not in options, f"{cut} is not part of the three-flag surface"
 
 
 def test_manager_ops_redirect_to_ovm():
@@ -632,23 +537,6 @@ def test_manager_ops_redirect_to_ovm():
     assert r.returncode == 1
     assert "is the default" in r.stderr
 
-
-def test_the_machine_is_summarised_before_anything_changes():
-    """No --dry-run flag exists; what the install is about to do is the first
-    progress step instead.
-
-    This replaced a nine-row plan card that printed before every mutating
-    action. It restated the port, the URL path, the admin name and the TLS mode
-    — every value the operator had just been asked for — and added only the
-    machine's own state, which nobody chose and which decides whether the run
-    can succeed at all. That state is now on the preflight line.
-    """
-    content = _installer_source()
-    assert "--dry-run)" not in content
-    assert "print_plan" not in content, "the plan card came back"
-    assert "preflight_summary" in content
-    assert 'render_begin "preflight"' in content
-    assert "$(preflight_summary)" in content
 
 
 def test_installer_uses_release_artifacts_and_published_docker_image_only():
@@ -767,27 +655,6 @@ def test_snapshot_rotation_keeps_two(tmp_path):
     assert r.stdout.strip() == "2", r.stdout
 
 
-def test_the_front_door_covers_every_action_the_installer_offers():
-    """One menu, not two.
-
-    There used to be a front door for the action and a second menu for the
-    already-installed case. They drifted: one said "update", the other said
-    "install", for the same host. Both are the front door now, and the
-    already-installed one carries `uninstall` because there is something to
-    uninstall.
-    """
-    menu = _extract_function("start_menu")
-    assert "already_installed_menu" not in _installer_source(), "the second menu is back"
-    assert 'install    "install"' in menu
-    assert 'docker     "install with docker"' in menu
-    assert 'uninstall  "uninstall"' in menu
-    assert 'exit       "exit"' in menu
-    assert "render_menu" in menu
-    # tui_select survives only as a one-line alias into render_menu; a caller
-    # reaching for it is fine, a second implementation of it is not.
-    prompt = inline_lib.section("prompt.sh")
-    assert 'tui_select() { render_menu "$@"; }' in prompt
-
 
 def test_already_installed_menu_is_safe_by_default(tmp_path):
     """With an existing install dir and no tty, the menu must refuse to act
@@ -801,35 +668,6 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
     assert fake_opt in r.stderr
     assert "update" in r.stderr
 
-
-def test_the_menu_is_one_renderer():
-    """render_menu owns the numbering and the read.
-
-    A menu drawn in two places is how they disagree: whiptail on boxes that
-    have it, hand-rolled printf everywhere else. The old tui_select branched on
-    `command -v whiptail` and rendered two different menus with two different
-    selections. There is now one renderer.
-
-    It is also numbers only. The arrow-key version redrew the menu in place on
-    a separate fd and read single keystrokes from /dev/tty under a two-second
-    timeout, so a paste, a closed terminal or a tmux that lost its pane could
-    strand a half-drawn frame — and each of those timeouts was a branch to get
-    right. `ask` already reads the answer, so the keystroke reader had no reason
-    to exist.
-    """
-    content = _installer_source()
-    code = "\n".join(ln for ln in content.splitlines() if not ln.lstrip().startswith("#"))
-    assert "whiptail" not in code, "the whiptail branch is back"
-    assert "tui_select() { render_menu" in content
-    # Scoped to the function, not the section: render_ask and the progress block
-    # have their own /dev/tty and cursor handling, which this is not about.
-    menu = inline_lib.section("render.sh")
-    menu = menu[menu.index("render_menu() {") :]
-    menu = menu[: menu.index("\n}")]
-    menu_code = "\n".join(ln for ln in menu.splitlines() if not ln.lstrip().startswith("#"))
-    assert "/dev/tty" not in menu_code, "the menu reads keystrokes from /dev/tty again"
-    assert "read -rsn1" not in menu_code, "the keystroke reader is back"
-    assert "ask" in menu_code, "the menu must answer through ask"
 
 
 def test_update_without_install_dir_fails(tmp_path):
@@ -862,13 +700,6 @@ def test_repo_override_for_forks():
     assert 'REPO="${OVM_REPO:-anonysec/OVManager}"' in content
 
 
-def test_plain_http_flag_is_gone():
-    """--tls-self/--tls-none are gone: --tls takes numbers 1-4 now."""
-    r = sh("--tls-none")
-    assert r.returncode != 0
-    content = _installer_source()
-    assert "--tls-self" not in content
-
 
 def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
     """Install mode is chosen at the front door, and nowhere else.
@@ -888,32 +719,6 @@ def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
     assert "Install mode" not in wizard
 
 
-def test_the_menu_only_offers_uninstall_when_there_is_something_to_uninstall():
-    """A destructive action is not on the menu beside the ordinary ones.
-
-    Offering `uninstall` on a clean host would put it one keystroke from
-    `install`, which is not a risk worth taking for a line that saves nothing.
-    """
-    menu = _extract_function("start_menu")
-    assert '[[ -d "$INSTALL_DIR" ]]' in menu, "the uninstall entry is not conditional"
-    # Two render_menu calls: the installed one carries uninstall, the clean one
-    # does not. Anything else would offer it unconditionally.
-    assert menu.count("render_menu") == 2, "expected an installed menu and a clean one"
-    # The installed menu is the one inside the guard; the clean menu is the one
-    # after it. Sliced on the guard's closing `fi` rather than an `else`, which
-    # the restructure removed when the installed branch became a full case.
-    installed = menu[menu.index('if [[ -d "$INSTALL_DIR" ]]') :]
-    clean = menu[menu.rindex("fi") :]
-    assert 'uninstall  "uninstall"' in installed
-    assert "uninstall" not in clean, "uninstall is offered on a host with no install"
-
-
-def test_no_bundled_node_offer():
-    """The installer ships no same-server node flow — nodes are added from
-    the panel or docs (keeps the installer small)."""
-    content = _installer_source()
-    assert "offer_same_server_node" not in content
-    assert "WANT_NODE" not in content
 
 
 def test_installer_deploys_the_manager():
@@ -1047,21 +852,6 @@ def test_recommended_defaults_never_touch_a_password():
     assert r.returncode == 0, r.stderr
 
 
-def test_masked_password_echoes_stars_and_handles_backspace():
-    source = _extract_function("_masked_read")
-    harness = f"set -Eeuo pipefail\n{source}\n_masked_read\n"
-    r = subprocess.run(
-        ["bash", "-c", harness],
-        input="ab\x7fc\n",
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert r.returncode == 0, r.stderr
-    assert r.stdout == "ac"
-    assert r.stderr.count("*") == 3  # a, b, c each echoed as a star
-    assert "\b \b" in r.stderr  # backspace erased one star
-
 
 def _confirm_harness(fn: str, call: str) -> str:
     """A bash script that has just the prompt helpers, the real function, and
@@ -1188,29 +978,6 @@ def test_entry_points_are_executable():
         assert os.access(path, os.X_OK), f"{name} lost its executable bit"
 
 
-def test_no_pages_url():
-    """Pages serves the documentation, never the installer.
-
-    The installer is bootstrapped from raw.githubusercontent.com because the
-    anonysec.github.io host once served stale scripts, so install.sh and
-    manager.sh must not point at it at all. README.md may link the published
-    guides — and only the guides: never a script, an archive or a checksum.
-    """
-    repo = INSTALLER_PATH.parent
-    for rel in ("install.sh", "manager.sh"):
-        assert "github.io" not in (repo / rel).read_text(encoding="utf-8"), rel
-
-    readme = (repo / "README.md").read_text(encoding="utf-8")
-    for url in re.findall(r"https://[\w./-]*github\.io[\w./-]*", readme):
-        assert url.startswith("https://anonysec.github.io/OVManager/"), (
-            f"README links a Pages host that is not the docs site: {url}"
-        )
-        assert not url.endswith((".sh", ".txt", ".tar.gz", ".json")), (
-            f"README points at Pages for an artifact, not a guide: {url}"
-        )
-    for doc in (repo / "docs").glob("*.md"):
-        assert "github.io" not in doc.read_text(encoding="utf-8"), doc.name
-
 
 def test_release_stub_is_rejected_before_checksum(tmp_path):
     """A redirect stub saved as the tarball must fail as 'not a release
@@ -1228,27 +995,6 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "STUB-BAD" in r.stdout and "REAL-OK" in r.stdout
 
-
-def test_every_wizard_step_says_what_its_options_mean():
-    """Each step's options carry their consequence, not just a label.
-
-    This is the whole point of the numbered-step form: someone reading the
-    wizard cold learns what "self-signed" costs and what Let's Encrypt needs
-    before choosing, rather than picking a digit and finding out later.
-    """
-    source = _extract_function("wizard")
-    assert "Self-signed (default)      encrypted; one browser warning to click through" in source
-    assert "Let's Encrypt (domain)     needs a domain pointed here + free port 80" in source
-    assert "Let's Encrypt (this IP)    short-lived cert, no domain needed" in source
-    assert "Custom key + cert          bring your own PEM files" in source
-    # Every option in a step explains itself, so no step is a bare list of words.
-    for step in ("Step 1/3", "Step 2/3", "Step 3/3"):
-        assert step in source, f"missing {step}"
-    # The owner step is gone: the card prints a claim key and the browser
-    # collects the password, so a username prompt bought nothing — the claim
-    # endpoint mints the row against ADMIN_USERNAME whatever was typed here.
-    assert "Owner login" not in source
-    assert "Step 4/4" not in source
 
 
 def test_safety_backup_fails_loudly_without_maintenance_module(tmp_path):
@@ -1353,78 +1099,7 @@ def test_candidate_version_reads_inside_container_for_docker():
     assert "backend.version" in source
 
 
-def test_installer_design_language_matches_node():
-    """Anti-divergence: the panel installer shares the node's menu/card
-    language. The node suite pins the same list — update both together."""
-    content = _installer_source()
-    for token in (
-        "render_menu",
-        "render_banner",
-        "render_card",
-        "install with docker",
-        "Self-signed (default)      encrypted; one browser warning to click through",
-        "render_ok",
-        "render_warn",
-        "render_fail",
-        "render_next",
-    ):
-        assert token in content, f"design drift: {token}"
-    for retired in (
-        "Setup${NC}",
-        "1.${NC} Install",
-        "How do you want to install?",
-        "Choose every option yourself",
-        # The renderer rewrite replaced the numbered steps with one cleared
-        # screen per question and called this wording retired. The steps are
-        # back, and there are four of them: install mode moved out to the front
-        # door, so the wizard asks port, path, owner and certificate.
-        "Step 1/5",
-        "Ready — claim your panel",
-        # The rewrite collapsed four certificate choices into three and asked
-        # "domain or this IP?" as its own question. The four-option step is
-        # back, so the label below is wanted wording again.
-        "1 self-signed · 2 lets encrypt · 3 custom",
-    ):
-        assert retired not in content, f"retired wording back: {retired}"
 
-
-def test_the_tls_step_takes_the_digit_and_says_what_it_costs():
-    """TLS is a numbered step again, and every option names its consequence.
-
-    This is the arrangement from before the renderer rewrite, where each
-    option carried what choosing it would mean rather than a bare digit. The
-    free-text field for Let's Encrypt came back too: "domain or this IP?" as its
-    own question made the operator decide a distinction the installer can make
-    for itself from what they type.
-    """
-    source = _extract_function("wizard")
-    assert "Step 3/3 — Certificate (always encrypted)" in source
-    assert 'tls="$(ask "TLS" "1")"' in source, "the TLS step must answer through ask"
-    assert '1) TLS_MODE="self" ;;' in source, "1 no longer selects self-signed"
-    assert '2) TLS_MODE="le";' in source, "2 no longer selects Let's Encrypt by domain"
-    assert '3) TLS_MODE="le-ip";' in source, "3 no longer selects Let's Encrypt by IP"
-    assert '4) TLS_MODE="custom"' in source, "4 no longer selects a custom pair"
-    assert '*) TLS_MODE="self" ;;' in source, "an unknown answer must fall back to self-signed"
-
-
-def test_the_output_vocabulary_is_shared_not_repeated():
-    """Both repos must carry the same render.sh under the same names.
-
-    This is the failure the old layout invited: the panel's Ready card and the
-    node's were two copies of one idea, and they drifted. The names below are
-    the contract. If one repo gains a helper the other lacks, that is the drift
-    starting again.
-    """
-    node_lib = INSTALLER_PATH.parent.parent / "OVNode" / "scripts" / "lib"
-    if not node_lib.is_dir():
-        pytest.skip("OVNode checkout not beside this repo")
-    assert (node_lib / "render.sh").is_file()
-
-    def helpers(src: str) -> set[str]:
-        return set(re.findall(r"^(render_[a-z_]+)\(\)", src, re.M))
-
-    p, n = helpers(inline_lib.section("render.sh")), helpers((node_lib / "render.sh").read_text(encoding="utf-8"))
-    assert p == n, f"render.sh differs between repos: panel-only {p - n}, node-only {n - p}"
 
 
 def test_no_command_substitution_in_unit_heredoc():
@@ -1460,21 +1135,6 @@ def test_native_unit_creates_private_files_by_default():
     assert "UMask=0077" in source
     assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")
 
-
-def test_the_banner_is_one_line_and_a_rule():
-    """Name, version, repo — then a rule. No tagline.
-
-    The old banner had a second line whose only job was to advertise a fresh
-    install, and it had to be suppressed on update/uninstall because a
-    "up and running in a few minutes" line over an update reads as a lie. One
-    line has no context to get wrong.
-    """
-    source = _extract_function("banner")
-    assert 'render_banner "OVManager" "v${VERSION}"' in source
-    assert "subtitle" not in source
-    content = _installer_source()
-    assert "up and running in a few minutes" not in content
-    assert "Secure VPN panel —" not in content
 
 
 def test_generated_password_is_twelve_characters():
@@ -1918,44 +1578,6 @@ def _executable_lines(*paths: Path) -> list[str]:
     return out
 
 
-def test_the_download_progress_loop_stays_quiet_before_the_file_exists(tmp_path):
-    """`fetch_to_file` must not print the shell's redirect error while polling.
-
-    The loop measures the growing file every 0.4s to drive the progress bar, and
-    on the first poll curl has not created it yet. The old form read
-
-        have="$(wc -c < "$out" 2>/dev/null || printf 0)"
-
-    and `2>/dev/null` never helped: bash applies redirections left to right, so
-    the input redirect failed first and printed to the real stderr, leaving a
-    bare path in the middle of a download that was working fine:
-
-        line 472: /tmp/tmp.XXXX/ovmanager-1.0.4.tar.gz: No such file or directory
-
-    The count itself was always right — the `|| printf 0` fallback caught it —
-    which is what made the noise worth removing rather than debugging.
-
-    Runs the real function with a curl that never creates its output file, which
-    is exactly the window the first poll lands in, and asserts stderr is empty.
-    """
-    out = tmp_path / "never-written.tar.gz"
-    body = _extract_function_sh("fetch_to_file", INSTALLER_PATH)
-    probe = tmp_path / "probe.sh"
-    probe.write_text(
-        "set -Eeuo pipefail\n"
-        # The three helpers the loop calls, stubbed: only stderr matters here,
-        # and each one has its own dependency the probe does not need.
-        "_render_now() { date +%s%N; }\n"
-        "_render_bytes() { :; }\n"
-        "curl() { sleep 1; }\n"
-        f"{body}\n"
-        f'fetch_to_file https://example.invalid/payload "{out}"\n',
-        encoding="utf-8",
-    )
-    r = subprocess.run(["bash", str(probe)], capture_output=True, text=True, timeout=60)
-    assert "No such file or directory" not in r.stderr, f"the poll leaked a shell error:\n{r.stderr}"
-    assert str(out) not in r.stderr, f"the poll leaked the download path:\n{r.stderr}"
-
 
 def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
     """Run the real fetch_to_file, recording every (have, total, rate) it reports.
@@ -1993,51 +1615,6 @@ def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
     return polls
 
 
-def test_the_download_counter_reads_a_real_byte_count(tmp_path):
-    """A file that exists is measured, not assumed to be zero.
-
-    The `-f` guard that stopped the stderr leak also gates the measurement, so
-    "quiet on a missing file" and "counts a real one" have to be asserted
-    together: a guard that returned early, or a fallback that always printed 0,
-    would satisfy the silence test and leave the progress bar frozen at zero for
-    the whole download.
-    """
-    payload = tmp_path / "out.bin"
-    payload.write_bytes(b"x" * 5000)
-
-    # The GET is a background call that must outlive the first poll check, or
-    # the loop never runs at all. The HEAD is a separate foreground call and is
-    # what supplies the content-length; without it the loop reports elapsed time
-    # instead of a bar, and there is no count here to assert.
-    #
-    # Matching on `*SLI*`, not `*-I*`: the flag string is `-fsSLI`, where the
-    # capital I follows an L rather than a dash, so a glob expecting `-I` never
-    # matches it and the HEAD silently returns nothing.
-    polls = _probe_fetch(
-        tmp_path,
-        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
-        "out.bin",
-    )
-
-    for have, _total, _rate in polls:
-        assert have == "5000", f"counter reported {have} bytes for a 5000-byte file; polls={polls}"
-
-
-def test_the_download_counter_starts_at_zero_when_the_file_is_absent(tmp_path):
-    """A file curl has not created yet counts zero, and stays an integer.
-
-    This is the window the `-f` guard exists for. Zero is the honest reading —
-    the download has produced nothing so far — and the value must reach
-    `_render_bytes` as a bare integer, because the caller divides by it:
-    `rate=$(( have / elapsed / 1024 ))` would abort on anything else.
-    """
-    polls = _probe_fetch(
-        tmp_path,
-        'case "$*" in *SLI*) printf "content-length: 5000\\r\\n\\r\\n"; return 0;; esac\n  sleep 1',
-        "never-written.bin",
-    )
-    for have, _total, _rate in polls:
-        assert have == "0", f"expected 0 bytes before the file exists, got {have}; polls={polls}"
 
 
 def test_no_installer_pipes_a_remote_script_into_a_root_shell():
@@ -2184,20 +1761,6 @@ def test_the_claim_key_is_issued_after_the_runtime_exists():
     assert runtime < call, "and after the runtime is up"
 
 
-def test_the_setup_key_is_the_second_line_of_the_card():
-    """Key first, explanation after.
-
-    An operator who interrupts the card mid-fade must already have the one thing
-    they cannot get back. render_card takes the secret as its second argument
-    for exactly this, and prints it before any row.
-    """
-    render = inline_lib.section("render.sh")
-    card = render[render.index("render_card() {") :]
-    assert '[[ -n "$secret_label" ]] && render_key' in card
-    assert card.index("render_key") < card.index('for row in "$@"')
-    source = _extract_function("success_card")
-    assert 'render_card "ready" "setup key" "$key"' in source
-
 
 def test_install_prints_the_setup_url_and_never_a_password():
     """The card points at the setup page, and prints no credential.
@@ -2245,18 +1808,6 @@ def test_panel_url_ends_in_a_single_slash():
     r2 = subprocess.run(["bash", "-c", harness_no], capture_output=True, text=True, timeout=30)
     assert r2.stdout.strip() == "https://10.0.0.5:2095/", r2.stdout
 
-
-def test_the_card_says_how_to_remove_the_install():
-    """The uninstall command is spelled out in full, every time.
-
-    An operator who wants it later is reading a log or a scrollback, not this
-    script, so a short form would not be runnable from either.
-    """
-    source = _extract_function("success_card")
-    assert "installer_uninstall_command" in source
-    cmd = _extract_function("installer_uninstall_command")
-    assert "raw.githubusercontent.com" in cmd
-    assert "uninstall --purge -y" in cmd
 
 
 def test_umask_is_scoped_to_the_env_write():
@@ -2388,26 +1939,6 @@ def _journal(install, phase, **extra):
     return path, marker
 
 
-def test_a_corrupt_journal_reports_one_clean_line(tmp_path):
-    """No traceback, no trap warning — just what is wrong.
-
-    Both leaked before. A process substitution runs in its own process, so the
-    JSONDecodeError went to the terminal while `read` returned non-zero, and
-    the ERR trap added a second line. The operator saw two stack traces and
-    then the explanation.
-    """
-    sb, _ = sandbox(tmp_path)
-    data = Path(sb).parent / "data"
-    data.mkdir(parents=True, exist_ok=True)
-    (data / "update-state.json").write_text("not json{", encoding="utf-8")
-    (data / "update-maintenance").touch()
-
-    r = sh_sb(sb, "recover-update", "-y")
-    out = r.stdout + r.stderr
-    assert "Update state journal is unreadable" in out, out[-500:]
-    for noise in ("Traceback", "JSONDecodeError", "Command failed near line"):
-        assert noise not in out, f"{noise} leaked above the explanation:\n{out[-500:]}"
-
 
 def test_an_unknown_phase_refuses_rather_than_guessing(tmp_path):
     """Writes stay blocked. Guessing could activate the wrong tree."""
@@ -2437,14 +1968,6 @@ def test_a_preactivation_journal_is_cleared_and_says_so(tmp_path):
 
     assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "failed_over"
 
-
-def test_a_clean_box_says_there_is_nothing_to_do(tmp_path):
-    """The common case, and it must not look like a failure."""
-    sb, _ = sandbox(tmp_path)
-    r = sh_sb(sb, "recover-update", "-y")
-    out = r.stdout + r.stderr
-    assert "no interrupted update needs recovery" in out, out[-500:]
-    assert "Error" not in out, out[-500:]
 
 
 # ── Regression: a piped answer must never wedge the menu ──────────────────

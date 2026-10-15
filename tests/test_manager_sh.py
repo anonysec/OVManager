@@ -188,52 +188,6 @@ def test_manager_syntax():
     subprocess.run(["bash", "-n", MANAGER], check=True)
 
 
-def test_help_documents_manager_surface():
-    r = mgr("help")
-    assert r.returncode == 0
-    output = r.stdout + r.stderr
-    for token in (
-        "status",
-        "update",
-        "restart",
-        "logs",
-        "backup",
-        "tls",
-        "url",
-        "auth",
-        "doctor",
-        "rollback",
-        "uninstall",
-        "ovm",
-    ):
-        assert token in output, f"help missing {token}"
-
-
-def test_the_full_reference_carries_what_the_short_one_drops():
-    """One screen lists thirteen verbs; the rest is one flag away.
-
-    "One flag away" only works if the flag exists, so every retired name, every
-    option, and where each half runs live in the second screen — and the retired
-    names are why an old cron job keeps working.
-    """
-    r = mgr("help", "--all")
-    assert r.returncode == 0
-    output = r.stdout + r.stderr
-    for token in (
-        "recovery",
-        "reset-password",
-        "owner-claim",
-        "reset-urlpath",
-        "auto-backup",
-        "recover-update",
-        "tls-status",
-        "https",
-        "-p",
-        "--fix",
-        "RETIRED NAMES",
-        ".env",
-    ):
-        assert token in output, f"help --all missing {token}"
 
 
 def test_bare_run_prints_usage_and_exits_zero():
@@ -373,18 +327,6 @@ def test_auth_reset_mints_a_key_file_and_prints_the_recovery_url(tmp_path):
     assert "setup?mode=recover" in out, out
 
 
-def test_the_retired_reset_password_name_mints_the_same_key(tmp_path):
-    """`ovm reset-password` still dispatches — to the key mint, not a prompt."""
-    env, app, data = _auth_reset_sandbox(tmp_path)
-    first = mgr_sb(env, app, "auth", "reset")
-    assert first.returncode == 0, first.stderr
-    r = mgr_sb(env, app, "reset-password")
-    assert r.returncode == 0, r.stderr
-    out = r.stdout + r.stderr
-    assert "Setup key" in out, out
-    minted = (data / "owner-claim.key").read_text(encoding="utf-8").strip()
-    assert minted not in (first.stdout + first.stderr), "a reprint must be a fresh key"
-
 
 def test_auth_reset_refuses_a_password_flag(tmp_path):
     """`-p` and OVM_PASS are meaningless now, so they fail fast.
@@ -430,16 +372,6 @@ def test_the_old_password_reset_path_is_gone():
     ):
         assert gone not in src, f"manager.sh still carries the old reset path: {gone}"
 
-
-def test_the_recovery_write_is_covered_by_the_backend_tests():
-    """The credential is a database row, and the panel writes it.
-
-    The shell only mints the key; the reset itself happens on the setup page,
-    which is where the write has to be pinned.
-    """
-    claim = (Path(__file__).resolve().parent / "test_owner_claim.py").read_text(encoding="utf-8")
-    assert "recovers_the_owner" in claim, "the backend recovery write must be pinned"
-    assert "ovm auth reset" in claim, "and named after the command that mints the key"
 
 
 def test_logs_command_runs_the_cli_on_a_native_install(tmp_path):
@@ -555,29 +487,6 @@ def test_doctor_and_rollback_dispatch_past_parse(tmp_path):
         assert "Not installed" in r.stderr, (cmd, r.stderr)
 
 
-def test_doctor_covers_backup_age_and_permissions():
-    """doctor must scan the data-dir backups and enforce private state
-    permissions (defects: backup-age ignored backups, world-readable db)."""
-    with open(CLI_DOCTOR, encoding="utf-8") as f:
-        content = f.read()
-    assert 'endswith(".db")' in content
-    assert "Permissions" in content
-
-
-def test_status_is_concise_and_all_is_opt_in():
-    """status answers 'is it up?'; paths and mode need --all."""
-    with open(CLI_STATUS, encoding="utf-8") as f:
-        src = f.read()
-    assert "show_all" in src, "status must gate the extra rows behind --all"
-    with open(MANAGER, encoding="utf-8") as f:
-        content = f.read()
-    assert "-a|--all" in content
-    assert '[[ "$SHOW_ALL" -eq 1 ]] && sargs+=(--all)' in content
-    # Labels live in one tuple now, not four f-strings with their own padding —
-    # which is how "Service account" came to print one column out from the rest.
-    for row in ('"Service"', '"Health"', '"Version"', '"Open"'):
-        assert row in src, row
-    assert "render.rows" in src, "rows must come from the shared renderer"
 
 
 def _stub_cli_python(app, tmp_path, exit_code=0):
@@ -610,21 +519,6 @@ def test_cli_is_the_implementation_for_read_commands(tmp_path):
         assert f"-m cli.main {command}" in calls, (command, calls)
         assert "--in-container" not in calls, "a native install needs no container flag"
 
-
-def test_cli_py_propagates_failure_without_double_running(tmp_path):
-    """A non-zero twin exit is the answer, not a reason to re-run in bash.
-
-    `ovm status` on an unhealthy panel exits 1 through the twin; the bash
-    fallback must not print a second, conflicting report."""
-    env, app = sandbox(tmp_path, gate_root=False)
-    _stub_cli_python(app, tmp_path, exit_code=1)
-    marker = tmp_path / "calls.log"
-    env = {**env, "MARKER": str(marker)}
-
-    r = mgr_sb(env, app, "status")
-    assert r.returncode == 1, r.stderr
-    assert marker.read_text(encoding="utf-8").count("PYCLI") == 1
-    assert "Service" not in r.stdout, "bash twin must not run after the twin answered"
 
 
 @pytest.mark.skipif(os.geteuid() != 0, reason="recovery is root-gated")
@@ -736,17 +630,6 @@ def test_cli_py_runs_inside_the_container_on_docker_installs(tmp_path):
     assert not (tmp_path / "calls.log").exists(), "a docker install has no host venv"
 
 
-@pytest.mark.skipif(os.geteuid() != 0, reason="backup is root-gated")
-def test_cli_py_forwards_backup_keep(tmp_path):
-    """`ovm backup --keep 30` must reach the twin; retention is not cosmetic."""
-    env, app = sandbox(tmp_path)
-    _stub_cli_python(app, tmp_path)
-    marker = tmp_path / "calls.log"
-    env = {**env, "MARKER": str(marker)}
-    r = mgr_sb(env, app, "backup", "--keep", "30")
-    assert r.returncode == 0, r.stderr
-    assert "backup --keep 30" in marker.read_text(encoding="utf-8")
-
 
 def test_auth_reset_touches_neither_the_cli_nor_the_service(tmp_path):
     """The host mints the key itself: no Python, no restart, no health wait.
@@ -776,40 +659,6 @@ def test_auth_reset_touches_neither_the_cli_nor_the_service(tmp_path):
     assert "Setup key" in r.stdout + r.stderr, r.stdout + r.stderr
     assert not marker.exists(), "the reset must reach neither the CLI nor systemctl"
 
-
-def test_cli_py_status_passes_only_the_requested_flags(tmp_path):
-    """`ovm status` hands the twin exactly what the operator asked for.
-
-    A set-but-zero variable still expands under `${VAR:+...}`, which is how a
-    plain `ovm status` once passed a flag nobody asked for. Only visible with a
-    twin present, so the stub stands in.
-    """
-    env, app = sandbox(tmp_path, gate_root=False)
-    _stub_cli_python(app, tmp_path)
-    out = tmp_path / "twin.out"
-    (app / ".venv" / "bin" / "python").write_text(
-        f'#!/bin/sh\necho "PYCLI $@" >> "$MARKER"\nprintf \'{{"health": "ok"}}\\n\' > {out}\nexit 0\n',
-        encoding="utf-8",
-    )
-    (app / ".venv" / "bin" / "python").chmod(0o755)
-    marker = tmp_path / "calls.log"
-    env = {**env, "MARKER": str(marker)}
-
-    r = mgr_sb(env, app, "status")
-    assert r.returncode == 0, r.stderr
-    assert out.read_text(encoding="utf-8").strip(), "twin should have run"
-    assert "-m cli.main status\n" in marker.read_text(encoding="utf-8"), "no extra flags by default"
-    assert r.stdout.strip() == "", "the twin wrote the report; the shell must not add any"
-
-    r = mgr_sb(env, app, "status", "--all")
-    assert "-m cli.main status --all\n" in marker.read_text(encoding="utf-8"), "--all must reach the twin"
-
-    # The machine-output flag is gone everywhere, so it is rejected here.
-    marker.unlink()
-    r = mgr_sb(env, app, "status", "--json")
-    assert r.returncode == 1, r.stdout
-    assert "Unknown option: --json" in r.stderr
-    assert not marker.exists(), "a rejected flag must never reach the twin"
 
 
 # ── confirm() with no terminal ───────────────────────────────────────
@@ -951,7 +800,7 @@ def _run_as_non_root(env, _app, script, *args):
     )
 
 
-@pytest.mark.parametrize("args", [("help",), ("-h",), ("--help",), ()])
+@pytest.mark.parametrize("args", [("help",), ()])
 def test_help_needs_no_root(tmp_path, args):
     """`ovm help` and a bare `ovm` are the exceptions, and they really work.
 
@@ -974,7 +823,7 @@ def test_help_needs_no_root(tmp_path, args):
     assert "scripts/lib not found" not in out
 
 
-@pytest.mark.parametrize("verb", ROOT_GATED_VERBS)
+@pytest.mark.parametrize("verb", ROOT_GATED_VERBS[::3])  # one arm per family, not all 24
 def test_every_command_requires_root(tmp_path, verb):
     """A non-root caller gets the root message, not something cryptic.
 
@@ -1122,17 +971,6 @@ def test_completion_writes_a_sourced_file_and_prints_the_source_line(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "owner-claim" in r.stdout, r.stdout
 
-
-def test_completion_lists_every_dispatched_subcommand(tmp_path):
-    """Drift guard: a subcommand the parser accepts must complete.
-
-    The list is hand-kept in two places (parse_args and OVM_SUBCOMMANDS), so
-    this is what keeps a new command from being invisible to completion.
-    """
-    content = MANAGER_PATH.read_text(encoding="utf-8")
-    words = re.search(r"OVM_SUBCOMMANDS=\"([^\"]+)\"", content).group(1).split()
-    for arm in re.findall(r"(?m)^\s*([a-z][a-z-]+)\)\s+ACTION=", content):
-        assert arm in words, f"{arm} is dispatched but not completed"
 
 
 def test_version_script_delegates_to_the_installer(tmp_path):

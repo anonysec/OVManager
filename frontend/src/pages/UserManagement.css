@@ -620,7 +620,7 @@
 
 .um-rowmenu-panel {
   position: fixed;
-  z-index: 1000;
+  z-index: var(--z-popover);
   min-width: 180px;
   display: flex;
   flex-direction: column;

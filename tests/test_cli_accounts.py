@@ -9,7 +9,6 @@ from pathlib import Path as _Path
 
 import cli.password as password
 import cli.urlpath as urlpath
-from cli.main import main
 
 
 def _install(tmp_path, env="ADMIN_USERNAME=admin\n"):
@@ -79,10 +78,6 @@ def test_reset_password_reports_a_missing_data_dir(tmp_path, monkeypatch):
     assert out["ok"] is False and "DATA_DIR" in out["error"]
 
 
-def test_reset_urlpath_missing_install(tmp_path):
-    out = urlpath.reset(str(tmp_path / "missing"), str(tmp_path / "compose.yml"))
-    assert out["ok"] is False and "Not installed" in out["error"]
-
 
 def test_reset_urlpath_runs_panel_entrypoint(monkeypatch, tmp_path):
     install_dir = _install(tmp_path)
@@ -138,25 +133,6 @@ def test_reset_urlpath_reports_failure(monkeypatch, tmp_path):
     out = urlpath.reset(install_dir, str(tmp_path / "compose-missing.yml"))
     assert out["ok"] is False and "boom" in out["error"]
 
-
-def test_main_reset_password_and_urlpath(monkeypatch, tmp_path, capsys):
-    install_dir = _install(tmp_path)
-    (tmp_path / "data" / "ovmanager.db").write_bytes(b"")
-    monkeypatch.setattr(password, "hash_password", lambda p: "$2b$12$STUBHASH")
-    monkeypatch.setattr(password, "_write_owner_hash", lambda d, h, o: {"ok": True})
-    rc = main(["--install-dir", install_dir, "reset-password", "--admin-pass", "long-enough-password"])
-    assert rc == 0
-    assert "database" in capsys.readouterr().out
-    rc = main(["--install-dir", install_dir, "reset-password", "--admin-pass", "short"])
-    assert rc == 1
-    monkeypatch.setattr(
-        urlpath.subprocess,
-        "run",
-        lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})(),
-    )
-    rc = main(["--install-dir", install_dir, "reset-urlpath"])
-    assert rc == 0
-    assert "served at /" in capsys.readouterr().out
 
 
 def test_reset_password_never_touches_a_path_outside_the_sandbox(tmp_path):

@@ -175,16 +175,23 @@
   --font-size-xl: 22px;
   --font-size-2xl: 28px;
   --font-size-3xl: 34px;
-  /* ── Layering (z-scale) — one knob per layer, ordered ───────────────── */
-  --z-nav: 70;        /* sidebar rail */
-  --z-topbar: 110;    /* sticky topbar */
-  --z-popover: 200;   /* dropdowns, popovers */
-  --z-modal: 1000;    /* modals, skip link */
-  --z-drawer: 1250;   /* node drawer backdrop/panel */
-  --z-progress: 1300; /* route progress bar */
-  --z-command: 9998;  /* command palette overlay */
-  --z-popover-high: 9999; /* notification popover — rides above drawers */
-  --z-toast: 10000;   /* always on top */
+  /* ── Layering (z-scale) — one knob per layer, ordered bottom → top ─────
+     A single scale: everything that floats declares one of these instead of
+     raw numbers. Two former blocks disagreed (--z-modal was 1000 and 100),
+     which left modals under the mobile hamburger and toasts tied with it. */
+  --z-nav: 70;             /* sidebar rail (desktop) */
+  --z-mobile-nav: 95;      /* bottom tab bar (phone) */
+  --z-topbar: 110;         /* sticky topbar */
+  --z-mobile-overlay: 118; /* phone nav backdrop */
+  --z-mobile-drawer: 119;  /* phone off-canvas sidebar */
+  --z-hamburger: 120;      /* hamburger stays above the open phone drawer */
+  --z-drawer: 130;         /* node drawer panel + backdrop */
+  --z-modal: 200;          /* dialogs */
+  --z-popover: 300;        /* dropdowns, row menus */
+  --z-toast: 400;          /* toast stack */
+  --z-progress: 500;       /* route progress bar */
+  --z-command: 600;        /* command palette overlay */
+  --z-popover-high: 700;   /* notification popover — rides above drawers */
 
   --line-height-tight: 1.2;
   --line-height-snug: 1.35;
@@ -214,14 +221,6 @@
   /* Focus ring metrics (the colour is --focus-ring above). */
   --focus-ring-width: 3px;
   --focus-ring-offset-width: 2px;
-
-  /* Elevation stack for overlays. */
-  --z-dropdown: 40;
-  --z-sticky: 50;
-  --z-drawer: 90;
-  --z-modal: 100;
-  --z-toast: 120;
-  --z-tooltip: 130;
 
   /* Easing curves. */
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);

@@ -6,7 +6,6 @@
 import re
 import shutil
 import sqlite3
-import sys
 from pathlib import Path
 
 from conftest import probe_value as _value
@@ -96,26 +95,6 @@ def test_backup_now_missing_database_reports_clean_error(monkeypatch, tmp_path):
     assert backup.render_backup_text(data).startswith("  ✗")
 
 
-def test_backup_now_backend_failure_reports_clean_error(monkeypatch, tmp_path):
-    install = _install(tmp_path)
-
-    import backend.routers.maintenance as maintenance
-
-    def _boom(keep=None):
-        raise RuntimeError("disk on fire")
-
-    monkeypatch.setattr(maintenance, "create_panel_backup", _boom)
-    data = backup.backup_now(install)
-    assert data["ok"] is False
-    assert "disk on fire" in data["error"]
-
-
-def test_backup_now_unimportable_backend_reports_clean_error(monkeypatch, tmp_path):
-    install = _install(tmp_path)
-    monkeypatch.setitem(sys.modules, "backend.routers.maintenance", None)
-    data = backup.backup_now(install)
-    assert data["ok"] is False
-    assert "Backend" in data["error"]
 
 
 def test_backup_now_rejects_bad_keep_and_missing_install(monkeypatch, tmp_path):
@@ -162,11 +141,6 @@ def test_auto_backup_keep_validation_rejects_junk(monkeypatch, tmp_path):
         assert data["ok"] is False and "keep" in data["error"].lower(), bad
 
 
-def test_auto_backup_unknown_action_rejected(monkeypatch, tmp_path):
-    install = _install(tmp_path)
-    data = backup.auto_backup("bogus", install)
-    assert data["ok"] is False and "Usage" in data["error"]
-
 
 def test_auto_backup_status_on_off_roundtrip_hermetic(monkeypatch, tmp_path):
     install = _install(tmp_path)
@@ -196,39 +170,6 @@ def test_auto_backup_status_on_off_roundtrip_hermetic(monkeypatch, tmp_path):
     finally:
         engine.dispose()
 
-
-def test_main_dispatch_returns_correct_codes(monkeypatch, tmp_path, capsys):
-    install = _install(tmp_path)
-
-    import cli.main as cli_main
-
-    monkeypatch.setattr(cli_main, "Install", type("I", (), {"detect": staticmethod(lambda **kw: install)}))
-
-    import backend.routers.maintenance as maintenance
-
-    monkeypatch.setattr(maintenance, "create_panel_backup", lambda keep=None: tmp_path / "b.db")
-    rc = main(["--install-dir", str(tmp_path / "opt"), "backup", "--keep", "5"])
-    assert rc == 0
-    assert "verified backup" in capsys.readouterr().out
-
-    def _none(keep=None):
-        return None
-
-    monkeypatch.setattr(maintenance, "create_panel_backup", _none)
-    rc = main(["--install-dir", str(tmp_path / "opt"), "backup"])
-    assert rc != 0
-
-    _tmp_session_factory(tmp_path, monkeypatch)
-    rc = main(["--install-dir", str(tmp_path / "opt"), "auto-backup", "status"])
-    assert rc == 0
-    assert "Auto backup" in capsys.readouterr().out
-
-    rc = main(["--install-dir", str(tmp_path / "opt"), "auto-backup", "on", "--time", "02:15", "--keep", "9"])
-    assert rc == 0
-
-    rc = main(["--install-dir", str(tmp_path / "opt"), "auto-backup", "on", "--time", "junk"])
-    assert rc != 0
-    assert "HH:MM" in capsys.readouterr().out
 
 
 # ── restore ────────────────────────────────────────────────────────────

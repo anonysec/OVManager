@@ -28,7 +28,7 @@ const Card = ({ title, icon: Icon, children, className = '' }: any) => (
 const Field = ({ label, hint, children, horizontal, inputId }: any) => (
   <div className={`sp-field${horizontal ? ' sp-field--h' : ''}`}>
     <label className="sp-label" htmlFor={inputId}>{label}</label>
-    {children}
+    <div className="sp-field-control">{children}</div>
     {hint && <p className="sp-hint">{hint}</p>}
   </div>
 );
