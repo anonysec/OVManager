@@ -92,9 +92,11 @@ async def live_stream(user: dict = Depends(get_current_user)):
     - A comment heartbeat (``: hb``) every 15s keeps idle connections alive
       through proxies with short timeouts.
     """
-    q = bus.subscribe()
 
     async def generate():
+        # Subscribe only once the generator runs: a response discarded before its
+        # first byte must not leave a subscriber behind for the collector to see.
+        q = bus.subscribe()
         try:
             yield _format_event("ready", {"ts": time.time(), "cap": get_snapshot_cap()})
             while True:
