@@ -112,13 +112,14 @@ def test_poll_writes_ledger_row_and_moves_cursor(monkeypatch):
     try:
         _poll(monkeypatch, name, {name: 1000})  # baseline: no billing, cursor set
         assert _ledger_rows(name) == [], "first sight must only baseline"
-        assert '"total": 1000' in _cursor(name).replace("'", '"')
+        # canonical form: compact separators, sorted keys — must not regress to json.dumps default
+        assert _cursor(name) == '{"tnode":{"total":1000}}'
 
         _poll(monkeypatch, name, {name: 1300})  # growth: delta 300
         rows = _ledger_rows(name)
         assert len(rows) == 1, f"one ledger row per growth poll, got {rows}"
         assert rows[0][0] == "tnode" and rows[0][1] == "poll" and rows[0][2] == 300
-        assert '"total": 1300' in _cursor(name).replace("'", '"')
+        assert _cursor(name) == '{"tnode":{"total":1300}}'
     finally:
         _drop(name)
 
@@ -173,7 +174,7 @@ def test_crash_before_commit_redelivers_exactly_once(monkeypatch):
             db.close()
 
         assert _ledger_rows(name) == [], "a crash before commit must leave no ledger row"
-        assert '"total": 1000' in _cursor(name).replace("'", '"'), "cursor must not move on a crash"
+        assert _cursor(name) == '{"tnode":{"total":1000}}', "cursor must not move on a crash"
 
         _poll(monkeypatch, name, {name: 1500})  # redelivery of the same cumulative
         rows = _ledger_rows(name)

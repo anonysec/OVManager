@@ -66,7 +66,7 @@ def test_reset_urlpath_cli_flag():
             timeout=60,
         )
         assert proc.returncode == 0
-        assert "root" in proc.stdout
+        assert "URLPATH cleared — the panel is served at root (/) again." in proc.stdout.splitlines()
     finally:
         from backend.urlpath import invalidate_cache
 

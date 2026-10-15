@@ -80,9 +80,11 @@ def test_node_version_compat_policy():
         assert node_version_compat(bad)["verdict"] == "unknown", bad
 
 
-def _self_signed_pem() -> str:
+def _self_signed_pem(san: str | None = None) -> tuple[str, str]:
     """Real self-signed cert for the pinned-context test (a fake PEM cannot
-    load into an SSLContext)."""
+    load into an SSLContext). Returns (cert PEM, key PEM); with ``san`` the
+    cert carries that DNS name (and names itself CN), without it the cert is
+    CN-only — exactly what install.sh mints."""
     import datetime
 
     from cryptography import x509
@@ -91,8 +93,8 @@ def _self_signed_pem() -> str:
     from cryptography.x509.oid import NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
-    cert = (
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, san or "127.0.0.1")])
+    builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
@@ -100,9 +102,55 @@ def _self_signed_pem() -> str:
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1))
         .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=30))
-        .sign(key, hashes.SHA256())
     )
-    return cert.public_bytes(serialization.Encoding.PEM).decode()
+    if san:
+        builder = builder.add_extension(x509.SubjectAlternativeName([x509.DNSName(san)]), critical=False)
+    cert = builder.sign(key, hashes.SHA256())
+    pem = cert.public_bytes(serialization.Encoding.PEM).decode()
+    key_pem = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()
+    ).decode()
+    return pem, key_pem
+
+
+def _serve_tls(combined_pem: str, tmp_path) -> tuple[int, object]:
+    """Serve one local HTTPS endpoint presenting ``combined_pem`` (cert+key).
+
+    Returns (port, server socket); a raw-socket loop answers one request at a
+    time so a real TLS handshake runs against the pinned sender.
+    """
+    import socket
+    import ssl
+    import threading
+
+    pem_file = tmp_path / "served.pem"
+    pem_file.write_text(combined_pem)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(str(pem_file))  # keyfile omitted: the key is in the same PEM
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(5)
+    port = srv.getsockname()[1]
+
+    def loop():
+        while True:
+            try:
+                raw, _ = srv.accept()
+            except OSError:
+                return
+            try:
+                conn = ctx.wrap_socket(raw, server_side=True)
+                conn.recv(65536)
+                body = b'{"success": true, "data": {}}'
+                head = b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: %d\r\n\r\n" % len(body)
+                conn.sendall(head + body)
+                conn.close()
+            except Exception:
+                pass
+
+    threading.Thread(target=loop, daemon=True).start()
+    return port, srv
 
 
 def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
@@ -116,7 +164,7 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
     real_dir = node_pki._CERT_DIR
     node_pki._CERT_DIR = tmp_path / "node-certs"
     try:
-        pem = _self_signed_pem()
+        pem, _ = _self_signed_pem()
         req = NodeRequests(
             address="10.0.0.9",
             port=2083,
@@ -131,12 +179,11 @@ def test_pinned_ca_verifies_against_the_pin(monkeypatch, tmp_path):
 
         from backend.node import requests as nr_mod
 
-        # The pinned session requires the chain but skips the hostname: the
-        # node cert names localhost while the panel dials the public IP, so
-        # the exact cert (not its subject) is the identity proof.
+        # Addressless = strict: no dial target passed, so the pool verifies
+        # the hostname it actually dials; the pin still pins.
         sender = nr_mod._pinned_sender(str(ca_path))
         adapter = sender.__self__.get_adapter("https://x")
-        assert adapter._pinned_context.check_hostname is False
+        assert adapter._pinned_context.check_hostname is True
         assert adapter._pinned_context.verify_mode == ssl.CERT_REQUIRED
 
         captured = {}
@@ -179,13 +226,13 @@ def test_a_pin_works_before_the_node_row_exists(monkeypatch):
 
     from backend.node import requests as nr_mod
 
-    pem = _self_signed_pem()
+    pem, _ = _self_signed_pem()
     req = NodeRequests(address="10.0.0.9", port=2083, api_key="k", use_tls=True, server_ca=pem)
 
     assert req._verify != "pinned", "the fetched pin was dropped — the key would cross unpinned"
 
     adapter = nr_mod._pinned_sender(req._verify).__self__.get_adapter("https://x")
-    assert adapter._pinned_context.check_hostname is False
+    assert adapter._pinned_context.check_hostname is True  # addressless = fail closed
     assert adapter._pinned_context.verify_mode == ssl.CERT_REQUIRED
 
     captured = {}
@@ -198,6 +245,30 @@ def test_a_pin_works_before_the_node_row_exists(monkeypatch):
     assert req._request("get", "/sync/status") == {"success": True}
     assert captured["sender"] is not None, "the pinned sender must be used, not the unverified fallback"
     assert req.tls_verified is True
+
+
+def test_a_pinned_cert_that_does_not_name_the_host_fails_closed(tmp_path):
+    """Pinning proves WHICH cert; the hostname check proves WHICH host.
+
+    install.sh mints a CN-only cert (no SAN), so dialling a node by name with
+    such a cert must fail closed under the pin — no unverified retry of the
+    API key to whatever answers. The matching-SAN control proves the serve /
+    dial setup itself works, so the rejection below cannot pass by accident.
+    """
+    good_pem, good_key = _self_signed_pem(san="localhost")
+    good_port, good_srv = _serve_tls(good_pem + good_key, tmp_path)
+    ok = NodeRequests(address="localhost", port=good_port, api_key="k", use_tls=True, server_ca=good_pem)
+    assert ok._request("get", "/sync/status") == {"success": True, "data": {}}, "control: matching SAN must verify"
+    assert ok.tls_verified is True
+
+    bad_pem, bad_key = _self_signed_pem()  # CN-only, exactly what install.sh mints
+    bad_port, bad_srv = _serve_tls(bad_pem + bad_key, tmp_path)
+    nr = NodeRequests(address="localhost", port=bad_port, api_key="k", use_tls=True, server_ca=bad_pem)
+    assert nr._request("get", "/sync/status") is None, "hostname mismatch must fail closed under the pin"
+    assert nr.tls_verified is not True
+
+    good_srv.close()
+    bad_srv.close()
 
 
 def _registered_node(node_id=4242):

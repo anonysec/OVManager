@@ -7,6 +7,7 @@ adopted legacy database, and refusing a newer one — can each be exercised.
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from backend.db import migrations
@@ -281,3 +282,31 @@ def test_existing_panel_is_left_untouched():
     finally:
         db.rollback()
         db.close()
+
+
+def test_a_second_owner_row_is_rejected(session):
+    """v26: uq_admins_owner keeps a second is_owner=1 row from ever committing.
+
+    Both paths must enforce it: a fresh install gets the index from the model,
+    an existing database from the numbered step (index dropped + stamp 26
+    rewound below to exercise it).
+    """
+    from backend.db.models import Admin
+
+    migrations.migrate(session)
+    assert session.query(Admin).filter(Admin.is_owner.is_(True)).count() == 1, "fresh DB seeds exactly one owner"
+
+    session.add(Admin(username="dup_owner_a", password="x", is_owner=True))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
+
+    session.execute(text("DROP INDEX uq_admins_owner"))
+    session.execute(text("DELETE FROM schema_version WHERE version = 26"))
+    session.commit()
+    migrations.migrate(session)
+
+    session.add(Admin(username="dup_owner_b", password="x", is_owner=True))
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
