@@ -63,13 +63,16 @@ def _check_hostname_for(address: str) -> bool:
 
     A named host is checked on top of the pin. An IP literal is not: the
     installer's self-signed node certificate carries only a CN (no SAN),
-    which OpenSSL ignores, and nodes are routinely dialed by IP. An
-    addressless call has no name to check either. The pin decides trust in
-    every case — the check only adds the name on top of it.
+    which OpenSSL ignores, and nodes are routinely dialed by IP. Anything
+    else — an omitted or unparsable address — fails closed and keeps the
+    check: urllib3 verifies it against the host actually dialled, so a
+    caller that forgets to pass the target cannot silently downgrade to
+    pin-only. The pin decides trust in every case — the check only adds
+    the name on top of it.
     """
     host = urlsplit(f"//{address}").hostname if address else None
     if not host:
-        return False
+        return True
     try:
         ipaddress.ip_address(host)
     except ValueError:
@@ -87,10 +90,11 @@ def _pinned_sender(ca: str, address: str = ""):
     """Request sender verifying against exactly ``ca`` (no fallback).
 
     ``address`` is the dial target (``host[:port]``) and decides whether the
-    certificate must also carry its name; see ``_check_hostname_for``. CA
-    files are cached one session per (pin, check) pair. PEM text is not: it
-    only arrives on a first add, so those sessions would never be reused,
-    and caching them would grow the table by one entry per add attempt.
+    certificate must also carry its name; missing means strict, see
+    ``_check_hostname_for``. CA files are cached one session per (pin, check)
+    pair. PEM text is not: it only arrives on a first add, so those sessions
+    would never be reused, and caching them would grow the table by one entry
+    per add attempt.
     """
     check_hostname = _check_hostname_for(address)
     if _is_pem(ca):
