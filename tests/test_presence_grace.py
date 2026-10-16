@@ -1,8 +1,11 @@
 """Presence grace window, subscriber gating, snapshot node cap (Task 5)."""
 
 import time
+import traceback
 
 from backend.operations.observability import live
+
+_probe_log: list[tuple[float, str]] = []  # DIAG ONLY
 
 
 class _FakeNode:
@@ -34,6 +37,7 @@ def _install(monkeypatch, calls, *, names=("n1",), respond=None):
             pass
 
         def get_sessions(self, hours=None, timeout=None):
+            _probe_log.append((time.monotonic(), "".join(traceback.format_stack(limit=24))))  # DIAG ONLY
             calls.append(timeout)
             return {"live_sessions": [{"common_name": "1"}]} if respond is None else respond
 
@@ -75,6 +79,7 @@ async def test_the_idle_panel_refreshes_once_the_window_passes(monkeypatch):
     A snapshot nobody refreshes is how the public /sub/ page ends up serving
     last week's counts, so past the window the poll runs again anyway.
     """
+    t0 = time.monotonic()  # DIAG ONLY
     calls: list = []
     _reset()
     _install(monkeypatch, calls)
@@ -88,7 +93,16 @@ async def test_the_idle_panel_refreshes_once_the_window_passes(monkeypatch):
         f"subs={len(live.bus._subscribers)} "
         f"closed={[lp.is_closed() for lp in live.bus._subscribers.values()]} "
         f"fresh={live.snapshot_fresh()} idle={live.IDLE_POLL_SECONDS} "
-        f"age={time.monotonic() - live.snapshot.last_poll_ts:.1f} " + " ||| ".join(getattr(live.bus, "_diag_stacks", [])[-2:])
+        f"age={time.monotonic() - live.snapshot.last_poll_ts:.1f} "
+        # DIAG ONLY below this line
+        + " PROBES "
+        + " ### ".join(f"t={t - t0:.2f}s " + " | ".join(s.splitlines()[-12:]) for t, s in _probe_log if t >= t0)
+        + " FRESH "
+        + " ### ".join(f"t={t - t0:.2f}s v={v} ts={ts - t0:.2f} " for t, v, ts in getattr(live, "_diag_fresh", []))
+        + " HAS "
+        + " ### ".join(f"t={t - t0:.2f}s v={v} " for t, v in getattr(live, "_diag_has", []))
+        + " UPDATES "
+        + " ### ".join(f"t={t - t0:.2f}s " + " | ".join(s.splitlines()[-8:]) for t, s in getattr(live, "_diag_updates", [])[-3:])
     )
 
     live.snapshot._last_poll_ts = time.monotonic() - live.IDLE_POLL_SECONDS - 1

@@ -377,6 +377,7 @@ def _live_install_untouched():
 def _diag_bus_tracer():
     """Record a creation stack for every LiveBus subscriber in this worker."""
     try:
+        import time
         import traceback
 
         from backend.operations.observability import live
@@ -393,6 +394,39 @@ def _diag_bus_tracer():
                 return q
 
             bus.subscribe = traced
+
+        if not getattr(live, "_diag_gate_traced", False):
+            live._diag_gate_traced = True
+            live._diag_fresh = []
+            live._diag_updates = []
+            orig_fresh = live.snapshot_fresh
+
+            def traced_fresh():
+                v = orig_fresh()
+                live._diag_fresh.append((time.monotonic(), v, live.snapshot.last_poll_ts))
+                del live._diag_fresh[:-60]
+                return v
+
+            live.snapshot_fresh = traced_fresh
+            live._diag_has = []
+            orig_has = bus.has_subscribers
+
+            def traced_has():
+                v = orig_has()
+                live._diag_has.append((time.monotonic(), v))
+                del live._diag_has[:-60]
+                return v
+
+            bus.has_subscribers = traced_has
+            orig_update = live.snapshot.update
+
+            def traced_update(*args, **kwargs):
+                r = orig_update(*args, **kwargs)
+                live._diag_updates.append((time.monotonic(), "".join(traceback.format_stack(limit=14))))
+                del live._diag_updates[:-20]
+                return r
+
+            live.snapshot.update = traced_update
     except Exception as exc:  # pragma: no cover - diag must never break the run
         print(f"[diag] tracer setup failed: {exc}")
     yield
