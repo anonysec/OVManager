@@ -192,6 +192,25 @@
   gap: var(--space-1);
 }
 
+/* ── NodeDrawer widths ──────────────────────────────────────────────── */
+/* The drawer mounts inside .nm-page; scope width overrides here so the
+   NodeDrawer component files stay untouched (incl. its focus logic). */
+.nm-page .node-drawer {
+  width: min(480px, 92vw);
+}
+
+@media (min-width: 1200px) {
+  .nm-page .node-drawer {
+    width: min(560px, 44vw);
+  }
+}
+
+@media (max-width: 599.98px) {
+  .nm-page .node-drawer {
+    width: 100%;
+  }
+}
+
 /* ── Loading placeholder ─────────────────────────────────────────── */
 .nm-node-skeleton {
   padding: var(--space-4);
@@ -260,5 +279,13 @@
   .nm-actions {
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+}
+
+/* Touch targets: keep 30px density on mouse, ≥44px hit area on touch. */
+@media (pointer: coarse) {
+  .nm-actions .ui-btn {
+    min-width: var(--control-h-lg);
+    min-height: var(--control-h-lg);
   }
 }

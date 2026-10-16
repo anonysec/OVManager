@@ -158,6 +158,7 @@
   "nodeClose": "Close",
   "nodeRequestFailed": "The panel could not reach the node.",
   "nodeNoStatus": "No live status yet — check the node.",
+  "nodeUnreachable": "Unreachable",
   "nodeKeepCurrentHint": "Leave empty to keep the current value.",
   "nodeTabSettings": "Settings",
   "nodeTabActions": "Actions",

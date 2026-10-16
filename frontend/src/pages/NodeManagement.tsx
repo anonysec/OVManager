@@ -313,7 +313,7 @@ const NodeManagement = () => {
         />
       ) : filteredNodes.length === 0 ? (
         <EmptyState
-          title={t('noMatchesTitle', 'No matching users')}
+          title={t('noMatchesNodes', 'No matching nodes')}
           description={t('noMatchesBody', 'Try a different search term or clear the active filter.')}
           actionLabel={t('clearFilters', 'Clear filters')}
           onAction={() => { setSearchTerm(''); setStatusFilter('all'); }}
@@ -326,14 +326,20 @@ const NodeManagement = () => {
             const version = info?.node_info?.version;
             const tls = tlsMeta(info?.tls_mode, t);
             const meta = nodeMeta(node);
-            const online = Boolean(node.status) && info?.reachable !== false;
+            // Health mapping per MASTER: ok → success, unreachable-but-enabled →
+            // warning, disabled/off → danger (three states stay distinct).
+            const health = !node.status ? 'offline' : info?.reachable === false ? 'warning' : 'online';
             const transport = (node.protocol || 'udp').toUpperCase();
             return (
               <Card as="article" key={node.id} className="nm-node" padded={false}>
                 <div className="nm-node-main">
                   <StatusBadge
-                    status={online ? 'online' : 'offline'}
-                    label={online ? t('statusOnline') : t('statusOffline')}
+                    status={health}
+                    label={
+                      health === 'online' ? t('statusOnline')
+                        : health === 'warning' ? t('nodeUnreachable', 'Unreachable')
+                          : t('statusOffline')
+                    }
                   />
                   <div className="nm-identity">
                     <button
