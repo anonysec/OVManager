@@ -16,6 +16,8 @@ set -Eeuo pipefail
 
 INSTALL_DIR="${OVM_APP_DIR:-/opt/ovmanager}"
 VERSION="1.6.0"
+# `ovm update --from-source [DIR]`: pass a dev tree through to the installer.
+FROM_SOURCE=0 FROM_SOURCE_DIR=""
 
 usage() {
     # Thirteen verbs, one screen. The old help was sixty-four lines: twenty-seven
@@ -41,6 +43,7 @@ usage() {
     ovm restore [NAME]      List backups, or restore one
 
     ovm update              Staged update; recovers an interrupted one first
+    ovm update --from-source  Dev install from a working tree (no release fetch)
     ovm rollback            Restore the pre-update code snapshot
     ovm uninstall           Remove the app (--purge for data too)
 
@@ -111,6 +114,7 @@ usage_full() {
     --time HH:MM        backup schedule: daily run time
     --purge             uninstall: also delete data + certs
     -v, --version V     update: pin a release, e.g. -v v1.0.15
+    --from-source [DIR] update: dev install from a working tree (default: cwd)
     -h, --help          This help
 
   ENVIRONMENT
@@ -1677,6 +1681,10 @@ delegate_update() {
     local args=()
     [[ "$YES" -eq 1 ]] && args+=(-y)
     [[ -n "$PIN" ]] && args+=(-v "$PIN")
+    if [[ "$FROM_SOURCE" -eq 1 ]]; then
+        args+=(--from-source)
+        if [[ -n "$FROM_SOURCE_DIR" ]]; then args+=("$FROM_SOURCE_DIR"); fi
+    fi
     run_installer update "${args[@]}"
 }
 
@@ -2154,7 +2162,7 @@ OVM_SUBCOMMANDS="status start stop restart enable disable logs doctor doctor-fix
 tls auth url backup auto-backup restore rollback update uninstall version-script \
 config completion help tls-status https recovery owner-claim reset-password \
 reset-urlpath recover-update"
-OVM_FLAGS="-y --yes -a --all --fix --keep --time --purge -v --version -h --help -p --pass --self --domain --ip --key --cert"
+OVM_FLAGS="-y --yes -a --all --fix --keep --time --purge -v --version -h --help -p --pass --self --domain --ip --key --cert --from-source --dest"
 
 do_completion() {
     local dir="${OVM_COMPLETION_DIR:-/etc/bash_completion.d}" path
@@ -2205,6 +2213,8 @@ parse_args() {
             -a|--all) SHOW_ALL=1; shift ;;
             --fix) FIX=1; shift ;;
             --purge) PURGE=1; shift ;;
+            --from-source) FROM_SOURCE=1; shift
+                           if [[ $# -ge 1 && "$1" != -* ]]; then FROM_SOURCE_DIR="$1"; shift; fi ;;
             -v|--version) [[ $# -ge 2 ]] || die "--version needs vX.Y.Z"; PIN="$2"; shift 2 ;;
             --keep) [[ $# -ge 2 ]] || die "--keep needs a number"; BACKUP_KEEP="$2"; shift 2 ;;
             --time) [[ $# -ge 2 ]] || die "--time needs HH:MM"; BACKUP_TIME="$2"; shift 2 ;;

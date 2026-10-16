@@ -533,12 +533,18 @@ def test_installer_uses_release_artifacts_and_published_docker_image_only():
     content = _installer_source()
     compose = _extract_function("write_compose")
     assert "git clone" not in content
-    assert "--from-source" not in content
-    assert "npm run build" not in content
+    assert "npm run build" not in compose
     assert "image: ${IMAGE_REPO}:${ACTIVE_IMAGE_VERSION}" in compose
     assert "build:" not in compose
     assert 'docker compose -f "$COMPOSE_FILE" pull' in content
     assert "Release checksum file is missing" in content
+    # The one documented exception: `--from-source` installs a working tree
+    # instead of a release archive. It must stay dev-only — no release fetch,
+    # no Docker image, and it is the only place the build hint lives.
+    fs = _extract_function("do_from_source")
+    assert "npm run build" in fs, "the missing frontend/dist hint must name the build"
+    assert "fetch_release" not in fs
+    assert "docker" not in fs.lower()
 
 
 def test_update_fails_over_on_health_failure():
