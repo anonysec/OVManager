@@ -245,6 +245,34 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 
 .ds-kpi--loading > * { visibility: hidden; }
 
+/* ── KPI hierarchy ────────────────────────────────────────────────
+   Lead counters (first four cells) carry the headline scale; the
+   utilization gauges after them step down so the rail reads in two
+   tiers. Position-based — no KpiCard prop needed. */
+.ds-stats-grid .ds-kpi:nth-child(-n + 4) .ds-kpi-value {
+  font-size: var(--font-size-2xl);
+}
+
+.ds-stats-grid .ds-kpi:nth-child(n + 5) {
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+}
+
+.ds-stats-grid .ds-kpi:nth-child(n + 5) .ds-kpi-value {
+  font-size: var(--font-size-lg);
+}
+
+.ds-stats-grid .ds-kpi:nth-child(n + 5) .ds-kpi-label {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+@media (max-width: 639.98px) {
+  .ds-stats-grid .ds-kpi:nth-child(-n + 4) .ds-kpi-value {
+    font-size: var(--font-size-xl);
+  }
+}
+
 /* ── Alert rail ────────────────────────────────────────────────────
    One frame; severity is a 2px inline-start bar, not a coloured box. */
 .ds-alerts {
@@ -1017,6 +1045,49 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 /* ── Chart card — the bare chart lives in a plain card shell ─────── */
 .ds-chart-card .ds-chart-embed {
   padding: 0 var(--space-4) var(--space-4);
+}
+
+/* ── Chart legend — shape + text, never colour alone ─────────────── */
+.ds-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+  list-style: none;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.ds-chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-chart-legend-glyph {
+  flex: none;
+  display: inline-block;
+  width: 14px;
+}
+
+.ds-chart-legend-glyph--bars {
+  height: 10px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--accent-text) 0 3px,
+    transparent 3px 5px
+  );
+}
+
+.ds-chart-legend-glyph--line {
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-text);
+}
+
+@media (max-width: 767.98px) {
+  .ds-chart-legend { padding: 0 var(--space-3) var(--space-3); }
 }
 
 .ds-chart-embed {

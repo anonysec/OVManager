@@ -500,7 +500,7 @@ const ServerStats = () => {
       {!loading && <AlertStrip items={notifications} onClear={undefined} />}
 
       {allFailed ? (
-        <div className="ds-empty-wrap">
+        <div className="ds-empty-wrap" role="status">
           <ErrorState
             title={t('loadFailedTitle')}
             message={t('loadFailedMessage')}
@@ -513,6 +513,16 @@ const ServerStats = () => {
           {isOwner && (
             <Card className="ds-chart-card" padded={false}>
               <StreamChart />
+              <ul className="ds-chart-legend">
+                <li>
+                  <span className="ds-chart-legend-glyph ds-chart-legend-glyph--bars" aria-hidden="true" />
+                  {t('chartLegendTraffic', 'Bars — traffic per bucket')}
+                </li>
+                <li>
+                  <span className="ds-chart-legend-glyph ds-chart-legend-glyph--line" aria-hidden="true" />
+                  {t('chartLegendSessions', 'Line — peak sessions per bucket')}
+                </li>
+              </ul>
             </Card>
           )}
 
@@ -559,12 +569,14 @@ const ServerStats = () => {
                   })}
                 </ul>
               ) : (
-                <EmptyState
-                  title={t('noNodes', 'No nodes')}
-                  description={t('noNodesDesc', 'Add a node to see its live status on the map and table.')}
-                  actionLabel={t('addNode', 'Add node')}
-                  onAction={() => navigate('/nodes')}
-                />
+                <div role="status">
+                  <EmptyState
+                    title={t('noNodes', 'No nodes')}
+                    description={t('noNodesDesc', 'Add a node to see its live status on the map and table.')}
+                    actionLabel={t('addNode', 'Add node')}
+                    onAction={() => navigate('/nodes')}
+                  />
+                </div>
               )}
             </Card>
           )}
@@ -596,12 +608,14 @@ const ServerStats = () => {
                       </div>
                     </>
                   ) : (
-                    <EmptyState
-                      title={t('noUsersOnline', 'No users online')}
-                      description={t('noUsersOnlineDesc', 'Online users will appear here.')}
-                      actionLabel={t('viewAll', 'View all')}
-                      onAction={() => navigate('/users')}
-                    />
+                    <div role="status">
+                      <EmptyState
+                        title={t('noUsersOnline', 'No users online')}
+                        description={t('noUsersOnlineDesc', 'Online users will appear here.')}
+                        actionLabel={t('viewAll', 'View all')}
+                        onAction={() => navigate('/users')}
+                      />
+                    </div>
                   )
                 ) : (
                   attentionUsers.length > 0 ? (
@@ -613,10 +627,12 @@ const ServerStats = () => {
                       caption={t('needsAttention', 'Needs attention')}
                     />
                   ) : (
-                    <EmptyState
-                      title={t('allSystemsClear', 'All systems clear')}
-                      description={t('noAttentionDesc', 'No expiring, over-quota or disabled users right now.')}
-                    />
+                    <div role="status">
+                      <EmptyState
+                        title={t('allSystemsClear', 'All systems clear')}
+                        description={t('noAttentionDesc', 'No expiring, over-quota or disabled users right now.')}
+                      />
+                    </div>
                   )
                 )}
               </div>
