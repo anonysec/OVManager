@@ -2,7 +2,20 @@
 // page does not have to pull in the map chunk's d3-geo/world-atlas.
 
 
-const CODES = {
+export interface CountryEntry {
+  name: string;
+  coords: [number, number];
+}
+
+/** Node shape the geo helpers read; extra fields are ignored. */
+export interface NodeLocation {
+  country_code?: string | null;
+  name?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+}
+
+const CODES: Record<string, CountryEntry> = {
   DE: { name: 'Germany', coords: [10.4, 51.1] },
   TR: { name: 'Turkey', coords: [35.2, 39.1] },
   FI: { name: 'Finland', coords: [25.7, 61.9] },
@@ -17,7 +30,7 @@ const CODES = {
   JP: { name: 'Japan', coords: [138, 36] },
 };
 
-const FLAG_SVGS = {
+const FLAG_SVGS: Record<string, string> = {
   DE: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#ffce00"/><rect width="640" height="160" fill="#000"/><rect y="320" width="640" height="160" fill="#d00"/></svg>',
   TR: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#e30a0a"/><circle cx="220" cy="240" r="70" fill="#fff"/><circle cx="220" cy="240" r="30" fill="#e30a0a"/></svg>',
   FI: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><rect x="213" width="54" height="480" fill="#003897"/><rect y="213" width="640" height="54" fill="#003897"/></svg>',
@@ -32,7 +45,7 @@ const FLAG_SVGS = {
   JP: '<svg viewBox="0 0 640 480" width="20" height="15"><rect width="640" height="480" fill="#fff"/><circle cx="320" cy="240" r="80" fill="#bc002d"/></svg>',
 };
 
-const COUNTRY_ALIASES = {
+const COUNTRY_ALIASES: Record<string, string> = {
   FL: 'FI',
   UK: 'GB',
   US: 'USA',
@@ -41,7 +54,7 @@ const COUNTRY_ALIASES = {
   UNITEDARABEMIRATES: 'AE',
 };
 
-const normalizeCountryCode = (node) => {
+const normalizeCountryCode = (node: NodeLocation): string | null => {
   const raw = String(node?.country_code || '').trim().toUpperCase();
   if (!raw) return null;
   if (CODES[raw]) return raw;
@@ -49,7 +62,7 @@ const normalizeCountryCode = (node) => {
   return /^[A-Z]{2,3}$/.test(raw) ? raw : null;
 };
 
-const nodeMeta = (node) => {
+const nodeMeta = (node: NodeLocation) => {
   const latitude = Number(node.latitude);
   const longitude = Number(node.longitude);
   const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -61,7 +74,7 @@ const nodeMeta = (node) => {
   return {
     name: entry?.name || (code || 'Location unavailable'),
     flagCode: entry ? code : null,
-    coords: hasCoordinates ? [longitude, latitude] : (entry?.coords || null),
+    coords: hasCoordinates ? [longitude, latitude] as [number, number] : (entry?.coords || null),
     approximate: !hasCoordinates && Boolean(entry?.coords),
   };
 };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COUNTRY_ALIASES, nodeMeta, normalizeCountryCode } from './geo.js';
+import { COUNTRY_ALIASES, nodeMeta, normalizeCountryCode } from './geo';
 
 describe('normalizeCountryCode', () => {
   it('returns null when there is no stored code, regardless of name', () => {

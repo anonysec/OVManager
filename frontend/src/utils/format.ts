@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-export function formatBytes(bytes) {
+export function formatBytes(bytes: number | string | null | undefined): string {
   const n = Number(bytes);
   if (!n || n <= 0) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];

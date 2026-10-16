@@ -142,6 +142,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
   };
 
   const handleSubmit = async (e: any) => {
+    if (isLoading) return;
     e.preventDefault();
     setError('');
     setIsLoading(true);

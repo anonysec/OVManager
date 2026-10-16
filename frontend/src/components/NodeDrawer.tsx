@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiActivity, FiShield, FiCheck, FiCpu, FiDownload, FiGlobe, FiPower, FiRefreshCw,
@@ -10,6 +10,15 @@ import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
 
 
+
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 
 const apiError = (e: any, fallback: any) => {
   const detail = e?.response?.data?.detail;
@@ -29,6 +38,10 @@ const NodeDrawer = ({
   onChanged,
 }: { node?: any; initialTab?: any; onClose?: any; onEdit?: any; onDelete?: any; onDownloadAll?: any; onChanged?: any }) => {
   const { t } = useTranslation();
+  const drawerRef = useRef<any>(null);
+  const previousFocusRef = useRef<any>(null);
+  const onCloseRef = useRef<any>(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   const [tab, setTab] = useState(initialTab);
   const [status, setStatus] = useState<any>(null);
   const [statusState, setStatusState] = useState('loading');
@@ -58,10 +71,42 @@ const NodeDrawer = ({
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
   useEffect(() => {
-    const onKey = (e: any) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    if (!node) return undefined;
+    previousFocusRef.current = document.activeElement;
+    const dialog = drawerRef.current;
+    if (dialog) {
+      const firstInput = dialog.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled])');
+      if (firstInput) firstInput.focus();
+      else if (dialog.querySelectorAll(FOCUSABLE)[0]) dialog.querySelectorAll(FOCUSABLE)[0].focus();
+      else dialog.focus();
+    }
+
+    const onKeyDown = (e: any) => {
+      if (e.key === 'Escape') { onCloseRef.current?.(); return; }
+      if (e.key !== 'Tab' || !dialog) return;
+      const focusable: any[] = Array.from(dialog.querySelectorAll(FOCUSABLE)).filter(
+        (el: any) => !el.closest('[aria-hidden="true"]')
+      );
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
+        previousFocusRef.current.focus();
+      }
+    };
+  }, [node]);
 
   const run = async (key: any, fn: any) => {
     setBusy(key);
@@ -209,8 +254,11 @@ const NodeDrawer = ({
   return (
     <div className="node-drawer-backdrop" onClick={onClose}>
       <aside
+        ref={drawerRef}
         className="node-drawer"
         role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         aria-label={`${node.name} — ${t('nodeDetails', 'Node details')}`}
         onClick={(e) => e.stopPropagation()}
       >

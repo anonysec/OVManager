@@ -20,9 +20,9 @@ const raw = readFileSync(
 // assertion (this repo has shipped exactly that before).
 const code = raw.replace(/\/\*[\s\S]*?\*\//g, '');
 
-const selectors = [];
+const selectors: string[] = [];
 const blocks = /(^|\})([^{}]*)\{/g;
-let m;
+let m: RegExpExecArray | null;
 while ((m = blocks.exec(code))) selectors.push(m[2]);
 
 const buttonSelectors = selectors

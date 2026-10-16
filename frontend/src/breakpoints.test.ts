@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 
 const here = dirname(fileURLToPath(import.meta.url));
-const read = (p) => readFileSync(join(here, p), 'utf8');
+const read = (p: string) => readFileSync(join(here, p), 'utf8');
 
 const PHONE_MAX = 767.98; // must equal the JS threshold minus a subpixel
 
@@ -14,14 +14,14 @@ describe('responsive breakpoints', () => {
     const src = read('pages/DashboardLayout.tsx');
     const m = /window\.innerWidth\s*<\s*(\d+)/.exec(src);
     expect(m, 'expected an `innerWidth < N` mobile test').toBeTruthy();
-    expect(Number(m[1])).toBe(Math.ceil(PHONE_MAX));
+    expect(Number(m![1])).toBe(Math.ceil(PHONE_MAX));
   });
 
   it('Sidebar closes its drawer at the same threshold', () => {
     const src = read('components/Sidebar.tsx');
     const m = /window\.innerWidth\s*>=\s*(\d+)/.exec(src);
     expect(m, 'expected an `innerWidth >= N` reset').toBeTruthy();
-    expect(Number(m[1])).toBe(Math.ceil(PHONE_MAX));
+    expect(Number(m![1])).toBe(Math.ceil(PHONE_MAX));
   });
 
   it('no stylesheet keeps a stale phone breakpoint', () => {

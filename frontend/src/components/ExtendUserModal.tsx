@@ -23,6 +23,7 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
   if (!user) return null;
 
   const handleSubmit = async (e: any) => {
+    if (busy) return;
     e.preventDefault();
     setError('');
     const d = Number(days || 0);

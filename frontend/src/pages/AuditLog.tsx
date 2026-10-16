@@ -364,7 +364,7 @@ const AuditLog = () => {
         />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={t('noMatchesTitle', 'No matching entries')}
+          title={t('noMatchesEntries', 'No matching entries')}
           description={t('noMatchesBody', 'Try a different search term or clear the active filter.')}
           actionLabel={t('clearFilters', 'Clear filters')}
           onAction={clearFilters}

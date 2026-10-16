@@ -108,6 +108,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
   };
 
   const handleSubmit = async (event: any) => {
+    if (isLoading) return;
     event.preventDefault();
     const errors = validate();
     if (Object.keys(errors).length > 0) {

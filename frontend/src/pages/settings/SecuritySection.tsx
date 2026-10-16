@@ -117,7 +117,7 @@ const SecuritySection = () => {
           ))}
         </div>
         {error && <ErrorState title={t('error', 'Error')} message={error} onRetry={load} />}
-        {loading && !error && <PanelSkeleton lines={3} label="Loading…" />}
+        {loading && !error && <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />}
         {!loading && !error && sec && (
           <div className="sp-stats-grid">
             <Stat label={t('authFailures', 'Auth / TLS failures')} value={authFailures} tone={authFailures > 0 ? 'danger' : null} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -84,12 +84,16 @@ const NodeManagement = () => {
 
   useEffect(() => { fetchNodes(); }, [fetchNodes]);
 
+  const nodesRef = useRef<any[]>(nodes);
+  const hasNodes = nodes.length > 0;
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
   useEffect(() => {
-    if (nodes.length === 0) return undefined;
+    if (!hasNodes) return undefined;
     let cancelled = false;
     const fetchAllStatus = async () => {
       const fresh: Record<string, any> = {};
-      await Promise.all(nodes.map(async (node: any) => {
+      await Promise.all(nodesRef.current.map(async (node: any) => {
         try {
           const res = await apiClient.get(`/nodes/${node.id}/status/`);
           if (res.data?.success && res.data?.data) fresh[node.id] = res.data.data;
@@ -100,7 +104,7 @@ const NodeManagement = () => {
     fetchAllStatus();
     const intervalId = setInterval(fetchAllStatus, DATA_REFRESH_SEC * 1000);
     return () => { cancelled = true; clearInterval(intervalId); };
-  }, [nodes]);
+  }, [hasNodes]);
 
   useEffect(() => {
     if (searchParams.get('add') === '1') {

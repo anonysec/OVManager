@@ -117,11 +117,11 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${t('downloadConfigFromNode')} — ${user?.name || ''}`} size="medium">
-      <div className="node-pick">
+      <div className="node-pick" aria-busy={isLoadingNodes}>
         <p className="node-pick-hint">{t('downloadSourceHint', 'Choose a node to pull the OpenVPN profile from.')}</p>
 
         {isLoadingNodes ? (
-          <div className="node-pick-loading">{t('loadingNodesDots', 'Loading nodes...')}</div>
+          <div className="node-pick-loading" role="status">{t('loadingNodesDots', 'Loading nodes...')}</div>
         ) : nodes.length === 0 ? (
           <div className="node-pick-empty">{t('noNodesAvailable', 'No active nodes available for download.')}</div>
         ) : (

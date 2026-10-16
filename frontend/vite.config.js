@@ -58,6 +58,6 @@ export default defineConfig({
     // jsdom denies localStorage on opaque origins (no url) — the app reads
     // it at import time (i18n, theme, timezone), so give tests a real origin.
     environmentOptions: { jsdom: { url: 'http://localhost/' } },
-    setupFiles: ['./src/test-setup.js'],
+    setupFiles: ['./src/test-setup.ts'],
   },
 })

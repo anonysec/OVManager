@@ -5,7 +5,9 @@
 import i18n, { isRTL } from '../i18n';
 import { getDisplayTimezone } from './displayTimezone';
 
-function displayLocale() {
+type DateInput = string | number | Date | null | undefined;
+
+function displayLocale(): string {
   const l = (i18n.language || '').toLowerCase();
   // ponytail: any RTL → Persian formatter; add locale map when second RTL lands
   if (isRTL(l)) return 'fa-u-ca-gregory-nu-latn';
@@ -14,7 +16,7 @@ function displayLocale() {
   return 'en-GB';
 }
 
-function safeT(key, fallback) {
+function safeT(key: string, fallback: string): string {
   try {
     return i18n.t(key, { defaultValue: fallback }) || fallback;
   } catch {
@@ -22,11 +24,11 @@ function safeT(key, fallback) {
   }
 }
 
-export function fmtDateTime(iso, opts = {}) {
+export function fmtDateTime(iso: DateInput, opts: Intl.DateTimeFormatOptions = {}): string {
   if (!iso) return '—';
   const { timeZone = getDisplayTimezone(), ...rest } = opts;
   const d = new Date(iso);
-  if (isNaN(d)) return '—';
+  if (isNaN(d.getTime())) return '—';
   try {
     return new Intl.DateTimeFormat(displayLocale(), {
       timeZone,
@@ -42,11 +44,11 @@ export function fmtDateTime(iso, opts = {}) {
   }
 }
 
-export function fmtDate(iso, opts = {}) {
+export function fmtDate(iso: DateInput, opts: Intl.DateTimeFormatOptions = {}): string {
   if (!iso) return '—';
   const { timeZone = getDisplayTimezone(), ...rest } = opts;
   const d = new Date(iso);
-  if (isNaN(d)) return '—';
+  if (isNaN(d.getTime())) return '—';
   try {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone,
@@ -60,10 +62,10 @@ export function fmtDate(iso, opts = {}) {
   }
 }
 
-export function fmtRelative(iso) {
+export function fmtRelative(iso: DateInput): string {
   if (!iso) return safeT('never', 'never');
   const d = new Date(iso);
-  if (isNaN(d)) return safeT('never', 'never');
+  if (isNaN(d.getTime())) return safeT('never', 'never');
   const diffMs = d.getTime() - Date.now();
   const abs = Math.abs(diffMs);
   if (abs < 30000) return safeT('justNow', 'just now');
@@ -86,22 +88,22 @@ export function fmtRelative(iso) {
   return fmtDate(iso);
 }
 
-export function daysUntil(expiry) {
+export function daysUntil(expiry: DateInput): number {
   if (!expiry) return Infinity;
   const d = new Date(expiry);
-  if (isNaN(d)) return Infinity;
+  if (isNaN(d.getTime())) return Infinity;
   const now = new Date();
-  return Math.ceil((d - now) / 86400000);
+  return Math.ceil((d.getTime() - now.getTime()) / 86400000);
 }
 
-export function formatUptime(seconds) {
+export function formatUptime(seconds: number | string | null | undefined): string {
   if (!seconds || seconds === '-') return '-';
   const n = Number(seconds);
   if (isNaN(n) || n < 0) return '-';
   const d = Math.floor(n / 86400);
   const h = Math.floor((n % 86400) / 3600);
   const m = Math.floor((n % 3600) / 60);
-  const parts = [];
+  const parts: string[] = [];
   if (d > 0) parts.push(`${d}d`);
   if (h > 0) parts.push(`${h}h`);
   if (m > 0 || parts.length === 0) parts.push(`${m}m`);

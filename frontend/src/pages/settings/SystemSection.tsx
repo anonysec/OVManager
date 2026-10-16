@@ -240,7 +240,7 @@ const SystemSection = () => {
     } finally { setCleanBusy(''); }
   };
 
-  if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
+  if (loading) return <PanelSkeleton lines={4} label={t('loading', 'Loading…')} />;
   if (loadError && !sysInfo) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (

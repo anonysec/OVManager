@@ -3,14 +3,14 @@
 
 const PREFIX = 'ovmanager-ui-';
 
-export const getUiPref = (key, fallback = null) => {
+export const getUiPref = (key: string, fallback: string | null = null): string | null => {
   try {
     const v = localStorage.getItem(PREFIX + key);
     return v === null ? fallback : v;
   } catch { return fallback; }
 };
 
-export const setUiPref = (key, value) => {
+export const setUiPref = (key: string, value: unknown): void => {
   try {
     localStorage.setItem(PREFIX + key, String(value));
     window.dispatchEvent(new Event('ovmanager-ui-prefs'));
@@ -18,7 +18,7 @@ export const setUiPref = (key, value) => {
 };
 
 
-export const applyAccent = () => {
+export const applyAccent = (): void => {
   const accent = getUiPref('accent', '');
   const root = document.documentElement;
   if (accent) {
@@ -27,4 +27,3 @@ export const applyAccent = () => {
     root.style.removeProperty('--accent-color');
   }
 };
-

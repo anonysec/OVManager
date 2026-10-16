@@ -387,7 +387,7 @@ const TlsSection = () => {
     }
   };
 
-  if (loading && !status) return <PanelSkeleton lines={3} label="Loading…" />;
+  if (loading && !status) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (error && !status) {
     return (
       <ErrorState

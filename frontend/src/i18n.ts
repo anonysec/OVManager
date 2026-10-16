@@ -6,7 +6,7 @@ import { initReactI18next } from 'react-i18next';
 
 import enTranslation from './lang/en.json';
 
-const LAZY_LOCALES = {
+const LAZY_LOCALES: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
   fa: () => import('./lang/fa.json'),
   ru: () => import('./lang/ru.json'),
   cn: () => import('./lang/cn.json'),
@@ -14,26 +14,25 @@ const LAZY_LOCALES = {
 
 export const SUPPORTED_LANGS = ['fa', 'en', 'ru', 'cn'];
 
-/** @type {Record<string, string>} */
-export const LANG_LABELS = { fa: 'فارسی', en: 'English', ru: 'Русский', cn: '中文' };
+export const LANG_LABELS: Record<string, string> = { fa: 'فارسی', en: 'English', ru: 'Русский', cn: '中文' };
 
 // ponytail: Persian-only RTL; add ar/he when second RTL locale lands
-export const isRTL = (lng) => String(lng).startsWith('fa');
+export const isRTL = (lng: string) => String(lng).startsWith('fa');
 
-const applyDocumentDir = (lng) => {
+const applyDocumentDir = (lng: string) => {
   const dir = isRTL(lng) ? 'rtl' : 'ltr';
   document.documentElement.dir = dir;
   document.documentElement.lang = lng;
   document.body.setAttribute('dir', dir);
 };
 
-const readStoredLang = () => {
+const readStoredLang = (): string | null => {
   try {
     if (typeof localStorage !== 'undefined') return localStorage.getItem('ovmanager-lang');
   } catch { /* blocked storage: fall back to English */ }
   return null;
 };
-const writeStoredLang = (lng) => {
+const writeStoredLang = (lng: string) => {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem('ovmanager-lang', lng);
   } catch { /* preference only: a failed write must not break the switch */ }
@@ -52,12 +51,12 @@ i18n
     partialBundledLanguages: true,
   });
 
-const loading = new Map();
+const loading = new Map<string, Promise<void>>();
 
 /** Safe to call repeatedly: in-flight loads are de-duplicated. */
 let wanted = 0;
 
-export async function loadLanguage(lng) {
+export async function loadLanguage(lng: string): Promise<void> {
   if (!lng || lng === i18n.language) return;
   const token = ++wanted;
 
@@ -90,8 +89,8 @@ export async function loadLanguage(lng) {
 }
 
 if (stored !== initial) {
-  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1));
-  idle(() => loadLanguage(stored));
+  const idle = window.requestIdleCallback || ((fn: () => void) => setTimeout(fn, 1));
+  idle(() => { void loadLanguage(stored); });
 }
 
 applyDocumentDir(i18n.language);

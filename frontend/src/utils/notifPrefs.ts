@@ -3,7 +3,7 @@
 
 
 
-const KEYS = {
+const KEYS: Record<string, string> = {
   nodeDown: 'ovmanager-pref-alert-node',
   maxLogins: 'ovmanager-pref-alert-maxlogin',
   authErrors: 'ovmanager-pref-alert-auth',
@@ -21,8 +21,8 @@ const DEFAULTS = {
 
 export const DATA_REFRESH_SEC = 30;
 
-export const readPrefs = () => {
-  const out = { ...DEFAULTS };
+export const readPrefs = (): Record<string, boolean> => {
+  const out: Record<string, boolean> = { ...DEFAULTS };
   try {
     for (const [key, storageKey] of Object.entries(KEYS)) {
       const raw = localStorage.getItem(storageKey);
@@ -33,14 +33,14 @@ export const readPrefs = () => {
   return out;
 };
 
-export const writePref = (key, value) => {
+export const writePref = (key: string, value: unknown): void => {
   try {
     localStorage.setItem(KEYS[key], String(value));
     window.dispatchEvent(new Event('ovmanager-prefs-changed'));
   } catch { /* noop */ }
 };
 
-export const alertPrefKey = (id) => {
+export const alertPrefKey = (id: string | number): string | null => {
   if (String(id).startsWith('node-')) return 'nodeDown';
   if (String(id).startsWith('full-')) return 'maxLogins';
   if (id === 'auth') return 'authErrors';

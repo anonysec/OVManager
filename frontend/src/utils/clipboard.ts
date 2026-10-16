@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-export async function copyText(text) {
+export async function copyText(text: unknown): Promise<boolean> {
   if (text == null) return false;
   const value = String(text);
   try {

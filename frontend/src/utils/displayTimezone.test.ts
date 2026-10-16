@@ -2,25 +2,25 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getDisplayTimezone, setDisplayTimezone } from './displayTimezone';
 import { fmtDateTime, fmtDate } from './time';
 
-const lsGet = (k) => {
+const lsGet = (k: string): string | null => {
   try {
     if (typeof localStorage !== 'undefined') return localStorage.getItem(k);
   } catch { /* blocked storage */ }
   return null;
 };
-const lsSet = (k, v) => {
+const lsSet = (k: string, v: string): void => {
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem(k, v);
   } catch { /* blocked storage */ }
 };
-const lsDel = (k) => {
+const lsDel = (k: string): void => {
   try {
     if (typeof localStorage !== 'undefined') localStorage.removeItem(k);
   } catch { /* blocked storage */ }
 };
 
 describe('displayTimezone', () => {
-  let saved;
+  let saved: string | null;
   beforeEach(() => {
     saved = lsGet('ovTimezone');
     lsDel('ovTimezone');

@@ -382,7 +382,7 @@ const DashboardLayout = () => {
                   <kbd><FiCommand aria-hidden="true" />K</kbd>
                 </button>
                 <div className="lang-picker-wrap" ref={langRef}>
-                  <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label="Change language">
+                  <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
                     <LangIcon size={18} />
                   </button>
                   <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>

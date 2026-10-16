@@ -4,7 +4,7 @@
 
 const STORAGE_KEY = 'ovTimezone';
 
-function isValidZone(tz) {
+function isValidZone(tz: unknown): boolean {
   if (!tz || typeof tz !== 'string') return false;
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz });
@@ -14,11 +14,11 @@ function isValidZone(tz) {
   }
 }
 
-function readCached() {
+function readCached(): string {
   try {
     if (typeof localStorage !== 'undefined') {
       const v = localStorage.getItem(STORAGE_KEY);
-      if (isValidZone(v)) return v;
+      if (isValidZone(v)) return v as string;
     }
   } catch {
     /* blocked storage (tests without origin, privacy mode): ignore */
@@ -28,11 +28,11 @@ function readCached() {
 
 let current = readCached();
 
-export function getDisplayTimezone() {
+export function getDisplayTimezone(): string {
   return current;
 }
 
-export function setDisplayTimezone(tz) {
+export function setDisplayTimezone(tz: string): string | null {
   if (!isValidZone(tz)) return null;
   current = tz;
   try {

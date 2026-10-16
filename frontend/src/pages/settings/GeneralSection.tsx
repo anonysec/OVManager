@@ -116,7 +116,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const pathChanged = editValueClean !== urlPath;
   const newPanelUrl = editValueClean ? `${window.location.origin}/${editValueClean}/` : `${window.location.origin}/`;
 
-  if (loading) return <PanelSkeleton lines={4} label="Loading…" />;
+  if (loading) return <PanelSkeleton lines={4} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (

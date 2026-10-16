@@ -10,7 +10,7 @@ import { FiActivity, FiServer, FiUsers, FiBarChart2, FiPlus, FiArrowRight, FiCpu
 import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDateTime, formatUptime } from '../utils/time';
 import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
-import { nodeMeta, FLAG_SVGS } from '../utils/geo.js';
+import { nodeMeta, FLAG_SVGS } from '../utils/geo';
 import { settle } from '../hooks/useAsyncData';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -121,6 +121,8 @@ const ServerStats = () => {
 
   const [errors, setErrors] = useState<any>({});
 
+  const probeGen = useRef(0);
+
   const loadData = useCallback(async (background = false) => {
     if (!background) setLoading(true);
 
@@ -189,6 +191,7 @@ const ServerStats = () => {
     setLoading(false);
 
     try {
+      const gen = ++probeGen.current;
       const results = await Promise.all(nodesData.map(async (n: any) => {
         if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0, reachable: false }];
         try {
@@ -196,6 +199,7 @@ const ServerStats = () => {
           return [n.id, r.data?.data || {}];
         } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0, reachable: false }]; }
       }));
+      if (gen !== probeGen.current) return;
       setNodeStatus(Object.fromEntries(results));
       setProbesDone(true);
     } catch { /* keep previous */ }

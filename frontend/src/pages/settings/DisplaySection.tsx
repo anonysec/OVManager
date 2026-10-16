@@ -61,7 +61,7 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
 
   const cancel = () => setEditing(false);
 
-  if (loading) return <PanelSkeleton lines={3} label="Loading…" />;
+  if (loading) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
