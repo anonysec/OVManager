@@ -59,10 +59,10 @@ def _rewind_to_stamped_16(db, rows) -> None:
     db.commit()
 
 
-def test_fresh_database_stamps_25_with_new_tables(session):
-    assert migrations.migrate(session) == SCHEMA_VERSION == 25
+def test_fresh_database_stamps_26_with_new_tables(session):
+    assert migrations.migrate(session) == SCHEMA_VERSION == 26
     assert {"traffic_ledger", "settings_kv"} <= _tables(session)
-    assert migrations.current_version(session) == 25
+    assert migrations.current_version(session) == 26
     assert migrations.verify_schema(session) == []
 
 

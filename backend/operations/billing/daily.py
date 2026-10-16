@@ -103,6 +103,21 @@ def _load_node_usage(user) -> dict:
         return {}
 
 
+def _canon(state) -> str:
+    """Canonical node_usage text — both sides of an OCC compare speak it.
+
+    Sorted keys and no spaces, so equal states compare equal whatever the
+    spacing of the row they were read from; unparsable stored text comes back
+    unchanged so it still lines up with the raw ``IS`` bind against the row.
+    """
+    if isinstance(state, str):
+        try:
+            state = json.loads(state or "{}")
+        except (ValueError, TypeError):
+            return state or "{}"
+    return json.dumps(state, sort_keys=True, separators=(",", ":"))
+
+
 def _apply_user_traffic(db, user_id: int, expected_used, expected_state: str, new_used: int, new_state: str, delta: int) -> bool:
     """Persist one user's traffic only if the row still holds the loaded values.
 
@@ -231,9 +246,9 @@ async def _collect_node_traffic(
     for user_id, entry in pending.items():
         user = entry["user"]
         old_used = user.used or 0
-        old_state = user.node_usage or "{}"
-        new_state = json.dumps(entry["node_usage"])
-        if entry["delta"] == 0 and new_state == old_state:
+        old_state = user.node_usage or "{}"  # raw text: the SQL bind must match the row
+        new_state = _canon(entry["node_usage"])
+        if entry["delta"] == 0 and _canon(old_state) == new_state:
             continue
         if not _apply_user_traffic(db, user_id, old_used, old_state, old_used + entry["delta"], new_state, entry["delta"]):
             # OCC miss: recompute against the fresh row and retry once, so a
@@ -244,8 +259,8 @@ async def _collect_node_traffic(
                 continue
             old_used = user.used or 0
             old_state = user.node_usage or "{}"
-            new_state = json.dumps(entry["node_usage"])
-            if entry["delta"] == 0 and new_state == old_state:
+            new_state = _canon(entry["node_usage"])
+            if entry["delta"] == 0 and _canon(old_state) == new_state:
                 continue
             if not _apply_user_traffic(db, user_id, old_used, old_state, old_used + entry["delta"], new_state, entry["delta"]):
                 logger.warning("Traffic still conflicting after recompute for %s — dropped", user.name)

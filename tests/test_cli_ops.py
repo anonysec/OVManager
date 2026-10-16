@@ -88,8 +88,6 @@ def test_tls_status_reads_expiry(monkeypatch, tmp_path):
     assert "Expires" in tls.render_text(data)
 
 
-
-
 def _self_signed_cert(tmp_path):
     """A real self-signed PEM, or skip when openssl is unavailable."""
     import shutil

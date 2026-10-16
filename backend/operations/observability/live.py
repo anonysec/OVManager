@@ -60,12 +60,13 @@ class LiveBus:
 
     publish() is safe to call from any thread (async endpoints, APScheduler
     executor threads, sync CRUD helpers): delivery is scheduled on the event
-    loop captured when the first subscriber registers. With no subscribers
-    (tests, CLI tooling) publish() is a cheap no-op.
+    loop of a live subscriber (a queue whose loop has closed can never be read
+    and is dropped). With no subscribers (tests, CLI tooling) publish() is a
+    cheap no-op.
     """
 
     def __init__(self) -> None:
-        self._subscribers: set[asyncio.Queue] = set()
+        self._subscribers: dict[asyncio.Queue, asyncio.AbstractEventLoop] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._lock = threading.Lock()
 
@@ -74,20 +75,35 @@ class LiveBus:
         loop = asyncio.get_running_loop()
         q: asyncio.Queue = asyncio.Queue(maxsize=max_queue)
         with self._lock:
-            self._subscribers.add(q)
+            self._subscribers[q] = loop
             self._loop = loop
         return q
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
         with self._lock:
-            self._subscribers.discard(q)
+            self._subscribers.pop(q, None)
+
+    def _prune(self) -> None:
+        """Drop subscribers whose event loop is gone: they can never be read.
+
+        A stream dropped without its cleanup (cancelled handshake, a loop torn
+        down before the generator's finally ran) leaves its queue behind; once
+        that loop is closed nothing will ever drain it, and the collector would
+        treat a ghost as a watcher and poll forever.
+        """
+        for q, loop in list(self._subscribers.items()):
+            if loop.is_closed():
+                del self._subscribers[q]
+        self._loop = next(iter(self._subscribers.values()), None)
 
     def has_subscribers(self) -> bool:
         with self._lock:
+            self._prune()
             return bool(self._subscribers)
 
     def publish(self, topic: str, data: dict | None = None) -> None:
         with self._lock:
+            self._prune()
             loop = self._loop
             subs = list(self._subscribers)
         if loop is None or not subs:
@@ -178,7 +194,11 @@ def snapshot_fresh() -> bool:
     online and nodes up long after the collector stopped.
     """
     ts = snapshot.last_poll_ts
-    return ts > 0 and (time.monotonic() - ts) <= IDLE_POLL_SECONDS
+    # `!= 0`, not `> 0`: 0.0 is the never-polled sentinel, but on a freshly
+    # booted machine time.monotonic() is near zero, so a stamp of
+    # `monotonic() - IDLE + 1` is negative. `> 0` read that as never-polled and
+    # re-probed a panel that was inside its idle window (CI VM, monotonic ~90s).
+    return ts != 0 and (time.monotonic() - ts) <= IDLE_POLL_SECONDS
 
 
 def get_snapshot_cap() -> int:

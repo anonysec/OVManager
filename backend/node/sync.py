@@ -67,7 +67,9 @@ def _merge_push_hashes(db: Session, entries: list[tuple[object, dict[str, str]]]
         data[PUSH_HASH_KEY] = merged
         db.execute(
             text("UPDATE users SET node_usage = :new WHERE id = :uid AND COALESCE(node_usage, '{}') = :old"),
-            {"new": json.dumps(data), "uid": user.id, "old": old_state},
+            # canonical payload, raw bind: the write is sorted/compact, the
+            # ``= :old`` guard must still match the row as it is stored
+            {"new": json.dumps(data, sort_keys=True, separators=(",", ":")), "uid": user.id, "old": old_state},
         )
     db.commit()
 

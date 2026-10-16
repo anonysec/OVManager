@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, DateTime
+from sqlalchemy import BigInteger, DateTime, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .engine import Base
@@ -26,6 +26,10 @@ class User(Base):
 
 class Admin(Base):
     __tablename__ = "admins"
+    # One owner, enforced at the write: only the owner claim is constrained
+    # (partial index), so non-owner rows stay free. Fresh databases get this
+    # from create_all(); existing ones from migration v26.
+    __table_args__ = (Index("uq_admins_owner", "is_owner", unique=True, sqlite_where=text("is_owner = 1")),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     username: Mapped[str] = mapped_column(unique=True)

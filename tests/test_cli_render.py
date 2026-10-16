@@ -31,10 +31,6 @@ from cli.doctor import Check  # noqa: E402
 # ── The row ─────────────────────────────────────────────────────────────
 
 
-
-
-
-
 # ── Colour ──────────────────────────────────────────────────────────────
 
 
@@ -79,7 +75,6 @@ def test_a_renderer_never_emits_an_escape_sequence():
 # ── Glyphs ──────────────────────────────────────────────────────────────
 
 
-
 def test_glyphs_fall_back_to_ascii_when_the_locale_cannot_show_them():
     """LANG=C is a real install path, and a box with no locale set is a real
     container. Braille and box drawing come out as literal mojibake."""
@@ -96,11 +91,7 @@ def test_glyphs_fall_back_to_ascii_when_the_locale_cannot_show_them():
     assert out.stdout.strip() == "('ok', 'XX')"
 
 
-
-
 # ── Failure shape ───────────────────────────────────────────────────────
-
-
 
 
 # ── doctor ──────────────────────────────────────────────────────────────
@@ -111,7 +102,6 @@ def _checks(*failures: Check) -> list[Check]:
     return ok + list(failures)
 
 
-
 def test_doctor_puts_failures_first_with_their_fix():
     text = doctor.render_text(_checks(Check(name="Disk", ok=False, detail="only 4% free", fix="free space on /var")))
     assert text.splitlines()[0].startswith("  ✗ 1 problems")
@@ -120,10 +110,7 @@ def test_doctor_puts_failures_first_with_their_fix():
     assert "2 other checks passed" in text
 
 
-
-
 # ── status ──────────────────────────────────────────────────────────────
-
 
 
 def test_status_on_a_missing_install_is_a_failure_not_a_table():
@@ -133,8 +120,6 @@ def test_status_on_a_missing_install_is_a_failure_not_a_table():
 
 
 # ── Grouped commands ────────────────────────────────────────────────────
-
-
 
 
 # ── One renderer ────────────────────────────────────────────────────────

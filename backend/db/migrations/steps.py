@@ -391,6 +391,26 @@ def _create_traffic_ledger_and_kv(db: Session) -> None:
     logger.info("migrations v25: backfilled traffic_ledger from user_traffic_daily")
 
 
+def _add_admins_owner_unique(db: Session) -> None:
+    """Enforce a single owner row (v26): partial UNIQUE index on ``admins.is_owner``.
+
+    Only ``is_owner = 1`` is constrained, so non-owner rows and the ``0``
+    default stay unconstrained. A database that already carries two owner
+    claims keeps the oldest row — the newest-wins rule would silently swap
+    the owner — and the rest are demoted first, so a dirty upgrade cannot
+    die halfway on the index. Fresh databases get the same index from the
+    model.
+    """
+    if "admins" not in table_names(db):
+        return
+    dupes = db.execute(
+        text("UPDATE admins SET is_owner = 0 WHERE is_owner = 1 AND id NOT IN (SELECT MIN(id) FROM admins WHERE is_owner = 1)")
+    ).rowcount
+    if dupes:
+        logger.warning("migrations v26: demoted %s duplicate owner row(s); the oldest owner claim survives", dupes)
+    db.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON admins (is_owner) WHERE is_owner = 1"))
+
+
 STEPS: tuple[tuple[int, str, object], ...] = (
     (2, "encrypt node API keys at rest", _encrypt_node_keys),
     (3, "drop orphan daily traffic rows", _cleanup_orphan_daily_rows),
@@ -416,4 +436,5 @@ STEPS: tuple[tuple[int, str, object], ...] = (
     (23, "add event delivered markers (delivered)", _add_event_delivered),
     (24, "single-admin cut (drop multi-admin columns)", _single_admin_schema),
     (25, "add traffic ledger and settings kv", _create_traffic_ledger_and_kv),
+    (26, "unique owner index (admins.is_owner)", _add_admins_owner_unique),
 )

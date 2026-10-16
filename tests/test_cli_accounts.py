@@ -78,7 +78,6 @@ def test_reset_password_reports_a_missing_data_dir(tmp_path, monkeypatch):
     assert out["ok"] is False and "DATA_DIR" in out["error"]
 
 
-
 def test_reset_urlpath_runs_panel_entrypoint(monkeypatch, tmp_path):
     install_dir = _install(tmp_path)
     calls = {}
@@ -132,7 +131,6 @@ def test_reset_urlpath_reports_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(urlpath.subprocess, "run", lambda *a, **k: Bad())
     out = urlpath.reset(install_dir, str(tmp_path / "compose-missing.yml"))
     assert out["ok"] is False and "boom" in out["error"]
-
 
 
 def test_reset_password_never_touches_a_path_outside_the_sandbox(tmp_path):

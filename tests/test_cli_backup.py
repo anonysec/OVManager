@@ -95,8 +95,6 @@ def test_backup_now_missing_database_reports_clean_error(monkeypatch, tmp_path):
     assert backup.render_backup_text(data).startswith("  ✗")
 
 
-
-
 def test_backup_now_rejects_bad_keep_and_missing_install(monkeypatch, tmp_path):
     install = _install(tmp_path)
 
@@ -141,7 +139,6 @@ def test_auto_backup_keep_validation_rejects_junk(monkeypatch, tmp_path):
         assert data["ok"] is False and "keep" in data["error"].lower(), bad
 
 
-
 def test_auto_backup_status_on_off_roundtrip_hermetic(monkeypatch, tmp_path):
     install = _install(tmp_path)
     engine, _factory = _tmp_session_factory(tmp_path, monkeypatch)
@@ -169,7 +166,6 @@ def test_auto_backup_status_on_off_roundtrip_hermetic(monkeypatch, tmp_path):
         assert final["enabled"] is False
     finally:
         engine.dispose()
-
 
 
 # ── restore ────────────────────────────────────────────────────────────

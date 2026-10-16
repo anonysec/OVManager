@@ -298,7 +298,6 @@ def test_sandbox_install_never_touches_the_real_system(tmp_path):
     assert r.returncode in (0, 1)
 
 
-
 def test_bad_tls_number_fails_fast():
     r = sh("--tls", "9")
     assert r.returncode == 1
@@ -376,7 +375,6 @@ def test_pass_environment_variables_are_reported_not_swallowed(tmp_path):
     sb, _ = sandbox(tmp_path)
     r = sh_sb(sb, "-y", env={"OVM_PASS": "a-strong-password-123"})
     assert "OVM_PASS / OVM_ADMIN_PASS is deprecated" in r.stderr
-
 
 
 def test_a_supplied_owner_password_is_accepted_and_dropped(tmp_path):
@@ -471,7 +469,6 @@ DIE_CASES = [
 ]
 
 
-
 def test_failure_keeps_the_human_framing_on_stderr():
     """The diagnostic names the cause and the run, and never leaks to stdout."""
     r = sh("--bogus-flag")
@@ -520,12 +517,6 @@ def _parse_args(stmt: str) -> subprocess.CompletedProcess:
     )
 
 
-
-
-
-
-
-
 def test_manager_ops_redirect_to_ovm():
     """status/logs/etc. are no longer installer commands — point at ovm."""
     for cmd in ("status", "logs", "backup", "tls", "recovery", "reset-password", "menu"):
@@ -536,7 +527,6 @@ def test_manager_ops_redirect_to_ovm():
     r = sh("install")
     assert r.returncode == 1
     assert "is the default" in r.stderr
-
 
 
 def test_installer_uses_release_artifacts_and_published_docker_image_only():
@@ -655,7 +645,6 @@ def test_snapshot_rotation_keeps_two(tmp_path):
     assert r.stdout.strip() == "2", r.stdout
 
 
-
 def test_already_installed_menu_is_safe_by_default(tmp_path):
     """With an existing install dir and no tty, the menu must refuse to act
     (exit 2) — never default into update/uninstall."""
@@ -667,7 +656,6 @@ def test_already_installed_menu_is_safe_by_default(tmp_path):
     assert "already installed" in r.stderr
     assert fake_opt in r.stderr
     assert "update" in r.stderr
-
 
 
 def test_update_without_install_dir_fails(tmp_path):
@@ -700,7 +688,6 @@ def test_repo_override_for_forks():
     assert 'REPO="${OVM_REPO:-anonysec/OVManager}"' in content
 
 
-
 def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
     """Install mode is chosen at the front door, and nowhere else.
 
@@ -717,8 +704,6 @@ def test_the_mode_is_asked_once_by_the_menu_and_never_by_the_wizard():
 
     assert not _re.search(r"(?<![A-Z_])MODE", wizard), "the wizard must not ask for the install mode"
     assert "Install mode" not in wizard
-
-
 
 
 def test_installer_deploys_the_manager():
@@ -852,7 +837,6 @@ def test_recommended_defaults_never_touch_a_password():
     assert r.returncode == 0, r.stderr
 
 
-
 def _confirm_harness(fn: str, call: str) -> str:
     """A bash script that has just the prompt helpers, the real function, and
     the named call — no installer, no libs, no terminal."""
@@ -978,7 +962,6 @@ def test_entry_points_are_executable():
         assert os.access(path, os.X_OK), f"{name} lost its executable bit"
 
 
-
 def test_release_stub_is_rejected_before_checksum(tmp_path):
     """A redirect stub saved as the tarball must fail as 'not a release
     archive' — never as a checksum mismatch (the v1.2.3 failure mode)."""
@@ -994,7 +977,6 @@ def test_release_stub_is_rejected_before_checksum(tmp_path):
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert "STUB-BAD" in r.stdout and "REAL-OK" in r.stdout
-
 
 
 def test_safety_backup_fails_loudly_without_maintenance_module(tmp_path):
@@ -1099,9 +1081,6 @@ def test_candidate_version_reads_inside_container_for_docker():
     assert "backend.version" in source
 
 
-
-
-
 def test_no_command_substitution_in_unit_heredoc():
     """Regression: an unquoted heredoc executes backticks in its body. A
     comment with `ovm stop` inside the UNIT heredoc ran the manager on
@@ -1134,7 +1113,6 @@ def test_native_unit_creates_private_files_by_default():
     source = _extract_function("write_systemd_unit")
     assert "UMask=0077" in source
     assert 'chmod 700 "$DATA_DIR"' in _extract_function("do_install")
-
 
 
 def test_generated_password_is_twelve_characters():
@@ -1578,7 +1556,6 @@ def _executable_lines(*paths: Path) -> list[str]:
     return out
 
 
-
 def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
     """Run the real fetch_to_file, recording every (have, total, rate) it reports.
 
@@ -1613,8 +1590,6 @@ def _probe_fetch(tmp_path, curl_body: str, out_name: str) -> list[str]:
             polls.append(parts)
     assert polls, f"no poll was recorded; stderr was:\n{r.stderr}"
     return polls
-
-
 
 
 def test_no_installer_pipes_a_remote_script_into_a_root_shell():
@@ -1761,7 +1736,6 @@ def test_the_claim_key_is_issued_after_the_runtime_exists():
     assert runtime < call, "and after the runtime is up"
 
 
-
 def test_install_prints_the_setup_url_and_never_a_password():
     """The card points at the setup page, and prints no credential.
 
@@ -1807,7 +1781,6 @@ def test_panel_url_ends_in_a_single_slash():
     harness_no = harness.replace("PATHPREFIX=abc123", "PATHPREFIX=")
     r2 = subprocess.run(["bash", "-c", harness_no], capture_output=True, text=True, timeout=30)
     assert r2.stdout.strip() == "https://10.0.0.5:2095/", r2.stdout
-
 
 
 def test_umask_is_scoped_to_the_env_write():
@@ -1939,7 +1912,6 @@ def _journal(install, phase, **extra):
     return path, marker
 
 
-
 def test_an_unknown_phase_refuses_rather_than_guessing(tmp_path):
     """Writes stay blocked. Guessing could activate the wrong tree."""
     sb, _ = sandbox(tmp_path)
@@ -1967,7 +1939,6 @@ def test_a_preactivation_journal_is_cleared_and_says_so(tmp_path):
     import json
 
     assert json.loads(journal.read_text(encoding="utf-8"))["phase"] == "failed_over"
-
 
 
 # ── Regression: a piped answer must never wedge the menu ──────────────────

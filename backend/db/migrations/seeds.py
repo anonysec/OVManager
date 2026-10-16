@@ -12,15 +12,16 @@ from backend.logger import logger
 
 
 def _seed_settings(db: Session) -> None:
-    """Ensure a settings row exists; seed the URLPATH only on a brand-new row.
+    """Ensure a settings row exists and its URLPATH is populated.
 
     The row is created through the ORM rather than a raw INSERT: ``create_all()``
     emits no DEFAULT clause for Python-side defaults, so ``timezone``,
     ``bot_enabled`` and friends are NOT NULL with no SQL default, and a partial
     INSERT under ``INSERT OR IGNORE`` is discarded silently.
 
-    An existing row is never touched. A prefix that is blank is a deliberate
-    value, not a missing one — see below.
+    An existing row keeps its own values: a prefix that is blank is a
+    deliberate value (panel at root) and is left alone — only a NULL one
+    (a row that predates the column) is seeded from ``.env``.
     """
     from backend.config import config
     from backend.db.models import Settings
@@ -31,8 +32,8 @@ def _seed_settings(db: Session) -> None:
         settings.urlpath = (config.URLPATH or "").strip("/")
         db.add(settings)
         db.flush()
-    elif settings.urlpath is not None:
-        return
+    elif settings.urlpath is None:
+        settings.urlpath = (config.URLPATH or "").strip("/")
 
 
 def _add_admin_user_defaults(db: Session) -> None:

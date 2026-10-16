@@ -281,9 +281,6 @@ def test_config_falls_back_to_the_environment(tmp_path):
         del os.environ["OVM_TEST_ONLY_PORT"]
 
 
-
-
-
 def inspect(func) -> str:
     import inspect as _inspect
 

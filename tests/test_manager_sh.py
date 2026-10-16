@@ -188,8 +188,6 @@ def test_manager_syntax():
     subprocess.run(["bash", "-n", MANAGER], check=True)
 
 
-
-
 def test_bare_run_prints_usage_and_exits_zero():
     """Bare `ovm` lists the commands. It must never wait for input.
 
@@ -327,7 +325,6 @@ def test_auth_reset_mints_a_key_file_and_prints_the_recovery_url(tmp_path):
     assert "setup?mode=recover" in out, out
 
 
-
 def test_auth_reset_refuses_a_password_flag(tmp_path):
     """`-p` and OVM_PASS are meaningless now, so they fail fast.
 
@@ -371,7 +368,6 @@ def test_the_old_password_reset_path_is_gone():
         "OVM_ADMIN_PASS",
     ):
         assert gone not in src, f"manager.sh still carries the old reset path: {gone}"
-
 
 
 def test_logs_command_runs_the_cli_on_a_native_install(tmp_path):
@@ -487,8 +483,6 @@ def test_doctor_and_rollback_dispatch_past_parse(tmp_path):
         assert "Not installed" in r.stderr, (cmd, r.stderr)
 
 
-
-
 def _stub_cli_python(app, tmp_path, exit_code=0):
     """A stub venv python that records argv and exits `exit_code`."""
     venv_bin = app / ".venv" / "bin"
@@ -518,7 +512,6 @@ def test_cli_is_the_implementation_for_read_commands(tmp_path):
         calls = marker.read_text(encoding="utf-8")
         assert f"-m cli.main {command}" in calls, (command, calls)
         assert "--in-container" not in calls, "a native install needs no container flag"
-
 
 
 @pytest.mark.skipif(os.geteuid() != 0, reason="recovery is root-gated")
@@ -630,7 +623,6 @@ def test_cli_py_runs_inside_the_container_on_docker_installs(tmp_path):
     assert not (tmp_path / "calls.log").exists(), "a docker install has no host venv"
 
 
-
 def test_auth_reset_touches_neither_the_cli_nor_the_service(tmp_path):
     """The host mints the key itself: no Python, no restart, no health wait.
 
@@ -658,7 +650,6 @@ def test_auth_reset_touches_neither_the_cli_nor_the_service(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "Setup key" in r.stdout + r.stderr, r.stdout + r.stderr
     assert not marker.exists(), "the reset must reach neither the CLI nor systemctl"
-
 
 
 # ── confirm() with no terminal ───────────────────────────────────────
@@ -970,7 +961,6 @@ def test_completion_writes_a_sourced_file_and_prints_the_source_line(tmp_path):
     r = subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert "owner-claim" in r.stdout, r.stdout
-
 
 
 def test_version_script_delegates_to_the_installer(tmp_path):

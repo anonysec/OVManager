@@ -210,6 +210,15 @@ class URLPathMiddleware:
             "/manifest.webmanifest",
             "/sw.js",
             "/icons/",
+            # Framework endpoints the panel actually serves — app.py sets
+            # docs_url="/doc" and openapi_url="/openapi.json" (both DOC-gated)
+            # and keeps FastAPI's default redoc_url="/redoc", so all three are
+            # live whenever DOC=True; they stay reachable whatever URLPATH
+            # hides, so a client can still fetch the schema. "/doc" also covers
+            # the literal "/docs" by prefix.
+            "/openapi.json",
+            "/doc",
+            "/redoc",
         )
         if any(path == p.rstrip("/") or path.startswith(p) for p in _ALWAYS_ALLOWED_PREFIXES):
             await self.app(scope, receive, send)
