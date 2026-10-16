@@ -157,9 +157,9 @@ async def get_all_users(
         return item
 
     if server_filter:
-        page_users, total = crud.get_users_page(db, search=needle, page=page, page_size=page_size)
+        page_users, total = await run_in_threadpool(crud.get_users_page, db, search=needle, page=page, page_size=page_size)
     else:
-        page_users = crud.get_all_users(db)
+        page_users = await run_in_threadpool(crud.get_all_users, db)
         total = len(page_users)
 
     users_list = [serialize(u) for u in page_users]
@@ -200,7 +200,7 @@ async def create_user(
     normalized_name = request.name.replace(" ", "_")
     check_user = crud.get_user_by_name(db, normalized_name)
     if check_user is not None:
-        return ResponseModel(success=False, msg="User with this name already exists", data=None)
+        raise HTTPException(status_code=409, detail="User with this name already exists")
 
     new_user = crud.create_user(db, request)
 
@@ -305,13 +305,12 @@ async def disconnect_user_sessions(
 async def delete_user(uuid: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     db_user = crud.get_user_by_uuid(db, uuid)
     if db_user is None:
-        return ResponseModel(success=False, msg="User not found", data=None)
+        raise HTTPException(status_code=404, detail="User not found")
     require_user_access(db_user, user)
     if crud.count_users(db) <= 1:
-        return ResponseModel(
-            success=False,
-            msg="You must keep at least one user — create another before deleting this one",
-            data=None,
+        raise HTTPException(
+            status_code=409,
+            detail="You must keep at least one user — create another before deleting this one",
         )
 
     result = await delete_user_on_all_nodes(db_user.name, db_user.id, db)
@@ -336,11 +335,11 @@ async def restore_user(uuid: str, db: Session = Depends(get_db), user: dict = De
     """Undo a recent delete: re-insert the user with its original UUID."""
     entry = _deleted_users.get(uuid)
     if not entry or (_time.monotonic() - entry[0]) > _DELETED_TTL:
-        return ResponseModel(success=False, msg="Undo window expired — user can no longer be restored", data=None)
+        raise HTTPException(status_code=410, detail="Undo window expired — user can no longer be restored")
     snap = entry[1]
     if crud.get_user_by_uuid(db, uuid) is not None:
         _deleted_users.pop(uuid, None)
-        return ResponseModel(success=False, msg="User already exists", data=None)
+        raise HTTPException(status_code=409, detail="User already exists")
     try:
         restored = crud.restore_user(db, snap)
     except Exception:

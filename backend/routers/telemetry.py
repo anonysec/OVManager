@@ -56,7 +56,7 @@ notifications_router = APIRouter(prefix="/notifications", tags=["Notifications"]
 
 
 @notifications_router.get("/", response_model=ResponseModel)
-async def notifications(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
+def notifications(db: Session = Depends(get_db), user: dict = Depends(get_current_user)):
     nodes = crud.get_all_nodes(db)
     items = []
     for n in nodes:

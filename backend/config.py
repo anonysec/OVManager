@@ -16,6 +16,10 @@ class Setting(BaseSettings):
     DOC: bool = False
     SSL_KEYFILE: str | None = None
     SSL_CERTFILE: str | None = None
+    # Allow connecting to a node whose certificate does not verify (self-signed
+    # node with no pin). Off by default: the API key must not cross the wire
+    # without MITM protection. Set NODE_TLS_INSECURE_FALLBACK=true to opt in.
+    NODE_TLS_INSECURE_FALLBACK: bool = False
     JWT_SECRET_KEY: str | None = None
     SESSION_IDLE_SECONDS: int = Field(
         default=1800,

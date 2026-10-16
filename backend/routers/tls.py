@@ -35,6 +35,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -161,6 +162,12 @@ def put_tls_settings(
     email = updates.get("acme_email")
     if email and not validate_email(email):
         return ResponseModel(success=False, msg="That ACME email is not valid.", data=None)
+    for name in ("cert_file", "key_file"):
+        value = updates.get(name)
+        if value:
+            if ".." in Path(value).parts:
+                return ResponseModel(success=False, msg=f"The {name.replace('_', ' ')} must not contain '..'.", data=None)
+            updates[name] = os.path.abspath(value)
     for name, (column, _env_key) in _TLS_ENV_KEYS.items():
         if name in updates:
             setattr(settings, column, updates[name] or None)
@@ -512,12 +519,12 @@ async def upload_certificate(
     key_bytes = await key.read(MAX_TLS_FILE_SIZE + 1)
     cert_bytes = await cert.read(MAX_TLS_FILE_SIZE + 1)
     try:
-        _, parsed = _validate_pair(key_bytes, cert_bytes)
+        _, parsed = await run_in_threadpool(_validate_pair, key_bytes, cert_bytes)
     except ValueError as exc:
         log_event(None, "tls.upload", actor=user.get("username"), detail=f"rejected: {exc}")
         return ResponseModel(success=False, msg=str(exc), data=None)
     try:
-        _write_managed_files(key_bytes, cert_bytes, "custom")
+        await run_in_threadpool(_write_managed_files, key_bytes, cert_bytes, "custom")
     except (OSError, ValueError) as exc:
         return ResponseModel(success=False, msg=f"Could not save the certificate files: {exc}", data=None)
     log_event(

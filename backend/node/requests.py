@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import requests as _req
 from fastapi.responses import Response
 
+from backend.config import config
 from backend.logger import logger
 
 TIMEOUT = 10
@@ -317,10 +318,10 @@ class NodeRequests:
         """TLS policy: with a pinned ``server_ca``, HTTPS is verified against
         exactly that certificate (and against the target's name when it dials
         a hostname) and an SSL failure fails closed (a MITM between panel and
-        node must not get the API key). Without a pin
-        (legacy self-signed node not yet pinned), verified-first with one
-        unverified retry and a ONE-TIME loud warning. ``tls_verified``
-        records which path was used so the UI can show it.
+        node must not get the API key). Without a pin, an SSL failure also
+        fails closed by default; only when ``NODE_TLS_INSECURE_FALLBACK`` is
+        set does it retry unverified once, with a ONE-TIME loud warning.
+        ``tls_verified`` records which path was used so the UI can show it.
 
         ``require_success=False`` returns the node's envelope even when it
         answers ``success: false`` (e.g. an update refusal), so callers can
@@ -352,6 +353,16 @@ class NodeRequests:
             self.tls_verified = True
             return result
         except _req.exceptions.SSLError as e:
+            if not config.NODE_TLS_INSECURE_FALLBACK:
+                logger.error(
+                    "Node %s %s: TLS certificate verification failed (%s) — refusing to connect. "
+                    "Pin the node's certificate, or set NODE_TLS_INSECURE_FALLBACK=true to accept "
+                    "unverified TLS for self-signed nodes.",
+                    self.address,
+                    path,
+                    e,
+                )
+                return None
             self._note_tls_fallback(path, e)
             try:
                 with _warnings.catch_warnings():
