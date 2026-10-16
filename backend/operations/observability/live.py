@@ -194,7 +194,11 @@ def snapshot_fresh() -> bool:
     online and nodes up long after the collector stopped.
     """
     ts = snapshot.last_poll_ts
-    return ts > 0 and (time.monotonic() - ts) <= IDLE_POLL_SECONDS
+    # `!= 0`, not `> 0`: 0.0 is the never-polled sentinel, but on a freshly
+    # booted machine time.monotonic() is near zero, so a stamp of
+    # `monotonic() - IDLE + 1` is negative. `> 0` read that as never-polled and
+    # re-probed a panel that was inside its idle window (CI VM, monotonic ~90s).
+    return ts != 0 and (time.monotonic() - ts) <= IDLE_POLL_SECONDS
 
 
 def get_snapshot_cap() -> int:
