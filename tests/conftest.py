@@ -370,3 +370,29 @@ def _live_install_untouched():
         f"the test suite changed the live install: {changed}. A test is acting "
         "outside its sandbox — stub the command, or skip the verb."
     )
+
+
+# ── DIAG ONLY (temporary branch): bus subscriber creation tracer ──────────────
+@pytest.fixture(scope="session", autouse=True)
+def _diag_bus_tracer():
+    """Record a creation stack for every LiveBus subscriber in this worker."""
+    try:
+        import traceback
+
+        from backend.operations.observability import live
+
+        bus = live.bus
+        if not getattr(bus, "_diag_traced", False):
+            bus._diag_traced = True
+            bus._diag_stacks = []
+            orig = bus.subscribe
+
+            def traced(*args, **kwargs):
+                q = orig(*args, **kwargs)
+                bus._diag_stacks.append("".join(traceback.format_stack(limit=24)))
+                return q
+
+            bus.subscribe = traced
+    except Exception as exc:  # pragma: no cover - diag must never break the run
+        print(f"[diag] tracer setup failed: {exc}")
+    yield
