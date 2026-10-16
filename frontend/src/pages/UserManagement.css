@@ -654,3 +654,58 @@
   color: var(--text-primary);
   outline: none;
 }
+
+/* ── Pro-max pass: density, overflow, touch targets (page-scoped) ──── */
+
+/* Cell density on the 4px grid; rows never shrink below --row-h. */
+.um-page .dt-th,
+.um-page .dt-td {
+  padding: var(--space-2) var(--space-3);
+}
+
+.um-page .dt-row {
+  height: var(--row-h);
+}
+
+/* Long tags ellipsize instead of widening the name cell. */
+.um-page .dt-tag {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Table scrolls inside its own container at 375px — page never scrolls
+   horizontally. */
+.um-page .dt-wrap {
+  max-width: 100%;
+}
+
+/* Icon buttons keep the 30px visual (density) but resolve to a 44px hit
+   area via the pseudo-element. Rows are ~46px apart, so vertical hit
+   boxes never overlap; horizontal gap stays untouched. */
+.um-page .dt-icon-btn,
+.um-page .dt-pbtn {
+  position: relative;
+}
+
+.um-page .dt-icon-btn::after,
+.um-page .dt-pbtn::after {
+  content: '';
+  position: absolute;
+  inset: -7px 0;
+}
+
+/* Chips + clear link: comfortable on desktop, 44px on touch/phone. */
+.um-page .um-chip,
+.um-page .um-clear {
+  min-height: var(--control-h-sm);
+}
+
+@media (max-width: 767.98px), (pointer: coarse) {
+  .um-page .um-chip,
+  .um-clear,
+  .um-page .um-rowmenu-item {
+    min-height: var(--control-h-lg);
+  }
+}

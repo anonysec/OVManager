@@ -496,7 +496,12 @@ const UserManagement = () => {
     {
       key: 'name', label: t('th_username', 'Username'), sortable: true,
       render: (u: any) => (
-        <button type="button" className="dt-rowlink" onClick={() => handleUserClick(u)} title={u.uuid}>
+        <button
+          type="button"
+          className="dt-rowlink"
+          onClick={() => handleUserClick(u)}
+          title={`${u.name ?? ''}${u.tag ? ` · ${u.tag}` : ''} · ${u.uuid}`}
+        >
           <span className="dt-cell-main">
             <span className="dt-avatar" aria-hidden="true">{String(u.name || '?').slice(0, 1).toUpperCase()}</span>
             <span style={{ minWidth: 0 }}>
