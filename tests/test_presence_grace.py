@@ -88,8 +88,7 @@ async def test_the_idle_panel_refreshes_once_the_window_passes(monkeypatch):
         f"subs={len(live.bus._subscribers)} "
         f"closed={[lp.is_closed() for lp in live.bus._subscribers.values()]} "
         f"fresh={live.snapshot_fresh()} idle={live.IDLE_POLL_SECONDS} "
-        f"age={time.monotonic() - live.snapshot.last_poll_ts:.1f} "
-        + " ||| ".join(getattr(live.bus, "_diag_stacks", [])[-2:])
+        f"age={time.monotonic() - live.snapshot.last_poll_ts:.1f} " + " ||| ".join(getattr(live.bus, "_diag_stacks", [])[-2:])
     )
 
     live.snapshot._last_poll_ts = time.monotonic() - live.IDLE_POLL_SECONDS - 1
