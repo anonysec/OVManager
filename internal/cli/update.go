@@ -35,7 +35,83 @@ const (
 	updateStageDir = ".ovmanager.staging"
 	updatePrevDir  = ".ovmanager.previous"
 	updateKeep     = 10
+	// inTreeDataDirName is the data-dir name install.sh --from-source writes
+	// (DATA_DIR=$dest/data). A release layout keeps DATA_DIR at
+	// /var/lib/ovmanager, outside the tree, and is left alone.
+	inTreeDataDirName = "data"
 )
+
+// CaptureDataDir resolves the data directory the update must preserve across
+// the tree swap. Precedence mirrors the panel's own resolution: the installed
+// .env DATA_DIR wins, then the ambient DATA_DIR, then the resolved install
+// value, then the from-source default <install>/data. inTree reports whether
+// that directory lives inside the install tree — only in-tree data is migrated.
+func CaptureDataDir(inst Install) (dir string, inTree bool) {
+	raw := strings.TrimSpace(inst.Env["DATA_DIR"])
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv("DATA_DIR"))
+	}
+	if raw == "" {
+		raw = strings.TrimSpace(inst.DataDir)
+	}
+	if raw == "" {
+		raw = filepath.Join(inst.InstallDir, inTreeDataDirName)
+	}
+	dir = filepath.Clean(raw)
+	rel, err := filepath.Rel(filepath.Clean(inst.InstallDir), dir)
+	return dir, err == nil && rel != "." && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// MigrateDataIfInTree copies the previous tree's in-tree data dir into the
+// freshly extracted tree, but only when the new tree has no data of its own —
+// a candidate that ships its own data must not be clobbered. It copies rather
+// than moves, so the previous tree stays intact for a failed-verification
+// failover. It returns a short description of the decision for the operator log.
+func MigrateDataIfInTree(prevDir, newDir string) (string, error) {
+	prevData := filepath.Join(prevDir, inTreeDataDirName)
+	if !dirHasEntries(prevData) {
+		return "no in-tree data dir to carry", nil
+	}
+	newData := filepath.Join(newDir, inTreeDataDirName)
+	if dirHasEntries(newData) {
+		return "candidate already has its own data dir — left untouched", nil
+	}
+	if err := copyTree(prevData, newData); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("carried %s → %s", prevData, newData), nil
+}
+
+// dirHasEntries reports whether path is a directory with at least one entry.
+func dirHasEntries(path string) bool {
+	entries, err := os.ReadDir(path)
+	return err == nil && len(entries) > 0
+}
+
+// copyTree recursively copies src into dst, preserving permission bits.
+// ponytail: regular files and dirs only — the data dir holds no symlinks; add
+// link handling if a release ever ships one.
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		return copyFilePerm(path, target, info.Mode().Perm())
+	})
+}
 
 type updateOptions struct {
 	dryRun     bool
@@ -58,7 +134,9 @@ func releaseChecksumURL(v string) string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s.sha256", repoSlug(), v, releaseBase(v))
 }
 
-func updateStatePath(install Install) string { return filepath.Join(install.DataDir, "update-state.json") }
+func updateStatePath(install Install) string {
+	return filepath.Join(install.DataDir, "update-state.json")
+}
 func updateMarkerPath(install Install) string {
 	return filepath.Join(install.DataDir, "update-maintenance")
 }
@@ -151,6 +229,10 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 	fmt.Fprintln(out, kv("maintenance", "writes paused"))
 	serviceStop(install)
 
+	// Capture the resolved data dir before the swap: an in-tree DATA_DIR moves
+	// with the old tree into .previous and must be carried into the new tree.
+	dataDir, inTreeData := CaptureDataDir(install)
+
 	// activate
 	prev := prevPath(install)
 	_ = os.RemoveAll(prev)
@@ -168,6 +250,30 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(out, kv("activate", "v"+from+" → v"+target))
+
+	// Carry an in-tree data dir into the freshly extracted tree so the panel
+	// keeps its database, claim key, node certs and backups across the swap.
+	if inTreeData {
+		decision, err := MigrateDataIfInTree(prev, install.InstallDir)
+		if err != nil {
+			fmt.Fprintln(out, kv("data", "could not carry "+dataDir+": "+err.Error()))
+			_ = os.Rename(install.InstallDir, stage)
+			if rerr := os.Rename(prev, install.InstallDir); rerr != nil {
+				writeUpdateState(install, "recovery_required", from, target, safety)
+				fmt.Fprint(out, block([]string{failedLine("Update could not carry the in-tree data dir and could not restore the previous release.")}))
+				return 1
+			}
+			_ = os.RemoveAll(stage)
+			_ = os.Remove(updateMarkerPath(install))
+			writeUpdateState(install, "failed_over", from, target, safety)
+			serviceRestart(install)
+			fmt.Fprint(out, block([]string{failedLine("Could not carry the in-tree data dir; the previous release remains active and data was not changed")}))
+			return 1
+		}
+		fmt.Fprintln(out, kv("data", decision))
+	} else {
+		fmt.Fprintln(out, kv("data", "DATA_DIR outside the install tree — left in place"))
+	}
 
 	// verify — the phase the v1.6.0 dev layout skipped.
 	writeUpdateState(install, "verifying", from, target, safety)
