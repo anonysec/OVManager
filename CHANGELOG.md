@@ -1,3 +1,23 @@
+## 2.0.0 — 2026-10-17
+
+Go cutover. The panel and the `ovm` operator CLI are now one Go binary:
+`main.go` serves the panel when invoked bare and routes subcommands to cobra.
+No Python in the runtime — `main.py`, `cli/`, `manager.sh`, `pyproject.toml`,
+`scripts/`, `tests/`, `uv.lock` and `Dockerfile` are gone, and CI builds and
+tests Go only.
+
+`install.sh` is a bootstrap: fetch the checksummed release tarball (Go binary
+plus prebuilt `frontend/dist`), extract flat into `$INSTALL_DIR`, write the
+systemd unit, restart, then verify `/health` reports the release version. The
+version match is the v1.6.0 dev-layout gap fix — a stale process answering the
+probe fails the install instead of passing as healthy. `ovm update` is the Go
+staged transaction (backup → stage → verify → failover) with the restart made
+explicit and the probe derived from the installed `.env`.
+
+Ported to Go: the migration runner (steps 1–26, tracked in
+`PRAGMA user_version`), `migrate_legacy_tls`, and the full panel router
+(`/health`, every `/api` router, the SPA fallback).
+
 ## 1.6.0 — 2026-10-15
 
 Settings rewrite in the x-ui/3x-ui shape: one section per tab (icon tab bar

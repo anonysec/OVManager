@@ -21,6 +21,7 @@ import (
 
 	"ovmanager-go/internal/db"
 	"ovmanager-go/internal/node"
+	"ovmanager-go/internal/version"
 )
 
 // nodeSchema mirrors the columns backend/node/*.py touches.
@@ -212,7 +213,10 @@ func TestNodeConflictEnvelope(t *testing.T) {
 
 // TestNodeStatusShapeReachable checks the exact key set of get_node_status.
 func TestNodeStatusShapeReachable(t *testing.T) {
-	srv := httptest.NewTLSServer(syncHandler("1.6.0"))
+	// The fake agent reports the panel's own version: a differing major is
+	// legitimately "incompatible", so pinning the fixture to a literal would
+	// re-break on every bump.
+	srv := httptest.NewTLSServer(syncHandler(version.Version))
 	defer srv.Close()
 	host, port := hostPort(t, srv.URL)
 
@@ -241,7 +245,7 @@ func TestNodeStatusShapeReachable(t *testing.T) {
 		t.Errorf("tls_mode = %v, want verified", got["tls_mode"])
 	}
 	info, _ := got["node_info"].(map[string]any)
-	if info["version"] != "1.6.0" {
+	if info["version"] != version.Version {
 		t.Errorf("node_info.version = %v", info["version"])
 	}
 	vcompat, _ := got["version_compat"].(map[string]any)
