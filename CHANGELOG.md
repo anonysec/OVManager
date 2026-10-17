@@ -1,3 +1,10 @@
+## 2.0.2 — 2026-10-17
+
+Re-cut of 2.0.1 so the release carrying the in-tree data-dir fix is what
+`ovm update` resolves as latest and installs from. `internal/cli/update.go`
+is unchanged since 2.0.1 — this release exists to exercise the fixed update
+path on a live host end to end.
+
 ## 2.0.1 — 2026-10-17
 
 Fix `ovm update` orphaning an in-tree data dir. A from-source install keeps
