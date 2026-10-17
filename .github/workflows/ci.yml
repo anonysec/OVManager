@@ -47,6 +47,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run verify
+      - run: npm audit --omit=dev --audit-level=critical
 
   go:
     runs-on: ubuntu-latest
