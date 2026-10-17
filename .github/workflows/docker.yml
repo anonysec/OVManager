@@ -1,0 +1,62 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+
+name: Docker
+
+# Builds the multi-arch distroless image and pushes it to GHCR. Mirrors the
+# tag scheme release.yml uses (v<Version> from internal/version/version.go),
+# plus a moving :latest.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read version
+        id: ver
+        run: |
+          VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
+          echo "VER=${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/anonysec/ovmanager:${{ steps.ver.outputs.VER }}
+            ghcr.io/anonysec/ovmanager:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/anonysec/ovmanager:${{ steps.ver.outputs.VER }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
