@@ -59,11 +59,15 @@
 
 ## Second shelf (this wave, from post-plan review)
 
-### Task 6: Client profile issuance (THE core feature)
+### Task 6: Client profile issuance — RESCOPED by investigation (corrected)
 
-**Headline:** users currently get nothing to actually connect with (`grep ovpn` over internal/ + web/src = 0 hits).
-- [ ] Investigation lane first (read-only): map how OpenVPN instances + client certs are minted today (node agent? manual?), report end-to-end flow.
-- [ ] Then: per-user×node profile generation (CA-embedded `.ovpn` incl. push options/ui dir), download endpoint, or "copy client config" UX per node-page + user modal. Scope set by investigation.
+**Findings (HEAD 52c087d):** the feature already exists. UI "Get Config" → node picker → panel pulls profile from node agent (`/sync/download/ovpn/{uid}`, inline `<ca>/<cert>/<key>`), rewrites `remote` lines (panel_domain + per-other-node fallbacks), returns `.ovpn` (and `.zip` per node for owner); subscription page serves the same gated on expiry/disabled/quota. **Issuance lives node-side by design — do NOT move CA minting panel-side** (`nodes.server_ca` is the agent mTLS pin, not the OpenVPN CA). The earlier "grep ovpn = 0" was a mis-grep (searched users/ + pages, missed node/ + components).
+
+Remaining scope (real):
+- [ ] Tests first: `test/ovpn_download_test.go` — `injectRemoteLines` rewrite + `handleDownloadOVPN` gating (today: active + quota only).
+- [ ] Expiry gate: `handleDownloadOVPN` must refuse when `ExpiryDate < today` (parity with the subscription page's gating).
+- [ ] Wire `DeleteUserOnAllNodes` (currently dead code) into user delete so panel deletion also evicts node-side sessions/configs; document create-as-node-auto-provisioning (agent mints on first download).
+- [ ] Update the db spec text in this plan: feature exists; remaining work is the 3 items above.
 
 ### Task 7: README refresh
 
