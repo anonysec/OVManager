@@ -7,6 +7,7 @@ package users
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // Handler serves the /users routes.
@@ -469,6 +471,12 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.Svc.DB.Exec(`DELETE FROM users WHERE id = ?`, row.ID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
 		return
+	}
+	// Evict the user on every reachable node too. A node we cannot reach must
+	// not fail the panel-side delete: the row is already gone, so log and move
+	// on rather than leaving the request stuck (no partial-failure state).
+	if failures, _ := node.DeleteUserOnAllNodes(row.ID, h.Svc.DB)["failed"].([]string); len(failures) > 0 {
+		log.Printf("users: user %s deleted panel-side; node fan-out failed on %v", row.Name, failures)
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
 }

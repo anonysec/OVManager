@@ -632,6 +632,10 @@ func allUsers(db *sql.DB) []userRef {
 // --- user fan-outs (management.py) ---
 
 // CreateUserOnAllNodes provisions a user on every active node concurrently.
+//
+// Intentional dead code: node agents mint the client profile on first download
+// (node-side, by design), so the panel never has to push a user out ahead of
+// time. Kept for the parity surface; do not wire it into the create flow.
 func CreateUserOnAllNodes(name string, db *sql.DB, maxLogins int, userID int64) []any {
 	nodes := getActiveNodes(db)
 	pid := PanelIDFor(db)
@@ -1027,9 +1031,22 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 	var userID int64
 	var active bool
 	var total, used sql.NullInt64
-	if err := h.svc.DB.QueryRow(`SELECT id, is_active, total, used FROM users WHERE uuid = ?`, uuid).Scan(&userID, &active, &total, &used); err != nil {
+	var expiry sql.NullString
+	if err := h.svc.DB.QueryRow(`SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`, uuid).Scan(&userID, &active, &total, &used, &expiry); err != nil {
 		auth.WriteDetail(w, http.StatusNotFound, "User not found")
 		return
+	}
+	// Expiry gate mirrors the subscription page (sub.subUser): expired users are
+	// refused before the disabled/quota checks.
+	if expiry.Valid && expiry.String != "" {
+		raw := expiry.String
+		if len(raw) > 10 {
+			raw = raw[:10]
+		}
+		if raw < time.Now().Format("2006-01-02") {
+			auth.WriteDetail(w, http.StatusForbidden, "User account has expired")
+			return
+		}
 	}
 	if !active {
 		auth.WriteDetail(w, http.StatusForbidden, "User account is not active")
