@@ -1,0 +1,465 @@
+// `ovm update` — the staged update transaction, ported from install.sh
+// do_update (Phase 5). backup → stage → maintenance → activate → verify
+// (systemd restart + health check against the URL from .env) → commit, with
+// automatic failover on a failed candidate.
+//
+// v1.6.0 gap this fixes: verification of a dev-layout/native install did not
+// restart the service before probing, and probed a URL that was not the one the
+// panel serves. Here the restart is explicit (systemctl restart / docker
+// restart) and the probe is install.HealthURL(), derived from the installed
+// .env (scheme from TLS mode, port from PORT), and the reported version must
+// match the release being installed.
+package cli
+
+import (
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"ovmanager-go/internal/db"
+	"ovmanager-go/internal/panel"
+	"ovmanager-go/internal/version"
+)
+
+const (
+	appSlug        = "ovmanager"
+	updateStageDir = ".ovmanager.staging"
+	updatePrevDir  = ".ovmanager.previous"
+	updateKeep     = 10
+)
+
+type updateOptions struct {
+	dryRun     bool
+	fromSource string
+	pin        string
+}
+
+func repoSlug() string {
+	if v := strings.TrimSpace(os.Getenv("OVM_REPO")); v != "" {
+		return v
+	}
+	return "anonysec/OVManager"
+}
+
+func releaseBase(v string) string { return appSlug + "-" + v }
+func releaseURL(v string) string {
+	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s.tar.gz", repoSlug(), v, releaseBase(v))
+}
+func releaseChecksumURL(v string) string {
+	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s.sha256", repoSlug(), v, releaseBase(v))
+}
+
+func updateStatePath(install Install) string { return filepath.Join(install.DataDir, "update-state.json") }
+func updateMarkerPath(install Install) string {
+	return filepath.Join(install.DataDir, "update-maintenance")
+}
+func stagePath(install Install) string {
+	return filepath.Join(filepath.Dir(install.InstallDir), updateStageDir)
+}
+func prevPath(install Install) string {
+	return filepath.Join(filepath.Dir(install.InstallDir), updatePrevDir)
+}
+
+// writeUpdateState mirrors install.sh update_state: a JSON journal of the
+// transaction phase (read by /updater/operation and the recover path).
+func writeUpdateState(install Install, phase, from, to, safety string) {
+	body := fmt.Sprintf(`{"phase":%q,"from_version":%q,"to_version":%q,"safety_backup":%q,"updated_at":%q,"pid":%d}`,
+		phase, from, to, safety, time.Now().UTC().Format(time.RFC3339), os.Getpid())
+	_ = os.MkdirAll(install.DataDir, 0o700)
+	_ = os.WriteFile(updateStatePath(install), []byte(body), 0o600)
+}
+
+func updatePlanLines(install Install, target string) []string {
+	return []string{
+		fmt.Sprintf("  → v%s update plan", target),
+		kv("backup", "safety copy of the panel database"),
+		kv("stage", "fetch and verify the release"),
+		kv("maintenance", "block background writes"),
+		kv("activate", "swap the release tree"),
+		kv("verify", "systemctl restart + health check at "+install.HealthURL()),
+		kv("commit", "resume writers"),
+	}
+}
+
+func runUpdate(install Install, opt updateOptions, out io.Writer) int {
+	if os.Geteuid() != 0 {
+		fmt.Fprint(out, block([]string{failedLine("Must run as root")}))
+		return 1
+	}
+	if info, err := os.Stat(install.InstallDir); err != nil || !info.IsDir() {
+		fmt.Fprint(out, block([]string{failedLine("Not installed (" + install.InstallDir + " missing)")}))
+		return 1
+	}
+
+	target := strings.TrimPrefix(strings.TrimSpace(opt.pin), "v")
+	from := version.Version
+	if reachable, reported := FetchHealth(install.HealthURL(), 5*time.Second, install.Cafile()); reachable && reported != "?" {
+		from = reported
+	}
+
+	if opt.dryRun {
+		lines := updatePlanLines(install, orValue(target, "latest"))
+		lines = append(lines, "", hint("dry run — nothing was changed"))
+		fmt.Fprint(out, block(lines))
+		return 0
+	}
+
+	if target == "" {
+		latest, err := fetchLatestRelease()
+		if err != nil {
+			fmt.Fprint(out, block([]string{failedLine("Could not resolve the latest release: " + err.Error())}))
+			return 1
+		}
+		target = latest
+	}
+
+	writeUpdateState(install, "preflight", from, target, "")
+	fmt.Fprintln(out, kv("backup", "creating safety copy"))
+	safety, err := panel.CreateBackup(updateKeep, "pre-update", install.DataDir)
+	if err != nil || safety == "" {
+		fmt.Fprint(out, block([]string{failedLine("Could not create the mandatory pre-update backup")}))
+		return 1
+	}
+	fmt.Fprintln(out, okLine("backup  "+filepath.Base(safety)))
+	writeUpdateState(install, "staging", from, target, safety)
+
+	stage := stagePath(install)
+	_ = os.RemoveAll(stage)
+	if err := os.MkdirAll(stage, 0o755); err != nil {
+		fmt.Fprint(out, block([]string{failedLine("Could not create the staging dir: " + err.Error())}))
+		return 1
+	}
+	fmt.Fprintln(out, kv("stage", "fetching v"+target))
+	if err := stageRelease(stage, target, opt.fromSource, install); err != nil {
+		_ = os.RemoveAll(stage)
+		fmt.Fprint(out, block([]string{failedLine(err.Error())}))
+		return 1
+	}
+
+	// maintenance: block writes
+	writeUpdateState(install, "activating", from, target, safety)
+	_ = os.WriteFile(updateMarkerPath(install), nil, 0o600)
+	fmt.Fprintln(out, kv("maintenance", "writes paused"))
+	serviceStop(install)
+
+	// activate
+	prev := prevPath(install)
+	_ = os.RemoveAll(prev)
+	if err := os.Rename(install.InstallDir, prev); err != nil {
+		_ = os.Remove(updateMarkerPath(install))
+		writeUpdateState(install, "failed_over", from, target, safety)
+		fmt.Fprint(out, block([]string{failedLine("Could not activate the staged release; the previous release remains active and data was not changed")}))
+		return 1
+	}
+	if err := os.Rename(stage, install.InstallDir); err != nil {
+		_ = os.Rename(prev, install.InstallDir)
+		_ = os.Remove(updateMarkerPath(install))
+		writeUpdateState(install, "failed_over", from, target, safety)
+		fmt.Fprint(out, block([]string{failedLine("Could not activate the staged release; the previous release remains active and data was not changed")}))
+		return 1
+	}
+	fmt.Fprintln(out, kv("activate", "v"+from+" → v"+target))
+
+	// verify — the phase the v1.6.0 dev layout skipped.
+	writeUpdateState(install, "verifying", from, target, safety)
+	fmt.Fprintln(out, kv("verify", "restarting "+systemdService))
+	started := serviceRestart(install)
+	verified := false
+	if started {
+		if reachable, reported := waitHealth(install.HealthURL(), 60, install.Cafile()); reachable && reported == target {
+			verified = true
+		} else if reachable {
+			fmt.Fprintln(out, "  warn: candidate reported version '"+reported+"', expected '"+target+"'")
+		}
+	}
+
+	if !verified {
+		fmt.Fprintln(out, kv("verify", "candidate did not answer — failing over to v"+from))
+		writeUpdateState(install, "failing_over", from, target, safety)
+		serviceStop(install)
+		_ = os.RemoveAll(stage)
+		_ = os.Rename(install.InstallDir, stage)
+		if err := os.Rename(prev, install.InstallDir); err != nil {
+			writeUpdateState(install, "recovery_required", from, target, safety)
+			fmt.Fprint(out, block([]string{failedLine("Automatic failover could not restore the previous release.")}))
+			return 1
+		}
+		dbRestored := false
+		if dbRestoreNeeded(safety, filepath.Join(install.DataDir, "ovmanager.db")) {
+			if err := restoreUpdateDatabase(safety, filepath.Join(install.DataDir, "ovmanager.db")); err != nil {
+				writeUpdateState(install, "recovery_required", from, target, safety)
+				fmt.Fprint(out, block([]string{failedLine("Previous code was restored but the database safety backup could not be restored")}))
+				return 1
+			}
+			dbRestored = true
+		}
+		if serviceRestart(install) {
+			if reachable, _ := waitHealth(install.HealthURL(), 60, install.Cafile()); reachable {
+				_ = os.Remove(updateMarkerPath(install))
+				writeUpdateState(install, "failed_over", from, target, safety)
+				note := " (database was untouched — no restore needed)"
+				if dbRestored {
+					note = " Data was restored from " + safety + "."
+				}
+				fmt.Fprint(out, block([]string{failedLine("Update failed over safely to v" + from + "." + note)}))
+				return 1
+			}
+		}
+		writeUpdateState(install, "recovery_required", from, target, safety)
+		fmt.Fprint(out, block([]string{failedLine("Update recovery needs attention. Safety backup: " + safety)}))
+		return 1
+	}
+
+	// commit
+	fmt.Fprintln(out, kv("commit", "resuming writers"))
+	_ = os.Remove(updateMarkerPath(install))
+	serviceRestart(install)
+	if reachable, _ := waitHealth(install.HealthURL(), 60, install.Cafile()); !reachable {
+		_ = os.WriteFile(updateMarkerPath(install), nil, 0o600)
+		writeUpdateState(install, "recovery_required", from, target, safety)
+		fmt.Fprint(out, block([]string{failedLine("Candidate passed verification but failed its final restart. Writes are blocked; run: ovm update")}))
+		return 1
+	}
+	writeUpdateState(install, "committed", from, target, safety)
+	fmt.Fprint(out, block([]string{okLine("v" + from + " → v" + target), hint("rollback: ovm rollback")}))
+	return 0
+}
+
+func orValue(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func fetchLatestRelease() (string, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/"+repoSlug()+"/releases/latest", nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var decoded struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil || decoded.TagName == "" {
+		return "", fmt.Errorf("GitHub did not report a release")
+	}
+	return strings.TrimPrefix(strings.TrimSpace(decoded.TagName), "v"), nil
+}
+
+// stageRelease fills stage with the release to install, verifying the checksum.
+func stageRelease(stage, target, fromSource string, install Install) error {
+	if fromSource != "" {
+		src := fromSource
+		if src == "." {
+			src, _ = os.Getwd()
+		}
+		if _, err := os.Stat(filepath.Join(src, "cmd", "ovmanager")); err != nil {
+			return fmt.Errorf("no Go source tree in %s", src)
+		}
+		cmd := exec.Command("rsync", "-a", "--delete",
+			"--exclude", ".git", "--exclude", "node_modules", "--exclude", "data",
+			"--exclude", ".env", src+"/", stage+"/")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("stage failed: %s", strings.TrimSpace(string(out)))
+		}
+	} else {
+		work, err := os.MkdirTemp("", "ovm-release-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(work)
+		base := releaseBase(target)
+		tarball := filepath.Join(work, base+".tar.gz")
+		if err := download(releaseURL(target), tarball); err != nil {
+			return fmt.Errorf("No verified release file is available for v%s", target)
+		}
+		checksum, err := downloadBytes(releaseChecksumURL(target))
+		if err != nil {
+			return fmt.Errorf("Release checksum file is missing for v%s", target)
+		}
+		if err := verifyChecksum(tarball, string(checksum)); err != nil {
+			return err
+		}
+		cmd := exec.Command("tar", "--no-same-owner", "--strip-components=1", "-xzf", tarball, "-C", stage)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("extract failed: %s", strings.TrimSpace(string(out)))
+		}
+	}
+	// Preserve configuration; drop a retired secret the new tree rejects.
+	env, err := os.ReadFile(filepath.Join(install.InstallDir, ".env"))
+	if err == nil {
+		stripped := stripEnvKey(string(env), "BACKUP_ENCRYPT_KEY")
+		_ = os.WriteFile(filepath.Join(stage, ".env"), []byte(stripped), 0o600)
+	}
+	return nil
+}
+
+func stripEnvKey(body, key string) string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, key+"=") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+func download(url, dst string) error {
+	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	f, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+func downloadBytes(url string) ([]byte, error) {
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+}
+
+func verifyChecksum(path, checksumBody string) error {
+	want := strings.Fields(strings.TrimSpace(checksumBody))
+	if len(want) == 0 {
+		return fmt.Errorf("empty checksum file")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, want[0]) {
+		return fmt.Errorf("Release checksum mismatch")
+	}
+	return nil
+}
+
+// waitHealth polls the URL until it answers, returning the reported version.
+func waitHealth(url string, tries int, cafile string) (bool, string) {
+	for i := 0; i < tries; i++ {
+		if reachable, reported := FetchHealth(url, 3*time.Second, cafile); reachable {
+			return true, reported
+		}
+		time.Sleep(time.Second)
+	}
+	return false, "?"
+}
+
+func serviceRestart(install Install) bool {
+	if fileExists(install.ComposeFile()) {
+		return runFix("docker", "compose", "-f", install.ComposeFile(), "up", "-d")
+	}
+	return runFix("systemctl", "restart", systemdService)
+}
+
+func serviceStop(install Install) {
+	if fileExists(install.ComposeFile()) {
+		_ = runFix("docker", "compose", "-f", install.ComposeFile(), "down")
+		return
+	}
+	_ = runFix("systemctl", "stop", systemdService)
+}
+
+// dbRestoreNeeded compares the schema version of the live database against the
+// safety backup (install.sh db_restore_needed).
+func dbRestoreNeeded(backup, live string) bool {
+	liveVersion, err := userVersion(live)
+	if err != nil {
+		return true
+	}
+	backupVersion, err := userVersion(backup)
+	if err != nil {
+		return false
+	}
+	return backupVersion != liveVersion
+}
+
+func userVersion(path string) (int, error) {
+	conn, err := dbOpenReadOnly(path)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	var v int
+	if err := conn.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
+// restoreUpdateDatabase copies the verified backup over the live database
+// (install.sh restore_update_database).
+func restoreUpdateDatabase(backup, live string) error {
+	if !fileExists(backup) {
+		return fmt.Errorf("backup missing")
+	}
+	if _, err := userVersion(backup); err != nil {
+		return err
+	}
+	raw, err := os.ReadFile(backup)
+	if err != nil {
+		return err
+	}
+	mode := os.FileMode(0o600)
+	var uid, gid = -1, -1
+	if info, err := os.Stat(live); err == nil {
+		mode = info.Mode().Perm()
+		uid, gid = statUID(info), statGID(info)
+	}
+	tmp := live + ".update-rollback"
+	if err := os.WriteFile(tmp, raw, mode); err != nil {
+		return err
+	}
+	_ = os.Chmod(tmp, mode)
+	if uid >= 0 {
+		_ = os.Chown(tmp, uid, gid)
+	}
+	if err := os.Rename(tmp, live); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		_ = os.Remove(live + suffix)
+	}
+	return nil
+}
+
+func dbOpenReadOnly(path string) (*sql.DB, error) {
+	return db.Open(path)
+}

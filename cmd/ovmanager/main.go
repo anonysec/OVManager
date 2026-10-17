@@ -1,5 +1,6 @@
-// Command ovmanager is the OVManager panel binary (CLI subcommands land in
-// Phase 5; for now it serves the HTTP API).
+// Command ovmanager is the OVManager panel binary and operator CLI (Phase 5).
+// Run bare (or via systemd) it serves the panel; with a subcommand it acts as
+// the `ovm` operator CLI.
 package main
 
 import (
@@ -8,11 +9,15 @@ import (
 	"net/http"
 	"os"
 
+	"ovmanager-go/internal/cli"
 	"ovmanager-go/internal/health"
 	"ovmanager-go/internal/version"
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		os.Exit(cli.Run(os.Args[1:], os.Stdout))
+	}
 	addr := net.JoinHostPort(env("HOST", "0.0.0.0"), env("PORT", "2095"))
 	// ponytail: no TLS/graceful shutdown yet — install.sh terminates TLS in
 	// front of the panel; add timeouts when the binary becomes the edge.
