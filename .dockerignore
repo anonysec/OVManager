@@ -1,40 +1,34 @@
 # VCS
 .git
-.github
 .gitignore
+.dockerignore
+
+# CI / Pages source
+.github
 
 # Environment
 .env
 .env.*
-!.env.example
 
-# Python
-__pycache__
-*.py[cod]
-*.egg-info
-.venv
-venv
-.pytest_cache
-.ruff_cache
-.coverage
+# Runtime data
+data
 
 # Node
-node_modules
+web/node_modules
 
-# Build artifacts
-dist
-build
+# Go build artifacts
+/ovmanager
+web/dist
 
-# Tests / docs
-tests
-*.md
-!README.md
-
-# Agent configuration — never part of a build context
-.claude
+# Tests
+test
 
 # Editor / OS
 .idea
 .vscode
 *.swp
 .DS_Store
+
+# Docs
+*.md
+!README.md
