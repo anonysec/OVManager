@@ -2,7 +2,7 @@
 // serve the panel — not just the CLI. app.py's surface is root /health plus the
 // whole API behind the auth gate; the plan's parity probe is /health + an
 // authenticated /api route + the /login method/credential shapes.
-package goparity
+package tests
 
 import (
 	"encoding/json"

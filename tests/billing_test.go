@@ -1,6 +1,6 @@
 // Billing ledger parity: golden outputs generated from the real Python module
 // (see testdata/billing_golden.json) plus DB-level ordering/upsert behaviour.
-package goparity
+package tests
 
 import (
 	"encoding/json"

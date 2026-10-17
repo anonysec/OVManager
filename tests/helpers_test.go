@@ -1,5 +1,5 @@
 // Test scaffolding shared by the auth and users parity tests.
-package goparity
+package tests
 
 import (
 	"database/sql"

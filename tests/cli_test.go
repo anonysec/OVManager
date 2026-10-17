@@ -1,7 +1,7 @@
 // Parity tests for Phase 5: the cobra CLI must print byte-identical golden
 // screens for status/doctor against a fixture DATA_DIR, and the update
 // orchestrator must have a dry-run that touches nothing.
-package goparity
+package tests
 
 import (
 	"bytes"

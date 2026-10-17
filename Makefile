@@ -11,7 +11,7 @@ setup:
 build:
 	go build -o ovmanager ./cmd/ovmanager
 
-# The full Go suite. goparity holds the cross-implementation parity tests, so
+# The full Go suite. tests holds the cross-implementation parity tests, so
 # this is the gate that used to be `pytest tests/ -n auto`.
 test:
 	go test ./...

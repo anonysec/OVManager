@@ -2,7 +2,7 @@
 // (install.sh --from-source lays it at <install>/data) must survive the
 // stage→activate tree swap, while a release layout that keeps DATA_DIR outside
 // the tree (/var/lib/ovmanager) is left untouched.
-package goparity
+package tests
 
 import (
 	"os"

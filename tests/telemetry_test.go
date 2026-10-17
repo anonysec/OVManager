@@ -1,6 +1,6 @@
 // Parity tests for Phase 3 telemetry: activity, notifications, metrics and the
 // SSE framing the frontend EventSource consumes byte-for-byte.
-package goparity
+package tests
 
 import (
 	"bufio"

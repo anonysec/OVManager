@@ -1,6 +1,6 @@
-// Package goparity holds cross-implementation parity tests: the Go server must
+// Package tests holds cross-implementation parity tests: the Go server must
 // answer byte-compatible with the Python backend it replaces.
-package goparity
+package tests
 
 import (
 	"encoding/json"

@@ -1,6 +1,6 @@
 // Node parity tests: TLS pin accept/reject, fail-closed fallback, status
 // shapes, unreachable semantics, fanout chunking and sync result shape.
-package goparity
+package tests
 
 import (
 	"crypto/ecdsa"

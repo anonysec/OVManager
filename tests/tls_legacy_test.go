@@ -1,7 +1,7 @@
 // Parity tests for migrate_legacy_tls, ported from the last Python version
 // (backend/routers/tls.py at 07204ee^): a pair left in DATA_DIR/tls is copied
 // onto the declared paths, once, and never over a pair already declared.
-package goparity
+package tests
 
 import (
 	"os"

@@ -4,7 +4,7 @@
 // Each route is asserted on status + response shape against what the Python
 // routers returned (ResponseModel envelope vs plain JSON, and the 4xx shapes
 // from the recent fail-closed/traversal fixes).
-package goparity
+package tests
 
 import (
 	"bytes"

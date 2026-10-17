@@ -2,7 +2,7 @@
 // Python package backend/db/migrations (runner.py/schema.py/seeds.py/steps.py,
 // last version at 07204ee^). SCHEMA_VERSION stays 26; the cutover plan moves the
 // version into PRAGMA user_version.
-package goparity
+package tests
 
 import (
 	"database/sql"

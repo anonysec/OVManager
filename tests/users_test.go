@@ -1,4 +1,4 @@
-package goparity
+package tests
 
 import (
 	"database/sql"

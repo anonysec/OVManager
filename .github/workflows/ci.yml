@@ -71,7 +71,7 @@ jobs:
       - name: Build
         run: make build
       - name: Test
-        # One command, one home: the parity suite (goparity) proves the Go
+        # One command, one home: the parity suite (tests) proves the Go
         # binary answers like the Python app it replaced. CI and `make test`
         # cannot drift.
         run: make test
