@@ -152,6 +152,14 @@ func SnapshotFresh() bool {
 	return ts != 0 && time.Since(procStart).Seconds()-ts <= idlePollSeconds()
 }
 
+// LastPollTS is observability's last_poll_ts(): the monotonic seconds-since-
+// start stamp of the last live poll, 0 when the snapshot was never taken.
+func LastPollTS() float64 {
+	snap.mu.Lock()
+	defer snap.mu.Unlock()
+	return snap.lastPoll
+}
+
 // updateSnapshot stores a new snapshot; returns (connectionsChanged, nodesChanged).
 func updateSnapshot(connections map[string]int, nodes map[string]bool, cap int) (bool, bool) {
 	if cap > 0 && len(nodes) > cap {

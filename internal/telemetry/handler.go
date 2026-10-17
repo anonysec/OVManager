@@ -616,6 +616,10 @@ func lastEventMeta(db *sql.DB, kind string) map[string]any {
 	return meta
 }
 
+// PromoteEvents delivers enrolled events to Telegram once each; returns the
+// number sent. Exported for the health overview and panel alert routes.
+func PromoteEvents(db *sql.DB, send func(string) bool) int { return promoteEvents(db, send) }
+
 // promoteEvents delivers enrolled audit events to Telegram, once each.
 func promoteEvents(db *sql.DB, send func(string) bool) int {
 	delivered := map[string]bool{}
@@ -809,6 +813,10 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 }
 
 // --- notifier (observability/notifier.py) ---
+
+// SendTelegram is the exported notifier for the panel's alert test and the
+// health-overview promoter.
+func SendTelegram(db *sql.DB, text string) bool { return sendTelegram(db, text) }
 
 // sendTelegram sends one HTML-escaped message; false when the bot is unconfigured
 // or the transport fails (notifier.send_telegram).

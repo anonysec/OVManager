@@ -15,17 +15,18 @@ import (
 	"ovmanager-go/internal/health"
 )
 
-// pythonVersion reads backend/version.py so the Go constant cannot drift while
-// the Python backend still ships.
-func pythonVersion(t *testing.T) string {
+// releaseVersion reads pyproject.toml so the Go constant cannot drift from the
+// release metadata. It used to read backend/version.py; that file is gone now
+// that the Python backend is deleted (Phase 4).
+func releaseVersion(t *testing.T) string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "backend", "version.py"))
+	raw, err := os.ReadFile(filepath.Join("..", "pyproject.toml"))
 	if err != nil {
-		t.Fatalf("read backend/version.py: %v", err)
+		t.Fatalf("read pyproject.toml: %v", err)
 	}
-	m := regexp.MustCompile(`__version__\s*=\s*"([^"]+)"`).FindSubmatch(raw)
+	m := regexp.MustCompile(`(?m)^version\s*=\s*"([^"]+)"`).FindSubmatch(raw)
 	if m == nil {
-		t.Fatalf("no __version__ in backend/version.py")
+		t.Fatalf("no version in pyproject.toml")
 	}
 	return string(m[1])
 }
@@ -54,9 +55,9 @@ func TestHealthMatchesPython(t *testing.T) {
 	if got["status"] != "ok" {
 		t.Errorf("status field = %v, want ok", got["status"])
 	}
-	want := pythonVersion(t)
+	want := releaseVersion(t)
 	if got["version"] != want {
-		t.Errorf("version = %v, want %q (backend/version.py)", got["version"], want)
+		t.Errorf("version = %v, want %q (pyproject.toml)", got["version"], want)
 	}
 	if len(got) != 2 {
 		t.Errorf("keys = %v, want exactly status+version", got)

@@ -713,10 +713,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	h.register(mux, "POST /nodes", owner(h.handleAddNode))
 	h.register(mux, "POST /nodes/test", owner(h.handleTestNode))
 	h.register(mux, "PUT /nodes/{node_id}", owner(h.handleUpdateNode))
-	h.register(mux, "GET /nodes/{node_id}/status/", owner(h.handleNodeStatus))
-	h.register(mux, "GET /nodes/{node_id}/status", owner(h.handleNodeStatus))
 	h.register(mux, "POST /nodes/{node_id}/repin", owner(h.handleRepin))
-	h.register(mux, "GET /nodes/{node_id}/logs", owner(h.handleNodeLogs))
 	h.register(mux, "PUT /nodes/{node_id}/dns", owner(h.handleNodeDNS))
 	h.register(mux, "PUT /nodes/{node_id}/ipv6", owner(h.handleNodeIPv6))
 	h.register(mux, "PUT /nodes/{node_id}/ports", owner(h.handleNodePorts))
@@ -727,7 +724,27 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	h.register(mux, "GET /nodes", owner(h.handleListNodes))
 	h.register(mux, "GET /nodes/ovpn/{uuid}/{node_id}", user(h.handleDownloadOVPN))
 	h.register(mux, "GET /nodes/ovpn-all/{node_id}", owner(h.handleDownloadAllOVPN))
+	h.register(mux, "GET /nodes/{first}/{second}", owner(h.handleNodeSubresource))
 	h.register(mux, "DELETE /nodes/{node_id}", owner(h.handleDeleteNode))
+}
+
+// handleNodeSubresource owns the "/nodes/{id}/<word>" GET routes.
+//
+// Go's ServeMux cannot rank "/nodes/ovpn-all/{id}" above "/nodes/{id}/status"
+// (each is more specific in a different segment) and panics at registration,
+// while FastAPI resolved the overlap by declaration order. Both live here:
+// "/nodes/ovpn-all/{id}" is a strict subset of "/nodes/{first}/{second}", so it
+// wins on specificity, and everything else lands in this switch.
+func (h *Handler) handleNodeSubresource(w http.ResponseWriter, r *http.Request) {
+	r.SetPathValue("node_id", r.PathValue("first"))
+	switch r.PathValue("second") {
+	case "status":
+		h.handleNodeStatus(w, r)
+	case "logs":
+		h.handleNodeLogs(w, r)
+	default:
+		auth.WriteDetail(w, http.StatusNotFound, "Not Found")
+	}
 }
 
 func (h *Handler) register(mux *http.ServeMux, pattern string, fn http.HandlerFunc) {
