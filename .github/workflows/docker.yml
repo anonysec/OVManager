@@ -22,6 +22,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The Dockerfile embeds the SPA at Go build time and has no node stage,
+      # so web/dist must exist in the build context.
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

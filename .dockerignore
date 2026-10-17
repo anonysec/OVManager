@@ -18,7 +18,8 @@ web/node_modules
 
 # Go build artifacts
 /ovmanager
-web/dist
+# web/dist stays in the context on purpose: the Dockerfile copies it into
+# internal/webfs/dist so the SPA is embedded in the binary.
 
 # Tests
 test

@@ -3,9 +3,10 @@
 
 name: Release assets
 
-# Builds the versioned install tarball (Go binary + prebuilt web/dist)
-# and attaches it to the published GitHub Release, so install.sh (the default
-# release path) can install without git, npm or a Go toolchain.
+# Builds bare per-platform binaries with the SPA embedded (internal/webfs) and
+# attaches them + a .sha256 sidecar each to the published GitHub Release, so
+# install.sh (the default release path) can install without git, npm or a Go
+# toolchain.
 on:
   release:
     types: [published]
@@ -41,39 +42,28 @@ jobs:
           VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
           echo "VER=${VER}" >> "$GITHUB_ENV"
 
-      - name: Build Go binary
-        run: go build -o ovmanager ./cmd
-
       - name: Build frontend
         run: |
           cd web
           npm ci --no-audit --no-fund
           npm run build
 
-      - name: Pack release tarball
+      - name: Build platform binaries (SPA embedded)
         run: |
-          STAGE="$(mktemp -d)"
-          git archive --prefix="ovmanager-${VER}/" HEAD | tar -x -C "$STAGE"
-          mkdir -p "$STAGE/ovmanager-${VER}/web"
-          cp ovmanager "$STAGE/ovmanager-${VER}/ovmanager"
-          cp -r web/dist "$STAGE/ovmanager-${VER}/web/dist"
-          # --owner/--group: the Actions runner is uid 1001, and plain tar
-          # stores that, so extracting as root gave every install a tree owned
-          # by a uid that does not exist on the target.
-          # --strip-components=1 in install.sh's fetch_release pairs with this
-          # --prefix so the installed tree lands flat at $INSTALL_DIR.
-          # Members are all under "ovmanager-<version>/": the Go binary, the
-          # repo snapshot, and "web/dist" inside it. install.sh strips ONE
-          # component, so "ovmanager-<version>/ovmanager" lands flat as
-          # "ovmanager" and the prebuilt UI lands at "web/dist". Archiving
-          # "." would add a "./" level and the strip would remove "." instead,
-          # leaving a nested version dir; keeping "web/dist" outside the
-          # prefix would strip it to a stray top-level "dist/".
-          tar --owner=0 --group=0 -czf "ovmanager-${VER}.tar.gz" -C "$STAGE" "ovmanager-${VER}"
-          sha256sum "ovmanager-${VER}.tar.gz" > "ovmanager-${VER}.sha256"
+          # Stage the built SPA where go:embed reaches it, then cross-compile.
+          # modernc.org/sqlite is pure Go, so CGO_ENABLED=0 stays portable.
+          mkdir -p internal/webfs/dist
+          cp -a web/dist/. internal/webfs/dist/
+          for arch in amd64 arm64; do
+            out="ovmanager-linux-${arch}"
+            GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath -o "${out}" ./cmd
+            sha256sum "${out}" > "${out}.sha256"
+          done
 
       - name: Upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "v${VER}" "ovmanager-${VER}.tar.gz" "ovmanager-${VER}.sha256" --clobber
+          gh release upload "v${VER}" \
+            ovmanager-linux-amd64 ovmanager-linux-amd64.sha256 \
+            ovmanager-linux-arm64 ovmanager-linux-arm64.sha256 --clobber

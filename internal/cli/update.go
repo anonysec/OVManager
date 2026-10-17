@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -126,13 +127,17 @@ func repoSlug() string {
 	return "anonysec/OVManager"
 }
 
-func releaseBase(v string) string { return appSlug + "-" + v }
+// releaseAsset is the bare-binary asset the release workflow publishes for the
+// running platform (the SPA is embedded in the binary). install.sh fetches the
+// same name.
+func releaseAsset() string {
+	return fmt.Sprintf("%s-%s-%s", appSlug, runtime.GOOS, runtime.GOARCH)
+}
+
 func releaseURL(v string) string {
-	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s.tar.gz", repoSlug(), v, releaseBase(v))
+	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s", repoSlug(), v, releaseAsset())
 }
-func releaseChecksumURL(v string) string {
-	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s.sha256", repoSlug(), v, releaseBase(v))
-}
+func releaseChecksumURL(v string) string { return releaseURL(v) + ".sha256" }
 
 func updateStatePath(install Install) string {
 	return filepath.Join(install.DataDir, "update-state.json")
@@ -387,26 +392,22 @@ func stageRelease(stage, target, fromSource string, install Install) error {
 			return fmt.Errorf("stage failed: %s", strings.TrimSpace(string(out)))
 		}
 	} else {
-		work, err := os.MkdirTemp("", "ovm-release-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(work)
-		base := releaseBase(target)
-		tarball := filepath.Join(work, base+".tar.gz")
-		if err := download(releaseURL(target), tarball); err != nil {
+		// Bare-binary release: download the platform binary straight into the
+		// stage under the service name, verify it against its .sha256 sidecar,
+		// then make it executable. No archive, no extract.
+		bin := filepath.Join(stage, appSlug)
+		if err := download(releaseURL(target), bin); err != nil {
 			return fmt.Errorf("No verified release file is available for v%s", target)
 		}
 		checksum, err := downloadBytes(releaseChecksumURL(target))
 		if err != nil {
 			return fmt.Errorf("Release checksum file is missing for v%s", target)
 		}
-		if err := verifyChecksum(tarball, string(checksum)); err != nil {
+		if err := verifyChecksum(bin, string(checksum)); err != nil {
 			return err
 		}
-		cmd := exec.Command("tar", "--no-same-owner", "--strip-components=1", "-xzf", tarball, "-C", stage)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("extract failed: %s", strings.TrimSpace(string(out)))
+		if err := os.Chmod(bin, 0o755); err != nil {
+			return err
 		}
 	}
 	// Preserve configuration; drop a retired secret the new tree rejects.
