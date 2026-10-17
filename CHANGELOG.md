@@ -1,3 +1,17 @@
+## 2.0.1 — 2026-10-17
+
+Fix `ovm update` orphaning an in-tree data dir. A from-source install keeps
+`DATA_DIR` at `<install>/data`; the update transaction moved the old tree to
+`.ovmanager.previous` and extracted a fresh tree with an empty `data/`, so the
+panel came back up with a blank database and a new claim key.
+
+`ovm update` now resolves the data dir before the swap (installed `.env`, then
+ambient `DATA_DIR`, then the resolved default) and, after extraction, carries
+it into the new tree — but only when the candidate has no data of its own, so a
+release layout that ships its own `data/` is never clobbered. The copy (not
+move) leaves the previous tree intact for the existing failover, and the
+decision is written to the update log.
+
 ## 2.0.0 — 2026-10-17
 
 Go cutover. The panel and the `ovm` operator CLI are now one Go binary:

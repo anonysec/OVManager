@@ -33,7 +33,7 @@ DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 # Keep in sync with internal/version/version.go: the installer fetches this
 # release tag, and the /health check requires the running binary to report it.
-VERSION="2.0.0"
+VERSION="2.0.1"
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 
 # The panel runs as an unprivileged service account on a native install: it is
