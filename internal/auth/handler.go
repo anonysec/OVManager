@@ -11,9 +11,9 @@ import (
 
 // Response is the FastAPI ResponseModel envelope.
 type Response struct {
-	Success bool `json:"success"`
+	Success bool   `json:"success"`
 	Msg     string `json:"msg"`
-	Data    any  `json:"data"`
+	Data    any    `json:"data"`
 }
 
 // Login rate limits (backend/auth/auth.py).

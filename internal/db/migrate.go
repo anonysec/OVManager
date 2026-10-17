@@ -788,7 +788,7 @@ func addAdminsOwnerUnique(x execer) error {
 // --- v14 cryptography (at-rest encryption retired; decrypt legacy rows once) ---
 
 // decryptStoredSecrets reads the retired BOT/NODE_ENCRYPT_KEY values from the
-// environment and decrypts any remaining ``enc:`` rows. A row that fails to
+// environment and decrypts any remaining “enc:“ rows. A row that fails to
 // decrypt is left as-is — fail-closed, never truncated.
 func decryptStoredSecrets(x execer) error {
 	botKey := cleanKey(os.Getenv("BOT_ENCRYPT_KEY"))

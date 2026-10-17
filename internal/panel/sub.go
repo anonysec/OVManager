@@ -96,9 +96,9 @@ var subTmpl = template.Must(template.New("subscription").Funcs(subFuncs).Parse(s
 
 // Subscription rate limiting (sub.py: 30 hits / 60s per IP, capped buckets).
 const (
-	subMax         = 30
-	subWindow      = 60.0
-	subMaxBuckets  = 10000
+	subMax        = 30
+	subWindow     = 60.0
+	subMaxBuckets = 10000
 )
 
 var (
@@ -168,7 +168,7 @@ func sha16(value string) string {
 }
 
 func (h *Handler) subStaticJS(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(appDir(), "frontend", "templates", "subscription.js")
+	path := filepath.Join(appDir(), "web", "templates", "subscription.js")
 	if !fileExists(path) {
 		auth404(w, "Not Found")
 		return

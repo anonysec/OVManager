@@ -12,10 +12,10 @@ import (
 )
 
 type golden struct {
-	Canon           [][2]any   `json:"canon"`
-	ExtractUsername [][4]any   `json:"extract_username"`
-	SessionDelta    [][5]any   `json:"session_delta"`
-	PyRound         [][2]any   `json:"py_round"`
+	Canon           [][2]any `json:"canon"`
+	ExtractUsername [][4]any `json:"extract_username"`
+	SessionDelta    [][5]any `json:"session_delta"`
+	PyRound         [][2]any `json:"py_round"`
 }
 
 func loadGolden(t *testing.T) golden {

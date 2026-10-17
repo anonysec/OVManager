@@ -24,10 +24,10 @@ import (
 
 // Panel-side TLS certificate management (backend/routers/tls.py).
 const (
-	maxTLSFileSize   = 1024 * 1024
-	acmeIssueTimeout = 180 * time.Second
+	maxTLSFileSize     = 1024 * 1024
+	acmeIssueTimeout   = 180 * time.Second
 	acmeInstallTimeout = 60 * time.Second
-	restartHint = "Restart the panel to use the new certificate: " +
+	restartHint        = "Restart the panel to use the new certificate: " +
 		"'systemctl restart ovmanager' on a native install, or 'docker restart ovmanager' for Docker."
 )
 
@@ -72,8 +72,8 @@ func validateEmail(value string) bool { return value != "" && emailRe.MatchStrin
 
 // --- paths ---
 
-func tlsDir() string  { return filepath.Join(dataDir(), "tls") }
-func metaPath() string { return filepath.Join(tlsDir(), "meta.json") }
+func tlsDir() string           { return filepath.Join(dataDir(), "tls") }
+func metaPath() string         { return filepath.Join(tlsDir(), "meta.json") }
 func previousKeyPath() string  { return filepath.Join(tlsDir(), "previous-privkey.pem") }
 func previousCertPath() string { return filepath.Join(tlsDir(), "previous-fullchain.pem") }
 
@@ -617,11 +617,11 @@ func buildSelfSigned(commonName string) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	subject := pkix.Name{
-		Country:            []string{"US"},
-		Province:           []string{"Local"},
-		Locality:           []string{"Local"},
-		Organization:       []string{"OVManager"},
-		CommonName:         commonName,
+		Country:      []string{"US"},
+		Province:     []string{"Local"},
+		Locality:     []string{"Local"},
+		Organization: []string{"OVManager"},
+		CommonName:   commonName,
 	}
 	now := time.Now()
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))

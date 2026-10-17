@@ -27,16 +27,16 @@ jobs:
           cache: true
 
       - name: Build Go binary
-        run: go build -o ovmanager ./cmd/ovmanager
+        run: go build -o ovmanager ./cmd
 
       - name: Install frontend deps
         run: |
-          cd frontend
+          cd web
           npm ci
 
       - name: Audit frontend dependencies
         run: |
-          cd frontend
+          cd web
           npm audit --audit-level=moderate || true
 
       - name: Test project startup

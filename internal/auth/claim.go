@@ -12,8 +12,8 @@ import (
 
 // owner-claim constants (backend/routers/owner_claim.py).
 const (
-	claimKeyFile   = "owner-claim.key"
-	maxClaimFail   = 5
+	claimKeyFile    = "owner-claim.key"
+	maxClaimFail    = 5
 	claimFailWindow = 300
 )
 

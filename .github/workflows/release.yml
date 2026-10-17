@@ -3,7 +3,7 @@
 
 name: Release assets
 
-# Builds the versioned install tarball (Go binary + prebuilt frontend/dist)
+# Builds the versioned install tarball (Go binary + prebuilt web/dist)
 # and attaches it to the published GitHub Release, so install.sh (the default
 # release path) can install without git, npm or a Go toolchain.
 on:
@@ -42,11 +42,11 @@ jobs:
           echo "VER=${VER}" >> "$GITHUB_ENV"
 
       - name: Build Go binary
-        run: go build -o ovmanager ./cmd/ovmanager
+        run: go build -o ovmanager ./cmd
 
       - name: Build frontend
         run: |
-          cd frontend
+          cd web
           npm ci --no-audit --no-fund
           npm run build
 
@@ -54,20 +54,20 @@ jobs:
         run: |
           STAGE="$(mktemp -d)"
           git archive --prefix="ovmanager-${VER}/" HEAD | tar -x -C "$STAGE"
-          mkdir -p "$STAGE/ovmanager-${VER}/frontend"
+          mkdir -p "$STAGE/ovmanager-${VER}/web"
           cp ovmanager "$STAGE/ovmanager-${VER}/ovmanager"
-          cp -r frontend/dist "$STAGE/ovmanager-${VER}/frontend/dist"
+          cp -r web/dist "$STAGE/ovmanager-${VER}/web/dist"
           # --owner/--group: the Actions runner is uid 1001, and plain tar
           # stores that, so extracting as root gave every install a tree owned
           # by a uid that does not exist on the target.
           # --strip-components=1 in install.sh's fetch_release pairs with this
           # --prefix so the installed tree lands flat at $INSTALL_DIR.
           # Members are all under "ovmanager-<version>/": the Go binary, the
-          # repo snapshot, and "frontend/dist" inside it. install.sh strips ONE
+          # repo snapshot, and "web/dist" inside it. install.sh strips ONE
           # component, so "ovmanager-<version>/ovmanager" lands flat as
-          # "ovmanager" and the prebuilt UI lands at "frontend/dist". Archiving
+          # "ovmanager" and the prebuilt UI lands at "web/dist". Archiving
           # "." would add a "./" level and the strip would remove "." instead,
-          # leaving a nested version dir; keeping "frontend/dist" outside the
+          # leaving a nested version dir; keeping "web/dist" outside the
           # prefix would strip it to a stray top-level "dist/".
           tar --owner=0 --group=0 -czf "ovmanager-${VER}.tar.gz" -C "$STAGE" "ovmanager-${VER}"
           sha256sum "ovmanager-${VER}.tar.gz" > "ovmanager-${VER}.sha256"

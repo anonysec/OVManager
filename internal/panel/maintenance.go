@@ -30,7 +30,7 @@ const (
 // maintenanceLock serializes backup/restore (maintenance.py's RLock).
 var maintenanceLock sync.Mutex
 
-func backupDir() string { return filepath.Join(dataDir(), "backups") }
+func backupDir() string  { return filepath.Join(dataDir(), "backups") }
 func dbFilePath() string { return filepath.Join(dataDir(), "ovmanager.db") }
 
 // backupSortKey is (mtime, name) — newest first, deterministic on ties.

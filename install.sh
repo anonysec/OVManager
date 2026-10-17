@@ -6,7 +6,7 @@
 #
 # The panel and the `ovm` operator CLI are one Go binary. A default install
 # fetches the checksummed release tarball (the binary plus the prebuilt
-# frontend/dist), extracts it flat into $INSTALL_DIR, writes the systemd unit,
+# web/dist), extracts it flat into $INSTALL_DIR, writes the systemd unit,
 # restarts, and verifies /health reports the release version. That last check
 # is the v1.6.0 gap: the old verify did not restart the service and probed a
 # dev layout, so a release that never came up still reported success.
@@ -78,7 +78,7 @@ release_checksum_url() {
 # fetch_release <dir>: download the tarball, verify its sha256 sidecar, then
 # extract it flat. release.yml packs everything under one "ovmanager-<version>/"
 # top-level dir, so --strip-components=1 lands the binary, the repo snapshot and
-# frontend/dist directly in <dir>. The sidecar is verified before extraction.
+# web/dist directly in <dir>. The sidecar is verified before extraction.
 fetch_release() {
     local dest="$1" work base
     base="$(release_base)"
@@ -241,8 +241,8 @@ do_from_source() {
     # Validation runs before the root gate so a broken tree reports its real
     # reason, and --help/bad flags work for whoever ran them.
     [[ -d "$src" ]] || die "no source directory: $src"
-    [[ -f "$src/cmd/ovmanager/main.go" ]] || die "no Go source tree in $src (cmd/ovmanager/main.go missing)"
-    [[ -d "$src/frontend/dist" ]] || die "frontend/dist missing in $src — run: cd frontend && npm run build"
+    [[ -f "$src/cmd/main.go" ]] || die "no Go source tree in $src (cmd/main.go missing)"
+    [[ -d "$src/web/dist" ]] || die "web/dist missing in $src — run: cd web && npm run build"
 
     check_root
     # rm -rf and a --delete rsync live behind this: an empty or / destination is
@@ -269,7 +269,7 @@ do_from_source() {
         "$src/" "$dest/"
 
     # The binary is the service: build it in place so the unit can ExecStart it.
-    ( cd "$dest" && go build -o "$APP_SLUG" ./cmd/ovmanager )
+    ( cd "$dest" && go build -o "$APP_SLUG" ./cmd )
 
     mkdir -p "$dest/data"
     # Never copy the source tree's .env: dev trees carry real credentials. This

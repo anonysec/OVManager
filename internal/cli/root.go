@@ -10,14 +10,14 @@ import (
 )
 
 type app struct {
-	out            io.Writer
-	exit           int
-	installDir     string
-	dataDir        string
-	inContainer    bool
-	serviceState   string
-	publicIP       string
-	showAll        bool
+	out          io.Writer
+	exit         int
+	installDir   string
+	dataDir      string
+	inContainer  bool
+	serviceState string
+	publicIP     string
+	showAll      bool
 }
 
 // Run executes the CLI with args (excluding argv[0]) and returns the exit code.

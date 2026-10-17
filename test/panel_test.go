@@ -99,12 +99,12 @@ CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT,
 
 // panelEnv is the isolated filesystem + PATH the panel server runs against.
 type panelEnv struct {
-	srv    *httptest.Server
-	token  string
-	conn   *sql.DB
+	srv     *httptest.Server
+	token   string
+	conn    *sql.DB
 	dataDir string
-	appDir string
-	tlsKey string
+	appDir  string
+	tlsKey  string
 	tlsCert string
 }
 
@@ -240,7 +240,7 @@ func TestPanelSurface(t *testing.T) {
 		{name: "settings timezone invalid", method: "PUT", path: "/api/server/settings/timezone",
 			body: map[string]any{"timezone": "Not/AZone"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
 		{name: "settings subscription", method: "PUT", path: "/api/server/settings/subscription",
-			body: map[string]any{"sub_announce": "hi", "sub_update_interval_hours": 24},
+			body:       map[string]any{"sub_announce": "hi", "sub_update_interval_hours": 24},
 			wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(true),
 			dataKeys: []string{"sub_announce", "sub_update_interval_hours"}},
 		{name: "settings subscription bad hours", method: "PUT", path: "/api/server/settings/subscription",

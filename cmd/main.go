@@ -58,11 +58,11 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root.Handle("/health", health.Router())
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
-	root.Handle("/", spaHandler(filepath.Join(appDir(), "frontend", "dist")))
+	root.Handle("/", spaHandler(filepath.Join(appDir(), "web", "dist")))
 	return root
 }
 
-// appDir is where .env and frontend/ live (backend/config.py app_dir).
+// appDir is where .env and web/ live (backend/config.py app_dir).
 func appDir() string {
 	if d := os.Getenv("OVM_APP_DIR"); d != "" {
 		return d
@@ -73,7 +73,7 @@ func appDir() string {
 	return "."
 }
 
-// spaHandler serves the built frontend and falls back to index.html for the
+// spaHandler serves the built web and falls back to index.html for the
 // client-side router. Reserved prefixes answer 404 like app.py's catch-all,
 // never SPA HTML.
 func spaHandler(dist string) http.Handler {

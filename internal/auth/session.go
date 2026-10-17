@@ -27,8 +27,8 @@ type Identity struct {
 
 // Service holds the shared DB handle plus in-memory rate-limit state.
 type Service struct {
-	DB          *sql.DB
-	DataDir     string
+	DB           *sql.DB
+	DataDir      string
 	TrustedProxy bool
 
 	MaxSeconds  int

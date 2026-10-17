@@ -16,11 +16,11 @@ import (
 	"time"
 )
 
-// TestBinaryServesPanel builds cmd/ovmanager, execs it bare, and asserts it
+// TestBinaryServesPanel builds cmd, execs it bare, and asserts it
 // answers the panel contract. It fails while main.go only serves /health.
 func TestBinaryServesPanel(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "ovmanager")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/ovmanager")
+	build := exec.Command("go", "build", "-o", bin, "./cmd")
 	build.Dir = ".."
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)

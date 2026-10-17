@@ -19,8 +19,8 @@ import (
 
 // Handler serves the /users routes.
 type Handler struct {
-	Svc  *auth.Service
-	mu   sync.Mutex
+	Svc *auth.Service
+	mu  sync.Mutex
 	// ponytail: in-memory Undo registry, per-process like the Python one; move
 	// to a table when the panel runs multi-worker.
 	deleted map[string]deletedUser

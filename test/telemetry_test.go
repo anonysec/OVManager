@@ -72,7 +72,7 @@ func TestActivityMatchesPython(t *testing.T) {
 	srv, token := newTelemetryServer(t, conn, dir)
 
 	rows := []struct {
-		ts           float64
+		ts                            float64
 		actor, action, target, detail any
 	}{
 		{100.0, "admin1", "user.create", "ann", `{"severity": "info"}`},
