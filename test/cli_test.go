@@ -117,6 +117,9 @@ func TestCLIDoctor(t *testing.T) {
 // dir.
 func TestCLIUpdateDryRun(t *testing.T) {
 	installDir, dataDir := cliFixture(t)
+	oldRootEuid := cli.UpdateRootEuid
+	cli.UpdateRootEuid = func() int { return 0 }
+	t.Cleanup(func() { cli.UpdateRootEuid = oldRootEuid })
 	before, _ := os.Stat(filepath.Join(installDir, ".env"))
 	var out bytes.Buffer
 	code := cli.Run([]string{"update", "--dry-run", "--install-dir", installDir, "--data-dir", dataDir}, &out)

@@ -168,8 +168,12 @@ func updatePlanLines(install Install, target string) []string {
 	}
 }
 
+// rootEuid matches the FetchHealth stub pattern: tests swap the root check so
+// the orchestrator's guard can be exercised on non-root CI runners.
+var UpdateRootEuid = os.Geteuid
+
 func runUpdate(install Install, opt updateOptions, out io.Writer) int {
-	if os.Geteuid() != 0 {
+	if UpdateRootEuid() != 0 {
 		fmt.Fprint(out, block([]string{failedLine("Must run as root")}))
 		return 1
 	}
