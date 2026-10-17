@@ -42,6 +42,9 @@ jobs:
           VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
           echo "VER=${VER}" >> "$GITHUB_ENV"
 
+      - name: Sync web version from internal/version
+        run: make version
+
       - name: Build frontend
         run: |
           cd web

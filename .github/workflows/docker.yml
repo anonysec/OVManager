@@ -24,6 +24,9 @@ jobs:
 
       # The Dockerfile embeds the SPA at Go build time and has no node stage,
       # so web/dist must exist in the build context.
+      - name: Sync web version from internal/version
+        run: make version
+
       - name: Build frontend
         run: |
           cd web
