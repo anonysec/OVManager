@@ -8,7 +8,6 @@
  *
  * Budgets (missing keys tolerated today):
  *   frontend fa/ru/cn: 0  (fully in sync)
- *   bot      fa/ru/cn: 0  (currently fully in sync)
  *
  * Lower a budget to zero once translations land — never raise one without
  * noting why in PROJECT_PLAN.md.
@@ -20,9 +19,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+// The bot locale group is gone: backend/bot/locales was deleted with the
+// Python backend (Phase 6). Only the SPA locales remain.
 const GROUPS = [
   { dir: join(root, 'src', 'lang'), locales: ['fa', 'ru', 'cn'], budget: 0 },
-  { dir: join(root, '..', 'backend', 'bot', 'locales'), locales: ['fa', 'ru', 'cn'], budget: 0 },
 ];
 
 let failures = 0;

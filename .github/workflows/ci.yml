@@ -9,9 +9,9 @@ on:
   pull_request:
 
 jobs:
-  # The SPA build on its own, so `backend` can start as soon as the artifact
-  # exists instead of idling behind lint and unit tests. The backend tests
-  # serve the panel from frontend/dist.
+  # The SPA build on its own, so the Go job can start as soon as the artifact
+  # exists instead of idling behind the frontend gate. The panel tests serve
+  # the built SPA from frontend/dist.
   frontend-dist:
     runs-on: ubuntu-latest
     defaults:
@@ -32,11 +32,7 @@ jobs:
           path: frontend/dist
 
   # The frontend gate is `npm run verify` — the same chain a developer runs,
-  # not a hand-picked subset. It previously ran lint/check:i18n/test/build as
-  # four ad-hoc steps, which silently skipped check:types (tsc) and
-  # check:tokens: the strict TypeScript gate was only ever enforced locally.
-  # The build runs here too, in parallel with frontend-dist, so the canonical
-  # chain stays the gate rather than being split across two jobs.
+  # not a hand-picked subset (it covers check:types (tsc) and check:tokens too).
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -52,7 +48,7 @@ jobs:
       - run: npm ci
       - run: npm run verify
 
-  backend:
+  go:
     runs-on: ubuntu-latest
     needs: frontend-dist
     env:
@@ -66,33 +62,16 @@ jobs:
         with:
           name: frontend-dist
           path: frontend/dist
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
-      - name: Install uv
-        run: pip install uv
-      - name: Sync deps + dev group
-        run: |
-          uv sync
-          # Test deps come from the lockfile (incl. httpx2 for
-          # starlette.testclient); no ad-hoc installs that can drift from it.
-          uv pip install --python .venv/bin/python3 pytest pytest-asyncio pytest-xdist
-      - name: Lint backend
-        run: |
-          # Same ruff the lockfile pins, so `make lint` here and in CI agree:
-          # an unpinned ruff reformatted files the local run called clean.
-          uv pip install --python .venv/bin/python3 "ruff==0.16.5"
-          # `make lint-backend`, not a second copy of it. This step and the
-          # Makefile each
-          # listed the lint targets, and after the bot moved under backend the
-          # Makefile was fixed while this one kept naming the old path — so CI
-          # died with E902 while `make lint` passed, twice. One command, one home.
-          make lint-backend
-
-      - name: Run backend tests
-        # -n auto: each xdist worker imports conftest, which allocates its own
-        # throwaway data dir with tempfile.mkdtemp(), so no two workers share a
-        # database. Verified locally at 4, 8 and 16 workers too, not just auto,
-        # so a runner with more cores than this box cannot expose a shared-state
-        # bug that two workers would have hidden.
-        run: .venv/bin/python -m pytest -q -n auto
+          go-version-file: go.mod
+          cache: true
+      - name: Lint
+        run: make lint
+      - name: Build
+        run: make build
+      - name: Test
+        # One command, one home: the parity suite (goparity) proves the Go
+        # binary answers like the Python app it replaced. CI and `make test`
+        # cannot drift.
+        run: make test

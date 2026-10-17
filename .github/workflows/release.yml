@@ -3,16 +3,16 @@
 
 name: Release assets
 
-# Builds the versioned install tarball (repo snapshot + prebuilt
-# frontend/dist) and attaches it to the published GitHub Release, so
-# install.sh --from-release (the default) can install without git/npm.
+# Builds the versioned install tarball (Go binary + prebuilt frontend/dist)
+# and attaches it to the published GitHub Release, so install.sh (the default
+# release path) can install without git, npm or a Go toolchain.
 on:
   release:
     types: [published]
   workflow_dispatch:
 
 jobs:
-  # The backend suite runs in ci.yml (push/PR gates). This workflow no longer
+  # The Go suite runs in ci.yml (push/PR gates). This workflow no longer
   # repeats it; the release is cut from a commit that passed CI.
   assets:
     runs-on: ubuntu-latest
@@ -25,10 +25,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Read version
+        run: |
+          VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
+          echo "VER=${VER}" >> "$GITHUB_ENV"
+
+      - name: Build Go binary
+        run: go build -o ovmanager ./cmd/ovmanager
 
       - name: Build frontend
         run: |
@@ -38,26 +52,25 @@ jobs:
 
       - name: Pack release tarball
         run: |
-          VER="$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
           STAGE="$(mktemp -d)"
           git archive --prefix="ovmanager-${VER}/" HEAD | tar -x -C "$STAGE"
           mkdir -p "$STAGE/ovmanager-${VER}/frontend"
+          cp ovmanager "$STAGE/ovmanager-${VER}/ovmanager"
           cp -r frontend/dist "$STAGE/ovmanager-${VER}/frontend/dist"
           # --owner/--group: the Actions runner is uid 1001, and plain tar
           # stores that, so extracting as root gave every install a tree owned
           # by a uid that does not exist on the target.
           # --strip-components=1 in install.sh's fetch_release pairs with this
           # --prefix so the installed tree lands flat at $INSTALL_DIR.
-          # Members are all under "ovmanager-<version>/", code plus
-          # "frontend/dist" inside it: install.sh strips ONE component, so
-          # "ovmanager-<version>/x" lands flat as "x" and the prebuilt UI
-          # lands at "frontend/dist". Archiving "." would add a "./" level
-          # and the strip would remove "." instead, leaving a nested version
-          # dir with no pyproject at top; keeping "frontend/dist" outside
-          # the prefix would strip it to a stray top-level "dist/".
+          # Members are all under "ovmanager-<version>/": the Go binary, the
+          # repo snapshot, and "frontend/dist" inside it. install.sh strips ONE
+          # component, so "ovmanager-<version>/ovmanager" lands flat as
+          # "ovmanager" and the prebuilt UI lands at "frontend/dist". Archiving
+          # "." would add a "./" level and the strip would remove "." instead,
+          # leaving a nested version dir; keeping "frontend/dist" outside the
+          # prefix would strip it to a stray top-level "dist/".
           tar --owner=0 --group=0 -czf "ovmanager-${VER}.tar.gz" -C "$STAGE" "ovmanager-${VER}"
           sha256sum "ovmanager-${VER}.tar.gz" > "ovmanager-${VER}.sha256"
-          echo "VER=${VER}" >> "$GITHUB_ENV"
 
       - name: Upload assets
         env:
