@@ -5,7 +5,7 @@ package cli
 import (
 	"strings"
 
-	"ovmanager-go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/panel"
 )
 
 func runURLPathShow(install Install) (string, int) {

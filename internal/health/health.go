@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/http"
 
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // Router returns the health endpoint as an http.Handler.

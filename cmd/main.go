@@ -12,16 +12,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/cli"
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/health"
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/panel"
-	"ovmanager-go/internal/telemetry"
-	"ovmanager-go/internal/users"
-	"ovmanager-go/internal/version"
-	"ovmanager-go/internal/webfs"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/cli"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/health"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/users"
+	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/webfs"
 )
 
 func main() {

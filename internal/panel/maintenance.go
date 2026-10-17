@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"ovmanager-go/internal/billing"
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // Panel maintenance: backups, restore, sync, cleanup and usage levers

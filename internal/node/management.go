@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // --- settings / crud helpers ---

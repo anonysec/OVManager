@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // Panel update checker (backend/routers/updater.py).

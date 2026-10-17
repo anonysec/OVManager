@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // extraTelemetryDDL is the observability schema Phase 3 needs on top of

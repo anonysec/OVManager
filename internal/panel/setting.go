@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"ovmanager-go/internal/telemetry"
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // Panel-settings validation (backend/routers/setting.py).

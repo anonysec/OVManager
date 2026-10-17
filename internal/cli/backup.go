@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"ovmanager-go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/panel"
 )
 
 const defaultBackupKeep = 14

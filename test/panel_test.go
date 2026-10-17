@@ -28,12 +28,12 @@ import (
 	"testing"
 	"time"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/panel"
-	"ovmanager-go/internal/telemetry"
-	"ovmanager-go/internal/users"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/users"
 )
 
 // panelSchema mirrors the columns the Phase 4 routers touch (models.py +

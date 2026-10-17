@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/telemetry"
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // check is one row of the /overview checklist.

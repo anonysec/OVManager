@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"testing"
 
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/health"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/health"
 )
 
 // releaseVersion reads internal/version/version.go so the served /health

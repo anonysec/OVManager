@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/users"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/users"
 )
 
 // pythonBcryptHash is a real bcrypt hash minted by the Python backend's

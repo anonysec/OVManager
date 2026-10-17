@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"ovmanager-go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
 // Handler serves the /users routes.

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ovmanager-go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/panel"
 )
 
 const (

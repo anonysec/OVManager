@@ -12,7 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"ovmanager-go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
 // cryptoRead fills b with random bytes (used by the audit event key and the

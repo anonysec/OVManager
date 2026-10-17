@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"ovmanager-go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // Security summary (backend/routers/security.py). Aggregates per-node login

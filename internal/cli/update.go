@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/panel"
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 const (

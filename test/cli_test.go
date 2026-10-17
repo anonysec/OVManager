@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"ovmanager-go/internal/cli"
+	"github.com/anonysec/OVManager/go/internal/cli"
 )
 
 // cliFixture builds an install layout the CLI can read: an .env, a 0700 data

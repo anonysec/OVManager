@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"ovmanager-go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/panel"
 )
 
 // declaredPaths points SSL_KEYFILE/SSL_CERTFILE at a temp dir beside DATA_DIR

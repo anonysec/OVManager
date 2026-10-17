@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"ovmanager-go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
 // --- event bus (live.py LiveBus) ---

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"ovmanager-go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/db"
 )
 
 func newMigrateDB(t *testing.T) *sql.DB {

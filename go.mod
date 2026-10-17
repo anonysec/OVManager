@@ -1,4 +1,4 @@
-module ovmanager-go
+module github.com/anonysec/OVManager/go
 
 go 1.26.0
 

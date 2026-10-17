@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"ovmanager-go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
 // TestAuthVerifiesPythonHash is the hash-parity guard: a hash written by the

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/db"
 )
 
 // BackupInfo is one restorable backup.

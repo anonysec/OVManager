@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // Handler serves the Phase 4 routes.

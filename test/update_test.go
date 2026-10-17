@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ovmanager-go/internal/cli"
+	"github.com/anonysec/OVManager/go/internal/cli"
 )
 
 func mustWrite(t *testing.T, path, body string) {

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ovmanager-go/internal/billing"
+	"github.com/anonysec/OVManager/go/internal/billing"
 )
 
 type golden struct {

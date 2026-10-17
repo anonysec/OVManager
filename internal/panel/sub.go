@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/telemetry"
-	"ovmanager-go/internal/webfs"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/webfs"
 )
 
 // Subscription page (backend/routers/sub.py). The template is the Jinja source

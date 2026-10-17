@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ovmanager-go/internal/auth"
-	"ovmanager-go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/db"
 )
 
 func runResetPassword(install Install, dataDir, password string) (string, int) {

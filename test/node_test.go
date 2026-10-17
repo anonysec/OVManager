@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"ovmanager-go/internal/db"
-	"ovmanager-go/internal/node"
-	"ovmanager-go/internal/version"
+	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // nodeSchema mirrors the columns backend/node/*.py touches.
