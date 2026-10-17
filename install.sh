@@ -4,10 +4,11 @@
 #
 # OVManager installer — bootstraps the Go binary.
 #
-# The panel and the `ovm` operator CLI are one Go binary. A default install
-# fetches the checksummed release tarball (the binary plus the prebuilt
-# web/dist), extracts it flat into $INSTALL_DIR, writes the systemd unit,
-# restarts, and verifies /health reports the release version. That last check
+# The panel and the `ovm` operator CLI are one Go binary with the built SPA
+# embedded, so a release ships bare per-platform binaries. A default install
+# fetches the checksummed binary for this platform straight into $INSTALL_DIR,
+# writes the systemd unit, restarts, and verifies /health reports the release
+# version. That last check
 # is the v1.6.0 gap: the old verify did not restart the service and probed a
 # dev layout, so a release that never came up still reported success.
 #
@@ -55,7 +56,7 @@ check_root()  { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
 
 check_deps() {
     local missing=()
-    for cmd in curl tar sha256sum openssl; do
+    for cmd in curl install sha256sum openssl; do
         command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
     done
     [[ ${#missing[@]} -eq 0 ]] \
@@ -63,45 +64,44 @@ check_deps() {
 }
 
 # ── Release fetch ──────────────────────────────────────────────────────
-release_base() { printf '%s-%s' "$APP_SLUG" "$VERSION"; }
+# Release assets are bare per-platform binaries (the built SPA is embedded in
+# the binary), each with a .sha256 sidecar. Map the machine's arch onto the
+# asset suffix release.yml publishes.
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)   printf 'amd64' ;;
+        aarch64|arm64)  printf 'arm64' ;;
+        *)              die "Unsupported architecture: $(uname -m) (need x86_64 or aarch64)" ;;
+    esac
+}
+
+release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
 
 release_url() {
-    printf 'https://github.com/%s/releases/download/v%s/%s.tar.gz' \
-        "$REPO" "$VERSION" "$(release_base)"
+    printf 'https://github.com/%s/releases/download/v%s/%s' \
+        "$REPO" "$VERSION" "$(release_asset)"
 }
 
-release_checksum_url() {
-    printf 'https://github.com/%s/releases/download/v%s/%s.sha256' \
-        "$REPO" "$VERSION" "$(release_base)"
-}
+release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
 
-# fetch_release <dir>: download the tarball, verify its sha256 sidecar, then
-# extract it flat. release.yml packs everything under one "ovmanager-<version>/"
-# top-level dir, so --strip-components=1 lands the binary, the repo snapshot and
-# web/dist directly in <dir>. The sidecar is verified before extraction.
+# fetch_release <dir>: download this platform's binary and its sha256 sidecar,
+# verify, then install it as $APP_SLUG under <dir>. No archive, no extract.
 fetch_release() {
-    local dest="$1" work base
-    base="$(release_base)"
+    local dest="$1" work asset
+    asset="$(release_asset)"
     work="$(mktemp -d)"
-    _note "fetching v$VERSION"
-    curl -fsSL -o "$work/$base.tar.gz" "$(release_url)" \
+    _note "fetching v$VERSION ($asset)"
+    curl -fsSL -o "$work/$asset" "$(release_url)" \
         || { rm -rf "$work"; die "No release file for v$VERSION — see https://github.com/$REPO/releases"; }
-    # A redirect stub or proxy block page must fail here, never as a checksum
-    # mismatch further down.
-    tar -tzf "$work/$base.tar.gz" >/dev/null 2>&1 \
-        || { rm -rf "$work"; die "Download for v$VERSION is not a release archive."; }
-    curl -fsSL -o "$work/$base.sha256" "$(release_checksum_url)" \
+    curl -fsSL -o "$work/$asset.sha256" "$(release_checksum_url)" \
         || { rm -rf "$work"; die "Release checksum file is missing for v$VERSION"; }
-    ( cd "$work" && sha256sum -c "$base.sha256" >/dev/null ) \
+    ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null ) \
         || { rm -rf "$work"; die "Release checksum mismatch for v$VERSION"; }
     mkdir -p "$dest"
-    # --no-same-owner: an archive from an older release still carries whatever
-    # uid built it, and extracting as root would restore that uid on the tree.
-    tar --no-same-owner --strip-components=1 -xzf "$work/$base.tar.gz" -C "$dest" \
-        || { rm -rf "$work"; die "Extract failed"; }
-    chown -R root:root "$dest"
+    install -m 0755 "$work/$asset" "$dest/$APP_SLUG"
+    chown root:root "$dest/$APP_SLUG"
     rm -rf "$work"
-    _ok "extracted v$VERSION to $dest"
+    _ok "installed v$VERSION to $dest"
 }
 
 # ── Configuration ──────────────────────────────────────────────────────
@@ -269,6 +269,11 @@ do_from_source() {
         "$src/" "$dest/"
 
     # The binary is the service: build it in place so the unit can ExecStart it.
+    # Stage the built SPA into the embed package first — this mirrors `make
+    # build`, the only step the release path does not need (its dist ships
+    # pre-embedded).
+    mkdir -p "$dest/internal/webfs/dist"
+    cp -a "$dest/web/dist/." "$dest/internal/webfs/dist/"
     ( cd "$dest" && go build -o "$APP_SLUG" ./cmd )
 
     mkdir -p "$dest/data"
