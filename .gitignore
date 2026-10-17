@@ -10,6 +10,11 @@ data/
 web/node_modules/
 web/dist/
 
+# Embedded SPA (staged by `make build`; .gitkeep keeps go:embed valid on a
+# clean checkout)
+internal/webfs/dist/*
+!internal/webfs/dist/.gitkeep
+
 # Go build
 /ovmanager
 

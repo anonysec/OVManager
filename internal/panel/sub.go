@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"html"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 
 	"ovmanager-go/internal/node"
 	"ovmanager-go/internal/telemetry"
+	"ovmanager-go/internal/webfs"
 )
 
 // Subscription page (backend/routers/sub.py). The template is the Jinja source
@@ -168,14 +170,16 @@ func sha16(value string) string {
 }
 
 func (h *Handler) subStaticJS(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Join(appDir(), "web", "templates", "subscription.js")
-	if !fileExists(path) {
-		auth404(w, "Not Found")
-		return
-	}
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	http.ServeFile(w, r, path)
+	// Disk override for dev; a release install has no web/ tree, so the copy
+	// embedded in the binary is the fallback (and the norm there).
+	path := filepath.Join(appDir(), "web", "templates", "subscription.js")
+	if fileExists(path) {
+		http.ServeFile(w, r, path)
+		return
+	}
+	_, _ = io.WriteString(w, webfs.SubJS())
 }
 
 func (h *Handler) subPage(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"ovmanager-go/internal/telemetry"
 	"ovmanager-go/internal/users"
 	"ovmanager-go/internal/version"
+	"ovmanager-go/internal/webfs"
 )
 
 func main() {
@@ -58,7 +60,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root.Handle("/health", health.Router())
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
-	root.Handle("/", spaHandler(filepath.Join(appDir(), "web", "dist")))
+	root.Handle("/", spaHandler())
 	return root
 }
 
@@ -76,9 +78,16 @@ func appDir() string {
 // spaHandler serves the built web and falls back to index.html for the
 // client-side router. Reserved prefixes answer 404 like app.py's catch-all,
 // never SPA HTML.
-func spaHandler(dist string) http.Handler {
-	fs := http.FileServer(http.Dir(dist))
-	index := filepath.Join(dist, "index.html")
+//
+// The SPA comes from <appDir>/web/dist when that tree exists (a dev checkout,
+// or an explicit OVM_APP_DIR); otherwise — a release install ships only the
+// binary — it is served from the copy embedded via internal/webfs.
+func spaHandler() http.Handler {
+	var fsys fs.FS = webfs.Dist()
+	if dist := filepath.Join(appDir(), "web", "dist"); diskIndex(dist) {
+		fsys = os.DirFS(dist)
+	}
+	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "doc" || path == "openapi.json" || strings.HasPrefix(path, "assets/") {
@@ -89,12 +98,27 @@ func spaHandler(dist string) http.Handler {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if _, err := os.Stat(filepath.Join(dist, filepath.FromSlash(path))); err == nil {
-			fs.ServeHTTP(w, r)
+		if path == "" {
+			path = "index.html"
+		}
+		if _, err := fs.Stat(fsys, filepath.ToSlash(path)); err == nil {
+			fileServer.ServeHTTP(w, r)
 			return
 		}
-		http.ServeFile(w, r, index)
+		index, err := fs.ReadFile(fsys, "index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(index)
 	})
+}
+
+// diskIndex reports whether dir holds a built index.html.
+func diskIndex(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "index.html"))
+	return err == nil
 }
 
 func env(key, fallback string) string {
