@@ -34,6 +34,9 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer conn.Close()
+	if _, err := db.Migrate(conn); err != nil {
+		log.Fatalf("migrate database: %v", err)
+	}
 
 	addr := net.JoinHostPort(env("HOST", "0.0.0.0"), env("PORT", "2095"))
 	// ponytail: no TLS/graceful shutdown yet — install.sh terminates TLS in
