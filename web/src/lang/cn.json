@@ -857,5 +857,9 @@
   "logsFollow": "跟随",
   "logsRefresh": "刷新",
   "logsEmpty": "暂无日志输出",
-  "logsError": "日志加载失败。"
+  "logsError": "日志加载失败。",
+  "settingsTlsAcmeTitle": "签发证书（Let's Encrypt）",
+  "settingsTlsAcmeHint": "面板自带 ACME 客户端，无需 acme.sh。域名必须已指向本服务器，且签发期间 80 端口需可从互联网访问。",
+  "settingsTlsAcmeButton": "签发证书",
+  "settingsTlsAcmeIssuing": "签发中…最长可能需要两分钟。请保持此标签页打开。"
 }

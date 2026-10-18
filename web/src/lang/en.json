@@ -857,5 +857,9 @@
   "logsFollow": "Follow",
   "logsRefresh": "Refresh",
   "logsEmpty": "No log output",
-  "logsError": "Failed to load logs."
+  "logsError": "Failed to load logs.",
+  "settingsTlsAcmeTitle": "Issue certificate (Let's Encrypt)",
+  "settingsTlsAcmeHint": "The panel runs the ACME client itself — no acme.sh needed. The domain must already point at this server, and port 80 must be reachable from the internet during issuance.",
+  "settingsTlsAcmeButton": "Issue certificate",
+  "settingsTlsAcmeIssuing": "Issuing… this can take up to two minutes. Keep this tab open."
 }

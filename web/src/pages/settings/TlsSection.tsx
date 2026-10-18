@@ -387,6 +387,36 @@ const TlsSection = () => {
     }
   };
 
+  // Built-in ACME issuance (POST /tls/acme): no acme.sh on the host — the
+  // panel runs the HTTP-01 flow itself against a temporary port-80 listener.
+  const doAcmeIssue = async () => {
+    setBusy('acme');
+    setArea('acme', null);
+    setArea('restart', null);
+    try {
+      const res = await apiClient.post(
+        '/tls/acme',
+        { domain: domain.trim(), email: email.trim() },
+        { timeout: RENEW_TIMEOUT_MS },
+      );
+      const env = res.data || {};
+      if (env.success === false) {
+        setArea('acme', { tone: 'error', text: env.msg || t('settingsTlsRequestFailed', REQUEST_FAILED) });
+      } else {
+        setArea('acme', { tone: 'success', text: env.msg || t('saved', 'Saved.') });
+        setPendingRestart(true);
+        refreshStatus({ silent: true });
+      }
+    } catch {
+      setArea('acme', {
+        tone: 'error',
+        text: t('settingsTlsRenewLost', 'No answer from the server. The request can take up to two minutes — refresh the status above before retrying.'),
+      });
+    } finally {
+      setBusy('');
+    }
+  };
+
   if (loading && !status) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (error && !status) {
     return (
@@ -704,6 +734,56 @@ const TlsSection = () => {
         )}
         {feedback.renew && <Notice tone={feedback.renew.tone}>{feedback.renew.text}</Notice>}
         {feedback.renew?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
+      </Card>
+
+      <Card title={t('settingsTlsAcmeTitle', "Issue certificate (Let's Encrypt)")} icon={<FiGlobe aria-hidden="true" />}>
+        <p className="ts-hint">
+          {t('settingsTlsAcmeHint', 'The panel runs the ACME client itself — no acme.sh needed. The domain must already point at this server, and port 80 must be reachable from the internet during issuance.')}
+        </p>
+        <div className="ts-renew-grid">
+          <Field label={t('settingsTlsDomain', 'Domain')}>
+            <input
+              type="text"
+              value={domain}
+              placeholder={t('settingsTlsDomainPlaceholder', 'panel.example.com')}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={busy !== ''}
+              onChange={(e) => setDomain(e.target.value)}
+            />
+          </Field>
+          <Field
+            label={t('settingsTlsEmail', 'Email')}
+            hint={t('settingsTlsEmailHint', "Optional. Let's Encrypt uses it for expiry notices; a temporary address is used when it is empty.")}
+          >
+            <input
+              type="email"
+              value={email}
+              placeholder={t('settingsTlsEmailPlaceholder', 'you@example.com')}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={busy !== ''}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="ts-actions">
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<FiGlobe size={13} aria-hidden="true" />}
+            loading={busy === 'acme'}
+            disabled={restarting || (busy !== '' && busy !== 'acme') || !domain.trim()}
+            onClick={doAcmeIssue}
+          >
+            {t('settingsTlsAcmeButton', 'Issue certificate')}
+          </Button>
+        </div>
+        {busy === 'acme' && (
+          <p className="ts-hint">{t('settingsTlsAcmeIssuing', 'Issuing… this can take up to two minutes. Keep this tab open.')}</p>
+        )}
+        {feedback.acme && <Notice tone={feedback.acme.tone}>{feedback.acme.text}</Notice>}
+        {feedback.acme?.tone === 'success' && restartNeeded && !restartDone && restartPrompt}
       </Card>
 
       <ConfirmModal

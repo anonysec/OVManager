@@ -857,5 +857,9 @@
   "logsFollow": "دنبال کردن",
   "logsRefresh": "بازخوانی",
   "logsEmpty": "خروجی لاگ وجود ندارد",
-  "logsError": "بارگیری لاگ‌ها ناموفق بود."
+  "logsError": "بارگیری لاگ‌ها ناموفق بود.",
+  "settingsTlsAcmeTitle": "صدور گواهی (Let's Encrypt)",
+  "settingsTlsAcmeHint": "پنل خودش کلاینت ACME را اجرا می‌کند — به acme.sh نیازی نیست. دامنه باید از قبل به این سرور اشاره کند و در زمان صدور، پورت ۸۰ از اینترنت قابل دسترسی باشد.",
+  "settingsTlsAcmeButton": "صدور گواهی",
+  "settingsTlsAcmeIssuing": "در حال صدور… ممکن است تا دو دقیقه طول بکشد. این تب را باز نگه دارید."
 }
