@@ -1,3 +1,7 @@
+## 2.1.1 — 2026-10-18
+
+Fix: SPA assets returned 404 (assets/ was in the reserved-prefix list), breaking page load. Fix: installer created DATA_DIR before minting claim key. Fix: from-source update source-tree check (cmd/main.go). 
+
 ## 2.1.0 — 2026-10-18
 
 Feature-gap wave (x-ui comparison): ACME one-click TLS + T-30d auto-renew,
