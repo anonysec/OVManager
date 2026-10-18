@@ -382,7 +382,7 @@ func stageRelease(stage, target, fromSource string, install Install) error {
 		if src == "." {
 			src, _ = os.Getwd()
 		}
-		if _, err := os.Stat(filepath.Join(src, "cmd", "ovmanager")); err != nil {
+		if _, err := os.Stat(filepath.Join(src, "cmd", "main.go")); err != nil {
 			return fmt.Errorf("no Go source tree in %s", src)
 		}
 		cmd := exec.Command("rsync", "-a", "--delete",
