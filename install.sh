@@ -130,6 +130,15 @@ write_env() {
         printf 'URLPATH=\n'
         printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"
         printf 'DATA_DIR=%s\n' "$data_dir"
+        if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
+            # One-click TLS at bootstrap: the panel issues a Let's Encrypt
+            # certificate over HTTP-01 shortly after first start (daily worker),
+            # writing this declared pair. The paths live under DATA_DIR so the
+            # unprivileged panel account can write them.
+            printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
+            printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
+            printf 'OVM_ACME_DOMAIN=%s\n' "$OVM_ACME_DOMAIN"
+        fi
     } > "$envfile"
     )
     chmod 600 "$envfile"
@@ -150,6 +159,42 @@ mint_claim_key() {
 }
 
 # ── Service ────────────────────────────────────────────────────────────
+# check_acme_domain validates the operator's OVM_ACME_DOMAIN early. Fail-soft:
+# an invalid domain is a warning and a plain-HTTP install, never a dead run.
+check_acme_domain() {
+    [[ -z "${OVM_ACME_DOMAIN:-}" ]] && return 0
+    if [[ "$OVM_ACME_DOMAIN" != *[!A-Za-z0-9.-]* && "$OVM_ACME_DOMAIN" == *.* ]]; then
+        _ok "acme    Let's Encrypt issuance scheduled for $OVM_ACME_DOMAIN"
+        return 0
+    fi
+    _warn "OVM_ACME_DOMAIN '$OVM_ACME_DOMAIN' is not a valid DNS name — issuing is skipped, the panel stays on plain HTTP"
+    OVM_ACME_DOMAIN=""
+}
+
+# verify_acme <data_dir>: the panel's worker issues shortly after first start.
+# Poll up to 3 minutes for the declared pair; a miss is a warning and the
+# panel keeps serving plain HTTP. The certificate must parse and hold at
+# least one day — otherwise the pair cannot terminate TLS anywhere.
+verify_acme() {
+    local data_dir="$1" cert key i check
+    cert="$data_dir/tls/fullchain.pem"
+    key="$data_dir/tls/privkey.pem"
+    _note "waiting for the Let's Encrypt certificate (up to 180s)…"
+    for ((i = 0; i < 60; i++)); do
+        if [[ -s "$cert" && -s "$key" ]]; then
+            if check="$(openssl x509 -in "$cert" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
+                _ok "acme    certificate installed at $cert"
+                _note "point your front TLS proxy (or a TLS vhost) at these files to go live"
+                return 0
+            fi
+        fi
+        sleep 3
+    done
+    _warn "no Let's Encrypt certificate after 3 minutes — the panel continues on plain HTTP"
+    _warn "  check journalctl -u $SYSTEMD_SERVICE, or issue from Settings → HTTPS in the panel"
+    return 0
+}
+
 ensure_panel_user() {
     id -u "$PANEL_USER" >/dev/null 2>&1 && return 0
     mkdir -p "$DATA_DIR"
@@ -175,6 +220,10 @@ Group=$PANEL_USER
 ExecStart=$INSTALL_DIR/$APP_SLUG
 Restart=on-failure
 RestartSec=3
+# The built-in ACME client binds the standalone HTTP-01 listener on port 80
+# only during issuance; the bind must work even though the panel runs as
+# $PANEL_USER.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
@@ -378,6 +427,7 @@ do_install() {
 
     local key port
     ensure_panel_user
+    check_acme_domain
     fetch_release "$INSTALL_DIR"
     write_env "$INSTALL_DIR/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
@@ -396,6 +446,9 @@ do_install() {
 
     install_cli
     _ok "installed v$VERSION to $INSTALL_DIR (service $SYSTEMD_SERVICE, port $port)"
+    if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
+        verify_acme "$DATA_DIR"
+    fi
     if [[ -n "$key" ]]; then
         printf '\n  Open  http://<host>:%s/  and claim the panel with this key:\n\n      %s\n\n' \
             "$port" "$key" >&2
@@ -426,12 +479,23 @@ COMMANDS
   help                       Show this help
 
 OPTIONS
+  --acme DOMAIN              Request a Let's Encrypt certificate for DOMAIN
+                             (HTTP-01; port 80 must reach this server). Same as
+                             pre-setting OVM_ACME_DOMAIN in the environment.
+                             On failure the install continues on plain HTTP.
   --from-source [DIR]        Dev install from a working tree (default: the
                              current directory): rsync + go build + a dev unit,
                              no release fetch
   --dest DIR                 with --from-source: destination (default /opt/ovmanager)
   -y, --yes                  Accept all defaults (the bootstrap never prompts)
   -h, --help                 Show this help
+
+ENVIRONMENT
+  OVM_ACME_DOMAIN=<domain>   Same as --acme DOMAIN: after first start the panel
+                             issues a Let's Encrypt certificate over HTTP-01
+                             and renews automatically (T-30 days). The install
+                             never dies over issuance; it warns and the panel
+                             keeps serving plain HTTP until it works.
 
 After installation, use ovm (alias: ovmanager) for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery and updates.
@@ -478,6 +542,7 @@ parse_args() {
         case "$1" in
             --from-source) FROM_SOURCE=1; shift
                            if [[ $# -ge 1 && "$1" != -* ]]; then SRC="$1"; shift; fi ;;
+            --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
             -y|--yes)      shift ;;
             -h|--help)     usage ;;
