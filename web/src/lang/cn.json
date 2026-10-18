@@ -861,5 +861,15 @@
   "settingsTlsAcmeTitle": "签发证书（Let's Encrypt）",
   "settingsTlsAcmeHint": "面板自带 ACME 客户端，无需 acme.sh。域名必须已指向本服务器，且签发期间 80 端口需可从互联网访问。",
   "settingsTlsAcmeButton": "签发证书",
-  "settingsTlsAcmeIssuing": "签发中…最长可能需要两分钟。请保持此标签页打开。"
+  "settingsTlsAcmeIssuing": "签发中…最长可能需要两分钟。请保持此标签页打开。",
+  "settingsTelegram": "Telegram 通知",
+  "settingsTelegramDesc": "每日用量摘要、用户事件与测试消息",
+  "telegramEnabledHint": "每日摘要、用户过期/超额事件以及节点/CPU 告警会发送到所有者会话。",
+  "telegramChatId": "会话 ID",
+  "telegramSummaryTime": "每日摘要时间（HH:MM）",
+  "telegramSummaryHint": "24 小时制；用量报告每天在此时间发送一次。",
+  "telegramTokenMasked": "来自 @BotFather，只写保存——已保存的令牌显示为 ••…末4位。",
+  "telegramSendTest": "发送测试消息",
+  "telegramTestOk": "测试消息已发送。",
+  "telegramTestFail": "测试失败"
 }

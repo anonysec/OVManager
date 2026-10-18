@@ -861,5 +861,15 @@
   "settingsTlsAcmeTitle": "صدور گواهی (Let's Encrypt)",
   "settingsTlsAcmeHint": "پنل خودش کلاینت ACME را اجرا می‌کند — به acme.sh نیازی نیست. دامنه باید از قبل به این سرور اشاره کند و در زمان صدور، پورت ۸۰ از اینترنت قابل دسترسی باشد.",
   "settingsTlsAcmeButton": "صدور گواهی",
-  "settingsTlsAcmeIssuing": "در حال صدور… ممکن است تا دو دقیقه طول بکشد. این تب را باز نگه دارید."
+  "settingsTlsAcmeIssuing": "در حال صدور… ممکن است تا دو دقیقه طول بکشد. این تب را باز نگه دارید.",
+  "settingsTelegram": "اعلان‌های تلگرام",
+  "settingsTelegramDesc": "خلاصه روزانه، رویدادهای کاربران و پیام آزمایشی",
+  "telegramEnabledHint": "خلاصه روزانه، رویداد انقضا/عبور از سهمیه و هشدارهای گره و پردازنده به چت مالک ارسال می‌شود.",
+  "telegramChatId": "شناسه چت",
+  "telegramSummaryTime": "ساعت خلاصه روزانه (HH:MM)",
+  "telegramSummaryHint": "قالب ۲۴ ساعته؛ گزارش مصرف روزانه یک بار در روز در این ساعت ارسال می‌شود.",
+  "telegramTokenMasked": "از @BotFather، فقط برای نوشتن — توکن ذخیره‌شده به شکل ••…چهار کاراکتر آخر نمایش داده می‌شود.",
+  "telegramSendTest": "ارسال پیام آزمایشی",
+  "telegramTestOk": "پیام آزمایشی ارسال شد.",
+  "telegramTestFail": "آزمایش ناموفق"
 }

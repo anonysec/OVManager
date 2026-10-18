@@ -861,5 +861,15 @@
   "settingsTlsAcmeTitle": "Issue certificate (Let's Encrypt)",
   "settingsTlsAcmeHint": "The panel runs the ACME client itself — no acme.sh needed. The domain must already point at this server, and port 80 must be reachable from the internet during issuance.",
   "settingsTlsAcmeButton": "Issue certificate",
-  "settingsTlsAcmeIssuing": "Issuing… this can take up to two minutes. Keep this tab open."
+  "settingsTlsAcmeIssuing": "Issuing… this can take up to two minutes. Keep this tab open.",
+  "settingsTelegram": "Telegram notifications",
+  "settingsTelegramDesc": "Daily usage summary, user events and the send-test probe",
+  "telegramEnabledHint": "Daily summary, expired/over-quota events and node/CPU alerts go to the owner chat.",
+  "telegramChatId": "Chat ID",
+  "telegramSummaryTime": "Daily summary time (HH:MM)",
+  "telegramSummaryHint": "24-hour time; the usage report is sent once a day at this time.",
+  "telegramTokenMasked": "From @BotFather, write-only — the saved token shows as ••…last4.",
+  "telegramSendTest": "Send test message",
+  "telegramTestOk": "Test message sent.",
+  "telegramTestFail": "Test failed"
 }

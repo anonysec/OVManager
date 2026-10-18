@@ -24,6 +24,7 @@ import SystemSection from './settings/SystemSection';
 import SecuritySection from './settings/SecuritySection';
 import BackupSection from './settings/BackupSection';
 import TlsSection from './settings/TlsSection';
+import TelegramSection from './settings/TelegramSection';
 import MyActivitySection from './settings/MyActivitySection';
 import './Settings.css';
 import './SettingsPage.css';
@@ -35,6 +36,7 @@ const SECTIONS = [
   { id: 'alerts',     icon: FiBell,      labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },
   { id: 'bot',        icon: FiSend,      labelKey: 'settingsBot',        label: 'Bot',        descKey: 'settingsBotDesc',        desc: 'Telegram bot token, enable state and owner ID', Component: BotSection, shared: true },
   { id: 'tls',        icon: FiLock,      labelKey: 'settingsTls',        label: 'TLS',        descKey: 'settingsTlsDesc',        desc: 'Certificate status for the panel itself', Component: TlsSection },
+  { id: 'telegram',   icon: FiSend,      labelKey: 'settingsTelegram',   label: 'Telegram',   descKey: 'settingsTelegramDesc',   desc: 'Daily usage summary, user events and test message', Component: TelegramSection, shared: true },
   { id: 'backup',     icon: FiArchive,   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection },
   { id: 'security',   icon: FiShield,    labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
   { id: 'display',    icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
