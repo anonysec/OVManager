@@ -91,7 +91,7 @@ func spaHandler() http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "doc" || path == "openapi.json" || strings.HasPrefix(path, "assets/") {
+		if path == "doc" || path == "openapi.json" {
 			http.NotFound(w, r)
 			return
 		}
