@@ -125,7 +125,7 @@ write_env() {
     (
     umask 077
     {
-        printf 'HOST=0.0.0.0\n'
+        printf 'HOST=127.0.0.1\n'
         printf 'PORT=%s\n' "$DEFAULT_PORT"
         printf 'URLPATH=\n'
         printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"

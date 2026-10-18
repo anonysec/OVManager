@@ -38,12 +38,28 @@ func main() {
 		log.Fatalf("migrate database: %v", err)
 	}
 
-	addr := net.JoinHostPort(env("HOST", "0.0.0.0"), env("PORT", "2095"))
-	// ponytail: no TLS/graceful shutdown yet — install.sh terminates TLS in
-	// front of the panel; add timeouts when the binary becomes the edge.
-	log.Printf("ovmanager-go %s listening on %s", version.Version, addr)
-	if err := http.ListenAndServe(addr, panelRouter(auth.NewService(conn, dataDir))); err != nil {
-		log.Fatalf("listen %s: %v", addr, err)
+	port := env("PORT", "2095")
+	certFile := panel.SSLCertPath()
+	keyFile := panel.SSLKeyPath()
+	tlsEnabled := fileExists(certFile) && fileExists(keyFile)
+
+	handler := panelRouter(auth.NewService(conn, dataDir))
+
+	var addr string
+	if tlsEnabled {
+		// Never expose plaintext on 0.0.0.0: TLS on, bind all interfaces.
+		addr = net.JoinHostPort("0.0.0.0", port)
+		log.Printf("ovmanager-go %s listening on https://%s (TLS)", version.Version, addr)
+		if err := http.ListenAndServeTLS(addr, certFile, keyFile, handler); err != nil {
+			log.Fatalf("listen %s: %v", addr, err)
+		}
+	} else {
+		// No certificate: localhost only, never 0.0.0.0 over plain HTTP.
+		addr = net.JoinHostPort("127.0.0.1", port)
+		log.Printf("ovmanager-go %s listening on http://%s (no TLS)", version.Version, addr)
+		if err := http.ListenAndServe(addr, handler); err != nil {
+			log.Fatalf("listen %s: %v", addr, err)
+		}
 	}
 }
 
@@ -130,4 +146,13 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+
+func fileExists(p string) bool {
+	if p == "" {
+		return false
+	}
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir()
 }

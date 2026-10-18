@@ -185,15 +185,20 @@ func sslKeyPath() string {
 	if v := envOrFile("SSL_KEYFILE"); v != "" {
 		return v
 	}
-	return "/etc/ovmanager/tls/privkey.pem"
+	return filepath.Join(dataDir(), "tls", "privkey.pem")
 }
 
 func sslCertPath() string {
 	if v := envOrFile("SSL_CERTFILE"); v != "" {
 		return v
 	}
-	return "/etc/ovmanager/tls/fullchain.pem"
+	return filepath.Join(dataDir(), "tls", "fullchain.pem")
 }
+
+// SSLCertPath / SSLKeyPath are the exported forms used by cmd/main to decide
+// binding and TLS mode.
+func SSLCertPath() string { return sslCertPath() }
+func SSLKeyPath() string   { return sslKeyPath() }
 
 func subscriptionPath() string {
 	if v := strings.Trim(envOrFile("SUBSCRIPTION_PATH"), "/"); v != "" {
