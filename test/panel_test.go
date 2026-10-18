@@ -337,9 +337,9 @@ func TestPanelSurface(t *testing.T) {
 		{name: "tls renew bad domain", method: "POST", path: "/api/tls/renew",
 			body: map[string]any{"domain": "not a domain"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false), msgContains: "not valid"},
-		{name: "tls renew acme missing", method: "POST", path: "/api/tls/renew",
+		{name: "tls renew missing email", method: "POST", path: "/api/tls/renew",
 			body: map[string]any{"domain": "vpn.example.com"}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false), msgContains: "acme.sh is not installed"},
+			wantSuccess: boolPtr(false), msgContains: "contact email address is required"},
 		{name: "https status alias", method: "GET", path: "/api/https/status", wantStatus: 200, wantEnvelope: true},
 
 		// --- updater ---

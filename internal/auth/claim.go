@@ -58,7 +58,7 @@ func (e errKeyUnreadable) Error() string { return e.msg }
 
 func (s *Service) ownerIsClaimed() bool {
 	var hash sql.NullString
-	err := s.DB.QueryRow(`SELECT password FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&hash)
+	err := s.DB().QueryRow(`SELECT password FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&hash)
 	return err == nil && hash.Valid && hash.String != ""
 }
 
@@ -136,9 +136,9 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 	}
 	var ownerID int64
 	var ownerName string
-	rowErr := s.DB.QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&ownerID, &ownerName)
+	rowErr := s.DB().QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&ownerID, &ownerName)
 	var conflictID int64
-	conflictErr := s.DB.QueryRow(`SELECT id FROM admins WHERE username = ?`, chosen).Scan(&conflictID)
+	conflictErr := s.DB().QueryRow(`SELECT id FROM admins WHERE username = ?`, chosen).Scan(&conflictID)
 
 	if conflictErr == nil && (rowErr == sql.ErrNoRows || chosen != ownerName) {
 		writeDetail(w, http.StatusConflict, "An admin with this username already exists")
@@ -150,9 +150,9 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rowErr == sql.ErrNoRows {
-		_, err = s.DB.Exec(`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, chosen, hash)
+		_, err = s.DB().Exec(`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, chosen, hash)
 	} else {
-		_, err = s.DB.Exec(`UPDATE admins SET username = ?, password = ?, is_owner = 1 WHERE id = ?`, chosen, hash, ownerID)
+		_, err = s.DB().Exec(`UPDATE admins SET username = ?, password = ?, is_owner = 1 WHERE id = ?`, chosen, hash, ownerID)
 	}
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, "Could not create the owner account")
@@ -181,7 +181,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 	}
 	var ownerID int64
 	var ownerName string
-	if err := s.DB.QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&ownerID, &ownerName); err != nil {
+	if err := s.DB().QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&ownerID, &ownerName); err != nil {
 		writeDetail(w, http.StatusConflict, "No owner row found. Sign in, or reinstall the panel.")
 		return
 	}
@@ -190,7 +190,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 		chosen = ownerName
 	}
 	var conflictID int64
-	if err := s.DB.QueryRow(`SELECT id FROM admins WHERE username = ?`, chosen).Scan(&conflictID); err == nil && conflictID != ownerID {
+	if err := s.DB().QueryRow(`SELECT id FROM admins WHERE username = ?`, chosen).Scan(&conflictID); err == nil && conflictID != ownerID {
 		writeDetail(w, http.StatusConflict, "An admin with this username already exists")
 		return
 	}
@@ -199,7 +199,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 		writeDetail(w, http.StatusInternalServerError, "Could not reset the owner account")
 		return
 	}
-	if _, err := s.DB.Exec(`UPDATE admins SET username = ?, password = ?, is_owner = 1 WHERE id = ?`, chosen, hash, ownerID); err != nil {
+	if _, err := s.DB().Exec(`UPDATE admins SET username = ?, password = ?, is_owner = 1 WHERE id = ?`, chosen, hash, ownerID); err != nil {
 		writeDetail(w, http.StatusInternalServerError, "Could not reset the owner account")
 		return
 	}
@@ -210,7 +210,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 
 // claimRateLimited reproduces owner_claim.py's per-IP failure window.
 func (s *Service) claimRateLimited(r *http.Request) bool {
-	key := sha16(s.clientIP(r))
+	key := Sha16(s.clientIP(r))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
@@ -236,7 +236,7 @@ func (s *Service) claimRateLimited(r *http.Request) bool {
 }
 
 func (s *Service) noteClaimFailure(r *http.Request) {
-	key := sha16(s.clientIP(r))
+	key := Sha16(s.clientIP(r))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[key] = append(s.failures[key], nowSecs())

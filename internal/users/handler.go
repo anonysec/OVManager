@@ -140,7 +140,7 @@ func (u userRow) tag() any {
 }
 
 func (h *Handler) byUUID(uuidStr string) (userRow, bool) {
-	u, err := scanUser(h.Svc.DB.QueryRow(`SELECT `+userCols+` FROM users WHERE uuid = ?`, uuidStr))
+	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE uuid = ?`, uuidStr))
 	if err != nil {
 		return userRow{}, false
 	}
@@ -203,11 +203,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	if serverFilter {
 		like := "%" + escapeLike(search) + "%"
-		if err := h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE name LIKE ? ESCAPE '\'`, like).Scan(&total); err != nil {
+		if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users WHERE name LIKE ? ESCAPE '\'`, like).Scan(&total); err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 			return
 		}
-		res, err := h.Svc.DB.Query(`SELECT `+userCols+` FROM users WHERE name LIKE ? ESCAPE '\' ORDER BY id LIMIT ? OFFSET ?`,
+		res, err := h.Svc.DB().Query(`SELECT `+userCols+` FROM users WHERE name LIKE ? ESCAPE '\' ORDER BY id LIMIT ? OFFSET ?`,
 			like, pageSize, (page-1)*pageSize)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
@@ -215,7 +215,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = scanAll(res)
 	} else {
-		res, err := h.Svc.DB.Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
+		res, err := h.Svc.DB().Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 			return
@@ -278,7 +278,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.ReplaceAll(req.Name, " ", "_")
 	var exists int64
-	if err := h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE name = ?`, name).Scan(&exists); err == nil && exists > 0 {
+	if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users WHERE name = ?`, name).Scan(&exists); err == nil && exists > 0 {
 		auth.WriteDetail(w, http.StatusConflict, "User with this name already exists")
 		return
 	}
@@ -298,7 +298,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := h.Svc.DB.Exec(
+	res, err := h.Svc.DB().Exec(
 		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
 		 VALUES (?, ?, ?, ?, 0, '{}', ?, ?, 1, ?)`,
 		uuid.NewString(), name, req.Total, req.Used, maxLogins, expiry, tag,
@@ -308,7 +308,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
-	row, _ := scanUser(h.Svc.DB.QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	row, _ := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User created successfully. VPN config will be generated on first download.",
@@ -379,7 +379,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		row.IsActive = 1
 	}
 
-	if _, err := h.Svc.DB.Exec(
+	if _, err := h.Svc.DB().Exec(
 		`UPDATE users SET total = ?, max_logins = ?, expiry_date = ?, is_active = ?, tag = ? WHERE uuid = ?`,
 		row.Total, row.MaxLogins, row.ExpiryDate.String, row.IsActive, nullTag(row.Tag), uuidStr,
 	); err != nil {
@@ -422,7 +422,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	if *req.Status {
 		active = 1
 	}
-	if _, err := h.Svc.DB.Exec(`UPDATE users SET is_active = ? WHERE uuid = ?`, active, uuidStr); err != nil {
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET is_active = ? WHERE uuid = ?`, active, uuidStr); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not change user status")
 		return
 	}
@@ -443,7 +443,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 			nodeUsage = string(mustJSON(map[string]json.RawMessage{"push_hash": push}))
 		}
 	}
-	if _, err := h.Svc.DB.Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, nodeUsage, uuidStr); err != nil {
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, nodeUsage, uuidStr); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 		return
 	}
@@ -458,7 +458,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var count int64
-	if err := h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+	if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
 		return
 	}
@@ -479,13 +479,13 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 // delete: the row is already gone, so log and move on rather than leaving the
 // request stuck (no partial-failure state).
 func (h *Handler) deleteRow(row userRow) error {
-	if _, err := h.Svc.DB.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
+	if _, err := h.Svc.DB().Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
 		return err
 	}
-	if _, err := h.Svc.DB.Exec(`DELETE FROM users WHERE id = ?`, row.ID); err != nil {
+	if _, err := h.Svc.DB().Exec(`DELETE FROM users WHERE id = ?`, row.ID); err != nil {
 		return err
 	}
-	if failures, _ := node.DeleteUserOnAllNodes(row.ID, h.Svc.DB)["failed"].([]string); len(failures) > 0 {
+	if failures, _ := node.DeleteUserOnAllNodes(row.ID, h.Svc.DB())["failed"].([]string); len(failures) > 0 {
 		log.Printf("users: user %s deleted panel-side; node fan-out failed on %v", row.Name, failures)
 	}
 	return nil
@@ -530,7 +530,7 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := entry.snap
-	if _, err := h.Svc.DB.Exec(
+	if _, err := h.Svc.DB().Exec(
 		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snap.UUID, snap.Name, snap.Total, snap.Used, snap.LastNodeUsage, nonEmpty(snap.NodeUsage, "{}"),
@@ -581,7 +581,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		total += req.Bytes
 		row.Total = &total
 	}
-	if _, err := h.Svc.DB.Exec(`UPDATE users SET total = ?, expiry_date = ? WHERE uuid = ?`,
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET total = ?, expiry_date = ? WHERE uuid = ?`,
 		row.Total, row.ExpiryDate.String, uuidStr); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not extend user")
 		return
@@ -596,7 +596,7 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 		userNotFound(w)
 		return
 	}
-	total, perNode := aggregateNodeUsage(h.Svc.DB, row)
+	total, perNode := aggregateNodeUsage(h.Svc.DB(), row)
 	// ponytail: per-day series needs Phase 3 billing; shape stays stable.
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
@@ -671,7 +671,7 @@ type defaults struct{ days, trafficGB, maxUsers int }
 
 func (h *Handler) userDefaults() defaults {
 	d := defaults{days: 30, trafficGB: 100, maxUsers: 1}
-	_ = h.Svc.DB.QueryRow(`SELECT default_days, default_traffic_gb, default_max_users FROM settings LIMIT 1`).
+	_ = h.Svc.DB().QueryRow(`SELECT default_days, default_traffic_gb, default_max_users FROM settings LIMIT 1`).
 		Scan(&d.days, &d.trafficGB, &d.maxUsers)
 	if d.days == 0 {
 		d.days = 30

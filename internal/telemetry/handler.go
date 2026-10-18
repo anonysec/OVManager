@@ -60,7 +60,7 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true, Msg: "Activity retrieved",
-		Data: recentEvents(h.Svc.DB, limit, actor, action),
+		Data: recentEvents(h.Svc.DB(), limit, actor, action),
 	})
 }
 
@@ -108,7 +108,7 @@ var inboxTypes = map[string]bool{"threshold_expiry": true, "threshold_cpu": true
 
 func (h *Handler) notifications(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
-	rows, err := h.Svc.DB.Query(`SELECT name, status FROM nodes ORDER BY id`)
+	rows, err := h.Svc.DB().Query(`SELECT name, status FROM nodes ORDER BY id`)
 	if err == nil {
 		for rows.Next() {
 			var name string
@@ -122,7 +122,7 @@ func (h *Handler) notifications(w http.ResponseWriter, r *http.Request) {
 		}
 		rows.Close()
 	}
-	for _, item := range thresholdItems(h.Svc.DB) {
+	for _, item := range thresholdItems(h.Svc.DB()) {
 		if t, _ := item["type"].(string); inboxTypes[t] {
 			items = append(items, item)
 		}
@@ -212,7 +212,7 @@ func thresholdItems(db *sql.DB) []map[string]any {
 }
 
 func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
-	CollectMetrics(h.Svc.DB)
+	CollectMetrics(h.Svc.DB())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Metrics snapshot collected"})
 }
 
@@ -253,8 +253,8 @@ func EnsureExtraTables(db *sql.DB) {
 // history mirrors metrics.history.
 func (h *Handler) metricsHistory(w http.ResponseWriter, r *http.Request) {
 	hours := intQuery(r, "hours", 24)
-	EnsureExtraTables(h.Svc.DB)
-	data := history(h.Svc.DB, hours)
+	EnsureExtraTables(h.Svc.DB())
+	data := history(h.Svc.DB(), hours)
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Metrics history", Data: data})
 }
 

@@ -156,7 +156,7 @@ func (h *Handler) updateTimezone(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := setColumns(h.Svc.DB, map[string]any{"timezone": tz}); err != nil {
+	if err := setColumns(h.Svc.DB(), map[string]any{"timezone": tz}); err != nil {
 		envelope(w, false, "Invalid timezone: "+tz, nil)
 		return
 	}
@@ -223,7 +223,7 @@ func (h *Handler) updateSubscription(w http.ResponseWriter, r *http.Request) {
 	if payload.SubUpdateIntervalHours != nil {
 		updates["sub_update_interval_hours"] = *payload.SubUpdateIntervalHours
 	}
-	if err := setColumns(h.Svc.DB, updates); err != nil {
+	if err := setColumns(h.Svc.DB(), updates); err != nil {
 		envelope(w, false, "Subscription link settings updated", nil)
 		return
 	}
@@ -262,7 +262,7 @@ func (h *Handler) updateDomain(w http.ResponseWriter, r *http.Request) {
 		value = domain
 		msg = "VPN domain updated"
 	}
-	if err := setColumns(h.Svc.DB, map[string]any{"panel_domain": value}); err != nil {
+	if err := setColumns(h.Svc.DB(), map[string]any{"panel_domain": value}); err != nil {
 		envelope(w, false, "VPN domain update failed", nil)
 		return
 	}
@@ -370,7 +370,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	// Make sure a settings row exists before pointing columns at it
 	// (readSettings seeds it — a 0-row UPDATE would otherwise silently pass,
 	// see tls.go's issuance flow for the same trap).
-	readSettings(h.Svc.DB)
+	readSettings(h.Svc.DB())
 	if payload.AutoBackupTime != nil && !autoBackupTimeRe.MatchString(*payload.AutoBackupTime) {
 		envelope(w, false, "auto_backup_time must be a valid 24-hour time in HH:MM format", nil)
 		return
@@ -431,7 +431,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 			updates[col.column] = value
 		}
 	}
-	if err := setColumns(h.Svc.DB, updates); err != nil {
+	if err := setColumns(h.Svc.DB(), updates); err != nil {
 		envelope(w, false, "Bot config update failed", nil)
 		return
 	}
@@ -480,7 +480,7 @@ func (h *Handler) testAlert(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "Unsupported alert channel: "+channel, nil)
 		return
 	}
-	sent := telemetry.SendTelegram(h.Svc.DB, "OVManager test alert — Telegram notifications are wired up.")
+	sent := telemetry.SendTelegram(h.Svc.DB(), "OVManager test alert — Telegram notifications are wired up.")
 	msg := "Telegram test failed — check the bot token, owner chat ID and that the bot is enabled"
 	if sent {
 		msg = "Test alert sent to Telegram"

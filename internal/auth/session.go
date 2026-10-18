@@ -26,8 +26,15 @@ type Identity struct {
 }
 
 // Service holds the shared DB handle plus in-memory rate-limit state.
+//
+// The DB pointer sits behind dbmu: a restore swaps the live database in place
+// (panel.activateDatabase), and an unguarded field would race every query
+// against the swap. Read it through DB(); NewService/DBSwap are the only
+// writers.
 type Service struct {
-	DB           *sql.DB
+	dbmu sync.RWMutex
+	db   *sql.DB
+
 	DataDir      string
 	TrustedProxy bool
 
@@ -43,13 +50,42 @@ type Service struct {
 // (SESSION_MAX_SECONDS=604800, SESSION_IDLE_SECONDS=1800).
 func NewService(db *sql.DB, dataDir string) *Service {
 	return &Service{
-		DB:          db,
+		db:          db,
 		DataDir:     dataDir,
 		MaxSeconds:  envInt("SESSION_MAX_SECONDS", 604800),
 		IdleSeconds: envInt("SESSION_IDLE_SECONDS", 1800),
 		attempts:    map[string][]float64{},
 		failures:    map[string][]float64{},
 	}
+}
+
+// DB returns the live database handle (swap-safe).
+func (s *Service) DB() *sql.DB {
+	s.dbmu.RLock()
+	defer s.dbmu.RUnlock()
+	return s.db
+}
+
+// DBSwap atomically replaces the live database handle and returns the
+// previous one (activateDatabase closes it after the swap settles).
+func (s *Service) DBSwap(fresh *sql.DB) *sql.DB {
+	s.dbmu.Lock()
+	defer s.dbmu.Unlock()
+	old := s.db
+	s.db = fresh
+	return old
+}
+
+// DBClose closes the live handle (tests, process teardown).
+func (s *Service) DBClose() error {
+	s.dbmu.Lock()
+	defer s.dbmu.Unlock()
+	if s.db == nil {
+		return nil
+	}
+	err := s.db.Close()
+	s.db = nil
+	return err
 }
 
 func envInt(key string, fallback int) int {
@@ -83,7 +119,7 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 	if len(ip) > 64 {
 		ip = ip[:64]
 	}
-	_, err := s.DB.Exec(
+	_, err := s.DB().Exec(
 		`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at, user_agent, ip)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		tokenHash(raw), username, role, now, now+float64(ttl), now, nullIfEmpty(userAgent), nullIfEmpty(ip),
@@ -114,7 +150,7 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 	var id int64
 	var ident Identity
 	var expiresAt, lastSeen float64
-	err := s.DB.QueryRow(
+	err := s.DB().QueryRow(
 		`SELECT id, username, role, expires_at, last_seen_at FROM sessions WHERE token_hash = ?`,
 		tokenHash(raw),
 	).Scan(&id, &ident.Username, &ident.Type, &expiresAt, &lastSeen)
@@ -126,12 +162,12 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 	}
 	now := nowSecs()
 	if now >= expiresAt || now-lastSeen > float64(s.IdleSeconds) {
-		_, _ = s.DB.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+		_, _ = s.DB().Exec(`DELETE FROM sessions WHERE id = ?`, id)
 		return zero, false
 	}
 	if now-lastSeen >= touchThrottleSeconds {
 		// A failed touch must never break the request.
-		_, _ = s.DB.Exec(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now, id)
+		_, _ = s.DB().Exec(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now, id)
 	}
 	return ident, true
 }
@@ -141,7 +177,7 @@ func (s *Service) RevokeToken(raw string) bool {
 	if raw == "" {
 		return false
 	}
-	res, err := s.DB.Exec(`DELETE FROM sessions WHERE token_hash = ?`, tokenHash(raw))
+	res, err := s.DB().Exec(`DELETE FROM sessions WHERE token_hash = ?`, tokenHash(raw))
 	if err != nil {
 		return false
 	}
@@ -151,7 +187,7 @@ func (s *Service) RevokeToken(raw string) bool {
 
 // RevokeUserSessions deletes every session of a user.
 func (s *Service) RevokeUserSessions(username string) int {
-	res, err := s.DB.Exec(`DELETE FROM sessions WHERE username = ?`, username)
+	res, err := s.DB().Exec(`DELETE FROM sessions WHERE username = ?`, username)
 	if err != nil {
 		return 0
 	}
@@ -162,7 +198,7 @@ func (s *Service) RevokeUserSessions(username string) int {
 // PurgeExpired deletes dead sessions (absolute cap OR idle timeout).
 func (s *Service) PurgeExpired() int {
 	now := nowSecs()
-	res, err := s.DB.Exec(
+	res, err := s.DB().Exec(
 		`DELETE FROM sessions WHERE expires_at <= ? OR (? - last_seen_at) > ?`,
 		now, now, s.IdleSeconds,
 	)
@@ -177,7 +213,7 @@ func (s *Service) PurgeExpired() int {
 // (auth.py role_is_current).
 func (s *Service) roleIsCurrent(username, role string) bool {
 	var isOwner int64
-	err := s.DB.QueryRow(`SELECT is_owner FROM admins WHERE username = ?`, username).Scan(&isOwner)
+	err := s.DB().QueryRow(`SELECT is_owner FROM admins WHERE username = ?`, username).Scan(&isOwner)
 	if err == sql.ErrNoRows || err != nil {
 		return false
 	}
@@ -192,7 +228,7 @@ func (s *Service) roleIsCurrent(username, role string) bool {
 func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	var hash string
 	var isOwner int64
-	err := s.DB.QueryRow(`SELECT password, is_owner FROM admins WHERE username = ?`, username).Scan(&hash, &isOwner)
+	err := s.DB().QueryRow(`SELECT password, is_owner FROM admins WHERE username = ?`, username).Scan(&hash, &isOwner)
 	if err != nil || hash == "" || isOwner == 0 {
 		_, _ = bcryptWaste(password)
 		return Identity{}, false
@@ -202,7 +238,7 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	}
 	if NeedsRehash(hash) {
 		if fresh, err := HashPassword(password); err == nil {
-			_, _ = s.DB.Exec(`UPDATE admins SET password = ? WHERE username = ?`, fresh, username)
+			_, _ = s.DB().Exec(`UPDATE admins SET password = ? WHERE username = ?`, fresh, username)
 		}
 	}
 	return Identity{Username: username, Type: "owner"}, true

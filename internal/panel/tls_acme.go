@@ -123,7 +123,7 @@ func (h *Handler) tlsACMEIssue(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.runIssuance(r.Context(), domain)
 	if err != nil {
-		telemetry.RecordEvent(h.Svc.DB, "tls_acme", "error",
+		telemetry.RecordEvent(h.Svc.DB(), "tls_acme", "error",
 			"Let's Encrypt certificate issuance failed for "+domain,
 			map[string]any{"target": domain, "detail": err.Error()})
 		envelope(w, false,
@@ -134,8 +134,8 @@ func (h *Handler) tlsACMEIssue(w http.ResponseWriter, r *http.Request) {
 	// The pair is active on disk; make sure a settings row exists before
 	// pointing the SSL_* columns at it (readSettings seeds the row — a fresh
 	// install has none, and a 0-row UPDATE would silently pass).
-	readSettings(h.Svc.DB)
-	if err := setColumns(h.Svc.DB, map[string]any{
+	readSettings(h.Svc.DB())
+	if err := setColumns(h.Svc.DB(), map[string]any{
 		"ssl_cert_file": sslCertPath(), "ssl_key_file": sslKeyPath(),
 	}); err != nil {
 		// The pair is active on disk; only the settings row failed.
@@ -144,7 +144,7 @@ func (h *Handler) tlsACMEIssue(w http.ResponseWriter, r *http.Request) {
 				"key_path": sslKeyPath(), "domain": domain, "expires_days": res.expiresDays})
 		return
 	}
-	telemetry.RecordEvent(h.Svc.DB, "tls_acme", "info",
+	telemetry.RecordEvent(h.Svc.DB(), "tls_acme", "info",
 		"Let's Encrypt certificate installed for "+domain,
 		map[string]any{"target": domain, "expires_days": res.expiresDays})
 	envelope(w, true, fmt.Sprintf("Let's Encrypt certificate for %s installed. %s", domain, restartHint),
@@ -178,7 +178,7 @@ func (h *Handler) runIssuance(ctx context.Context, domain string) (*acmeIssueRes
 	if err != nil {
 		return nil, err
 	}
-	parsed, err := h.writeManagedFiles(res.KeyPEM, res.CertPEM, "lets-encrypt")
+	parsed, err := writeManagedFiles(res.KeyPEM, res.CertPEM, "lets-encrypt")
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func loadOrCreateAccountKey() (crypto.Signer, error) {
 		return nil, err
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	if err := NewHandler(nil).atomicWrite(path, pemBytes, 0o600); err != nil {
+	if err := atomicWrite(path, pemBytes, 0o600); err != nil {
 		return nil, err
 	}
 	return key, nil
@@ -216,56 +216,66 @@ func loadOrCreateAccountKey() (crypto.Signer, error) {
 
 // --- renewal worker (single goroutine, daily tick) ---
 
-// acmeRenewInterval is the daily check; acmeBootCheckDelay leaves the panel
-// time to settle before the OVM_ACME_DOMAIN boot issuance.
+// acmeRenewInterval is the daily check. acmeRetryInterval is the shorter
+// re-attempt after a FAILED issuance (a flaky network should not cost the
+// certificate a whole day). acmeBootCheckDelay leaves the panel time to
+// settle before the OVM_ACME_DOMAIN boot issuance.
 const (
 	acmeRenewInterval  = 24 * time.Hour
+	acmeRetryInterval  = 4 * time.Hour
 	acmeBootCheckDelay = 45 * time.Second
 )
 
 var acmeWorkerOnce sync.Once
 
-// startACMEWorker launches the renewal loop once per process. Idempotent, so
-// Mount can call it unconditionally.
+// startACMEWorker launches the renewal loop once per process. Idempotent,
+// so Mount can call it unconditionally.
 func (h *Handler) startACMEWorker() {
 	acmeWorkerOnce.Do(func() {
 		go func() {
 			time.Sleep(acmeBootCheckDelay)
 			for {
-				h.acmeMaintenance()
-				time.Sleep(acmeRenewInterval)
+				if h.acmeMaintenance() {
+					time.Sleep(acmeRenewInterval)
+				} else {
+					// A issuance just failed: retry sooner instead of
+					// waiting out the daily tick.
+					time.Sleep(acmeRetryInterval)
+				}
 			}
 		}()
 	})
 }
 
-// acmeMaintenance is one worker tick: enrolled domain required, renewal only
-// when RenewDue says so. Failures are audit events, synced after the next
-// tick (or the endpoint).
-func (h *Handler) acmeMaintenance() {
+// acmeMaintenance is one worker tick: enrolled domain required, renewal
+// only when RenewDue says so. It reports whether the tick ended without
+// an issuance failure (no domain, nothing due, or success). Failures are
+// audit events, synced after the next tick (or the endpoint).
+func (h *Handler) acmeMaintenance() bool {
 	domain := h.acmeDomain()
 	if domain == "" {
-		return
+		return true
 	}
 	keyRaw, _ := os.ReadFile(sslKeyPath())
 	certRaw, _ := os.ReadFile(sslCertPath())
 	if !acme.RenewDue(keyRaw, certRaw, acmeWindowDays) {
-		return
+		return true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), acmeHTTPIssueTimeout+10*time.Second)
 	defer cancel()
 	res, err := h.runIssuance(ctx, domain)
 	if err != nil {
-		telemetry.RecordEvent(h.Svc.DB, "tls_acme.renew", "error",
+		telemetry.RecordEvent(h.Svc.DB(), "tls_acme.renew", "error",
 			"Automatic Let's Encrypt renewal failed for "+domain,
 			map[string]any{"target": domain, "detail": err.Error()})
-		return
+		return false
 	}
-	readSettings(h.Svc.DB)
-	_ = setColumns(h.Svc.DB, map[string]any{
+	readSettings(h.Svc.DB())
+	_ = setColumns(h.Svc.DB(), map[string]any{
 		"ssl_cert_file": sslCertPath(), "ssl_key_file": sslKeyPath(),
 	})
-	telemetry.RecordEvent(h.Svc.DB, "tls_acme.renew", "info",
+	telemetry.RecordEvent(h.Svc.DB(), "tls_acme.renew", "info",
 		"Let's Encrypt certificate renewed for "+domain,
 		map[string]any{"target": domain, "expires_days": daysUntil(res.parsed)})
+	return true
 }

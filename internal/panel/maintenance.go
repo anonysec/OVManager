@@ -2,7 +2,10 @@ package panel
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -16,6 +19,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
@@ -83,7 +87,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 		return "", err
 	}
 	_ = os.Chmod(backupDir(), 0o700)
-	if _, err := h.Svc.DB.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+	if _, err := h.Svc.DB().Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		return "", err
 	}
 
@@ -96,7 +100,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 	_ = os.Chmod(snapshot, 0o600)
 	_ = os.Remove(snapshot) // VACUUM INTO refuses an existing target
 	defer func() { _ = os.Remove(snapshot) }()
-	if _, err := h.Svc.DB.Exec(`VACUUM INTO ?`, snapshot); err != nil {
+	if _, err := h.Svc.DB().Exec(`VACUUM INTO ?`, snapshot); err != nil {
 		return "", err
 	}
 
@@ -251,10 +255,7 @@ func writeUploadCapped(src multipart.File, dst string, limit int64) error {
 			}
 		}
 		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			}
-			if strings.Contains(err.Error(), "EOF") {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err
@@ -326,7 +327,7 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 		if safetyName != "" {
 			safety = safetyName
 		}
-		telemetry.RecordEvent(h.Svc.DB, "db_restore", "error",
+		telemetry.RecordEvent(h.Svc.DB(), "db_restore", "error",
 			"Database restore failed and rolled back", map[string]any{
 				"target": actor, "detail": detail, "error": msg,
 			})
@@ -343,6 +344,11 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 	var err error
 	candidate, err = stageCandidate(srcPath)
 	if err != nil {
+		return fail(err)
+	}
+	// Gate BEFORE any activation: a candidate from a different release
+	// (older or newer schema) must not become the live database.
+	if err := h.restoreVersionCompatible(candidate); err != nil {
 		return fail(err)
 	}
 
@@ -375,7 +381,7 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 	if err := verifyDatabase(dbFilePath()); err != nil {
 		return fail(err)
 	}
-	telemetry.RecordEvent(h.Svc.DB, "db_restore", "info",
+	telemetry.RecordEvent(h.Svc.DB(), "db_restore", "info",
 		"Database restored and verified successfully",
 		map[string]any{"target": actor, "detail": detail, "safety_backup": safetyName})
 	return restoreResult{true, "Database restored and verified successfully",
@@ -390,14 +396,47 @@ func (h *Handler) activateDatabase(write func(dst string) error) error {
 	}
 	_ = os.Chmod(dbFilePath(), 0o600)
 	removeSQLiteSidecars()
-	old := h.Svc.DB
 	fresh, err := db.Open(dbFilePath())
 	if err != nil {
 		return err
 	}
-	h.Svc.DB = fresh
+	// DBSwap publishes the new pool under the service's db lock; readers keep
+	// taking handles from DB() so no goroutine queries the closed old pool.
+	old := h.Svc.DBSwap(fresh)
 	if old != nil {
 		_ = old.Close()
+	}
+	// The Telegram worker holds no stale copy either way; its handle is
+	// swap-guarded, but point it at the fresh pool immediately.
+	if w := notify.Running(); w != nil {
+		w.SwapDB(fresh)
+	}
+	return nil
+}
+
+// restoreVersionCompatible rejects a candidate whose schema version
+// (PRAGMA user_version) differs from the live database: a candidate from an
+// older release would regress the schema (the migration runner is one-way),
+// and one from a newer release would leave the running code behind it.
+func (h *Handler) restoreVersionCompatible(candidate string) error {
+	var live int
+	if err := h.Svc.DB().QueryRow(`PRAGMA user_version`).Scan(&live); err != nil {
+		// The live file is unreadable — restoring is the recovery path.
+		return nil
+	}
+	probe, err := db.Open(candidate)
+	if err != nil {
+		return err
+	}
+	defer probe.Close()
+	var cand int
+	if err := probe.QueryRow(`PRAGMA user_version`).Scan(&cand); err != nil {
+		return err
+	}
+	if cand != live {
+		return fmt.Errorf(
+			"schema version mismatch: backup at %d, live at %d; restore a backup of this release instead",
+			cand, live)
 	}
 	return nil
 }
@@ -454,12 +493,12 @@ func isSQLiteError(err error) bool {
 }
 
 func (h *Handler) syncLimits(w http.ResponseWriter, r *http.Request) {
-	data := node.SyncAllUserLimits(h.Svc.DB)
+	data := node.SyncAllUserLimits(h.Svc.DB())
 	envelope(w, true, "Login limits synced", data)
 }
 
 func (h *Handler) cleanStale(w http.ResponseWriter, r *http.Request) {
-	data := node.CleanStaleSessionsAllNodes(h.Svc.DB)
+	data := node.CleanStaleSessionsAllNodes(h.Svc.DB())
 	envelope(w, true, "Stale sessions cleaned", data)
 }
 
@@ -516,7 +555,7 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 	case "all":
 		where = "(" + expired + ") OR (" + disabled + ")"
 	}
-	rows, err := h.Svc.DB.Query(`SELECT id, name FROM users WHERE ` + where + ` ORDER BY id DESC`)
+	rows, err := h.Svc.DB().Query(`SELECT id, name FROM users WHERE ` + where + ` ORDER BY id DESC`)
 	if err != nil {
 		return nil
 	}
@@ -550,7 +589,7 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 		sample = append(sample, c["name"].(string))
 	}
 	var total int
-	_ = h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total)
+	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total)
 	envelope(w, true, fmt.Sprintf("%d user(s) match", len(candidates)), map[string]any{
 		"status": status, "older_than_days": payload.OlderThanDays,
 		"matched": len(candidates), "sample": sample,
@@ -573,19 +612,48 @@ func (h *Handler) cleanupRun(w http.ResponseWriter, r *http.Request) {
 	}
 	candidates := h.cleanupCandidates(payload)
 	names := []string{}
+	fanoutFailed := []string{}
+	var lastTxErr error
 	for _, c := range candidates {
 		name, _ := c["name"].(string)
 		id, _ := c["id"].(int64)
-		_, _ = h.Svc.DB.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, id)
-		_, _ = h.Svc.DB.Exec(`DELETE FROM users WHERE id = ?`, id)
+		// One transaction per user: traffic rows and the users row go together,
+		// so a cleanup never leaves a user half-deleted.
+		tx, err := h.Svc.DB().Begin()
+		if err != nil {
+			lastTxErr = err
+			break
+		}
+		if _, err := tx.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, id); err == nil {
+			_, err = tx.Exec(`DELETE FROM users WHERE id = ?`, id)
+		}
+		if err != nil {
+			_ = tx.Rollback()
+			lastTxErr = err
+			continue
+		}
+		if err := tx.Commit(); err != nil {
+			lastTxErr = err
+			continue
+		}
+		// Same contract as the users DELETE route: the panel-side row is gone,
+		// so unreachable nodes are reported, not rolled back.
+		if failures, _ := node.DeleteUserOnAllNodes(id, h.Svc.DB())["failed"].([]string); len(failures) > 0 {
+			fanoutFailed = append(fanoutFailed, fmt.Sprintf("%s: %s", name, strings.Join(failures, ", ")))
+			log.Printf("maintenance: cleanup deleted user %s; node fan-out failed on %v", name, failures)
+		}
 		names = append(names, name)
+	}
+	if lastTxErr != nil && len(names) == 0 {
+		envelope(w, false, "Cleanup failed: "+lastTxErr.Error(), nil)
+		return
 	}
 	if len(names) > 0 {
 		telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	}
 	envelope(w, true, fmt.Sprintf("Deleted %d user(s)", len(names)), map[string]any{
 		"deleted": len(names), "names": names, "status": status,
-		"older_than_days": payload.OlderThanDays,
+		"older_than_days": payload.OlderThanDays, "node_delete_failed": fanoutFailed,
 	})
 }
 
@@ -598,7 +666,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "Confirmation required — resend with confirm=true", nil)
 		return
 	}
-	res, err := h.Svc.DB.Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = '{}'`)
+	res, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = '{}'`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 		return
@@ -621,8 +689,8 @@ func (h *Handler) usagePurge(w http.ResponseWriter, r *http.Request) {
 	if keep == 0 {
 		keep = 90
 	}
-	removed := billing.PruneDaily(h.Svc.DB, keep)
-	removedLedger := billing.PruneLedger(h.Svc.DB, keep, 5000)
+	removed := billing.PruneDaily(h.Svc.DB(), keep)
+	removedLedger := billing.PruneLedger(h.Svc.DB(), keep, 5000)
 	envelope(w, true, fmt.Sprintf("Removed %d daily usage row(s)", removed),
 		map[string]any{"removed": removed, "removed_ledger": removedLedger})
 }

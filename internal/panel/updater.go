@@ -156,8 +156,23 @@ func fetchLatest(repo string) (string, string, string) {
 	if code == 200 {
 		var tags []map[string]any
 		if json.Unmarshal(raw, &tags) == nil && len(tags) > 0 {
-			if name, _ := tags[0]["name"].(string); name != "" {
-				return strings.TrimSpace(name), "github", ""
+			// GitHub returns tags newest-first, but not always (git push order
+			// leaks through): pick the highest version instead of tags[0].
+			// versionNewer ignores non-version tags ("nightly"), so a tag-less
+			// push order still falls back to the first entry.
+			best := ""
+			for _, tag := range tags {
+				name, _ := tag["name"].(string)
+				name = strings.TrimSpace(name)
+				if name == "" {
+					continue
+				}
+				if best == "" || versionNewer(name, best) {
+					best = name
+				}
+			}
+			if best != "" {
+				return best, "github", ""
 			}
 		}
 	}

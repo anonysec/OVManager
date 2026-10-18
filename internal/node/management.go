@@ -760,7 +760,7 @@ func (h *Handler) nodeByID(r *http.Request) *Node {
 	if err != nil {
 		return nil
 	}
-	return GetNodeByID(h.svc.DB, id)
+	return GetNodeByID(h.svc.DB(), id)
 }
 
 func decodeBody(r *http.Request, v any) bool {
@@ -781,11 +781,11 @@ func (h *Handler) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteValidation(w, "name", "Node name is required")
 		return
 	}
-	if getNodeByName(h.svc.DB, req.Name) != nil {
+	if getNodeByName(h.svc.DB(), req.Name) != nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: fmt.Sprintf("A node named '%s' already exists. Choose a different name.", req.Name)})
 		return
 	}
-	ok, msg := AddNodeHandler(req, h.svc.DB)
+	ok, msg := AddNodeHandler(req, h.svc.DB())
 	if ok {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node added successfully"})
 		return
@@ -806,7 +806,7 @@ func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "API key is required."})
 		return
 	}
-	c, err := NewClient(req.Address, req.port(), req.key(), "", PanelIDFor(h.svc.DB), 0)
+	c, err := NewClient(req.Address, req.port(), req.key(), "", PanelIDFor(h.svc.DB()), 0)
 	if err != nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Invalid address: " + err.Error()})
 		return
@@ -829,11 +829,11 @@ func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
-	if clash := getNodeByName(h.svc.DB, req.Name); clash != nil && clash.ID != id {
+	if clash := getNodeByName(h.svc.DB(), req.Name); clash != nil && clash.ID != id {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: fmt.Sprintf("Another node is already named '%s'.", req.Name)})
 		return
 	}
-	ok, msg := UpdateNodeHandler(id, req, h.svc.DB)
+	ok, msg := UpdateNodeHandler(id, req, h.svc.DB())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
 }
 
@@ -843,7 +843,7 @@ func (h *Handler) handleNodeStatus(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node status retrieved successfully", Data: GetNodeStatus(h.svc.DB, n.ID)})
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node status retrieved successfully", Data: GetNodeStatus(h.svc.DB(), n.ID)})
 }
 
 func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
@@ -858,7 +858,7 @@ func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Could not fetch the node's certificate."})
 		return
 	}
-	_, _ = h.svc.DB.Exec(`UPDATE nodes SET server_ca = ? WHERE id = ?`, pem, n.ID)
+	_, _ = h.svc.DB().Exec(`UPDATE nodes SET server_ca = ? WHERE id = ?`, pem, n.ID)
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Certificate pin updated.", Data: map[string]any{"repinned": true}})
 }
 
@@ -873,7 +873,7 @@ func (h *Handler) handleNodeLogs(w http.ResponseWriter, r *http.Request) {
 	if limit == 0 {
 		limit = 100
 	}
-	c := NodeClient(n, PanelIDFor(h.svc.DB))
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node logs retrieved successfully", Data: c.GetLogs(level, limit)})
 }
 
@@ -895,7 +895,7 @@ func (h *Handler) handleNodeDNS(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Provide dns1 and/or dns2."})
 		return
 	}
-	c := NodeClient(n, PanelIDFor(h.svc.DB))
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
 	applied := c.UpdateConfig(UpdateConfigParams{TunnelAddress: n.TunnelAddress, Protocol: n.Protocol, OVPNPort: n.OVPNPort, DNS1: req.DNS1, DNS2: req.DNS2})
 	if applied != true {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "The node rejected the DNS update — check the addresses are valid IPs and that the node is reachable."})
@@ -922,7 +922,7 @@ func (h *Handler) handleNodeIPv6(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Provide enable_ipv6 and/or ipv6_prefix."})
 		return
 	}
-	c := NodeClient(n, PanelIDFor(h.svc.DB))
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
 	applied := c.UpdateConfig(UpdateConfigParams{TunnelAddress: n.TunnelAddress, Protocol: n.Protocol, OVPNPort: n.OVPNPort, EnableIPv6: req.EnableIPv6, IPv6Prefix: req.IPv6Prefix})
 	if applied != true {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "The node rejected the IPv6 update — check the prefix is a valid IPv6 network and that the node is reachable."})
@@ -948,7 +948,7 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Provide extra_ports — a comma-separated port list, or an empty string to clear."})
 		return
 	}
-	c := NodeClient(n, PanelIDFor(h.svc.DB))
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
 	answer := c.UpdateConfig(UpdateConfigParams{TunnelAddress: n.TunnelAddress, Protocol: n.Protocol, OVPNPort: n.OVPNPort, ExtraPorts: req.ExtraPorts, ReturnEnvelope: true})
 	if answer == nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Node unreachable — the ports were not changed."})
@@ -977,7 +977,7 @@ func (h *Handler) nodeEnvelopeAction(w http.ResponseWriter, r *http.Request, cal
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
-	c := NodeClient(n, PanelIDFor(h.svc.DB))
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
 	answer := call(c)
 	if answer == nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: unreachable})
@@ -1004,7 +1004,7 @@ func (h *Handler) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleListNodes(w http.ResponseWriter, r *http.Request) {
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Nodes retrieved successfully", Data: listNodes(h.svc.DB)})
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Nodes retrieved successfully", Data: listNodes(h.svc.DB())})
 }
 
 func (h *Handler) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
@@ -1013,7 +1013,7 @@ func (h *Handler) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Failed to delete node"})
 		return
 	}
-	ok := DeleteNodeHandler(n.ID, h.svc.DB)
+	ok := DeleteNodeHandler(n.ID, h.svc.DB())
 	msg := "Node deleted successfully"
 	if !ok {
 		msg = "Failed to delete node"
@@ -1032,7 +1032,7 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 	var active bool
 	var total, used sql.NullInt64
 	var expiry sql.NullString
-	if err := h.svc.DB.QueryRow(`SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`, uuid).Scan(&userID, &active, &total, &used, &expiry); err != nil {
+	if err := h.svc.DB().QueryRow(`SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`, uuid).Scan(&userID, &active, &total, &used, &expiry); err != nil {
 		auth.WriteDetail(w, http.StatusNotFound, "User not found")
 		return
 	}
@@ -1056,7 +1056,7 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusForbidden, "User traffic limit reached")
 		return
 	}
-	content := DownloadOVPNClient(userID, nodeID, h.svc.DB)
+	content := DownloadOVPNClient(userID, nodeID, h.svc.DB())
 	if content == nil {
 		auth.WriteDetail(w, http.StatusNotFound, "OVPN file not found")
 		return
@@ -1073,12 +1073,12 @@ func (h *Handler) handleDownloadAllOVPN(w http.ResponseWriter, r *http.Request) 
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found or configs unavailable")
 		return
 	}
-	n := GetNodeByID(h.svc.DB, nodeID)
+	n := GetNodeByID(h.svc.DB(), nodeID)
 	if n == nil {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found or configs unavailable")
 		return
 	}
-	content := DownloadAllOVPNClients(nodeID, h.svc.DB)
+	content := DownloadAllOVPNClients(nodeID, h.svc.DB())
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s_all_clients.zip"`, n.Name))
 	w.WriteHeader(http.StatusOK)

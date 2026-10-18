@@ -15,8 +15,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
-// cryptoRead fills b with random bytes (used by the audit event key and the
-// placeholder ACME email).
+// cryptoRead fills b with random bytes (used by the audit event key).
 func cryptoRead(b []byte) (int, error) { return rand.Read(b) }
 
 // readAtMost reads at most limit bytes, mirroring

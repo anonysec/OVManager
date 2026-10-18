@@ -120,7 +120,8 @@ func checkUpdateJournal(install Install) Check {
 }
 
 // BackupTimerUnit mirrors the unit install.sh writes: <service stem>-backup.timer.
-func backupTimerUnit(install Install) string {
+// It is a test seam so host state cannot make doctor tests flaky.
+var BackupTimerUnit = func(install Install) string {
 	base := filepath.Base(install.InstallDir)
 	return "/etc/systemd/system/" + base + "-backup.timer"
 }
@@ -145,7 +146,7 @@ func checkBackupAge(install Install, maximumDays int) Check {
 	if len(candidates) == 0 {
 		// A configured daily timer covers this — backups will exist after its
 		// first tick, and no manual reminder is warranted meanwhile.
-		if fileExists(backupTimerUnit(install)) {
+		if fileExists(BackupTimerUnit(install)) {
 			return Check{"Backup", true, "scheduled (daily timer)", ""}
 		}
 		return Check{"Backup", false, "none yet", "ovm backup"}

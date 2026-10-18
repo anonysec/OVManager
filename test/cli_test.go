@@ -46,12 +46,15 @@ func cliFixture(t *testing.T) (installDir, dataDir string) {
 	oldHealth, oldState, oldIP := cli.FetchHealth, cli.ServiceState, cli.PrimaryIP
 	oldEnabled, oldUnit, oldDisk := cli.SystemctlEnabled, cli.UnitPath, cli.DiskFreeMB
 	oldLegacy := cli.LegacyBackupDir
+	oldTimer := cli.BackupTimerUnit
 	t.Cleanup(func() {
 		cli.FetchHealth, cli.ServiceState, cli.PrimaryIP = oldHealth, oldState, oldIP
 		cli.SystemctlEnabled, cli.UnitPath, cli.DiskFreeMB = oldEnabled, oldUnit, oldDisk
 		cli.LegacyBackupDir = oldLegacy
+		cli.BackupTimerUnit = oldTimer
 	})
 	cli.LegacyBackupDir = filepath.Join(root, "var-backups")
+	cli.BackupTimerUnit = func(install cli.Install) string { return filepath.Join(root, "no-backup.timer") }
 	cli.FetchHealth = func(url string, timeout time.Duration, cafile string) (bool, string) {
 		return true, "1.6.0"
 	}

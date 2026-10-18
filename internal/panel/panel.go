@@ -36,9 +36,6 @@ type Handler struct {
 	urlValue string
 	urlAt    float64
 
-	// certificate writes are serialized like _CERTIFICATE_LOCK.
-	certMu sync.Mutex
-
 	// issuance (bundle: the whole ACME flow owns the certificate state for
 	// its duration) is serialized separately from the short file writes.
 	acmeMu sync.Mutex
@@ -153,21 +150,39 @@ func dataDir() string {
 	return node.DataDir
 }
 
+// envFileCache memoizes the last .env read (5s TTL, same cadence as the
+// urlpath cache): the file is re-read at most every 5 seconds, keyed on the
+// app dir so tests and callers swapping OVM_APP_DIR stay fresh.
+var envFileCache = struct {
+	mu     sync.Mutex
+	dir    string
+	at     time.Time
+	values map[string]string
+}{}
+
 // envFileValues reads the uncommented KEY=VALUE pairs from the panel's .env.
+// The file is optional: an unreadable or missing one yields an empty map.
 func envFileValues() map[string]string {
+	dir := appDir()
+	envFileCache.mu.Lock()
+	defer envFileCache.mu.Unlock()
+	if envFileCache.values != nil && envFileCache.dir == dir &&
+		time.Since(envFileCache.at) < 5*time.Second {
+		return envFileCache.values
+	}
 	values := map[string]string{}
-	raw, err := os.ReadFile(filepath.Join(appDir(), ".env"))
-	if err != nil {
-		return values
-	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
+	raw, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err == nil {
+		for _, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+				continue
+			}
+			key, value, _ := strings.Cut(line, "=")
+			values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "'\"")
 		}
-		key, value, _ := strings.Cut(line, "=")
-		values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "'\"")
 	}
+	envFileCache.dir, envFileCache.at, envFileCache.values = dir, time.Now(), values
 	return values
 }
 
@@ -198,7 +213,7 @@ func sslCertPath() string {
 // SSLCertPath / SSLKeyPath are the exported forms used by cmd/main to decide
 // binding and TLS mode.
 func SSLCertPath() string { return sslCertPath() }
-func SSLKeyPath() string   { return sslKeyPath() }
+func SSLKeyPath() string  { return sslKeyPath() }
 
 func subscriptionPath() string {
 	if v := strings.Trim(envOrFile("SUBSCRIPTION_PATH"), "/"); v != "" {
@@ -299,7 +314,7 @@ func (s settings) intOr(key string, def int) int {
 }
 
 func (h *Handler) settings() settings {
-	return readSettings(h.Svc.DB)
+	return readSettings(h.Svc.DB())
 }
 
 // readSettings loads the single settings row, creating it when absent
@@ -434,7 +449,7 @@ func (h *Handler) setURLPath(value string) (string, error) {
 	if value != "" && reservedPrefixes()[strings.ToLower(value)] {
 		return "", errReservedPrefix{value}
 	}
-	if err := setColumns(h.Svc.DB, map[string]any{"urlpath": value}); err != nil {
+	if err := setColumns(h.Svc.DB(), map[string]any{"urlpath": value}); err != nil {
 		return "", errURLPathPersist{}
 	}
 	h.urlMu.Lock()

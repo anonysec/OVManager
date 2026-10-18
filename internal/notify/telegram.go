@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -240,9 +241,12 @@ const (
 	collectEvery = 30 * time.Minute // metric + threshold sweep cadence
 )
 
-// Worker turns settings + users state into Telegram messages.
+// Worker turns settings + users state into Telegram messages. The DB handle
+// is guarded: a restore swaps the pool underneath a running worker
+// (SwapDB), and an unguarded field would race Tick against the swap.
 type Worker struct {
-	DB *sql.DB
+	dbmu sync.RWMutex
+	db   *sql.DB
 	// DailyBackup, when set, produces (name, bytes) of a database snapshot for
 	// the summary attachment; nil (or empty bytes) skips the attachment.
 	DailyBackup func() (string, []byte)
@@ -259,20 +263,39 @@ type Worker struct {
 // NewWorker builds a worker over the data DB.
 func NewWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*sql.DB)) *Worker {
 	return &Worker{
-		DB: db, DailyBackup: dailyBackup, Collect: collect,
+		db: db, DailyBackup: dailyBackup, Collect: collect,
 		sentDay: map[string]string{},
 	}
 }
 
-var workerOnce sync.Once
+// DB returns the live database handle (swap-safe).
+func (w *Worker) DB() *sql.DB {
+	w.dbmu.RLock()
+	defer w.dbmu.RUnlock()
+	return w.db
+}
+
+// SwapDB atomically replaces the live database handle; called after a restore
+// reopens the pool so the next Tick stops reading the replaced inode.
+func (w *Worker) SwapDB(fresh *sql.DB) {
+	w.dbmu.Lock()
+	defer w.dbmu.Unlock()
+	w.db = fresh
+}
+
+var (
+	workerOnce sync.Once
+	running    atomic.Pointer[Worker]
+)
 
 // StartWorker runs the worker loop once per process. A short starting delay
 // mirrors the ACME renewal worker so boot traffic settles first.
 func StartWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*sql.DB)) {
 	workerOnce.Do(func() {
+		w := NewWorker(db, dailyBackup, collect)
+		running.Store(w)
 		go func() {
 			time.Sleep(2 * time.Minute)
-			w := NewWorker(db, dailyBackup, collect)
 			ticker := time.NewTicker(workerTick)
 			defer ticker.Stop()
 			for now := range ticker.C {
@@ -282,23 +305,27 @@ func StartWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*
 	})
 }
 
+// Running returns the worker StartWorker launched, or nil before that.
+func Running() *Worker { return running.Load() }
+
 // Tick is one worker step: collector sweep, immediate events, the daily
 // summary. Everything is guarded by the settings row; without a ready bot it
 // is a no-op.
 func (w *Worker) Tick(now time.Time) {
-	p := LoadSettings(w.DB)
+	db := w.DB() // one handle per tick; a swap takes effect on the next one
+	p := LoadSettings(db)
 	if !p.ready() {
 		return
 	}
 	if w.lastCollect.IsZero() || now.Sub(w.lastCollect) >= collectEvery {
 		w.lastCollect = now
 		if w.Collect != nil {
-			w.Collect(w.DB)
+			w.Collect(db)
 		}
 	}
 
 	day := now.Format("2006-01-02")
-	for _, ev := range ImmediateEvents(w.DB, now) {
+	for _, ev := range ImmediateEvents(db, now) {
 		switch ev.Kind {
 		case "expired":
 			if !p.NotifyExpiry {
@@ -318,7 +345,7 @@ func (w *Worker) Tick(now time.Time) {
 		clock := now.Hour()*100 + now.Minute()
 		due := summaryTime.Hour()*100 + summaryTime.Minute()
 		if clock >= due {
-			w.sendOnce(p, "daily", SummaryText(w.DB, now), day)
+			w.sendOnce(p, "daily", SummaryText(db, now), day)
 		}
 	}
 }

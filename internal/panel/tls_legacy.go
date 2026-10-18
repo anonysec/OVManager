@@ -50,12 +50,12 @@ func MigrateLegacyTLS(dataDirPath string) map[string]any {
 	}
 	if err == nil {
 		// The write path is the panel's own transaction (validate, atomic
-		// replace, retain the previous pair). It touches only the certificate
-		// files, so a handler with no service is enough — one implementation,
-		// not two. ponytail: per-handler certMu, so this does not serialize
-		// against a *live* handler's write; fine while migration runs before
-		// the panel serves.
-		_, err = NewHandler(nil).writeManagedFiles(keyBytes, certBytes, "migrated")
+		// replace, retain the previous pair) now lives as a package-level
+		// function, so this calls it directly — one implementation, not two.
+		// ponytail: the write mutex is package-global, so during the migration
+		// window a *live* handler's write serializes against it through the
+		// same lock. Migration runs before the panel serves, so this is fine.
+		_, err = writeManagedFiles(keyBytes, certBytes, "migrated")
 	}
 	if err != nil {
 		return map[string]any{"ok": false,

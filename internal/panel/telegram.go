@@ -21,7 +21,7 @@ const telegramAttachLimit = notify.MaxDocumentBytes
 // startTelegramWorker launches the notify loop once per process. Idempotent,
 // so Mount can call it unconditionally.
 func (h *Handler) startTelegramWorker() {
-	notify.StartWorker(h.Svc.DB, h.telegramBackupPayload, telemetry.CollectMetrics)
+	notify.StartWorker(h.Svc.DB(), h.telegramBackupPayload, telemetry.CollectMetrics)
 }
 
 // telegramBackupPayload produces the daily backup attachment when the

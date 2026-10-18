@@ -74,10 +74,15 @@ jobs:
       - name: Test
         # One command, one home: the parity suite (test/) proves the Go binary
         # answers like the app it replaced. Run with a coverage profile
-        # so the same invocation is the gate — -coverpkg is required because the
-        # suite lives in its own package (plain -coverprofile ./... reports 0.5%
-        # for the packages it exercises).
-        run: go test -coverprofile=cover.out -covermode=atomic -coverpkg=./cmd/...,./internal/... ./...
+        # so the same invocation is the gate — -coverpkg is required
+        # because the suite lives in its own package (plain -coverprofile
+        # ./... reports 0.5% for the packages it exercises).
+        run: go test -race -coverprofile=cover.out -covermode=atomic -coverpkg=./cmd/...,./internal/... ./...
+
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
 
       - name: Coverage gate
         # Floor only grows. Measured total at introduction: 45.1%; the plan's

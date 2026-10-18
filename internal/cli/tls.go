@@ -1,6 +1,10 @@
 // `ovm tls` (cli/tls.py): terminal-side HTTPS certificate management.
 // Issuance and installation happen here; the panel process only reads the
-// resulting files from DATA_DIR/tls at startup to decide bind mode.
+// resulting files at startup to decide bind mode. The target pair is the
+// DECLARED pair — SSL_CERTFILE/SSL_KEYFILE from the install .env (or the
+// environment) when present — falling back to DATA_DIR/tls, the same
+// resolution panel.SSLCertPath performs. Writing always to DATA_DIR/tls would
+// leave a declared install serving its old certificate.
 package cli
 
 import (
@@ -13,9 +17,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/acme"
@@ -23,9 +29,23 @@ import (
 
 func tlsDir(inst Install) string { return filepath.Join(inst.DataDir, "tls") }
 
+// tlsTargetPaths resolves where the panel reads the pair at startup: the
+// declared SSL_CERTFILE/SSL_KEYFILE when BOTH are set, else the DATA_DIR/tls
+// pair. Mirrors panel.SSLCertPath/SSLKeyPath (the cli cannot call those
+// directly, they resolve against the running process's working directory).
+func tlsTargetPaths(inst Install) (cert, key string) {
+	dir := tlsDir(inst)
+	cert = filepath.Join(dir, "fullchain.pem")
+	key = filepath.Join(dir, "privkey.pem")
+	if c := strings.TrimSpace(inst.Env["SSL_CERTFILE"]); c != "" &&
+		strings.TrimSpace(inst.Env["SSL_KEYFILE"]) != "" {
+		return c, strings.TrimSpace(inst.Env["SSL_KEYFILE"])
+	}
+	return cert, key
+}
+
 func runTLSStatus(inst Install) (string, int) {
-	cert := filepath.Join(tlsDir(inst), "fullchain.pem")
-	key := filepath.Join(tlsDir(inst), "privkey.pem")
+	cert, key := tlsTargetPaths(inst)
 	if !fileExists(cert) || !fileExists(key) {
 		return block([]string{heading("HTTPS certificate"), kv("Status", "disabled  (plain HTTP on 127.0.0.1)")}), 0
 	}
@@ -36,12 +56,29 @@ func runTLSStatus(inst Install) (string, int) {
 	return block(append([]string{heading("HTTPS certificate")}, renderRows(items)...)), 0
 }
 
-func runTLSRemove(inst Install) (string, int) {
+// legacyPairPaths are the pre-declaration locations the panel's startup
+// migration copies from.
+func legacyPairPaths(inst Install) (cert, key string) {
 	dir := tlsDir(inst)
-	for _, name := range []string{"fullchain.pem", "privkey.pem", "previous-fullchain.pem", "previous-privkey.pem"} {
-		_ = os.Remove(filepath.Join(dir, name))
+	return filepath.Join(dir, "fullchain.pem"), filepath.Join(dir, "privkey.pem")
+}
+
+func runTLSRemove(inst Install) (string, int) {
+	cert, key := tlsTargetPaths(inst)
+	legacyCert, legacyKey := legacyPairPaths(inst)
+	var removed []string
+	for _, p := range []string{cert, key, legacyCert, legacyKey,
+		filepath.Join(tlsDir(inst), "previous-fullchain.pem"),
+		filepath.Join(tlsDir(inst), "previous-privkey.pem")} {
+		if err := os.Remove(p); err == nil {
+			removed = append(removed, p)
+		}
 	}
-	return block([]string{heading("HTTPS certificate"), "removed — panel reverts to HTTP on 127.0.0.1 after restart", "fix            ovm service restart"}), 0
+	summary := "removed — panel reverts to HTTP on 127.0.0.1 after restart"
+	if len(removed) == 0 {
+		summary = "nothing to remove"
+	}
+	return block([]string{heading("HTTPS certificate"), summary, "fix            ovm service restart"}), 0
 }
 
 func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
@@ -56,14 +93,17 @@ func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "could not read key: " + err.Error()}), 1
 	}
-	dir := tlsDir(inst)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	certPath, keyPath := tlsTargetPaths(inst)
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.WriteFile(filepath.Join(dir, "fullchain.pem"), certBytes, 0o644); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.WriteFile(filepath.Join(dir, "privkey.pem"), keyBytes, 0o600); err != nil {
+	if err := os.WriteFile(certPath, certBytes, 0o644); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	if err := os.WriteFile(keyPath, keyBytes, 0o600); err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
 	return block([]string{heading("HTTPS certificate"), "installed — restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
@@ -91,20 +131,26 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	dir := tlsDir(inst)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	// write cert
-	cf, _ := os.Create(filepath.Join(dir, "fullchain.pem"))
-	cf.Write(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
-	cf.Close()
-	// write key
-	kf, _ := os.Create(filepath.Join(dir, "privkey.pem"))
-	keyDER, _ := x509.MarshalPKCS8PrivateKey(key)
-	kf.Write(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
-	kf.Close()
-	_ = os.Chmod(filepath.Join(dir, "privkey.pem"), 0o600)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	certPath, keyPath := tlsTargetPaths(inst)
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+		return block([]string{heading("HTTPS certificate"), "could not write certificate: " + err.Error()}), 1
+	}
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		return block([]string{heading("HTTPS certificate"), "could not write key: " + err.Error()}), 1
+	}
+	_ = os.Chmod(keyPath, 0o600)
 	return block([]string{heading("HTTPS certificate"), "self-signed cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
 }
 
@@ -113,7 +159,11 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		return block([]string{heading("HTTPS certificate"), "usage: ovm tls acme <domain> [email]"}), 2
 	}
 	// account key
-	acctPath := filepath.Join(tlsDir(inst), "acme-account.pem")
+	dir := tlsDir(inst)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	acctPath := filepath.Join(dir, "acme-account.pem")
 	key, err := loadOrCreateAccountKeyCLI(acctPath)
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
@@ -128,18 +178,28 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1
 	}
-	dir := tlsDir(inst)
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, "fullchain.pem"), res.CertPEM, 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "privkey.pem"), res.KeyPEM, 0o600)
+	certPath, keyPath := tlsTargetPaths(inst)
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil {
+		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
+	}
+	if err := os.WriteFile(certPath, res.CertPEM, 0o644); err != nil {
+		return block([]string{heading("HTTPS certificate"), "could not write certificate: " + err.Error()}), 1
+	}
+	if err := os.WriteFile(keyPath, res.KeyPEM, 0o600); err != nil {
+		return block([]string{heading("HTTPS certificate"), "could not write key: " + err.Error()}), 1
+	}
 	// persist account key if returned
 	if len(res.AccountKeyPEM) > 0 {
-		_ = os.WriteFile(acctPath, res.AccountKeyPEM, 0o600)
+		if err := os.WriteFile(acctPath, res.AccountKeyPEM, 0o600); err != nil {
+			return block([]string{heading("HTTPS certificate"), "could not persist the ACME account key: " + err.Error()}), 1
+		}
 	}
 	_ = email
-	return block([]string{heading("HTTPS certificate"), "Let's Encrypt cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
+	return block([]string{heading("HTTPS certificate"), fmt.Sprintf("Let's Encrypt cert issued for %s", domain), "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
 }
-
 
 func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {
 	if raw, err := os.ReadFile(path); err == nil {
@@ -160,7 +220,9 @@ func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {
 		return nil, err
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
 	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {
 		return nil, err
 	}

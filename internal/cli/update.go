@@ -36,8 +36,8 @@ const (
 	updateStageDir = ".ovmanager.staging"
 	updatePrevDir  = ".ovmanager.previous"
 	updateKeep     = 10
-	// inTreeDataDirName is the data-dir name install.sh --from-source writes
-	// (DATA_DIR=$dest/data). A release layout keeps DATA_DIR at
+	// inTreeDataDirName is the data-dir name install.sh --build (dev install)
+	// writes (DATA_DIR=$dest/data). A release layout keeps DATA_DIR at
 	// /var/lib/ovmanager, outside the tree, and is left alone.
 	inTreeDataDirName = "data"
 )
@@ -45,7 +45,7 @@ const (
 // CaptureDataDir resolves the data directory the update must preserve across
 // the tree swap. Precedence mirrors the panel's own resolution: the installed
 // .env DATA_DIR wins, then the ambient DATA_DIR, then the resolved install
-// value, then the from-source default <install>/data. inTree reports whether
+// value, then the dev-build default <install>/data. inTree reports whether
 // that directory lives inside the install tree — only in-tree data is migrated.
 func CaptureDataDir(inst Install) (dir string, inTree bool) {
 	raw := strings.TrimSpace(inst.Env["DATA_DIR"])
@@ -115,9 +115,9 @@ func copyTree(src, dst string) error {
 }
 
 type updateOptions struct {
-	dryRun     bool
-	fromSource string
-	pin        string
+	dryRun bool
+	build  string
+	pin    string
 }
 
 func repoSlug() string {
@@ -226,7 +226,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(out, kv("stage", "fetching v"+target))
-	if err := stageRelease(stage, target, opt.fromSource, install); err != nil {
+	if err := stageRelease(stage, target, opt.build, install); err != nil {
 		_ = os.RemoveAll(stage)
 		fmt.Fprint(out, block([]string{failedLine(err.Error())}))
 		return 1
@@ -376,9 +376,8 @@ func fetchLatestRelease() (string, error) {
 }
 
 // stageRelease fills stage with the release to install, verifying the checksum.
-func stageRelease(stage, target, fromSource string, install Install) error {
-	if fromSource != "" {
-		src := fromSource
+func stageRelease(stage, target, src string, install Install) error {
+	if src != "" {
 		if src == "." {
 			src, _ = os.Getwd()
 		}

@@ -82,6 +82,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - The panel is served under a random secret URL prefix; anything outside it gets an empty 404, so scanners see nothing.
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
 - Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovm tls` shows the installed certificate.
+- Built-in Let's Encrypt (`ovm tls acme <domain>` or `install.sh --acme DOMAIN`) issues over HTTP-01: **port 80 must be free** on this server for up to ~60 seconds while the certificate is issued, then renewals happen automatically (T-30 days). Anything else bound to port 80 makes issuance fail; the panel keeps serving plain HTTP meanwhile.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.
 - A filterable audit log of who changed what, exportable as CSV.
@@ -115,7 +116,7 @@ The installer fetches the bare release binary for this platform (plus its SHA-25
 **From source** (development): point the installer at a working tree — it builds the SPA and the binary in place:
 
 ```bash
-bash install.sh --from-source [SRC] [--dest DIR]
+bash install.sh --build [SRC] [--dest DIR]
 ```
 
 **Docker instead of systemd:** the pre-built image publishes on every release:

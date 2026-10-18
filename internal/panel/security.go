@@ -218,7 +218,7 @@ func nodeEvents(data map[string]any, nodeName string, tz *time.Location, idToNam
 
 // allNodes loads every node row (crud.get_all_nodes).
 func (h *Handler) allNodes() []*node.Node {
-	rows, err := h.Svc.DB.Query(
+	rows, err := h.Svc.DB().Query(
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes ORDER BY id`)
 	if err != nil {
@@ -254,10 +254,17 @@ func panelIDToName(db *sql.DB) map[string]string {
 
 // securitySummary is GET /security/summary.
 func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
+	// Server-side clamp: an arbitrary hours value here becomes identical
+	// GetSessions work on every node.
 	hours := intQuery(r, "hours", 8)
+	if hours < 1 {
+		hours = 1
+	} else if hours > 48 {
+		hours = 48
+	}
 	tz := h.panelTimezone()
-	idToName := panelIDToName(h.Svc.DB)
-	pid := node.PanelIDFor(h.Svc.DB)
+	idToName := panelIDToName(h.Svc.DB())
+	pid := node.PanelIDFor(h.Svc.DB())
 	nodes := h.allNodes()
 
 	calls := make([]func() any, 0, len(nodes))

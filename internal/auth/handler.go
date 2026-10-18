@@ -203,20 +203,23 @@ func firstProto(v string) string {
 	return strings.TrimSpace(v)
 }
 
-func sha16(s string) string {
+// Sha16 is the shared rate-limit bucket key: the first 16 hex characters of
+// the SHA-256 of s. Exported so every package (auth, panel) hashes the same
+// way instead of keeping private copies.
+func Sha16(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])[:16]
 }
 
 func (s *Service) rateKey(ip, username string) string {
-	return sha16(ip + "\x00" + strings.ToLower(username))
+	return Sha16(ip + "\x00" + strings.ToLower(username))
 }
 
 func (s *Service) userKey(username string) string {
-	return sha16("user\x00" + strings.ToLower(username))
+	return Sha16("user\x00" + strings.ToLower(username))
 }
 
-func (s *Service) ipKey(ip string) string { return sha16(ip) }
+func (s *Service) ipKey(ip string) string { return Sha16(ip) }
 
 // --- in-memory rate-limit buckets (auth.py) ---
 

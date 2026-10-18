@@ -111,7 +111,7 @@ func (h *Handler) healthOverview(w http.ResponseWriter, r *http.Request) {
 		details[c.ID] = c.Detail
 		h.recordCheckTransition(c)
 	}
-	telemetry.PromoteEvents(h.Svc.DB, func(msg string) bool { return telemetry.SendTelegram(h.Svc.DB, msg) })
+	telemetry.PromoteEvents(h.Svc.DB(), func(msg string) bool { return telemetry.SendTelegram(h.Svc.DB(), msg) })
 	plain(w, map[string]any{"checks": checks, "details": details})
 }
 
@@ -138,7 +138,7 @@ func (h *Handler) checkDatabase() check {
 	}
 	size := info.Size()
 	var raw any
-	_ = h.Svc.DB.QueryRow(`PRAGMA quick_check`).Scan(&raw)
+	_ = h.Svc.DB().QueryRow(`PRAGMA quick_check`).Scan(&raw)
 	resultText := "ok"
 	if raw != nil {
 		resultText = fmt.Sprint(raw)
@@ -155,7 +155,7 @@ func (h *Handler) checkDatabase() check {
 }
 
 func (h *Handler) checkNodes() check {
-	rows, err := h.Svc.DB.Query(`SELECT name FROM nodes ORDER BY id`)
+	rows, err := h.Svc.DB().Query(`SELECT name FROM nodes ORDER BY id`)
 	names := []string{}
 	if err == nil {
 		for rows.Next() {
@@ -350,7 +350,7 @@ func (h *Handler) recordCheckTransition(c check) {
 		return
 	}
 	if c.Status == "ok" {
-		telemetry.RecordEvent(h.Svc.DB, "health."+c.ID, "info", c.Summary,
+		telemetry.RecordEvent(h.Svc.DB(), "health."+c.ID, "info", c.Summary,
 			map[string]any{"target": c.ID})
 		return
 	}
@@ -358,25 +358,25 @@ func (h *Handler) recordCheckTransition(c check) {
 	if c.Status == "warn" {
 		severity = "warning"
 	}
-	telemetry.RecordEvent(h.Svc.DB, "health."+c.ID, severity, c.Summary,
+	telemetry.RecordEvent(h.Svc.DB(), "health."+c.ID, severity, c.Summary,
 		map[string]any{"event_key": newHexKey(), "status": c.Status, "target": c.ID})
 }
 
 func (h *Handler) loginHealth(w http.ResponseWriter, r *http.Request) {
-	data := node.LoginHealthSummary(h.Svc.DB, intQuery(r, "hours", 8))
+	data := node.LoginHealthSummary(h.Svc.DB(), intQuery(r, "hours", 8))
 	envelope(w, true, "Login health", data)
 }
 
 func (h *Handler) loginDiagnostics(w http.ResponseWriter, r *http.Request) {
-	data := node.LoginDiagnostics(r.PathValue("username"), h.Svc.DB, intQuery(r, "hours", 8))
+	data := node.LoginDiagnostics(r.PathValue("username"), h.Svc.DB(), intQuery(r, "hours", 8))
 	envelope(w, true, "Login diagnostics", data)
 }
 
 func (h *Handler) healthSetup(w http.ResponseWriter, r *http.Request) {
 	var nodeCount, activeNodeCount, userCount int
-	_ = h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM nodes`).Scan(&nodeCount)
-	_ = h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM nodes WHERE status = 1`).Scan(&activeNodeCount)
-	_ = h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&userCount)
+	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes`).Scan(&nodeCount)
+	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes WHERE status = 1`).Scan(&activeNodeCount)
+	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&userCount)
 	plain(w, map[string]any{
 		"has_node": nodeCount > 0, "has_user": userCount > 0,
 		"has_active_node": activeNodeCount > 0,

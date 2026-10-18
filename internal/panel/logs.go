@@ -48,7 +48,7 @@ func (h *Handler) allowedUnit(unit string) (string, bool) {
 		return "", false
 	}
 	var n int
-	_ = h.Svc.DB.QueryRow(`SELECT COUNT(*) FROM nodes WHERE name = ?`, name).Scan(&n)
+	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes WHERE name = ?`, name).Scan(&n)
 	if n == 0 {
 		return "", false
 	}

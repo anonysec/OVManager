@@ -261,10 +261,14 @@ func (a *app) resetPasswordCmd() *cobra.Command {
 func (a *app) updateCmd() *cobra.Command {
 	var opts updateOptions
 	var pin string
+	var deprecatedSrc string
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "staged update; recovers an interrupted one first",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if opts.build == "" {
+				opts.build = deprecatedSrc
+			}
 			opts.pin = pin
 			a.exit = runUpdate(a.install(), opts, a.out)
 			return nil
@@ -272,8 +276,10 @@ func (a *app) updateCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.BoolVar(&opts.dryRun, "dry-run", false, "print the update plan and change nothing")
-	f.StringVar(&opts.fromSource, "from-source", "", "dev install from a working tree (default: cwd)")
-	f.Lookup("from-source").NoOptDefVal = "."
+	f.StringVar(&opts.build, "build", "", "dev install from a working tree (default: cwd)")
+	f.Lookup("build").NoOptDefVal = "."
+	f.StringVar(&deprecatedSrc, "from-source", "", "deprecated alias of --build")
+	_ = f.MarkHidden("from-source")
 	f.StringVarP(&pin, "version", "v", "", "pin a release, e.g. -v v1.0.15")
 	return cmd
 }

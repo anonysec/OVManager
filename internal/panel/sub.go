@@ -1,10 +1,8 @@
 package panel
 
 import (
-	"crypto/sha256"
 	"database/sql"
 	_ "embed"
-	"encoding/hex"
 	"html"
 	"html/template"
 	"io"
@@ -16,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/webfs"
@@ -110,7 +109,7 @@ var (
 )
 
 func (h *Handler) subRateLimited(r *http.Request) bool {
-	key := sha16(h.clientIP(r))
+	key := auth.Sha16(h.clientIP(r))
 	now := float64(time.Now().UnixNano()) / 1e9
 	subMu.Lock()
 	defer subMu.Unlock()
@@ -162,11 +161,6 @@ func subEnforceCap() {
 	for i := 0; i < overflow && i < len(buckets); i++ {
 		delete(subAttempts, buckets[i].key)
 	}
-}
-
-func sha16(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])[:16]
 }
 
 func (h *Handler) subStaticJS(w http.ResponseWriter, r *http.Request) {
@@ -247,14 +241,27 @@ func (h *Handler) subDownload(w http.ResponseWriter, r *http.Request) {
 		writeSubError(w, 404, "Not Found", "The requested node was not found.")
 		return
 	}
-	body := node.DownloadOVPNClient(user.id, nodeObj.ID, h.Svc.DB)
+	body := node.DownloadOVPNClient(user.id, nodeObj.ID, h.Svc.DB())
 	if len(body) == 0 {
 		writeSubError(w, 404, "Not Found", "The configuration file could not be generated.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-openvpn-profile")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+user.name+".ovpn"+`"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeFilename(user.name)+".ovpn"+`"`)
 	_, _ = w.Write(body)
+}
+
+// sanitizeFilename strips quotes, backslashes and CR/LF from a user-supplied
+// name before it is interpolated into a quoted Content-Disposition token, so
+// header injection or premature quote termination cannot happen.
+func sanitizeFilename(name string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '"', '\\', '\r', '\n':
+			return -1
+		}
+		return r
+	}, name)
 }
 
 // subUser is the shared lookup + gating for both subscription routes. It
@@ -276,7 +283,7 @@ func (h *Handler) subUser(w http.ResponseWriter, uuid string, r *http.Request) (
 	var used sql.NullInt64
 	var expiry sql.NullString
 	var active sql.NullInt64
-	err := h.Svc.DB.QueryRow(
+	err := h.Svc.DB().QueryRow(
 		`SELECT id, name, total, used, expiry_date, is_active FROM users WHERE uuid = ?`, uuid,
 	).Scan(&row.id, &row.name, &total, &used, &expiry, &active)
 	if err == sql.ErrNoRows {
@@ -371,7 +378,7 @@ func fmtDate(value string) string {
 }
 
 func (h *Handler) activeNodes() []*node.Node {
-	rows, err := h.Svc.DB.Query(
+	rows, err := h.Svc.DB().Query(
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes WHERE status = 1 ORDER BY id`)
 	if err != nil {
@@ -386,7 +393,7 @@ func (h *Handler) activeNodes() []*node.Node {
 }
 
 func (h *Handler) nodeByName(name string) *node.Node {
-	rows, err := h.Svc.DB.Query(
+	rows, err := h.Svc.DB().Query(
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes WHERE name = ?`, name)
 	if err != nil {
