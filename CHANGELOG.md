@@ -1,3 +1,7 @@
+## 2.1.2 — 2026-10-18
+
+Fix: fresh installs created an empty database (db.Migrate was never called in main.go), so claim failed with "Could not create the owner account". 
+
 ## 2.1.1 — 2026-10-18
 
 Fix: SPA assets returned 404 (assets/ was in the reserved-prefix list), breaking page load. Fix: installer created DATA_DIR before minting claim key. Fix: from-source update source-tree check (cmd/main.go). 
