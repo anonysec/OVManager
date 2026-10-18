@@ -10,6 +10,7 @@ package tests
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,6 +40,7 @@ type logsEnv struct {
 	srv    *httptest.Server
 	token  string
 	sqlite *sql.DB
+	svc    *auth.Service
 }
 
 func logsEnvFor(t *testing.T, stub string) logsEnv {
@@ -79,12 +81,13 @@ func logsEnvFor(t *testing.T, stub string) logsEnv {
 	if token == "" {
 		t.Fatal("login returned no access_token")
 	}
-	return logsEnv{srv: srv, token: token, sqlite: conn}
+	return logsEnv{srv: srv, token: token, sqlite: conn, svc: svc}
 }
 
 func TestLogsUnitWhitelist(t *testing.T) {
 	env := logsEnvFor(t, journalStubEcho)
-	res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", env.token, nil, "")
+	// Unknown unit.
+	res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?unit=openvpn-nope&lines=10", env.token, nil, "")
 	body := string(raw)
 
 	if res.StatusCode != http.StatusBadRequest {
@@ -94,11 +97,11 @@ func TestLogsUnitWhitelist(t *testing.T) {
 		t.Fatalf("unknown unit body %q lacks the Unknown-unit detail", body)
 	}
 
-	// Charset sanitize + traversal attempts land on the same 400.
-	for _, bad := range []string{"openvpn-x;reboot", "openvpn-Europe", "../etc", "ovmanager $(id)"} {
-		res, _ := rawReq(t, "GET", env.srv.URL+"/api/logs?unit="+bad+"&lines=10", env.token, nil, "")
+	// Charset sanitize, traversal and case traps land on the same 400.
+	for _, bad := range []string{"openvpn-x:kill", "openvpn-Europe", "../etc", "ovmanager $(id)"} {
+		res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?unit="+bad+"&lines=10", env.token, nil, "")
 		if res.StatusCode != http.StatusBadRequest {
-			t.Fatalf("unit %q status = %d, want 400", bad, res.StatusCode)
+			t.Fatalf("unit %q status = %d, want 400 (body %q)", bad, res.StatusCode, raw)
 		}
 	}
 
@@ -108,7 +111,7 @@ func TestLogsUnitWhitelist(t *testing.T) {
 	); err != nil {
 		t.Fatalf("seed node: %v", err)
 	}
-	res, raw = rawReq(t, "GET", "/api/logs?unit=openvpn-eu-1&lines=10", env.token, nil, "")
+	res, raw = rawReq(t, "GET", env.srv.URL+"/api/logs?unit=openvpn-eu-1&lines=10", env.token, nil, "")
 	body = string(raw)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("node unit status = %d, want 200 (%s)", res.StatusCode, body)
@@ -132,14 +135,14 @@ func TestLogsLinesCap(t *testing.T) {
 		query string
 		want  string
 	}{
-		{"", "-n 200"}, // default
-		{"lines=abc", "-n 200"},
-		{"lines=900", "-n 500"}, // capped
-		{"lines=3", "-n 3"},
-		{"lines=0", "-n 1"}, // clamp low
-		{"lines=-7", "-n 1"},
+		{"/api/logs", "-n 200"},           // default
+		{"/api/logs?lines=abc", "-n 200"}, // unparseable → default
+		{"/api/logs?lines=900", "-n 500"}, // capped
+		{"/api/logs?lines=3", "-n 3"},
+		{"/api/logs?lines=0", "-n 1"},  // clamp low
+		{"/api/logs?lines=-7", "-n 1"}, // clamp low
 	} {
-		res, raw := rawReq(t, "GET", "/api/logs?"+c.query, env.token, nil, "")
+		res, raw := rawReq(t, "GET", env.srv.URL+c.query, env.token, nil, "")
 		if res.StatusCode != http.StatusOK || !strings.Contains(string(raw), c.want) {
 			t.Fatalf("GET /api/logs?%s → %d %q, want %s", c.query, res.StatusCode, raw, c.want)
 		}
@@ -148,7 +151,7 @@ func TestLogsLinesCap(t *testing.T) {
 
 func TestLogsUnreadable(t *testing.T) {
 	env := logsEnvFor(t, journalStubNoPermission)
-	res, raw := rawReq(t, "GET", "/api/logs?lines=10", env.token, nil, "")
+	res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", env.token, nil, "")
 	if res.StatusCode != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502 (%s)", res.StatusCode, raw)
 	}
@@ -161,22 +164,31 @@ func TestLogsGate(t *testing.T) {
 	env := logsEnvFor(t, journalStubEcho)
 
 	// Anonymous → 401 from RequireUser.
-	res, _ := rawReq(t, "GET", "/api/logs?lines=10", "", nil, "")
+	res, _ := rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", "", nil, "")
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("anonymous status = %d, want 401", res.StatusCode)
 	}
 
-	// Any logged-in admin, not just the owner.
+	// Any logged-in admin, not just the owner: a role="admin" session rides
+	// the same RequireUser gate. Login only mints owner sessions, so the
+	// admin session is issued directly (IssueSession) against a seeded
+	// is_owner=0 row.
 	if _, err := env.sqlite.Exec(
 		`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, pythonBcryptHash,
 	); err != nil {
 		t.Fatalf("seed admin: %v", err)
 	}
-	token, _ := login(t, env.srv.URL, "second", knownPassword)["access_token"].(string)
-	if token == "" {
-		t.Fatal("second login returned no access_token")
+	rec := httptest.NewRecorder()
+	env.svc.IssueSession(rec, httptest.NewRequest("POST", "/api/login", nil), "second", "admin")
+	var issued map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &issued); err != nil {
+		t.Fatalf("decode issued session: %v", err)
 	}
-	res, raw := rawReq(t, "GET", "/api/logs?lines=10", token, nil, "")
+	token, _ := issued["access_token"].(string)
+	if token == "" {
+		t.Fatal("IssueSession returned no access_token")
+	}
+	res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", token, nil, "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("admin status = %d, want 200 (%s)", res.StatusCode, raw)
 	}

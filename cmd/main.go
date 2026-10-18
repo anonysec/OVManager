@@ -55,6 +55,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	node.NewHandler(svc).Mount(api)
 	telemetry.NewHandler(svc).Mount(api)
 	h.Mount(api)
+	h.MountLogs(api)
 
 	root := http.NewServeMux()
 	root.Handle("/health", health.Router())
