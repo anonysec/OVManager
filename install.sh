@@ -149,6 +149,7 @@ write_env() {
 # invalidate the key a live panel is still holding for its owner claim.
 mint_claim_key() {
     local path="$1" key
+    mkdir -p "$(dirname "$path")"
     if [[ -f "$path" ]]; then
         return 0
     fi
@@ -196,8 +197,8 @@ verify_acme() {
 }
 
 ensure_panel_user() {
-    id -u "$PANEL_USER" >/dev/null 2>&1 && return 0
     mkdir -p "$DATA_DIR"
+    id -u "$PANEL_USER" >/dev/null 2>&1 && return 0
     useradd --system --no-create-home --home-dir "$DATA_DIR" \
         --shell /usr/sbin/nologin \
         --comment "OVManager panel service account" "$PANEL_USER" >/dev/null 2>&1 \
