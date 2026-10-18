@@ -50,14 +50,17 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users/next-username", guard(h.nextUsername))
 	mux.HandleFunc("GET /users/traffic/top", guard(h.topTraffic))
 	mux.HandleFunc("GET /users/{uuid}/traffic", guard(h.traffic))
+	mux.HandleFunc("GET /users/expired", guard(h.expiredHandler))
 	mux.HandleFunc("GET /users/{$}", guard(h.list))
 	mux.HandleFunc("POST /users/{$}", guard(h.create))
+	mux.HandleFunc("POST /users/purge", guard(h.purge))
 	mux.HandleFunc("POST /users/{uuid}/reset-usage", guard(h.resetUsage))
 	mux.HandleFunc("PUT /users/{uuid}", guard(h.update))
 	mux.HandleFunc("PUT /users/{uuid}/{$}", guard(h.update))
 	mux.HandleFunc("PUT /users/{uuid}/status", guard(h.status))
 	mux.HandleFunc("GET /users/{uuid}/sessions", guard(h.sessions))
 	mux.HandleFunc("POST /users/{uuid}/disconnect", guard(h.disconnect))
+	mux.HandleFunc("POST /users/{uuid}/kick", guard(h.kickHandler))
 	mux.HandleFunc("DELETE /users/{uuid}", guard(h.remove))
 	mux.HandleFunc("POST /users/{uuid}/restore", guard(h.restore))
 	mux.HandleFunc("POST /users/{uuid}/extend", guard(h.extend))
@@ -464,21 +467,28 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.remember(row)
-	if _, err := h.Svc.DB.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
+	if err := h.deleteRow(row); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
 		return
+	}
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
+}
+
+// deleteRow is the one shared user-delete path: traffic rows, users row, then
+// the node fan-out. A node we cannot reach must not fail the panel-side
+// delete: the row is already gone, so log and move on rather than leaving the
+// request stuck (no partial-failure state).
+func (h *Handler) deleteRow(row userRow) error {
+	if _, err := h.Svc.DB.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
+		return err
 	}
 	if _, err := h.Svc.DB.Exec(`DELETE FROM users WHERE id = ?`, row.ID); err != nil {
-		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
-		return
+		return err
 	}
-	// Evict the user on every reachable node too. A node we cannot reach must
-	// not fail the panel-side delete: the row is already gone, so log and move
-	// on rather than leaving the request stuck (no partial-failure state).
 	if failures, _ := node.DeleteUserOnAllNodes(row.ID, h.Svc.DB)["failed"].([]string); len(failures) > 0 {
 		log.Printf("users: user %s deleted panel-side; node fan-out failed on %v", row.Name, failures)
 	}
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
+	return nil
 }
 
 func (h *Handler) remember(u userRow) {

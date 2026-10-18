@@ -20,7 +20,7 @@ import (
 func fakeKickAgent(t *testing.T, killed *[]string, mu *sync.Mutex, payload string) *httptest.Server {
 	t.Helper()
 	if payload == "" {
-		payload = `{"success":true}`
+		payload = `{"success":true,"data":{"killed_sessions":0}}`
 	}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/disconnect") {
@@ -59,19 +59,19 @@ func TestUsersExpiredList(t *testing.T) {
 	env := newPanelEnv(t)
 	past := "2000-01-01"
 	future := time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02")
-	seed := func(uuid string, expiry string, total, used any) {
+	seed := func(i int, uuid string, expiry string, total, used any) {
 		t.Helper()
 		if _, err := env.conn.Exec(
 			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
-			 VALUES (?, ?, ?, ?, 0, '{}', 1, ?, 1)`, uuid, "u-"+uuid[:4], total, used, expiry,
+			 VALUES (?, ?, ?, ?, 0, '{}', 1, ?, 1)`, uuid, fmt.Sprintf("u-%02d", i), total, used, expiry,
 		); err != nil {
 			t.Fatalf("insert user %s: %v", uuid, err)
 		}
 	}
-	seed("aaaa0000-0000-0000-0000-000000000001", past, nil, nil)                 // expired
-	seed("aaaa0000-0000-0000-0000-000000000002", future, int64(100), int64(100)) // depleted
-	seed("aaaa0000-0000-0000-0000-000000000003", future, nil, nil)               // fine
-	seed("aaaa0000-0000-0000-0000-000000000004", past, int64(100), int64(0))     // expired too
+	seed(1, "aaaa0000-0000-0000-0000-000000000001", past, nil, nil)                 // expired
+	seed(2, "aaaa0000-0000-0000-0000-000000000002", future, int64(100), int64(100)) // depleted
+	seed(3, "aaaa0000-0000-0000-0000-000000000003", future, nil, nil)               // fine
+	seed(4, "aaaa0000-0000-0000-0000-000000000004", past, int64(100), int64(0))     // expired too
 
 	res, body := doJSON(t, http.MethodGet, env.srv.URL+"/api/users/expired", env.token, nil)
 	res.Body.Close()
@@ -116,11 +116,11 @@ func TestUsersPurgeBulk(t *testing.T) {
 	past := "2000-01-01"
 	gone := "bbbb0000-0000-0000-0000-000000000001"
 	keep := "bbbb0000-0000-0000-0000-000000000002"
-	for _, u := range []struct{ uuid string }{{gone}, {keep}} {
+	for _, u := range []struct{ uuid, name string }{{gone, "pu-gone"}, {keep, "pu-keep"}} {
 		if _, err := env.conn.Exec(
 			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, ?, 1)`,
-			u.uuid, "pu-"+u.uuid[4:8], past,
+			u.uuid, u.name, past,
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
 		}
@@ -160,10 +160,10 @@ func TestUsersPurgeBulk(t *testing.T) {
 // every user is refused with the keep-one-user rule.
 func TestUsersPurgeValidatesAndRefusesEverything(t *testing.T) {
 	env := newPanelEnv(t)
-	for _, u := range []string{"cccc0000-0000-0000-0000-000000000001", "cccc0000-0000-0000-0000-000000000002"} {
+	for i, u := range []string{"cccc0000-0000-0000-0000-000000000001", "cccc0000-0000-0000-0000-000000000002"} {
 		if _, err := env.conn.Exec(
 			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
-			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u, "pu-"+u[4:8],
+			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u, fmt.Sprintf("pu-%d", i+1),
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
 		}
@@ -202,10 +202,10 @@ func TestUsersPurgeSurvivesUnreachableNode(t *testing.T) {
 
 	gone := "dddd0000-0000-0000-0000-000000000001"
 	kept := "dddd0000-0000-0000-0000-000000000002"
-	for _, u := range []struct{ uuid string }{{gone}, {kept}} {
+	for i, u := range []struct{ uuid string }{{gone}, {kept}} {
 		if _, err := env.conn.Exec(
 			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
-			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u.uuid, "pu-"+u.uuid[4:8],
+			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u.uuid, fmt.Sprintf("pu-%d", i+10),
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
 		}
@@ -240,11 +240,15 @@ func TestUsersPurgeSurvivesUnreachableNode(t *testing.T) {
 // TestUsersPurgeUnknownIDsAreIgnored: unknown uuids do not fail the batch.
 func TestUsersPurgeUnknownIDsAreIgnored(t *testing.T) {
 	env := newPanelEnv(t)
-	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
-		 VALUES ('eeee0000-0000-0000-0000-000000000001', 'pu1', NULL, 0, 0, '{}', 1, '2000-01-01', 1)`,
-	); err != nil {
-		t.Fatalf("insert user: %v", err)
+	for i, uuid := range []string{
+		"eeee0000-0000-0000-0000-000000000001", "eeee0000-0000-0000-0000-000000000002",
+	} {
+		if _, err := env.conn.Exec(
+			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, uuid, fmt.Sprintf("pu-%d", i+20),
+		); err != nil {
+			t.Fatalf("insert user: %v", err)
+		}
 	}
 	res, body := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/purge", env.token,
 		map[string]any{"user_ids": []string{"eeee0000-0000-0000-0000-000000000001", "nope-0000"}})
@@ -293,7 +297,7 @@ func TestUsersKickKillsLiveSessions(t *testing.T) {
 	env := newPanelEnv(t)
 	var kicked []string
 	var mu sync.Mutex
-	agent := fakeKickAgent(t, &kicked, &mu, `{"success":true,"removed_markers":["s1","s2"]}`)
+	agent := fakeKickAgent(t, &kicked, &mu, `{"success":true,"data":{"removed_markers":["s1","s2"]}}`)
 	host, port := hostPort(t, agent.URL)
 	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
 	insertTestNode(t, env.conn, 2, "n2", host, port, 1195, certPEM(t, agent))
@@ -316,8 +320,8 @@ func TestUsersKickKillsLiveSessions(t *testing.T) {
 		t.Fatalf("kick = %d %v", res.StatusCode, body)
 	}
 	data, _ := body["data"].(map[string]any)
-	if data["kicked"] != float64(2) {
-		t.Errorf("kicked = %v, want 2", data["kicked"])
+	if data["kicked"] != float64(4) {
+		t.Errorf("kicked = %v, want 4 (both nodes report s1+s2)", data["kicked"])
 	}
 	wantPath := "/sync/user/" + fmt.Sprintf("%d", uid) + "/disconnect"
 	mu.Lock()
