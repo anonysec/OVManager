@@ -38,6 +38,10 @@ type Handler struct {
 
 	// certificate writes are serialized like _CERTIFICATE_LOCK.
 	certMu sync.Mutex
+
+	// issuance (bundle: the whole ACME flow owns the certificate state for
+	// its duration) is serialized separately from the short file writes.
+	acmeMu sync.Mutex
 }
 
 // NewHandler builds the router over the shared auth service.
@@ -90,6 +94,9 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tls/rollback", owner(h.tlsRollback))
 	mux.HandleFunc("POST /tls/restart", owner(h.tlsRestart))
 
+	// Built-in ACME issuance (no acme.sh dependency on the host).
+	mux.HandleFunc("POST /tls/acme", owner(h.tlsACMEIssue))
+
 	// https_router aliases (backend/routers/tls.py bottom).
 	mux.HandleFunc("GET /https/status", owner(h.tlsStatus))
 	mux.HandleFunc("POST /https/existing", owner(h.tlsUpload))
@@ -101,6 +108,10 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /updater/status", owner(h.updateStatus))
 	mux.HandleFunc("GET /updater/operation", owner(h.updateOperation))
 	mux.HandleFunc("POST /updater/run", owner(h.runUpdate))
+
+	// Daily ACME renewal (T-30d) + boot issuance when the installer wired
+	// OVM_ACME_DOMAIN. No-op without an enrolled domain.
+	h.startACMEWorker()
 }
 
 // MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside
