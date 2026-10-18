@@ -154,15 +154,37 @@ func (a *app) restoreCmd() *cobra.Command {
 }
 
 func (a *app) tlsCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "tls",
-		Short: "installed certificate at a glance",
+		Short: "HTTPS certificate management (terminal-side)",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			text, code := runTLSStatus(a.install())
 			a.emit(text, code)
 			return nil
 		},
 	}
+	cmd.AddCommand(
+		&cobra.Command{Use: "status", Short: "show installed certificate", RunE: func(_ *cobra.Command, _ []string) error {
+			text, code := runTLSStatus(a.install()); a.emit(text, code); return nil
+		}},
+		&cobra.Command{Use: "remove", Short: "remove certificate (revert to HTTP localhost)", RunE: func(_ *cobra.Command, _ []string) error {
+			text, code := runTLSRemove(a.install()); a.emit(text, code); return nil
+		}},
+		&cobra.Command{Use: "selfsigned [domain]", Short: "generate a self-signed certificate", Args: cobra.MaximumNArgs(1), RunE: func(_ *cobra.Command, args []string) error {
+			domain := ""
+			if len(args) == 1 { domain = args[0] }
+			text, code := runTLSSelfSigned(a.install(), domain); a.emit(text, code); return nil
+		}},
+		&cobra.Command{Use: "install <cert.pem> <key.pem>", Short: "install a certificate + key", Args: cobra.ExactArgs(2), RunE: func(_ *cobra.Command, args []string) error {
+			text, code := runTLSInstall(a.install(), args[0], args[1]); a.emit(text, code); return nil
+		}},
+		&cobra.Command{Use: "acme <domain> [email]", Short: "issue a Let's Encrypt certificate", Args: cobra.RangeArgs(1, 2), RunE: func(_ *cobra.Command, args []string) error {
+			email := ""
+			if len(args) == 2 { email = args[1] }
+			text, code := runTLSAcme(a.install(), args[0], email); a.emit(text, code); return nil
+		}},
+	)
+	return cmd
 }
 
 func (a *app) urlpathCmd() *cobra.Command {

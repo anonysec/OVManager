@@ -74,14 +74,18 @@ func DetectInstall(installDir, dataDir string) Install {
 	inst := Install{InstallDir: installDir, DataDir: "/var/lib/ovmanager", Port: defaultPort, TLSMode: "none"}
 	env := readInstallEnv(filepath.Join(installDir, ".env"))
 	inst.Env = env
+	if dataDir == "" {
+		if v := os.Getenv("DATA_DIR"); v != "" {
+			dataDir = v
+		}
+	}
 	if p, err := strconv.Atoi(env["PORT"]); err == nil {
 		inst.Port = p
 	}
 	inst.PathPrefix = strings.Trim(env["URLPATH"], "/")
 	if dataDir != "" {
 		inst.DataDir = dataDir
-	}
-	if env["DATA_DIR"] != "" {
+	} else if env["DATA_DIR"] != "" {
 		inst.DataDir = env["DATA_DIR"]
 	}
 	if env["SSL_KEYFILE"] != "" {
