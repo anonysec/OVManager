@@ -100,7 +100,11 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 
 	ids := make([]acme.AuthzID, 0, len(o.Domains))
 	for _, d := range o.Domains {
-		ids = append(ids, acme.AuthzID{Type: "dns", Value: d})
+		if ip := net.ParseIP(d); ip != nil {
+			ids = append(ids, acme.AuthzID{Type: "ip", Value: d})
+		} else {
+			ids = append(ids, acme.AuthzID{Type: "dns", Value: d})
+		}
 	}
 	order, err := client.AuthorizeOrder(ctx, ids)
 	if err != nil {
@@ -143,9 +147,19 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	var dnsNames []string
+	var ipAddrs []net.IP
+	for _, d := range o.Domains {
+		if ip := net.ParseIP(d); ip != nil {
+			ipAddrs = append(ipAddrs, ip)
+		} else {
+			dnsNames = append(dnsNames, d)
+		}
+	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject:  pkix.Name{CommonName: o.Domains[0]},
-		DNSNames: o.Domains,
+		Subject:     pkix.Name{CommonName: o.Domains[0]},
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddrs,
 	}, certKey)
 	if err != nil {
 		return nil, err

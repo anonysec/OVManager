@@ -155,35 +155,44 @@ func (a *app) restoreCmd() *cobra.Command {
 
 func (a *app) tlsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "tls",
-		Short: "HTTPS certificate management (terminal-side)",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			text, code := runTLSStatus(a.install())
-			a.emit(text, code)
+		Use:     "tls [domain-or-ip|status|remove|selfsigned|install|acme]",
+		Aliases: []string{"ssl", "cert"},
+		Short:   "HTTPS certificate management (terminal-side)",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(_ *cobra.Command, args []string) error {
+			inst := a.install()
+			switch {
+			case len(args) == 0:
+				text, code := runTLSStatus(inst); a.emit(text, code)
+			case args[0] == "status":
+				text, code := runTLSStatus(inst); a.emit(text, code)
+			case args[0] == "remove":
+				text, code := runTLSRemove(inst); a.emit(text, code)
+			case args[0] == "selfsigned":
+				domain := ""
+				if len(args) > 1 { domain = args[1] }
+				text, code := runTLSSelfSigned(inst, domain); a.emit(text, code)
+			case args[0] == "install":
+				if len(args) < 3 {
+					a.emit("usage: ovm tls install <cert.pem> <key.pem>\n", 2); return nil
+				}
+				text, code := runTLSInstall(inst, args[1], args[2]); a.emit(text, code)
+			case args[0] == "acme":
+				if len(args) < 2 {
+					a.emit("usage: ovm tls acme <domain-or-ip> [email]\n", 2); return nil
+				}
+				email := ""
+				if len(args) > 2 { email = args[2] }
+				text, code := runTLSAcme(inst, args[1], email); a.emit(text, code)
+			default:
+				// treat as domain/IP → issue Let's Encrypt cert
+				email := ""
+				if len(args) > 1 { email = args[1] }
+				text, code := runTLSAcme(inst, args[0], email); a.emit(text, code)
+			}
 			return nil
 		},
 	}
-	cmd.AddCommand(
-		&cobra.Command{Use: "status", Short: "show installed certificate", RunE: func(_ *cobra.Command, _ []string) error {
-			text, code := runTLSStatus(a.install()); a.emit(text, code); return nil
-		}},
-		&cobra.Command{Use: "remove", Short: "remove certificate (revert to HTTP localhost)", RunE: func(_ *cobra.Command, _ []string) error {
-			text, code := runTLSRemove(a.install()); a.emit(text, code); return nil
-		}},
-		&cobra.Command{Use: "selfsigned [domain]", Short: "generate a self-signed certificate", Args: cobra.MaximumNArgs(1), RunE: func(_ *cobra.Command, args []string) error {
-			domain := ""
-			if len(args) == 1 { domain = args[0] }
-			text, code := runTLSSelfSigned(a.install(), domain); a.emit(text, code); return nil
-		}},
-		&cobra.Command{Use: "install <cert.pem> <key.pem>", Short: "install a certificate + key", Args: cobra.ExactArgs(2), RunE: func(_ *cobra.Command, args []string) error {
-			text, code := runTLSInstall(a.install(), args[0], args[1]); a.emit(text, code); return nil
-		}},
-		&cobra.Command{Use: "acme <domain> [email]", Short: "issue a Let's Encrypt certificate", Args: cobra.RangeArgs(1, 2), RunE: func(_ *cobra.Command, args []string) error {
-			email := ""
-			if len(args) == 2 { email = args[1] }
-			text, code := runTLSAcme(a.install(), args[0], email); a.emit(text, code); return nil
-		}},
-	)
 	return cmd
 }
 
