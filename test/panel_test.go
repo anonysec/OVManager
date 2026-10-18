@@ -149,7 +149,7 @@ func newPanelEnv(t *testing.T) *panelEnv {
 	root.Handle("/api/", http.StripPrefix("/api", inner))
 	h.MountSub(root)
 
-	srv := httptest.NewServer(root)
+	srv := httptest.NewServer(panel.SecurityHeaders(root))
 	t.Cleanup(srv.Close)
 	token, _ := login(t, srv.URL, "owner", knownPassword)["access_token"].(string)
 	if token == "" {

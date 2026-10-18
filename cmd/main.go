@@ -61,7 +61,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
 	root.Handle("/", spaHandler())
-	return root
+	return panel.SecurityHeaders(root)
 }
 
 // appDir is where .env and web/ live (backend/config.py app_dir).
