@@ -9,8 +9,8 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   [![Version](https://img.shields.io/badge/version-2.0.0-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
-  [![Python](https://img.shields.io/badge/python-3.12%2B-3776ab?logo=python&logoColor=white)](pyproject.toml)
-  [![React](https://img.shields.io/badge/react-19-087ea4?logo=react&logoColor=white)](frontend/package.json)
+  [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
+  [![React](https://img.shields.io/badge/react-19-087ea4?logo=react&logoColor=white)](web/package.json)
   [![Runtime](https://img.shields.io/badge/runtime-systemd%20%7C%20docker-555555)](#-install)
 </div>
 
@@ -37,13 +37,12 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 ## 💡 Why this one?
 
 - **A first login with nothing to leak.** The installer never creates an owner password and never writes one to disk. It prints a one-time claim key; the owner account does not exist until a browser posts that key and chooses a password. A copy of the server's config file is worth nothing to an attacker.
-- **Updates that undo themselves.** `sudo ovm update` downloads a verified release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up. `sudo ovm rollback` does the same thing by hand.
-- **Nothing is compiled on your server.** The installer downloads a signed-off release archive plus its mandatory SHA-256 sidecar and refuses to continue if the download is not a real archive or the checksum does not match. No compiler, no `git`, no `npm` on the box.
+- **Nothing is compiled on your server.** The installer downloads a bare release binary for this platform plus its mandatory SHA-256 sidecar and refuses to continue if the checksum does not match. The dashboard ships inside the binary; no compiler, no `git`, no `npm`, no runtime packages on the box.
 - **The VPN servers are independent of the panel.** Nodes never call the panel and do not store its address, so the panel can be moved, rebuilt or replaced without touching a single VPN server. Re-attach them with the same address, name and key.
 - **Limits that hold while the panel is down.** The device limit is pushed to each node and enforced there at connect time. The panel is not asked permission, and its absence changes nothing.
 - **Accounting that cannot double-bill.** Each node reports a lifetime byte total per user; the panel remembers the last number it saw and bills only the increase. A dropped session, a restart or a rebuilt node cannot over-count.
-- **A bot, if you want one.** Status, user actions and alerts from Telegram, off until you add a token.
-- **A real API underneath.** The dashboard is a client of the panel's own JSON API, which speaks the same login session. FastAPI will serve the OpenAPI schema at `/doc` when you set `DOC=True` in `.env` — it is off by default.
+- **Updates that undo themselves.** `sudo ovm update` downloads a verified release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up.
+- **A real API underneath.** The dashboard is a client of the panel's own JSON API and speaks the same login session.
 
 ## ✨ Features
 
@@ -67,37 +66,36 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Usage collected every five minutes from every node, counted as the increase over the last reading — short sessions, disconnects and restarts cannot double-count, and a total that shrinks bills zero.
 - Quota crossings enforced immediately after the tick that detects them; expiry-only cases caught by a separate ten-minute sweep.
 - Conditional database writes, so an admin action landing mid-tick becomes a no-op rather than being overwritten by stale data.
-- Warnings from 80% of quota, and a daily Telegram summary of users expiring within three days and users out of traffic.
+- Warnings from 80% of quota, caught at the tick that detects them.
 - Device limits enforced on the node, from 1 (a new connection takes over) through N (the N+1th is rejected) to 0 (unlimited).
 
 ### 🌐 Nodes
 - Add a node with an address, port and API key, or paste its `the node installer output` bundle and let the form fill itself in.
 - Test connection before saving; the node row then shows reachability, agent and OpenVPN version, and session counts.
 - Per-node settings pushed from the panel: DNS servers, IPv6 pool and prefix, extra OpenVPN ports.
-- Node-down and node-recovered alerts over Telegram, throttled so a flapping node cannot page you every five minutes.
+- Deleting a panel user also deletes them on every reachable node, so no ghost sessions survive the panel row.
 - `2083` is the only port the panel needs; the node agent is installed by its own one-liner.
 
 ### 🔐 Security and TLS
 - Login sessions are opaque tokens in the database, stored as a SHA-256 hash, sliding on activity and revocable per account.
 - Rate limits on failed logins, per username and per address, with a `Retry-After` on the claim endpoint.
 - The panel is served under a random secret URL prefix; anything outside it gets an empty 404, so scanners see nothing.
-- Self-signed, Let's Encrypt (domain or IP) or your own key and certificate, switchable from the CLI or from Settings → TLS.
+- Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
+- Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovm tls` shows the installed certificate.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.
 - A filterable audit log of who changed what, exportable as CSV.
 
 ### 🤖 Automation and API
-- Telegram bot: browse, create, edit, extend and delete users, pick a node for a config, inspect nodes and status, choose the bot's language, and receive alerts — from the phone.
-- Scheduled backups inside the panel or through a systemd timer, with an optional off-site copy pushed to your own SSH host.
-- A daily systemd timer that keeps running even when the panel is stopped.
+- Backup scheduler: the installer writes a daily systemd timer (`ovm-backup.timer`) that runs a verified backup and prunes to 7 copies, whether or not the panel process is up.
 - Public subscription endpoint that answers with a page, a usage summary or the `.ovpn` itself.
+- Staged updates and every manual-verifying step are fully scripted.
 
 ### 🔧 Operations
-- `ovm doctor` runs 13 health checks over the service, autostart, file modes, data directory, disk space, worker, HTTP health and certificate; `--fix` applies the safe ones.
-- Staged updates with automatic failover, `ovm rollback` for the previous code tree, and `ovm recover-update` for an update interrupted by a reboot.
-- Verified `.db` backups, listed and restored by name, or uploaded and restored atomically from the panel.
-- Uninstall keeps your data unless you pass `--purge`; purging takes a snapshot to `/var/backups` first.
-- A text menu for everything above — run `ovmanager` with no arguments.
+- `ovm doctor` runs the health checks over the service, autostart, file modes, data directory, disk space, worker, HTTP health and backup age and certificate.
+- Staged updates with automatic failover; an update interrupted by a reboot is recovered on the next `ovm update` run.
+- Verified `.db` backups, listed and restored by name (`ovm backup --keep N`, `ovm restore`).
+- A bare `ovm` run prints the available screens and exits; every command has `--help`.
 
 ## 🚀 Install
 
@@ -105,47 +103,27 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 
 - A Linux server — Debian or Ubuntu recommended.
 - Root, or an account with `sudo`.
-- For the default native install, a host with systemd. On WSL, or in a container without systemd, use Docker mode instead.
-- Port `2095` free. Port `80` free too if you intend to use Let's Encrypt during the install.
-- Nothing else. The installer brings its own Python runtime; `git`, `npm` and Docker are not required.
+- A host with systemd.
+- Port `2095` free.
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
-This is the interactive install. Run with no flags it asks, and given no terminal it stops and tells you to pass `--yes` rather than choosing for you.
+The installer fetches the bare release binary for this platform (plus its SHA-256 sidecar, verified before install), puts it in `/opt/ovmanager`, writes a systemd service and a daily backup timer, starts the panel and health-checks the result. There is nothing to prompt for; `-y` is accepted for compatibility and the script never asks questions mid-run. `bash install.sh --help` prints the full surface.
 
-The menu offers **Install** (recommended, asks nothing else) and **Install with Docker**. To answer every setting yourself, run the wizard instead:
-
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) interactive
-```
-
-**With no terminal** — a run without one cannot ask, so it needs `--yes` to say that is intended:
+**From source** (development): point the installer at a working tree — it builds the SPA and the binary in place:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- --yes
-
-curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- --docker --yes
+bash install.sh --from-source [SRC] [--dest DIR]
 ```
 
-The installer takes exactly three flags — `-y/--yes`, `--docker`, `-h/--help`. Everything else is an `OVM_*` variable, and each one is also the wizard's default, so a scripted run and an interactive one cannot disagree:
+**Docker instead of systemd:** the pre-built image publishes on every release:
 
-| Variable | Values |
-| --- | --- |
-| `OVM_PORT` | Panel port (default `2095`) |
-| `OVM_PATH` | Secret URL prefix: `random` (default), `root`, or a name |
-| `OVM_ADMIN_USER` | Owner login name (default `admin`) |
-| `OVM_TLS` | `self` (default), `le`, `le-ip`, `custom` |
-| `OVM_TLS_DOMAIN`, `OVM_TLS_KEY`, `OVM_TLS_CERT` | For `le` and `custom` |
-| `OVM_PUBLIC_URL` | Address used in subscription links, when it cannot be inferred |
-| `OVM_MODE` | `native` or `docker` |
-| `OVM_VERSION` | Pin an install or update to one release |
-| `OVM_REPO` | `myorg/OVManager` to install and update from a fork |
-
-`CI=true` implies `--yes`. The older flag spellings (`-p/--pass`, `--mode`, `--tls*`, `-i`) still work and each prints what replaces it. The installer's own commands are `update`, `uninstall`, `interactive`, `version-script` and `help`; with none given it installs. `bash install.sh --help` prints the whole surface.
+```bash
+docker run -d --name ovmanager -p 2095:2095 -v ovmanager-data:/data \
+  ghcr.io/anonysec/ovmanager
+```
 
 ## 🏁 After it finishes
 
@@ -163,14 +141,30 @@ user           admin — change it any time in Settings
 
 | Path | What |
 | --- | --- |
-| `/opt/ovmanager` | The installed tree, with its own virtualenv |
-| `/opt/ovmanager/.env` | Configuration — port, URL prefix, public URL, TLS paths |
-| `/var/lib/ovmanager` | The database and the backup bundles |
-| `/etc/ssl/self-signed` | The installer's self-signed pair, shared with the node installer |
+| `/opt/ovmanager` | The installed tree: the binary (with the dashboard inside), `.env` |
+| `/opt/ovmanager/.env` | Configuration — port, data dir, owner login name |
+| `/var/lib/ovmanager` | The database, backups and node material (mode `0700`) |
+| `/usr/local/bin/ovm` | Symlink to the binary — the operator CLI |
+| `.github/site` | Not on disk: the docs are the Pages site below |
 
 **Then attach a server.** The panel manages accounts; it does not carry VPN traffic. Install OVNode on the machine your users will connect to and register it under **Nodes → Add Node** — the panel's Ready card prints a ready-to-paste command with the API key already filled in. Until a node is green, the panel has nothing to hand out.
 
-**Managing it afterwards** is `ovm` (alias `ovmanager`), installed on the server and refreshed by every update. Run it bare for a menu: Status · Start/Stop/Restart · Logs · Backup · Auto backup · Update · TLS · Recovery · Uninstall.
+**Managing it afterwards** is `ovm`, a symlink to the same binary that serves the panel. Run it bare for a command list, or `--help` per command. There is no `uninstall` command: stop the service and remove `/opt/ovmanager` and `/var/lib/ovmanager` (data is kept unless you remove it).
+
+| What | How |
+| --- | --- |
+| Status, health, version, URL | `sudo ovm status [--all]` |
+| Health checks | `sudo ovm doctor` |
+| Service control | `sudo ovm service start \| stop \| restart \| enable \| disable` |
+| Server logs | `sudo ovm logs [N\|-f]` |
+| Backup now (verified, pruned) | `sudo ovm backup [--keep N]` — default 14 |
+| List backups, or restore | `sudo ovm restore [NAME]` |
+| The daily timer | written by the installer; runs `ovm backup --keep 7` daily |
+| Panel URL prefix | `sudo ovm urlpath` |
+| Installed certificate | `sudo ovm tls` |
+| Staged update with failover | `sudo ovm update` |
+| Reset the owner password | `sudo ovm reset-password` |
+| Shell completion | `sudo ovm completion bash\|zsh\|fish` |
 
 ## ⚡ Performance notes
 
@@ -189,23 +183,18 @@ Every `ovm` command needs root, because each one reads the panel's `.env` to fin
 | Command | What it does |
 | --- | --- |
 | `sudo ovm status` | Service, health, version and panel URL. `--all` adds mode, port, data and install paths. |
-| `sudo ovm doctor [--fix]` | Run the health checks; `--fix` applies the safe repairs. |
+| `sudo ovm doctor` | Run the health checks (service, autostart, modes, data dir, disk, worker, HTTP health, backup age, certificate). |
 | `sudo ovm logs [N\|-f]` | Last N log lines (default 100), or follow live. |
-| `sudo ovm start \| stop \| restart` | Service control. `enable` / `disable` set automatic start. |
-| `sudo ovm backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. |
+| `sudo ovm service start \| stop \| restart` | Service control. `enable` / `disable` set automatic start. |
+| `sudo ovm backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. The installer's daily timer pins `--keep 7`. |
 | `sudo ovm restore [NAME]` | List backups, or restore one by name. |
-| `sudo ovm auto-backup on \| off` | Daily backup through a systemd timer (`--time HH:MM`, `--keep N`). |
-| `sudo ovm https` | `--self`, `--domain NAME`, `--ip`, or `--key F --cert F`. |
-| `sudo ovm tls-status` | The installed certificate and when it expires. Read-only. |
-| `sudo ovm update` | Staged update with automatic failover. |
-| `sudo ovm rollback` | Restore the newest pre-update code snapshot. |
-| `sudo ovm recover-update` | Recover an update interrupted by a reboot or power loss. |
-| `sudo ovm owner-claim` | Print a fresh one-time claim key, before the panel has been claimed. |
+| `sudo ovm urlpath` | Print the secret URL prefix the panel is served under. |
+| `sudo ovm tls` | The installed certificate and when it expires. Read-only. |
+| `sudo ovm update` | Staged update with automatic failover; recovers an interrupted update first. |
 | `sudo ovm reset-password` | Set a new owner password, then restart the panel. |
-| `sudo ovm reset-urlpath` | Clear the secret panel URL prefix. |
-| `sudo ovm recovery` | Reprint the panel URL and login name. Read-only. |
-| `sudo ovm uninstall [--purge]` | Remove the app. Data is kept unless `--purge`. |
-| `sudo ovm completion` | Install bash completion. |
+| `sudo ovm completion` | Install shell completion (`bash\|zsh\|fish\|powershell`). |
+
+`ovm update` covers rollback too: the pre-update tree is kept, `ovm restore` restores backups, and an update interrupted mid-flight is recovered automatically at the next `ovm update` call.
 
 ## 📚 Docs
 
