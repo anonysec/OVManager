@@ -847,5 +847,15 @@
   "nodeTlsPinExpiry": "到期",
   "nodeRepinButton": "从当前证书重新锁定",
   "filterOnline": "Online",
-  "filterQuota": "Near quota"
+  "filterQuota": "Near quota",
+  "navLogs": "系统日志",
+  "logsTitle": "系统日志",
+  "logsSubtitle": "面板及其节点的最近日志行",
+  "logsUnit": "单元",
+  "logsUnitPanel": "面板",
+  "logsLines": "行数",
+  "logsFollow": "跟随",
+  "logsRefresh": "刷新",
+  "logsEmpty": "暂无日志输出",
+  "logsError": "日志加载失败。"
 }

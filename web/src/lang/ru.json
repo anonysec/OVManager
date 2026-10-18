@@ -847,5 +847,15 @@
   "nodeTlsPinExpiry": "Истекает",
   "nodeRepinButton": "Перезакрепить из текущего сертификата",
   "filterOnline": "Online",
-  "filterQuota": "Near quota"
+  "filterQuota": "Near quota",
+  "navLogs": "Системные логи",
+  "logsTitle": "Системные логи",
+  "logsSubtitle": "Последние строки журнала панели и её узлов",
+  "logsUnit": "Юнит",
+  "logsUnitPanel": "Панель",
+  "logsLines": "Строки",
+  "logsFollow": "Следить",
+  "logsRefresh": "Обновить",
+  "logsEmpty": "Нет записей в журнале",
+  "logsError": "Не удалось загрузить логи."
 }

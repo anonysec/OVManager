@@ -847,5 +847,15 @@
   "nodeTlsPinExpiry": "انقضا",
   "nodeRepinButton": "پین مجدد از گواهی فعلی",
   "filterOnline": "Online",
-  "filterQuota": "Near quota"
+  "filterQuota": "Near quota",
+  "navLogs": "لاگ‌های سیستم",
+  "logsTitle": "لاگ‌های سیستم",
+  "logsSubtitle": "آخرین خطوط ژورنال پنل و نودهای آن",
+  "logsUnit": "یونیت",
+  "logsUnitPanel": "پنل",
+  "logsLines": "خطوط",
+  "logsFollow": "دنبال کردن",
+  "logsRefresh": "بازخوانی",
+  "logsEmpty": "خروجی لاگ وجود ندارد",
+  "logsError": "بارگیری لاگ‌ها ناموفق بود."
 }

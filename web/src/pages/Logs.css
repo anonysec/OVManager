@@ -1,0 +1,83 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* System logs — sticky filter bar plus a monospace journal viewer. */
+
+.logs-page {
+  max-width: var(--content-max);
+}
+
+.logs-controls {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.logs-controls label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.logs-controls label span {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.logs-controls select {
+  min-height: var(--control-h-sm);
+  padding: 4px var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.logs-view {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  min-height: 420px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.log-rows {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.logs-view--error .log-rows,
+.log-rows-empty {
+  padding: var(--space-4);
+  color: var(--text-muted);
+}
+
+.logs-error {
+  padding: var(--space-4);
+  color: var(--danger-text);
+}
+
+@media (max-width: 767.98px) {
+  .logs-view {
+    max-height: none;
+  }
+}

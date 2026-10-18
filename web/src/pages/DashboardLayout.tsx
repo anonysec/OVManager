@@ -117,6 +117,7 @@ const DashboardLayout = () => {
       '/admins': t('navAdmins', 'Admins'),
       '/audit': t('navAudit', 'Logs'),
       '/settings': t('navSettings', 'Settings'),
+      '/logs': t('navLogs', 'System logs'),
       '/setup': t('setupTitle', 'Setup wizard'),
     };
     if (map[pathname]) return map[pathname];
@@ -125,6 +126,7 @@ const DashboardLayout = () => {
     if (pathname.startsWith('/admins')) return t('navAdmins', 'Admins');
     if (pathname.startsWith('/audit')) return t('navAudit', 'Logs');
     if (pathname.startsWith('/settings')) return t('navSettings', 'Settings');
+    if (pathname.startsWith('/logs')) return t('navLogs', 'System logs');
     if (pathname.startsWith('/setup')) return t('setupTitle', 'Setup wizard');
     return t('navHome', 'Home');
   };

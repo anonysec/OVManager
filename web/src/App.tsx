@@ -16,6 +16,7 @@ const loadUsers = () => import('./pages/UserManagement');
 const loadNodes = () => import('./pages/NodeManagement');
 const loadSettings = () => import('./pages/Settings');
 const loadAudit = () => import('./pages/AuditLog');
+const loadLogs = () => import('./pages/Logs');
 const loadSetup = () => import('./pages/SetupWizard');
 
 const LoginPage = lazy(loadLogin);
@@ -26,6 +27,7 @@ const UserManagement = lazy(loadUsers);
 const NodeManagement = lazy(loadNodes);
 const Settings = lazy(loadSettings);
 const AuditLog = lazy(loadAudit);
+const Logs = lazy(loadLogs);
 const SetupWizard = lazy(loadSetup);
 
 const link = document.createElement('link');
@@ -151,6 +153,7 @@ function App({ onReady }: { onReady?: () => void }) {
             {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
             {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
+            <Route path="logs" element={<Page name="logs"><Logs /></Page>} />
           </Route>
           <Route path="*" element={firstRun ?? <Navigate to={isAuthenticated ? "/" : "/login"} />} />
         </Routes>

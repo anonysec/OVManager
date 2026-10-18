@@ -847,5 +847,15 @@
   "nodeTlsPinUnknown": "Live certificate not checked",
   "nodeTlsPinIssuer": "Issuer",
   "nodeTlsPinExpiry": "Expires",
-  "nodeRepinButton": "Re-pin from current cert"
+  "nodeRepinButton": "Re-pin from current cert",
+  "navLogs": "System logs",
+  "logsTitle": "System logs",
+  "logsSubtitle": "Last journal lines for the panel and its nodes",
+  "logsUnit": "Unit",
+  "logsUnitPanel": "Panel",
+  "logsLines": "Lines",
+  "logsFollow": "Follow",
+  "logsRefresh": "Refresh",
+  "logsEmpty": "No log output",
+  "logsError": "Failed to load logs."
 }
