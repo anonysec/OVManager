@@ -326,6 +326,10 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 		if safetyName != "" {
 			safety = safetyName
 		}
+		telemetry.RecordEvent(h.Svc.DB, "db_restore", "error",
+			"Database restore failed and rolled back", map[string]any{
+				"target": actor, "detail": detail, "error": msg,
+			})
 		return restoreResult{false, msg, map[string]any{
 			"safety_backup": safety, "rolled_back": rolledBack,
 			"data_safe": !activated || rolledBack,
@@ -371,6 +375,9 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 	if err := verifyDatabase(dbFilePath()); err != nil {
 		return fail(err)
 	}
+	telemetry.RecordEvent(h.Svc.DB, "db_restore", "info",
+		"Database restored and verified successfully",
+		map[string]any{"target": actor, "detail": detail, "safety_backup": safetyName})
 	return restoreResult{true, "Database restored and verified successfully",
 		map[string]any{"safety_backup": safetyName, "rolled_back": false}}
 }

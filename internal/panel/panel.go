@@ -113,6 +113,9 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// OVM_ACME_DOMAIN. No-op without an enrolled domain.
 	h.startACMEWorker()
 
+	// Plan Task 5: GET /api/db/backup + POST /api/db/restore — see dbops.go.
+	h.MountDBOps(mux, owner)
+
 	// Telegram ops channel: one worker goroutine (daily summary at
 	// telegram_summary_time, immediate expired/over-quota events, node/CPU
 	// threshold sweeps through telemetry.CollectMetrics). No-op while the bot
