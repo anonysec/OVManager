@@ -156,7 +156,7 @@ func PruneLedger(db *sql.DB, keepDays, batch int) int {
 // Canon renders the canonical node_usage text both sides of an OCC compare speak.
 //
 // ponytail: only handles the shapes daily.py stores (object or its JSON text);
-// Python's default-str fallback for exotic types is not reproduced.
+// default-str fallback for exotic types is not reproduced.
 func Canon(state any) string {
 	if s, ok := state.(string); ok {
 		if s == "" {
@@ -194,7 +194,7 @@ func ExtractUsername(clientName, nodeName string, known map[string]bool) string 
 // ComputeSessionDelta returns (delta_bytes, new_state) for one user on one node.
 //
 // new_state is a map[string]int64 when the node reports per-session data, or an
-// int64 legacy total otherwise (mirrors the Python union return).
+// int64 legacy total otherwise (mirrors the union return).
 func ComputeSessionDelta(sessions map[string]any, prevState any, legacyTotal float64) (int, any) {
 	if sessions != nil {
 		if prev, ok := prevState.(map[string]any); ok {

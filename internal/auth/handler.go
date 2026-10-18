@@ -26,7 +26,7 @@ const (
 	maxBuckets      = 10000
 )
 
-// Mount registers the auth routes the Python routers expose, relative to the
+// Mount registers the auth routes the routers expose, relative to the
 // caller's prefix (app.py includes them under /api).
 func (s *Service) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /login", s.handleLogin)

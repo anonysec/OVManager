@@ -1,4 +1,4 @@
-// Parity tests for migrate_legacy_tls, ported from the last Python version
+// Parity tests for migrate_legacy_tls, ported from the last version
 // (backend/routers/tls.py at 07204ee^): a pair left in DATA_DIR/tls is copied
 // onto the declared paths, once, and never over a pair already declared.
 package tests
@@ -160,7 +160,7 @@ func TestMigrateLegacyTLSSkipsWhenTheDeclaredPathIsTheLegacyPath(t *testing.T) {
 }
 
 // TestMigrateLegacyTLSReportsAnInvalidLegacyPair never raises: the failure is
-// the Python wording, and the declared paths stay untouched.
+// the wording, and the declared paths stay untouched.
 func TestMigrateLegacyTLSReportsAnInvalidLegacyPair(t *testing.T) {
 	env := newPanelEnv(t)
 	keyPath, certPath := declaredPaths(t, env.dataDir)
@@ -172,7 +172,7 @@ func TestMigrateLegacyTLSReportsAnInvalidLegacyPair(t *testing.T) {
 	}
 	msg, _ := got["error"].(string)
 	if !strings.HasPrefix(msg, "Could not migrate the existing certificate: ") {
-		t.Fatalf("error = %q, want the Python wording", msg)
+		t.Fatalf("error = %q, want the wording", msg)
 	}
 	for _, path := range []string{keyPath, certPath} {
 		if _, err := os.Stat(path); err == nil {

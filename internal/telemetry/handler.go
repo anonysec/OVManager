@@ -190,7 +190,7 @@ func thresholdItems(db *sql.DB) []map[string]any {
 			items = append(items, map[string]any{
 				"id": "usage:" + firstNonEmpty(u.uuid, u.name), "type": "threshold_usage",
 				"level": level, "target": u.name,
-				"title": fmt.Sprintf("%s at %d%% of quota (warn limit %d%%)", u.name, pyRound(pct), limit),
+				"title": fmt.Sprintf("%s at %d%% of quota (warn limit %d%%)", u.name, bankerRound(pct), limit),
 			})
 		}
 	}
@@ -204,7 +204,7 @@ func thresholdItems(db *sql.DB) []map[string]any {
 			items = append(items, map[string]any{
 				"id": fmt.Sprintf("cpu:%d", n.id), "type": "threshold_cpu",
 				"level": "warning", "target": n.name,
-				"title": fmt.Sprintf("Node %s CPU at %d%% (warn limit %d%%)", n.name, pyRound(n.cpu), limit),
+				"title": fmt.Sprintf("Node %s CPU at %d%% (warn limit %d%%)", n.name, bankerRound(n.cpu), limit),
 			})
 		}
 	}
@@ -218,7 +218,7 @@ func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
 
 // --- metrics (observability/metrics.py) ---
 
-// metricsTables is the DDL the collector/history need at runtime; the Python
+// metricsTables is the DDL the collector/history need at runtime;
 // migrations own it, this is the idempotent mirror.
 var metricsTables = []string{
 	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT)`,
@@ -944,8 +944,8 @@ func kvValue(db *sql.DB, key string) string {
 	return v.String
 }
 
-// pyRound is Python's round() — banker's rounding, which Go's math.Round is not.
-func pyRound(f float64) int {
+// bankerRound is banker's rounding, which Go's math.Round is not.
+func bankerRound(f float64) int {
 	floor := math.Floor(f)
 	diff := f - floor
 	if diff > 0.5 {
@@ -961,7 +961,7 @@ func pyRound(f float64) int {
 	return int(floor) + 1
 }
 
-// round1 is Python's round(x, 1).
+// round1 is round(x, 1).
 func round1(f float64) float64 {
 	return math.Round(f*10) / 10
 }

@@ -73,7 +73,7 @@ jobs:
         run: make build
       - name: Test
         # One command, one home: the parity suite (test/) proves the Go binary
-        # answers like the Python app it replaced. Run with a coverage profile
+        # answers like the app it replaced. Run with a coverage profile
         # so the same invocation is the gate — -coverpkg is required because the
         # suite lives in its own package (plain -coverprofile ./... reports 0.5%
         # for the packages it exercises).

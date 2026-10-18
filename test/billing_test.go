@@ -1,4 +1,4 @@
-// Billing ledger parity: golden outputs generated from the real Python module
+// Billing ledger parity: golden outputs generated from the real module
 // (see testdata/billing_golden.json) plus DB-level ordering/upsert behaviour.
 package tests
 

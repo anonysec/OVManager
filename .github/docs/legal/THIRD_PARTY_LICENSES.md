@@ -4,7 +4,6 @@ OVManager is MIT-licensed, but its dependencies, base images, system packages, o
 
 Release artifacts must include an automatically generated software bill of materials and all notices required by shipped components. Package manifests are the current dependency source of truth:
 
-- Python: `pyproject.toml` and `uv.lock`
 - JavaScript: `frontend/package.json` and `frontend/package-lock.json`
 - Container: `Dockerfile` and its resolved base-image digest
 

@@ -51,7 +51,7 @@ func newTelemetryConn(t *testing.T) (*sql.DB, string) {
 
 func newTelemetryServer(t *testing.T, conn *sql.DB, dir string) (*httptest.Server, string) {
 	t.Helper()
-	seedOwner(t, conn, "owner", pythonBcryptHash)
+	seedOwner(t, conn, "owner", bcryptHash)
 	svc := auth.NewService(conn, dir)
 	inner := http.NewServeMux()
 	svc.Mount(inner)
@@ -67,7 +67,7 @@ func newTelemetryServer(t *testing.T, conn *sql.DB, dir string) (*httptest.Serve
 	return srv, token
 }
 
-func TestActivityMatchesPython(t *testing.T) {
+func TestActivityMatches(t *testing.T) {
 	conn, dir := newTelemetryConn(t)
 	srv, token := newTelemetryServer(t, conn, dir)
 
@@ -150,7 +150,7 @@ func TestNotificationsShape(t *testing.T) {
 	}
 }
 
-func TestSSEFramingMatchesPython(t *testing.T) {
+func TestSSEFramingMatches(t *testing.T) {
 	conn, dir := newTelemetryConn(t)
 	srv, token := newTelemetryServer(t, conn, dir)
 
@@ -182,7 +182,7 @@ func TestSSEFramingMatchesPython(t *testing.T) {
 	if !strings.HasPrefix(evt, "event: users\ndata: {\"op\": \"sync\", \"ts\": ") || !strings.HasSuffix(evt, "}") {
 		t.Fatalf("event frame = %q", evt)
 	}
-	// The ts value must be a plain Python-style float, not Go's %v int form.
+	// The ts value must be a plain float, not Go's %v int form.
 	payload := strings.SplitN(evt, "data: ", 2)[1]
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {

@@ -38,12 +38,12 @@ cd frontend && npm ci && npm run build
 uv run main.py                            # first run creates the schema
 ```
 
-The first run creates the owner row with no password. Set one with the Python
+The first run creates the owner row with no password. Set one with the
 CLI directly (this is the CLI's own spelling, `--admin-pass`; the `-p/--pass`
 short form belongs to the installed `ovm` command, not to this one):
 
 ```bash
-.venv/bin/python -m cli.main reset-password --admin-pass 'a-strong-password'
+ovm reset-password --admin-pass 'a-strong-password'
 ```
 
 ## Checks

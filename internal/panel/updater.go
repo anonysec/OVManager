@@ -279,7 +279,7 @@ func (h *Handler) startNativeUpdate(w http.ResponseWriter, installSh string) {
 	cmd := exec.Command("bash", installSh, "update")
 	cmd.Stdin = nil
 	cmd.Stdout = logFile
-	cmd.Stderr = logFile // Python's stderr=subprocess.STDOUT
+	cmd.Stderr = logFile // stderr=subprocess.STDOUT
 	cmd.SysProcAttr = detachSysProcAttr()
 	if err := cmd.Start(); err != nil {
 		envelope(w, false, "Could not start the updater: "+err.Error(), nil)

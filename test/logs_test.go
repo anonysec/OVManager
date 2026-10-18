@@ -64,7 +64,7 @@ func logsEnvFor(t *testing.T, stub string) logsEnv {
 	if _, err := conn.Exec(panelSchema); err != nil {
 		t.Fatalf("panel schema: %v", err)
 	}
-	seedOwner(t, conn, "owner", pythonBcryptHash)
+	seedOwner(t, conn, "owner", bcryptHash)
 
 	svc := auth.NewService(conn, dataDir)
 	h := panel.NewHandler(svc)
@@ -174,7 +174,7 @@ func TestLogsGate(t *testing.T) {
 	// admin session is issued directly (IssueSession) against a seeded
 	// is_owner=0 row.
 	if _, err := env.sqlite.Exec(
-		`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, pythonBcryptHash,
+		`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash,
 	); err != nil {
 		t.Fatalf("seed admin: %v", err)
 	}

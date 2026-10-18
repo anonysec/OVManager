@@ -124,7 +124,7 @@ func legacyEvents(data map[string]any, nodeName string, tz *time.Location, idToN
 	raw := []map[string]any{}
 	switch le := data["last_error"].(type) {
 	case map[string]any:
-		// Python iterates the dict in document order; sort for a stable result.
+		// iterate the map in document order; sort for a stable result.
 		keys := make([]string, 0, len(le))
 		for k := range le {
 			keys = append(keys, k)
@@ -278,7 +278,7 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 	for _, item := range node.GatherNodes(calls, node.RequestFanoutDeadline) {
 		pair, ok := item.([]any)
 		if !ok || len(pair) < 2 {
-			continue // an exception in Python terms
+			continue // an exception
 		}
 		nodeName, _ := pair[0].(string)
 		data, _ := pair[1].(map[string]any)
@@ -392,7 +392,7 @@ func ongoingUsers(events []map[string]any) []string {
 }
 
 // topCommonNames is Counter(user).most_common(20): count desc, ties in
-// first-encountered order, rendered as [name, count] pairs like Python tuples.
+// first-encountered order, rendered as [name, count] pairs.
 func topCommonNames(events []map[string]any) [][]any {
 	counts := map[string]int{}
 	order := []string{}

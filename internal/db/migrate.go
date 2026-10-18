@@ -1,9 +1,9 @@
-// Schema migration runner, ported from the deleted Python package
+// Schema migration runner, ported from the legacy package
 // backend/db/migrations (last version at 07204ee^: runner.py, schema.py,
 // seeds.py, steps.py, constants.py).
 //
 // The numbered steps are reproduced one-for-one, in order, with the same guards
-// so a database is upgraded exactly like the Python runner did. The difference
+// so a database is upgraded exactly like the runner did. The difference
 // the cutover plan prescribes: the version lives in PRAGMA user_version instead
 // of the schema_version table (no table survives, nothing to inspect).
 //

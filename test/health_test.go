@@ -1,5 +1,5 @@
 // Package tests holds cross-implementation parity tests: the Go server must
-// answer byte-compatible with the Python backend it replaces.
+// answer byte-compatible with the backend it replaces.
 package tests
 
 import (
@@ -17,7 +17,7 @@ import (
 
 // releaseVersion reads internal/version/version.go so the served /health
 // version is pinned to the source constant. It used to read pyproject.toml,
-// then backend/version.py before that; both are gone now that Python is
+// then backend/version.py before that; both are gone now that it is
 // deleted (Phase 6).
 func releaseVersion(t *testing.T) string {
 	t.Helper()
@@ -32,9 +32,9 @@ func releaseVersion(t *testing.T) string {
 	return string(m[1])
 }
 
-// TestHealthMatchesPython mirrors backend/app.py /health: {"status":"ok"} plus
+// TestHealthMatches mirrors backend/app.py /health: {"status":"ok"} plus
 // "version" for loopback clients (httptest is loopback, as is the panel itself).
-func TestHealthMatchesPython(t *testing.T) {
+func TestHealthMatches(t *testing.T) {
 	srv := httptest.NewServer(health.Router())
 	defer srv.Close()
 
@@ -66,7 +66,7 @@ func TestHealthMatchesPython(t *testing.T) {
 }
 
 // TestOpenAppliesPragmas guards the DSN pragmas: modernc silently ignores a
-// malformed _pragma=, so assert the ones the Python engine sets.
+// malformed _pragma=, so assert the ones the engine sets.
 func TestOpenAppliesPragmas(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 	conn, err := db.Open(path)

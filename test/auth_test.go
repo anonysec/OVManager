@@ -14,19 +14,19 @@ import (
 	"github.com/anonysec/OVManager/go/internal/auth"
 )
 
-// TestAuthVerifiesPythonHash is the hash-parity guard: a hash written by the
-// Python backend (backend/auth/hash.py, $2b$12$) must verify in Go.
-func TestAuthVerifiesPythonHash(t *testing.T) {
-	if !auth.VerifyPassword(knownPassword, pythonBcryptHash) {
-		t.Fatalf("Go could not verify a Python-minted bcrypt hash")
+// TestAuthVerifiesHash is the hash-parity guard: a hash written by the
+// backend (backend/auth/hash.py, $2b$12$) must verify in Go.
+func TestAuthVerifiesHash(t *testing.T) {
+	if !auth.VerifyPassword(knownPassword, bcryptHash) {
+		t.Fatalf("Go could not verify the bcrypt hash")
 	}
-	if auth.VerifyPassword("wrong", pythonBcryptHash) {
-		t.Errorf("wrong password verified against Python hash")
+	if auth.VerifyPassword("wrong", bcryptHash) {
+		t.Errorf("wrong password verified against hash")
 	}
 	if auth.VerifyPassword(knownPassword, "") {
 		t.Errorf("empty hash must never verify")
 	}
-	// Go-minted hashes are $2b$12$ and round-trip, matching the Python policy.
+	// Go-minted hashes are $2b$12$ and round-trip, matching the policy.
 	h, err := auth.HashPassword(knownPassword)
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
@@ -49,7 +49,7 @@ func TestAuthVerifiesPythonHash(t *testing.T) {
 // the ovm_session cookie (max-age = SESSION_MAX_SECONDS, HttpOnly, Lax, "/").
 func TestAuthLoginSuccess(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 
 	res := postForm(t, srv.URL, "/api/login", url.Values{"username": {"admin"}, "password": {knownPassword}})
@@ -104,7 +104,7 @@ func TestAuthLoginSuccess(t *testing.T) {
 // TestAuthLoginWrongPassword mirrors the 401 shape (backend/auth/auth.py).
 func TestAuthLoginWrongPassword(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 
 	res := postForm(t, srv.URL, "/api/login", url.Values{"username": {"admin"}, "password": {"nope"}})
@@ -126,8 +126,8 @@ func TestAuthLoginWrongPassword(t *testing.T) {
 // credential (backend/auth/auth.py authenticate_user).
 func TestAuthLoginUnknownNonOwner(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, pythonBcryptHash); err != nil {
+	seedOwner(t, conn, "admin", bcryptHash)
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash); err != nil {
 		t.Fatal(err)
 	}
 	srv := newServer(t, conn, dir)
@@ -141,7 +141,7 @@ func TestAuthLoginUnknownNonOwner(t *testing.T) {
 // TestAuthLoginLockout mirrors the in-memory rate limiter's 429 + Retry-After.
 func TestAuthLoginLockout(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 	var res *http.Response
 	for i := 0; i < 5; i++ {
@@ -210,7 +210,7 @@ func TestAuthSessionVerifyRevoke(t *testing.T) {
 // with the login-again detail (backend/auth/auth.py).
 func TestAuthRefreshRetired(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 	res, body := doJSON(t, http.MethodPost, srv.URL+"/api/refresh", "", nil)
 	defer res.Body.Close()
@@ -225,7 +225,7 @@ func TestAuthRefreshRetired(t *testing.T) {
 // TestAuthLogoutRevokes mirrors /logout: row delete + cookie clear.
 func TestAuthLogoutRevokes(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 	got := login(t, srv.URL, "admin", knownPassword)
 	token := got["access_token"].(string)
@@ -243,7 +243,7 @@ func TestAuthLogoutRevokes(t *testing.T) {
 // TestAuthRequireOwner403 mirrors authz.require_owner.
 func TestAuthRequireOwner403(t *testing.T) {
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	svc := auth.NewService(conn, dir)
 	inner := http.NewServeMux()
 	svc.Mount(inner)

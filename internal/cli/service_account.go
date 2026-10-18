@@ -14,9 +14,9 @@ import (
 // switch the unit. The unit is edited, not regenerated, and snapshotted first
 // so a panel that does not come back can be restored.
 //
-// Unlike the Python original this does NOT rewrite ExecStart: the post-migration
-// unit runs the Go binary, and forcing `.venv/bin/python3 main.py` back would
-// break every native install. Only User= is changed and Group= is inserted
+// This does NOT rewrite ExecStart: the unit runs the Go binary, and
+// reverting to a script-based entrypoint would break every native install.
+// Only User= is changed and Group= is inserted
 // beside it (Group= at the end of the file would land in [Install]).
 func fixServiceAccount(install Install, check Check) Check {
 	account := panelUser()

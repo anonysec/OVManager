@@ -311,7 +311,7 @@ func publicKeyDER(key any) ([]byte, error) {
 	return nil, errors.New("unsupported private key type")
 }
 
-// isoFormat matches Python's datetime.isoformat() (+00:00, trailing zeros
+// isoFormat matches datetime.isoformat() (+00:00, trailing zeros
 // trimmed, whole seconds without a fraction).
 func isoFormat(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.999999-07:00")
@@ -573,13 +573,13 @@ func (h *Handler) tlsUpload(w http.ResponseWriter, r *http.Request) {
 	if parsed != nil {
 		subject = parsed.Subject.String()
 	}
-	_ = subject // logged by the Python router; the response is what the API contract pins
+	_ = subject // logged by the router; the response is what the API contract pins
 	envelope(w, true, "Certificate installed. "+restartHint, map[string]any{
 		"restart_required": true, "cert_path": sslCertPath(), "key_path": sslKeyPath(),
 	})
 }
 
-// readUpload reads one multipart file field, capped at 1MB+1 like the Python
+// readUpload reads one multipart file field, capped at 1MB+1 like the original
 // `await file.read(MAX_TLS_FILE_SIZE + 1)`.
 func readUpload(r *http.Request, field string) ([]byte, bool) {
 	file, _, err := r.FormFile(field)

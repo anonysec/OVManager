@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // The bot locale group is gone: backend/bot/locales was deleted with the
-// Python backend (Phase 6). Only the SPA locales remain.
+// Only the SPA locales remain.
 const GROUPS = [
   { dir: join(root, 'src', 'lang'), locales: ['fa', 'ru', 'cn'], budget: 0 },
 ];

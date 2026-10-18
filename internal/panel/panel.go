@@ -1,4 +1,4 @@
-// Package panel ports the remaining Python routers (Phase 4): health overview,
+// Package panel ports the remaining routers (Phase 4): health overview,
 // panel settings, security summary, TLS management, updater, maintenance and
 // the subscription page.
 //
@@ -232,7 +232,7 @@ func (s settings) str(key, def string) string {
 	return def
 }
 
-// strOr is the raw DB value ("" for NULL) — the Python `getattr(x, col, None) or ""`.
+// strOr is the raw DB value ("" for NULL).
 func (s settings) strOr(key string) string {
 	v, _ := s[key].(string)
 	return v
@@ -256,7 +256,7 @@ func (s settings) num(key string, def int) int {
 	return def
 }
 
-// numOrNull is Python's `getattr(x, col, None)` for ints.
+// numOrNull is the nullable-int accessor for ints.
 func (s settings) numOrNull(key string) any {
 	switch v := s[key].(type) {
 	case int64:
@@ -277,7 +277,7 @@ func (s settings) boolean(key string, def bool) bool {
 	return def
 }
 
-// intOr is Python's `as_int(getattr(...), default)` for the alert thresholds:
+// intOr is the int accessor with default for the alert thresholds:
 // an unparsable value falls back, it is not treated as absent.
 func (s settings) intOr(key string, def int) int {
 	switch v := s[key].(type) {
@@ -450,7 +450,7 @@ type errURLPathPersist struct{}
 func (errURLPathPersist) Error() string { return "URLPATH could not be persisted" }
 
 // reservedPrefixes are the first path segments the panel itself owns. Derived
-// from the Go route table (the Python version walked api.routes).
+// from the Go route table.
 func reservedPrefixes() map[string]bool {
 	reserved := map[string]bool{
 		"api": true, "assets": true, "health": true, "static": true,

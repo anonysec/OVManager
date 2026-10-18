@@ -1,4 +1,4 @@
-// Package node ports the backend/node Python package: the mTLS API client,
+// Package node ports the backend/node package: the mTLS API client,
 // the connection/health registry, fan-out bounds, sync workers, diagnostics
 // and the node management handlers.
 //

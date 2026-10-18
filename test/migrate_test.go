@@ -1,5 +1,5 @@
 // Parity tests for Phase 6 Task 3: the Go migration runner against the deleted
-// Python package backend/db/migrations (runner.py/schema.py/seeds.py/steps.py,
+// legacy package backend/db/migrations (runner/schema/seeds/steps,
 // last version at 07204ee^). SCHEMA_VERSION stays 26; the cutover plan moves the
 // version into PRAGMA user_version.
 package tests
@@ -70,9 +70,9 @@ func userVersion(t *testing.T, conn *sql.DB) int {
 	return count(t, conn, "PRAGMA user_version")
 }
 
-// TestMigrationStepListMatchesPython pins the ordered step list to steps.py's
+// TestMigrationStepListMatches pins the ordered step list to
 // STEPS tuple verbatim — the runner's order and wording are the parity contract.
-func TestMigrationStepListMatchesPython(t *testing.T) {
+func TestMigrationStepListMatches(t *testing.T) {
 	want := []db.MigrationStep{
 		{2, "encrypt node API keys at rest"},
 		{3, "drop orphan daily traffic rows"},
@@ -254,7 +254,7 @@ func TestMigrateRefusesNewerDatabase(t *testing.T) {
 	}
 }
 
-// fernetKey/fernetToken were minted by Python cryptography.fernet over
+// fernetKey/fernetToken were minted by cryptography.fernet over
 // b"my-secret-bot-token" — the cross-implementation guard for v14.
 const (
 	fernetKey   = "Ilcce2f4KtuKc2lquXlc-hZx3Nki5n7Kt829kbXsI5A="
@@ -268,7 +268,7 @@ INSERT INTO settings (id, bot_token) VALUES (1, 'enc:` + fernetToken + `');
 INSERT INTO nodes (id, key) VALUES (1, 'enc:` + fernetToken + `');
 `
 
-// TestMigrateDecryptsStoredSecrets proves a Go-built DB reads the Python Fernet
+// TestMigrateDecryptsStoredSecrets proves a Go-built DB reads the Fernet
 // rows at v14 (stdlib crypto, no new dependency).
 func TestMigrateDecryptsStoredSecrets(t *testing.T) {
 	t.Setenv("ADMIN_USERNAME", "")

@@ -33,14 +33,14 @@ func prepare(password string) []byte {
 }
 
 // HashPassword returns a bcrypt hash (12 rounds, $2b$ prefix). New hashes stay
-// byte-comparable with the Python backend's.
+// byte-comparable with the backend.
 func HashPassword(password string) (string, error) {
 	h, err := bcrypt.GenerateFromPassword(prepare(password), BcryptCost)
 	if err != nil {
 		return "", err
 	}
 	// x/crypto emits the $2a$ variant; rewrite to $2b$ so stored hashes are
-	// byte-identical to the Python backend's (bcrypt honors both on compare).
+	// byte-identical to the backend's (bcrypt honors both on compare).
 	return "$2b$" + string(h)[4:], nil
 }
 

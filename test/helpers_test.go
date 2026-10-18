@@ -17,12 +17,12 @@ import (
 	"github.com/anonysec/OVManager/go/internal/users"
 )
 
-// pythonBcryptHash is a real bcrypt hash minted by the Python backend's
+// bcryptHash is a real bcrypt hash minted by the backend's
 // backend/auth/hash.py (bcrypt 12 rounds, $2b$). knownPassword must verify
 // against it from Go — this is the cross-implementation hash guard.
 const (
 	knownPassword    = "correct-horse-battery"
-	pythonBcryptHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
+	bcryptHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
 )
 
 // testSchema mirrors the columns the ported code touches (backend/db/models.py).

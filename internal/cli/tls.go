@@ -32,7 +32,7 @@ func orNone(v string) string {
 }
 
 // migrateTLSLegacy reports a pre-declaration certificate left in DATA_DIR/tls.
-// migrate_legacy_tls had no Go port (its Python source was deleted with
+// migrate_legacy_tls had no Go port (its source was deleted with
 // backend/ in Phase 4), so this only reports; it never moves files.
 func migrateTLSLegacy(install Install) (string, int) {
 	legacyDir := install.DataDir + "/tls"

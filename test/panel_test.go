@@ -1,7 +1,7 @@
 // Parity tests for Phase 4: the remaining routers (setting, security, tls,
 // updater, maintenance, sub, plus the health overview/login endpoints).
 //
-// Each route is asserted on status + response shape against what the Python
+// Each route is asserted on status + response shape against what the original
 // routers returned (ResponseModel envelope vs plain JSON, and the 4xx shapes
 // from the recent fail-closed/traversal fixes).
 package tests
@@ -135,7 +135,7 @@ func newPanelEnv(t *testing.T) *panelEnv {
 	if _, err := conn.Exec(panelSchema); err != nil {
 		t.Fatalf("panel schema: %v", err)
 	}
-	seedOwner(t, conn, "owner", pythonBcryptHash)
+	seedOwner(t, conn, "owner", bcryptHash)
 
 	svc := auth.NewService(conn, dataDir)
 	h := panel.NewHandler(svc)
@@ -544,7 +544,7 @@ func TestTLSUploadValidatesAndActivates(t *testing.T) {
 		t.Fatalf("mismatched pair not rejected: %s", raw)
 	}
 
-	// Garbage PEM is refused with the exact Python wording.
+	// Garbage PEM is refused with the exact wording.
 	_, raw = postPair(t, env.srv.URL, env.token, "/api/tls/upload", "not a key", "not a cert")
 	if !strings.Contains(string(raw), "not a valid PEM private key") {
 		t.Fatalf("garbage pair not rejected: %s", raw)

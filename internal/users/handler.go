@@ -1,7 +1,7 @@
 // Package users ports backend/routers/users.py + backend/db/crud/users.py.
 //
 // The node fan-out half of each mutation lands with Phase 2; local DB state is
-// authoritative here, so with zero nodes the responses match Python exactly.
+// authoritative here, so with zero nodes the responses match exactly.
 package users
 
 import (
@@ -23,7 +23,7 @@ import (
 type Handler struct {
 	Svc *auth.Service
 	mu  sync.Mutex
-	// ponytail: in-memory Undo registry, per-process like the Python one; move
+	// ponytail: in-memory Undo registry, per-process; move
 	// to a table when the panel runs multi-worker.
 	deleted map[string]deletedUser
 }
@@ -387,7 +387,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// ponytail: node status/limit fan-out lands with Phase 2; with zero nodes
-	// Python's *_on_all_nodes return true, so success matches.
+	// the node helpers return true, so success matches.
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated successfully"})
 }
 

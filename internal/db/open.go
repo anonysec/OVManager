@@ -14,7 +14,7 @@ import (
 // DefaultPath is the panel database location (DATA_DIR overrides at call site).
 const DefaultPath = "data/ovmanager.db"
 
-// dsnPragmas keeps the Python engine's PRAGMAs. cache_size -32768 = 32MiB.
+// dsnPragmas keeps the engine's PRAGMAs. cache_size -32768 = 32MiB.
 //
 // ponytail: perf.low_resource (8MiB cache on 1GB boxes) not wired — pass a
 // variant DSN when the setting gains a reader here.

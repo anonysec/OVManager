@@ -30,7 +30,7 @@ const dbUploadCap = 100 * 1024 * 1024
 func seedHelperAdmin(t *testing.T, conn *sql.DB) {
 	t.Helper()
 	if _, err := conn.Exec(
-		`INSERT INTO admins (username, password, is_owner) VALUES ('helper', ?, 0)`, pythonBcryptHash,
+		`INSERT INTO admins (username, password, is_owner) VALUES ('helper', ?, 0)`, bcryptHash,
 	); err != nil {
 		t.Fatalf("seed helper admin: %v", err)
 	}

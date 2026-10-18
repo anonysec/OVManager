@@ -12,7 +12,7 @@ import (
 func authedServer(t *testing.T) (*sql.DB, string, string) {
 	t.Helper()
 	conn, dir := newTestDB(t)
-	seedOwner(t, conn, "admin", pythonBcryptHash)
+	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
 	token := login(t, srv.URL, "admin", knownPassword)["access_token"].(string)
 	return conn, srv.URL, token
@@ -241,7 +241,7 @@ func TestUsersDeleteRestore(t *testing.T) {
 	if got["data"].(map[string]any)["uuid"] != uuidTwo {
 		t.Errorf("restored uuid = %v, want %v", got["data"].(map[string]any)["uuid"], uuidTwo)
 	}
-	// A consumed entry can no longer be undone (Python pops on success).
+	// A consumed entry can no longer be undone (pops on success).
 	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuidTwo+"/restore", token, nil)
 	res.Body.Close()
 	if res.StatusCode != 410 {

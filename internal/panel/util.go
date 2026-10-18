@@ -19,7 +19,7 @@ import (
 // placeholder ACME email).
 func cryptoRead(b []byte) (int, error) { return rand.Read(b) }
 
-// readAtMost reads at most limit bytes, mirroring Python's
+// readAtMost reads at most limit bytes, mirroring
 // `await file.read(MAX + 1)` size probing.
 func readAtMost(r io.Reader, limit int) ([]byte, error) {
 	buf := make([]byte, 0, 4096)

@@ -446,7 +446,7 @@ func loadCertificate(path string) (*x509.Certificate, error) {
 	return parseCertificatePEM(raw)
 }
 
-// daysUntil is Python's (not_valid_after_utc - now).days: floored, so an
+// daysUntil is (not_valid_after_utc - now).days: floored, so an
 // expired certificate reports -1 rather than 0.
 func daysUntil(cert *x509.Certificate) int {
 	return int(math.Floor(time.Until(cert.NotAfter).Hours() / 24))

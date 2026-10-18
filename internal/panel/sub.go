@@ -348,7 +348,7 @@ func usedPct(used int64, total *int64) *int {
 		return &v
 	}
 	v := int(float64(used) / float64(*total) * 100)
-	// Python's round() is banker's rounding; traffic percentages never land on
+	// round() is banker's rounding; traffic percentages never land on
 	// an exact .5 in practice, and the UI only prints the integer.
 	if v > 100 {
 		v = 100

@@ -19,7 +19,7 @@ const TokenBytes = 32
 // touchThrottleSeconds throttles the sliding last_seen write.
 const touchThrottleSeconds = 300
 
-// Identity is the frontend-shaped identity dict returned by the Python layer.
+// Identity is the frontend-shaped identity dict returned by the backend layer.
 type Identity struct {
 	Username string
 	Type     string
@@ -211,12 +211,12 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 // bcryptWaste spends the same bcrypt time a real credential would so a
 // missing/foreign row is not distinguishable by timing (auth.py _waste_verify).
 func bcryptWaste(password string) (bool, error) {
-	return VerifyPassword(password, pythonDummyHash), nil
+	return VerifyPassword(password, dummyBcryptHash), nil
 }
 
-// pythonDummyHash is a valid $2b$12$ hash of an unknown random string; timing
+// dummyBcryptHash is a valid $2b$12$ hash of an unknown random string; timing
 // noise only, never a credential.
-const pythonDummyHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
+const dummyBcryptHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
 
 func nullIfEmpty(s string) any {
 	if s == "" {

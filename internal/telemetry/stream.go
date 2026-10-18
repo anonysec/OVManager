@@ -22,7 +22,7 @@ import (
 
 // --- event bus (live.py LiveBus) ---
 
-// KV is one ordered object member. Python dicts preserve insertion order and
+// KV is one ordered object member. Dicts preserve insertion order and
 // json.dumps serialises in that order, so the SSE wire format carries order
 // explicitly instead of a Go map (which marshals sorted).
 type KV struct {
@@ -46,7 +46,7 @@ type Bus struct {
 // NewBus builds an empty bus.
 func NewBus() *Bus { return &Bus{subs: map[chan Event]struct{}{}} }
 
-// Subscribe registers a subscriber with a 100-deep queue like the Python bus.
+// Subscribe registers a subscriber with a 100-deep queue like the bus.
 func (b *Bus) Subscribe() chan Event {
 	ch := make(chan Event, 100)
 	b.mu.Lock()
@@ -215,7 +215,7 @@ func StreamHandler(svc *auth.Service, b *Bus) http.HandlerFunc {
 		q := b.Subscribe()
 		defer b.Unsubscribe(q)
 		// ready frame: {"ts": <time>, "cap": <cap>} — ts first, like the dict.
-		_, _ = w.Write([]byte("event: ready\ndata: " + pyObject([]KV{{"ts", nowSecs()}, {"cap", SnapshotCap()}}) + "\n\n"))
+		_, _ = w.Write([]byte("event: ready\ndata: " + orderedObject([]KV{{"ts", nowSecs()}, {"cap", SnapshotCap()}}) + "\n\n"))
 		flusher.Flush()
 
 		timer := time.NewTimer(heartbeatSeconds * time.Second)
@@ -241,13 +241,13 @@ func formatEvent(topic string, ts float64, data []KV) string {
 	pairs := make([]KV, 0, len(data)+1)
 	pairs = append(pairs, data...)
 	pairs = append(pairs, KV{"ts", ts})
-	return "event: " + topic + "\ndata: " + pyObject(pairs) + "\n\n"
+	return "event: " + topic + "\ndata: " + orderedObject(pairs) + "\n\n"
 }
 
-// --- Python-compatible JSON for the SSE body (json.dumps default=str) ---
+// --- JSON for the SSE body (json.dumps default=str) ---
 
-// pyObject renders an ordered object with Python's default separators.
-func pyObject(pairs []KV) string {
+// orderedObject renders an ordered object with default separators.
+func orderedObject(pairs []KV) string {
 	var sb strings.Builder
 	sb.WriteByte('{')
 	for i, p := range pairs {
@@ -278,9 +278,9 @@ func pyValue(v any) string {
 	case int64:
 		return strconv.FormatInt(x, 10)
 	case float64:
-		return pyFloat(x)
+		return formatFloat(x)
 	case []KV:
-		return pyObject(x)
+		return orderedObject(x)
 	case []any:
 		parts := make([]string, len(x))
 		for i, item := range x {
@@ -299,14 +299,14 @@ func pyFallback(v any) string {
 	return ""
 }
 
-// pyFloat matches Python's repr for the magnitudes a unix ts takes.
+// formatFloat matches repr for the magnitudes a unix ts takes.
 //
-// ponytail: fixed shortest form; Python switches to exponent form below 1e-4
+// ponytail: fixed shortest form; switches to exponent form below 1e-4
 // or at/above 1e16. SSE floats are unix seconds, so that range never occurs.
-func pyFloat(f float64) string {
+func formatFloat(f float64) string {
 	s := strconv.FormatFloat(f, 'f', -1, 64)
 	if !strings.ContainsRune(s, '.') {
-		s += ".0" // Python prints 100.0, not 100
+		s += ".0" // prints 100.0, not 100
 	}
 	return s
 }
