@@ -182,6 +182,45 @@ UNIT
     chmod 644 "/etc/systemd/system/$SYSTEMD_SERVICE"
 }
 
+# A daily verified backup, independent of the panel being up: a system timer
+# that runs `ovm backup --keep 7`. Retention mirrors the CLI default (7, vs the
+# 14 default for manual runs) so disk stays bounded under automation.
+write_backup_units() {
+    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service" <<UNIT
+[Unit]
+Description=OVManager daily backup
+After=${SYSTEMD_SERVICE}
+
+[Service]
+Type=oneshot
+EnvironmentFile=$INSTALL_DIR/.env
+User=$PANEL_USER
+Group=$PANEL_USER
+ExecStart=$INSTALL_DIR/$APP_SLUG backup --keep 7
+UNIT
+
+    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.timer" <<UNIT
+[Unit]
+Description=Run the OVManager daily backup
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+RandomizedDelaySec=45min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+    chmod 644 /etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service \
+              /etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.timer
+}
+
+enable_backup_timer() {
+    systemctl daemon-reload
+    systemctl enable --now "${SYSTEMD_SERVICE%.service}-backup.timer" >/dev/null 2>&1 \
+        || _warn "Could not enable the backup timer (enable it with: systemctl enable --now ${SYSTEMD_SERVICE%.service}-backup.timer)"
+}
+
 # The panel user must be able to read the code and the config, and to write its
 # data dir — and nothing else. The .env stays root-owned and group-readable so
 # the config never lands in a file the panel user owns (and could rewrite).
@@ -343,11 +382,13 @@ do_install() {
     write_env "$INSTALL_DIR/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
     write_systemd_unit
+    write_backup_units
     grant_panel_access
 
     systemctl daemon-reload
     systemctl enable --now "$SYSTEMD_SERVICE" >/dev/null 2>&1 \
         || die "Could not start $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
+    enable_backup_timer
 
     port="$(read_env_port "$INSTALL_DIR/.env")"
     verify_health "$port" "$VERSION" \
