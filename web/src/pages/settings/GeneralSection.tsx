@@ -9,7 +9,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import LoadingButton from '../../components/LoadingButton';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
-import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiInfo, FiDownload, FiUpload, FiDatabase } from 'react-icons/fi';
+import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiInfo } from 'react-icons/fi';
 import { Card, Field } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
 import { errorMessageOf } from '../../utils/errorMessage';
@@ -41,10 +41,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const [subPrefixSaving, setSubPrefixSaving] = useState(false);
   const [profile, setProfile] = useState({ title: '', support: '', announce: '', interval: '12' });
   const [profileSaving, setProfileSaving] = useState(false);
-  const [dbFile, setDbFile] = useState<File | null>(null);
-  const [dbBusy, setDbBusy] = useState('');
-  const [dbMsg, setDbMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [dbConfirm, setDbConfirm] = useState(false);
   const loading = shared?.loading ?? true;
   const loadError = shared?.error ?? false;
   const load = shared?.reload ?? (() => {});
@@ -116,40 +112,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
     finally { setProfileSaving(false); }
   };
 
-  /* DB export/import (plan Task 5) — streams the newest stored backup and
-     replaces the live database through the staging-restore endpoint. */
-  const exportDb = async () => {
-    setDbBusy('export'); setDbMsg(null);
-    try {
-      const r = await apiClient.get('/db/backup', { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement('a');
-      a.href = url;
-      const disp = r.headers?.['content-disposition'] || '';
-      const m = disp.match(/filename="([^"]+)"/);
-      a.download = m ? m[1] : 'ovmanager-backup.db';
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    } catch (e) {
-      setDbMsg({ type: 'error', text: errorMessageOf(e, t('error', 'Error')) });
-    } finally { setDbBusy(''); }
-  };
-
-  const importDb = async () => {
-    if (!dbFile) return;
-    setDbBusy('import'); setDbMsg(null);
-    try {
-      const fd = new FormData(); fd.append('file', dbFile);
-      const r = await apiClient.post('/db/restore', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      if (r.data?.success === false) {
-        setDbMsg({ type: 'error', text: r.data?.msg || t('error', 'Error') });
-      } else {
-        setDbMsg({ type: 'success', text: r.data?.msg || t('restored', 'Restore complete.') });
-        setDbFile(null);
-      }
-    } catch (e) {
-      setDbMsg({ type: 'error', text: errorMessageOf(e, t('error', 'Error')) });
-    } finally { setDbBusy(''); }
-  };
 
   const panelUrl = urlPath ? `${window.location.origin}/${urlPath}/` : `${window.location.origin}/`;
 
@@ -261,34 +223,6 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
         </div>
       </Card>
 
-      <Card title={t('backupTitle', 'Database Backup')} icon={FiDatabase}>
-        <p className="sp-hint sp-mb-12">{t('restoreHint', 'Select a .db backup file to restore. This overwrites current data and asks for confirmation.')}</p>
-        <div className="sp-btn-group sp-mb-14">
-          <button className="btn btn-sm" disabled={!!dbBusy} aria-busy={dbBusy === 'export'} onClick={exportDb}>
-            {dbBusy === 'export' ? <span className="button-spinner" aria-hidden="true" /> : <><FiDownload size={13} aria-hidden="true" /> {t('downloadLatest', 'Download Latest')}</>}
-          </button>
-          <button className="btn btn-sm btn-secondary" disabled={!dbFile || !!dbBusy} aria-busy={dbBusy === 'import'} onClick={() => setDbConfirm(true)}>
-            {dbBusy === 'import' ? <span className="button-spinner" aria-hidden="true" /> : <><FiUpload size={13} aria-hidden="true" /> {t('restoreButton', 'Restore')}</>}
-          </button>
-        </div>
-        <label className="sr-only" htmlFor="general-db-file">{t('selectBackupFile', 'Select backup file')}</label>
-        <input id="general-db-file" type="file" accept=".db" className="sp-file-input" disabled={!!dbBusy} onChange={e => { setDbFile(e.target.files?.[0] || null); setDbMsg(null); }} />
-        {dbMsg && (
-          <p className={`bs-auto-msg bs-auto-msg--${dbMsg.type}`} role={dbMsg.type === 'error' ? 'alert' : 'status'}>
-            {dbMsg.text}
-          </p>
-        )}
-      </Card>
-      <ConfirmModal
-        open={dbConfirm}
-        onClose={() => setDbConfirm(false)}
-        onConfirm={importDb}
-        title={t('restoreButton', 'Restore')}
-        message={t('confirmRestoreFile', 'Restore from "{{name}}"? This will overwrite current data.', { name: dbFile?.name || '' })}
-        danger
-        confirmLabel={t('restoreButton', 'Restore')}
-        cancelLabel={t('cancelButton', 'Cancel')}
-      />
     </div>
   );
 };
