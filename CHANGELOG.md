@@ -1,3 +1,13 @@
+## 2.1.0 — 2026-10-18
+
+Feature-gap wave (x-ui comparison): ACME one-click TLS + T-30d auto-renew,
+in-panel log viewer (journalctl whitelist), expired/depleted users sweep with
+kick, Telegram ops notifications (daily summary + events), in-panel DB
+export/import. Security headers middleware (CSP, XFO, nosniff, conditional
+HSTS), daily backup timer from the installer, README refresh, module path
+rename to github.com/anonysec/OVManager/go, single version source, CI
+coverage gate (44%), embedded SPA security header mount.
+
 ## 2.0.2 — 2026-10-17
 
 Re-cut of 2.0.1 so the release carrying the in-tree data-dir fix is what
