@@ -4,7 +4,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   FiDownload, FiSearch, FiPlus, FiCheck, FiWifi, FiUsers,
-  FiEdit2, FiActivity, FiTrash2, FiClock, FiUserCheck, FiUserX, FiRefreshCw, FiMoreHorizontal,
+  FiEdit2, FiActivity, FiTrash2, FiClock, FiUserCheck, FiUserX, FiRefreshCw, FiMoreHorizontal, FiWifiOff,
 } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
@@ -45,6 +45,13 @@ const statusLabel = (u: any, t: any) => {
   if (d < 0) return t('expired');
   if (u.is_active === false) return t('disabled');
   return t('statusOffline');
+};
+
+// Mirror of the backend's activationBlocked: past expiry OR quota depleted.
+const isExpiredUser = (u: any) => {
+  const d = daysUntil(u.expiry_date);
+  if (d < 0 || d === -Infinity) return true;
+  return u.total != null && Number(u.used || 0) >= Number(u.total);
 };
 
 const UserManagement = () => {
@@ -158,6 +165,7 @@ const UserManagement = () => {
       active: c((u: any) => Boolean(u.is_active) && notExpired(u)),
       disabled: c((u: any) => !u.is_active && notExpired(u)),
       expiring: c((u: any) => { const d = daysUntil(u.expiry_date); return d > 0 && d <= 7; }),
+      expired: c((u: any) => isExpiredUser(u)),
     };
   }, [users]);
 
@@ -211,6 +219,7 @@ const UserManagement = () => {
       const remaining = daysUntil(user.expiry_date);
       if (view === 'active' && !(user.is_active && remaining >= 0)) return false;
       if (view === 'expiring') { if (!(remaining > 0 && remaining <= 7)) return false; }
+      if (view === 'expired' && !isExpiredUser(user)) return false;
       if (view === 'disabled' && !(!user.is_active && remaining >= 0)) return false;
       if (view.startsWith('tag:') && (user.tag || '') !== view.slice(4)) return false;
       return true;
@@ -304,6 +313,24 @@ const UserManagement = () => {
       addToast(errorMessageOf(e, t('error')), 'error');
     }
   }, [addToast, fetchUsers, t]);
+
+  const handleKick = useCallback((user: any) => {
+    openConfirm(
+      t('kick', 'Kick'),
+      t('confirmKick', 'Disconnect {{name}} from all nodes now?', { name: user.name }),
+      async () => {
+        try {
+          const res = await apiClient.post(`/users/${user.uuid}/kick`);
+          const kicked = res.data?.data?.kicked ?? 0;
+          addToast(t('kickedDone', '{{count}} session(s) terminated.', { count: kicked }), 'success');
+        } catch (e) {
+          addToast(errorMessageOf(e, t('error')), 'error');
+        }
+      },
+      false,
+      t('kick', 'Kick')
+    );
+  }, [addToast, t]);
 
   const handleDelete = useCallback((user: any) => {
     openConfirm(
@@ -418,6 +445,25 @@ const UserManagement = () => {
     const ids = [...selected];
     let ok = 0; let fail = 0;
     const byUuid = new Map(users.map((u) => [String(u.uuid), u]));
+    if (op === 'purge') {
+      // Server-side bulk delete through the panel's own delete path (session
+      // revoke + node fan-out included); one request instead of a per-row loop.
+      try {
+        const res = await apiClient.post('/users/purge', { user_ids: ids });
+        ok = res.data?.data?.deleted ?? 0;
+        fail = ids.length - ok;
+      } catch { fail = ids.length; }
+      setSelected(new Set());
+      setBulkBusy(false);
+      fetchUsers({ background: true });
+      addToast(
+        fail === 0
+          ? t('purgeDone', 'Deleted {{count}} user(s).', { count: ok })
+          : t('bulkPartial', '{{label}}: {{ok}} done, {{fail}} failed.', { label, ok, fail }),
+        fail === 0 ? 'success' : 'warning'
+      );
+      return;
+    }
     for (const uuid of ids) {
       const u = byUuid.get(String(uuid));
       if (!u) { fail += 1; continue; }
@@ -453,6 +499,11 @@ const UserManagement = () => {
 
   const anySelectedDisabled = useMemo(
     () => users.some((u) => selected.has(String(u.uuid)) && u.is_active === false),
+    [users, selected],
+  );
+
+  const selectedExpiredCount = useMemo(
+    () => users.filter((u) => selected.has(String(u.uuid)) && isExpiredUser(u)).length,
     [users, selected],
   );
 
@@ -628,6 +679,7 @@ const UserManagement = () => {
             { id: 'active', label: t('filterActive', 'Active') },
             { id: 'disabled', label: t('filterDisabled', 'Disabled') },
             { id: 'expiring', label: t('filterExpiring', 'Expiring') },
+            { id: 'expired', label: t('filterExpired', 'Expired') },
           ].map((f) => (
             <button key={f.id} type="button" className={`um-chip${view === f.id ? ' is-active' : ''}`} aria-pressed={view === f.id} onClick={() => setView(f.id)}>
               {f.label} <span className="um-chip-count">{(filterCounts as Record<string, number>)[f.id] ?? 0}</span>
@@ -680,6 +732,9 @@ const UserManagement = () => {
           <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={13} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={13} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
           <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
+          {selectedExpiredCount > 0 && (
+            <Button size="sm" variant="danger" disabled={bulkBusy} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('purge', 'purgeExpired', 'confirmPurgeExpired', t('purgeExpired', 'Delete expired'))}>{t('purgeExpired', 'Delete expired')} ({selectedExpiredCount})</Button>
+          )}
           <Button size="sm" variant="danger" disabled={bulkBusy || bulkDeletesAll} title={bulkDeletesAll ? t('keepOneUser', 'You must keep at least one user') : undefined} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t('clear', 'Clear')}</Button>
         </div>
@@ -748,6 +803,7 @@ const UserManagement = () => {
           <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleToggleStatus(rowMenu.user); }}>
             {rowMenu.user.is_active ? <FiUserX size={14} aria-hidden="true" /> : <FiUserCheck size={14} aria-hidden="true" />} {rowMenu.user.is_active ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
           </button>
+          <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleKick(rowMenu.user); }}><FiWifiOff size={14} aria-hidden="true" /> {t('kick', 'Kick')}</button>
           <button type="button" role="menuitem" className="um-rowmenu-item" onClick={() => { setRowMenu(null); handleResetUsage(rowMenu.user); }}><FiRefreshCw size={14} aria-hidden="true" /> {t('resetUsageButton', 'Reset usage')}</button>
         </div>,
         document.body,
