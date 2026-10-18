@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
@@ -81,9 +82,10 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"subscription_path":         strings.Trim(subPath, "/"),
 		"timezone":                  s.str("timezone", "UTC"),
 		"panel_version":             version.Version,
-		"bot_token":                 nil,
+		"bot_token":                 maskedBotToken(s),
 		"bot_configured":            s.strOr("bot_token") != "",
 		"bot_enabled":               s.boolean("bot_enabled", false),
+		"telegram_summary_time":     s.str("telegram_summary_time", "09:00"),
 		"default_days":              orDefault(s.num("default_days", 30), 30),
 		"default_traffic_gb":        orDefault(s.num("default_traffic_gb", 100), 100),
 		"default_max_users":         orDefault(s.num("default_max_users", 1), 1),
@@ -116,6 +118,15 @@ func orDefault(v, def int) int {
 		return def
 	}
 	return v
+}
+
+// maskedBotToken is the GET shape of the stored token: last four characters
+// only — the secret itself never leaves the row.
+func maskedBotToken(s settings) any {
+	if s.strOr("bot_token") == "" {
+		return nil
+	}
+	return notify.MaskToken(s.strOr("bot_token"))
 }
 
 // publicURLOr is (config.PUBLIC_URL or str(request.base_url)).
@@ -278,6 +289,7 @@ type botConfigUpdate struct {
 	AutoBackupKeep        *int    `json:"auto_backup_keep"`
 	OffsiteBackupTarget   *string `json:"offsite_backup_target"`
 	TelegramBackupEnabled *bool   `json:"telegram_backup_enabled"`
+	TelegramSummaryTime   *string `json:"telegram_summary_time"`
 }
 
 // columns maps each request field to its DB column.
@@ -313,6 +325,16 @@ var botConfigColumns = []struct {
 	{"auto_backup_keep", "auto_backup_keep", func(p botConfigUpdate) (any, bool) { return intOrNil(p.AutoBackupKeep) }},
 	{"offsite_backup_target", "offsite_backup_target", func(p botConfigUpdate) (any, bool) { return strOrNil(p.OffsiteBackupTarget) }},
 	{"telegram_backup_enabled", "telegram_backup_enabled", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.TelegramBackupEnabled) }},
+	{"telegram_summary_time", "telegram_summary_time", func(p botConfigUpdate) (any, bool) {
+		if p.TelegramSummaryTime == nil {
+			return nil, false
+		}
+		v := strings.TrimSpace(*p.TelegramSummaryTime)
+		if v == "" {
+			return "09:00", true // blank resets to the default slot
+		}
+		return v, true
+	}},
 }
 
 func boolOrNil(v *bool) (any, bool) {
@@ -345,9 +367,19 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &payload) {
 		return
 	}
+	// Make sure a settings row exists before pointing columns at it
+	// (readSettings seeds it — a 0-row UPDATE would otherwise silently pass,
+	// see tls.go's issuance flow for the same trap).
+	readSettings(h.Svc.DB)
 	if payload.AutoBackupTime != nil && !autoBackupTimeRe.MatchString(*payload.AutoBackupTime) {
 		envelope(w, false, "auto_backup_time must be a valid 24-hour time in HH:MM format", nil)
 		return
+	}
+	if payload.TelegramSummaryTime != nil {
+		if v := strings.TrimSpace(*payload.TelegramSummaryTime); v != "" && !autoBackupTimeRe.MatchString(v) {
+			envelope(w, false, "telegram_summary_time must be a valid 24-hour time in HH:MM format", nil)
+			return
+		}
 	}
 	if payload.AutoBackupKeep != nil && (*payload.AutoBackupKeep < autoBackupKeepMin || *payload.AutoBackupKeep > autoBackupKeepMax) {
 		envelope(w, false, "auto_backup_keep must be between 1 and 500", nil)
@@ -421,6 +453,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 		"offsite_backup_target":     s.strOr("offsite_backup_target"),
 		"telegram_backup_enabled":   s.boolean("telegram_backup_enabled", false),
 		"telegram_backup_available": s.strOr("bot_token") != "",
+		"telegram_summary_time":     s.str("telegram_summary_time", "09:00"),
 	}
 	for k, v := range thresholdData(s) {
 		data[k] = v

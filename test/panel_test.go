@@ -61,6 +61,7 @@ CREATE TABLE settings (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTE
   urlpath VARCHAR DEFAULT '', auto_backup_enabled BOOLEAN DEFAULT 0,
   auto_backup_time VARCHAR DEFAULT '03:30', auto_backup_keep INTEGER DEFAULT 50,
   offsite_backup_target VARCHAR, telegram_backup_enabled BOOLEAN DEFAULT 0,
+  telegram_summary_time VARCHAR DEFAULT '09:00',
   ssl_cert_file VARCHAR, ssl_key_file VARCHAR, acme_domain VARCHAR, acme_email VARCHAR,
   cert_method VARCHAR DEFAULT 'selfsigned', panel_id VARCHAR, panel_url VARCHAR,
   panel_domain VARCHAR, bot_owner_setup_complete BOOLEAN DEFAULT 0);

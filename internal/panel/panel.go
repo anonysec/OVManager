@@ -112,6 +112,12 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// Daily ACME renewal (T-30d) + boot issuance when the installer wired
 	// OVM_ACME_DOMAIN. No-op without an enrolled domain.
 	h.startACMEWorker()
+
+	// Telegram ops channel: one worker goroutine (daily summary at
+	// telegram_summary_time, immediate expired/over-quota events, node/CPU
+	// threshold sweeps through telemetry.CollectMetrics). No-op while the bot
+	// is disabled or unconfigured.
+	h.startTelegramWorker()
 }
 
 // MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside
