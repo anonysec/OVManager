@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
 	"math"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/notify"
 )
 
 // DefaultBus is the process-wide live event bus (live.bus).
@@ -818,8 +818,9 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 // health-overview promoter.
 func SendTelegram(db *sql.DB, text string) bool { return sendTelegram(db, text) }
 
-// sendTelegram sends one HTML-escaped message; false when the bot is unconfigured
-// or the transport fails (notifier.send_telegram).
+// sendTelegram sends one message through the notify package (the shared
+// stdlib transport); false when the bot is unconfigured or the transport
+// fails (notifier.send_telegram). Plain text — no HTML parse mode.
 func sendTelegram(db *sql.DB, text string) bool {
 	if db == nil {
 		return false
@@ -829,23 +830,14 @@ func sendTelegram(db *sql.DB, text string) bool {
 	var token sql.NullString
 	err := db.QueryRow(`SELECT bot_enabled, owner_telegram_id, bot_token FROM settings LIMIT 1`).
 		Scan(&enabled, &ownerID, &token)
-	if err != nil || enabled.Int64 == 0 || !ownerID.Valid || !token.Valid || token.String == "" {
+	if err != nil || !enabled.Valid || enabled.Int64 == 0 || !ownerID.Valid || !token.Valid || token.String == "" {
 		return false
 	}
 	tok := token.String
 	if strings.HasPrefix(tok, "enc:") {
 		return false // legacy encrypted token fails closed
 	}
-	body, _ := json.Marshal(map[string]any{
-		"chat_id": ownerID.Int64, "text": html.EscapeString(text), "parse_mode": "HTML",
-	})
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post("https://api.telegram.org/bot"+tok+"/sendMessage", "application/json", strings.NewReader(string(body)))
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
+	return notify.SendMessage(tok, strconv.FormatInt(ownerID.Int64, 10), text) == nil
 }
 
 // nilDB is unused; kept out — RecordEvent always takes a live handle.

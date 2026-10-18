@@ -288,6 +288,7 @@ var mappedColumns = map[string][]mcolumn{
 		{"auto_backup_keep", "INTEGER DEFAULT 50 NOT NULL"},
 		{"offsite_backup_target", "VARCHAR"},
 		{"telegram_backup_enabled", "BOOLEAN DEFAULT 0 NOT NULL"},
+		{"telegram_summary_time", "VARCHAR DEFAULT '09:00' NOT NULL"},
 		{"ssl_cert_file", "VARCHAR"},
 		{"ssl_key_file", "VARCHAR"},
 		{"acme_domain", "VARCHAR"},
