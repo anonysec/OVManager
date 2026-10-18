@@ -5,14 +5,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
-import ConfirmModal from '../../components/ConfirmModal';
 import LoadingButton from '../../components/LoadingButton';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiInfo } from 'react-icons/fi';
 import { Card, Field } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
-import { errorMessageOf } from '../../utils/errorMessage';
 
 /* ═══════════════════════════════════════════════════════
    GENERAL (advanced) — Panel URL path + subscription prefix
