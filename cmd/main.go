@@ -149,10 +149,11 @@ const c=document.getElementById('c'),ctx=c.getContext('2d');
 function resize(){c.width=innerWidth;c.height=innerHeight}
 resize();addEventListener('resize',resize);
 const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
+const palette=['#0f0','#0ff','#f0f','#ff0','#0af','#fa0','#f55'];const col=palette[Math.floor(Math.random()*palette.length)];
 const fs=16,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
 function draw(){
   ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle='#0f0';ctx.font=fs+'px monospace';
+  ctx.fillStyle=col;ctx.font=fs+'px monospace';ctx.shadowColor=col;ctx.shadowBlur=8;
   for(let i=0;i<drops.length;i++){
     const t=chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(t,i*fs,drops[i]*fs);
