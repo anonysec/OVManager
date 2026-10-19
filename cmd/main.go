@@ -141,64 +141,50 @@ func spaHandler() http.Handler {
 // decoyHandler serves a generic placeholder at the site root so the panel is
 // never reachable from "/".
 func decoyHandler() http.Handler {
-	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title><style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden}
-canvas{display:block}
-</style></head><body><canvas id="c"></canvas><script>
-const palettes=[
-  ['#ff006e','#8338ec','#3a86ff','#06d6a0','#ffbe0b'],
-  ['#0f0','#0ff','#f0f','#ff0','#0af'],
-  ['#f55','#fa0','#ff0','#0f0','#0af','#f0f'],
-  ['#fff','#0ff','#f0f','#ff0','#0f0']
-];
-const styles=['rain','glitch','scan'];
-const palette=palettes[Math.floor(Math.random()*palettes.length)];
-const style=styles[Math.floor(Math.random()*styles.length)];
-const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789!@#$%';
-const fs=16;
+	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#000;overflow:hidden;font-family:'JetBrains Mono',monospace;color:#00FF41}
+canvas{position:fixed;inset:0;z-index:0}
+.scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.15) 0px,rgba(0,0,0,0.15) 1px,transparent 1px,transparent 3px);mix-blend-mode:multiply}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_50%,rgba(0,0,0,0.85)_100%)}
+.overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
+.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:700;color:#00FF41;text-shadow:0 0 8px #00FF41,0 0 24px #00FF41;position:relative;animation:glitch 2.5s infinite}
+.glitch::before,.glitch::after{content:'404';position:absolute;inset:0;opacity:.7}
+.glitch::before{color:#FF3333;text-shadow:-2px 0 #FF3333;animation:glitch 2.5s infinite;clip-path:polygon(0 0,100% 0,100% 45%,0 45%)}
+.glitch::after{color:#00FF41;text-shadow:2px 0 #00FF41;animation:glitch 2.5s infinite;clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%)}
+.sub{margin-top:12px;font-size:.9rem;letter-spacing:.3em;color:#94A3B8;text-transform:uppercase}
+.sub span{color:#FF3333}
+@keyframes glitch{0%,100%{transform:translate(0)}20%{transform:translate(-2px,1px)}40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,2px)}80%{transform:translate(1px,-2px)}}
+@media (prefers-reduced-motion:reduce){.glitch,.glitch::before,.glitch::after{animation:none}}
+</style></head><body>
+<canvas id="c"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="overlay"><div><div class="glitch">404</div><div class="sub">not<span>//</span>found</div></div></div>
+<script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 function resize(){c.width=innerWidth;c.height=innerHeight}
 resize();addEventListener('resize',resize);
-let drops=Array(Math.floor(c.width/fs)).fill(1);
-function pickColor(){return palette[Math.floor(Math.random()*palette.length)];}
-let col=pickColor();
-function drawRain(){
-  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.font=fs+'px monospace';
+const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
+const fs=16,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
+const palettes=[['#00FF41','#FF3333'],['#00FF41','#00FFFF'],['#FF3333','#00FF41']];
+const pal=palettes[Math.floor(Math.random()*palettes.length)];
+function draw(){
+  ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(0,0,c.width,c.height);
+  ctx.font=fs+'px "JetBrains Mono",monospace';
   for(let i=0;i<drops.length;i++){
-    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
-    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
+    ctx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=8;
     const t=chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(t,i*fs,drops[i]*fs);
     if(drops[i]*fs>c.height&&Math.random()>.975) drops[i]=0;
     drops[i]++;
   }
 }
-function drawGlitch(){
-  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(0,0,c.width,c.height);
-  for(let i=0;i<40;i++){
-    const x=Math.random()*c.width,y=Math.random()*c.height,w=Math.random()*120+20,h=Math.random()*20+5;
-    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
-    ctx.fillRect(x,y,w,h);
-    ctx.fillStyle='#000';
-    ctx.font=(Math.random()*14+10)+'px monospace';
-    ctx.fillText(chars[Math.floor(Math.random()*chars.length)],x+4,y+14);
-  }
-}
-function drawScan(){
-  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.fillRect(0,0,c.width,c.height);
-  const t=Date.now()/1000;
-  const y=(t*80)%c.height;
-  for(let i=0;i<c.width;i+=fs){
-    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
-    ctx.shadowBlur=0;
-    ctx.font=fs+'px monospace';
-    ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i,y);
-  }
-  ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fillRect(0,y,c.width,2);
-}
-function draw(){ if(style==='rain')drawRain(); else if(style==='glitch')drawGlitch(); else drawScan(); }
-setInterval(draw,style==='glitch'?80:33);
+setInterval(draw,33);
 </script></body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
