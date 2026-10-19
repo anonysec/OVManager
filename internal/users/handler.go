@@ -19,6 +19,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // Handler serves the /users routes.
@@ -109,14 +110,16 @@ func (u userRow) base() map[string]any {
 	}
 }
 
-// live adds the panel-only connection fields (routers/users.py serialize()).
+// live adds the panel-only connection fields (routers/users.py serialize()),
+// read from the live snapshot the telemetry collector keeps.
 //
-// ponytail: active_connections stays 0 until the live collector lands in
-// Phase 2/3 (backend/operations/observability/live.py).
+// ponytail: Connections() copies the whole map per row; hoist it to the caller
+// if user lists ever grow past the page size.
 func (u userRow) live() map[string]any {
 	m := u.base()
-	m["active_connections"] = 0
-	m["online"] = false
+	count := telemetry.Connections()[u.Name]
+	m["active_connections"] = count
+	m["online"] = count > 0
 	return m
 }
 
