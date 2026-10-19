@@ -21,8 +21,8 @@ import (
 // backend/auth/hash.py (bcrypt 12 rounds, $2b$). knownPassword must verify
 // against it from Go — this is the cross-implementation hash guard.
 const (
-	knownPassword    = "correct-horse-battery"
-	bcryptHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
+	knownPassword = "correct-horse-battery"
+	bcryptHash    = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
 )
 
 // testSchema mirrors the columns the ported code touches (backend/db/models.py).
@@ -40,7 +40,7 @@ CREATE TABLE settings (id INTEGER PRIMARY KEY, default_days INTEGER DEFAULT 30,
   default_traffic_gb INTEGER DEFAULT 100, default_max_users INTEGER DEFAULT 1);
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   status BOOLEAN DEFAULT 1, key VARCHAR);
-CREATE TABLE user_traffic_daily (id INTEGER PRIMARY KEY, user_id INTEGER, day DATE, bytes BIGINT);
+CREATE TABLE user_traffic_daily (id INTEGER PRIMARY KEY, user_id INTEGER, day TEXT, bytes BIGINT);
 `
 
 // newTestDB opens a throwaway SQLite file with the schema the ported code uses.

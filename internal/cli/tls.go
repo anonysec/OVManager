@@ -123,9 +123,9 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 		Subject:      pkix.Name{CommonName: domain},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:      x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:   []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:      []string{domain},
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{domain},
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {

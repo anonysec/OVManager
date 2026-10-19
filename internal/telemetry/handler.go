@@ -240,17 +240,15 @@ var metricsTables = []string{
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 }
 
-var tablesReady bool
+var tablesReady sync.Once
 
 // EnsureExtraTables creates the observability/billing tables once per process.
 func EnsureExtraTables(db *sql.DB) {
-	if tablesReady {
-		return
-	}
-	for _, ddl := range metricsTables {
-		_, _ = db.Exec(ddl)
-	}
-	tablesReady = true
+	tablesReady.Do(func() {
+		for _, ddl := range metricsTables {
+			_, _ = db.Exec(ddl)
+		}
+	})
 }
 
 // history mirrors metrics.history.
