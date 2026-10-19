@@ -265,7 +265,7 @@ func intMap(m map[string]any) map[string]int64 {
 // loaded values (daily._apply_user_traffic). Returns false on an OCC miss.
 func ApplyUserTraffic(db Execer, userID int64, expectedUsed int64, expectedState string, newUsed int64, newState string, delta int64) bool {
 	res, err := db.Exec(
-		`UPDATE users SET used = ?, node_usage = ? WHERE id = ? AND used IS ? AND node_usage IS ?`,
+		`UPDATE users SET used = ?, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`,
 		newUsed, newState, userID, expectedUsed, expectedState,
 	)
 	if err != nil {

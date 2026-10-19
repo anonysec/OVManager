@@ -15,6 +15,16 @@ import (
 // PushHashKey is the node_usage JSON key holding per-node push hashes.
 const PushHashKey = "push_hash"
 
+// ReseedMarkerKey marks a user awaiting a baseline reseed after a usage reset
+// (design §4.6): the next traffic pass seeds every node with delta 0.
+const ReseedMarkerKey = "__reseed"
+
+// IsReservedUsageKey reports whether a node_usage key is bookkeeping rather
+// than a node id/name, so readers skip it.
+func IsReservedUsageKey(key string) bool {
+	return key == PushHashKey || key == ReseedMarkerKey
+}
+
 // DefaultBatchSize / MaxPushBytes bound one bulk /sync/users chunk.
 const (
 	DefaultBatchSize = 100
