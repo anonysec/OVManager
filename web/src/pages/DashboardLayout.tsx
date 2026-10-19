@@ -475,19 +475,8 @@ const FaFlagIcon = () => (
 const EnFlagIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="24" fill="#fff" />
-    <rect width="24" height="2.4" y="0" fill="#b22234" />
-    <rect width="24" height="2.4" y="4.8" fill="#b22234" />
-    <rect width="24" height="2.4" y="9.6" fill="#b22234" />
-    <rect width="24" height="2.4" y="19.2" fill="#b22234" />
-    <rect width="11" height="13" x="0" y="0" fill="#3c3b6e" />
-    <g fill="#fff">
-      <circle cx="2" cy="2.2" r="0.9" /><circle cx="5" cy="2.2" r="0.9" /><circle cx="8" cy="2.2" r="0.9" />
-      <circle cx="2" cy="5.5" r="0.9" /><circle cx="5" cy="5.5" r="0.9" /><circle cx="8" cy="5.5" r="0.9" />
-      <circle cx="2" cy="8.8" r="0.9" /><circle cx="5" cy="8.8" r="0.9" /><circle cx="6.5" cy="8.8" r="0.9" /><circle cx="9.5" cy="8.8" r="0.9" />
-      <circle cx="3.5" cy="12.1" r="0.9" /><circle cx="6.5" cy="12.1" r="0.9" /><circle cx="9.5" cy="12.1" r="0.9" />
-      <circle cx="2" cy="15.4" r="0.9" /><circle cx="5" cy="15.4" r="0.9" /><circle cx="8" cy="15.4" r="0.9" />
-      <circle cx="8.5" cy="21.3" r="0.9" fill="#da0000" /><rect width="24" height="2.4" y="21.6" fill="#da0000" />
-    </g>
+    <rect x="10" width="4" height="24" fill="#c8102e" />
+    <rect y="10" width="24" height="4" fill="#c8102e" />
   </svg>
 );
 
