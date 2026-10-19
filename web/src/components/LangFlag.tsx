@@ -20,8 +20,15 @@ const FaFlagIcon: FC = () => (
 const EnFlagIcon: FC = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
     <rect width="24" height="24" fill="#fff" />
-    <rect x="10" width="4" height="24" fill="#c8102e" />
-    <rect y="10" width="24" height="4" fill="#c8102e" />
+    {Array.from({ length: 13 }).map((_, i) => (
+      <rect key={i} y={i * (24 / 13)} width="24" height={24 / 13} fill={i % 2 === 0 ? '#b22234' : '#fff'} />
+    ))}
+    <rect width="10" height={24 * 7 / 13} fill="#3c3b6e" />
+    {Array.from({ length: 50 }).map((_, i) => {
+      const row = Math.floor(i / 11);
+      const col = i % 11 - (row % 2 ? 0.5 : 0);
+      return <circle key={i} cx={0.9 + col * (10 / 11)} cy={0.9 + row * (24 * 7 / 13 / 10)} r="0.45" fill="#fff" />;
+    })}
   </svg>
 );
 
