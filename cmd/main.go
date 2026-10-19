@@ -80,7 +80,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 
 	prefix := "/" + h.URLPath()
 	root.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
-	root.Handle(prefix+"/", spaHandler())
+	root.Handle(prefix+"/", spaHandler(prefix+"/"))
 
 	// Decoy at the site root so the panel is never exposed on "/".
 	root.Handle("/", decoyHandler())
@@ -105,7 +105,7 @@ func appDir() string {
 // The SPA comes from <appDir>/web/dist when that tree exists (a dev checkout,
 // or an explicit OVM_APP_DIR); otherwise — a release install ships only the
 // binary — it is served from the copy embedded via internal/webfs.
-func spaHandler() http.Handler {
+func spaHandler(basePath string) http.Handler {
 	var fsys fs.FS = webfs.Dist()
 	if dist := filepath.Join(appDir(), "web", "dist"); diskIndex(dist) {
 		fsys = os.DirFS(dist)
@@ -133,8 +133,18 @@ func spaHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		html := string(index)
+		if basePath != "" && basePath != "/" {
+			bp := basePath
+			if !strings.HasSuffix(bp, "/") {
+				bp += "/"
+			}
+			if !strings.Contains(html, "<base") {
+				html = strings.Replace(html, "<head>", "<head><base href=\""+bp+"\">", 1)
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(index)
+		_, _ = w.Write([]byte(html))
 	})
 }
 
