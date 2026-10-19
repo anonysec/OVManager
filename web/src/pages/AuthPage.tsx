@@ -26,7 +26,7 @@ const AuthPage = () => {
 
   const { theme, cycleTheme } = useTheme() as any;
   const { t, i18n } = useTranslation();
-  const { login, claim, claimable } = useAuth();
+  const { login, claim, claimable, recoverable } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -145,7 +145,7 @@ const AuthPage = () => {
             </Field>
             <PasswordInput label={t('password')} value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} autoComplete="current-password" placeholder={t('passwordPlaceholder', '••••••••')} required />
             <Button type="submit" variant="primary" size="lg" block loading={loading}>{t('loginButton', 'Login')}</Button>
-            {claimable && <button type="button" className="login-claim-link" onClick={() => setView('setup')}>{t('ownerAccess', 'Owner access')}</button>}
+            {(claimable || recoverable) && <button type="button" className="login-claim-link" onClick={() => setView('setup')}>{t('ownerAccess', 'Owner access')}</button>}
           </form>
         ) : step === 'verify' ? (
           <form className="login-form" onSubmit={handleVerify}>

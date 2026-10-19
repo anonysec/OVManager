@@ -70,16 +70,17 @@ func (s *Service) mountClaim(mux *http.ServeMux) {
 
 func (s *Service) handleClaimStatus(w http.ResponseWriter, r *http.Request) {
 	claimed := s.ownerIsClaimed()
+	key, err := s.readClaimKey()
 	keyPresent := false
-	if !claimed {
-		key, err := s.readClaimKey()
-		if err != nil {
-			keyPresent = true // unreadable file: don't disclose "no key"
-		} else {
-			keyPresent = key != ""
-		}
+	if err != nil {
+		keyPresent = true // unreadable file: don't disclose "no key"
+	} else {
+		keyPresent = key != ""
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"claimable": !claimed && keyPresent})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"claimable":    !claimed && keyPresent,
+		"recoverable":  claimed && keyPresent,
+	})
 }
 
 func (s *Service) handleClaimVerify(w http.ResponseWriter, r *http.Request) {
