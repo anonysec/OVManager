@@ -437,14 +437,15 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		userNotFound(w)
 		return
 	}
-	// Keep the node push hashes; only the counters wipe (crud.reset_user_usage).
-	nodeUsage := "{}"
-	if parsed := map[string]json.RawMessage{}; json.Unmarshal([]byte(row.NodeUsage), &parsed) == nil {
-		if push, ok := parsed["push_hash"]; ok && len(push) > 0 && push[0] == '{' {
-			nodeUsage = string(mustJSON(map[string]json.RawMessage{"push_hash": push}))
-		}
+	// Keep per-node baselines and push_hash; zero only the counters, and set the
+	// reseed marker so the next traffic pass seeds every node with delta 0
+	// instead of re-billing bytes the panel already counted (design §4.6).
+	data := map[string]json.RawMessage{}
+	if json.Unmarshal([]byte(row.NodeUsage), &data) != nil {
+		data = map[string]json.RawMessage{}
 	}
-	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, nodeUsage, uuidStr); err != nil {
+	data[node.ReseedMarkerKey] = json.RawMessage("true")
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, string(mustJSON(data)), uuidStr); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 		return
 	}
