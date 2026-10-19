@@ -145,23 +145,60 @@ func decoyHandler() http.Handler {
 html,body{margin:0;height:100%;background:#000;overflow:hidden}
 canvas{display:block}
 </style></head><body><canvas id="c"></canvas><script>
+const palettes=[
+  ['#ff006e','#8338ec','#3a86ff','#06d6a0','#ffbe0b'],
+  ['#0f0','#0ff','#f0f','#ff0','#0af'],
+  ['#f55','#fa0','#ff0','#0f0','#0af','#f0f'],
+  ['#fff','#0ff','#f0f','#ff0','#0f0']
+];
+const styles=['rain','glitch','scan'];
+const palette=palettes[Math.floor(Math.random()*palettes.length)];
+const style=styles[Math.floor(Math.random()*styles.length)];
+const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789!@#$%';
+const fs=16;
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 function resize(){c.width=innerWidth;c.height=innerHeight}
 resize();addEventListener('resize',resize);
-const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
-const palette=['#0f0','#0ff','#f0f','#ff0','#0af','#fa0','#f55'];const col=palette[Math.floor(Math.random()*palette.length)];
-const fs=16,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
-function draw(){
+let drops=Array(Math.floor(c.width/fs)).fill(1);
+function pickColor(){return palette[Math.floor(Math.random()*palette.length)];}
+let col=pickColor();
+function drawRain(){
   ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle=col;ctx.font=fs+'px monospace';ctx.shadowColor=col;ctx.shadowBlur=8;
+  ctx.font=fs+'px monospace';
   for(let i=0;i<drops.length;i++){
+    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
     const t=chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(t,i*fs,drops[i]*fs);
     if(drops[i]*fs>c.height&&Math.random()>.975) drops[i]=0;
     drops[i]++;
   }
 }
-setInterval(draw,33);
+function drawGlitch(){
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(0,0,c.width,c.height);
+  for(let i=0;i<40;i++){
+    const x=Math.random()*c.width,y=Math.random()*c.height,w=Math.random()*120+20,h=Math.random()*20+5;
+    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
+    ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#000';
+    ctx.font=(Math.random()*14+10)+'px monospace';
+    ctx.fillText(chars[Math.floor(Math.random()*chars.length)],x+4,y+14);
+  }
+}
+function drawScan(){
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.fillRect(0,0,c.width,c.height);
+  const t=Date.now()/1000;
+  const y=(t*80)%c.height;
+  for(let i=0;i<c.width;i+=fs){
+    ctx.fillStyle=palette[Math.floor(Math.random()*palette.length)];
+    ctx.shadowBlur=0;
+    ctx.font=fs+'px monospace';
+    ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i,y);
+  }
+  ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fillRect(0,y,c.width,2);
+}
+function draw(){ if(style==='rain')drawRain(); else if(style==='glitch')drawGlitch(); else drawScan(); }
+setInterval(draw,style==='glitch'?80:33);
 </script></body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
