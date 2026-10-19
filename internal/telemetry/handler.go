@@ -395,9 +395,15 @@ func CollectMetrics(db *sql.DB) {
 	// last_online + full-user count from the per-user live connection counts.
 	activeCounts := map[string]int{}
 	for _, sessions := range sessionsByNode {
-		live, _ := sessions["live_sessions"].([]any)
+		live, ok := sessions["live_sessions"].([]any)
+		if !ok {
+			continue
+		}
 		for _, item := range live {
-			sess, _ := item.(map[string]any)
+			sess, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
 			cn, _ := sess["common_name"].(string)
 			username := cn
 			if mapped, ok := idToName[cn]; ok {
@@ -572,9 +578,15 @@ func CollectLiveSnapshot(db *sql.DB) {
 			continue
 		}
 		online[n.Name] = true
-		live, _ := data["live_sessions"].([]any)
+		live, ok := data["live_sessions"].([]any)
+		if !ok {
+			continue
+		}
 		for _, item := range live {
-			sess, _ := item.(map[string]any)
+			sess, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
 			cn, _ := sess["common_name"].(string)
 			username := cn
 			if mapped, ok := idToName[cn]; ok {

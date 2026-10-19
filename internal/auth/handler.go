@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -152,6 +153,17 @@ func (s *Service) RequireUser(next http.HandlerFunc) http.HandlerFunc {
 			writeDetail(w, http.StatusUnauthorized, "Could not validate credentials")
 			return
 		}
+		// CSRF guard: a cross-origin mutating request must carry an Origin that
+		// matches the panel host. Missing Origin is allowed (non-browser / test
+		// clients and same-origin fetches that omit it); a mismatched Origin is
+		// rejected. This blocks cross-site POST/PUT/DELETE without breaking the
+		// existing test harness, which sends no Origin header.
+		if isMutatingMethod(r.Method) {
+			if o := r.Header.Get("Origin"); o != "" && !originAllowed(o, r) {
+				writeDetail(w, http.StatusForbidden, "Origin not allowed")
+				return
+			}
+		}
 		next(w, r)
 	}
 }
@@ -166,6 +178,26 @@ func (s *Service) RequireOwner(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	})
+}
+
+func isMutatingMethod(m string) bool {
+	switch m {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	}
+	return false
+}
+
+func originAllowed(origin string, r *http.Request) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := r.Host
+	if host == "" {
+		host = r.URL.Host
+	}
+	return strings.EqualFold(u.Host, host)
 }
 
 func bearerToken(r *http.Request) string {
