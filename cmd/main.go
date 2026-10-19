@@ -143,48 +143,48 @@ func spaHandler() http.Handler {
 func decoyHandler() http.Handler {
 	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:#000;overflow:hidden;font-family:'JetBrains Mono',monospace;color:#00FF41}
-canvas{position:fixed;inset:0;z-index:0}
-.scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.15) 0px,rgba(0,0,0,0.15) 1px,transparent 1px,transparent 3px);mix-blend-mode:multiply}
-.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_50%,rgba(0,0,0,0.85)_100%)}
+html,body{height:100%;background:#0B0B10;overflow:hidden;font-family:'Share Tech Mono',monospace;color:#F8FAFC}
+canvas{position:fixed;inset:0;z-index:0;opacity:.35}
+.scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12) 0px,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 4px)}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_55%,rgba(0,0,0,0.9)_100%)}
 .overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
-.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:700;color:#00FF41;text-shadow:0 0 8px #00FF41,0 0 24px #00FF41;position:relative;animation:glitch 4s infinite}
-.glitch::before,.glitch::after{content:'404';position:absolute;inset:0;opacity:.7}
-.glitch::before{color:#FF3333;text-shadow:-2px 0 #FF3333;animation:glitch 4s infinite;clip-path:polygon(0 0,100% 0,100% 45%,0 45%)}
-.glitch::after{color:#00FF41;text-shadow:2px 0 #00FF41;animation:glitch 4s infinite;clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%)}
-.sub{margin-top:12px;font-size:.9rem;letter-spacing:.3em;color:#94A3B8;text-transform:uppercase}
-.sub span{color:#FF3333}
-@keyframes glitch{0%,100%{transform:translate(0)}20%{transform:translate(-2px,1px)}40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,2px)}80%{transform:translate(1px,-2px)}}
-@media (prefers-reduced-motion:reduce){.glitch,.glitch::before,.glitch::after{animation:none}}
+.hud{border:1px solid #1E293B;padding:2.5rem 3.5rem;background:rgba(30,30,35,0.6);backdrop-filter:blur(6px);box-shadow:0 0 24px rgba(59,130,246,0.25)}
+.code{font-family:'Fira Code',monospace;font-size:.8rem;color:#94A3B8;letter-spacing:.15em;margin-bottom:1rem}
+.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:400;color:#F8FAFC;letter-spacing:.1em;text-shadow:0 0 12px #3B82F6,0 0 30px #3B82F6;animation:scan 2s linear infinite}
+.sub{margin-top:1rem;font-size:.85rem;letter-spacing:.25em;color:#94A3B8;text-transform:uppercase}
+.sub span{color:#3B82F6}
+.ticker{position:fixed;bottom:1rem;left:1rem;right:1rem;z-index:3;font-size:.7rem;color:#94A3B8;letter-spacing:.1em;display:flex;justify-content:space-between;pointer-events:none}
+@keyframes scan{0%,100%{opacity:1}50%{opacity:.7}}
+@media (prefers-reduced-motion:reduce){.glitch{animation:none}}
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="scanlines"></div>
 <div class="vignette"></div>
-<div class="overlay"><div><div class="glitch">404</div><div class="sub">not<span>//</span>found</div></div></div>
+<div class="overlay"><div class="hud"><div class="code">ERR::NOT_FOUND</div><div class="glitch">404</div><div class="sub">resource<span>//</span>missing</div></div></div>
+<div class="ticker"><span>SYS.STATUS: ONLINE</span><span>SEC.LEVEL: MAX</span><span>UPTIME: 99.99%</span></div>
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 function resize(){c.width=innerWidth;c.height=innerHeight}
 resize();addEventListener('resize',resize);
-const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
-const fs=16,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
-const palettes=[['#00FF41','#FF3333'],['#00FF41','#00FFFF'],['#FF3333','#00FF41']];
-const pal=palettes[Math.floor(Math.random()*palettes.length)];
+const chars='01ABCDEF<>{}[]|/\';
+const fs=14,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
+const pal=['#3B82F6','#60A5FA','#94A3B8','#F8FAFC'];
 function draw(){
-  ctx.fillStyle='rgba(0,0,0,0.06)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.font=fs+'px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(11,11,16,0.08)';ctx.fillRect(0,0,c.width,c.height);
+  ctx.font=fs+'px "Share Tech Mono",monospace';
   for(let i=0;i<drops.length;i++){
     ctx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
-    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=4;
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
     const t=chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(t,i*fs,drops[i]*fs);
-    if(drops[i]*fs>c.height&&Math.random()>.975) drops[i]=0;
+    if(drops[i]*fs>c.height&&Math.random()>.98) drops[i]=0;
     drops[i]++;
   }
 }
-setInterval(draw,60);
+setInterval(draw,50);
 </script></body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
