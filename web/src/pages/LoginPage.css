@@ -208,3 +208,27 @@ input[type="password"]::-webkit-textfield-decoration-button {
   cursor: pointer;
   outline: none;
 }
+
+.login-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.login-tab {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--border-color, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.login-tab.active {
+  background: var(--accent, var(--accent-color));
+  color: var(--accent-ink, #fff);
+  border-color: var(--accent, var(--accent-color));
+}
+.login-card {
+  max-width: 360px;
+}

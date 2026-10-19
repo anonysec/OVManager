@@ -5,20 +5,21 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
 import { LangFlag } from '../components/LangFlag';
-import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
+import { FiAlertCircle, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
+import PasswordInput from '../components/PasswordInput';
 import { errorMessageOf } from '../utils/errorMessage';
 import './LoginPage.css';
 
 const ClaimPage = () => {
   const [step, setStep] = useState<'verify' | 'create'>('verify');
+  const [mode, setMode] = useState<'create' | 'reset'>('create');
   const [setupKey, setSetupKey] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,13 +29,12 @@ const ClaimPage = () => {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [langOpen]);
   const { theme, cycleTheme } = useTheme() as any;
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { claim } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { t } = useTranslation();
   const recover = searchParams.get('mode') === 'recover';
 
   useEffect(() => {
@@ -47,7 +47,6 @@ const ClaimPage = () => {
   const claimErrorOf = (err: any) =>
     errorMessageOf(err, t('claimError', 'The claim failed. Check the key and try again.'));
 
-  // Step 1 — prove the holder of the setup key before asking for credentials.
   const handleVerify = async (e: any) => {
     e.preventDefault();
     if (loading) return;
@@ -63,18 +62,17 @@ const ClaimPage = () => {
     }
   };
 
-  // Step 2 — the key checked out, now create the owner account.
   const handleCreate = async (e: any) => {
     e.preventDefault();
     if (loading) return;
-    if (password !== confirmPassword) {
+    if (mode === 'create' && password !== confirmPassword) {
       setError(t('passwordsDoNotMatch', 'Passwords do not match.'));
       return;
     }
     setError('');
     setLoading(true);
     try {
-      await claim(setupKey.trim(), password, username.trim());
+      await claim(setupKey.trim(), password, mode === 'create' ? username.trim() : '');
       navigate('/');
     } catch (err: any) {
       setError(claimErrorOf(err));
@@ -86,25 +84,25 @@ const ClaimPage = () => {
   return (
     <div className="login-page">
       <div className="login-topbar">
-      <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme" title={theme}>
-        {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
-      </button>
-      <div className="lang-picker-wrap" ref={langRef}>
-        <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen((o) => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
-          <LangIcon size={18} />
+        <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme" title={theme}>
+          {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
         </button>
-        <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
-          {SUPPORTED_LANGS.map((code) => (
-            <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { void loadLanguage(code); setLangOpen(false); }}>
-              <LangFlag code={code} />
-              <span>{LANG_LABELS[code]}</span>
-              {i18n.language === code && <span className="lang-check">✓</span>}
-            </button>
-          ))}
+        <div className="lang-picker-wrap" ref={langRef}>
+          <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen((o) => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
+            <LangIcon size={18} />
+          </button>
+          <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
+            {SUPPORTED_LANGS.map((code) => (
+              <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { void loadLanguage(code); setLangOpen(false); }}>
+                <LangFlag code={code} />
+                <span>{LANG_LABELS[code]}</span>
+                {i18n.language === code && <span className="lang-check">✓</span>}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-    <main className="login-card">
+      <main className="login-card">
         <header className="login-card-header">
           <span className="login-brand-mark" aria-hidden="true"><Logo size={40} /></span>
           <h1 className="login-brand">
@@ -144,71 +142,42 @@ const ClaimPage = () => {
             </Button>
           </form>
         ) : (
-          <form className="login-form" onSubmit={handleCreate}>
-            <Field label={t('username')}>
-              <input
-                type="text"
-                id="claim-username"
-                value={username}
-                onChange={(e) => { setUsername(e.target.value); clearError(); }}
-                autoComplete="username"
-                placeholder={t('usernamePlaceholder', 'admin')}
-                required
-                autoFocus
-              />
-            </Field>
-
-            <div className="ui-field">
-              <label className="ui-field-label" htmlFor="claim-password">{t('claimPassword', 'Owner password')}</label>
-              <div className="ui-field-control login-password-wrap">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="claim-password"
-                  className="ui-input login-password-input"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                  autoComplete="new-password"
-                  placeholder={t('passwordPlaceholder', '••••••••')}
-                  minLength={8}
-                  required
-                />
-                <button
-                  type="button"
-                  className="login-password-toggle"
-                  tabIndex={-1}
-                  onClick={() => setShowPassword((visible) => !visible)}
-                  aria-label={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
-                  title={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
-                >
-                  {showPassword ? <FiEyeOff aria-hidden="true" /> : <FiEye aria-hidden="true" />}
-                </button>
-              </div>
+          <>
+            <div className="login-tabs">
+              <button type="button" className={`login-tab${mode === 'create' ? ' active' : ''}`} onClick={() => setMode('create')}>{t('claimCreate', 'Create')}</button>
+              <button type="button" className={`login-tab${mode === 'reset' ? ' active' : ''}`} onClick={() => setMode('reset')}>{t('claimReset', 'Reset password')}</button>
             </div>
+            <form className="login-form" onSubmit={handleCreate}>
+              {mode === 'create' && (
+                <Field label={t('username')}>
+                  <input
+                    type="text"
+                    id="claim-username"
+                    value={username}
+                    onChange={(e) => { setUsername(e.target.value); clearError(); }}
+                    autoComplete="username"
+                    placeholder={t('usernamePlaceholder', 'admin')}
+                    required
+                    autoFocus
+                  />
+                </Field>
+              )}
 
-            <div className="ui-field">
-              <label className="ui-field-label" htmlFor="claim-confirm">{t('confirmPassword', 'Confirm password')}</label>
-              <div className="ui-field-control login-password-wrap">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="claim-confirm"
-                  className="ui-input login-password-input"
-                  value={confirmPassword}
-                  onChange={(e) => { setConfirmPassword(e.target.value); clearError(); }}
-                  autoComplete="new-password"
-                  placeholder={t('passwordPlaceholder', '••••••••')}
-                  minLength={8}
-                  required
-                />
-                {confirmPassword && password !== confirmPassword && (
-                  <p className="ui-field-hint" style={{ color: 'var(--danger-text)' }}>{t('passwordsDoNotMatch', 'Passwords do not match.')}</p>
-                )}
-              </div>
-            </div>
+              <PasswordInput label={t('claimPassword', 'Owner password')} value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} autoComplete="new-password" placeholder={t('passwordPlaceholder', '••••••••')} minLength={8} required />
 
-            <Button type="submit" variant="primary" size="lg" block loading={loading}>
-              {t('claimButton', 'Create owner account')}
-            </Button>
-          </form>
+              {mode === 'create' && (
+                <PasswordInput label={t('confirmPassword', 'Confirm password')} value={confirmPassword} onChange={(e: any) => { setConfirmPassword(e.target.value); clearError(); }} autoComplete="new-password" placeholder={t('passwordPlaceholder', '••••••••')} minLength={8} required />
+              )}
+
+              {confirmPassword && password !== confirmPassword && (
+                <p className="ui-field-hint" style={{ color: 'var(--danger-text)' }}>{t('passwordsDoNotMatch', 'Passwords do not match.')}</p>
+              )}
+
+              <Button type="submit" variant="primary" size="lg" block loading={loading}>
+                {mode === 'create' ? t('claimButton', 'Create owner account') : t('resetPassword', 'Reset password')}
+              </Button>
+            </form>
+          </>
         )}
       </main>
     </div>

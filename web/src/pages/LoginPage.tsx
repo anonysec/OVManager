@@ -5,16 +5,16 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
 import { LangFlag } from '../components/LangFlag';
-import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
+import { FiAlertCircle, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
+import PasswordInput from '../components/PasswordInput';
 import './LoginPage.css';
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (!token) return;
@@ -119,31 +119,7 @@ const LoginPage = () => {
             />
           </Field>
 
-          <div className="ui-field">
-            <label className="ui-field-label" htmlFor="password">{t('password')}</label>
-            <div className="ui-field-control login-password-wrap">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                className="ui-input login-password-input"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); clearError(); }}
-                autoComplete="current-password"
-                placeholder={t('passwordPlaceholder', '••••••••')}
-                required
-              />
-              <button
-                type="button"
-                className="login-password-toggle"
-                tabIndex={-1}
-                onClick={() => setShowPassword((visible) => !visible)}
-                aria-label={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
-                title={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
-              >
-                {showPassword ? <FiEyeOff aria-hidden="true" /> : <FiEye aria-hidden="true" />}
-              </button>
-            </div>
-          </div>
+          <PasswordInput label={t('password')} value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} autoComplete="current-password" placeholder={t('passwordPlaceholder', '••••••••')} required />
 
           <Button type="submit" variant="primary" size="lg" block loading={loading}>
             {t('loginButton', 'Login')}
