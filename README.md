@@ -74,7 +74,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Test connection before saving; the node row then shows reachability, agent and OpenVPN version, and session counts.
 - Per-node settings pushed from the panel: DNS servers, IPv6 pool and prefix, extra OpenVPN ports.
 - Deleting a panel user also deletes them on every reachable node, so no ghost sessions survive the panel row.
-- `2083` is the only port the panel needs; the node agent is installed by its own one-liner.
+- `2095` is the only port the panel needs; the node agent is installed by its own one-liner.
 
 ### 🔐 Security and TLS
 - Login sessions are opaque tokens in the database, stored as a SHA-256 hash, sliding on activity and revocable per account.

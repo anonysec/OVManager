@@ -233,6 +233,7 @@ var acmeWorkerOnce sync.Once
 func (h *Handler) startACMEWorker() {
 	acmeWorkerOnce.Do(func() {
 		go func() {
+			defer func() { recover() }()
 			time.Sleep(acmeBootCheckDelay)
 			for {
 				if h.acmeMaintenance() {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -59,6 +59,9 @@ const UserManagement = () => {
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
+  const usersRef = useRef(users);
+  const sessionsReqRef = useRef(0);
+  useEffect(() => { usersRef.current = users; }, [users]);
   const [subSettings, setSubSettings] = useState<any>(null);
   const [myDefaults, setMyDefaults] = useState<any>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -96,7 +99,7 @@ const UserManagement = () => {
 
   const fetchUsers = useCallback(async ({ background = false } = {}) => {
     setLoadError(false);
-    if (!background) setIsLoading((prev) => (users.length === 0 ? true : prev));
+    if (!background) setIsLoading((prev) => (usersRef.current.length === 0 ? true : prev));
     try {
       const response = await apiClient.get('/users/');
       const list = asList(response.data, 'users');
@@ -108,7 +111,7 @@ const UserManagement = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [addToast, users.length, t]);
+  }, [addToast, t]);
 
   const fetchSubSettings = useCallback(async () => {
     try {
@@ -386,13 +389,16 @@ const UserManagement = () => {
     setSessionError('');
     setSessionDiagnostics(null);
     setIsSessionsModalOpen(true);
+    const reqId = ++sessionsReqRef.current;
     try {
       const res = await apiClient.get(`/users/${user.uuid}/sessions`);
+      if (reqId !== sessionsReqRef.current) return;
       setSessionDiagnostics(res.data?.data || res.data);
     } catch (e) {
+      if (reqId !== sessionsReqRef.current) return;
       setSessionError(errorMessageOf(e, t('error')));
     } finally {
-      setSessionLoading(false);
+      if (reqId === sessionsReqRef.current) setSessionLoading(false);
     }
   }, [t]);
 

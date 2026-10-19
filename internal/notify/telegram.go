@@ -295,6 +295,7 @@ func StartWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*
 		w := NewWorker(db, dailyBackup, collect)
 		running.Store(w)
 		go func() {
+			defer func() { recover() }()
 			time.Sleep(2 * time.Minute)
 			ticker := time.NewTicker(workerTick)
 			defer ticker.Stop()

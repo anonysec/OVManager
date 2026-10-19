@@ -4,6 +4,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"net/http"
 	"io"
 
 	"github.com/spf13/cobra"
@@ -55,6 +57,7 @@ func (a *app) rootCmd() *cobra.Command {
 	root.AddCommand(
 		a.statusCmd(), a.logsCmd(), a.doctorCmd(), a.backupCmd(), a.restoreCmd(),
 		a.tlsCmd(), a.urlpathCmd(), a.resetPasswordCmd(), a.updateCmd(), a.serviceCmd(),
+		a.healthCmd(),
 	)
 	return root
 }
@@ -75,6 +78,27 @@ func (a *app) statusCmd() *cobra.Command {
 				code = 0
 			}
 			a.emit(renderStatus(data, a.showAll), code)
+			return nil
+		},
+	}
+}
+
+func (a *app) healthCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "health",
+		Short: "probe the local panel /health endpoint",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "2095"
+			}
+			resp, err := http.Get("http://127.0.0.1:" + port + "/health")
+			if err != nil || resp.StatusCode != http.StatusOK {
+				a.emit("unhealthy\n", 1)
+				return nil
+			}
+			resp.Body.Close()
+			a.emit("ok\n", 0)
 			return nil
 		},
 	}

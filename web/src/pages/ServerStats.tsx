@@ -202,7 +202,7 @@ const ServerStats = () => {
       if (gen !== probeGen.current) return;
       setNodeStatus(Object.fromEntries(results));
       setProbesDone(true);
-    } catch { /* keep previous */ }
+    } catch (e) { console.warn('server stats load failed', e); /* keep previous */ }
   }, [isOwner]);
 
   const { subscribe, streamConnected } = useLive();

@@ -34,5 +34,6 @@ ENV OVM_APP_DIR=/app \
     DATA_DIR=/data \
     PORT=2095
 EXPOSE 2095
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/app/ovmanager", "health"]
 USER nonroot
 ENTRYPOINT ["/app/ovmanager"]

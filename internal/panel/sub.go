@@ -164,6 +164,10 @@ func subEnforceCap() {
 }
 
 func (h *Handler) subStaticJS(w http.ResponseWriter, r *http.Request) {
+	if h.subRateLimited(r) {
+		writeSubError(w, 429, "Too Many Requests", "Please try again in a minute.")
+		return
+	}
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	// Disk override for dev; a release install has no web/ tree, so the copy

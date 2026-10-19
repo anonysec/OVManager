@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/anonysec/OVManager/go/internal/billing"
 )
@@ -40,8 +41,10 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	nodes := getActiveNodes(db)
 	users, byName := loadTrafficUsers(db)
 
+	idToName := map[string]string{}
 	known := make(map[string]bool, len(users))
 	for _, u := range users {
+		idToName[strconv.FormatInt(u.id, 10)] = u.name
 		known[u.name] = true
 	}
 
@@ -72,7 +75,19 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		res.NodesPolled++
 		nodeKey := strconv.FormatInt(n.ID, 10)
 		for reported, rawTotal := range totals {
-			u, ok := byName[billing.ExtractUsername(reported, n.Name, known)]
+			resolved := reported
+			if mapped, ok := idToName[reported]; ok {
+				resolved = mapped
+			} else {
+				suffix := "-" + n.Name
+				if strings.HasSuffix(reported, suffix) {
+					base := reported[:len(reported)-len(suffix)]
+					if mapped, ok := idToName[base]; ok {
+						resolved = mapped + suffix
+					}
+				}
+			}
+			u, ok := byName[billing.ExtractUsername(resolved, n.Name, known)]
 			if !ok {
 				continue
 			}

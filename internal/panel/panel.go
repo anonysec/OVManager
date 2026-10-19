@@ -50,13 +50,11 @@ func NewHandler(svc *auth.Service) *Handler {
 // includes every router under /api).
 func (h *Handler) Mount(mux *http.ServeMux) {
 	owner := h.Svc.RequireOwner
-	user := h.Svc.RequireUser
-
 	mux.HandleFunc("GET /health/overview", owner(h.healthOverview))
 	mux.HandleFunc("GET /health/login-health", owner(h.loginHealth))
 	mux.HandleFunc("GET /health/login-diagnostics/{username}", owner(h.loginDiagnostics))
-	mux.HandleFunc("GET /health/setup", user(h.healthSetup))
-	mux.HandleFunc("GET /health/tls", user(h.healthTLS))
+	mux.HandleFunc("GET /health/setup", owner(h.healthSetup))
+	mux.HandleFunc("GET /health/tls", owner(h.healthTLS))
 
 	mux.HandleFunc("GET /server/settings", owner(h.getSettings))
 	mux.HandleFunc("GET /server/settings/", owner(h.getSettings))

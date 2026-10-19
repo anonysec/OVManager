@@ -48,7 +48,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
               </thead>
               <tbody>
                 {nodes.length ? nodes.map((n: any, i: number) => (
-                  <tr key={i}>
+                  <tr key={`${n.node}-${n.common_name}-${i}`}>
                     <td>{n.node}</td>
                     <td>{n.common_name}</td>
                     <td>{fmt(n.live_count)}</td>
@@ -71,7 +71,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
               </thead>
               <tbody>
                 {registry.length ? registry.map((r: any, i: number) => (
-                  <tr key={i}>
+                  <tr key={`${r.common_name}-${r.updated_at || r.created_at_utc}-${i}`}>
                     <td>{r.common_name}</td>
                     <td>{r.updated_at ? new Date(r.updated_at * 1000).toLocaleString() : (r.created_at_utc ? new Date(r.created_at_utc).toLocaleString() : '—')}</td>
                     <td>{r.node_name || r.node || '-'}</td>

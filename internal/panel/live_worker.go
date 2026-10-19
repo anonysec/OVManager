@@ -50,6 +50,7 @@ func setLiveCollect(fn func(*sql.DB)) (restore func()) {
 func (h *Handler) startLiveWorker() {
 	liveWorkerOnce.Do(func() {
 		go func() {
+			defer func() { recover() }()
 			time.Sleep(liveBootDelay)
 			ticker := time.NewTicker(livePollInterval())
 			defer ticker.Stop()

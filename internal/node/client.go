@@ -66,6 +66,11 @@ type Client struct {
 	mu          sync.Mutex
 	tlsVerified *bool
 	conflictMsg string
+
+	transportMu       sync.Mutex
+	pinnedTransport   *http.Transport
+	plainTransport    *http.Transport
+	insecureTransport *http.Transport
 }
 
 // NewClient builds a client for address:port. serverCA is the stored pin PEM
@@ -140,6 +145,8 @@ func checkHostname(host string) bool {
 
 func isPEM(v string) bool { return strings.Contains(v, "BEGIN CERTIFICATE") }
 
+// insecureFallback reads NODE_TLS_INSECURE_FALLBACK (default false = fail
+// closed). pydantic treats true/1/yes/on as true, case-insensitively.
 // insecureFallback reads NODE_TLS_INSECURE_FALLBACK (default false = fail
 // closed). pydantic treats true/1/yes/on as true, case-insensitively.
 func insecureFallback() bool {
@@ -223,6 +230,30 @@ func (c *Client) setVerified(v bool) {
 	c.mu.Unlock()
 }
 
+// cachedTransport returns a reusable *http.Transport for the given TLS config.
+// cfg == nil yields a plain transport; the insecure flag selects the
+// InsecureSkipVerify transport used only when insecureFallback() is true.
+func (c *Client) cachedTransport(cfg *tls.Config, insecure bool) *http.Transport {
+	c.transportMu.Lock()
+	defer c.transportMu.Unlock()
+	if insecure {
+		if c.insecureTransport == nil {
+			c.insecureTransport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+		}
+		return c.insecureTransport
+	}
+	if cfg == nil {
+		if c.plainTransport == nil {
+			c.plainTransport = &http.Transport{}
+		}
+		return c.plainTransport
+	}
+	if c.pinnedTransport == nil {
+		c.pinnedTransport = &http.Transport{TLSClientConfig: cfg}
+	}
+	return c.pinnedTransport
+}
+
 // request runs one RPC and returns the parsed envelope (nil on any failure),
 // recording health from this single choke point (requests.py _request).
 func (c *Client) request(method, path string, o reqOpts) map[string]any {
@@ -242,7 +273,7 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 		if err != nil {
 			return nil
 		}
-		hc := &http.Client{Transport: &http.Transport{TLSClientConfig: cfg}, Timeout: o.timeout}
+		hc := &http.Client{Transport: c.cachedTransport(cfg, false), Timeout: o.timeout}
 		r, err := c.send(hc, method, path, o)
 		if err != nil {
 			return nil // pin mismatch/transport: fail closed, never fall back
@@ -250,7 +281,7 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 		c.setVerified(true)
 		return r
 	}
-	hc := &http.Client{Transport: &http.Transport{}, Timeout: o.timeout}
+	hc := &http.Client{Transport: c.cachedTransport(nil, false), Timeout: o.timeout}
 	r, err := c.send(hc, method, path, o)
 	if err == nil {
 		c.setVerified(true)
@@ -262,7 +293,7 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 	if !insecureFallback() {
 		return nil
 	}
-	hc2 := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, Timeout: o.timeout}
+	hc2 := &http.Client{Transport: c.cachedTransport(nil, true), Timeout: o.timeout}
 	r2, err2 := c.send(hc2, method, path, o)
 	if err2 != nil {
 		return nil
@@ -628,7 +659,7 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		hc := &http.Client{Transport: &http.Transport{TLSClientConfig: cfg}, Timeout: timeout}
+		hc := &http.Client{Transport: c.cachedTransport(cfg, false), Timeout: timeout}
 		resp, err := hc.Do(req)
 		if err != nil {
 			return nil, err

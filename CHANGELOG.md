@@ -1,3 +1,13 @@
+## Unreleased — 2026-10-19
+
+- Feature: per-user traffic accounting across nodes (cumulative deltas, OCC-guarded writes, reseed markers, reset/purge routes).
+- Feature: live snapshot collector feeding active_connections/online and SSE-driven refresh.
+- Fix: guard nodeState/checkState maps with mutex; stop mutating shared Client.headers across goroutines.
+- Fix: CollectMetrics/CollectLiveSnapshot type asserts guarded against malformed node payloads.
+- Fix: Origin/CSRF guard on mutating routes via RequireUser.
+- Fix: SyncTraffic resolves numeric panel user ids reported by nodes.
+- Fix: reset-usage writes are OCC-guarded against concurrent traffic passes.
+
 ## 2.1.2 — 2026-10-18
 
 Fix: fresh installs created an empty database (db.Migrate was never called in main.go), so claim failed with "Could not create the owner account". 

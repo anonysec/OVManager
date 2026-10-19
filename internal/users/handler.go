@@ -446,19 +446,36 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		userNotFound(w)
 		return
 	}
+	_ = row
 	// Keep per-node baselines and push_hash; zero only the counters, and set the
 	// reseed marker so the next traffic pass seeds every node with delta 0
 	// instead of re-billing bytes the panel already counted (design §4.6).
-	data := map[string]json.RawMessage{}
-	if json.Unmarshal([]byte(row.NodeUsage), &data) != nil {
-		data = map[string]json.RawMessage{}
+	// OCC guard prevents a traffic pass landing between read and write from
+	// clobbering the just-written baseline.
+	for attempt := 0; attempt < 3; attempt++ {
+		var used int64
+		var state string
+		if err := h.Svc.DB().QueryRow(`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE uuid = ?`, uuidStr).Scan(&used, &state); err != nil {
+			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
+			return
+		}
+		data := map[string]json.RawMessage{}
+		if json.Unmarshal([]byte(state), &data) != nil {
+			data = map[string]json.RawMessage{}
+		}
+		data[node.ReseedMarkerKey] = json.RawMessage("true")
+		merged := string(mustJSON(data))
+		res, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, merged, uuidStr, used, state)
+		if err != nil {
+			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 1 {
+			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User usage reset successfully"})
+			return
+		}
 	}
-	data[node.ReseedMarkerKey] = json.RawMessage("true")
-	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, string(mustJSON(data)), uuidStr); err != nil {
-		auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
-		return
-	}
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User usage reset successfully"})
+	auth.WriteDetail(w, http.StatusConflict, "Could not reset usage: concurrent update")
 }
 
 func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {

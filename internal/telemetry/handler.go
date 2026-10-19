@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,7 +45,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /metrics/history", owner(h.metricsHistory))
 	mux.HandleFunc("POST /metrics/collect", owner(h.collectNow))
 	mux.HandleFunc("GET /notifications/", guard(h.notifications))
-	mux.HandleFunc("GET /live/stream", StreamHandler(h.Svc, DefaultBus))
+	mux.HandleFunc("GET /live/stream", h.Svc.RequireUser(StreamHandler(h.Svc, DefaultBus)))
 }
 
 // --- activity (routers/telemetry.py get_activity) ---
@@ -468,7 +469,7 @@ const (
 	graceSeconds           = 20.0
 )
 
-func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECONDS", 300) }
+func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECONDS", 300, true) }
 
 // liveFanoutDeadline bounds one CollectLiveSnapshot fan-out. A var so tests can
 // shrink it; production uses the shared request fan-out deadline.
@@ -476,7 +477,7 @@ var liveFanoutDeadline = node.RequestFanoutDeadline
 
 // PollSeconds mirrors live.poll_seconds.
 func PollSeconds() float64 {
-	if v := os.Getenv("OVMANAGER_LIVE_POLL_SECONDS"); v != "" {
+	if v := envOrFileTelemetry("OVMANAGER_LIVE_POLL_SECONDS"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
 		}
@@ -1064,13 +1065,40 @@ func intQuery(r *http.Request, key string, def int) int {
 	return def
 }
 
-func envFloat(key string, def float64) float64 {
-	if v := os.Getenv(key); v != "" {
+func envFloat(key string, def float64, _ ...bool) float64 {
+	if v := envOrFileTelemetry(key); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f
 		}
 	}
 	return def
+}
+
+func envOrFileTelemetry(key string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	dir := os.Getenv("OVM_APP_DIR")
+	if dir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			dir = wd
+		}
+	}
+	// reuse panel-style .env parse minimally
+	data, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == key {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 func newEventKey() string {

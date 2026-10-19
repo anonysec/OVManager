@@ -290,7 +290,7 @@ const DashboardLayout = () => {
         const pref = alertPrefKey(n.id);
         return !pref || prefs[pref] !== false;
       }));
-    } catch { /* keep existing */
+    } catch (e) { console.warn('notification build failed', e); /* keep existing */
     }
   }, [t, userRole]);
 

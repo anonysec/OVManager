@@ -208,11 +208,6 @@ const heartbeatSeconds = 15
 // StreamHandler returns the SSE endpoint bound to bus b.
 func StreamHandler(svc *auth.Service, b *Bus) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := svc.CurrentUser(r); !ok {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			auth.WriteDetail(w, http.StatusUnauthorized, "Could not validate credentials")
-			return
-		}
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			auth.WriteDetail(w, http.StatusInternalServerError, "streaming unsupported")

@@ -26,13 +26,17 @@ async function readEventStream(body: any, onEvent: any) {
       buf = buf.slice(idx + 2);
       if (!block || block.startsWith(':')) continue; // heartbeat / comment
       let topic = null;
+      let data: any = null;
       for (const line of block.split('\n')) {
         const trimmed = line.trim();
         if (trimmed.startsWith('event:')) {
           topic = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith('data:')) {
+          const raw = trimmed.slice(5).trim();
+          try { data = JSON.parse(raw); } catch { data = raw; }
         }
       }
-      onEvent(topic);
+      onEvent(topic, data);
     }
   }
 }
@@ -89,10 +93,11 @@ export const LiveProvider = ({ children }: { children?: any }) => {
         });
         if (!resp.ok || !resp.body) throw new Error(`live stream HTTP ${resp.status}`);
         if (!stopped) setStreamConnected(true);
-        await readEventStream(resp.body, (topic: string | null) => {
+        await readEventStream(resp.body, (topic: string | null, data?: any) => {
+          void data;
           if (!stopped) tickWithPublish(topic);
         });
-      } catch { /* retry below */
+      } catch (e) { console.warn('live stream error', e); /* retry below */
       }
       if (stopped) return;
       setStreamConnected(false);

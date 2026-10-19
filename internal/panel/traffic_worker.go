@@ -65,6 +65,7 @@ func trafficPollSeconds() int {
 func (h *Handler) startTrafficWorker() {
 	trafficWorkerOnce.Do(func() {
 		go func() {
+			defer func() { recover() }()
 			time.Sleep(trafficBootDelay)
 			ticker := time.NewTicker(time.Duration(trafficPollSeconds()) * time.Second)
 			defer ticker.Stop()

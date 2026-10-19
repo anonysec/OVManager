@@ -669,19 +669,20 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep node_usage (baselines + push_hash) and set the reseed marker so the
 	// next traffic pass seeds instead of re-billing (design §4.6).
-	rows, err := h.Svc.DB().Query(`SELECT id, COALESCE(node_usage, '{}') FROM users`)
+	rows, err := h.Svc.DB().Query(`SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM users`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 		return
 	}
 	type userState struct {
 		id    int64
+		used  int64
 		state string
 	}
 	var recs []userState
 	for rows.Next() {
 		var u userState
-		if err := rows.Scan(&u.id, &u.state); err != nil {
+		if err := rows.Scan(&u.id, &u.used, &u.state); err != nil {
 			rows.Close()
 			envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 			return
@@ -692,20 +693,43 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 	marker := json.RawMessage("true")
 	reset := int64(0)
 	for _, u := range recs {
-		data := map[string]json.RawMessage{}
-		if json.Unmarshal([]byte(u.state), &data) != nil {
-			data = map[string]json.RawMessage{}
+		ok := false
+		for attempt := 0; attempt < 3; attempt++ {
+			var used int64
+			var state string
+			if attempt > 0 {
+				if err := h.Svc.DB().QueryRow(`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE id = ?`, u.id).Scan(&used, &state); err != nil {
+					envelope(w, false, "Usage reset failed: "+err.Error(), nil)
+					return
+				}
+			} else {
+				used = u.used
+				state = u.state
+			}
+			data := map[string]json.RawMessage{}
+			if json.Unmarshal([]byte(state), &data) != nil {
+				data = map[string]json.RawMessage{}
+			}
+			data[node.ReseedMarkerKey] = marker
+			merged, err := json.Marshal(data)
+			if err != nil {
+				envelope(w, false, "Usage reset failed: "+err.Error(), nil)
+				return
+			}
+			res, err := h.Svc.DB().Exec(
+				`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, string(merged), u.id, used, state,
+			)
+			if err != nil {
+				envelope(w, false, "Usage reset failed: "+err.Error(), nil)
+				return
+			}
+			if n, _ := res.RowsAffected(); n == 1 {
+				ok = true
+				break
+			}
 		}
-		data[node.ReseedMarkerKey] = marker
-		merged, err := json.Marshal(data)
-		if err != nil {
-			envelope(w, false, "Usage reset failed: "+err.Error(), nil)
-			return
-		}
-		if _, err := h.Svc.DB().Exec(
-			`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE id = ?`, string(merged), u.id,
-		); err != nil {
-			envelope(w, false, "Usage reset failed: "+err.Error(), nil)
+		if !ok {
+			envelope(w, false, "Usage reset failed: concurrent update", nil)
 			return
 		}
 		reset++
