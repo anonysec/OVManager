@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
 )
@@ -464,6 +466,10 @@ const (
 
 func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECONDS", 300) }
 
+// liveFanoutDeadline bounds one CollectLiveSnapshot fan-out. A var so tests can
+// shrink it; production uses the shared request fan-out deadline.
+var liveFanoutDeadline = node.RequestFanoutDeadline
+
 // PollSeconds mirrors live.poll_seconds.
 func PollSeconds() float64 {
 	if v := os.Getenv("OVMANAGER_LIVE_POLL_SECONDS"); v != "" {
@@ -487,6 +493,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 	}
 
 	ids := []int64{}
+	nodesErr := error(nil)
 	if rows, err := db.Query(`SELECT id FROM nodes WHERE status = 1`); err == nil {
 		for rows.Next() {
 			var id int64
@@ -495,19 +502,32 @@ func CollectLiveSnapshot(db *sql.DB) {
 			}
 		}
 		rows.Close()
+	} else {
+		nodesErr = err
 	}
 	idToName := map[string]string{}
+	known := map[string]bool{}
+	usersErr := error(nil)
 	if rows, err := db.Query(`SELECT id, name FROM users`); err == nil {
 		for rows.Next() {
 			var id int64
 			var name string
 			if rows.Scan(&id, &name) == nil {
 				idToName[strconv.FormatInt(id, 10)] = name
+				known[name] = true
 			}
 		}
 		rows.Close()
+	} else {
+		usersErr = err
 	}
 	pid := node.PanelIDFor(db)
+
+	// An empty result is otherwise silent; the counts make it diagnosable.
+	if nodesErr != nil || usersErr != nil {
+		log.Printf("telemetry: live snapshot: load failed (nodes=%d err=%v, users=%d err=%v)",
+			len(ids), nodesErr, len(known), usersErr)
+	}
 
 	if len(ids) == 0 {
 		_, nodesChanged := updateSnapshot(map[string]int{}, map[string]bool{}, cap)
@@ -517,14 +537,25 @@ func CollectLiveSnapshot(db *sql.DB) {
 		return
 	}
 
+	nodes := make([]*node.Node, 0, len(ids))
+	for _, id := range ids {
+		if n := node.GetNodeByID(db, id); n != nil {
+			nodes = append(nodes, n)
+		}
+	}
+	calls := make([]func() any, len(nodes))
+	for i, n := range nodes {
+		n := n
+		calls[i] = func() any {
+			return node.NodeClient(n, pid).GetSessions("", 1, node.ProbeTimeout(n))
+		}
+	}
+	results := node.GatherNodes(calls, liveFanoutDeadline)
+
 	counts := map[string]int{}
 	online := map[string]bool{}
-	for _, id := range ids {
-		n := node.GetNodeByID(db, id)
-		if n == nil {
-			continue
-		}
-		data := node.NodeClient(n, pid).GetSessions("", 1, node.ProbeTimeout(n))
+	for i, n := range nodes {
+		data, _ := results[i].(map[string]any)
 		if len(data) == 0 {
 			online[n.Name] = false
 			continue
@@ -537,6 +568,9 @@ func CollectLiveSnapshot(db *sql.DB) {
 			username := cn
 			if mapped, ok := idToName[cn]; ok {
 				username = mapped
+			} else {
+				// Legacy/foreign nodes report name-shaped CNs; strip the node suffix.
+				username = billing.ExtractUsername(cn, n.Name, known)
 			}
 			if username != "" {
 				counts[username]++
