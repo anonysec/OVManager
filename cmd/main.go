@@ -141,10 +141,31 @@ func spaHandler() http.Handler {
 // decoyHandler serves a generic placeholder at the site root so the panel is
 // never reachable from "/".
 func decoyHandler() http.Handler {
+	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title><style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+canvas{display:block}
+</style></head><body><canvas id="c"></canvas><script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+function resize(){c.width=innerWidth;c.height=innerHeight}
+resize();addEventListener('resize',resize);
+const chars='01アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789';
+const fs=16,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
+function draw(){
+  ctx.fillStyle='rgba(0,0,0,0.05)';ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle='#0f0';ctx.font=fs+'px monospace';
+  for(let i=0;i<drops.length;i++){
+    const t=chars[Math.floor(Math.random()*chars.length)];
+    ctx.fillText(t,i*fs,drops[i]*fs);
+    if(drops[i]*fs>c.height&&Math.random()>.975) drops[i]=0;
+    drops[i]++;
+  }
+}
+setInterval(draw,33);
+</script></body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("<!doctype html><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>"))
+		_, _ = w.Write([]byte(page))
 	})
 }
 
