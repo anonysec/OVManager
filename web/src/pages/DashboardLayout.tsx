@@ -464,13 +464,10 @@ const FaFlagIcon = () => (
     <rect width="24" height="8" y="8" fill="#fff" />
     <rect width="24" height="8" y="16" fill="#da0000" />
     <g transform="translate(12,12)">
-      <circle r="2.6" fill="#d62828" />
-      <g fill="#f4d35e">
-        <circle r="2" /><polygon points="0,-7 1,-4 -1,-4" />
-        <circle r="2" /><polygon points="0,7 1,4 -1,4" />
-        <circle r="2" /><polygon points="-7,0 -4,1 -4,-1" />
-        <circle r="2" /><polygon points="7,0 4,1 4,-1" />
-      </g>
+      <circle r="3.2" fill="#f4d35e" stroke="#b8860b" strokeWidth="0.4" />
+      <path d="M-1.2,-1.6 Q0,-3.4 1.2,-1.6 L1.6,1.8 Q0,2.6 -1.6,1.8 Z" fill="#b8860b" />
+      <path d="M-2.4,0.6 Q-3.6,-0.8 -2.8,-2.2" stroke="#b8860b" strokeWidth="0.5" fill="none" />
+      <path d="M2.4,0.6 Q3.6,-0.8 2.8,-2.2" stroke="#b8860b" strokeWidth="0.5" fill="none" />
     </g>
   </svg>
 );
