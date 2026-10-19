@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
+import { LangFlag } from '../components/LangFlag';
 import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
@@ -90,6 +91,7 @@ const ClaimPage = () => {
         <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
           {SUPPORTED_LANGS.map((code) => (
             <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { void loadLanguage(code); setLangOpen(false); }}>
+              <LangFlag code={code} />
               <span>{LANG_LABELS[code]}</span>
               {i18n.language === code && <span className="lang-check">✓</span>}
             </button>
