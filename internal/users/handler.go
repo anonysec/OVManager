@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -614,13 +615,15 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 // aggregateNodeUsage mirrors _aggregate_node_usage in routers/users.py.
 func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 	nodeIDs := map[string]int64{}
-	if res, err := db.Query(`SELECT name, id FROM nodes`); err == nil {
+	nodeNames := map[int64]string{}
+	if res, err := db.Query(`SELECT id, name FROM nodes`); err == nil {
 		defer res.Close()
 		for res.Next() {
 			var name string
 			var id int64
-			if res.Scan(&name, &id) == nil {
+			if res.Scan(&id, &name) == nil {
 				nodeIDs[name] = id
+				nodeNames[id] = name
 			}
 		}
 	}
@@ -630,7 +633,21 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 	}
 	perNode := []map[string]any{}
 	var total int64
-	for name, raw := range usage {
+	for key, raw := range usage {
+		if node.IsReservedUsageKey(key) {
+			continue
+		}
+		// New baselines key by node id; legacy/importer rows key by name.
+		name := key
+		var id any
+		if parsed, err := strconv.ParseInt(key, 10, 64); err == nil {
+			if resolved, ok := nodeNames[parsed]; ok {
+				name = resolved
+				id = parsed
+			}
+		} else if resolved, ok := nodeIDs[key]; ok {
+			id = resolved
+		}
 		var used int64
 		var state struct {
 			Total int64 `json:"total"`
@@ -640,10 +657,7 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 		} else {
 			_ = json.Unmarshal(raw, &used)
 		}
-		entry := map[string]any{"node_id": nil, "name": name, "used": used}
-		if id, ok := nodeIDs[name]; ok {
-			entry["node_id"] = id
-		}
+		entry := map[string]any{"node_id": id, "name": name, "used": used}
 		perNode = append(perNode, entry)
 		total += used
 	}
