@@ -150,9 +150,11 @@ func spaHandler(h *panel.Handler) http.Handler {
 		if rel == "" || rel == basePath {
 			rel = "index.html"
 		}
-		if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
-			http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
-			return
+		if rel != "index.html" {
+			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
+				http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
+				return
+			}
 		}
 		index, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
