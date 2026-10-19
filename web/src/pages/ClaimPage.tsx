@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
-import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor, FiGlobe } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
@@ -72,10 +72,15 @@ const ClaimPage = () => {
   return (
     <div className="login-page">
       <div className="login-topbar">
-      <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme">{theme}</button>
-      <select className="ui-input" value={i18n.language} onChange={(e) => void loadLanguage(e.target.value)} aria-label="Language">
-        {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
-      </select>
+      <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme" title={theme}>
+        {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
+      </button>
+      <div className="login-lang">
+        <FiGlobe aria-hidden="true" />
+        <select value={i18n.language} onChange={(e) => void loadLanguage(e.target.value)} aria-label="Language">
+          {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
+        </select>
+      </div>
     </div>
     <main className="login-card">
         <header className="login-card-header">
