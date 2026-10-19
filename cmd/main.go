@@ -151,10 +151,10 @@ canvas{position:fixed;inset:0;z-index:0}
 .scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.15) 0px,rgba(0,0,0,0.15) 1px,transparent 1px,transparent 3px);mix-blend-mode:multiply}
 .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_50%,rgba(0,0,0,0.85)_100%)}
 .overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
-.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:700;color:#00FF41;text-shadow:0 0 8px #00FF41,0 0 24px #00FF41;position:relative;animation:glitch 2.5s infinite}
+.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:700;color:#00FF41;text-shadow:0 0 8px #00FF41,0 0 24px #00FF41;position:relative;animation:glitch 4s infinite}
 .glitch::before,.glitch::after{content:'404';position:absolute;inset:0;opacity:.7}
-.glitch::before{color:#FF3333;text-shadow:-2px 0 #FF3333;animation:glitch 2.5s infinite;clip-path:polygon(0 0,100% 0,100% 45%,0 45%)}
-.glitch::after{color:#00FF41;text-shadow:2px 0 #00FF41;animation:glitch 2.5s infinite;clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%)}
+.glitch::before{color:#FF3333;text-shadow:-2px 0 #FF3333;animation:glitch 4s infinite;clip-path:polygon(0 0,100% 0,100% 45%,0 45%)}
+.glitch::after{color:#00FF41;text-shadow:2px 0 #00FF41;animation:glitch 4s infinite;clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%)}
 .sub{margin-top:12px;font-size:.9rem;letter-spacing:.3em;color:#94A3B8;text-transform:uppercase}
 .sub span{color:#FF3333}
 @keyframes glitch{0%,100%{transform:translate(0)}20%{transform:translate(-2px,1px)}40%{transform:translate(2px,-1px)}60%{transform:translate(-1px,2px)}80%{transform:translate(1px,-2px)}}
@@ -177,14 +177,14 @@ function draw(){
   ctx.font=fs+'px "JetBrains Mono",monospace';
   for(let i=0;i<drops.length;i++){
     ctx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
-    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=8;
+    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=4;
     const t=chars[Math.floor(Math.random()*chars.length)];
     ctx.fillText(t,i*fs,drops[i]*fs);
     if(drops[i]*fs>c.height&&Math.random()>.975) drops[i]=0;
     drops[i]++;
   }
 }
-setInterval(draw,33);
+setInterval(draw,60);
 </script></body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
