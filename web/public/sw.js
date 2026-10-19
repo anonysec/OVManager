@@ -11,7 +11,7 @@
  *
  * Bump CACHE_VERSION on every release; the old cache is deleted on activate.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `ovmanager-static-${CACHE_VERSION}`;
 
 // Paths are resolved against this script's location, so the worker works at

@@ -145,11 +145,13 @@ func spaHandler(h *panel.Handler) http.Handler {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if path == "" {
-			path = "index.html"
+		prefix := basePath + "/"
+		rel := strings.TrimPrefix(r.URL.Path, prefix)
+		if rel == "" || rel == basePath {
+			rel = "index.html"
 		}
-		if _, err := fs.Stat(fsys, filepath.ToSlash(path)); err == nil {
-			fileServer.ServeHTTP(w, r)
+		if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
+			http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
 			return
 		}
 		index, err := fs.ReadFile(fsys, "index.html")
