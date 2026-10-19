@@ -37,6 +37,11 @@ const ClaimPage = () => {
   const { t } = useTranslation();
   const recover = searchParams.get('mode') === 'recover';
 
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+    apiClient.get('/server/settings').then(() => { window.location.replace('/'); }).catch(() => {});
+  }, []);
   const clearError = () => { if (error) setError(''); };
 
   const claimErrorOf = (err: any) =>
@@ -194,6 +199,9 @@ const ClaimPage = () => {
                   minLength={8}
                   required
                 />
+                {confirmPassword && password !== confirmPassword && (
+                  <p className="ui-field-hint" style={{ color: 'var(--danger-text)' }}>{t('passwordsDoNotMatch', 'Passwords do not match.')}</p>
+                )}
               </div>
             </div>
 

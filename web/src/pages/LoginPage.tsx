@@ -15,6 +15,12 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (!token) return;
+    apiClient.get('/server/settings').then(() => { window.location.replace('/'); }).catch(() => {});
+  }, []);
+
   const [langOpen, setLangOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
