@@ -3,10 +3,9 @@
 
 import { detailMessage } from '../utils/errorMessage';
 
-const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
-export const apiBase = basePath ? `/${basePath}/api` : '/api';
+export const apiBase = '/api';
 
-export const urlPath = basePath ? `/${basePath}` : '';
+export const urlPath = '';
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 export const API_ERROR_EVENT = 'api:error';
