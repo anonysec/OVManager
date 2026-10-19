@@ -8,8 +8,6 @@ import { SkeletonPanel, SkeletonBlock } from './components/ui/Skeleton';
 
 import favicon from './assets/ovmanager-character-clean.png';
 
-const loadLogin = () => import('./pages/LoginPage');
-const loadClaim = () => import('./pages/ClaimPage');
 const loadDashboard = () => import('./pages/DashboardLayout');
 const loadServerStats = () => import('./pages/ServerStats');
 const loadUsers = () => import('./pages/UserManagement');
@@ -19,8 +17,8 @@ const loadAudit = () => import('./pages/AuditLog');
 const loadLogs = () => import('./pages/Logs');
 const loadSetup = () => import('./pages/SetupWizard');
 
-const LoginPage = lazy(loadLogin);
-const ClaimPage = lazy(loadClaim);
+const loadAuth = () => import('./pages/AuthPage');
+const AuthPage = lazy(loadAuth);
 const DashboardLayout = lazy(loadDashboard);
 const ServerStats = lazy(loadServerStats);
 const UserManagement = lazy(loadUsers);
@@ -112,7 +110,7 @@ function App({ onReady }: { onReady?: () => void }) {
           <Route
             path="/login"
             element={
-              firstRun ?? (isAuthenticated ? <Navigate to="/" /> : <Page name="login"><LoginPage /></Page>)
+              firstRun ?? (isAuthenticated ? <Navigate to="/" /> : <Page name="auth"><AuthPage /></Page>)
             }
           />
           {/* The installer's Ready card prints this URL, so it is the first
@@ -137,7 +135,7 @@ function App({ onReady }: { onReady?: () => void }) {
             element={
               isAuthenticated
                 ? <DashboardLayout />
-                : <Page name="claim"><ClaimPage /></Page>
+                : <Page name="auth"><AuthPage /></Page>
             }>
             <Route index element={<Page name="setup"><SetupWizard /></Page>} />
           </Route>
