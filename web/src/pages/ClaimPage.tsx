@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
-import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor, FiGlobe } from 'react-icons/fi';
+import { FiAlertCircle, FiEye, FiEyeOff, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
@@ -18,6 +18,14 @@ const ClaimPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const langRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!langOpen) return;
+    const onDoc = (e: MouseEvent) => { if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [langOpen]);
   const { theme, cycleTheme } = useTheme() as any;
   const { i18n } = useTranslation();
   const [error, setError] = useState('');
@@ -75,11 +83,18 @@ const ClaimPage = () => {
       <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme" title={theme}>
         {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
       </button>
-      <div className="login-lang">
-        <FiGlobe aria-hidden="true" />
-        <select value={i18n.language} onChange={(e) => void loadLanguage(e.target.value)} aria-label="Language">
-          {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
-        </select>
+      <div className="lang-picker-wrap" ref={langRef}>
+        <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen((o) => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
+          <LangIcon size={18} />
+        </button>
+        <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
+          {SUPPORTED_LANGS.map((code) => (
+            <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { void loadLanguage(code); setLangOpen(false); }}>
+              <span>{LANG_LABELS[code]}</span>
+              {i18n.language === code && <span className="lang-check">✓</span>}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
     <main className="login-card">
@@ -189,5 +204,13 @@ const ClaimPage = () => {
     </div>
   );
 };
+
+const LangIcon = ({ size = 16 }: { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2 12h20" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+  </svg>
+);
 
 export default ClaimPage;
