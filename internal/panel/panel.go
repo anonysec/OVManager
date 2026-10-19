@@ -435,6 +435,9 @@ func intQuery(r *http.Request, key string, def int) int {
 const urlPathTTL = 5.0
 
 // urlpath returns the current URL prefix, cached for 5s. Empty means root.
+// URLPath returns the current (non-empty) URL prefix the panel is served under.
+func (h *Handler) URLPath() string { return h.urlpath() }
+
 func (h *Handler) urlpath() string {
 	now := float64(time.Now().UnixNano()) / 1e9
 	h.urlMu.Lock()
@@ -442,9 +445,11 @@ func (h *Handler) urlpath() string {
 	if h.urlAt != 0 && now-h.urlAt < urlPathTTL {
 		return h.urlValue
 	}
-	value := ""
+	value := "dashboard"
 	if s := h.settings(); s != nil {
-		value = strings.Trim(s.strOr("urlpath"), "/")
+		if v := strings.Trim(s.strOr("urlpath"), "/"); v != "" {
+			value = v
+		}
 	}
 	h.urlValue = value
 	h.urlAt = now
@@ -455,7 +460,10 @@ func (h *Handler) urlpath() string {
 // no caller can shadow a live panel route.
 func (h *Handler) setURLPath(value string) (string, error) {
 	value = strings.Trim(value, "/")
-	if value != "" && reservedPrefixes()[strings.ToLower(value)] {
+	if value == "" {
+		value = "dashboard"
+	}
+	if reservedPrefixes()[strings.ToLower(value)] {
 		return "", errReservedPrefix{value}
 	}
 	if err := setColumns(h.Svc.DB(), map[string]any{"urlpath": value}); err != nil {

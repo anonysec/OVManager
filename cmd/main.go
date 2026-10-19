@@ -77,7 +77,13 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root.Handle("/health", health.Router())
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
-	root.Handle("/", spaHandler())
+
+	prefix := "/" + h.URLPath()
+	root.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
+	root.Handle(prefix+"/", spaHandler())
+
+	// Decoy at the site root so the panel is never exposed on "/".
+	root.Handle("/", decoyHandler())
 	return panel.SecurityHeaders(root)
 }
 
@@ -129,6 +135,16 @@ func spaHandler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(index)
+	})
+}
+
+// decoyHandler serves a generic placeholder at the site root so the panel is
+// never reachable from "/".
+func decoyHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte("<!doctype html><html><head><title>404 Not Found</title></head><body><h1>Not Found</h1><p>The requested URL was not found on this server.</p></body></html>"))
 	})
 }
 
