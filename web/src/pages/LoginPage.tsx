@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
+import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
 import { FiAlertCircle, FiEye, FiEyeOff } from 'react-icons/fi';
 import apiClient from '../services/api';
 import Logo from '../components/Logo';
@@ -12,6 +14,8 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const { theme, cycleTheme } = useTheme() as any;
+  const { i18n } = useTranslation();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -49,7 +53,13 @@ const LoginPage = () => {
 
   return (
     <div className="login-page">
-      <main className="login-card">
+      <div className="login-topbar">
+      <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme">{theme}</button>
+      <select className="ui-input" value={i18n.language} onChange={(e) => void loadLanguage(e.target.value)} aria-label="Language">
+        {SUPPORTED_LANGS.map((l) => <option key={l} value={l}>{LANG_LABELS[l]}</option>)}
+      </select>
+    </div>
+    <main className="login-card">
         <header className="login-card-header">
           <span className="login-brand-mark" aria-hidden="true"><Logo size={40} /></span>
           <h1 className="login-brand">
@@ -97,6 +107,7 @@ const LoginPage = () => {
               <button
                 type="button"
                 className="login-password-toggle"
+                tabIndex={-1}
                 onClick={() => setShowPassword((visible) => !visible)}
                 aria-label={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}
                 title={showPassword ? t('hidePassword', 'Hide password') : t('showPassword', 'Show password')}

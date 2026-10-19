@@ -163,3 +163,31 @@
     padding: var(--space-5);
   }
 }
+
+/* Hide the browser's native password-reveal control so only our toggle shows. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-textfield-decoration-button {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.login-topbar {
+  position: absolute;
+  top: var(--space-4);
+  inset-inline-end: var(--space-4);
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  z-index: 10;
+}
+.login-topbar select {
+  width: auto;
+  min-width: 96px;
+  padding: 4px 8px;
+  font-size: var(--fs-sm);
+}
