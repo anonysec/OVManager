@@ -116,6 +116,11 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// bot state.
 	h.startTrafficWorker()
 
+	// Live snapshot collector: one goroutine refreshing the connection/node
+	// snapshot the subscription page, health checklist and SSE events read.
+	// Idle cadence is enforced by the collector's own pollDue gate.
+	h.startLiveWorker()
+
 	// Plan Task 5: GET /api/db/backup + POST /api/db/restore — see dbops.go.
 	h.MountDBOps(mux, owner)
 

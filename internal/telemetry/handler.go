@@ -480,9 +480,22 @@ func PollSeconds() float64 {
 	return lowResourcePollSeconds // ponytail: low_resource flag not re-read here
 }
 
+// pollDue reports whether enough time has passed since the last poll to run
+// another. The window is PollSeconds while a browser holds the live stream
+// open, idlePollSeconds otherwise (design §5.2). now and LastPollTS are both
+// monotonic seconds since start, so a caller's ticker and this gate agree.
+func pollDue(now float64) bool {
+	window := PollSeconds()
+	if !DefaultBus.HasSubscribers() {
+		window = idlePollSeconds()
+	}
+	last := LastPollTS()
+	return last == 0 || now-last >= window
+}
+
 // CollectLiveSnapshot polls every active node and refreshes the snapshot.
 func CollectLiveSnapshot(db *sql.DB) {
-	if !DefaultBus.HasSubscribers() && SnapshotFresh() {
+	if !pollDue(time.Since(procStart).Seconds()) {
 		return
 	}
 	cap := SnapshotMaxNodes
