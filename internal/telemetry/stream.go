@@ -174,6 +174,18 @@ func updateSnapshot(connections map[string]int, nodes map[string]bool, cap int) 
 		}
 		nodes = trimmed
 	}
+	if cap > 0 && len(connections) > cap {
+		names := make([]string, 0, len(connections))
+		for name := range connections {
+			names = append(names, name)
+		}
+		sortStrings(names)
+		trimmed := map[string]int{}
+		for _, name := range names[:cap] {
+			trimmed[name] = connections[name]
+		}
+		connections = trimmed
+	}
 	snap.mu.Lock()
 	defer snap.mu.Unlock()
 	countsChanged := !sameInts(connections, snap.connections)

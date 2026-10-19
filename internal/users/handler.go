@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // Handler serves the /users routes.
@@ -107,14 +110,16 @@ func (u userRow) base() map[string]any {
 	}
 }
 
-// live adds the panel-only connection fields (routers/users.py serialize()).
+// live adds the panel-only connection fields (routers/users.py serialize()),
+// read from the live snapshot the telemetry collector keeps.
 //
-// ponytail: active_connections stays 0 until the live collector lands in
-// Phase 2/3 (backend/operations/observability/live.py).
+// ponytail: Connections() copies the whole map per row; hoist it to the caller
+// if user lists ever grow past the page size.
 func (u userRow) live() map[string]any {
 	m := u.base()
-	m["active_connections"] = 0
-	m["online"] = false
+	count := telemetry.Connections()[u.Name]
+	m["active_connections"] = count
+	m["online"] = count > 0
 	return m
 }
 
@@ -155,10 +160,15 @@ func (h *Handler) nextUsername(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "No username prefix configured"})
 }
 
-// topTraffic is a Phase 3 (billing) placeholder: the shape is registered now so
-// the frontend's route list stays stable.
+// topTraffic ranks users by billed bytes over the last N days.
 func (h *Handler) topTraffic(w http.ResponseWriter, r *http.Request) {
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Top traffic users retrieved", Data: []any{}})
+	days := max(1, min(queryInt(r, "days", 30), 90))
+	limit := max(1, min(queryInt(r, "limit", 10), 25))
+	auth.WriteJSON(w, http.StatusOK, auth.Response{
+		Success: true,
+		Msg:     "Top traffic users retrieved",
+		Data:    billing.TopUsers(h.Svc.DB(), days, limit),
+	})
 }
 
 func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
@@ -436,14 +446,15 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		userNotFound(w)
 		return
 	}
-	// Keep the node push hashes; only the counters wipe (crud.reset_user_usage).
-	nodeUsage := "{}"
-	if parsed := map[string]json.RawMessage{}; json.Unmarshal([]byte(row.NodeUsage), &parsed) == nil {
-		if push, ok := parsed["push_hash"]; ok && len(push) > 0 && push[0] == '{' {
-			nodeUsage = string(mustJSON(map[string]json.RawMessage{"push_hash": push}))
-		}
+	// Keep per-node baselines and push_hash; zero only the counters, and set the
+	// reseed marker so the next traffic pass seeds every node with delta 0
+	// instead of re-billing bytes the panel already counted (design §4.6).
+	data := map[string]json.RawMessage{}
+	if json.Unmarshal([]byte(row.NodeUsage), &data) != nil {
+		data = map[string]json.RawMessage{}
 	}
-	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, nodeUsage, uuidStr); err != nil {
+	data[node.ReseedMarkerKey] = json.RawMessage("true")
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ?`, string(mustJSON(data)), uuidStr); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 		return
 	}
@@ -597,12 +608,12 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	total, perNode := aggregateNodeUsage(h.Svc.DB(), row)
-	// ponytail: per-day series needs Phase 3 billing; shape stays stable.
+	days := max(1, min(queryInt(r, "days", 30), 90))
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User traffic history retrieved",
 		Data: map[string]any{
-			"days":       []any{},
+			"days":       billing.UserDailySeries(h.Svc.DB(), row.ID, days),
 			"used":       deref(row.Used),
 			"total_used": total,
 			"per_node":   perNode,
@@ -614,13 +625,15 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 // aggregateNodeUsage mirrors _aggregate_node_usage in routers/users.py.
 func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 	nodeIDs := map[string]int64{}
-	if res, err := db.Query(`SELECT name, id FROM nodes`); err == nil {
+	nodeNames := map[int64]string{}
+	if res, err := db.Query(`SELECT id, name FROM nodes`); err == nil {
 		defer res.Close()
 		for res.Next() {
 			var name string
 			var id int64
-			if res.Scan(&name, &id) == nil {
+			if res.Scan(&id, &name) == nil {
 				nodeIDs[name] = id
+				nodeNames[id] = name
 			}
 		}
 	}
@@ -630,7 +643,21 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 	}
 	perNode := []map[string]any{}
 	var total int64
-	for name, raw := range usage {
+	for key, raw := range usage {
+		if node.IsReservedUsageKey(key) {
+			continue
+		}
+		// New baselines key by node id; legacy/importer rows key by name.
+		name := key
+		var id any
+		if parsed, err := strconv.ParseInt(key, 10, 64); err == nil {
+			if resolved, ok := nodeNames[parsed]; ok {
+				name = resolved
+				id = parsed
+			}
+		} else if resolved, ok := nodeIDs[key]; ok {
+			id = resolved
+		}
 		var used int64
 		var state struct {
 			Total int64 `json:"total"`
@@ -640,10 +667,7 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 		} else {
 			_ = json.Unmarshal(raw, &used)
 		}
-		entry := map[string]any{"node_id": nil, "name": name, "used": used}
-		if id, ok := nodeIDs[name]; ok {
-			entry["node_id"] = id
-		}
+		entry := map[string]any{"node_id": id, "name": name, "used": used}
 		perNode = append(perNode, entry)
 		total += used
 	}
@@ -744,6 +768,14 @@ func escapeLike(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "%", "\\%")
 	return strings.ReplaceAll(s, "_", "\\_")
+}
+
+// queryInt reads a positive integer query param, falling back to def.
+func queryInt(r *http.Request, key string, def int) int {
+	if n, err := parsePositive(r.URL.Query().Get(key)); err == nil {
+		return n
+	}
+	return def
 }
 
 func parsePositive(v string) (int, error) {

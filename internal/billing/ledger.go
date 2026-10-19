@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+// Execer is the slice of *sql.DB the writers use; *sql.Tx satisfies it too,
+// so a user write and its daily row can share one transaction.
+type Execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 // LedgerRow is one traffic_ledger insert (usage.write_ledger_batch).
 type LedgerRow struct {
 	UserID     int64
@@ -28,7 +34,7 @@ type LedgerRow struct {
 func today() string { return time.Now().UTC().Format("2006-01-02") }
 
 // RecordDailyBytes adds billed bytes to a user's day row (usage.record_daily_bytes).
-func RecordDailyBytes(db *sql.DB, userID, delta int64, day string) {
+func RecordDailyBytes(db Execer, userID, delta int64, day string) {
 	if delta <= 0 {
 		return
 	}
@@ -257,9 +263,9 @@ func intMap(m map[string]any) map[string]int64 {
 
 // ApplyUserTraffic persists one user's traffic only if the row still holds the
 // loaded values (daily._apply_user_traffic). Returns false on an OCC miss.
-func ApplyUserTraffic(db *sql.DB, userID int64, expectedUsed int64, expectedState string, newUsed int64, newState string, delta int64) bool {
+func ApplyUserTraffic(db Execer, userID int64, expectedUsed int64, expectedState string, newUsed int64, newState string, delta int64) bool {
 	res, err := db.Exec(
-		`UPDATE users SET used = ?, node_usage = ? WHERE id = ? AND used IS ? AND node_usage IS ?`,
+		`UPDATE users SET used = ?, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`,
 		newUsed, newState, userID, expectedUsed, expectedState,
 	)
 	if err != nil {

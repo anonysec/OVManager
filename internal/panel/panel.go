@@ -75,6 +75,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /maintenance/backup", owner(h.backupCreate))
 	mux.HandleFunc("POST /maintenance/backup/restore", owner(h.backupRestore))
 	mux.HandleFunc("POST /maintenance/sync-limits", owner(h.syncLimits))
+	mux.HandleFunc("POST /maintenance/sync-traffic", owner(h.syncTraffic))
 	mux.HandleFunc("POST /maintenance/clean-stale", owner(h.cleanStale))
 	mux.HandleFunc("POST /maintenance/restart", owner(h.restartPanel))
 	mux.HandleFunc("POST /maintenance/cleanup/preview", owner(h.cleanupPreview))
@@ -109,6 +110,16 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// Daily ACME renewal (T-30d) + boot issuance when the installer wired
 	// OVM_ACME_DOMAIN. No-op without an enrolled domain.
 	h.startACMEWorker()
+
+	// Per-user traffic accounting: one goroutine polling active nodes and
+	// billing their cumulative-total deltas. Runs regardless of the Telegram
+	// bot state.
+	h.startTrafficWorker()
+
+	// Live snapshot collector: one goroutine refreshing the connection/node
+	// snapshot the subscription page, health checklist and SSE events read.
+	// Idle cadence is enforced by the collector's own pollDue gate.
+	h.startLiveWorker()
 
 	// Plan Task 5: GET /api/db/backup + POST /api/db/restore — see dbops.go.
 	h.MountDBOps(mux, owner)

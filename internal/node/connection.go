@@ -39,6 +39,7 @@ type connection struct {
 	health    NodeHealth
 	lastOK    time.Time
 	lastFail  time.Time
+	panelID   string
 }
 
 const healthTTL = 300 * time.Second
@@ -53,17 +54,35 @@ var (
 
 // NodeClient returns a live client for node, reusing the cached connection
 // when the signature is unchanged (backend/node/requests.node_client +
-// connection.get_connection). panelID stamps X-Panel-ID.
+// connection.get_connection). panelID is carried per request (X-Panel-ID) and
+// never stamped onto the shared client's header map.
 func NodeClient(n *Node, panelID string) *Client {
 	c := getConnection(n)
-	if panelID != "" && c != nil {
-		c.Headers()["X-Panel-ID"] = panelID
+	if c == nil || panelID == "" {
+		return c
 	}
+	if n.ID == 0 {
+		// Uncached: this client is freshly created and solely owned here.
+		c.panelID = panelID
+		return c
+	}
+	connMu.Lock()
+	if conn, ok := connections[n.ID]; ok {
+		conn.panelID = panelID
+	}
+	connMu.Unlock()
 	return c
 }
 
-// Headers exposes the mutable header map (the node_client panel-id stamp).
-func (c *Client) Headers() map[string]string { return c.headers }
+// Headers returns a copy of the client's static header map. Callers must not
+// rely on mutating it; the panel id travels via Client.panelIDHeader instead.
+func (c *Client) Headers() map[string]string {
+	out := make(map[string]string, len(c.headers))
+	for k, v := range c.headers {
+		out[k] = v
+	}
+	return out
+}
 
 func getConnection(n *Node) *Client {
 	sig := signatureOf(n)

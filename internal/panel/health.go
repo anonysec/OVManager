@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,8 +30,12 @@ type check struct {
 }
 
 // observed check statuses, keyed by check id: the first observation seeds the
-// map silently so a restart never re-pages an old failure.
-var checkState = map[string]string{}
+// map silently so a restart never re-pages an old failure. Two concurrent
+// /overview requests write it, so access goes through the mutex.
+var checkState = struct {
+	mu sync.Mutex
+	m  map[string]string
+}{m: map[string]string{}}
 
 const sevenDays = 7 * 24 * 60 * 60
 
@@ -344,8 +349,10 @@ func (h *Handler) checkBackups() check {
 // recordCheckTransition audits one check result — only when its status changed
 // (audit.record_event + the node-alerts seeding rule).
 func (h *Handler) recordCheckTransition(c check) {
-	prev, seen := checkState[c.ID]
-	checkState[c.ID] = c.Status
+	checkState.mu.Lock()
+	prev, seen := checkState.m[c.ID]
+	checkState.m[c.ID] = c.Status
+	checkState.mu.Unlock()
 	if !seen || prev == c.Status {
 		return
 	}

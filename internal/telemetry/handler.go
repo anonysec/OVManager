@@ -6,15 +6,18 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
 )
@@ -237,17 +240,15 @@ var metricsTables = []string{
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 }
 
-var tablesReady bool
+var tablesReady sync.Once
 
 // EnsureExtraTables creates the observability/billing tables once per process.
 func EnsureExtraTables(db *sql.DB) {
-	if tablesReady {
-		return
-	}
-	for _, ddl := range metricsTables {
-		_, _ = db.Exec(ddl)
-	}
-	tablesReady = true
+	tablesReady.Do(func() {
+		for _, ddl := range metricsTables {
+			_, _ = db.Exec(ddl)
+		}
+	})
 }
 
 // history mirrors metrics.history.
@@ -461,9 +462,11 @@ const (
 	graceSeconds           = 20.0
 )
 
-var graceUntil = map[string]float64{}
-
 func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECONDS", 300) }
+
+// liveFanoutDeadline bounds one CollectLiveSnapshot fan-out. A var so tests can
+// shrink it; production uses the shared request fan-out deadline.
+var liveFanoutDeadline = node.RequestFanoutDeadline
 
 // PollSeconds mirrors live.poll_seconds.
 func PollSeconds() float64 {
@@ -475,9 +478,22 @@ func PollSeconds() float64 {
 	return lowResourcePollSeconds // ponytail: low_resource flag not re-read here
 }
 
+// pollDue reports whether enough time has passed since the last poll to run
+// another. The window is PollSeconds while a browser holds the live stream
+// open, idlePollSeconds otherwise (design §5.2). now and LastPollTS are both
+// monotonic seconds since start, so a caller's ticker and this gate agree.
+func pollDue(now float64) bool {
+	window := PollSeconds()
+	if !DefaultBus.HasSubscribers() {
+		window = idlePollSeconds()
+	}
+	last := LastPollTS()
+	return last == 0 || now-last >= window
+}
+
 // CollectLiveSnapshot polls every active node and refreshes the snapshot.
 func CollectLiveSnapshot(db *sql.DB) {
-	if !DefaultBus.HasSubscribers() && SnapshotFresh() {
+	if !pollDue(time.Since(procStart).Seconds()) {
 		return
 	}
 	cap := SnapshotMaxNodes
@@ -488,6 +504,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 	}
 
 	ids := []int64{}
+	nodesErr := error(nil)
 	if rows, err := db.Query(`SELECT id FROM nodes WHERE status = 1`); err == nil {
 		for rows.Next() {
 			var id int64
@@ -496,19 +513,32 @@ func CollectLiveSnapshot(db *sql.DB) {
 			}
 		}
 		rows.Close()
+	} else {
+		nodesErr = err
 	}
 	idToName := map[string]string{}
+	known := map[string]bool{}
+	usersErr := error(nil)
 	if rows, err := db.Query(`SELECT id, name FROM users`); err == nil {
 		for rows.Next() {
 			var id int64
 			var name string
 			if rows.Scan(&id, &name) == nil {
 				idToName[strconv.FormatInt(id, 10)] = name
+				known[name] = true
 			}
 		}
 		rows.Close()
+	} else {
+		usersErr = err
 	}
 	pid := node.PanelIDFor(db)
+
+	// An empty result is otherwise silent; the counts make it diagnosable.
+	if nodesErr != nil || usersErr != nil {
+		log.Printf("telemetry: live snapshot: load failed (nodes=%d err=%v, users=%d err=%v)",
+			len(ids), nodesErr, len(known), usersErr)
+	}
 
 	if len(ids) == 0 {
 		_, nodesChanged := updateSnapshot(map[string]int{}, map[string]bool{}, cap)
@@ -518,14 +548,25 @@ func CollectLiveSnapshot(db *sql.DB) {
 		return
 	}
 
+	nodes := make([]*node.Node, 0, len(ids))
+	for _, id := range ids {
+		if n := node.GetNodeByID(db, id); n != nil {
+			nodes = append(nodes, n)
+		}
+	}
+	calls := make([]func() any, len(nodes))
+	for i, n := range nodes {
+		n := n
+		calls[i] = func() any {
+			return node.NodeClient(n, pid).GetSessions("", 1, node.ProbeTimeout(n))
+		}
+	}
+	results := node.GatherNodes(calls, liveFanoutDeadline)
+
 	counts := map[string]int{}
 	online := map[string]bool{}
-	for _, id := range ids {
-		n := node.GetNodeByID(db, id)
-		if n == nil {
-			continue
-		}
-		data := node.NodeClient(n, pid).GetSessions("", 1, node.ProbeTimeout(n))
+	for i, n := range nodes {
+		data, _ := results[i].(map[string]any)
 		if len(data) == 0 {
 			online[n.Name] = false
 			continue
@@ -538,6 +579,9 @@ func CollectLiveSnapshot(db *sql.DB) {
 			username := cn
 			if mapped, ok := idToName[cn]; ok {
 				username = mapped
+			} else {
+				// Legacy/foreign nodes report name-shaped CNs; strip the node suffix.
+				username = billing.ExtractUsername(cn, n.Name, known)
 			}
 			if username != "" {
 				counts[username]++
@@ -556,6 +600,8 @@ func CollectLiveSnapshot(db *sql.DB) {
 
 // applyGrace holds a node that just went down as up (live._apply_grace).
 func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
+	nodeAlerts.mu.Lock()
+	defer nodeAlerts.mu.Unlock()
 	names := map[string]bool{}
 	for k := range prev {
 		names[k] = true
@@ -565,17 +611,17 @@ func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
 	}
 	for name := range names {
 		if online[name] {
-			delete(graceUntil, name)
+			delete(nodeAlerts.graceUntil, name)
 			online[name] = true
 			continue
 		}
-		until, ok := graceUntil[name]
+		until, ok := nodeAlerts.graceUntil[name]
 		if !ok && prev[name] {
 			until = now + graceSeconds
-			graceUntil[name] = until
+			nodeAlerts.graceUntil[name] = until
 		}
 		if until != 0 && now >= until {
-			delete(graceUntil, name)
+			delete(nodeAlerts.graceUntil, name)
 			online[name] = false
 		} else {
 			online[name] = until != 0
@@ -756,11 +802,22 @@ func messageOf(group []map[string]any) string {
 
 const downAlertCooldownSeconds = 30 * 60
 
-var (
-	nodeState      = map[int64]bool{}
-	lastDownAlert  = map[int64]float64{}
-	alertedDownSet = map[int64]bool{}
-)
+// nodeAlerts owns every package-level live/node alert map. CollectMetrics is
+// reachable concurrently from the worker tick and POST /metrics/collect, so
+// each map access takes the mutex. graceUntil lives here too because the
+// manual collect path can race the live worker.
+var nodeAlerts = struct {
+	mu             sync.Mutex
+	nodeState      map[int64]bool
+	lastDownAlert  map[int64]float64
+	alertedDownSet map[int64]bool
+	graceUntil     map[string]float64
+}{
+	nodeState:      map[int64]bool{},
+	lastDownAlert:  map[int64]float64{},
+	alertedDownSet: map[int64]bool{},
+	graceUntil:     map[string]float64{},
+}
 
 // checkNodeAlerts mirrors node_alerts.check_node_alerts.
 func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
@@ -776,8 +833,14 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 			name = fmt.Sprintf("node-%d", nodeID)
 		}
 		reachable := boolOf(row["reachable"])
-		prev, seen := nodeState[nodeID]
-		nodeState[nodeID] = reachable
+
+		nodeAlerts.mu.Lock()
+		prev, seen := nodeAlerts.nodeState[nodeID]
+		nodeAlerts.nodeState[nodeID] = reachable
+		alertedDown := nodeAlerts.alertedDownSet[nodeID]
+		lastDown := nodeAlerts.lastDownAlert[nodeID]
+		nodeAlerts.mu.Unlock()
+
 		if !seen {
 			continue
 		}
@@ -791,19 +854,23 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 			RecordEvent(db, kind, sev, msg, map[string]any{"node_id": nodeID, "target": name})
 		}
 		if !reachable {
-			if alertedDownSet[nodeID] || !notify {
+			if alertedDown || !notify {
 				continue
 			}
-			if ts-lastDownAlert[nodeID] < downAlertCooldownSeconds {
+			if ts-lastDown < downAlertCooldownSeconds {
 				continue
 			}
 			if sendTelegram(db, "🔴 Node "+name+" is unreachable.") {
-				lastDownAlert[nodeID] = ts
-				alertedDownSet[nodeID] = true
+				nodeAlerts.mu.Lock()
+				nodeAlerts.lastDownAlert[nodeID] = ts
+				nodeAlerts.alertedDownSet[nodeID] = true
+				nodeAlerts.mu.Unlock()
 				sent++
 			}
-		} else if alertedDownSet[nodeID] {
-			delete(alertedDownSet, nodeID)
+		} else if alertedDown {
+			nodeAlerts.mu.Lock()
+			delete(nodeAlerts.alertedDownSet, nodeID)
+			nodeAlerts.mu.Unlock()
 			if notify && sendTelegram(db, "🟢 Node "+name+" is back online.") {
 				sent++
 			}

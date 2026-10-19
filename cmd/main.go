@@ -145,7 +145,6 @@ func env(key, fallback string) string {
 	return fallback
 }
 
-
 // serveMode returns the bind address and whether TLS is used. The invariant:
 // plaintext is never bound to 0.0.0.0; TLS binds all interfaces.
 func serveMode(tlsEnabled bool, port string) (string, bool) {

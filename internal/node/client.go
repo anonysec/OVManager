@@ -59,6 +59,9 @@ type Client struct {
 	pinPEM    string // "" = no pin (default trust + optional fallback)
 	NodeID    int64
 	checkName bool // whether the pin must also carry the dial name
+	// panelID is the per-request X-Panel-ID for clients that own their
+	// connection (NodeID == 0); cached clients read it from the registry.
+	panelID string
 
 	mu          sync.Mutex
 	tlsVerified *bool
@@ -83,9 +86,7 @@ func NewClient(address string, port int, apiKey, serverCA, panelID string, nodeI
 	if strings.Contains(host, ":") {
 		c.address = "[" + host + "]:" + strconv.Itoa(target)
 	}
-	if panelID != "" {
-		c.headers["X-Panel-ID"] = panelID
-	}
+	c.panelID = panelID
 	if serverCA != "" {
 		if !isPEM(serverCA) {
 			return nil, errors.New("Node has a pinned certificate but it is not a PEM certificate")
@@ -319,6 +320,21 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[stri
 	return data, nil
 }
 
+// panelIDHeader resolves the X-Panel-ID to send. Cached clients read it from
+// the registry under connMu (NodeClient is the only writer); clients that own
+// their connection (NodeID == 0) read their own field.
+func (c *Client) panelIDHeader() string {
+	if c.NodeID == 0 {
+		return c.panelID
+	}
+	connMu.Lock()
+	defer connMu.Unlock()
+	if conn, ok := connections[c.NodeID]; ok {
+		return conn.panelID
+	}
+	return c.panelID
+}
+
 func (c *Client) roundtrip(hc *http.Client, method, path string, o reqOpts, body []byte) (*http.Response, error) {
 	rawURL := c.scheme + "://" + c.address + path
 	if len(o.params) > 0 {
@@ -334,6 +350,9 @@ func (c *Client) roundtrip(hc *http.Client, method, path string, o reqOpts, body
 	}
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+	if pid := c.panelIDHeader(); pid != "" {
+		req.Header.Set("X-Panel-ID", pid)
 	}
 	for k, v := range o.rawHeader {
 		req.Header.Set(k, v)
@@ -602,6 +621,9 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		}
 		for k, v := range c.headers {
 			req.Header.Set(k, v)
+		}
+		if pid := c.panelIDHeader(); pid != "" {
+			req.Header.Set("X-Panel-ID", pid)
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)

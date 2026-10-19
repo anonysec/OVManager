@@ -36,11 +36,11 @@ build:
 test:
 	go test ./...
 
-# go vet only: `gofmt -l` still flags pre-existing files, so it is not a gate
-# yet. Add `gofmt -l | tee /dev/stderr | grep -q . && exit 1` when the tree is
-# clean.
+# go vet across the module plus a gofmt gate: the tree is clean, so any
+# unformatted file now fails lint instead of drifting.
 lint:
-	go vet ./cmd/... ./internal/...
+	go vet ./...
+	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
 verify: test version
 	cd web && npm run verify

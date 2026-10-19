@@ -2,10 +2,14 @@ package tests
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // authedServer boots a server with an owner row and returns base URL + token.
@@ -323,7 +327,7 @@ func TestUsersTrafficAndReset(t *testing.T) {
 		t.Fatalf("traffic = %d %v", res.StatusCode, got)
 	}
 
-	if _, err := conn.Exec(`UPDATE users SET used=1234, node_usage='{"n1":{"total":900}}' WHERE uuid=?`, uuid); err != nil {
+	if _, err := conn.Exec(`UPDATE users SET used=1234, node_usage='{"1":900,"push_hash":{"1":"h"}}' WHERE uuid=?`, uuid); err != nil {
 		t.Fatal(err)
 	}
 	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuid+"/reset-usage", token, nil)
@@ -336,7 +340,148 @@ func TestUsersTrafficAndReset(t *testing.T) {
 	if err := conn.QueryRow(`SELECT used, node_usage FROM users WHERE uuid=?`, uuid).Scan(&used, &nodeUsage); err != nil {
 		t.Fatal(err)
 	}
-	if used != 0 || nodeUsage != "{}" {
-		t.Errorf("after reset: used=%d node_usage=%s, want 0 {}", used, nodeUsage)
+	if used != 0 {
+		t.Errorf("after reset: used=%d, want 0", used)
+	}
+	state := map[string]any{}
+	if err := json.Unmarshal([]byte(nodeUsage), &state); err != nil {
+		t.Fatalf("node_usage %q: %v", nodeUsage, err)
+	}
+	if state["1"] != float64(900) {
+		t.Errorf(`baseline dropped: node_usage["1"]=%v, want 900`, state["1"])
+	}
+	if _, ok := state["push_hash"]; !ok {
+		t.Errorf("push_hash dropped: %v", state)
+	}
+	if state["__reseed"] != true {
+		t.Errorf("reseed marker missing: %v", state)
+	}
+}
+
+// TestUsersTopTraffic: GET /users/traffic/top ranks users by daily bytes.
+func TestUsersTopTraffic(t *testing.T) {
+	conn, base, token := authedServer(t)
+	today := time.Now().UTC().Format("2006-01-02")
+	ids := map[string]int64{}
+	for _, n := range []string{"alice", "bob"} {
+		res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": n})
+		res.Body.Close()
+		var id int64
+		if err := conn.QueryRow(`SELECT id FROM users WHERE name=?`, n).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids[n] = id
+	}
+	for _, r := range []struct {
+		id    int64
+		bytes int64
+	}{{ids["alice"], 3000}, {ids["bob"], 1000}} {
+		if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, r.id, today, r.bytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, got := doJSON(t, http.MethodGet, base+"/api/users/traffic/top?days=30&limit=1", token, nil)
+	res.Body.Close()
+	if res.StatusCode != 200 || got["msg"] != "Top traffic users retrieved" {
+		t.Fatalf("top-traffic = %d %v", res.StatusCode, got)
+	}
+	rows, ok := got["data"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("top-traffic data = %v, want one row", got["data"])
+	}
+	first := rows[0].(map[string]any)
+	if first["name"] != "alice" || first["bytes"] != float64(3000) {
+		t.Errorf("top row = %v, want alice 3000", first)
+	}
+}
+
+// TestUsersTrafficDailySeries: GET /users/{uuid}/traffic returns `days` as the
+// zero-filled UserDailySeries window (the SPA asks ?days=14).
+func TestUsersTrafficDailySeries(t *testing.T) {
+	conn, base, token := authedServer(t)
+	res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "erin"})
+	res.Body.Close()
+	uuid := uuidOf(t, conn, "erin")
+	var id int64
+	if err := conn.QueryRow(`SELECT id FROM users WHERE uuid=?`, uuid).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, id, today, 4096); err != nil {
+		t.Fatal(err)
+	}
+	res, got := doJSON(t, http.MethodGet, base+"/api/users/"+uuid+"/traffic?days=14", token, nil)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("traffic = %d %v", res.StatusCode, got)
+	}
+	days, ok := got["data"].(map[string]any)["days"].([]any)
+	if !ok || len(days) != 14 {
+		t.Fatalf("days = %v, want 14 entries", got["data"].(map[string]any)["days"])
+	}
+	last := days[len(days)-1].(map[string]any)
+	if last["day"] != today || last["bytes"] != float64(4096) {
+		t.Errorf("last day = %v, want %s 4096", last, today)
+	}
+}
+
+// fakeUsageNode answers GET /sync/usage with pinned cumulative totals.
+func fakeUsageNode(t *testing.T, totals map[string]any) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := json.Marshal(map[string]any{
+			"success": true,
+			"data":    map[string]any{"totals": totals},
+		})
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestUsersResetReseedsBaselines: a reset keeps the per-node baseline and marks
+// the user for reseed, so the next traffic pass seeds delta 0 (no re-bill of
+// bytes already counted) and clears the marker (design §4.6).
+func TestUsersResetReseedsBaselines(t *testing.T) {
+	env := newPanelEnv(t)
+	res, _ := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/", env.token, map[string]any{"name": "user"})
+	res.Body.Close()
+	uuid := uuidOf(t, env.conn, "user")
+	if _, err := env.conn.Exec(`UPDATE users SET used=999, node_usage='{"1":500,"push_hash":{"1":"x"}}' WHERE uuid=?`, uuid); err != nil {
+		t.Fatal(err)
+	}
+	res, got := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/"+uuid+"/reset-usage", env.token, nil)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("reset = %d %v", res.StatusCode, got)
+	}
+
+	agent := fakeUsageNode(t, map[string]any{"user": int64(600)})
+	host, port := hostPort(t, agent.URL)
+	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
+
+	node.SyncTraffic(env.conn)
+
+	var used int64
+	var raw string
+	if err := env.conn.QueryRow(`SELECT used, node_usage FROM users WHERE uuid=?`, uuid).Scan(&used, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if used != 0 {
+		t.Errorf("used = %d, want 0 (reseed must not re-bill)", used)
+	}
+	state := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("node_usage %q: %v", raw, err)
+	}
+	if state["1"] != float64(600) {
+		t.Errorf(`node_usage["1"] = %v, want 600 (reseeded baseline)`, state["1"])
+	}
+	if _, ok := state["__reseed"]; ok {
+		t.Errorf("marker not cleared: %v", state)
+	}
+	if _, ok := state["push_hash"]; !ok {
+		t.Errorf("push_hash lost after pass: %v", state)
 	}
 }
