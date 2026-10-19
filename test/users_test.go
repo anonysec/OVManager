@@ -358,6 +358,73 @@ func TestUsersTrafficAndReset(t *testing.T) {
 	}
 }
 
+// TestUsersTopTraffic: GET /users/traffic/top ranks users by daily bytes.
+func TestUsersTopTraffic(t *testing.T) {
+	conn, base, token := authedServer(t)
+	today := time.Now().UTC().Format("2006-01-02")
+	ids := map[string]int64{}
+	for _, n := range []string{"alice", "bob"} {
+		res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": n})
+		res.Body.Close()
+		var id int64
+		if err := conn.QueryRow(`SELECT id FROM users WHERE name=?`, n).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids[n] = id
+	}
+	for _, r := range []struct {
+		id    int64
+		bytes int64
+	}{{ids["alice"], 3000}, {ids["bob"], 1000}} {
+		if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, r.id, today, r.bytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, got := doJSON(t, http.MethodGet, base+"/api/users/traffic/top?days=30&limit=1", token, nil)
+	res.Body.Close()
+	if res.StatusCode != 200 || got["msg"] != "Top traffic users retrieved" {
+		t.Fatalf("top-traffic = %d %v", res.StatusCode, got)
+	}
+	rows, ok := got["data"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("top-traffic data = %v, want one row", got["data"])
+	}
+	first := rows[0].(map[string]any)
+	if first["name"] != "alice" || first["bytes"] != float64(3000) {
+		t.Errorf("top row = %v, want alice 3000", first)
+	}
+}
+
+// TestUsersTrafficDailySeries: GET /users/{uuid}/traffic returns `days` as the
+// zero-filled UserDailySeries window (the SPA asks ?days=14).
+func TestUsersTrafficDailySeries(t *testing.T) {
+	conn, base, token := authedServer(t)
+	res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "erin"})
+	res.Body.Close()
+	uuid := uuidOf(t, conn, "erin")
+	var id int64
+	if err := conn.QueryRow(`SELECT id FROM users WHERE uuid=?`, uuid).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, id, today, 4096); err != nil {
+		t.Fatal(err)
+	}
+	res, got := doJSON(t, http.MethodGet, base+"/api/users/"+uuid+"/traffic?days=14", token, nil)
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("traffic = %d %v", res.StatusCode, got)
+	}
+	days, ok := got["data"].(map[string]any)["days"].([]any)
+	if !ok || len(days) != 14 {
+		t.Fatalf("days = %v, want 14 entries", got["data"].(map[string]any)["days"])
+	}
+	last := days[len(days)-1].(map[string]any)
+	if last["day"] != today || last["bytes"] != float64(4096) {
+		t.Errorf("last day = %v, want %s 4096", last, today)
+	}
+}
+
 // fakeUsageNode answers GET /sync/usage with pinned cumulative totals.
 func fakeUsageNode(t *testing.T, totals map[string]any) *httptest.Server {
 	t.Helper()

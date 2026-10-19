@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
 )
 
@@ -156,10 +157,15 @@ func (h *Handler) nextUsername(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "No username prefix configured"})
 }
 
-// topTraffic is a Phase 3 (billing) placeholder: the shape is registered now so
-// the frontend's route list stays stable.
+// topTraffic ranks users by billed bytes over the last N days.
 func (h *Handler) topTraffic(w http.ResponseWriter, r *http.Request) {
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Top traffic users retrieved", Data: []any{}})
+	days := max(1, min(queryInt(r, "days", 30), 90))
+	limit := max(1, min(queryInt(r, "limit", 10), 25))
+	auth.WriteJSON(w, http.StatusOK, auth.Response{
+		Success: true,
+		Msg:     "Top traffic users retrieved",
+		Data:    billing.TopUsers(h.Svc.DB(), days, limit),
+	})
 }
 
 func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
@@ -599,12 +605,12 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	total, perNode := aggregateNodeUsage(h.Svc.DB(), row)
-	// ponytail: per-day series needs Phase 3 billing; shape stays stable.
+	days := max(1, min(queryInt(r, "days", 30), 90))
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User traffic history retrieved",
 		Data: map[string]any{
-			"days":       []any{},
+			"days":       billing.UserDailySeries(h.Svc.DB(), row.ID, days),
 			"used":       deref(row.Used),
 			"total_used": total,
 			"per_node":   perNode,
@@ -759,6 +765,14 @@ func escapeLike(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "%", "\\%")
 	return strings.ReplaceAll(s, "_", "\\_")
+}
+
+// queryInt reads a positive integer query param, falling back to def.
+func queryInt(r *http.Request, key string, def int) int {
+	if n, err := parsePositive(r.URL.Query().Get(key)); err == nil {
+		return n
+	}
+	return def
 }
 
 func parsePositive(v string) (int, error) {
