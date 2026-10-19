@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
@@ -461,8 +462,6 @@ const (
 	graceSeconds           = 20.0
 )
 
-var graceUntil = map[string]float64{}
-
 func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECONDS", 300) }
 
 // PollSeconds mirrors live.poll_seconds.
@@ -556,6 +555,8 @@ func CollectLiveSnapshot(db *sql.DB) {
 
 // applyGrace holds a node that just went down as up (live._apply_grace).
 func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
+	nodeAlerts.mu.Lock()
+	defer nodeAlerts.mu.Unlock()
 	names := map[string]bool{}
 	for k := range prev {
 		names[k] = true
@@ -565,17 +566,17 @@ func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
 	}
 	for name := range names {
 		if online[name] {
-			delete(graceUntil, name)
+			delete(nodeAlerts.graceUntil, name)
 			online[name] = true
 			continue
 		}
-		until, ok := graceUntil[name]
+		until, ok := nodeAlerts.graceUntil[name]
 		if !ok && prev[name] {
 			until = now + graceSeconds
-			graceUntil[name] = until
+			nodeAlerts.graceUntil[name] = until
 		}
 		if until != 0 && now >= until {
-			delete(graceUntil, name)
+			delete(nodeAlerts.graceUntil, name)
 			online[name] = false
 		} else {
 			online[name] = until != 0
@@ -756,11 +757,22 @@ func messageOf(group []map[string]any) string {
 
 const downAlertCooldownSeconds = 30 * 60
 
-var (
-	nodeState      = map[int64]bool{}
-	lastDownAlert  = map[int64]float64{}
-	alertedDownSet = map[int64]bool{}
-)
+// nodeAlerts owns every package-level live/node alert map. CollectMetrics is
+// reachable concurrently from the worker tick and POST /metrics/collect, so
+// each map access takes the mutex. graceUntil lives here too because the
+// manual collect path can race the live worker.
+var nodeAlerts = struct {
+	mu             sync.Mutex
+	nodeState      map[int64]bool
+	lastDownAlert  map[int64]float64
+	alertedDownSet map[int64]bool
+	graceUntil     map[string]float64
+}{
+	nodeState:      map[int64]bool{},
+	lastDownAlert:  map[int64]float64{},
+	alertedDownSet: map[int64]bool{},
+	graceUntil:     map[string]float64{},
+}
 
 // checkNodeAlerts mirrors node_alerts.check_node_alerts.
 func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
@@ -776,8 +788,14 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 			name = fmt.Sprintf("node-%d", nodeID)
 		}
 		reachable := boolOf(row["reachable"])
-		prev, seen := nodeState[nodeID]
-		nodeState[nodeID] = reachable
+
+		nodeAlerts.mu.Lock()
+		prev, seen := nodeAlerts.nodeState[nodeID]
+		nodeAlerts.nodeState[nodeID] = reachable
+		alertedDown := nodeAlerts.alertedDownSet[nodeID]
+		lastDown := nodeAlerts.lastDownAlert[nodeID]
+		nodeAlerts.mu.Unlock()
+
 		if !seen {
 			continue
 		}
@@ -791,19 +809,23 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 			RecordEvent(db, kind, sev, msg, map[string]any{"node_id": nodeID, "target": name})
 		}
 		if !reachable {
-			if alertedDownSet[nodeID] || !notify {
+			if alertedDown || !notify {
 				continue
 			}
-			if ts-lastDownAlert[nodeID] < downAlertCooldownSeconds {
+			if ts-lastDown < downAlertCooldownSeconds {
 				continue
 			}
 			if sendTelegram(db, "🔴 Node "+name+" is unreachable.") {
-				lastDownAlert[nodeID] = ts
-				alertedDownSet[nodeID] = true
+				nodeAlerts.mu.Lock()
+				nodeAlerts.lastDownAlert[nodeID] = ts
+				nodeAlerts.alertedDownSet[nodeID] = true
+				nodeAlerts.mu.Unlock()
 				sent++
 			}
-		} else if alertedDownSet[nodeID] {
-			delete(alertedDownSet, nodeID)
+		} else if alertedDown {
+			nodeAlerts.mu.Lock()
+			delete(nodeAlerts.alertedDownSet, nodeID)
+			nodeAlerts.mu.Unlock()
 			if notify && sendTelegram(db, "🟢 Node "+name+" is back online.") {
 				sent++
 			}
