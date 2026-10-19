@@ -71,9 +71,10 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
       if (v && !/^[A-Za-z0-9_-]+$/.test(v)) { setError(t('urlInvalid', 'Only letters, numbers, dashes and underscores.')); return; }
       if (v.length > 64) { setError(t('urlInvalid', 'Max 64 characters.')); return; }
       const res = await apiClient.put('/server/settings/urlpath', { urlpath: v });
-      setUrlPath(v); setEditing(false);
+      const next = (res?.data?.urlpath || (v ? v : 'dashboard')).toString().replace(/^\/+|\/+$/g, '');
+      setUrlPath(next); setEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
-      const newBase = v ? `/${v}` : '';
+      const newBase = next ? `/${next}` : '/dashboard';
       setTimeout(() => { window.location.assign(`${window.location.origin}${newBase}/settings`); }, 600);
       void res;
     } catch (e) { setError((e as GeneralApiError).response?.data?.msg || t('error', 'Error')); }

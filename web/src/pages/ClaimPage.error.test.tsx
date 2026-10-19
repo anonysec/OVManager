@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider } from '../context/ThemeContext';
 import '../i18n';
 
 vi.mock('../services/api', () => ({
@@ -36,7 +37,13 @@ const submitVerify = (container: HTMLElement) => {
 };
 
 describe('ClaimPage claimErrorOf', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (q: string) => ({ matches: false, media: q, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false }),
+    });
+  });
 
   it('renders a 422 array detail as a readable message, no boundary', async () => {
     (apiClient.post as any).mockRejectedValue(httpError([
@@ -44,7 +51,7 @@ describe('ClaimPage claimErrorOf', () => {
       { loc: ['body', 'username'], msg: 'Field required', type: 'missing' },
     ]));
     const { container } = render(
-      <MemoryRouter initialEntries={['/setup']}><ClaimPage /></MemoryRouter>,
+      <MemoryRouter initialEntries={['/setup']}><ThemeProvider><ClaimPage /></ThemeProvider></MemoryRouter>,
     );
     submitVerify(container);
     const alert = await screen.findByRole('alert');
@@ -56,7 +63,7 @@ describe('ClaimPage claimErrorOf', () => {
   it('keeps a string detail as-is', async () => {
     (apiClient.post as any).mockRejectedValue(httpError('Invalid setup key'));
     const { container } = render(
-      <MemoryRouter initialEntries={['/setup']}><ClaimPage /></MemoryRouter>,
+      <MemoryRouter initialEntries={['/setup']}><ThemeProvider><ClaimPage /></ThemeProvider></MemoryRouter>,
     );
     submitVerify(container);
     const alert = await screen.findByRole('alert');
@@ -66,7 +73,7 @@ describe('ClaimPage claimErrorOf', () => {
   it('falls back to the default claim message when detail is missing', async () => {
     (apiClient.post as any).mockRejectedValue({ response: { status: 500, data: {} } });
     const { container } = render(
-      <MemoryRouter initialEntries={['/setup']}><ClaimPage /></MemoryRouter>,
+      <MemoryRouter initialEntries={['/setup']}><ThemeProvider><ClaimPage /></ThemeProvider></MemoryRouter>,
     );
     submitVerify(container);
     const alert = await screen.findByRole('alert');

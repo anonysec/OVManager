@@ -4,9 +4,9 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"net/http"
 	"io"
+	"net/http"
+	"os"
 
 	"github.com/spf13/cobra"
 )

@@ -205,7 +205,7 @@ input[type="password"]::-webkit-textfield-decoration-button {
   border: 0;
   background: transparent;
   color: var(--text-primary);
-  font-size: var(--fs-sm);
+  font-size: var(--font-size-sm);
   cursor: pointer;
   outline: none;
 }
@@ -223,7 +223,7 @@ input[type="password"]::-webkit-textfield-decoration-button {
   background: var(--surface-2);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: var(--fs-sm);
+  font-size: var(--font-size-sm);
 }
 .login-tab.active {
   background: var(--accent, var(--accent-color));

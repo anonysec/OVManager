@@ -78,12 +78,10 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
 
-	prefix := "/" + h.URLPath()
-	root.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
-	root.Handle(prefix+"/", spaHandler(prefix+"/"))
+	// The panel prefix is resolved per request (5s DB cache) so a URL-path
+	// change in Settings takes effect without a restart.
+	root.Handle("/", panelDispatcher(h))
 
-	// Decoy at the site root so the panel is never exposed on "/".
-	root.Handle("/", decoyHandler())
 	return panel.SecurityHeaders(root)
 }
 
@@ -98,6 +96,28 @@ func appDir() string {
 	return "."
 }
 
+// panelDispatcher routes the site root: the current panel prefix serves the
+// SPA (bare prefix redirects to the trailing slash), everything else gets the
+// decoy 404. The prefix is resolved per request.
+func panelDispatcher(h *panel.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		prefix := "/" + strings.Trim(h.URLPath(), "/")
+		if prefix == "/" {
+			prefix = "/dashboard"
+		}
+		p := r.URL.Path
+		if p == prefix {
+			http.Redirect(w, r, prefix+"/", http.StatusMovedPermanently)
+			return
+		}
+		if strings.HasPrefix(p, prefix+"/") {
+			spaHandler(h).ServeHTTP(w, r)
+			return
+		}
+		decoyHandler().ServeHTTP(w, r)
+	})
+}
+
 // spaHandler serves the built web and falls back to index.html for the
 // client-side router. Reserved prefixes answer 404 like app.py's catch-all,
 // never SPA HTML.
@@ -105,13 +125,17 @@ func appDir() string {
 // The SPA comes from <appDir>/web/dist when that tree exists (a dev checkout,
 // or an explicit OVM_APP_DIR); otherwise — a release install ships only the
 // binary — it is served from the copy embedded via internal/webfs.
-func spaHandler(basePath string) http.Handler {
+func spaHandler(h *panel.Handler) http.Handler {
 	var fsys fs.FS = webfs.Dist()
 	if dist := filepath.Join(appDir(), "web", "dist"); diskIndex(dist) {
 		fsys = os.DirFS(dist)
 	}
 	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		basePath := "/" + strings.Trim(h.URLPath(), "/")
+		if basePath == "/" {
+			basePath = "/dashboard"
+		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "doc" || path == "openapi.json" {
 			http.NotFound(w, r)
@@ -134,14 +158,12 @@ func spaHandler(basePath string) http.Handler {
 			return
 		}
 		html := string(index)
-		if basePath != "" && basePath != "/" {
-			bp := basePath
-			if !strings.HasSuffix(bp, "/") {
-				bp += "/"
-			}
-			if !strings.Contains(html, "<base") {
-				html = strings.Replace(html, "<head>", "<head><base href=\""+bp+"\">", 1)
-			}
+		bp := basePath
+		if !strings.HasSuffix(bp, "/") {
+			bp += "/"
+		}
+		if !strings.Contains(html, "<base") {
+			html = strings.Replace(html, "<head>", "<head><base href=\""+bp+"\">", 1)
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(html))
