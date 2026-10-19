@@ -104,7 +104,7 @@ const ClaimPage = () => {
       </div>
       <main className="login-card">
         <header className="login-card-header">
-          <span className="login-brand-mark" aria-hidden="true"><Logo size={40} /></span>
+          <span className="login-brand-mark" aria-hidden="true"><Logo size={64} /></span>
           <h1 className="login-brand">
             OV<span>Manager</span>
           </h1>

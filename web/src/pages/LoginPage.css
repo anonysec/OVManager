@@ -16,7 +16,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  width: min(420px, 100%);
+  width: min(340px, 100%);
   padding: var(--space-7);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -35,8 +35,8 @@
 .login-brand-mark {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
   margin-bottom: var(--space-1);
   border-radius: var(--radius-lg);
   background: var(--accent-soft);
