@@ -16,7 +16,7 @@ version:
 	sed -i -E "s/^  \"version\": \".*\"/  \"version\": \"$$v\"/" web/package.json; \
 	echo "version -> $$v"
 
-# One binary = the panel (bare invocation) + the `ovm` operator CLI. The SPA is
+# One binary = the panel (bare invocation) + the `ovmanager` operator CLI. The SPA is
 # embedded (internal/webfs/dist), so the build stages web/dist into the package
 # before compiling. web/dist is built only when absent — CI hands it over as an
 # artifact, so the Go job never needs npm.
@@ -26,6 +26,7 @@ build:
 		$(MAKE) -s version; \
 		cd web && npm ci && npm run build; \
 	fi
+	@rm -rf internal/webfs/dist
 	@mkdir -p internal/webfs/dist
 	@cp -a web/dist/. internal/webfs/dist/
 	@cp -a web/templates/subscription.js internal/webfs/templates/subscription.js
