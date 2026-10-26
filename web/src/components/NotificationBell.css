@@ -1,0 +1,60 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ---- NOTIFICATION POPUP (bell) ---- */
+.notification-wrap { position: relative; }
+.notification-popover {
+  position: absolute;
+  inset-inline-end: 0; top: 46px;
+  /* Never wider than the viewport: the wrap sits at the far right of the
+     phone topbar, so a fixed 340px panel would clip off the left edge on
+     320–364px screens. min() keeps the desktop size untouched. */
+  width: min(340px, calc(100vw - 24px));
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+  z-index: var(--z-popover-high);
+  display: none;
+}
+.notification-popover.is-open { display: block; }
+.notif-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px; }
+.notif-head strong { font-family: var(--font-display); font-size: var(--font-size-md); }
+.notif-refresh { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius-md); min-width: 44px; min-height: 44px; width: 44px; height: 44px; cursor: pointer; }
+.notif-refresh:hover { color: var(--orange); border-color: var(--orange); }
+.notif-refresh:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
+.notification-empty { color: var(--muted); text-align: center; padding: 24px 12px; }
+.notification-item .n-btn {
+  margin-top: 8px; width: 100%; padding: 7px; border-radius: 8px;
+  border: 1px solid var(--orange); background: transparent; color: var(--orange);
+  cursor: pointer; font-size: 12px; font-weight: 700;
+}
+.modal-item .n-btn:hover { background: rgba(255,101,15,.12); }
+
+/* The base .notification-item rule lives above; severity backgrounds follow. */
+
+/* WCAG-compliant danger/warning/info backgrounds */
+.notification-item.danger {
+  background: color-mix(in srgb, var(--red) 12%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--red) 30%, var(--line));
+}
+.notification-item.danger .dot { background: var(--red); }
+
+.notification-item.warning {
+  background: color-mix(in srgb, var(--orange) 12%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--orange) 30%, var(--line));
+}
+.notification-item.warning .dot { background: var(--orange); }
+
+.notification-item.info {
+  background: color-mix(in srgb, var(--cyan) 12%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--cyan) 30%, var(--line));
+}
+.notification-item.info .dot { background: var(--cyan); }
+.modal-grid .input-group { margin-bottom: 0; }
+@media (max-width: 640px) {
+  .modal-grid { grid-template-columns: 1fr; }
+}

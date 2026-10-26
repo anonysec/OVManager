@@ -13,9 +13,10 @@ const loadServerStats = () => import('./pages/ServerStats');
 const loadUsers = () => import('./pages/UserManagement');
 const loadNodes = () => import('./pages/NodeManagement');
 const loadSettings = () => import('./pages/Settings');
-const loadAudit = () => import('./pages/AuditLog');
 const loadLogs = () => import('./pages/Logs');
 const loadSetup = () => import('./pages/SetupWizard');
+const loadAdmins = () => import('./pages/Admins');
+const Admins = lazy(loadAdmins);
 
 const loadAuth = () => import('./pages/AuthPage');
 const AuthPage = lazy(loadAuth);
@@ -24,7 +25,6 @@ const ServerStats = lazy(loadServerStats);
 const UserManagement = lazy(loadUsers);
 const NodeManagement = lazy(loadNodes);
 const Settings = lazy(loadSettings);
-const AuditLog = lazy(loadAudit);
 const Logs = lazy(loadLogs);
 const SetupWizard = lazy(loadSetup);
 
@@ -57,7 +57,7 @@ function useRoutePrefetch(isAuthenticated: boolean, userRole: string | null) {
     const cancel = window.cancelIdleCallback || clearTimeout;
 
     const handle = idle(async () => {
-      const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadSettings];
+      const queue: Array<() => Promise<unknown>> = [loadUsers, loadNodes, loadSettings, loadAdmins];
       for (const load of queue) {
         try {
           await load();
@@ -148,8 +148,12 @@ function App({ onReady }: { onReady?: () => void }) {
             }>
             <Route index element={<Page name="dashboard"><ServerStats /></Page>} />
             <Route path="users" element={<Page name="users"><UserManagement /></Page>} />
-            {userRole === 'owner' && <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />}
-            {userRole === 'owner' && <Route path="audit" element={<Page name="audit"><AuditLog /></Page>} />}
+            {userRole === 'owner' && (
+              <>
+                <Route path="nodes" element={<Page name="nodes"><NodeManagement /></Page>} />
+                <Route path="admins" element={<Page name="admins"><Admins /></Page>} />
+              </>
+            )}
             <Route path="settings" element={<Page name="settings"><Settings /></Page>} />
             <Route path="logs" element={<Page name="logs"><Logs /></Page>} />
           </Route>

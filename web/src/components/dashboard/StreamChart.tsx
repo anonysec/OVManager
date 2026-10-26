@@ -196,7 +196,7 @@ export default function StreamChart({ period: initialPeriod = '24h' }: { period?
             </svg>
           </span>
           <div>
-            <h3 className="ds-chart-title-text">{isTraffic ? t('chartMetricTraffic', 'Traffic') : t('chartMetricConns', 'Sessions')}</h3>
+            <h2 className="ds-chart-title-text">{isTraffic ? t('chartMetricTraffic', 'Traffic') : t('chartMetricConns', 'Sessions')}</h2>
             <p className="ds-chart-title-sub">{windowLabel}</p>
           </div>
         </div>

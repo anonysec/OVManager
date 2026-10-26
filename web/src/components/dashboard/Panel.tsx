@@ -10,10 +10,10 @@ function Panel({ title, icon: Icon, action, flush = false, className = '', child
   return (
     <section className={`ds-card ${className}`}>
       <div className="ds-card-head">
-        <h3 className="ds-card-title">
+        <h2 className="ds-card-title">
           {Icon && <span className="ds-card-title-icon" aria-hidden="true"><Icon size={14} /></span>}
           {title}
-        </h3>
+        </h2>
         {action && <div className="ds-card-action">{action}</div>}
       </div>
       <div className={`ds-card-body${flush ? ' ds-card-body--flush' : ''}`}>{children}</div>

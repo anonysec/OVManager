@@ -1,0 +1,420 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* Sidebar scanability */
+.sidebar-section-label {
+  display: block;
+  padding: 15px 14px 5px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.ops-sidebar {
+  background: var(--bg-elevated);
+  border-inline-end-color: var(--border);
+}
+
+.ops-sidebar .sidebar-brand {
+  margin-top: 10px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.ops-sidebar .sidebar-nav {
+  padding-top: 0;
+}
+
+.ops-sidebar .sidebar-nav-list {
+  gap: 2px;
+}
+
+.ops-sidebar .sidebar-nav-link {
+  min-height: 42px;
+  border: 1px solid transparent;
+}
+
+.ops-sidebar .sidebar-nav-link.active {
+  border-color: color-mix(in srgb, var(--accent-color) 20%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-color);
+}
+
+.ops-sidebar .sidebar-nav-link.active::after {
+  position: absolute;
+  top: 9px;
+  inset-inline-end: 0;
+  bottom: 9px;
+  width: 3px;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
+  background: var(--accent-color);
+  content: '';
+}
+
+.ops-sidebar .sidebar-nav-link:hover:not(.active) {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* ── Sidebar profile & collapse ─────────────────────────────────────── */
+.sidebar-footer {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-collapse-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-collapse-bar:hover {
+  background: var(--surface-2);
+  color: var(--accent-color);
+  border-color: var(--border);
+}
+
+.sidebar-collapse-bar svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.ops-sidebar--collapsed .sidebar-collapse-bar {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.ops-sidebar--collapsed .sidebar-collapse-label {
+  display: none;
+}
+
+.sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  position: relative;
+}
+
+/* Avatar with status pulse ring */
+.sidebar-profile-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+}
+
+.sidebar-profile-avatar .avatar-md {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 60%, #fff));
+  color: #1b1209;
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Pulse indicator: green for Owner, blue for Admin/Operator */
+.sidebar-profile-pulse {
+  position: absolute;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+.sidebar-profile-pulse.is-owner {
+  background: #22c55e; /* green */
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+.sidebar-profile-pulse.is-operator {
+  background: #3b82f6; /* blue */
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Sole owner badge on the avatar */
+.sidebar-owner-badge {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  border: 2px solid var(--bg-elevated);
+  z-index: 2;
+}
+
+/* Info block (expanded only) */
+.sidebar-profile-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidebar-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sidebar-profile-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-profile-role-pill {
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+.sidebar-profile-role-pill.is-owner {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent-color);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Stats row — pill chips */
+.sidebar-profile-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.stat-chip-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  color: var(--accent-color);
+}
+
+.stat-chip-value {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Logout button — generous touch target, visible in both states */
+.sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebar-logout-btn:hover {
+  background: color-mix(in srgb, var(--danger-color) 14%, transparent);
+  color: var(--danger-color);
+}
+
+.sidebar-logout-btn:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.sidebar-logout-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Collapsed state: avatar only, logout shown as compact icon */
+.ops-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width, 72px);
+}
+
+.ops-sidebar--collapsed .sidebar-section-label {
+  display: none !important;
+}
+
+.ops-sidebar--collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 16px 0;
+  gap: 0;
+}
+
+.ops-sidebar--collapsed .sidebar-brand-text {
+  display: none !important;
+}
+
+.ops-sidebar--collapsed .sidebar-nav {
+  padding: 8px 0;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 4px auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-label {
+  display: none !important;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-icon {
+  margin: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link.active::after {
+  display: none;
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link.active {
+  background: var(--accent-soft);
+  color: var(--accent-color);
+  border-color: color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+.ops-sidebar--collapsed .sidebar-nav-link:hover:not(.active) {
+  background: var(--surface-2);
+}
+
+.ops-sidebar--collapsed .sidebar-collapse-bar {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.ops-sidebar--collapsed .sidebar-footer {
+  padding: 12px 0;
+  align-items: center;
+}
+
+.ops-sidebar--collapsed .sidebar-profile {
+  justify-content: center;
+}
+
+html[dir="rtl"] .sidebar-collapse-bar svg {
+  transform: scaleX(-1);
+}
+
+.ops-sidebar--collapsed .sidebar-profile-info {
+  display: none;
+}
+
+.ops-sidebar--collapsed .sidebar-logout-btn {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  border-radius: var(--radius-md);
+}
+
+html[dir="rtl"] .ops-sidebar--mobile {
+  transform: translateX(100%);
+}
+
+html[dir="rtl"] .ops-sidebar--mobile.ops-sidebar--open {
+  transform: translateX(0);
+}
+
+/* No RTL overrides needed for the main column or topbar: logical properties
+   (margin-inline-start / inset-inline-start) flip with dir automatically. The
+   physical versions that used to live here also carried a stale 60px rail. */
+
+/* ── Phone: off-canvas sidebar + hamburger (no overlap) ────────────────
+   767.98px matches the JS threshold (innerWidth < 768); the old 900px value
+   hid the rail while JS still laid out a desktop gutter. */
+@media (max-width: 767.98px) {
+  .ops-topbar-minimal {
+    inset-inline: 0 !important;
+  }
+
+  .ops-main-container,
+  .ops-main-container--collapsed {
+    margin-inline: 0 !important;
+  }
+
+  .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(-100%);
+  }
+
+  html[dir="rtl"] .ops-sidebar:not(.ops-sidebar--mobile) {
+    transform: translateX(100%);
+  }
+
+  .sidebar-hamburger {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+  }
+}
+
+/* Bottom nav column counts (owner sees Audit + Maintenance too). */
+@media (max-width: 767.98px) {
+  .mobile-nav--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .mobile-nav--7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}

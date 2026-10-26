@@ -1,0 +1,268 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* The content receives matching safe-area padding, so the last row is not
+   hidden behind the bottom bar. */
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .mobile-nav {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--z-mobile-nav);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+    min-height: 66px;
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+    box-shadow: 0 -12px 30px rgba(0, 0, 0, .18);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 50px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 5px 3px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: var(--font-size-2xs);
+    font-weight: 800;
+    line-height: 1;
+    transition: color .15s ease, background .15s ease, border-color .15s ease;
+  }
+
+  .mobile-nav-link svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .mobile-nav-link span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-nav-link:hover {
+    color: var(--text-primary);
+    background: var(--surface-2);
+  }
+
+  .mobile-nav-link.active {
+    border-color: color-mix(in srgb, var(--accent-color) 22%, transparent);
+    background: var(--accent-color-transparent);
+    color: var(--accent-color);
+  }
+
+  .ops-main-content,
+  .ops-main-content--collapsed,
+  .ops-main-content--mobile {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Keep the mobile search/filter toolbar in normal flow. It may scroll away,
+     while the bottom navigation remains available for the next page. */
+  .search-pagination-controls {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+html[data-theme="light"] .mobile-nav {
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 -12px 30px rgba(20, 30, 50, .10);
+}
+
+@media (max-width: 767.98px) {
+  .mobile-nav--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mobile-nav--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* ── EditNodeModal: "apply settings on node" checkbox row ── */
+.modal-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.modal-check-row input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  accent-color: var(--accent-color);
+}
+
+.modal-check-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.ops-alert-center.has-alerts {
+  border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-color) 7%, var(--surface-1)), var(--surface-1));
+}
+
+.ops-alert-center.is-clear {
+  border-color: color-mix(in srgb, var(--success-color) 22%, var(--border));
+}
+
+.ops-alert-center.is-clear .ops-alert-mini-icon {
+  background: color-mix(in srgb, var(--success-color) 14%, transparent);
+  color: var(--success-color);
+}
+
+.ops-alert-center.has-alerts .ops-alert-mini-text {
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RTL — technical values stay LTR inside RTL text
+   Numbers, IPs, ports, URLs, dates render left-to-right even
+   when the surrounding UI is right-to-left.
+═══════════════════════════════════════════════════════════ */
+html[dir="rtl"] .node-address,
+html[dir="rtl"] .ops-stat-cell strong,
+html[dir="rtl"] .security-metric strong,
+html[dir="rtl"] .sp-code,
+html[dir="rtl"] .udetail-link,
+html[dir="rtl"] .sp-feed-time,
+html[dir="rtl"] .sp-backup-size,
+html[dir="rtl"] .n-time,
+html[dir="rtl"] .col-last-online,
+html[dir="rtl"] .latency-note,
+html[dir="rtl"] .mini-line,
+html[dir="rtl"] .list-table td .traffic-limit,
+html[dir="rtl"] .sp-url-preview a {
+  direction: ltr;
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* Form inputs: keep placeholder/typed content flowing RTL, but
+   URLs/numbers (e.g. port fields) stay LTR per-input. */
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  text-align: start;
+}
+
+html[dir="rtl"] input[type="number"],
+html[dir="rtl"] input[name*="port"],
+html[dir="rtl"] input[name*="token"],
+html[dir="rtl"] input[name*="key"],
+html[dir="rtl"] input[type="password"] {
+  direction: ltr;
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* Modal forms: labels flow right, inputs align to the start. */
+html[dir="rtl"] .modal-form .input-group,
+html[dir="rtl"] .sp-field {
+  text-align: start;
+}
+
+/* Notification popover + dropdowns anchor to the inline-start. */
+html[dir="rtl"] .notification-popover {
+  left: 0;
+  right: auto;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI CONCEPTS — route progress, count-up, meters, drawer,
+   quick actions, filters, density, CSV, chart, mobile KPI
+═══════════════════════════════════════════════════════════ */
+
+/* The track reuses the table divider line so the bar reads as part of the
+   grid; the fill is the only colour. */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.row-quick-menu button.danger:hover { background: color-mix(in srgb, var(--danger-color) 12%, transparent); color: var(--danger-color); }
+.undo-toast .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success-color); }
+.undo-toast .tick { color: var(--muted); font-size: var(--font-size-xs); font-variant-numeric: tabular-nums; }
+
+/* ── Filter chips ───────────────────────────────────────── */
+
+.filter-chip.active {
+  /* Accent-soft fill rather than 14% transparent: at 14% a selected chip was
+     too faint to pick out when several are stacked. The accent border, text
+     and soft shadow lift it clear of the row. */
+  background: var(--accent-soft);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.filter-chip .count { color: var(--muted); font-size: var(--font-size-2xs); }
+.filter-chip.active .count { color: var(--accent-color); }
+.density-toggle button.active { background: color-mix(in srgb, var(--accent-color) 15%, transparent); color: var(--accent-color); }
+
+/* compact table mode */
+.table-compact .list-table td,
+.table-compact .user-list-table td,
+.table-compact .list-table thead th,
+.table-compact .user-list-table thead th,
+
+/* ── Dashboard quick actions ────────────────────────────── */
+.dashboard-quick-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+
+/* ── Accent picker ──────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   Loading & failure states
+   Skeletons, per-section error cards and the route-level page
+   loader. Kept together so the "what does a pending/broken
+   section look like" answer lives in one place.
+═══════════════════════════════════════════════════════════ */
+
+/* ── Touch ergonomics (phones) ────────────────────────────────────────
+   44px hit targets for the controls people actually tap, and 16px inputs
+   so iOS Safari does not zoom the form on focus. Desktop is untouched. */
+@media (max-width: 767.98px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .btn,
+  button,
+  .sidebar-nav-link,
+  .mobile-nav a,
+  .dt-rowlink,
+  .nm-actions button,
+  .toast {
+    min-height: 44px;
+  }
+
+  .mobile-nav a {
+    min-height: 52px;
+  }
+}

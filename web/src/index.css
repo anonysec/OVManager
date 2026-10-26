@@ -280,6 +280,12 @@
   font-size: var(--font-size-sm);
   font-weight: 500;
   transition: color 0.15s ease;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 6px;
 }
 
 .ops-breadcrumb-link:hover {
@@ -1090,3 +1096,730 @@ html[dir="rtl"] .ops-sidebar--mobile {
 .topbar-brand .brand-accent {
   color: var(--accent-color, var(--orange));
 }
+
+/* ---- sortable table headers ---- */
+.list-table th.sortable { user-select: none; padding: 0; }
+
+/* A real <button> so it is keyboard reachable and announces aria-sort; it
+   fills the cell so the whole header area stays clickable. */
+.list-table th.sortable .th-sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.list-table th.sortable .th-sort-btn:hover { color: var(--accent); }
+.list-table th.sortable .th-sort-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.sort-indicator.is-idle { color: var(--text-muted); opacity: .7; }
+.list-table th.sortable .th-sort-btn:hover .sort-indicator.is-idle { opacity: .9; color: var(--accent); }
+.sort-indicator.is-asc,
+.sort-indicator.is-desc { color: var(--orange); opacity: 1; }
+.sort-indicator.is-asc { background: var(--orange-soft, rgba(255,122,30,.16)); }
+/* Legacy .sort-ic class kept for any out-of-tree table that still uses it. */
+.list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-inline-start: 4px; color: var(--orange); }
+.list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
+.list-table tr.selected { background: rgba(255,122,30,.08); }
+.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: linear-gradient(135deg, var(--orange), #ffb466); color: #15110a; font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
+html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(135deg, #ff7e2e, #ffb466); color: var(--accent-contrast); }
+/* Status pills: success / info / warning / danger / muted, each as a soft
+   fill plus its matching read-safe text tone.
+   The idle mapping used --surface-3 + --text-secondary, which scored 4.45:1
+   in light mode — right at the AA floor, and indistinguishable from "muted".
+   info-soft + info-text clears 4.5:1 in both themes. */
+.status-pill.online, .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
+.status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
+.status-pill.offline, .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
+.status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
+.expiry-soon { color: #ffb454; font-weight: 700; }
+
+.flag-icon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.flag-icon svg {
+  width: 20px;
+  height: 15px;
+  display: block;
+}
+.list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
+.list-table thead th { position: sticky; top: 0; background: var(--panel); color: var(--text-secondary); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; padding: 9px 12px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); font-weight: 600; }
+.list-table thead th:first-child { border-top-left-radius: 10px; }
+.list-table thead th:last-child { border-top-right-radius: 10px; }
+.list-table td { padding: 9px 12px; font-size: var(--font-size-sm); white-space: nowrap; }
+.list-table tbody tr:hover td { background: rgba(255,255,255,.04); }
+.list-table td[data-label="Total Traffic"], .list-table td[data-label="Expiry Date"], .list-table td[data-label="Last Online"] { font-variant-numeric: tabular-nums; }
+/* .row-avatar canonical definition below (list-table section) */
+
+/* Excel-style lists (users / nodes / audit).
+   NOTE: .list-table.X selectors (not bare .X) — the older base .list-table
+   th/td rules further down have the SAME specificity as the bare class
+   selectors, and would override these paddings/heights by source order.
+   Prefixing with .list-table keeps the intended compact metrics applied. */
+.list-table.user-list-table, .list-table.node-list-table, .list-table.audit-table { border-collapse: collapse !important; border-spacing: 0 !important; min-width: 720px; font-variant-numeric: tabular-nums; }
+.list-table.user-list-table thead th, .list-table.node-list-table thead th, .list-table.audit-table thead th {
+  /* Offset 0: the scroll container is .list-table-container, not the page. */
+  position: sticky; top: 0; z-index: 5;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: var(--font-size-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  text-align: start; white-space: nowrap;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-bottom: 2px solid var(--line);
+}
+.list-table.user-list-table thead th:first-child, .list-table.node-list-table thead th:first-child, .list-table.audit-table thead th:first-child { border-top-left-radius: 0; }
+.list-table.user-list-table thead th:last-child, .list-table.node-list-table thead th:last-child, .list-table.audit-table thead th:last-child { border-top-right-radius: 0; }
+.list-table.user-list-table td, .list-table.node-list-table td, .list-table.audit-table td {
+  padding: 6px 10px;
+  font-size: var(--font-size-sm); line-height: 1.3;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  height: 36px;
+  vertical-align: middle;
+  text-align: center;
+}
+.list-table.user-list-table td[data-label="Username"],
+.list-table.user-list-table td[data-label="Name"],
+.list-table.node-list-table td.node-name-cell,
+.list-table.audit-table td.audit-target { text-align: start; }
+.list-table.user-list-table tbody tr, .list-table.node-list-table tbody tr, .list-table.audit-table tbody tr { background: var(--panel); }
+.list-table.user-list-table tbody tr:nth-child(even), .list-table.node-list-table tbody tr:nth-child(even), .list-table.audit-table tbody tr:nth-child(even) { background: rgba(255,255,255,.022); }
+.list-table.user-list-table tbody tr:hover td, .list-table.node-list-table tbody tr:hover td, .list-table.audit-table tbody tr:hover td { background: rgba(255,122,30,.07); }
+.list-table.user-list-table tbody tr.selected td { background: rgba(255,122,30,.12); }
+.list-table.user-list-table .col-check, .list-table.node-list-table .col-check { width: 42px; text-align: center; padding: 0; }
+.list-table.user-list-table .col-check input, .list-table.node-list-table .col-check input { width: 15px; height: 15px; cursor: pointer; }
+.list-table.user-list-table td.traffic-cell { display: flex; justify-content: center; align-items: center; gap: 8px; min-width: 150px; font-weight: 600; color: var(--text); text-align: center; }
+.list-table.user-list-table td[data-label="Max Logins"] { text-align: center; }
+.list-table.user-list-table td[data-label="Expiry Date"] { text-align: center; }
+.list-table.user-list-table td[data-label="Last Online"] { text-align: center; }
+.list-table.user-list-table td[data-label="Username"] { text-align: start; }    /* keep left */
+.list-table.user-list-table td[data-label="Owner"] { text-align: start; }      /* keep left */
+.list-table.user-list-table .traffic-used { font-weight: 600; font-variant-numeric: tabular-nums; }
+.list-table.user-list-table .traffic-limit { color: var(--muted); font-weight: 400; font-size: var(--font-size-xs); margin-inline-start: 4px; font-variant-numeric: tabular-nums; }
+.list-table.user-list-table .avatar-sm { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: rgba(255,122,30,.16); color: var(--orange); font-weight: 800; font-size: 12px; }
+.list-table.user-list-table .actions-cell { text-align: start; }
+
+/* icon-btn overrides for list-tables — tighter, smaller hit area */
+.list-table.user-list-table .icon-btn,
+.list-table.node-list-table .icon-btn,
+.list-table.audit-table .icon-btn {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 6px !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--line) !important;
+  cursor: pointer;
+  transition: all .12s ease;
+  display: inline-grid;
+  place-items: center;
+}
+.list-table.user-list-table .icon-btn:hover,
+.list-table.node-list-table .icon-btn:hover,
+.list-table.audit-table .icon-btn:hover {
+  background: rgba(255,255,255,.08) !important;
+  border-color: var(--orange) !important;
+  color: var(--orange) !important;
+}
+.list-table.user-list-table .icon-btn.danger,
+.list-table.node-list-table .icon-btn.danger,
+.list-table.audit-table .icon-btn.danger {
+  color: var(--danger-text) !important;
+  border-color: var(--danger-soft) !important;
+  background: var(--danger-soft) !important;
+}
+.list-table.user-list-table .icon-btn.danger:hover,
+.list-table.node-list-table .icon-btn.danger:hover,
+.list-table.audit-table .icon-btn.danger:hover {
+  color: var(--danger-contrast) !important;
+  background: var(--danger-text) !important;
+  border-color: var(--danger-text) !important;
+}
+/* Resting state is muted on line; hover lifts to brand colour, or to danger
+   for the delete action. The .danger variant carries a soft danger fill at
+   rest, so it is distinct from edit without relying on hover. */
+.icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 7px !important; padding: 6px !important; cursor: pointer; transition: all .12s ease; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; }
+.icon-btn:hover { background: rgba(255,255,255,.08) !important; color: var(--orange) !important; border-color: var(--orange) !important; }
+.icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
+.icon-btn.danger:hover { color: var(--danger-contrast) !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
+.icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
+html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
+.notif-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.notif-head strong { font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--text); }
+.notif-refresh { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: var(--font-size-md); min-width: 44px; min-height: 44px; width: 44px; height: 44px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; }
+.notif-refresh:hover { color: var(--orange); background: rgba(255,255,255,.06); }
+.notif-refresh:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
+.notification-empty { padding: 18px 12px; color: var(--muted); text-align: center; font-size: var(--font-size-sm); }
+.notification-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 8px;
+  background: rgba(255,255,255,.02);
+  text-decoration: none; color: var(--text); transition: background 0.15s ease;
+}
+.notification-item:last-child { margin-bottom: 0; }
+.notification-item:hover { background: rgba(255,255,255,.05); }
+.notification-item .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; }
+.notification-item .n-title { font-size: var(--font-size-sm); font-weight: 600; line-height: 1.3; color: var(--text); }
+.notification-item .n-time { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+/* Deliberately free of width/padding rules: duplicating them here caused
+   cascade conflicts that made the portaled menu render wider/taller than the
+   JS positioning expected. */
+.status-pill.expired { background: var(--warning-soft); color: var(--warning-text); }
+.toast-stack {
+  position: fixed;
+  inset-inline-end: 20px;
+  bottom: 20px;
+  display: grid;
+  gap: 10px;
+  z-index: var(--z-toast);
+}
+@media (max-width: 767.98px) {
+  .toast-stack {
+    bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
+.toast {
+  width: min(360px, calc(100vw - 40px));
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--red);
+  border-inline-start: 5px solid var(--red);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 18px 40px rgba(0,0,0,.35);
+}
+.toast strong { display: block; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+.toast.error, .toast.Error { border-color: var(--red); border-inline-start: 5px solid var(--red); }
+.toast.error strong, .toast.Error strong { color: var(--red); }
+.toast span { color: var(--text); font-size: var(--font-size-sm); opacity: 0.9; }
+.toast.success { border-color: var(--green); border-inline-start: 5px solid var(--green); }
+.toast.success strong { color: var(--green); }
+.toast.warning { border-color: var(--orange); border-inline-start: 5px solid var(--orange); background: color-mix(in srgb, var(--orange) 10%, var(--panel)); }
+.toast.warning strong { color: var(--orange); }
+.settings-list.small p { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.health-table-wrap .list-table { min-width: 720px; }
+.diagnostic-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 10px; }
+.diagnostic-summary span { border:1px solid var(--line); background: rgba(255,255,255,.035); border-radius:999px; padding:7px 10px; color: var(--text); }
+.diagnostic-recommendation { color: var(--orange); font-weight:800; margin: 8px 0 16px; }
+.modal-content h4 { margin: 14px 0 8px; }
+
+body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family); }
+
+.health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.mini-line.empty { background: rgba(255,255,255,.04); border-radius: 6px; }
+.ntag.danger { background: color-mix(in srgb, var(--red) 20%, var(--panel)); color: var(--red); border-color: color-mix(in srgb, var(--red) 50%, transparent); font-weight: 600; }
+.ntag.warning { background: color-mix(in srgb, var(--orange) 20%, var(--panel)); color: var(--orange); border-color: color-mix(in srgb, var(--orange) 50%, transparent); font-weight: 600; }
+.ntag.info { background: color-mix(in srgb, var(--cyan) 20%, var(--panel)); color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); font-weight: 600; }
+
+
+/* ---- SEARCH BAR ---- */
+.search-pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* ---- Date input with shortcuts ---- */
+
+.date-chip {
+  padding: 3px 10px; border-radius: 6px; font-size: var(--font-size-xs); font-weight: 700;
+  border: none; background: rgba(255,255,255,.06); color: var(--muted);
+  cursor: pointer; transition: all .12s ease; letter-spacing: .02em;
+}
+.date-chip:hover { color: var(--orange); background: rgba(255,122,30,.10); }
+/* ---- Login shortcut chips ---- */
+
+.shortcut-chip.active { color: var(--orange); background: rgba(255,122,30,.14); }
+/* ---- Search + filters inline ---- */
+.avatar-xs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #000;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+.list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.list-table thead {
+  background: var(--bg);
+}
+.list-table th {
+  padding: 12px 14px;
+  text-align: start;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.list-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+.list-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.list-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.status-pill.ok { background: var(--success-soft); color: var(--success-text); }
+.status-pill.idle { background: var(--info-soft); color: var(--info-text); }
+.status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
+.status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ===== PanelSkeleton (shared) ===== */
+.panel-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.skeleton-shimmer {
+  display: block;
+  height: 14px;
+  background: linear-gradient(90deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.06) 100%);
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== Focus-visible styles for accessibility ===== */
+.btn:focus-visible,
+.ops-userbar button:focus-visible,
+.icon-btn:focus-visible,
+.modal-close:focus-visible,
+.search-field input:focus-visible,
+.palette-item:focus-visible,
+input[type="checkbox"]:focus-visible,
+.code-copy:focus-visible,
+.date-chip:focus-visible,
+.notif-refresh:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-badge {
+    transition: none;
+  }
+  .skeleton-shimmer {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   UX polish pass — kept at the end so it wins over the older
+   concept styles above on equal specificity.
+   ============================================================ */
+
+.ops-main-content {
+  /* Top padding clears the fixed 64px topbar so page content (headings,
+     toolbars, table headers) never slides underneath it while scrolling. */
+  padding: calc(var(--topbar-h) + 24px) clamp(16px, 3vw, 42px) 48px;
+  background: var(--bg);
+}
+
+.ops-main-content > * {
+  width: 100%;
+  max-width: 1480px;
+  margin-inline: auto;
+}
+
+.is-spinning {
+  animation: spin .8s linear infinite;
+}
+
+.quick-link-icon.is-cyan {
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--cyan);
+}
+
+.quick-link-icon.is-neutral {
+  background: color-mix(in srgb, var(--text-secondary) 13%, transparent);
+  color: var(--text-secondary);
+}
+
+/* Make panels read as related sections instead of floating blocks. */
+.ops-overview-grid,
+
+/* Shared management toolbar (live: .search-pagination-controls + .search-field) */
+.search-pagination-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 60px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+}
+
+.search-field {
+  display: flex;
+  position: relative;
+  align-items: center;
+}
+
+.search-field .search-icon {
+  position: absolute;
+  inset-inline-start: 13px;
+  z-index: 1;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* The .search-field wrapper owns the border; the inner input stays minimal —
+   no border, no focus ring, no fixed height — so the wrapper's
+   height/padding/border do all the work. */
+.search-field .search-input {
+  width: 100%;
+  height: 100%;
+  padding: 0 0 0 26px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  outline: none;
+  box-shadow: none !important;
+  transition: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-field .search-input:focus {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+.seg-toggle .seg-tab.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.results-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* The count is recomputed at deferred priority while typing. Fade it so the
+   number is visibly provisional instead of silently one keystroke behind. */
+.results-meta.is-stale {
+  opacity: .55;
+  transition: opacity .12s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .results-meta.is-stale { transition: none; }
+}
+
+.results-meta strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.toolbar-clear {
+  margin-inline-start: 6px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent-color-transparent);
+  color: var(--accent-color);
+  font: 700 11px/1 var(--font-family);
+  cursor: pointer;
+}
+
+.toolbar-clear:hover {
+  background: color-mix(in srgb, var(--accent-color) 22%, transparent);
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.85;
+  animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .button-spinner { animation-duration: 1.4s; }
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .55; transform: scale(.86); }
+}
+
+@keyframes orbit-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 767.98px) {
+  /* Phones: override the tall desktop top padding (topbar offset lives in
+     .ops-main-content already); the bottom is replaced by the safe-area
+     padding rule further down. */
+  .ops-main-content {
+    padding: 20px 14px 36px;
+  }
+
+  /* The dashboard node table is too wide for a phone panel — make it scroll
+     inside its own box instead of blowing up the whole page width. */
+  .nodes-map-panel .ops-table.compact {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* One-row topbar on phones: [hamburger][brand][…userbar…]. The brand keeps
+     a visible wordmark and a small inline-start padding (logical, so it
+     mirrors in RTL) so search/lang/theme/bell all fit on the same line. */
+  .ops-topbar-minimal {
+    min-height: 60px;
+    padding-inline: 56px 12px;
+    padding-block: 9px;
+  }
+
+  .sidebar-hamburger {
+    top: 10px;
+    inset-inline-start: 8px;
+    width: 40px;
+    height: 40px;
+  }
+
+  html[dir="rtl"] .sidebar-hamburger {
+    left: auto;
+    right: 8px;
+  }
+
+  .ops-topbar-minimal .ops-userbar {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  /* Higher specificity than the base .topbar-brand rule so the tighter
+     phone sizing actually applies. */
+  .ops-topbar-minimal .profile-trigger-chevron.is-open {
+  transform: rotate(180deg);
+  color: var(--accent-color);
+}
+}
+
+/* The only exposed theme choices are system default, light, and dark. */
+.theme-pill.ultra,
+[data-theme-option="ultra"] {
+  display: none !important;
+}
+
+.security-review-item.danger .security-review-dot,
+.alert-center-item.danger .alert-center-item-dot {
+  background: var(--danger-color);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color) 55%, transparent);
+}
+
+/* Soft tinted surface, not solid red, so the row text stays readable. */
+
+.alert-center-item.danger {
+  border-color: color-mix(in srgb, var(--danger-color) 36%, var(--border));
+  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
+}
+
+.alert-center-item.danger .alert-center-item-copy strong {
+  color: var(--text-primary);
+}
+
+.alert-center-item.danger .alert-center-item-copy small {
+  color: var(--text-muted);
+}
+
+.ops-alert-center.is-clear {
+  border-color: color-mix(in srgb, var(--success-color) 25%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--success-color) 6%, var(--surface-1)), var(--surface-1));
+}
+
+.is-clear .alert-center-icon {
+  background: color-mix(in srgb, var(--success-color) 14%, transparent);
+  color: var(--success-color);
+}
+
+.alert-center-item.danger .alert-center-item-dot { background: var(--danger-color); }
+
+.alert-center-item.danger .alert-center-severity { color: var(--danger-color); }
+
+
+
+@media (max-width: 767.98px) {
+  .ops-breadcrumb {
+    display: none !important;
+  }
+
+  .ops-current-page {
+    display: none;
+  }
+}
+
+html[data-theme="light"] .profile-trigger:hover,
+html[data-theme="light"] .profile-trigger.active {
+  background: var(--surface-2);
+}
+
+/* Keep the danger tint (readable red-on-light) even where the light theme
+   forces a neutral panel background. */
+html[data-theme="light"] .alert-center-item.danger {
+  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
+}
+
+html[data-theme="light"] .security-review-item.danger {
+  background: color-mix(in srgb, var(--danger-color) 11%, #f7f9fc);
+}
+
+
+/* Additional overrides moved from styles.css */
+/* Scoped to buttons: painting security/alert rows, badges or metric values
+   with a solid red makes them unreadable. */
+button.danger { background: var(--red) !important; }
+.modal-overlay { background: rgba(0,0,0,.75) !important; }
+.modal, .modal-content { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; }
+
+/* ---- LIGHT MODE (proper palette swap) ---- */
+html[data-theme="light"] body { background: var(--bg); color: var(--text-primary); }
+
+html[data-theme="light"] .list-table tbody tr:hover td { background: rgba(255,122,30,.07); }
+html[data-theme="light"] .modal-window, html[data-theme="light"] .notification-popover { background: var(--surface-1); }
+html[data-theme="light"] .search-field { background: #f4f6f9; border-color: #dfe3ea; }
+
+@media (max-width: 1180px) {
+  .ops-userbar { justify-content: flex-start; }
+  body { overflow: auto; }
+}
+@media (max-width: 767.98px) {
+  .health-grid { grid-template-columns: 1fr; }
+}
+
+.btn-danger { background: var(--red); color: var(--danger-contrast); border: 1px solid var(--red); }
+.btn-danger:hover { filter: brightness(1.08); }
+
+/* ===== Light mode enhancements ===== */
+html[data-theme="light"] body {
+  background-image:
+    radial-gradient(1100px 600px at 12% -8%, rgba(255,122,30,.10), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgba(23,200,235,.08), transparent 55%);
+}
+html[data-theme="light"] .ops-panel { background: var(--surface-1); box-shadow: 0 18px 34px rgba(20,30,50,.10); }
+
+html[data-theme="light"] .list-table thead th,
+html[data-theme="light"] .user-list-table thead th,
+html[data-theme="light"] .node-list-table thead th,
+html[data-theme="light"] .audit-table thead th { background: #eef3f9; color: #5b6473; }
+html[data-theme="light"] .user-list-table tbody tr,
+html[data-theme="light"] .node-list-table tbody tr,
+html[data-theme="light"] .audit-table tbody tr { background: var(--surface-1); }
+html[data-theme="light"] .user-list-table tbody tr:nth-child(even),
+html[data-theme="light"] .node-list-table tbody tr:nth-child(even),
+html[data-theme="light"] .audit-table tbody tr:nth-child(even) { background: #fbfcfe; }
+html[data-theme="light"] .user-list-table td,
+html[data-theme="light"] .node-list-table td,
+html[data-theme="light"] .audit-table td { color: #11161f; border-color: #e3e8ef; }
+html[data-theme="light"] .user-list-table tbody tr:hover td,
+html[data-theme="light"] .node-list-table tbody tr:hover td,
+html[data-theme="light"] .audit-table tbody tr:hover td { background: rgba(255,122,30,.07); }
+html[data-theme="light"] .input-group input,
+html[data-theme="light"] .input-group select,
+html[data-theme="light"] .search-input { background: var(--surface-1) !important; color: #11161f !important; border-color: var(--border) !important; }
+html[data-theme="light"] .dot { background: #aab2bf; }
+html[data-theme="light"] .modal, html[data-theme="light"] .modal-content { background: var(--surface-1); }
+html[data-theme="light"] .notification-popover { background: var(--surface-1); color: #11161f; box-shadow: 0 24px 60px rgba(20,30,50,.18); }
+html[data-theme="light"] .notification-item { border-color: #e3e8ef; }
+/* --accent-contrast already resolves per theme; no override needed. */
+html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
+html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
+/* Light theme danger icon-btn keeps the soft-danger fill + foreground so the
+   destructive action stays distinct from edit. */
+html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
+html[data-theme="light"] .icon-btn.danger:hover { color: var(--danger-contrast) !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
+html[data-theme="light"] .empty-state { color: #5b6473; }
+html[data-theme="light"] .ops-panel header span.has-tip, html[data-theme="light"] .panel-tip { background: rgba(30,40,60,.14); }
+html[data-theme="light"] .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); font-weight: 700; }
+html[data-theme="light"] .seg-toggle button.active { color: var(--accent-contrast); }
+/* ---- Light mode: topbar + brand visibility ---- */
+html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
+html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !important; }
+/* ---- Light mode: borderless dashboard panels (shadow only) ---- */
+html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
+html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg) !important; }
+/* ---- Light mode: these surfaces drop their shadow entirely ---- */
+html[data-theme="light"] .notification-popover,
+html[data-theme="light"] .user-list-table,
+html[data-theme="light"] .node-list-table,
+html[data-theme="light"] .audit-table { box-shadow: none !important; }
+
+html[dir="rtl"] .ops-userbar { justify-content: flex-start; }
+/* modals become right-to-left with right-aligned text + inputs */
+html[dir="rtl"] .modal-window { direction: rtl; text-align: right; }
+html[dir="rtl"] .modal-window .input-group label { text-align: right; display: block; }
+html[dir="rtl"] .modal-window input,
+html[dir="rtl"] .modal-window select,
+html[dir="rtl"] .modal-window textarea { text-align: right; }
+html[dir="rtl"] .modal-window .modal-footer { display: flex; flex-direction: row-reverse; justify-content: flex-start; gap: 10px; }
+
+
+
+.row-menu-item.danger:hover { background: rgba(255,83,104,.10); color: #ff7a8a; }

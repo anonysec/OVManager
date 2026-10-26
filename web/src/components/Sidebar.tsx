@@ -5,7 +5,7 @@ import type { IconType } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronsLeft, FiChevronsRight,
-  FiMenu, FiBarChart2, FiFileText,
+  FiMenu, FiBarChart2, FiFileText, FiShield,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -108,6 +108,7 @@ const Sidebar = () => {
     { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
     ...(isOwner ? [
       { to: '/nodes',   label: t('navNodes',    'Nodes'),    icon: FiServer,             group: t('navGroupManage',   'Manage')   },
+      { to: '/admins',  label: t('navAdmins',   'Admins'),   icon: FiShield,             group: t('navGroupManage',   'Manage')   },
     ] : []),
     { to: '/settings',  label: t('navSettings', 'Settings'), icon: FiSettings,           group: t('navGroupSystem',   'System')   },
     { to: '/logs',      label: t('navLogs',     'Logs'),        icon: FiFileText,       group: t('navGroupSystem',   'System')   },
@@ -195,12 +196,13 @@ const Sidebar = () => {
             <div className="sidebar-profile-avatar" title={collapsed ? username : undefined}>
               <span className="avatar-md" aria-hidden="true">{username.slice(0, 1).toUpperCase() || '?'}</span>
               <span className={`sidebar-profile-pulse ${isOwner ? 'is-owner' : 'is-operator'}`} aria-hidden="true" />
+              {isOwner && <span className="sidebar-owner-badge" aria-label={t('soleOwner', 'Sole owner / administrator')}>👑</span>}
             </div>
             <div className="sidebar-profile-info" aria-hidden={collapsed}>
               <div className="sidebar-profile-name-row">
                 <strong className="sidebar-profile-name">{username}</strong>
-                <span className="sidebar-profile-role-pill">
-                  {isOwner ? t('owner', 'Owner') : t('adminShort', 'Admin')}
+                <span className={`sidebar-profile-role-pill${isOwner ? ' is-owner' : ''}`}>
+                  {isOwner ? t('soleOwnerShort', 'Sole Owner') : t('adminShort', 'Admin')}
                 </span>
               </div>
               <div className="sidebar-profile-stats">
