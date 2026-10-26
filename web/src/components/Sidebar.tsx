@@ -207,10 +207,12 @@ const Sidebar = () => {
                 <span className="stat-chip" title={t('totalUsers', 'Total users')}>
                   <FiUsers className="stat-chip-icon" aria-hidden="true" />
                   <span className="stat-chip-value">{stats.totalUsers}</span>
+                  <span className="sr-only">{`${stats.totalUsers} ${t('totalUsers', 'total users')}`}</span>
                 </span>
                 <span className="stat-chip" title={t('totalUsage', 'Total usage')}>
                   <FiBarChart2 className="stat-chip-icon" aria-hidden="true" />
                   <span className="stat-chip-value">{formatUsage(stats.totalUsage)}</span>
+                  <span className="sr-only">{`${formatUsage(stats.totalUsage)} ${t('totalUsage', 'total usage')}`}</span>
                 </span>
               </div>
             </div>

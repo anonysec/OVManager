@@ -1,0 +1,84 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ---- MODAL POPUPS (portal-based) ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.72);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: var(--z-modal);
+  animation: ovFade 0.18s ease both;
+}
+.modal-window {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(0,0,0,.5);
+  animation: ovPop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.modal-window.modal-small { max-width: 400px; }
+.modal-window.modal-large { max-width: 720px; }
+.modal-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+  z-index: 2;
+}
+.modal-header h2 { margin: 0; font-size: 20px; font-family: var(--font-display); }
+.modal-close {
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: var(--font-size-lg);
+}
+.modal-close:hover { color: var(--orange); border-color: var(--orange); }
+.modal-close:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
+.modal-body { padding: 22px; }
+@keyframes ovFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ovPop { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
+
+/* ---- Modal form layout (single definition — one size, one rhythm) ---- */
+.modal-form { display: grid; gap: 14px; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.modal-section-title {
+  margin: 4px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+.modal-section-title:first-child { border-top: 0; padding-top: 0; }
+.modal-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger-color) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+  color: var(--danger-color);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
+}
+
+/* ── ConfirmModal actions row (reuses Modal portal, no custom overlay) ── */
+.confirm-modal-actions {
+  display: flex;
+  justify-content: end;
+  gap: 10px;
+  margin-top: 4px;
+}

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import './Modal.css';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -25,11 +26,27 @@ const FOCUSABLE = [
 const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: any; onClose?: any; title?: any; children?: any; size?: any }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
+  const titleId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const previousFocusRef = useRef<any>(null);
   const onCloseRef = useRef<any>(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  // Dialog semantics: inert the app root while open so background content is
+  // not focusable/operable, and lock body scroll.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const rootEl = document.getElementById('root');
+    const inertPrev = rootEl ? rootEl.getAttribute('inert') : null;
+    if (rootEl) rootEl.setAttribute('inert', '');
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      if (rootEl) rootEl.setAttribute('inert', inertPrev ?? '');
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -74,13 +91,6 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: any) => {
@@ -94,7 +104,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
         className={`modal-window modal-${size}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? 'modal-title' : undefined}
+        aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
       >
         {onClose && (
@@ -109,7 +119,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
         )}
         {title && (
           <div className="modal-header">
-            <h2 id="modal-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
           </div>
         )}
         <div className="modal-body">
