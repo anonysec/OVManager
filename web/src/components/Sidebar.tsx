@@ -5,7 +5,7 @@ import type { IconType } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronsLeft, FiChevronsRight,
-  FiMenu, FiBarChart2, FiFileText, FiShield,
+  FiMenu, FiBarChart2, FiFileText,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -108,7 +108,6 @@ const Sidebar = () => {
     { to: '/users',     label: t('navUsers',    'Users'),    icon: FiUsers,              group: t('navGroupManage',   'Manage')   },
     ...(isOwner ? [
       { to: '/nodes',   label: t('navNodes',    'Nodes'),    icon: FiServer,             group: t('navGroupManage',   'Manage')   },
-      { to: '/admins',  label: t('navAdmins',   'Admins'),   icon: FiShield,             group: t('navGroupManage',   'Manage')   },
     ] : []),
     { to: '/settings',  label: t('navSettings', 'Settings'), icon: FiSettings,           group: t('navGroupSystem',   'System')   },
     { to: '/logs',      label: t('navLogs',     'Logs'),        icon: FiFileText,       group: t('navGroupSystem',   'System')   },
