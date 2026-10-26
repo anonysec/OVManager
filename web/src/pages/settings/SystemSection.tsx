@@ -397,16 +397,16 @@ const SystemSection = () => {
           </>
         )}
       </Card>
+      <ConfirmModal
+        open={confirm.open}
+        onClose={closeConfirm}
+        onConfirm={confirm.onConfirm}
+        title={confirm.title}
+        message={confirm.message}
+        confirmLabel={t('confirm', 'Confirm')}
+        danger={true}
+      />
     </div>
-    <ConfirmModal
-      open={confirm.open}
-      onClose={closeConfirm}
-      onConfirm={confirm.onConfirm}
-      title={confirm.title}
-      message={confirm.message}
-      confirmLabel={t('confirm', 'Confirm')}
-      danger={true}
-    />
   );
 };
 
