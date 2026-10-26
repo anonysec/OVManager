@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/maintenance"
 )
 
 const defaultBackupKeep = 14
@@ -43,7 +43,7 @@ func runBackup(install Install, keepRaw string) (string, int) {
 	if info, err := os.Stat(install.InstallDir); err != nil || !info.IsDir() {
 		return block([]string{failedLine("Not installed (" + install.InstallDir + " missing)")}), 1
 	}
-	path, err := panel.CreateBackup(keep, "backup", install.DataDir)
+	path, err := maintenance.CreateBackup(keep, "backup", install.DataDir)
 	if err != nil {
 		return block([]string{failedLine("Backup failed: " + err.Error())}), 1
 	}
@@ -51,7 +51,16 @@ func runBackup(install Install, keepRaw string) (string, int) {
 		return block([]string{failedLine("Backup skipped because the panel database was not found")}), 1
 	}
 	_ = os.Chmod(path, 0o600)
-	return block([]string{okLine("verified backup"), kv("path", path)}), 0
+	lines := []string{okLine("verified backup"), kv("path", path)}
+	// A backup on the same disk is not a backup: push the newest one to the
+	// configured offsite target. A failed copy is reported but not fatal —
+	// the local backup is still good.
+	if tool, offsiteErr := copyOffsiteAfterBackup(install.DataDir, path); offsiteErr != nil {
+		lines = append(lines, failedLine("offsite copy failed: "+offsiteErr.Error()))
+	} else if tool != "" {
+		lines = append(lines, "copied offsite with "+tool)
+	}
+	return block(lines), 0
 }
 
 // runRestore lists backups, or restores one by name (cli/restore.py).
@@ -68,7 +77,7 @@ func runRestore(install Install, name string) (string, int) {
 	if name == "" || containsSlash(name) || len(name) > 0 && name[0] == '.' {
 		return block([]string{failedLine("Invalid backup name: " + name)}), 1
 	}
-	success, msg, data := panel.RestoreStored(name, "ovm-cli", install.DataDir)
+	success, msg, data := maintenance.RestoreStored(name, "ovm-cli", install.DataDir)
 	if !success {
 		lines := []string{failedLine(msg)}
 		if safety, _ := data["safety_backup"].(string); safety != "" {
@@ -84,7 +93,7 @@ func runRestore(install Install, name string) (string, int) {
 }
 
 func listBackups(install Install) (string, int) {
-	backups, dir := panel.ListStoredBackups(install.DataDir)
+	backups, dir := maintenance.ListStoredBackups(install.DataDir)
 	if len(backups) == 0 {
 		return block([]string{heading("data backups in " + dir), hint("none — create one with: ovm backup")}), 1
 	}

@@ -300,12 +300,24 @@ func isoFormat(t time.Time) string {
 	return t.UTC().Format("2006-01-02T15:04:05.999999-07:00")
 }
 
-func (h *Handler) certPaths() (keyPath, certPath string) { return sslKeyPath(), sslCertPath() }
-
 // --- upload / generate / renew / rollback ---
 
 func (h *Handler) tlsUpload(w http.ResponseWriter, r *http.Request) {
+	// MaxBytesReader is the actual body limit: ParseMultipartForm only caps the
+	// in-memory portion and spools the rest to disk.
+	// The body carries BOTH the key and the certificate, each up to
+	// maxTLSFileSize, so the body cap is twice the per-file cap.
+	r.Body = http.MaxBytesReader(w, r.Body, 2*maxTLSFileSize+64*1024)
+	// The parser spools a file part over the in-memory limit to the system
+	// temp dir; the request has to clean it up.
+	defer removeMultipartTemps(r)
 	if err := r.ParseMultipartForm(maxTLSFileSize); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeValidationError(w, "too_large", "key",
+				fmt.Sprintf("Each file must be smaller than %d bytes", maxTLSFileSize))
+			return
+		}
 		writeValidationBody(w, "key", "field required")
 		return
 	}

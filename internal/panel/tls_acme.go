@@ -236,11 +236,15 @@ func (h *Handler) startACMEWorker() {
 			defer func() { recover() }()
 			time.Sleep(acmeBootCheckDelay)
 			for {
-				if h.acmeMaintenance() {
+				// The sleep stays OUTSIDE the guard: a panic must not turn
+				// this into a hot spin.
+				renewed := false
+				runGuarded("acme worker", func() { renewed = h.acmeMaintenance() })
+				if renewed {
 					time.Sleep(acmeRenewInterval)
 				} else {
-					// A issuance just failed: retry sooner instead of
-					// waiting out the daily tick.
+					// A issuance just failed (or panicked): retry sooner
+					// instead of waiting out the daily tick.
 					time.Sleep(acmeRetryInterval)
 				}
 			}

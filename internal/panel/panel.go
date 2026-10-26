@@ -11,7 +11,7 @@ package panel
 import (
 	"database/sql"
 	"encoding/json"
-	"net"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,6 +39,22 @@ type Handler struct {
 	// issuance (bundle: the whole ACME flow owns the certificate state for
 	// its duration) is serialized separately from the short file writes.
 	acmeMu sync.Mutex
+
+	// activeReq tracks in-flight requests so a database restore can wait for
+	// them to complete before swapping the live pool.
+	activeReq sync.WaitGroup
+}
+
+// TrackActive wraps a handler to track in-flight requests for the
+// database restore drain. The restore path waits for activeReq to reach
+// zero before closing the old pool, so in-flight requests see a live
+// connection and don't hit "database is closed".
+func (h *Handler) TrackActive(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.activeReq.Add(1)
+		defer h.activeReq.Done()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // NewHandler builds the router over the shared auth service.
@@ -56,14 +72,23 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health/setup", owner(h.healthSetup))
 	mux.HandleFunc("GET /health/tls", owner(h.healthTLS))
 
+	mux.HandleFunc("GET /settings", owner(h.getSettings))
+	mux.HandleFunc("PUT /settings/timezone", owner(h.updateTimezone))
+	mux.HandleFunc("PUT /settings/subscription", owner(h.updateSubscription))
+	mux.HandleFunc("PUT /settings/domain", owner(h.updateDomain))
+	mux.HandleFunc("PUT /settings/bot", owner(h.updateBotConfig))
+	mux.HandleFunc("PUT /settings/urlpath", owner(h.updateURLPath))
+	mux.HandleFunc("POST /settings/alerts/test", owner(h.testAlert))
+	mux.HandleFunc("GET /settings/info", owner(h.serverInfo))
+
+	// /server/* aliases for backwards compatibility with frontend / legacy router
 	mux.HandleFunc("GET /server/settings", owner(h.getSettings))
-	mux.HandleFunc("GET /server/settings/", owner(h.getSettings))
 	mux.HandleFunc("PUT /server/settings/timezone", owner(h.updateTimezone))
 	mux.HandleFunc("PUT /server/settings/subscription", owner(h.updateSubscription))
 	mux.HandleFunc("PUT /server/settings/domain", owner(h.updateDomain))
 	mux.HandleFunc("PUT /server/settings/bot", owner(h.updateBotConfig))
 	mux.HandleFunc("PUT /server/settings/urlpath", owner(h.updateURLPath))
-	mux.HandleFunc("POST /server/alerts/test", owner(h.testAlert))
+	mux.HandleFunc("POST /server/settings/alerts/test", owner(h.testAlert))
 	mux.HandleFunc("GET /server/info", owner(h.serverInfo))
 
 	mux.HandleFunc("GET /security/summary", owner(h.securitySummary))
@@ -81,25 +106,8 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /maintenance/usage/reset-all", owner(h.usageResetAll))
 	mux.HandleFunc("POST /maintenance/usage/purge", owner(h.usagePurge))
 
-	mux.HandleFunc("GET /tls/settings", owner(h.tlsGetSettings))
-	mux.HandleFunc("PUT /tls/settings", owner(h.tlsPutSettings))
-	mux.HandleFunc("GET /tls/status", owner(h.tlsStatus))
-	mux.HandleFunc("POST /tls/upload", owner(h.tlsUpload))
-	mux.HandleFunc("POST /tls/self-signed", owner(h.tlsSelfSigned))
-	mux.HandleFunc("POST /tls/renew", owner(h.tlsRenew))
-	mux.HandleFunc("POST /tls/rollback", owner(h.tlsRollback))
-	mux.HandleFunc("POST /tls/restart", owner(h.tlsRestart))
-
-	// Built-in ACME issuance (no acme.sh dependency on the host).
-	mux.HandleFunc("POST /tls/acme", owner(h.tlsACMEIssue))
-
-	// https_router aliases (backend/routers/tls.py bottom).
-	mux.HandleFunc("GET /https/status", owner(h.tlsStatus))
-	mux.HandleFunc("POST /https/existing", owner(h.tlsUpload))
-	mux.HandleFunc("POST /https/temporary", owner(h.tlsSelfSigned))
-	mux.HandleFunc("POST /https/automatic", owner(h.tlsRenew))
-	mux.HandleFunc("POST /https/rollback", owner(h.tlsRollback))
-	mux.HandleFunc("POST /https/restart", owner(h.tlsRestart))
+	// TLS certificate management lives in the `ovm tls` CLI now. The ACME
+	// renewal worker below still runs (it uses internal/acme directly).
 
 	mux.HandleFunc("GET /updater/status", owner(h.updateStatus))
 	mux.HandleFunc("GET /updater/operation", owner(h.updateOperation))
@@ -118,9 +126,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// snapshot the subscription page, health checklist and SSE events read.
 	// Idle cadence is enforced by the collector's own pollDue gate.
 	h.startLiveWorker()
-
-	// Plan Task 5: GET /api/db/backup + POST /api/db/restore — see dbops.go.
-	h.MountDBOps(mux, owner)
 
 	// Telegram ops channel: one worker goroutine (daily summary at
 	// telegram_summary_time, immediate expired/over-quota events, node/CPU
@@ -169,6 +174,15 @@ var envFileCache = struct {
 	values map[string]string
 }{}
 
+// invalidateEnvFileCache clears the .env cache so the next envFileValues call
+// re-reads the file. Called after settings are written.
+func invalidateEnvFileCache() {
+	envFileCache.mu.Lock()
+	defer envFileCache.mu.Unlock()
+	envFileCache.values = nil
+	envFileCache.dir = ""
+}
+
 // envFileValues reads the uncommented KEY=VALUE pairs from the panel's .env.
 // The file is optional: an unreadable or missing one yields an empty map.
 func envFileValues() map[string]string {
@@ -197,6 +211,15 @@ func envFileValues() map[string]string {
 
 // envOrFile is pydantic-settings precedence: a real environment variable wins
 // over the .env line.
+// TrustedProxyEnabled reports whether the panel sits behind a trusted
+// reverse proxy. The panel's own auth service reads the same flag from the
+// process environment; this reads it the way every other panel setting is
+// read — process environment first, then the .env file — so a panel started
+// by hand next to its .env behaves like a systemd or container one.
+func TrustedProxyEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(envOrFile("TRUSTED_PROXY")), "true")
+}
+
 func envOrFile(key string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -363,13 +386,51 @@ func readSettings(db *sql.DB) settings {
 
 // setColumns writes each column on the settings row.
 func setColumns(db *sql.DB, values map[string]any) error {
+	if len(values) == 0 {
+		return nil
+	}
+	// Whitelist of valid settings columns to prevent SQL injection via dynamic column names.
+	// Derived from the mappedColumns in internal/db/migrate.go.
+	validColumns := map[string]bool{
+		"tunnel_address": true, "port": true, "protocol": true, "timezone": true,
+		"bot_token": true, "bot_enabled": true, "default_days": true,
+		"default_traffic_gb": true, "default_max_users": true, "owner_telegram_id": true,
+		"notify_expiry": true, "notify_traffic": true, "notify_node_down": true,
+		"alert_days_left": true, "alert_usage_enabled": true, "alert_usage_pct": true,
+		"alert_cpu_enabled": true, "alert_cpu_pct": true, "subscription_url_prefix": true,
+		"subscription_path": true, "sub_profile_title": true, "sub_support_url": true,
+		"sub_announce": true, "sub_update_interval_hours": true, "urlpath": true,
+		"auto_backup_enabled": true, "auto_backup_time": true, "auto_backup_keep": true,
+		"offsite_backup_target": true, "telegram_backup_enabled": true, "telegram_summary_time": true,
+		"ssl_cert_file": true, "ssl_key_file": true, "acme_domain": true,
+		"acme_email": true, "cert_method": true, "panel_id": true, "panel_url": true,
+		"panel_domain": true, "bot_owner_setup_complete": true,
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
 	for key, value := range values {
-		if _, err := db.Exec(`UPDATE settings SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM settings)`, value); err != nil {
+		if !validColumns[key] {
+			_ = tx.Rollback()
+			return fmt.Errorf("invalid settings column: %s", key)
+		}
+		if _, err := tx.Exec(`UPDATE settings SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM settings)`, value); err != nil {
+			_ = tx.Rollback()
 			return err
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	// Invalidate .env cache so subsequent envFileValues reads pick up the new values immediately.
+	invalidateEnvFileCache()
 	return nil
 }
+
+// SetColumns is the exported form of setColumns for tests and external callers.
+func SetColumns(db *sql.DB, values map[string]any) error { return setColumns(db, values) }
 
 // --- HTTP helpers ---
 
@@ -383,6 +444,7 @@ func plain(w http.ResponseWriter, body any) {
 
 // decodeBody reads a JSON body; a malformed one is a 422 like FastAPI's.
 func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		auth.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"detail": []map[string]any{{
@@ -394,22 +456,8 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-// clientIP mirrors backend/client_ip.client_ip: X-Forwarded-For only behind a
-// trusted proxy.
 func (h *Handler) clientIP(r *http.Request) string {
-	if h.Svc.TrustedProxy {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			if v := strings.TrimSpace(parts[len(parts)-1]); v != "" {
-				return v
-			}
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	return host
+	return auth.ClientIP(h.Svc.TrustedProxy, r)
 }
 
 // baseURL is FastAPI's str(request.base_url).
@@ -489,6 +537,10 @@ func (errURLPathPersist) Error() string { return "URLPATH could not be persisted
 // reservedPrefixes are the first path segments the panel itself owns. Derived
 // from the Go route table.
 func reservedPrefixes() map[string]bool {
+	// "doc" and "openapi.json" are served at the site root (spaHandler), not
+	// under the panel prefix, so they are not strictly shadowable. They stay
+	// here as belt-and-braces: a panel URL path of "doc" would otherwise
+	// collide with the root-level route that the embedded SPA also reads.
 	reserved := map[string]bool{
 		"api": true, "assets": true, "health": true, "static": true,
 		"doc": true, "openapi.json": true,

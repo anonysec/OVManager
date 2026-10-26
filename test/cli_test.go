@@ -5,6 +5,9 @@ package tests
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/cli"
+	"github.com/anonysec/OVManager/go/internal/db"
 )
 
 // cliFixture builds an install layout the CLI can read: an .env, a 0700 data
@@ -100,12 +104,10 @@ func TestCLIDoctor(t *testing.T) {
 		t.Fatalf("exit = %d, want 1 (failing checks)\n%s", code, out.String())
 	}
 	want := strings.Join([]string{
-		"  XX 2 problems",
+		"  XX 1 problems",
 		"",
 		"   Backup         none yet",
 		"   fix            ovm backup",
-		"   Worker         not started (no lock file)",
-		"   fix            ovm restart",
 		"",
 		"    11 other checks passed — detail: ovm doctor --all",
 		"",
@@ -135,5 +137,126 @@ func TestCLIUpdateDryRun(t *testing.T) {
 	after, _ := os.Stat(filepath.Join(installDir, ".env"))
 	if before == nil || after == nil || !before.ModTime().Equal(after.ModTime()) {
 		t.Errorf("dry-run modified the install dir")
+	}
+}
+
+// TestCLIHealthHTTPS: ovm health reports healthy against an HTTPS-only local
+// server (plain probe fails, HTTPS retry with InsecureSkipVerify succeeds).
+func TestCLIHealthHTTPS(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PORT", u.Port())
+
+	var out bytes.Buffer
+	code := cli.Run([]string{"health"}, &out)
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "ok") {
+		t.Errorf("output = %q, want ok", out.String())
+	}
+}
+
+// TestCLIResetPasswordRevokesActualOwner: sessions of the owner row's actual
+// username are revoked, not ADMIN_USERNAME from .env.
+func TestCLIResetPasswordRevokesActualOwner(t *testing.T) {
+	installDir, dataDir := cliFixture(t)
+
+	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Exec(testSchema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('bob', 'oldhash', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h1','bob','owner',0,9999999999,0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h2','admin','owner',0,9999999999,0)`); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("OVM_ADMIN_PASS", "new-password-123")
+	var out bytes.Buffer
+	code := cli.Run([]string{"reset-password", "--install-dir", installDir, "--data-dir", dataDir}, &out)
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0\n%s", code, out.String())
+	}
+
+	var bobCount, adminCount int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sessions WHERE username='bob'`).Scan(&bobCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sessions WHERE username='admin'`).Scan(&adminCount); err != nil {
+		t.Fatal(err)
+	}
+	if bobCount != 0 {
+		t.Errorf("bob sessions not revoked: %d", bobCount)
+	}
+	if adminCount != 1 {
+		t.Errorf("admin sessions unexpectedly changed: %d", adminCount)
+	}
+	if !strings.Contains(out.String(), "revoked 1 active session") {
+		t.Errorf("output missing revocation line:\n%s", out.String())
+	}
+}
+
+// The panel tells the operator "Run: ovm auth key" when it cannot read the
+// setup key, and "ovm auth reset" when the key is lost. Those commands must
+// exist, or the panel's own recovery instructions are a dead end.
+func TestCLIAuthKeyCreatesAndKeepsTheKey(t *testing.T) {
+	installDir, dataDir := cliFixture(t)
+	keyPath := filepath.Join(dataDir, "owner-claim.key")
+
+	var out bytes.Buffer
+	code := cli.Run([]string{"auth", "key", "--install-dir", installDir, "--data-dir", dataDir}, &out)
+	if code != 0 {
+		t.Fatalf("ovm auth key: exit %d, output %s", code, out.String())
+	}
+	raw, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("no key file: %v", err)
+	}
+	first := strings.TrimSpace(string(raw))
+	if first == "" {
+		t.Fatal("the key file is empty")
+	}
+	if !strings.Contains(out.String(), first) {
+		t.Errorf("the key is not printed: %s", out.String())
+	}
+
+	// A rerun must not invalidate a key the panel is still holding.
+	out.Reset()
+	if code := cli.Run([]string{"auth", "key", "--install-dir", installDir, "--data-dir", dataDir}, &out); code != 0 {
+		t.Fatalf("ovm auth key (rerun): exit %d", code)
+	}
+	raw, _ = os.ReadFile(keyPath)
+	if got := strings.TrimSpace(string(raw)); got != first {
+		t.Errorf("the key changed on a rerun: %q -> %q", first, got)
+	}
+
+	// A reset is the lost-key case: a fresh key, and the old one stops working.
+	out.Reset()
+	if code := cli.Run([]string{"auth", "reset", "--install-dir", installDir, "--data-dir", dataDir}, &out); code != 0 {
+		t.Fatalf("ovm auth reset: exit %d", code)
+	}
+	raw, _ = os.ReadFile(keyPath)
+	if got := strings.TrimSpace(string(raw)); got == first {
+		t.Error("ovm auth reset kept the old key")
 	}
 }

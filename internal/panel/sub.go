@@ -391,7 +391,13 @@ func (h *Handler) activeNodes() []*node.Node {
 	defer rows.Close()
 	out := []*node.Node{}
 	for rows.Next() {
-		out = append(out, scanNodeRow(rows))
+		// scanNodeRow returns nil for a row it cannot scan (a legacy row
+		// with a non-text value, say). A nil node here would be
+		// dereferenced by the caller and take the PUBLIC subscription page
+		// down for every user, so skip it.
+		if n := scanNodeRow(rows); n != nil {
+			out = append(out, n)
+		}
 	}
 	return out
 }

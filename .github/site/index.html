@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OVManager — self-hosted OpenVPN admin panel</title>
-<meta name="description" content="OVManager is a self-hosted OpenVPN management panel: users, traffic quotas, multiple VPN nodes, TLS certificates and backups, with a one-line installer and an ovm CLI.">
+<meta name="description" content="OVManager is a self-hosted OpenVPN management panel: users, traffic quotas, multiple VPN nodes, TLS certificates and backups, with a one-line installer and an ovmanager CLI.">
 <link rel="stylesheet" href="assets/style.css">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 </head>
@@ -118,13 +118,13 @@
         <p>
           Self-signed by default, so the first start is encrypted with no
           domain. Switch to Let's Encrypt from the panel or with
-          <code>ovm https --domain</code>.
+          <code>ovmanager https --domain</code>.
         </p>
       </li>
       <li class="card">
         <h3>Verified backups</h3>
         <p>
-          <code>ovm backup</code> writes a checked database bundle, a daily
+          <code>ovmanager backup</code> writes a checked database bundle, a daily
           timer can keep it fresh, and a scheduled backup can push the newest
           copy offsite over SSH.
         </p>
@@ -139,7 +139,7 @@
       <li class="card">
         <h3>One operator CLI</h3>
         <p>
-          <code>ovm status</code>, <code>doctor</code>, <code>logs</code>,
+          <code>ovmanager status</code>, <code>doctor</code>, <code>logs</code>,
           <code>backup</code>, <code>restore</code>, <code>update</code>,
           <code>rollback</code> and a recovery menu, all with stable exit codes.
         </p>
@@ -194,7 +194,7 @@
       <li class="card"><h3><a href="wiki/tls.html">TLS certificates</a></h3><p>Self-signed, Let's Encrypt, renewals, and the certificate on the node side.</p></li>
       <li class="card"><h3><a href="wiki/backup.html">Backups &amp; restore</a></h3><p>Bundles, schedules, offsite copies, and restoring an upload safely.</p></li>
       <li class="card"><h3><a href="wiki/troubleshooting.html">Troubleshooting</a></h3><p>Lost URL, forgotten password, red nodes, no internet through the tunnel.</p></li>
-      <li class="card"><h3><a href="wiki/cli.html">CLI reference</a></h3><p>Every <code>ovm</code> command, the installer's three flags, and the <code>OVM_*</code> settings.</p></li>
+      <li class="card"><h3><a href="wiki/cli.html">CLI reference</a></h3><p>Every <code>ovmanager</code> command, the installer's three flags, and the <code>OVM_*</code> settings.</p></li>
     </ul>
 
   </div>

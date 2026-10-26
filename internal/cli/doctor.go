@@ -304,29 +304,6 @@ func checkHealth(install Install) Check {
 	return Check{"Panel health", false, "unreachable", "ovm logs"}
 }
 
-func checkWorker(install Install) Check {
-	lock := filepath.Join(install.DataDir, "scheduler.lock")
-	if !fileExists(lock) {
-		return Check{"Worker", false, "not started (no lock file)", "ovm restart"}
-	}
-	f, err := os.OpenFile(lock, os.O_RDWR|os.O_CREATE, 0o644)
-	if err != nil {
-		return Check{"Worker", false, "cannot read the lock: " + err.Error(), "ovm logs"}
-	}
-	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		raw, _ := os.ReadFile(lock)
-		pid := strings.TrimSpace(string(raw))
-		detail := "running"
-		if pid != "" {
-			detail = "running (pid " + pid + ")"
-		}
-		return Check{"Worker", true, detail, ""}
-	}
-	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	return Check{"Worker", false, "not running (stale lock file — the periodic jobs are not running)", "ovm restart"}
-}
-
 func checkServiceAccount(install Install, inContainer bool) Check {
 	if inContainer || fileExists(install.ComposeFile()) {
 		return Check{"Service account", true, "container-managed", ""}
@@ -362,7 +339,6 @@ func collectDoctor(install Install, service string, inContainer bool) []Check {
 		checkTLSKeyPerms(install, inContainer),
 		checkDataDir(install),
 		checkHealth(install),
-		checkWorker(install),
 		checkServiceAccount(install, inContainer),
 	}
 }

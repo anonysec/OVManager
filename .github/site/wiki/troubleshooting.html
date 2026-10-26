@@ -54,7 +54,7 @@
     </p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm reset-urlpath</code></pre>
+      <pre><code>sudo ovmanager reset-urlpath</code></pre>
     </figure>
     <p>
       The panel is served at <code>/</code> again. Set a new random path in
@@ -68,10 +68,10 @@
       From a native install, the equivalent is
       <code>cd /opt/ovmanager &amp;&amp; sudo uv run main.py --reset-urlpath</code>.
       On Docker, run the same command inside the container, or check
-      <code>ovm status</code>.
+      <code>ovmanager status</code>.
     </p>
     <p>
-      If <code>ovm recovery</code> still shows a URL you cannot reach, remember
+      If <code>ovmanager recovery</code> still shows a URL you cannot reach, remember
       that <code>/sub/...</code> and <code>/health</code> are intentionally
       served <em>without</em> the prefix &mdash; subscription links have to be
       shareable and health checks have to keep working.
@@ -84,9 +84,9 @@
     </p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm reset-password
-sudo ovm reset-password -p 'new-long-password'
-OVM_PASS='new-long-password' sudo ovm reset-password</code></pre>
+      <pre><code>sudo ovmanager reset-password
+sudo ovmanager reset-password -p 'new-long-password'
+OVM_PASS='new-long-password' sudo ovmanager reset-password</code></pre>
     </figure>
     <p>
       The interactive form asks for the new password twice, with hidden input.
@@ -100,8 +100,8 @@ OVM_PASS='new-long-password' sudo ovm reset-password</code></pre>
       Placeholder-looking passwords (<code>change-me</code>,
       <code>changeme</code>, <code>password123</code>, <code>admin123</code>)
       are refused, exactly as the panel refuses them. The same reset is entry 2
-      of the <code>sudo ovm recovery</code> menu. Docker installs work the same
-      way &mdash; <code>ovm</code> finds and restarts the container.
+      of the <code>sudo ovmanager recovery</code> menu. Docker installs work the same
+      way &mdash; <code>ovmanager</code> finds and restarts the container.
     </p>
 
     <h2 id="login">Login fails with "username or password is incorrect"</h2>
@@ -122,10 +122,10 @@ OVM_PASS='new-long-password' sudo ovm reset-password</code></pre>
       Click Advanced, then Proceed. The warning disappears once you switch to
       Let's Encrypt with a real domain &mdash; see
       <a href="tls.html#switch">TLS certificates</a> and
-      <code>ovm tls-status</code>.
+      <code>ovmanager tls-status</code>.
     </p>
 
-    <h2 id="health-probe"><code>ovm status</code> or <code>ovm doctor</code> call the panel unreachable</h2>
+    <h2 id="health-probe"><code>ovmanager status</code> or <code>ovmanager doctor</code> call the panel unreachable</h2>
     <p>
       Rarely a certificate problem. The health probe deliberately pins the
       certificate recorded in <code>.env</code> (<code>SSL_CERTFILE</code>) and
@@ -142,8 +142,8 @@ OVM_PASS='new-long-password' sudo ovm reset-password</code></pre>
     </p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>ovm tls-status
-ovm logs</code></pre>
+      <pre><code>ovmanager tls-status
+ovmanager logs</code></pre>
     </figure>
 
     <h2 id="node-red">Node stays red</h2>
@@ -319,7 +319,7 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
           </tr>
           <tr>
             <td><code>No answer on /health</code></td>
-            <td><code>journalctl -u ovmanager -f</code> natively, or <code>docker logs -f ovmanager</code>; then <code>ovm status</code>.</td>
+            <td><code>journalctl -u ovmanager -f</code> natively, or <code>docker logs -f ovmanager</code>; then <code>ovmanager status</code>.</td>
           </tr>
           <tr>
             <td><code>No verified release file is available</code>, or a checksum error</td>
@@ -330,7 +330,7 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
               your server &mdash; use a
               <a href="install.html#from-source">from-source install</a>. On an
               older install that is stuck on a download error, re-bootstrap with
-              the current raw one-liner and then run <code>ovm update</code>.
+              the current raw one-liner and then run <code>ovmanager update</code>.
             </td>
           </tr>
         </tbody>
@@ -347,8 +347,8 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
     </p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm uninstall
-sudo ovm uninstall --purge</code></pre>
+      <pre><code>sudo ovmanager uninstall
+sudo ovmanager uninstall --purge</code></pre>
     </figure>
 
     <h2 id="next">Next</h2>

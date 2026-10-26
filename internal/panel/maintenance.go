@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -185,7 +184,21 @@ func (h *Handler) backupDownload(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
 	// ParseForm first so both urlencoded (restore_from_server) and multipart
 	// (file upload) bodies work; FastAPI accepts either.
-	_ = r.ParseMultipartForm(32 << 20)
+	// MaxBytesReader is the real body limit: ParseMultipartForm alone spools the
+	// excess to disk.
+	r.Body = http.MaxBytesReader(w, r.Body, maxBackupFileSize+1<<20)
+	// The parser spools a file part over 32 MB to the system temp dir; the
+	// request has to clean it up.
+	defer removeMultipartTemps(r)
+	if err := r.ParseMultipartForm(32 << 20); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			envelope(w, false, fmt.Sprintf("File too large (max %d bytes)", maxBackupFileSize), nil)
+		} else {
+			envelope(w, false, "Could not read the uploaded file: "+err.Error(), nil)
+		}
+		return
+	}
 	actor, _ := h.Svc.CurrentUser(r)
 
 	if name := r.FormValue("restore_from_server"); name != "" {
@@ -316,7 +329,7 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 	fail := func(err error) restoreResult {
 		rolledBack := false
 		if activated && rollbackDB != "" && fileExists(rollbackDB) {
-			if rbErr := h.activateDatabase(func(dst string) error { return copyFile(rollbackDB, dst) }); rbErr == nil {
+			if _, rbErr := h.activateDatabase(func(dst string) (string, error) { return stageFile(rollbackDB, dst) }); rbErr == nil {
 				rolledBack = true
 			}
 		}
@@ -371,12 +384,12 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 		return fail(err)
 	}
 
-	if err := h.activateDatabase(func(dst string) error {
-		return copyFile(candidate, dst)
-	}); err != nil {
+	activated, err = h.activateDatabase(func(dst string) (string, error) {
+		return stageFile(candidate, dst)
+	})
+	if err != nil {
 		return fail(err)
 	}
-	activated = true
 	candidate = "" // consumed by the activation copy
 
 	if err := verifyDatabase(dbFilePath()); err != nil {
@@ -389,30 +402,102 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 		map[string]any{"safety_backup": safetyName, "rolled_back": false}}
 }
 
-// activateDatabase replaces the live database with src's content and reopens
-// the pool, so no connection keeps serving the replaced inode.
-func (h *Handler) activateDatabase(write func(dst string) error) error {
-	if err := write(dbFilePath()); err != nil {
-		return err
-	}
-	_ = os.Chmod(dbFilePath(), 0o600)
-	removeSQLiteSidecars()
-	fresh, err := db.Open(dbFilePath())
+// openLive opens the live database after a swap. A var so a test can
+// simulate a database that will not reopen.
+var openLive = db.Open
+
+// activateDatabase replaces the live database file and reopens the pool.
+//
+// It returns whether the panel was left without a usable pool: once the old
+// pool is closed the panel cannot serve, so a failure from that point on has
+// to be rolled back by the caller. Before that the old pool still serves and
+// the live file is untouched, so there is nothing to roll back.
+//
+// The replacement is STAGED first: the candidate is copied to a temp file
+// beside the live database while the old pool is still serving, so a 100 MB
+// restore does not spend seconds with the pool closed. Only then is the old
+// pool closed (which checkpoints its WAL into the main file and releases the
+// -wal/-shm sidecars), the sidecars removed, the staged file renamed over the
+// live one, and the new pool published. The window in which requests see a
+// closed pool is the rename plus the open — not the copy.
+//
+// Readers that already hold the old *sql.DB keep their (now unlinked) inode;
+// new opens see the new file.
+// activateDatabase replaces the live database file and reopens the pool.
+//
+// It returns whether the panel was left without a usable pool: once the old
+// pool is closed the panel cannot serve, so a failure from that point on has
+// to be rolled back by the caller. Before that the old pool still serves and
+// the live file is untouched, so there is nothing to roll back.
+//
+// The replacement is STAGED first: the candidate is copied to a temp file
+// beside the live database while the old pool is still serving, so a 100 MB
+// restore does not spend seconds with the pool closed. Before closing the
+// old pool, we wait for in-flight requests to drain (with a timeout). Only
+// then is the old pool closed (which checkpoints its WAL into the main file
+// and releases the -wal/-shm sidecars), the sidecars removed, the staged
+// file renamed over the live one, and the new pool published.
+func (h *Handler) activateDatabase(stage func(dst string) (string, error)) (disturbed bool, err error) {
+	live := dbFilePath()
+	staged, err := stage(live)
 	if err != nil {
-		return err
+		// The live file is untouched; the old pool is still serving.
+		return false, err
 	}
-	// DBSwap publishes the new pool under the service's db lock; readers keep
-	// taking handles from DB() so no goroutine queries the closed old pool.
-	old := h.Svc.DBSwap(fresh)
+
+	old := h.Svc.DB()
+
+	// Drain: wait for in-flight requests to finish before closing the pool.
+	// Use a timeout so a stuck request doesn't block restore forever.
+	drainDone := make(chan struct{})
+	go func() {
+		h.activeReq.Wait()
+		close(drainDone)
+	}()
+	select {
+	case <-drainDone:
+		// All in-flight requests completed.
+	case <-time.After(10 * time.Second):
+		// Timeout: proceed anyway to avoid deadlocking the panel.
+		// Log a warning so the operator knows some requests were interrupted.
+		log.Printf("restore: drain timeout, %d in-flight requests interrupted", 0)
+	}
+
+	// Close the old pool: this checkpoints the WAL into the main database
+	// file and releases the -wal/-shm sidecars. It MUST happen before the
+	// rename, or a stale sidecar could be recovered against the new file.
 	if old != nil {
 		_ = old.Close()
 	}
-	// The Telegram worker holds no stale copy either way; its handle is
-	// swap-guarded, but point it at the fresh pool immediately.
+	removeSQLiteSidecars()
+
+	if err := commitStaged(staged, live); err != nil {
+		// The live file is untouched (the rename failed); reopen it so the
+		// service keeps serving instead of a closed pool.
+		if fresh, oerr := openLive(live); oerr == nil {
+			_ = h.Svc.DBSwap(fresh)
+			if w := notify.Running(); w != nil {
+				w.SwapDB(fresh)
+			}
+			return false, err
+		}
+		// The pool could not be reopened: the panel is down and only the
+		// caller's rollback can bring it back.
+		return true, err
+	}
+	_ = os.Chmod(live, 0o600)
+	removeSQLiteSidecars()
+	fresh, err := openLive(live)
+	if err != nil {
+		return true, err
+	}
+	// DBSwap publishes the new pool; `old` is already closed, do not close
+	// it again.
+	_ = h.Svc.DBSwap(fresh)
 	if w := notify.Running(); w != nil {
 		w.SwapDB(fresh)
 	}
-	return nil
+	return true, nil
 }
 
 // restoreVersionCompatible rejects a candidate whose schema version
@@ -468,6 +553,7 @@ func stageCandidate(src string) (string, error) {
 	return path, nil
 }
 
+// verifyDatabase opens the candidate and runs integrity check + required tables check.
 func verifyDatabase(path string) error {
 	conn, err := db.Open(path)
 	if err != nil {
@@ -484,6 +570,18 @@ func verifyDatabase(path string) error {
 	}
 	if !strings.EqualFold(text, "ok") {
 		return fmt.Errorf("database integrity failed: %s", text)
+	}
+
+	// Verify required tables exist (OVManager schema).
+	required := []string{"admins", "sessions", "users", "nodes", "settings"}
+	for _, t := range required {
+		var cnt int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, t).Scan(&cnt); err != nil {
+			return err
+		}
+		if cnt == 0 {
+			return fmt.Errorf("missing required table: %s", t)
+		}
 	}
 	return nil
 }
@@ -545,18 +643,29 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 	if status == "" {
 		status = "expired"
 	}
+	switch status {
+	case "expired", "disabled", "all":
+	default:
+		return nil
+	}
 	cutoffDay := time.Now().UTC().AddDate(0, 0, -p.OlderThanDays).Format("2006-01-02")
 	cutoffTS := float64(time.Now().UTC().AddDate(0, 0, -p.OlderThanDays).UnixNano()) / 1e9
-	expired := `expiry_date IS NOT NULL AND expiry_date < '` + cutoffDay + `'`
-	disabled := `is_active = 0 AND (last_online IS NULL OR last_online < ` + strconv.FormatFloat(cutoffTS, 'f', -1, 64) + `)`
-	where := expired
+	expired := `expiry_date IS NOT NULL AND expiry_date < ?`
+	disabled := `is_active = 0 AND (last_online IS NULL OR last_online < ?)`
+	var query string
+	var args []any
 	switch status {
 	case "disabled":
-		where = disabled
+		query = `SELECT id, name FROM users WHERE ` + disabled + ` ORDER BY id DESC`
+		args = []any{cutoffTS}
 	case "all":
-		where = "(" + expired + ") OR (" + disabled + ")"
+		query = `SELECT id, name FROM users WHERE (` + expired + `) OR (` + disabled + `) ORDER BY id DESC`
+		args = []any{cutoffDay, cutoffTS}
+	default:
+		query = `SELECT id, name FROM users WHERE ` + expired + ` ORDER BY id DESC`
+		args = []any{cutoffDay}
 	}
-	rows, err := h.Svc.DB().Query(`SELECT id, name FROM users WHERE ` + where + ` ORDER BY id DESC`)
+	rows, err := h.Svc.DB().Query(query, args...)
 	if err != nil {
 		return nil
 	}
@@ -580,6 +689,10 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 	status := payload.Status
 	if status == "" {
 		status = "expired"
+	}
+	if status != "expired" && status != "disabled" && status != "all" {
+		writeValidationError(w, "value_error", "status", "invalid status")
+		return
 	}
 	candidates := h.cleanupCandidates(payload)
 	sample := []string{}
@@ -606,6 +719,10 @@ func (h *Handler) cleanupRun(w http.ResponseWriter, r *http.Request) {
 	status := payload.Status
 	if status == "" {
 		status = "expired"
+	}
+	if status != "expired" && status != "disabled" && status != "all" {
+		writeValidationError(w, "value_error", "status", "invalid status")
+		return
 	}
 	if !payload.Confirm {
 		envelope(w, false, "Confirmation required — preview first, then resend with confirm=true", nil)
@@ -652,6 +769,11 @@ func (h *Handler) cleanupRun(w http.ResponseWriter, r *http.Request) {
 	if len(names) > 0 {
 		telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	}
+	// The audit trail is NOT pruned here. This action deletes users; the
+	// audit trail's retention belongs to the usage purge (POST
+	// /maintenance/usage/purge), which reports how many rows it removed.
+	// Pruning it here would destroy the history of an unrelated action
+	// without saying so.
 	envelope(w, true, fmt.Sprintf("Deleted %d user(s)", len(names)), map[string]any{
 		"deleted": len(names), "names": names, "status": status,
 		"older_than_days": payload.OlderThanDays, "node_delete_failed": fanoutFailed,
@@ -753,6 +875,7 @@ func (h *Handler) usagePurge(w http.ResponseWriter, r *http.Request) {
 	}
 	removed := billing.PruneDaily(h.Svc.DB(), keep)
 	removedLedger := billing.PruneLedger(h.Svc.DB(), keep, 5000)
+	removedAudit := telemetry.PruneAuditLogs(h.Svc.DB(), keep)
 	envelope(w, true, fmt.Sprintf("Removed %d daily usage row(s)", removed),
-		map[string]any{"removed": removed, "removed_ledger": removedLedger})
+		map[string]any{"removed": removed, "removed_ledger": removedLedger, "removed_audit": removedAudit})
 }

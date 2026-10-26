@@ -5,10 +5,13 @@
 package tests
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -277,13 +280,13 @@ func TestTelegramWorkerDisabled(t *testing.T) {
 func TestTelegramTokenMaskedInSettings(t *testing.T) {
 	env := newPanelEnv(t)
 
-	_, body := doJSON(t, "PUT", env.srv.URL+"/api/server/settings/bot", env.token,
+	_, body := doJSON(t, "PUT", env.srv.URL+"/api/settings/bot", env.token,
 		map[string]any{"bot_token": "1234abcd5678efgh", "telegram_summary_time": "07:15"})
 	if body["success"] != true {
 		t.Fatalf("PUT bot: %v", body)
 	}
 
-	_, body = doJSON(t, "GET", env.srv.URL+"/api/server/settings", env.token, nil)
+	_, body = doJSON(t, "GET", env.srv.URL+"/api/settings", env.token, nil)
 	data, _ := body["data"].(map[string]any)
 	if data == nil {
 		t.Fatalf("no data in GET settings: %v", body)
@@ -295,7 +298,7 @@ func TestTelegramTokenMaskedInSettings(t *testing.T) {
 		t.Errorf("GET telegram_summary_time = %v, want 07:15", data["telegram_summary_time"])
 	}
 
-	_, body = doJSON(t, "PUT", env.srv.URL+"/api/server/settings/bot", env.token,
+	_, body = doJSON(t, "PUT", env.srv.URL+"/api/settings/bot", env.token,
 		map[string]any{"telegram_summary_time": "not-a-time"})
 	if body["success"] != false {
 		t.Errorf("invalid summary time accepted: %v", body)
@@ -312,4 +315,30 @@ func newNotifyDB(t *testing.T) *sql.DB {
 		t.Fatalf("telegram schema: %v", err)
 	}
 	return conn
+}
+
+// TestTelegramTransportFailureLogScrubbed: an unreachable host fails the send;
+// the logged text must not contain the bot token.
+func TestTelegramTransportFailureLogScrubbed(t *testing.T) {
+	db := newNotifyDB(t)
+	if _, err := db.Exec(`INSERT INTO settings (id, bot_enabled, bot_token, owner_telegram_id,
+		notify_expiry, notify_traffic, telegram_backup_enabled, telegram_summary_time)
+		VALUES (1, 1, 'SECRET_TOKEN', 7, 1, 1, 0, '09:00')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	original := notify.APIBase
+	notify.APIBase = "http://127.0.0.1:1"
+	t.Cleanup(func() { notify.APIBase = original })
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	w := notify.NewWorker(db, nil, nil)
+	w.Tick(time.Now())
+
+	if strings.Contains(buf.String(), "SECRET_TOKEN") {
+		t.Fatalf("token leaked into log: %s", buf.String())
+	}
 }

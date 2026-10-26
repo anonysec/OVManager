@@ -3,10 +3,12 @@
 package cli
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -41,7 +43,7 @@ func (a *app) install() Install {
 
 func (a *app) rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "ovm",
+		Use:           "ovmanager",
 		Short:         "OVManager local operator CLI",
 		SilenceUsage:  true,
 		SilenceErrors: false,
@@ -57,7 +59,7 @@ func (a *app) rootCmd() *cobra.Command {
 	root.AddCommand(
 		a.statusCmd(), a.logsCmd(), a.doctorCmd(), a.backupCmd(), a.restoreCmd(),
 		a.tlsCmd(), a.urlpathCmd(), a.resetPasswordCmd(), a.updateCmd(), a.serviceCmd(),
-		a.healthCmd(),
+		a.healthCmd(), a.authCmd(),
 	)
 	return root
 }
@@ -92,8 +94,26 @@ func (a *app) healthCmd() *cobra.Command {
 			if port == "" {
 				port = "2095"
 			}
+			// Plain probe first (the common case); fall back to HTTPS for a
+			// TLS-only panel, accepting a self-signed/loopback cert.
 			resp, err := http.Get("http://127.0.0.1:" + port + "/health")
-			if err != nil || resp.StatusCode != http.StatusOK {
+			if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+				resp.Body.Close()
+				a.emit("ok\n", 0)
+				return nil
+			}
+			if resp != nil {
+				resp.Body.Close()
+			}
+			client := &http.Client{
+				Timeout:   5 * time.Second,
+				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+			}
+			resp, err = client.Get("https://127.0.0.1:" + port + "/health")
+			if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
+				if resp != nil {
+					resp.Body.Close()
+				}
 				a.emit("unhealthy\n", 1)
 				return nil
 			}
@@ -204,14 +224,14 @@ func (a *app) tlsCmd() *cobra.Command {
 				a.emit(text, code)
 			case args[0] == "install":
 				if len(args) < 3 {
-					a.emit("usage: ovm tls install <cert.pem> <key.pem>\n", 2)
+					a.emit("usage: ovmanager tls install <cert.pem> <key.pem>\n", 2)
 					return nil
 				}
 				text, code := runTLSInstall(inst, args[1], args[2])
 				a.emit(text, code)
 			case args[0] == "acme":
 				if len(args) < 2 {
-					a.emit("usage: ovm tls acme <domain-or-ip> [email]\n", 2)
+					a.emit("usage: ovmanager tls acme <domain-or-ip> [email]\n", 2)
 					return nil
 				}
 				email := ""

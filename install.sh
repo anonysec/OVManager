@@ -4,7 +4,7 @@
 #
 # OVManager installer — bootstraps the Go binary.
 #
-# The panel and the `ovm` operator CLI are one Go binary with the built SPA
+# The panel and the `ovmanager` operator CLI are one Go binary with the built SPA
 # embedded, so a release ships bare per-platform binaries. A default install
 # fetches the checksummed binary for this platform straight into $INSTALL_DIR,
 # writes the systemd unit, restarts, and verifies /health reports the release
@@ -13,14 +13,14 @@
 # dev layout, so a release that never came up still reported success.
 #
 # Zero-question by default:
-#   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+#   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
 #
 # Dev install from a working tree (rsync + go build + a dev unit):
 #   ./install.sh --build [DIR] [--dest DIR]
 #
 # No owner password is set here: the install prints a one-time claim key and
 # the operator claims the panel in the browser. Day-to-day operations (status,
-# logs, backup, restore, TLS, recovery, update) live in the `ovm` binary.
+# logs, backup, restore, TLS, recovery, update) live in the `ovmanager` binary.
 #
 set -Eeuo pipefail
 
@@ -34,17 +34,18 @@ DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 # Keep in sync with internal/version/version.go: the installer fetches this
 # release tag, and the /health check requires the running binary to report it.
-VERSION="2.1.2"
+# The version is extracted from internal/version/version.go (the single source of truth).
+# This script must be run from the repository root (or with OVM_REPO set).
+VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 
 # The panel runs as an unprivileged service account on a native install: it is
 # a server parsing untrusted input from anyone who can reach the port, so as
 # root a remote compromise of the panel would be a compromise of the box. It
 # needs only its own code, its .env, its data dir and the TLS key, and cannot
-# update itself because `ovm update` replaces the tree and restarts the unit.
+# update itself because `ovmanager update` replaces the tree and restarts the unit.
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
 CLI_NAME="ovmanager"
-CLI_ALIAS="ovm"
 
 _ok()   { printf '  ok    %s\n' "$*" >&2; }
 _note() { printf '  ..    %s\n' "$*" >&2; }
@@ -109,6 +110,26 @@ read_env_port() {  # read_env_port <envfile> → the PORT it sets
     local envfile="$1" p
     p="$(awk -F= '/^PORT=/{print $2; exit}' "$envfile" 2>/dev/null | tr -d '[:space:]')"
     printf '%s' "${p:-$DEFAULT_PORT}"
+}
+
+# write_install_result <path>: the facts of this install, machine-readable.
+#
+# The terminal output is for a human; this file is for a program. A provisioning
+# run that cannot see the terminal still needs the port, the service and where
+# the claim key lives. The values are escaped with %q so the file is safe to
+# source even when one of them contains a space or a quote.
+write_install_result() {
+    local path="$1"
+    mkdir -p "$(dirname "$path")"
+    {
+        printf 'OVManager_VERSION=%q\n' "$VERSION"
+        printf 'OVManager_PORT=%q\n' "$DEFAULT_PORT"
+        printf 'OVManager_DATA_DIR=%q\n' "$DATA_DIR"
+        printf 'OVManager_SERVICE=%q\n' "$SYSTEMD_SERVICE"
+        printf 'OVManager_CLAIM_KEY=%q\n' "$DATA_DIR/owner-claim.key"
+    } > "$path"
+    chmod 600 "$path"
+    _note "install result written to $path"
 }
 
 # write_env <envfile> <data_dir>: create once, never overwrite. A rerun must
@@ -198,11 +219,34 @@ verify_acme() {
 
 ensure_panel_user() {
     mkdir -p "$DATA_DIR"
-    id -u "$PANEL_USER" >/dev/null 2>&1 && return 0
-    useradd --system --no-create-home --home-dir "$DATA_DIR" \
-        --shell /usr/sbin/nologin \
-        --comment "OVManager panel service account" "$PANEL_USER" >/dev/null 2>&1 \
-        || die "Could not create the $PANEL_USER account"
+    if ! id -u "$PANEL_USER" >/dev/null 2>&1; then
+        useradd --system --no-create-home --home-dir "$DATA_DIR" \
+            --shell /usr/sbin/nologin \
+            --comment "OVManager panel service account" "$PANEL_USER" >/dev/null 2>&1 \
+            || die "Could not create the $PANEL_USER account"
+    fi
+    if getent group systemd-journal >/dev/null 2>&1; then
+        usermod -a -G systemd-journal "$PANEL_USER" 2>/dev/null || true
+    fi
+}
+
+# unit_hardening prints the sandboxing directives for a unit whose working
+# directory and data dir live at the given paths.
+#
+# systemd's PrivateTmp= masks /tmp, /var/tmp and /run with a private tmpfs,
+# and ProtectHome= masks /home, /root and /run/user. A unit whose ExecStart
+# or WorkingDirectory sits under one of those can no longer see its own
+# files, so the service fails to start. The script recommends a test install
+# under /tmp, so the hardening is applied only when the paths are outside
+# the masked ones.
+unit_hardening() {
+    local p
+    for p in "$@"; do
+        case "$p/" in
+            /tmp/*|/var/tmp/*|/run/*|/home/*|/root/*|/dev/shm/*) return 0 ;;
+        esac
+    done
+    printf 'NoNewPrivileges=yes\nPrivateTmp=yes\nProtectHome=yes\n'
 }
 
 write_systemd_unit() {
@@ -218,6 +262,7 @@ EnvironmentFile=$INSTALL_DIR/.env
 Environment="OVM_APP_DIR=$INSTALL_DIR"
 User=$PANEL_USER
 Group=$PANEL_USER
+SupplementaryGroups=systemd-journal
 ExecStart=$INSTALL_DIR/$APP_SLUG
 Restart=on-failure
 RestartSec=3
@@ -225,6 +270,14 @@ RestartSec=3
 # only during issuance; the bind must work even though the panel runs as
 # $PANEL_USER.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+$(unit_hardening "$INSTALL_DIR" "$DATA_DIR")
+# ProtectSystem is deliberately NOT set. The panel writes the operator-
+# declared certificate and key (SSL_CERTFILE / SSL_KEYFILE), which on a
+# standard Let's Encrypt install live under /etc/letsencrypt — outside
+# DATA_DIR. systemd 259's ProtectSystem=full also mounts /etc read-only, and
+# =strict mounts the whole hierarchy read-only, so either one would break
+# certificate upload, ACME issuance and certificate rollback. NoNewPrivileges
+# and PrivateTmp harden the unit without fighting that contract.
 
 [Install]
 WantedBy=multi-user.target
@@ -233,7 +286,7 @@ UNIT
 }
 
 # A daily verified backup, independent of the panel being up: a system timer
-# that runs `ovm backup --keep 7`. Retention mirrors the CLI default (7, vs the
+# that runs `ovmanager backup --keep 7`. Retention mirrors the CLI default (7, vs the
 # 14 default for manual runs) so disk stays bounded under automation.
 write_backup_units() {
     cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service" <<UNIT
@@ -286,9 +339,8 @@ grant_panel_access() {
 
 install_cli() {
     mkdir -p "$BIN_DIR" 2>/dev/null || { _warn "Could not create $BIN_DIR"; return 0; }
-    if ln -sf "$INSTALL_DIR/$APP_SLUG" "$BIN_DIR/$CLI_NAME" \
-        && ln -sf "$CLI_NAME" "$BIN_DIR/$CLI_ALIAS"; then
-        _ok "command  $BIN_DIR/$CLI_NAME  (alias: $CLI_ALIAS)"
+    if ln -sf "$INSTALL_DIR/$APP_SLUG" "$BIN_DIR/$CLI_NAME"; then
+        _ok "command  $BIN_DIR/$CLI_NAME"
     else
         _warn "Could not install the $CLI_NAME command into $BIN_DIR"
     fi
@@ -334,6 +386,7 @@ do_from_source() {
     [[ -d "$src/web/dist" ]] || die "web/dist missing in $src — run: cd web && npm run build"
 
     check_root
+    ensure_panel_user
     # rm -rf and a --delete rsync live behind this: an empty or / destination is
     # never intended.
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
@@ -341,6 +394,11 @@ do_from_source() {
     command -v go >/dev/null || die "go not found — install Go 1.27+ (https://go.dev/dl/)"
 
     dest="${dest%/}"
+    if [[ "$dest" == "$INSTALL_DIR" ]]; then
+        if [[ -e "$INSTALL_DIR/$APP_SLUG" || -e "/etc/systemd/system/$SYSTEMD_SERVICE" ]]; then
+            die "--build refuses to overwrite the live install at $INSTALL_DIR; pass --dest DIR for a test install"
+        fi
+    fi
     service="$(basename "$dest").service"
     unit="/etc/systemd/system/$service"
 
@@ -366,6 +424,8 @@ do_from_source() {
     ( cd "$dest" && go build -o "$APP_SLUG" ./cmd )
 
     mkdir -p "$dest/data"
+    chown -R "$PANEL_USER:$PANEL_USER" "$dest/data"
+    chmod 700 "$dest/data"
     # Never copy the source tree's .env: dev trees carry real credentials. This
     # one is kept across reruns and never overwritten.
     if [[ ! -f "$dest/.env" ]]; then
@@ -376,12 +436,16 @@ DATA_DIR=$dest/data
 ADMIN_USERNAME=admin
 EOF
     fi
-    chmod 600 "$dest/.env"
+    chown "root:$PANEL_USER" "$dest/.env"
+    chmod 640 "$dest/.env"
     # Claim key is create-once like .env: reruns must never invalidate it.
     if [[ ! -f "$dest/data/owner-claim.key" ]]; then
         key="$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)"
         ( umask 077; printf '%s\n' "$key" > "$dest/data/owner-claim.key" )
         chmod 600 "$dest/data/owner-claim.key"
+        # The panel runs as $PANEL_USER and reads the key itself: it must be
+        # owned by that user, not by root.
+        chown "$PANEL_USER:$PANEL_USER" "$dest/data/owner-claim.key"
         _note "setup key (shown once, then claim in the panel): $key"
     fi
     port="$(read_env_port "$dest/.env")"
@@ -396,9 +460,16 @@ Type=simple
 WorkingDirectory=$dest
 EnvironmentFile=$dest/.env
 Environment="OVM_APP_DIR=$dest"
+User=$PANEL_USER
+Group=$PANEL_USER
+SupplementaryGroups=systemd-journal
 ExecStart=$dest/$APP_SLUG
 Restart=on-failure
 RestartSec=3
+$(unit_hardening "$dest" "$dest/data")
+# No ProtectSystem here either — see the release unit: the declared
+# certificate path is outside the data dir.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
@@ -421,7 +492,7 @@ UNIT
 
 do_install() {
     [[ -e "$INSTALL_DIR" || -f "/etc/systemd/system/$SYSTEMD_SERVICE" ]] \
-        && die "Already installed ($INSTALL_DIR). Use: ovm update"
+        && die "Already installed ($INSTALL_DIR). Use: ovmanager update"
     check_root
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
@@ -445,14 +516,19 @@ do_install() {
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
+    write_install_result "$DATA_DIR/install-result.env"
     install_cli
     _ok "installed v$VERSION to $INSTALL_DIR (service $SYSTEMD_SERVICE, port $port)"
     if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
         verify_acme "$DATA_DIR"
     fi
     if [[ -n "$key" ]]; then
-        printf '\n  Open  http://<host>:%s/  and claim the panel with this key:\n\n      %s\n\n' \
-            "$port" "$key" >&2
+        printf '\n  Open  http://127.0.0.1:%s/dashboard/  (plaintext is loopback-only;\n' \
+            "$port" >&2
+        printf '        tunnel in with:  ssh -L %s:127.0.0.1:%s <host>)\n' \
+            "$port" "$port" >&2
+        printf '  and claim the panel with this key:\n\n      %s\n\n' \
+            "$key" >&2
     else
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
     fi
@@ -472,10 +548,10 @@ usage() {
 OVManager Setup v${VERSION}
 
 USAGE
-  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
 
 COMMANDS
-  update [--version vX.Y.Z]  Hand off to \`ovm update\` (staged, with failover)
+  update [--version vX.Y.Z]  Hand off to \`ovmanager update\` (staged, with failover)
   version-script             Print this installer's version and commit
   help                       Show this help
 
@@ -499,7 +575,7 @@ ENVIRONMENT
                              never dies over issuance; it warns and the panel
                              keeps serving plain HTTP until it works.
 
-After installation, use ovm (alias: ovmanager) for status, service controls,
+After installation, use ovmanager for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery and updates.
 
 EXIT

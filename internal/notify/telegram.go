@@ -18,6 +18,7 @@ package notify
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"mime/multipart"
@@ -54,10 +55,10 @@ func SendMessage(token, chatID, text string) error {
 	form := url.Values{"chat_id": {strings.TrimSpace(chatID)}, "text": {text}}
 	resp, err := sendHTTPClient.PostForm(APIBase+"/bot"+strings.TrimSpace(token)+"/sendMessage", form)
 	if err != nil {
-		return err
+		return scrubError(err, strings.TrimSpace(token))
 	}
 	defer resp.Body.Close()
-	return checkTelegramResponse(resp)
+	return checkTelegramResponse(resp, strings.TrimSpace(token))
 }
 
 // SendDocument uploads name/data as a multipart document (the daily backup
@@ -93,19 +94,23 @@ func SendDocument(token, chatID, name string, data []byte) error {
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	resp, err := sendHTTPClient.Do(req)
 	if err != nil {
-		return err
+		return scrubError(err, strings.TrimSpace(token))
 	}
 	defer resp.Body.Close()
-	return checkTelegramResponse(resp)
+	return checkTelegramResponse(resp, strings.TrimSpace(token))
 }
 
-func checkTelegramResponse(resp *http.Response) error {
+// checkTelegramResponse checks the Telegram API response status. On error,
+// it scrubs the bot token from the response body before returning the error.
+func checkTelegramResponse(resp *http.Response, token string) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
 	buf := make([]byte, 4096)
 	n, _ := resp.Body.Read(buf)
-	return fmt.Errorf("telegram: status %d: %s", resp.StatusCode, strings.TrimSpace(string(buf[:n])))
+	body := strings.TrimSpace(string(buf[:n]))
+	body = scrubToken(body, token)
+	return fmt.Errorf("telegram: status %d: %s", resp.StatusCode, body)
 }
 
 // MaskToken echoes only the last four characters of a stored bot token — the
@@ -119,6 +124,36 @@ func MaskToken(token string) string {
 		return "…" // short secrets never echo in whole
 	}
 	return "…" + token[len(token)-4:]
+}
+
+// scrubToken removes every occurrence of token from text, replacing it with a
+// placeholder. It is the logging-safe counterpart to MaskToken: MaskToken is
+// for display, this is for substring replacement in error text.
+func scrubToken(text, token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, token, "[redacted]")
+}
+
+// scrubError returns an error whose text has the token removed. When the
+// underlying error is a *url.Error (the transport-failure shape) its URL field
+// is scrubbed in place so the original type is preserved.
+func scrubError(err error, token string) error {
+	if err == nil {
+		return nil
+	}
+	if ue, ok := err.(*url.Error); ok {
+		ue.URL = scrubToken(ue.URL, token)
+		if ue.Err != nil {
+			if nested := scrubError(ue.Err, token); nested != ue.Err {
+				ue.Err = nested
+			}
+		}
+		return ue
+	}
+	return err
 }
 
 // --- settings (the settings row, read fresh per tick) ---
@@ -258,14 +293,40 @@ type Worker struct {
 
 	sentDay     map[string]string // dedupe key → day last sent
 	lastCollect time.Time
+
+	// persistence key for sentDay in settings_kv
+	sentDayKey string
 }
 
 // NewWorker builds a worker over the data DB.
 func NewWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*sql.DB)) *Worker {
-	return &Worker{
+	w := &Worker{
 		db: db, DailyBackup: dailyBackup, Collect: collect,
-		sentDay: map[string]string{},
+		sentDay:    map[string]string{},
+		sentDayKey: "telegram_sent_day",
 	}
+	w.loadSentDay()
+	return w
+}
+
+// loadSentDay loads the persisted sentDay map from settings_kv.
+func (w *Worker) loadSentDay() {
+	row := w.db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, w.sentDayKey)
+	var val string
+	if err := row.Scan(&val); err == nil && val != "" {
+		_ = json.Unmarshal([]byte(val), &w.sentDay)
+	}
+}
+
+// saveSentDay persists the sentDay map to settings_kv.
+func (w *Worker) saveSentDay() {
+	data, _ := json.Marshal(w.sentDay)
+	_, _ = w.db.Exec(
+		`INSERT INTO settings_kv (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
+		w.sentDayKey, string(data), time.Now().Unix(),
+		string(data), time.Now().Unix(),
+	)
 }
 
 // DB returns the live database handle (swap-safe).
@@ -300,7 +361,7 @@ func StartWorker(db *sql.DB, dailyBackup func() (string, []byte), collect func(*
 			ticker := time.NewTicker(workerTick)
 			defer ticker.Stop()
 			for now := range ticker.C {
-				w.Tick(now)
+				runGuarded("notify worker", func() { w.Tick(now) })
 			}
 		}()
 	})
@@ -361,15 +422,16 @@ func (w *Worker) sendOnce(p Settings, key, text, day string) bool {
 	if err == nil && p.NotifyBackup && key == "daily" && w.DailyBackup != nil {
 		if name, data := w.DailyBackup(); len(data) > 0 {
 			if derr := SendDocument(p.Token, p.ChatID, name, data); derr != nil {
-				log.Printf("telegram: backup attach failed: %v", derr)
+				log.Printf("telegram: backup attach failed: %s", scrubToken(derr.Error(), p.Token))
 			}
 		}
 	}
 	if err != nil {
-		log.Printf("telegram: %s: %v", key, err)
+		log.Printf("telegram: %s: %s", key, scrubToken(err.Error(), p.Token))
 		return false
 	}
 	w.sentDay[key] = day
+	w.saveSentDay()
 	return true
 }
 

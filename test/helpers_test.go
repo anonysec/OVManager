@@ -39,8 +39,12 @@ CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UN
 CREATE TABLE settings (id INTEGER PRIMARY KEY, default_days INTEGER DEFAULT 30,
   default_traffic_gb INTEGER DEFAULT 100, default_max_users INTEGER DEFAULT 1);
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
-  status BOOLEAN DEFAULT 1, key VARCHAR);
+  status BOOLEAN DEFAULT 1, key VARCHAR, extra_ports VARCHAR DEFAULT '');
 CREATE TABLE user_traffic_daily (id INTEGER PRIMARY KEY, user_id INTEGER, day TEXT, bytes BIGINT);
+CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor TEXT,
+  action TEXT, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
+CREATE TABLE deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at);
 `
 
 // newTestDB opens a throwaway SQLite file with the schema the ported code uses.

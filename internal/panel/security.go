@@ -267,11 +267,12 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 	pid := node.PanelIDFor(h.Svc.DB())
 	nodes := h.allNodes()
 
+	share := node.FairShareTimeout(node.RequestFanoutDeadline, len(nodes), node.NodeFanoutLimit)
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			return []any{n.Name, node.NodeClient(n, pid).GetSessions("", hours, 0)}
+			return []any{n.Name, node.NodeClient(n, pid).GetSessions("", hours, share)}
 		})
 	}
 

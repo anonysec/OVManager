@@ -87,22 +87,27 @@ func writeOwnerHash(dataDir, hashed, owner string) (int, string) {
 	defer conn.Close()
 
 	var id int64
-	err = conn.QueryRow(`SELECT id FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&id)
+	var actual string
+	err = conn.QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&id, &actual)
 	if err != nil {
-		err = conn.QueryRow(`SELECT id FROM admins WHERE username = ? LIMIT 1`, owner).Scan(&id)
+		err = conn.QueryRow(`SELECT id, username FROM admins WHERE username = ? LIMIT 1`, owner).Scan(&id, &actual)
 	}
 	if err != nil {
 		if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, owner, hashed); err != nil {
 			return -1, "Could not update the owner credential: " + err.Error()
 		}
+		actual = owner
 	} else {
 		if _, err := conn.Exec(`UPDATE admins SET password = ?, is_owner = 1 WHERE id = ?`, hashed, id); err != nil {
 			return -1, "Could not update the owner credential: " + err.Error()
 		}
 	}
+	if actual == "" {
+		actual = owner
+	}
 
 	svc := auth.NewService(conn, dataDir)
-	return svc.RevokeUserSessions(owner), ""
+	return svc.RevokeUserSessions(actual), ""
 }
 
 func itoa(n int) string {

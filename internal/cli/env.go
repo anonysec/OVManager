@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/maintenance"
 )
 
 const (
@@ -116,13 +116,13 @@ func (i Install) Cafile() string { return i.Env["SSL_CERTFILE"] }
 // (URLPATH in .env is only the seed). Falls back to the seed when the database
 // cannot be read.
 func (i Install) LivePathPrefix() string {
-	if prefix, err := panel.LiveURLPath(i.DataDir); err == nil {
+	if prefix, err := maintenance.LiveURLPath(i.DataDir); err == nil {
 		return prefix
 	}
 	return i.PathPrefix
 }
 
-// PublicURL builds the host URL for this panel.
+// PublicURL builds the host URL for this maintenance.
 func (i Install) PublicURL(host string, live bool) string {
 	if host == "" {
 		host = "127.0.0.1"

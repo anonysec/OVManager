@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/version"
@@ -88,7 +89,8 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"telegram_summary_time":     s.str("telegram_summary_time", "09:00"),
 		"default_days":              orDefault(s.num("default_days", 30), 30),
 		"default_traffic_gb":        orDefault(s.num("default_traffic_gb", 100), 100),
-		"default_max_users":         orDefault(s.num("default_max_users", 1), 1),
+		"default_max_users":         s.numOrNull("default_max_users"),
+		"offsite_backup_target":     s.strOr("offsite_backup_target"),
 		"owner_telegram_id":         s.numOrNull("owner_telegram_id"),
 		"urlpath":                   urlpath,
 		"panel_domain":              s.nullStr("panel_domain"),
@@ -102,7 +104,6 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"auto_backup_enabled":       s.boolean("auto_backup_enabled", false),
 		"auto_backup_time":          s.str("auto_backup_time", "03:30"),
 		"auto_backup_keep":          orDefault(s.num("auto_backup_keep", 50), 50),
-		"offsite_backup_target":     s.strOr("offsite_backup_target"),
 		"telegram_backup_enabled":   s.boolean("telegram_backup_enabled", false),
 		"telegram_backup_available": s.strOr("bot_token") != "",
 		"panel_id":                  s.strOr("panel_id"),
@@ -275,6 +276,7 @@ type botConfigUpdate struct {
 	DefaultDays           *int    `json:"default_days"`
 	DefaultTrafficGB      *int    `json:"default_traffic_gb"`
 	DefaultMaxUsers       *int    `json:"default_max_users"`
+	OffsiteBackupTarget   *string `json:"offsite_backup_target"`
 	OwnerTelegramID       *int    `json:"owner_telegram_id"`
 	NotifyExpiry          *bool   `json:"notify_expiry"`
 	NotifyTraffic         *bool   `json:"notify_traffic"`
@@ -287,7 +289,6 @@ type botConfigUpdate struct {
 	AutoBackupEnabled     *bool   `json:"auto_backup_enabled"`
 	AutoBackupTime        *string `json:"auto_backup_time"`
 	AutoBackupKeep        *int    `json:"auto_backup_keep"`
-	OffsiteBackupTarget   *string `json:"offsite_backup_target"`
 	TelegramBackupEnabled *bool   `json:"telegram_backup_enabled"`
 	TelegramSummaryTime   *string `json:"telegram_summary_time"`
 }
@@ -311,6 +312,7 @@ var botConfigColumns = []struct {
 	{"default_days", "default_days", func(p botConfigUpdate) (any, bool) { return intOrNil(p.DefaultDays) }},
 	{"default_traffic_gb", "default_traffic_gb", func(p botConfigUpdate) (any, bool) { return intOrNil(p.DefaultTrafficGB) }},
 	{"default_max_users", "default_max_users", func(p botConfigUpdate) (any, bool) { return intOrNil(p.DefaultMaxUsers) }},
+	{"offsite_backup_target", "offsite_backup_target", func(p botConfigUpdate) (any, bool) { return strOrNil(p.OffsiteBackupTarget) }},
 	{"owner_telegram_id", "owner_telegram_id", func(p botConfigUpdate) (any, bool) { return intOrNil(p.OwnerTelegramID) }},
 	{"notify_expiry", "notify_expiry", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.NotifyExpiry) }},
 	{"notify_traffic", "notify_traffic", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.NotifyTraffic) }},
@@ -323,7 +325,6 @@ var botConfigColumns = []struct {
 	{"auto_backup_enabled", "auto_backup_enabled", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.AutoBackupEnabled) }},
 	{"auto_backup_time", "auto_backup_time", func(p botConfigUpdate) (any, bool) { return strOrNil(p.AutoBackupTime) }},
 	{"auto_backup_keep", "auto_backup_keep", func(p botConfigUpdate) (any, bool) { return intOrNil(p.AutoBackupKeep) }},
-	{"offsite_backup_target", "offsite_backup_target", func(p botConfigUpdate) (any, bool) { return strOrNil(p.OffsiteBackupTarget) }},
 	{"telegram_backup_enabled", "telegram_backup_enabled", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.TelegramBackupEnabled) }},
 	{"telegram_summary_time", "telegram_summary_time", func(p botConfigUpdate) (any, bool) {
 		if p.TelegramSummaryTime == nil {
@@ -385,8 +386,11 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "auto_backup_keep must be between 1 and 500", nil)
 		return
 	}
+	// Offsite backup copies are not implemented: the SSH/rsync copy that this
+	// setting used to advertise was never wired up. Re-adding the control
+	// requires a real implementation; do not re-add the dead field here.
 	if payload.OffsiteBackupTarget != nil && strings.TrimSpace(*payload.OffsiteBackupTarget) != "" {
-		if _, _, _, err := parseOffsiteTarget(*payload.OffsiteBackupTarget); err != nil {
+		if _, _, _, err := ParseOffsiteTarget(*payload.OffsiteBackupTarget); err != nil {
 			envelope(w, false, err.Error(), nil)
 			return
 		}
@@ -450,7 +454,6 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 		"auto_backup_enabled":       s.boolean("auto_backup_enabled", false),
 		"auto_backup_time":          s.str("auto_backup_time", "03:30"),
 		"auto_backup_keep":          orDefault(s.num("auto_backup_keep", 50), 50),
-		"offsite_backup_target":     s.strOr("offsite_backup_target"),
 		"telegram_backup_enabled":   s.boolean("telegram_backup_enabled", false),
 		"telegram_backup_available": s.strOr("bot_token") != "",
 		"telegram_summary_time":     s.str("telegram_summary_time", "09:00"),
@@ -460,6 +463,8 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	// The auto-backup schedule lives in the scheduler (Phase 5+); the settings
 	// write is what the API contract covers here.
+	audit.Record(h.Svc.DB(), panelActor(h, r), "admin.settings", "info",
+		"Panel settings updated.", map[string]any{"target": "bot_config"})
 	envelope(w, true, "Bot config updated", data)
 }
 
@@ -517,6 +522,8 @@ func (h *Handler) updateURLPath(w http.ResponseWriter, r *http.Request) {
 		msg = "URL path updated — panel moved to the new path immediately."
 		panelURL = "/" + newValue
 	}
+	audit.Record(h.Svc.DB(), panelActor(h, r), "admin.urlpath", "info",
+		"Panel URL path changed.", map[string]any{"target": newValue})
 	envelope(w, true, msg, map[string]any{"urlpath": newValue, "panel_url": panelURL})
 }
 

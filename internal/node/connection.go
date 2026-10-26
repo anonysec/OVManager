@@ -151,7 +151,10 @@ func Healthy(n *Node) bool {
 	if conn.health == HealthHealthy && time.Since(conn.lastOK) <= healthTTL {
 		return true
 	}
-	return true
+	// A node we have not heard from recently, or have never heard from, is
+	// NOT healthy: probing it gets the short timeout instead of the long
+	// one, so a black-holed node cannot hold a fan-out slot for 30 s.
+	return false
 }
 
 // ProbeTimeout is the timeout to use when periodically probing this node.
@@ -160,6 +163,21 @@ func ProbeTimeout(n *Node) time.Duration {
 		return LongTimeout
 	}
 	return BrokenProbeTimeout
+}
+
+// NodeTimeout is the timeout for one node call inside a fan-out: the node's
+// own probe timeout, bounded by the call's fair share of the fan-out budget.
+//
+// The bound matters because a call that hangs holds its concurrency slot for
+// its whole timeout: a node that is known to be healthy but is now
+// black-holed would otherwise hold a slot for 30 s and starve the calls
+// queued behind it.
+func NodeTimeout(n *Node, share time.Duration) time.Duration {
+	t := ProbeTimeout(n)
+	if share > 0 && t > share {
+		return share
+	}
+	return t
 }
 
 // Forget drops a node's connection entry (node deleted).

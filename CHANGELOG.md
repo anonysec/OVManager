@@ -1,10 +1,32 @@
-## Unreleased — 2026-10-19
+## Unreleased — 2026-10-21
 
 - Feature: per-user traffic accounting across nodes (cumulative deltas, OCC-guarded writes, reseed markers, reset/purge routes).
 - Feature: live snapshot collector feeding active_connections/online and SSE-driven refresh.
+- Feature: the audit trail names the actor — user, settings, node, sign-in and claim operations are recorded with the real username instead of "system".
+- Feature: `ovm auth key` / `ovm auth reset` mint and replace the owner-claim setup key, so the panel's own recovery instructions work (a container install had no way to claim the panel).
+- Feature: the offsite backup copy is implemented: the newest backup is pushed to the configured `[user@]host:/path` with rsync (or scp), `BatchMode=yes`, and the outcome goes to the audit log.
+- Fix: the SPA asked for `/nodes/{id}/status/` with a trailing slash, which Go's ServeMux matched to the node LIST route — the dashboard reported every node as unreachable and billed no traffic.
+- Fix: the SPA no longer keeps the session token in `localStorage`; the session is the server's `HttpOnly` cookie, so a script on the origin cannot read it.
+- Fix: a live-stream 401 now ends the session instead of leaving a frozen dashboard; the subscription link and QR work on a default install.
+- Fix: a migration step is no longer half-applied (each step and its version stamp run in one transaction) and the v25 backfill is re-runnable, so an interrupted upgrade can no longer leave a database that refuses to boot.
+- Fix: fresh and upgraded databases now converge on the same schema — an upgraded database could end up with no `sessions` table, and nobody could log in.
+- Fix: `TRUSTED_PROXY` is read (from the environment and the .env), so a login brute-force behind a proxy no longer locks out every user and the session cookie is `Secure` there.
+- Fix: a bad node record is rejected before it is written instead of panicking a goroutine and taking the panel down; a database restore replaces the live file atomically instead of truncating it under a serving pool.
+- Fix: `ovm reset-password` revokes the owner's real sessions; `ovm doctor` can pass; `ovm update` recovers an interrupted swap and builds the tree it stages; `install.sh --build` no longer runs the panel as root.
+- Fix: the node-status traffic, session and diagnostic fan-outs bound each call to a fair share of the deadline, so N unresponsive nodes no longer starve the healthy ones behind them.
+- Fix: deleting a node strips its traffic baseline and login-limit push hash, so the next node (SQLite reuses the id) is neither under-billed nor skipped by the limits sweep.
+- Fix: node traffic counters that resolve to the same user are summed, not reduced to the largest one.
+- Fix: uploads are size-capped, the HTTP server has read and idle timeouts, the SSE stream sets a write deadline, and the audit log is pruned and no longer scanned in full.
+- Fix: `TRUSTED_PROXY`, the 0 = unlimited device default, the panel URL prefix text, the installer's claim URL and the `ovm reset-password` recipes in `.env.example` all tell the truth.
 - Fix: guard nodeState/checkState maps with mutex; stop mutating shared Client.headers across goroutines.
 - Fix: CollectMetrics/CollectLiveSnapshot type asserts guarded against malformed node payloads.
 - Fix: Origin/CSRF guard on mutating routes via RequireUser.
+- Fix: the login endpoint is origin-guarded too — the session is a cookie and the login response sets it, so a cross-site POST would have put the victim in the attacker's session.
+- Fix: the fan-out semaphore is swapped under a lock and captured once per call, so a test that shrinks the cap no longer races with the calls holding a slot.
+- Fix: the offsite backup target refuses a leading dash — rsync and scp hand the host to ssh, which would read `-oProxyCommand=...` as an option.
+- Fix: an upload no longer leaves the multipart parser's spooled copy in the system temp dir — every restore copied the whole database into /tmp and left it there.
+- Fix: a restore that cannot reopen the swapped database is rolled back instead of leaving the panel on a closed pool.
+- Fix: a pre-runner database (schema version 0) with more than one owner row migrates again — the unique owner index is created after the step that dedupes them, not before.
 - Fix: SyncTraffic resolves numeric panel user ids reported by nodes.
 - Fix: reset-usage writes are OCC-guarded against concurrent traffic passes.
 

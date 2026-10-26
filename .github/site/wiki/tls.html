@@ -69,11 +69,11 @@
     </p>
     <figure class="cmd">
       <figcaption>From the server</figcaption>
-      <pre><code>sudo ovm https --domain panel.example.com   # Let's Encrypt for a domain
-sudo ovm https --ip                         # Let's Encrypt for this host's IP
-sudo ovm https --self                       # new self-signed certificate
-sudo ovm https --key F --cert F             # use your own key and certificate
-ovm tls-status                              # what is installed, and when it expires</code></pre>
+      <pre><code>sudo ovmanager https --domain panel.example.com   # Let's Encrypt for a domain
+sudo ovmanager https --ip                         # Let's Encrypt for this host's IP
+sudo ovmanager https --self                       # new self-signed certificate
+sudo ovmanager https --key F --cert F             # use your own key and certificate
+ovmanager tls-status                              # what is installed, and when it expires</code></pre>
     </figure>
     <p>
       Or from the panel: <strong>Settings &rarr; TLS</strong> shows the current
@@ -123,7 +123,7 @@ ovm tls-status                              # what is installed, and when it exp
 
     <h2 id="expiry">Watching for expiry</h2>
     <ul>
-      <li><code>ovm tls-status</code> on the panel &mdash; read-only, no restart.</li>
+      <li><code>ovmanager tls-status</code> on the panel &mdash; read-only, no restart.</li>
       <li><code>ovn status</code> on each VPN server &mdash; health plus certificate expiry.</li>
       <li><strong>Settings &rarr; TLS</strong> in the panel &mdash; the same panel information with the renewal buttons next to it.</li>
     </ul>

@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// NodeUsageVersion is the current schema version for node_usage JSON.
+// v1: flat map with int64 values (legacy)
+// v2: {"version": 2, "data": {"node_id": {"total": int64}}}
+const NodeUsageVersion = 2
+
 // Execer is the slice of *sql.DB the writers use; *sql.Tx satisfies it too,
 // so a user write and its daily row can share one transaction.
 type Execer interface {
@@ -185,6 +190,55 @@ func compact(v any) string {
 	return string(b)
 }
 
+// migrateNodeUsage upgrades legacy node_usage formats to the current version.
+// Handles:
+// - empty string → {"version": 2, "data": {}}
+// - legacy flat map (node_name → int64) → {"version": 2, "data": {node_id: {"total": int64}}}
+// - legacy flat map (node_name → {"total": int64}) → {"version": 2, "data": {node_id: {"total": int64}}}
+// - already versioned → returns as-is (or upgrades if version < current)
+func migrateNodeUsage(raw string) string {
+	if raw == "" {
+		return `{"version":2,"data":{}}`
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return `{"version":2,"data":{}}`
+	}
+
+	// Already versioned?
+	if m, ok := parsed.(map[string]any); ok {
+		if v, ok := m["version"]; ok {
+			if f, ok := v.(float64); ok && int(f) >= NodeUsageVersion {
+				return raw // already current
+			}
+		}
+		// Legacy flat map: {"node1": 123, "node2": {"total": 456}}
+		data := make(map[string]map[string]int64)
+		for k, v := range m {
+			if k == "version" || k == "data" {
+				continue // skip version/data keys in legacy format
+			}
+			total := int64(0)
+			if num, ok := v.(float64); ok {
+				total = int64(num)
+			} else if sub, ok := v.(map[string]any); ok {
+				if t, ok := sub["total"]; ok {
+					if n, ok := t.(float64); ok {
+						total = int64(n)
+					}
+				}
+			}
+			if total > 0 {
+				data[k] = map[string]int64{"total": total}
+			}
+		}
+		if len(data) > 0 {
+			return compact(map[string]any{"version": NodeUsageVersion, "data": data})
+		}
+	}
+	return `{"version":2,"data":{}}`
+}
+
 // ExtractUsername resolves a node-reported key to a panel username.
 func ExtractUsername(clientName, nodeName string, known map[string]bool) string {
 	if known != nil && known[clientName] {
@@ -197,48 +251,103 @@ func ExtractUsername(clientName, nodeName string, known map[string]bool) string 
 	return clientName
 }
 
+// extractNodeUsageData extracts the "data" map from a versioned node_usage state.
+// Returns nil if the state is not a valid versioned format.
+func extractNodeUsageData(state any) map[string]map[string]int64 {
+	if state == nil {
+		return nil
+	}
+	// If state is a string, parse it first
+	var parsed any
+	switch s := state.(type) {
+	case string:
+		if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+			return nil
+		}
+	case map[string]any:
+		parsed = s
+	default:
+		return nil
+	}
+
+	m, ok := parsed.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// Check for versioned format
+	if v, ok := m["version"]; ok {
+		if f, ok := v.(float64); ok && int(f) >= NodeUsageVersion {
+			if data, ok := m["data"].(map[string]any); ok {
+				result := make(map[string]map[string]int64)
+				for k, v := range data {
+					if sub, ok := v.(map[string]any); ok {
+						if total, ok := sub["total"].(float64); ok {
+							result[k] = map[string]int64{"total": int64(total)}
+						}
+					}
+				}
+				return result
+			}
+		}
+	}
+	// Legacy flat map format
+	result := make(map[string]map[string]int64)
+	for k, v := range m {
+		if k == "version" || k == "data" {
+			continue
+		}
+		total := int64(0)
+		if num, ok := v.(float64); ok {
+			total = int64(num)
+		} else if sub, ok := v.(map[string]any); ok {
+			if t, ok := sub["total"]; ok {
+				if n, ok := t.(float64); ok {
+					total = int64(n)
+				}
+			}
+		}
+		if total > 0 {
+			result[k] = map[string]int64{"total": total}
+		}
+	}
+	return result
+}
+
 // ComputeSessionDelta returns (delta_bytes, new_state) for one user on one node.
 //
 // new_state is a map[string]int64 when the node reports per-session data, or an
 // int64 legacy total otherwise (mirrors the union return).
 func ComputeSessionDelta(sessions map[string]any, prevState any, legacyTotal float64) (int, any) {
 	if sessions != nil {
-		if prev, ok := prevState.(map[string]any); ok {
-			delta := 0
-			for skey, cur := range sessions {
-				last := int64(0)
-				if lv, ok := prev[skey]; ok {
-					last = toI64(lv)
-				}
-				curInt := toI64(cur)
-				if curInt >= last {
-					delta += int(curInt - last)
-				} else {
-					delta += int(curInt)
-				}
-			}
-			return delta, intMap(sessions)
-		}
-		prevInt := int64(0)
-		if prevState != nil {
-			if _, isDict := prevState.(map[string]any); !isDict {
-				prevInt = toI64(prevState)
-			}
-		}
-		curTotal := int64(0)
-		for _, v := range sessions {
-			curTotal += toI64(v)
-		}
+		// Extract previous state data map
+		prevData := extractNodeUsageData(prevState)
 		delta := 0
-		if curTotal >= prevInt {
-			delta = int(curTotal - prevInt)
-		} else {
-			delta = int(curTotal)
+		for skey, cur := range sessions {
+			last := int64(0)
+			if prevData != nil {
+				if sub, ok := prevData[skey]; ok {
+					last = sub["total"]
+				}
+			}
+			curInt := toI64(cur)
+			if curInt >= last {
+				delta += int(curInt - last)
+			} else {
+				delta += int(curInt)
+			}
 		}
 		return delta, intMap(sessions)
 	}
+	// sessions is nil: legacy behavior returns integer total, not a map
+	prevData := extractNodeUsageData(prevState)
 	prevInt := int64(0)
-	if prevState != nil {
+	if prevData != nil {
+		// Sum all totals from previous data
+		for _, sub := range prevData {
+			prevInt += sub["total"]
+		}
+	} else if prevState != nil {
 		if _, isDict := prevState.(map[string]any); !isDict {
 			prevInt = toI64(prevState)
 		}

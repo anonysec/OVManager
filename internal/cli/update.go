@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/go/internal/maintenance"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
 
@@ -182,9 +182,22 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		fmt.Fprint(out, block([]string{failedLine("Must run as root")}))
 		return 1
 	}
-	if info, err := os.Stat(install.InstallDir); err != nil || !info.IsDir() {
-		fmt.Fprint(out, block([]string{failedLine("Not installed (" + install.InstallDir + " missing)")}))
-		return 1
+	info, err := os.Stat(install.InstallDir)
+	if err != nil || !info.IsDir() {
+		// Recover an interrupted swap: a crash between the two renames leaves
+		// the install dir absent and the previous tree holding the only copy.
+		prev := prevPath(install)
+		pinfo, perr := os.Stat(prev)
+		if perr != nil || !pinfo.IsDir() {
+			fmt.Fprint(out, block([]string{failedLine("Not installed (" + install.InstallDir + " missing)")}))
+			return 1
+		}
+		if rerr := os.Rename(prev, install.InstallDir); rerr != nil {
+			fmt.Fprint(out, block([]string{failedLine("Could not restore the previous release: " + rerr.Error())}))
+			return 1
+		}
+		_ = os.Remove(updateMarkerPath(install))
+		// fall through to the normal update with the restored tree
 	}
 
 	target := strings.TrimPrefix(strings.TrimSpace(opt.pin), "v")
@@ -211,7 +224,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 
 	writeUpdateState(install, "preflight", from, target, "")
 	fmt.Fprintln(out, kv("backup", "creating safety copy"))
-	safety, err := panel.CreateBackup(updateKeep, "pre-update", install.DataDir)
+	safety, err := maintenance.CreateBackup(updateKeep, "pre-update", install.DataDir)
 	if err != nil || safety == "" {
 		fmt.Fprint(out, block([]string{failedLine("Could not create the mandatory pre-update backup")}))
 		return 1
@@ -345,7 +358,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		return 1
 	}
 	writeUpdateState(install, "committed", from, target, safety)
-	fmt.Fprint(out, block([]string{okLine("v" + from + " → v" + target), hint("rollback: ovm rollback")}))
+	fmt.Fprint(out, block([]string{okLine("v" + from + " → v" + target)}))
 	return 0
 }
 
@@ -389,6 +402,14 @@ func stageRelease(stage, target, src string, install Install) error {
 			"--exclude", ".env", src+"/", stage+"/")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("stage failed: %s", strings.TrimSpace(string(out)))
+		}
+		// A source tree carries no binary: build it, exactly as install.sh
+		// does for a --build install. Without this the staged tree has no
+		// executable, the service fails to start, and the update rolls back.
+		build := exec.Command("go", "build", "-o", filepath.Join(stage, appSlug), "./cmd")
+		build.Dir = stage
+		if out, err := build.CombinedOutput(); err != nil {
+			return fmt.Errorf("build failed: %s", strings.TrimSpace(string(out)))
 		}
 	} else {
 		// Bare-binary release: download the platform binary straight into the

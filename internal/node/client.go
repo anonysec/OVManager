@@ -26,12 +26,60 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/anonysec/OVManager/go/internal/audit"
 )
+
+var (
+	AuditDB           func() *sql.DB
+	unverifiedNodesMu sync.Mutex
+	unverifiedNodes   = make(map[int64]bool)
+)
+
+func (c *Client) recordTLSUnverified() {
+	if c == nil || c.NodeID == 0 {
+		return
+	}
+	unverifiedNodesMu.Lock()
+	already := unverifiedNodes[c.NodeID]
+	if !already {
+		unverifiedNodes[c.NodeID] = true
+	}
+	unverifiedNodesMu.Unlock()
+	if already {
+		return
+	}
+	if AuditDB != nil {
+		if db := AuditDB(); db != nil {
+			audit.Record(db, "system", "node.tls_unverified", "warning",
+				fmt.Sprintf("Node %d TLS unverified fallback to %s", c.NodeID, c.address),
+				map[string]any{"node_id": c.NodeID, "target": c.address})
+		}
+	}
+}
 
 // Timeouts mirror backend/node/requests.py.
 const (
 	Timeout     = 10 * time.Second
 	LongTimeout = 30 * time.Second
+)
+
+// Response-body caps for node reads: http.Client.Timeout bounds time, not bytes.
+// A compromised node (or a MitM once NODE_TLS_INSECURE_FALLBACK is on) could
+// otherwise stream an unbounded body and exhaust the panel's RAM.
+const (
+	// maxNodeBody is the cap for small JSON status/usage envelopes from a node.
+	maxNodeBody = 1 << 20 // 1 MiB
+	// MaxNodeBody is the exported alias of maxNodeBody.
+	MaxNodeBody = maxNodeBody
+	// maxNodeBodyJSON is the per-endpoint cap for JSON responses.
+	maxNodeBodyJSON = 1 << 20 // 1 MiB: JSON status/usage envelopes
+	// MaxNodeBodyJSON is the exported alias.
+	MaxNodeBodyJSON = maxNodeBodyJSON
+	// maxNodeBodyOVPN is the larger (but still finite) cap for an .ovpn profile.
+	maxNodeBodyOVPN = 10 << 20 // 10 MiB: downloaded .ovpn profile
+	// MaxNodeBodyOVPN is the exported alias.
+	MaxNodeBodyOVPN = maxNodeBodyOVPN
 )
 
 // Node is the columns of a nodes row the node package needs.
@@ -49,6 +97,7 @@ type Node struct {
 	CountryCode   sql.NullString
 	Latitude      sql.NullFloat64
 	Longitude     sql.NullFloat64
+	ExtraPorts    string
 }
 
 // Client is the per-node HTTP client (backend/node/requests.NodeRequests).
@@ -173,9 +222,13 @@ func pinnedTLSConfig(pinPEM string, address string, checkName bool) (*tls.Config
 		host, _, _ := net.SplitHostPort(address)
 		return &tls.Config{RootCAs: pool, ServerName: strings.Trim(host, "[]")}, nil
 	}
-	// Pin-only: verify the chain against the pin, ignore the name (IP dial).
+	// // Pin-only: verify the chain against the pin, ignore the name (IP dial).
+	// InsecureSkipVerify: true here does NOT disable verification; it only skips
+	// the default system-CA check. The actual verification is done by
+	// VerifyPeerCertificate, which validates the leaf certificate against the
+	// pinned CA (pool). This is the standard Go pattern for certificate pinning.
 	return &tls.Config{
-		InsecureSkipVerify: true, //nolint:gosec // replaced by VerifyPeerCertificate below
+		InsecureSkipVerify: true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
 				return errors.New("node presented no certificate")
@@ -271,11 +324,17 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 	if c.pinPEM != "" {
 		cfg, err := pinnedTLSConfig(c.pinPEM, c.address, c.checkName)
 		if err != nil {
+			if c.TLSVerified() != nil {
+				c.setVerified(false)
+			}
 			return nil
 		}
 		hc := &http.Client{Transport: c.cachedTransport(cfg, false), Timeout: o.timeout}
 		r, err := c.send(hc, method, path, o)
 		if err != nil {
+			if c.TLSVerified() != nil {
+				c.setVerified(false)
+			}
 			return nil // pin mismatch/transport: fail closed, never fall back
 		}
 		c.setVerified(true)
@@ -288,17 +347,27 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 		return r
 	}
 	if !isTLSError(err) {
+		if c.TLSVerified() != nil {
+			c.setVerified(false)
+		}
 		return nil
 	}
 	if !insecureFallback() {
+		if c.TLSVerified() != nil {
+			c.setVerified(false)
+		}
 		return nil
 	}
 	hc2 := &http.Client{Transport: c.cachedTransport(nil, true), Timeout: o.timeout}
 	r2, err2 := c.send(hc2, method, path, o)
 	if err2 != nil {
+		if c.TLSVerified() != nil {
+			c.setVerified(false)
+		}
 		return nil
 	}
 	c.setVerified(false)
+	c.recordTLSUnverified()
 	return r2
 }
 
@@ -341,8 +410,17 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[stri
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil
 	}
+	// Bound the read so an oversized body is a clean failure, not a partial
+	// JSON object decoded into data.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxNodeBodyJSON+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxNodeBodyJSON {
+		return nil, fmt.Errorf("node response body exceeds %d bytes", maxNodeBodyJSON)
+	}
 	var data map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+	if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, nil
 	}
 	if ok, _ := data["success"].(bool); !ok && !o.allowFail {
@@ -410,7 +488,10 @@ func retryAfterS(v string) time.Duration {
 
 // conflictMessage surfaces the node's own 409 explanation (requests.py).
 func conflictMessage(resp *http.Response) string {
-	raw, _ := io.ReadAll(resp.Body)
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxNodeBodyJSON+1))
+	if len(raw) > maxNodeBodyJSON {
+		return "Node is paired with another panel."
+	}
 	var body map[string]any
 	_ = json.Unmarshal(raw, &body)
 	for _, key := range []string{"detail", "msg"} {
@@ -453,10 +534,19 @@ func isTLSError(err error) bool {
 	return strings.Contains(s, "certificate") || strings.Contains(s, "tls:") || strings.Contains(s, "x509:")
 }
 
-// dataOf returns r["data"] as a map, or an empty map.
+// dataOf returns r["data"] as a map.
+//
+// A nil result means the node did not answer: the call failed, or the
+// response carried no data object. Callers that need to tell "unreachable"
+// from "answered with nothing" must see that difference, so this returns
+// nil rather than an empty map — an empty map made every "the node is
+// unreachable" check dead code, and an unreachable node was reported as
+// reachable with zero counters.
+//
+// A caller that puts the result on the wire goes through orEmpty.
 func dataOf(r map[string]any) map[string]any {
 	if r == nil {
-		return map[string]any{}
+		return nil
 	}
 	if d, ok := r["data"].(map[string]any); ok {
 		return d
@@ -557,36 +647,18 @@ func (c *Client) CreateUser(name string, maxLogins int, uid string) bool {
 }
 
 // ChangeUserStatus activates/deactivates a user on the node.
-func (c *Client) ChangeUserStatus(name string, status bool, maxLogins *int, uid string) bool {
-	data := map[string]any{"name": name}
-	if status {
-		data["status"] = "activate"
-	} else {
-		data["status"] = "deactivate"
-	}
-	if uid != "" {
-		data["id"] = uid
-	}
-	if maxLogins != nil {
-		data["max_logins"] = *maxLogins
-	}
-	return c.request(http.MethodPut, "/sync/user", reqOpts{jsonBody: data, timeout: LongTimeout}) != nil
-}
-
 // DeleteUser removes a user from the node.
 func (c *Client) DeleteUser(uid string) bool {
 	return c.request(http.MethodDelete, "/sync/user/"+uid, reqOpts{timeout: 120 * time.Second}) != nil
 }
 
 // SetUserLimit pushes a max-logins limit to the node.
-func (c *Client) SetUserLimit(uid string, maxLogins int) bool {
-	return c.request(http.MethodPut, "/sync/user/limit",
-		reqOpts{jsonBody: map[string]any{"id": uid, "max_logins": maxLogins}, timeout: LongTimeout}) != nil
-}
-
 // DisconnectUser drops a user's session(s) on the node.
-func (c *Client) DisconnectUser(uid string, onlyStale bool) map[string]any {
-	o := reqOpts{timeout: LongTimeout}
+func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duration) map[string]any {
+	if timeout <= 0 {
+		timeout = LongTimeout
+	}
+	o := reqOpts{timeout: timeout}
 	if onlyStale {
 		o.params = url.Values{"only_stale": {"true"}}
 	}
@@ -665,7 +737,13 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 			return nil, err
 		}
 		defer resp.Body.Close()
-		buf, _ := io.ReadAll(resp.Body)
+		buf, err := io.ReadAll(io.LimitReader(resp.Body, maxNodeBodyOVPN+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(buf) > maxNodeBodyOVPN {
+			return nil, fmt.Errorf("node response body exceeds %d bytes", maxNodeBodyOVPN)
+		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
@@ -674,10 +752,16 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 	if c.pinPEM != "" {
 		cfg, err := pinnedTLSConfig(c.pinPEM, c.address, c.checkName)
 		if err != nil {
+			if c.TLSVerified() != nil {
+				c.setVerified(false)
+			}
 			return nil, err
 		}
 		buf, err := do(cfg)
 		if err != nil {
+			if c.TLSVerified() != nil {
+				c.setVerified(false)
+			}
 			return nil, err
 		}
 		c.setVerified(true)
@@ -689,13 +773,20 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		return validProfile(buf)
 	}
 	if !isTLSError(err) || !insecureFallback() {
+		if c.TLSVerified() != nil {
+			c.setVerified(false)
+		}
 		return nil, err
 	}
 	buf, err = do(&tls.Config{InsecureSkipVerify: true})
 	if err != nil {
+		if c.TLSVerified() != nil {
+			c.setVerified(false)
+		}
 		return nil, err
 	}
 	c.setVerified(false)
+	c.recordTLSUnverified()
 	return validProfile(buf)
 }
 

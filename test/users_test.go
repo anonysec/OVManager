@@ -485,3 +485,80 @@ func TestUsersResetReseedsBaselines(t *testing.T) {
 		t.Errorf("push_hash lost after pass: %v", state)
 	}
 }
+
+// The activity page is an audit trail only if the rows name the actor. Every
+// state-changing operation must leave a row whose actor is the real
+// username, not "system".
+func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
+	conn, base, token := authedServer(t)
+	// Two users: the panel refuses to delete the last one.
+	for _, name := range []string{"audited", "keeper"} {
+		res, body := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": name})
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("create %s: %d %s", name, res.StatusCode, body)
+		}
+	}
+	var uuid string
+	if err := conn.QueryRow(`SELECT uuid FROM users WHERE name = 'audited'`).Scan(&uuid); err != nil {
+		t.Fatal(err)
+	}
+	res, body := doJSON(t, http.MethodDelete, base+"/api/users/"+uuid, token, nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete: %d %s", res.StatusCode, body)
+	}
+
+	var actor, action, target string
+	err := conn.QueryRow(
+		`SELECT actor, action, target FROM audit_logs WHERE action = 'user.delete' ORDER BY id DESC LIMIT 1`,
+	).Scan(&actor, &action, &target)
+	if err != nil {
+		t.Fatalf("no user.delete audit row: %v", err)
+	}
+	if actor != "admin" {
+		t.Errorf("actor = %q, want the acting username (admin)", actor)
+	}
+	if target != "audited" {
+		t.Errorf("target = %q, want the deleted user's name", target)
+	}
+}
+
+// The audit detail is rendered as text in the panel: it must never carry a
+// secret.
+func TestUserCreateAuditRowCarriesNoSecret(t *testing.T) {
+	conn, base, token := authedServer(t)
+	doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "quiet"})
+	var detail string
+	if err := conn.QueryRow(
+		`SELECT detail FROM audit_logs WHERE action = 'user.create' ORDER BY id DESC LIMIT 1`,
+	).Scan(&detail); err != nil {
+		t.Fatalf("no user.create audit row: %v", err)
+	}
+	for _, secret := range []string{knownPassword, "password", "token"} {
+		if strings.Contains(strings.ToLower(detail), secret) {
+			t.Errorf("audit detail leaks %q: %s", secret, detail)
+		}
+	}
+}
+
+// The settings hint says "0 = unlimited" for the default device count. That
+// has to survive all the way to a user created without an explicit
+// max_logins — coercing it to 1 would silently limit every new user.
+func TestCreateUsesTheUnlimitedDefault(t *testing.T) {
+	conn, base, token := authedServer(t)
+	if _, err := conn.Exec(
+		`INSERT INTO settings (id, default_days, default_traffic_gb, default_max_users) VALUES (1, 30, 100, 0)`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	res, body := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "unlimited"})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("create: %d %s", res.StatusCode, body)
+	}
+	var maxLogins int64
+	if err := conn.QueryRow(`SELECT max_logins FROM users WHERE name = 'unlimited'`).Scan(&maxLogins); err != nil {
+		t.Fatal(err)
+	}
+	if maxLogins != 0 {
+		t.Errorf("max_logins = %d, want 0 (unlimited)", maxLogins)
+	}
+}

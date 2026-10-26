@@ -20,7 +20,7 @@ import (
 // testSchema (mirrors backend/db/migrations/constants.py).
 const extraTelemetryDDL = `
 CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT);
+  actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL,
   reachable INTEGER NOT NULL DEFAULT 0);
@@ -86,7 +86,10 @@ func TestActivityMatches(t *testing.T) {
 		}
 	}
 
-	_, body := doJSON(t, http.MethodGet, srv.URL+"/api/activity/", token, nil)
+	// The seeded rows are the subject of this test: the login that set the
+	// session up also wrote an auth.login row, so the feed is filtered to the
+	// user.* actions to keep the ordering assertion about the seeded rows.
+	_, body := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=user", token, nil)
 	if body["msg"] != "Activity retrieved" || body["success"] != true {
 		t.Fatalf("envelope = %v", body)
 	}
@@ -103,6 +106,17 @@ func TestActivityMatches(t *testing.T) {
 	}
 	if first["actor"] != "admin1" {
 		t.Fatalf("actor = %v", first["actor"])
+	}
+
+	// A sign-in is recorded with the real username, not "system".
+	_, loginFeed := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=auth.login", token, nil)
+	loginRows, _ := loginFeed["data"].([]any)
+	if len(loginRows) != 1 {
+		t.Fatalf("auth.login rows = %d, want 1", len(loginRows))
+	}
+	row, _ := loginRows[0].(map[string]any)
+	if row["actor"] != "owner" {
+		t.Errorf("login actor = %v, want the signing-in username", row["actor"])
 	}
 }
 
@@ -206,5 +220,75 @@ func readFrame(t *testing.T, rd *bufio.Reader) string {
 			return strings.TrimSuffix(sb.String(), "\n")
 		}
 		sb.WriteString(line)
+	}
+}
+
+// TestPromoteEventsDeliversOnce seeds delivered rows and asserts each system
+// event is promoted at most once.
+func TestPromoteEventsDeliversOnce(t *testing.T) {
+	conn, _ := newTelemetryConn(t)
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		key := "key" + string(rune('a'+i))
+		detail := `{"severity":"info","message":"msg ` + key + `","meta":{"event_key":"` + key + `"}}`
+		if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, target, detail) VALUES (?,?,?,?,?)`,
+			float64(100+i), "system", "threshold.test", "t", detail); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := conn.Exec(`INSERT INTO delivered (subscription, event_key, ts) VALUES (?,?,?)`, "threshold.test", "keya", 1.0); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := 0
+	sent := telemetry.PromoteEvents(conn, func(msg string) bool { calls++; return true })
+	if sent != 1 {
+		t.Fatalf("sent = %d, want 1", sent)
+	}
+	if calls != 1 {
+		t.Fatalf("send calls = %d, want 1", calls)
+	}
+
+	sent2 := telemetry.PromoteEvents(conn, func(msg string) bool { calls++; return true })
+	if sent2 != 0 {
+		t.Fatalf("second pass sent = %d, want 0", sent2)
+	}
+}
+
+// TestPruneAuditLogsKeepsRecentAndUndelivered checks date and delivered gating.
+func TestPruneAuditLogsKeepsRecentAndUndelivered(t *testing.T) {
+	conn, _ := newTelemetryConn(t)
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`); err != nil {
+		t.Fatal(err)
+	}
+
+	old := float64(1000)
+	recent := float64(time.Now().Unix())
+	detail := `{"severity":"info","message":"old","meta":{"event_key":"k1"}}`
+	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, old, "system", "a", detail); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO delivered (subscription, event_key, ts) VALUES (?,?,?)`, "a", "k1", old); err != nil {
+		t.Fatal(err)
+	}
+	detail2 := `{"severity":"info","message":"old2","meta":{"event_key":"k2"}}`
+	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, old, "system", "b", detail2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, recent, "system", "c", detail2); err != nil {
+		t.Fatal(err)
+	}
+
+	removed := telemetry.PruneAuditLogs(conn, 1)
+	if removed != 1 {
+		t.Fatalf("removed = %d, want 1", removed)
+	}
+	var n int
+	_ = conn.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&n)
+	if n != 2 {
+		t.Fatalf("remaining = %d, want 2", n)
 	}
 }

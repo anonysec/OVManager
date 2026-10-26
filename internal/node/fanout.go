@@ -35,12 +35,71 @@ func ChunkBySize[T any](items []T, batchSize, maxBytes int, itemBytes func(T) in
 	return chunks
 }
 
-var nodeSem = make(chan struct{}, NodeFanoutLimit)
+var (
+	// semMu guards nodeSem: a test swaps it, and a swap that raced with a
+	// running call would release the slot into a different channel.
+	semMu   sync.RWMutex
+	nodeSem = make(chan struct{}, NodeFanoutLimit)
+)
+
+// currentSem returns the live semaphore. Its capacity IS the concurrency cap.
+func currentSem() chan struct{} {
+	semMu.RLock()
+	defer semMu.RUnlock()
+	return nodeSem
+}
+
+// fanoutLimit is the live concurrency cap.
+func fanoutLimit() int { return cap(currentSem()) }
+
+// setFanoutLimit shrinks the shared concurrency cap for a test and returns a
+// restore function. Production always uses NodeFanoutLimit.
+func setFanoutLimit(n int) func() {
+	if n < 1 {
+		n = 1
+	}
+	semMu.Lock()
+	old := nodeSem
+	nodeSem = make(chan struct{}, n)
+	semMu.Unlock()
+	return func() {
+		semMu.Lock()
+		nodeSem = old
+		semMu.Unlock()
+	}
+}
+
+// FairShareTimeout is the per-call timeout for a fan-out of `calls` under
+// `limit` concurrency.
+//
+// A call that hangs holds its concurrency slot for its whole timeout, so a
+// fleet larger than the limit starves the calls queued behind it: with 20
+// slots and 25 nodes, 20 black-holed nodes would hold every slot for their
+// own timeout, the 5 healthy ones would never start, and the panel would
+// report EVERY node as dead.
+//
+// The batch needs ceil(calls/limit) rounds, so each round gets an equal share
+// of the deadline. A fleet that fits within the limit keeps its own
+// timeouts.
+func FairShareTimeout(deadline time.Duration, calls, limit int) time.Duration {
+	if limit <= 0 || calls <= limit {
+		return deadline
+	}
+	rounds := (calls + limit - 1) / limit
+	share := deadline / time.Duration(rounds)
+	if share <= 0 {
+		share = time.Second
+	}
+	return share
+}
 
 // RunBounded runs one blocking node call under the shared cap.
 func RunBounded(fn func() any) any {
-	nodeSem <- struct{}{}
-	defer func() { <-nodeSem }()
+	// The semaphore is captured once: the acquire and the release must use
+	// the same channel, or a swap in between would leak the slot.
+	sem := currentSem()
+	sem <- struct{}{}
+	defer func() { <-sem }()
 	return fn()
 }
 
@@ -108,8 +167,9 @@ func GatherNodes(calls []func() any, deadline time.Duration) []any {
 					results[j] = FanoutDeadline{Msg: "no answer within the fan-out deadline"}
 				}
 			}
+			out := append([]any(nil), results...)
 			mu.Unlock()
-			return results
+			return out
 		}
 	}
 	return results

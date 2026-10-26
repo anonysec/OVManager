@@ -4,6 +4,7 @@ package node
 import (
 	"crypto/tls"
 	"encoding/pem"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,14 +30,18 @@ func FetchServerCert(address string, port int, timeout time.Duration) string {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
-	dialer := &tls.Dialer{Config: &tls.Config{InsecureSkipVerify: true}} //nolint:gosec // TOFU fetch
-	conn, err := dialer.Dial("tcp", address+":"+strconv.Itoa(port))      //nolint:noctx
+	target := net.JoinHostPort(address, strconv.Itoa(port))
+	nd := &net.Dialer{Timeout: timeout}
+	rawConn, err := nd.Dial("tcp", target)
 	if err != nil {
 		return ""
 	}
-	defer conn.Close()
-	tconn, ok := conn.(*tls.Conn)
-	if !ok {
+	// Honour the timeout for the TLS handshake too: a listener that accepts
+	// TCP but never completes the handshake must not block indefinitely.
+	rawConn.SetDeadline(time.Now().Add(timeout))
+	defer rawConn.Close()
+	tconn := tls.Client(rawConn, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec // TOFU fetch
+	if err := tconn.Handshake(); err != nil {
 		return ""
 	}
 	certs := tconn.ConnectionState().PeerCertificates
@@ -48,24 +53,4 @@ func FetchServerCert(address string, port int, timeout time.Duration) string {
 		return ""
 	}
 	return pemText
-}
-
-// CAFileFor materializes a pinned CA for nodeID and returns its path. Returns
-// ("", false) when there is no pin or the PEM is not a certificate.
-func CAFileFor(nodeID int64, serverCA string) (string, bool) {
-	if serverCA == "" || !isPEM(serverCA) {
-		return "", false
-	}
-	dir := filepath.Join(DataDir, "node-certs")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", false
-	}
-	path := filepath.Join(dir, strconv.FormatInt(nodeID, 10)+".pem")
-	current, _ := os.ReadFile(path)
-	if string(current) != serverCA {
-		if err := os.WriteFile(path, []byte(serverCA), 0o600); err != nil {
-			return "", false
-		}
-	}
-	return path, true
 }

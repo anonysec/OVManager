@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -26,6 +27,8 @@ CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE, used BIGINT,
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   status BOOLEAN DEFAULT 1, key VARCHAR);
 CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, bot_enabled BOOLEAN DEFAULT 0);
+CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor TEXT,
+  action TEXT, target TEXT, detail TEXT);
 `
 
 func newTrafficDB(t *testing.T) (*sql.DB, string) {
@@ -90,8 +93,12 @@ func TestSyncTrafficRouteZeroCounts(t *testing.T) {
 	if !body.Success {
 		t.Fatalf("success = false, want true")
 	}
-	if body.Data != (node.TrafficResult{}) {
-		t.Fatalf("result = %+v, want zero TrafficResult", body.Data)
+	if body.Data.NodesPolled != 0 || body.Data.NodesFailed != 0 ||
+		body.Data.UsersUpdated != 0 || body.Data.UsersSeeded != 0 || body.Data.BytesBilled != 0 {
+		t.Fatalf("result = %+v, want a zero TrafficResult", body.Data)
+	}
+	if len(body.Data.AliasCollisions) != 0 {
+		t.Fatalf("AliasCollisions = %v, want none", body.Data.AliasCollisions)
 	}
 }
 
@@ -129,5 +136,39 @@ func TestTrafficPollSeconds(t *testing.T) {
 	t.Setenv("OVM_TRAFFIC_POLL_SECONDS", "15")
 	if got := trafficPollSeconds(); got != 15 {
 		t.Fatalf("override = %d, want 15", got)
+	}
+}
+
+// A node reporting two keys for one user is an anomaly worth seeing: the
+// bytes are summed, but the operator should know their node's keying drifted.
+func TestRecordAliasCollisionsWritesAnEvent(t *testing.T) {
+	conn, _ := newTrafficDB(t)
+	recordAliasCollisions(conn, node.TrafficResult{
+		AliasCollisions: []string{"user=alice node=1 keys=alice,12"},
+	})
+
+	var action string
+	var detail string
+	err := conn.QueryRow(`SELECT action, detail FROM audit_logs ORDER BY id DESC LIMIT 1`).Scan(&action, &detail)
+	if err != nil {
+		t.Fatalf("read audit row: %v", err)
+	}
+	if action != "traffic_alias_keys" {
+		t.Errorf("action = %q, want traffic_alias_keys", action)
+	}
+	if !strings.Contains(detail, "alice") {
+		t.Errorf("detail does not name the user: %q", detail)
+	}
+}
+
+func TestRecordAliasCollisionsWritesNothingWhenClean(t *testing.T) {
+	conn, _ := newTrafficDB(t)
+	recordAliasCollisions(conn, node.TrafficResult{})
+	var n int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("audit rows = %d, want 0", n)
 	}
 }

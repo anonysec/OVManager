@@ -5,6 +5,7 @@ package node
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,11 @@ type TrafficResult struct {
 	UsersUpdated int
 	UsersSeeded  int
 	BytesBilled  int64
+	// AliasCollisions names the (user, node) pairs where the node reported
+	// more than one key for the same user. The bytes are summed (see
+	// SyncTraffic), but the collision is reported so a node whose keying has
+	// drifted is visible instead of silent.
+	AliasCollisions []string
 }
 
 // trafficFanoutDeadline bounds one usage pass. A var so tests need not wait the
@@ -49,14 +55,20 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	}
 
 	pid := PanelIDFor(db)
+	// A hanging node must not hold a concurrency slot past the call's fair
+	// share of the fan-out budget, or the nodes queued behind it never run.
+	share := FairShareTimeout(trafficFanoutDeadline, len(nodes), fanoutLimit())
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
-		calls = append(calls, func() any { return NodeClient(n, pid).GetUsage(ProbeTimeout(n)) })
+		calls = append(calls, func() any { return NodeClient(n, pid).GetUsage(NodeTimeout(n, share)) })
 	}
 	raw := GatherNodes(calls, trafficFanoutDeadline)
 
 	contribs := map[int64]map[string]int64{}
+	// aliasKeys remembers the first reported key per (user, node) so a
+	// collision can name both keys.
+	aliasKeys := map[int64]map[string]string{}
 	for i, n := range nodes {
 		if _, ok := raw[i].(error); ok {
 			res.NodesFailed++
@@ -67,7 +79,13 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			res.NodesFailed++
 			continue
 		}
-		totals, ok := data["totals"].(map[string]any)
+		rawTotals := data["totals"]
+		if rawTotals == nil {
+			// A node that is up but has no users to report answers totals:null.
+			res.NodesPolled++
+			continue
+		}
+		totals, ok := rawTotals.(map[string]any)
 		if !ok {
 			res.NodesFailed++
 			continue
@@ -98,8 +116,24 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			if contribs[u.id] == nil {
 				contribs[u.id] = map[string]int64{}
 			}
-			if prev, seen := contribs[u.id][nodeKey]; !seen || cur > prev {
+			// The node's /sync/usage merges alias CNs ADDITIVELY
+			// (OVNode get_users_usage: users[key] = users.get(key, 0) +
+			// total), so two reported keys that resolve to one user are two
+			// DIFFERENT byte pools. They must be summed: keeping only the
+			// larger one silently drops the other's bytes from users.used,
+			// from user_traffic_daily and from the baseline, for good.
+			if prev, seen := contribs[u.id][nodeKey]; seen {
+				contribs[u.id][nodeKey] = prev + cur
+				res.AliasCollisions = append(res.AliasCollisions,
+					fmt.Sprintf("user=%s node=%s keys=%s,%s", u.name, nodeKey, aliasKeys[u.id][nodeKey], reported))
+			} else {
 				contribs[u.id][nodeKey] = cur
+			}
+			if aliasKeys[u.id] == nil {
+				aliasKeys[u.id] = map[string]string{}
+			}
+			if _, ok := aliasKeys[u.id][nodeKey]; !ok {
+				aliasKeys[u.id][nodeKey] = reported
 			}
 		}
 	}

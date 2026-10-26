@@ -149,6 +149,7 @@ func (h *Handler) kickUserNodes(u userRow) (killed int, failed []string) {
 
 	nodes := make([]*node.Node, 0, len(ids))
 	calls := make([]func() any, 0, len(ids))
+	share := node.FairShareTimeout(node.RequestFanoutDeadline, len(ids), node.NodeFanoutLimit)
 	for _, id := range ids {
 		n := node.GetNodeByID(h.Svc.DB(), id)
 		if n == nil {
@@ -156,7 +157,7 @@ func (h *Handler) kickUserNodes(u userRow) (killed int, failed []string) {
 		}
 		nodes = append(nodes, n)
 		calls = append(calls, func() any {
-			return node.NodeClient(n, pid).DisconnectUser(uid, false)
+			return node.NodeClient(n, pid).DisconnectUser(uid, false, share)
 		})
 	}
 	results := node.GatherNodes(calls, node.RequestFanoutDeadline)

@@ -8,6 +8,7 @@ data/
 
 # Node (web build artifacts)
 web/node_modules/
+node_modules/
 web/dist/
 
 # Embedded SPA (staged by `make build`; .gitkeep keeps go:embed valid on a
@@ -32,6 +33,7 @@ internal/webfs/dist/*
 # Local tools (never published)
 graphify-out/
 .opencode/
+.my-agent-team/
 AGENTS.md
 .worktrees/
 .pre-commit-cache/

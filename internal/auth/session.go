@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,12 +51,13 @@ type Service struct {
 // (SESSION_MAX_SECONDS=604800, SESSION_IDLE_SECONDS=1800).
 func NewService(db *sql.DB, dataDir string) *Service {
 	return &Service{
-		db:          db,
-		DataDir:     dataDir,
-		MaxSeconds:  envInt("SESSION_MAX_SECONDS", 604800),
-		IdleSeconds: envInt("SESSION_IDLE_SECONDS", 1800),
-		attempts:    map[string][]float64{},
-		failures:    map[string][]float64{},
+		db:           db,
+		DataDir:      dataDir,
+		TrustedProxy: strings.EqualFold(os.Getenv("TRUSTED_PROXY"), "true"),
+		MaxSeconds:   envInt("SESSION_MAX_SECONDS", 604800),
+		IdleSeconds:  envInt("SESSION_IDLE_SECONDS", 1800),
+		attempts:     map[string][]float64{},
+		failures:     map[string][]float64{},
 	}
 }
 
@@ -75,19 +77,6 @@ func (s *Service) DBSwap(fresh *sql.DB) *sql.DB {
 	s.db = fresh
 	return old
 }
-
-// DBClose closes the live handle (tests, process teardown).
-func (s *Service) DBClose() error {
-	s.dbmu.Lock()
-	defer s.dbmu.Unlock()
-	if s.db == nil {
-		return nil
-	}
-	err := s.db.Close()
-	s.db = nil
-	return err
-}
-
 func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -111,7 +100,10 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 	if ttl == 0 {
 		ttl = s.MaxSeconds
 	}
-	raw := newToken()
+	raw, err := newToken()
+	if err != nil {
+		return "", err
+	}
 	now := nowSecs()
 	if len(userAgent) > 256 {
 		userAgent = userAgent[:256]
@@ -119,12 +111,11 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 	if len(ip) > 64 {
 		ip = ip[:64]
 	}
-	_, err := s.DB().Exec(
+	if _, err := s.DB().Exec(
 		`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at, user_agent, ip)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		tokenHash(raw), username, role, now, now+float64(ttl), now, nullIfEmpty(userAgent), nullIfEmpty(ip),
-	)
-	if err != nil {
+	); err != nil {
 		return "", err
 	}
 	return raw, nil
@@ -132,12 +123,12 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 
 // newToken mirrors secrets.token_urlsafe(32): 32 random bytes, unpadded
 // URL-safe base64 (43 chars).
-func newToken() string {
+func newToken() (string, error) {
 	buf := make([]byte, TokenBytes)
 	if _, err := rand.Read(buf); err != nil {
-		panic("crypto/rand: " + err.Error())
+		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(buf)
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 // VerifySession resolves a raw token to its identity, or false when

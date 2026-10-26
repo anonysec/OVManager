@@ -83,7 +83,7 @@ func runTLSRemove(inst Install) (string, int) {
 
 func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 	if certSrc == "" || keySrc == "" {
-		return block([]string{heading("HTTPS certificate"), "usage: ovm tls install <cert.pem> <key.pem>"}), 2
+		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls install <cert.pem> <key.pem>"}), 2
 	}
 	certBytes, err := os.ReadFile(certSrc)
 	if err != nil {
@@ -106,6 +106,8 @@ func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 	if err := os.WriteFile(keyPath, keyBytes, 0o600); err != nil {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
+	_ = fixTLSOwnership(certPath, 0o644)
+	_ = fixTLSOwnership(keyPath, 0o600)
 	return block([]string{heading("HTTPS certificate"), "installed — restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
 }
 
@@ -150,13 +152,14 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return block([]string{heading("HTTPS certificate"), "could not write key: " + err.Error()}), 1
 	}
-	_ = os.Chmod(keyPath, 0o600)
+	_ = fixTLSOwnership(certPath, 0o644)
+	_ = fixTLSOwnership(keyPath, 0o600)
 	return block([]string{heading("HTTPS certificate"), "self-signed cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
 }
 
 func runTLSAcme(inst Install, domain, email string) (string, int) {
 	if domain == "" {
-		return block([]string{heading("HTTPS certificate"), "usage: ovm tls acme <domain> [email]"}), 2
+		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
 	// account key
 	dir := tlsDir(inst)
@@ -191,6 +194,8 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 	if err := os.WriteFile(keyPath, res.KeyPEM, 0o600); err != nil {
 		return block([]string{heading("HTTPS certificate"), "could not write key: " + err.Error()}), 1
 	}
+	_ = fixTLSOwnership(certPath, 0o644)
+	_ = fixTLSOwnership(keyPath, 0o600)
 	// persist account key if returned
 	if len(res.AccountKeyPEM) > 0 {
 		if err := os.WriteFile(acctPath, res.AccountKeyPEM, 0o600); err != nil {

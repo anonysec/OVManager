@@ -12,12 +12,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
@@ -53,12 +55,12 @@ func getKV(db *sql.DB, key string) string {
 }
 
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
-	COALESCE(key,''), status, server_ca, country_code, latitude, longitude`
+	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'')`
 
 func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 	n := &Node{}
 	err := row.Scan(&n.ID, &n.Name, &n.Address, &n.TunnelAddress, &n.Protocol, &n.OVPNPort,
-		&n.Port, &n.Key, &n.Status, &n.ServerCA, &n.CountryCode, &n.Latitude, &n.Longitude)
+		&n.Port, &n.Key, &n.Status, &n.ServerCA, &n.CountryCode, &n.Latitude, &n.Longitude, &n.ExtraPorts)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +136,9 @@ func versionParts(v any) ([]int, bool) {
 	return parts, true
 }
 
+// minNodeMajor is the lowest node major version this panel supports.
+const minNodeMajor = 1
+
 // nodeVersionCompat judges a node agent version against this panel.
 func nodeVersionCompat(agentVersion any) map[string]any {
 	agent, okA := versionParts(agentVersion)
@@ -145,7 +150,7 @@ func nodeVersionCompat(agentVersion any) map[string]any {
 	}
 	cmp := compareParts(agent, panel)
 	switch {
-	case agent[0] != panel[0]:
+	case agent[0] < minNodeMajor:
 		out["verdict"] = "incompatible"
 	case cmp > 0:
 		out["verdict"] = "node-newer"
@@ -213,6 +218,7 @@ func listNodes(db *sql.DB) []map[string]any {
 			"country_code":   n.CountryCode.String,
 			"latitude":       nullFloat(n.Latitude),
 			"longitude":      nullFloat(n.Longitude),
+			"extra_ports":    n.ExtraPorts,
 		})
 	}
 	return out
@@ -282,10 +288,11 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 
 	return map[string]any{
 		"node": map[string]any{
-			"id":      n.ID,
-			"name":    n.Name,
-			"address": n.Address,
-			"status":  n.Status,
+			"id":          n.ID,
+			"name":        n.Name,
+			"address":     n.Address,
+			"status":      n.Status,
+			"extra_ports": n.ExtraPorts,
 		},
 		"node_info":           orEmpty(res.info),
 		"version_compat":      nodeVersionCompat(res.info["version"]),
@@ -390,6 +397,7 @@ func AddNodeHandler(req nodeCreate, db *sql.DB) (bool, string) {
 		return false, err.Error()
 	}
 	_ = id
+	audit.Record(db, "admin", "node.create", "info", fmt.Sprintf("Node added: %s (%s:%d)", req.Name, req.Address, req.port()), map[string]any{"target": req.Name, "address": req.Address, "port": req.port()})
 	return true, "Node added successfully"
 }
 
@@ -441,6 +449,7 @@ func UpdateNodeHandler(nodeID int64, req nodeCreate, db *sql.DB) (bool, string) 
 }
 
 // DeleteNodeHandler deletes the node row and drops its connection.
+// It also cleans up the node's traffic baselines and push hashes from all users.
 func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	res, err := db.Exec(`DELETE FROM nodes WHERE id = ?`, nodeID)
 	if err != nil {
@@ -451,6 +460,20 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 		return false
 	}
 	Forget(nodeID)
+
+	// Clean up node's traffic baselines and push hashes from all users.
+	nodeIDStr := strconv.FormatInt(nodeID, 10)
+	jsonPath1 := "$.\"" + nodeIDStr + "\""
+	jsonPath2 := "$.push_hash.\"" + nodeIDStr + "\""
+	_, _ = db.Exec(
+		"UPDATE users SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
+		jsonPath1, jsonPath1)
+	_, _ = db.Exec(
+		"UPDATE users SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
+		jsonPath2, jsonPath2)
+
+	audit.Record(db, "admin", "node.delete", "warning", fmt.Sprintf("Node deleted (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
+
 	return true
 }
 
@@ -508,10 +531,36 @@ var remoteLineRe = regexp.MustCompile(`(?i)^\s*remote\s+`)
 
 func remotePlan(n *Node, db *sql.DB) (string, int, [][2]any) {
 	domain := panelDomainFor(db)
+	if domain == "" {
+		if strings.TrimSpace(n.TunnelAddress) != "" {
+			domain = strings.TrimSpace(n.TunnelAddress)
+		} else {
+			domain = strings.TrimSpace(n.Address)
+		}
+	}
 	fallbacks := [][2]any{}
+	// Add current node's own extra ports as immediate fallback lines
+	if strings.TrimSpace(n.ExtraPorts) != "" {
+		for _, pStr := range strings.Split(n.ExtraPorts, ",") {
+			if p, err := strconv.Atoi(strings.TrimSpace(pStr)); err == nil && isValidPort(p) && p != n.OVPNPort {
+				fallbacks = append(fallbacks, [2]any{domain, p})
+			}
+		}
+	}
 	for _, other := range getAllNodes(db) {
 		if other.ID != n.ID {
-			fallbacks = append(fallbacks, [2]any{other.Address, other.OVPNPort})
+			addr := strings.TrimSpace(other.TunnelAddress)
+			if addr == "" {
+				addr = strings.TrimSpace(other.Address)
+			}
+			fallbacks = append(fallbacks, [2]any{addr, other.OVPNPort})
+			if strings.TrimSpace(other.ExtraPorts) != "" {
+				for _, pStr := range strings.Split(other.ExtraPorts, ",") {
+					if p, err := strconv.Atoi(strings.TrimSpace(pStr)); err == nil && isValidPort(p) && p != other.OVPNPort {
+						fallbacks = append(fallbacks, [2]any{addr, p})
+					}
+				}
+			}
 		}
 	}
 	return domain, n.OVPNPort, fallbacks
@@ -519,6 +568,25 @@ func remotePlan(n *Node, db *sql.DB) (string, int, [][2]any) {
 
 func injectRemoteLines(content []byte, domain string, primaryPort int, fallbacks [][2]any) []byte {
 	if domain == "" && len(fallbacks) == 0 {
+		return content
+	}
+	// Validate domain and primary port
+	if domain != "" && (!isValidHostname(domain) || !isValidPort(primaryPort)) {
+		// Invalid domain/port: skip injection, return original content
+		return content
+	}
+	// Validate fallbacks
+	validFallbacks := [][2]any{}
+	for _, fb := range fallbacks {
+		if len(fb) == 2 {
+			host, _ := fb[0].(string)
+			port, _ := fb[1].(int)
+			if isValidHostname(host) && isValidPort(port) {
+				validFallbacks = append(validFallbacks, fb)
+			}
+		}
+	}
+	if domain == "" && len(validFallbacks) == 0 {
 		return content
 	}
 	text := string(content)
@@ -538,13 +606,18 @@ func injectRemoteLines(content []byte, domain string, primaryPort int, fallbacks
 	out := append([]string{}, lines...)
 	if domain != "" {
 		insertAt := remoteIdx[0]
-		out = append(out[:insertAt], append([]string{fmt.Sprintf("remote %s %d", domain, primaryPort)}, out[insertAt:]...)...)
-		for i := range remoteIdx {
-			remoteIdx[i]++
+		// If the existing remote line is a placeholder like "remote auto", replace it
+		if strings.HasPrefix(strings.TrimSpace(lines[insertAt]), "remote auto") {
+			out[insertAt] = fmt.Sprintf("remote %s %d", domain, primaryPort)
+		} else {
+			out = append(out[:insertAt], append([]string{fmt.Sprintf("remote %s %d", domain, primaryPort)}, out[insertAt:]...)...)
+			for i := range remoteIdx {
+				remoteIdx[i]++
+			}
 		}
 	}
 	fallbackLines := []string{}
-	for _, fb := range fallbacks {
+	for _, fb := range validFallbacks {
 		fallbackLines = append(fallbackLines, fmt.Sprintf("remote %v %v", fb[0], fb[1]))
 	}
 	if len(fallbackLines) > 0 {
@@ -565,6 +638,38 @@ func utf8Valid(s string) bool {
 		}
 	}
 	return true
+}
+
+// isValidHostname validates a hostname (domain name or IP address).
+func isValidHostname(s string) bool {
+	if len(s) == 0 || len(s) > 255 {
+		return false
+	}
+	// Allow IP addresses
+	if ip := net.ParseIP(s); ip != nil {
+		return true
+	}
+	// Hostname validation: labels separated by dots, each label 1-63 chars,
+	// alphanumeric plus hyphen, not starting/ending with hyphen.
+	for _, label := range strings.Split(s, ".") {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		for i, r := range label {
+			if (i == 0 || i == len(label)-1) && r == '-' {
+				return false
+			}
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// isValidPort validates a port number.
+func isValidPort(p int) bool {
+	return p > 0 && p <= 65535
 }
 
 // DownloadOVPNClient returns the rewritten .ovpn bytes for one user, or nil.
@@ -631,26 +736,6 @@ func allUsers(db *sql.DB) []userRef {
 
 // --- user fan-outs (management.py) ---
 
-// CreateUserOnAllNodes provisions a user on every active node concurrently.
-//
-// Intentional dead code: node agents mint the client profile on first download
-// (node-side, by design), so the panel never has to push a user out ahead of
-// time. Kept for the parity surface; do not wire it into the create flow.
-func CreateUserOnAllNodes(name string, db *sql.DB, maxLogins int, userID int64) []any {
-	nodes := getActiveNodes(db)
-	pid := PanelIDFor(db)
-	uid := ""
-	if userID != 0 {
-		uid = strconv.FormatInt(userID, 10)
-	}
-	calls := make([]func() any, 0, len(nodes))
-	for _, n := range nodes {
-		c := NodeClient(n, pid)
-		calls = append(calls, func() any { return c.CreateUser(name, maxLogins, uid) })
-	}
-	return GatherBounded(calls)
-}
-
 // DeleteUserOnAllNodes deletes a user from every active node.
 func DeleteUserOnAllNodes(userID int64, db *sql.DB) map[string]any {
 	nodes := getActiveNodes(db)
@@ -674,29 +759,6 @@ func DeleteUserOnAllNodes(userID int64, db *sql.DB) map[string]any {
 	return map[string]any{"ok": len(failed) == 0, "failed": failed}
 }
 
-// ResetUserUsageOnAllNodes zeroes a user's counters on every active node.
-func ResetUserUsageOnAllNodes(userID int64, db *sql.DB) map[string]any {
-	nodes := getActiveNodes(db)
-	if len(nodes) == 0 {
-		return map[string]any{"ok": true, "failed": []string{}}
-	}
-	pid := PanelIDFor(db)
-	uid := strconv.FormatInt(userID, 10)
-	calls := make([]func() any, 0, len(nodes))
-	for _, n := range nodes {
-		c := NodeClient(n, pid)
-		calls = append(calls, func() any { return c.ResetUsage(uid) })
-	}
-	results := GatherBounded(calls)
-	failed := []string{}
-	for i, n := range nodes {
-		if ok, _ := results[i].(bool); !ok {
-			failed = append(failed, n.Name)
-		}
-	}
-	return map[string]any{"ok": len(failed) == 0, "failed": failed}
-}
-
 // --- HTTP handlers (backend/routers/node.py) ---
 
 // Handler serves the /nodes routes; it borrows the auth service's DB handle
@@ -706,7 +768,12 @@ type Handler struct {
 }
 
 // NewHandler builds the node router over the shared auth service.
-func NewHandler(svc *auth.Service) *Handler { return &Handler{svc: svc} }
+func NewHandler(svc *auth.Service) *Handler {
+	if svc != nil {
+		AuditDB = svc.DB
+	}
+	return &Handler{svc: svc}
+}
 
 // Mount registers the /nodes routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
@@ -764,6 +831,7 @@ func (h *Handler) nodeByID(r *http.Request) *Node {
 }
 
 func decodeBody(r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(nil, r.Body, 1024*1024)
 	return json.NewDecoder(r.Body).Decode(v) == nil
 }
 
@@ -806,16 +874,30 @@ func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "API key is required."})
 		return
 	}
-	c, err := NewClient(req.Address, req.port(), req.key(), "", PanelIDFor(h.svc.DB()), 0)
+	serverCA := ""
+	if req.Cert != nil && strings.TrimSpace(*req.Cert) != "" {
+		serverCA = strings.TrimSpace(*req.Cert)
+	} else {
+		serverCA = FetchServerCert(req.Address, req.port(), 5*time.Second)
+	}
+	c, err := NewClient(req.Address, req.port(), req.key(), serverCA, PanelIDFor(h.svc.DB()), 0)
 	if err != nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Invalid address: " + err.Error()})
 		return
 	}
 	if c.CheckNode() {
-		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node is reachable.", Data: map[string]any{"reachable": true}})
+		data := map[string]any{"reachable": true}
+		if serverCA != "" {
+			data["cert"] = serverCA
+		}
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node is reachable.", Data: data})
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Node unreachable — check address (public IP, not 10.x/192.168.x unless shared LAN), service port (2083, not the 1194 VPN port), and the exact API key."})
+	msg := c.ConflictMsg()
+	if msg == "" {
+		msg = "Node unreachable — check address (public IP, not 10.x/192.168.x unless shared LAN), service port (2083, not the 1194 VPN port), and the exact API key."
+	}
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: msg})
 }
 
 func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
@@ -963,6 +1045,11 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 		} else {
 			msg = "The node rejected the extra ports."
 		}
+	}
+	if success {
+		// Persist extra_ports in the database
+		_, _ = h.svc.DB().Exec(`UPDATE nodes SET extra_ports = ? WHERE id = ?`, *req.ExtraPorts, n.ID)
+		n.ExtraPorts = *req.ExtraPorts
 	}
 	data := env["data"]
 	if data == nil && success {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/cli"
@@ -44,17 +45,23 @@ func main() {
 	keyFile := panel.SSLKeyPath()
 	tlsEnabled := fileExists(certFile) && fileExists(keyFile)
 
-	handler := panelRouter(auth.NewService(conn, dataDir))
+	svc := auth.NewService(conn, dataDir)
+	// The flag is read from the process environment inside NewService; the
+	// panel's .env is consulted too, so a panel started by hand next to its
+	// .env trusts the proxy the same way a systemd or container one does.
+	svc.TrustedProxy = svc.TrustedProxy || panel.TrustedProxyEnabled()
+	handler := panelRouter(svc)
 
 	addr, useTLS := serveMode(tlsEnabled, port)
+	srv := newServer(addr, handler)
 	if useTLS {
 		log.Printf("ovmanager-go %s listening on https://%s (TLS)", version.Version, addr)
-		if err := http.ListenAndServeTLS(addr, certFile, keyFile, handler); err != nil {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil {
 			log.Fatalf("listen %s: %v", addr, err)
 		}
 	} else {
 		log.Printf("ovmanager-go %s listening on http://%s (no TLS)", version.Version, addr)
-		if err := http.ListenAndServe(addr, handler); err != nil {
+		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("listen %s: %v", addr, err)
 		}
 	}
@@ -82,7 +89,11 @@ func panelRouter(svc *auth.Service) http.Handler {
 	// change in Settings takes effect without a restart.
 	root.Handle("/", panelDispatcher(h))
 
-	return panel.SecurityHeaders(root)
+	// Track active requests so a database restore can drain in-flight
+	// requests before swapping the live pool.
+	wrapped := h.TrackActive(root)
+
+	return panel.SecurityHeaders(wrapped)
 }
 
 // appDir is where .env and web/ live (backend/config.py app_dir).
@@ -106,6 +117,11 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 			prefix = "/dashboard"
 		}
 		p := r.URL.Path
+		// Root path shows decoy 404 (never redirects to dashboard)
+		if p == "/" {
+			decoyHandler().ServeHTTP(w, r)
+			return
+		}
 		if p == prefix {
 			http.Redirect(w, r, prefix+"/", http.StatusMovedPermanently)
 			return
@@ -178,17 +194,15 @@ func spaHandler(h *panel.Handler) http.Handler {
 // never reachable from "/".
 func decoyHandler() http.Handler {
 	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:#0B0B10;overflow:hidden;font-family:'Share Tech Mono',monospace;color:#F8FAFC}
+html,body{height:100%;background:#0B0B10;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#F8FAFC}
 canvas{position:fixed;inset:0;z-index:0;opacity:.35}
 .scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12) 0px,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 4px)}
 .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_55%,rgba(0,0,0,0.9)_100%)}
 .overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
 .hud{border:1px solid #1E293B;padding:2.5rem 3.5rem;background:rgba(30,30,35,0.6);backdrop-filter:blur(6px);box-shadow:0 0 24px rgba(59,130,246,0.25)}
-.code{font-family:'Fira Code',monospace;font-size:.8rem;color:#94A3B8;letter-spacing:.15em;margin-bottom:1rem}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:.8rem;color:#94A3B8;letter-spacing:.15em;margin-bottom:1rem}
 .glitch{font-size:clamp(4rem,12vw,9rem);font-weight:400;color:#F8FAFC;letter-spacing:.1em;text-shadow:0 0 12px #3B82F6,0 0 30px #3B82F6;animation:scan 2s linear infinite}
 .sub{margin-top:1rem;font-size:.85rem;letter-spacing:.25em;color:#94A3B8;text-transform:uppercase}
 .sub span{color:#3B82F6}
@@ -205,12 +219,12 @@ canvas{position:fixed;inset:0;z-index:0;opacity:.35}
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 function resize(){c.width=innerWidth;c.height=innerHeight}
 resize();addEventListener('resize',resize);
-const chars='01ABCDEF<>{}[]|/\';
+const chars='01ABCDEF<>{}[]|/\\';
 const fs=14,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
 const pal=['#3B82F6','#60A5FA','#94A3B8','#F8FAFC'];
 function draw(){
   ctx.fillStyle='rgba(11,11,16,0.08)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.font=fs+'px "Share Tech Mono",monospace';
+  ctx.font=fs+'px monospace';
   for(let i=0;i<drops.length;i++){
     ctx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
     ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
@@ -243,12 +257,41 @@ func env(key, fallback string) string {
 }
 
 // serveMode returns the bind address and whether TLS is used. The invariant:
-// plaintext is never bound to 0.0.0.0; TLS binds all interfaces.
+// plaintext binds loopback unless HOST says otherwise; TLS binds all
+// interfaces.
+//
+// A native install writes HOST=127.0.0.1 (install.sh), so it stays on
+// loopback. The container image sets HOST=0.0.0.0, because a published port
+// forwards to the container's own address — a loopback bind inside the
+// container is unreachable from outside.
 func serveMode(tlsEnabled bool, port string) (string, bool) {
+	host := "127.0.0.1"
 	if tlsEnabled {
-		return net.JoinHostPort("0.0.0.0", port), true
+		host = "0.0.0.0"
+	} else if h := strings.TrimSpace(env("HOST", "")); h != "" {
+		host = h
 	}
-	return net.JoinHostPort("127.0.0.1", port), false
+	return net.JoinHostPort(host, port), tlsEnabled
+}
+
+// newServer builds the panel's http.Server with bounded read/idle timeouts.
+// WriteTimeout is deliberately left at 0: the SSE stream is a long-lived
+// response and a global write deadline would kill every live stream (the
+// stream sets its own per-write deadline).
+//
+// ReadHeaderTimeout is the slowloris guard — headers must arrive quickly.
+// ReadTimeout covers the whole request BODY, so it is generous: the restore
+// endpoint accepts a 100 MB database upload, which on a slow uplink takes
+// minutes. The body SIZE is bounded separately, per endpoint, by
+// http.MaxBytesReader.
+func newServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       10 * time.Minute,
+		IdleTimeout:       120 * time.Second,
+	}
 }
 
 func fileExists(p string) bool {

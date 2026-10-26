@@ -32,7 +32,8 @@ COPY --from=build --chown=nonroot:nonroot /data /data
 
 ENV OVM_APP_DIR=/app \
     DATA_DIR=/data \
-    PORT=2095
+    PORT=2095 \
+    HOST=0.0.0.0
 EXPOSE 2095
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/app/ovmanager", "health"]
 USER nonroot

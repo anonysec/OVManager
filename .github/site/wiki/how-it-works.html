@@ -82,7 +82,7 @@
       the network and parses untrusted input, so a compromise of the web app
       should not be a compromise of the host. The consequence is that the panel
       cannot replace its own code &mdash; that needs root &mdash; so the update
-      button in the UI prints <code>sudo ovm update</code> instead. Docker runs
+      button in the UI prints <code>sudo ovmanager update</code> instead. Docker runs
       the app as its own <code>appuser</code> for the same reason.
     </p>
     <p>
@@ -218,7 +218,7 @@
         The owner is an ordinary <code>admins</code> row;
         <code>ADMIN_USERNAME</code> in <code>.env</code> only says <em>which</em>
         row is the owner. Changing the owner password is
-        <code>ovm reset-password</code>, and it rewrites that row. The panel
+        <code>ovmanager reset-password</code>, and it rewrites that row. The panel
         ignores the older <code>ADMIN_PASSWORD</code> /
         <code>ADMIN_PASSWORD_HASH</code> lines and logs a warning when it sees
         them.
@@ -266,11 +266,11 @@
       download is not a real archive or the checksum does not match.
     </p>
     <p>
-      <code>sudo ovm update</code> stages the new version, health-checks it, and
+      <code>sudo ovmanager update</code> stages the new version, health-checks it, and
       restores the previous code if it does not answer. The database migrates
       itself on the next start. An update interrupted mid-flight by a power loss
-      is cleaned up by <code>sudo ovm recover-update</code>, and the previous tree
-      is available as <code>sudo ovm rollback</code>.
+      is cleaned up by <code>sudo ovmanager recover-update</code>, and the previous tree
+      is available as <code>sudo ovmanager rollback</code>.
     </p>
     <p>
       On a node, <code>ovn update</code> takes a verified snapshot of the identity
@@ -281,7 +281,7 @@
 
     <h2 id="backups">Backups</h2>
     <p>
-      <code>ovm backup</code> writes a plain <code>.db</code> snapshot of the
+      <code>ovmanager backup</code> writes a plain <code>.db</code> snapshot of the
       panel database &mdash; an online-backup-API copy, <code>0600</code>, with
       older copies pruned by the keep count; <code>ovn backup</code> archives
       the node's data and PKI.

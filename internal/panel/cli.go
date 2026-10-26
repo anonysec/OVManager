@@ -9,7 +9,6 @@ package panel
 import (
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/db"
@@ -29,6 +28,17 @@ func cliHandler(dataDir string) (*Handler, func(), error) {
 		return nil, nil, err
 	}
 	return NewHandler(auth.NewService(conn, dataDir)), func() { _ = conn.Close() }, nil
+}
+
+// OffsiteBackupTarget returns the configured offsite copy target, or "" when
+// offsite copies are switched off.
+func OffsiteBackupTarget(dataDir string) (string, error) {
+	h, closeFn, err := cliHandler(dataDir)
+	if err != nil {
+		return "", err
+	}
+	defer closeFn()
+	return h.settings().strOr("offsite_backup_target"), nil
 }
 
 // CreateBackup takes one panel backup (label "backup", the panel's manual
@@ -98,14 +108,4 @@ func SetURLPath(value, dataDir string) (string, error) {
 	}
 	defer closeFn()
 	return h.setURLPath(value)
-}
-
-// ReservedPrefixes lists the first path segments the panel itself owns.
-func ReservedPrefixes() []string {
-	out := make([]string, 0)
-	for prefix := range reservedPrefixes() {
-		out = append(out, prefix)
-	}
-	sort.Strings(out)
-	return out
 }

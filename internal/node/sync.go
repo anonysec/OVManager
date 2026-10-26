@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 )
 
 // PushHashKey is the node_usage JSON key holding per-node push hashes.
@@ -30,11 +31,6 @@ const (
 	DefaultBatchSize = 100
 	MaxPushBytes     = 1048576
 )
-
-// GetUsersUsedTraffic returns per-user traffic counters from a node.
-func GetUsersUsedTraffic(n *Node, db *sql.DB) map[string]any {
-	return NodeClient(n, PanelIDFor(db)).GetUsage(0)
-}
 
 type limitUser struct {
 	id        int64
@@ -250,11 +246,12 @@ func sortedJSON(data map[string]any) map[string]any { return data }
 func CleanStaleSessionsAllNodes(db *sql.DB) map[string]any {
 	nodes := getAllNodes(db)
 	pid := PanelIDFor(db)
+	share := FairShareTimeout(RequestFanoutDeadline, len(nodes), NodeFanoutLimit)
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			return cleanNodeSessions(n, pid)
+			return cleanNodeSessions(n, pid, share)
 		})
 	}
 	raw := GatherNodes(calls, RequestFanoutDeadline)
@@ -274,9 +271,9 @@ func CleanStaleSessionsAllNodes(db *sql.DB) map[string]any {
 	return map[string]any{"nodes": results, "removed_total": removedTotal}
 }
 
-func cleanNodeSessions(n *Node, pid string) map[string]any {
+func cleanNodeSessions(n *Node, pid string, share time.Duration) map[string]any {
 	c := NodeClient(n, pid)
-	data := c.GetSessions("", 8, 0)
+	data := c.GetSessions("", 8, share)
 	if data == nil {
 		return map[string]any{"node": n.Name, "success": false, "error": "diagnostics unavailable", "removed": []string{}}
 	}
@@ -299,7 +296,7 @@ func cleanNodeSessions(n *Node, pid string) map[string]any {
 	sort.Strings(stale)
 	removed := []string{}
 	for _, cn := range stale {
-		res := c.DisconnectUser(cn, liveCNs[cn])
+		res := c.DisconnectUser(cn, liveCNs[cn], 0)
 		if list, ok := res["removed_markers"].([]any); ok {
 			for _, m := range list {
 				if s, ok := m.(string); ok {

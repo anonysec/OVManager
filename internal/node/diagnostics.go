@@ -46,37 +46,6 @@ func idToName(db *sql.DB) map[string]string {
 	return out
 }
 
-// GetActiveConnectionCounts returns {username: live_connection_count}.
-func GetActiveConnectionCounts(db *sql.DB) map[string]int {
-	nodes := getActiveNodes(db)
-	names := idToName(db)
-	pid := PanelIDFor(db)
-	counts := map[string]int{}
-
-	calls := make([]func() any, 0, len(nodes))
-	for _, n := range nodes {
-		n := n
-		calls = append(calls, func() any {
-			return NodeClient(n, pid).GetSessions("", 1, ProbeTimeout(n))
-		})
-	}
-	for _, item := range GatherNodes(calls, RequestFanoutDeadline) {
-		data, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		for _, sess := range sessionList(data["live_sessions"]) {
-			cn, _ := sess["common_name"].(string)
-			username := cn
-			if mapped, ok := names[cn]; ok {
-				username = mapped
-			}
-			counts[username]++
-		}
-	}
-	return counts
-}
-
 // GetUserSessionDiagnostics aggregates one user's sessions across nodes.
 func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]any {
 	var name string
@@ -87,11 +56,12 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 	pid := PanelIDFor(db)
 	cn := strconv.FormatInt(userID, 10)
 
+	share := FairShareTimeout(RequestFanoutDeadline, len(nodes), NodeFanoutLimit)
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			sessions := NodeClient(n, pid).GetSessions("", hours, 0)
+			sessions := NodeClient(n, pid).GetSessions("", hours, share)
 			return []any{n.Name, sessions}
 		})
 	}
@@ -164,11 +134,12 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 	}
 	pid := PanelIDFor(db)
 
+	share := FairShareTimeout(RequestFanoutDeadline, len(nodes), NodeFanoutLimit)
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			sessions := NodeClient(n, pid).GetSessions("", hours, 0)
+			sessions := NodeClient(n, pid).GetSessions("", hours, share)
 			return []any{n.Name, sessions}
 		})
 	}

@@ -7,15 +7,16 @@ package users
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
@@ -25,27 +26,16 @@ import (
 // Handler serves the /users routes.
 type Handler struct {
 	Svc *auth.Service
-	mu  sync.Mutex
-	// ponytail: in-memory Undo registry, per-process; move
-	// to a table when the panel runs multi-worker.
-	deleted map[string]deletedUser
 }
-
-type deletedUser struct {
-	at   time.Time
-	snap userRow
-}
-
-// backend/routers/users.py undo window.
-const (
-	deletedTTL = 120 * time.Second
-	deletedMax = 50
-)
 
 // NewHandler builds the users router.
 func NewHandler(svc *auth.Service) *Handler {
-	return &Handler{Svc: svc, deleted: map[string]deletedUser{}}
+	return &Handler{Svc: svc}
 }
+
+// deletedUserKey is the prefix for deleted_users table keys.
+const deletedUserKeyPrefix = "deleted_user_"
+const deletedTTLSeconds = 120
 
 // Mount registers the users routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
@@ -142,6 +132,14 @@ func (u userRow) tag() any {
 		return nil
 	}
 	return u.Tag.String
+}
+
+// actor is the username of the authenticated caller, for the audit trail.
+func (h *Handler) actor(r *http.Request) string {
+	if ident, ok := h.Svc.CurrentUser(r); ok {
+		return ident.Username
+	}
+	return "system"
 }
 
 func (h *Handler) byUUID(uuidStr string) (userRow, bool) {
@@ -319,6 +317,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := res.LastInsertId()
 	row, _ := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	audit.Record(h.Svc.DB(), h.actor(r), "user.create", "info",
+		"User created.", map[string]any{"target": name, "max_logins": maxLogins})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User created successfully. VPN config will be generated on first download.",
@@ -339,6 +339,13 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	sent := func(key string) bool { _, ok := raw[key]; return ok }
 
+	diffs := []string{}
+	oldTotalGB := int64(0)
+	if row.Total != nil {
+		oldTotalGB = *row.Total / (1024 * 1024 * 1024)
+	}
+	oldMaxLogins := row.MaxLogins
+
 	if sent("expiry_date") {
 		if string(raw["expiry_date"]) == "null" {
 			auth.WriteDetail(w, http.StatusUnprocessableEntity, "expiry_date cannot be null")
@@ -354,14 +361,24 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	if sent("total") && string(raw["total"]) != "null" {
 		var v int64
 		_ = json.Unmarshal(raw["total"], &v)
+		newGB := v / (1024 * 1024 * 1024)
+		if row.Total == nil || oldTotalGB != newGB {
+			diffs = append(diffs, fmt.Sprintf("quota %dGB -> %dGB", oldTotalGB, newGB))
+		}
 		row.Total = &v
 	}
 	if sent("total") && string(raw["total"]) == "null" {
+		if row.Total != nil {
+			diffs = append(diffs, fmt.Sprintf("quota %dGB -> unlimited", oldTotalGB))
+		}
 		row.Total = nil
 	}
 	if sent("max_logins") && string(raw["max_logins"]) != "null" {
 		var v int64
 		_ = json.Unmarshal(raw["max_logins"], &v)
+		if oldMaxLogins != v {
+			diffs = append(diffs, fmt.Sprintf("max logins %d -> %d", oldMaxLogins, v))
+		}
 		row.MaxLogins = v
 	}
 	if sent("tag") {
@@ -376,7 +393,11 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	if sent("expiry_date") {
 		var s string
 		_ = json.Unmarshal(raw["expiry_date"], &s)
-		row.ExpiryDate = sql.NullString{String: s[:min(10, len(s))], Valid: true}
+		newDate := s[:min(10, len(s))]
+		if row.ExpiryDate.String != newDate {
+			diffs = append(diffs, fmt.Sprintf("expiry %s -> %s", row.ExpiryDate.String, newDate))
+		}
+		row.ExpiryDate = sql.NullString{String: newDate, Valid: true}
 	}
 	requestedStatus := row.IsActive != 0
 	if sent("status") && string(raw["status"]) != "null" {
@@ -396,6 +417,12 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not update user")
 		return
 	}
+	updateMsg := "User updated."
+	if len(diffs) > 0 {
+		updateMsg = fmt.Sprintf("User updated: %s", strings.Join(diffs, ", "))
+	}
+	audit.Record(h.Svc.DB(), h.actor(r), "user.update", "info",
+		updateMsg, map[string]any{"target": row.Name, "active": row.IsActive != 0, "changes": diffs})
 	// ponytail: node status/limit fan-out lands with Phase 2; with zero nodes
 	// the node helpers return true, so success matches.
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated successfully"})
@@ -436,6 +463,8 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not change user status")
 		return
 	}
+	audit.Record(h.Svc.DB(), h.actor(r), "user.status", "info",
+		"User enabled or disabled.", map[string]any{"target": row.Name, "active": *req.Status})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Changed user status successfully"})
 }
 
@@ -471,6 +500,8 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if n, _ := res.RowsAffected(); n == 1 {
+			audit.Record(h.Svc.DB(), h.actor(r), "user.reset_usage", "info",
+				"User usage reset.", map[string]any{"target": row.Name})
 			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User usage reset successfully"})
 			return
 		}
@@ -499,6 +530,8 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
 		return
 	}
+	audit.Record(h.Svc.DB(), h.actor(r), "user.delete", "warning",
+		"User deleted.", map[string]any{"target": row.Name})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
 }
 
@@ -519,45 +552,59 @@ func (h *Handler) deleteRow(row userRow) error {
 	return nil
 }
 
-func (h *Handler) remember(u userRow) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	now := time.Now()
-	h.deleted[u.UUID] = deletedUser{at: now, snap: u}
-	for k, v := range h.deleted {
-		if now.Sub(v.at) > deletedTTL {
-			delete(h.deleted, k)
-		}
+// remember stores a deleted user snapshot for undo.
+func (h *Handler) remember(u userRow) error {
+	snapJSON, err := json.Marshal(u)
+	if err != nil {
+		return err
 	}
-	for len(h.deleted) > deletedMax {
-		for k := range h.deleted {
-			delete(h.deleted, k)
-			break
-		}
+	now := time.Now().Unix()
+	expiresAt := now + deletedTTLSeconds
+	_, err = h.Svc.DB().Exec(
+		`INSERT INTO deleted_users (uuid, snap_json, deleted_at, expires_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(uuid) DO UPDATE SET snap_json = ?, deleted_at = ?, expires_at = ?`,
+		u.UUID, string(snapJSON), now, expiresAt,
+		string(snapJSON), now, expiresAt,
+	)
+	if err != nil {
+		return err
 	}
+	// Prune expired entries (best effort)
+	_, _ = h.Svc.DB().Exec(`DELETE FROM deleted_users WHERE expires_at < ?`, now)
+	return nil
 }
 
 func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	uuidStr := r.PathValue("uuid")
-	h.mu.Lock()
-	entry, ok := h.deleted[uuidStr]
-	if ok && time.Since(entry.at) > deletedTTL {
-		delete(h.deleted, uuidStr)
-		ok = false
+	var snapJSON string
+	var deletedAt float64
+	err := h.Svc.DB().QueryRow(
+		`SELECT snap_json, deleted_at FROM deleted_users WHERE uuid = ?`,
+		uuidStr,
+	).Scan(&snapJSON, &deletedAt)
+	if err == sql.ErrNoRows {
+		auth.WriteDetail(w, http.StatusGone, "Undo window expired — user can no longer be restored")
+		return
 	}
-	h.mu.Unlock()
-	if !ok {
+	if err != nil {
+		auth.WriteDetail(w, http.StatusInternalServerError, "Could not fetch undo record")
+		return
+	}
+	if time.Now().Unix()-int64(deletedAt) > deletedTTLSeconds {
+		_, _ = h.Svc.DB().Exec(`DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
 		auth.WriteDetail(w, http.StatusGone, "Undo window expired — user can no longer be restored")
 		return
 	}
 	if _, exists := h.byUUID(uuidStr); exists {
-		h.mu.Lock()
-		delete(h.deleted, uuidStr)
-		h.mu.Unlock()
+		_, _ = h.Svc.DB().Exec(`DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
 		auth.WriteDetail(w, http.StatusConflict, "User already exists")
 		return
 	}
-	snap := entry.snap
+	var snap userRow
+	if err := json.Unmarshal([]byte(snapJSON), &snap); err != nil {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Restore failed: corrupt undo record"})
+		return
+	}
 	if _, err := h.Svc.DB().Exec(
 		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -567,10 +614,10 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Restore failed. Check the panel logs for details."})
 		return
 	}
-	h.mu.Lock()
-	delete(h.deleted, uuidStr)
-	h.mu.Unlock()
+	_, _ = h.Svc.DB().Exec(`DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
 	row, _ := h.byUUID(snap.UUID)
+	audit.Record(h.Svc.DB(), h.actor(r), "user.restore", "info",
+		"User restored.", map[string]any{"target": snap.Name})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User restored successfully", Data: row.base()})
 }
 
@@ -717,15 +764,15 @@ func (h *Handler) userDefaults() defaults {
 	if d.days == 0 {
 		d.days = 30
 	}
-	if d.maxUsers == 0 {
-		d.maxUsers = 1
-	}
+	// 0 means "unlimited" (the settings hint says so), so it must survive:
+	// coercing it to 1 would silently give every new user one device.
 	return d
 }
 
 // --- small utilities ---
 
 func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		auth.WriteValidation(w, "body", "JSON decode error")
 		return false
@@ -734,6 +781,7 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 func decodeRaw(w http.ResponseWriter, r *http.Request, dst *map[string]json.RawMessage) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		auth.WriteValidation(w, "body", "JSON decode error")
 		return false

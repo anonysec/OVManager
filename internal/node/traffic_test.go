@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ const trafficSchema = `
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   tunnel_address VARCHAR, protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194,
   port INTEGER DEFAULT 2083, key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR,
-  country_code VARCHAR, latitude REAL, longitude REAL);
+  country_code VARCHAR, latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
 CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
 CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
@@ -265,5 +266,154 @@ func TestSyncTrafficReseedMarker(t *testing.T) {
 	}
 	if _, ok := state[ReseedMarkerKey]; ok {
 		t.Errorf("marker not cleared: %v", state)
+	}
+}
+
+func TestSyncTrafficNullTotalsCountsPolled(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	conn := newTrafficDB(t)
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, nil, 0))
+	seedTrafficUser(t, conn, 1, "alice", "0", "{}")
+
+	res := SyncTraffic(conn)
+	if res.NodesPolled != 1 {
+		t.Errorf("NodesPolled = %d, want 1", res.NodesPolled)
+	}
+	if res.NodesFailed != 0 {
+		t.Errorf("NodesFailed = %d, want 0", res.NodesFailed)
+	}
+}
+
+// A node may report more than one key for the same user: the node's
+// /sync/usage merges alias CNs additively (OVNode get_users_usage), so each
+// key is a DIFFERENT byte pool. The panel must sum them — keeping only the
+// larger one drops the other's bytes from users.used, from
+// user_traffic_daily and from the baseline, permanently.
+func TestSyncTrafficSumsAliasKeys(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	conn := newTrafficDB(t)
+	// The node reports the same user under its name and under its numeric id.
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
+		"alice": int64(700),
+		"12":    int64(300),
+	}, 0))
+	seedTrafficUser(t, conn, 12, "alice", "0", `{"1":0}`)
+
+	res := SyncTraffic(conn)
+	if res.BytesBilled != 1000 {
+		t.Errorf("BytesBilled = %d, want 1000 (700 + 300)", res.BytesBilled)
+	}
+	if got := userUsed(t, conn, 12); got != 1000 {
+		t.Errorf("used = %d, want 1000", got)
+	}
+	if got := userState(t, conn, 12)["1"]; got != float64(1000) {
+		t.Errorf(`node_usage["1"] = %v, want 1000`, got)
+	}
+}
+
+// The first poll must still SEED the baseline (delta 0), never bill a node's
+// lifetime total — including when the total is a sum of alias pools.
+func TestSyncTrafficAliasSumSeedsOnFirstPoll(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	conn := newTrafficDB(t)
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
+		"alice": int64(700),
+		"12":    int64(300),
+	}, 0))
+	seedTrafficUser(t, conn, 12, "alice", "0", "{}")
+
+	res := SyncTraffic(conn)
+	if res.BytesBilled != 0 {
+		t.Errorf("BytesBilled = %d, want 0 on the first poll", res.BytesBilled)
+	}
+	if res.UsersSeeded != 1 {
+		t.Errorf("UsersSeeded = %d, want 1", res.UsersSeeded)
+	}
+	if got := userState(t, conn, 12)["1"]; got != float64(1000) {
+		t.Errorf(`node_usage["1"] = %v, want 1000 (the seeded sum)`, got)
+	}
+}
+
+// A collision is reported so a node whose keying has drifted is visible
+// instead of silent.
+func TestSyncTrafficAliasCollisionVisible(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	conn := newTrafficDB(t)
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
+		"alice": int64(700),
+		"12":    int64(300),
+	}, 0))
+	seedTrafficUser(t, conn, 12, "alice", "0", `{"1":0}`)
+
+	res := SyncTraffic(conn)
+	if len(res.AliasCollisions) != 1 {
+		t.Fatalf("AliasCollisions = %v, want exactly 1", res.AliasCollisions)
+	}
+	msg := res.AliasCollisions[0]
+	for _, want := range []string{"alice", "node=1", "12"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("collision %q does not name %q", msg, want)
+		}
+	}
+}
+
+// A node that reports one key per user (the documented contract) must not
+// report a collision.
+func TestSyncTrafficNoCollisionForOneKey(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	conn := newTrafficDB(t)
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
+	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
+
+	res := SyncTraffic(conn)
+	if len(res.AliasCollisions) != 0 {
+		t.Errorf("AliasCollisions = %v, want none", res.AliasCollisions)
+	}
+	if res.BytesBilled != 1000 {
+		t.Errorf("BytesBilled = %d, want 1000", res.BytesBilled)
+	}
+}
+
+// A node that hangs must not hold a concurrency slot for its whole timeout:
+// with more nodes than slots, the dead ones would starve the healthy ones
+// queued behind them, and the panel would report EVERY node as dead and bill
+// nothing.
+//
+// Whether the healthy call wins the slot or queues behind the hanging one is
+// a scheduling race, so the scenario runs several times: without the fix the
+// healthy node is only billed when it happens to win the slot, and with the
+// fix it is billed either way.
+func TestSyncTrafficBillsHealthyNodesBehindHangingOnes(t *testing.T) {
+	ResetForTests()
+	defer ResetForTests()
+	restore := setFanoutLimit(1)
+	defer restore()
+	oldDeadline := trafficFanoutDeadline
+	trafficFanoutDeadline = 600 * time.Millisecond
+	defer func() { trafficFanoutDeadline = oldDeadline }()
+
+	for attempt := 0; attempt < 6; attempt++ {
+		conn := newTrafficDB(t)
+		// The dead node answers late; the live node answers at once.
+		seedTrafficNode(t, conn, 1, "dead", usageServer(t, map[string]any{"alice": int64(500)}, 1500*time.Millisecond))
+		seedTrafficNode(t, conn, 2, "live", usageServer(t, map[string]any{"alice": int64(700)}, 0))
+		seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0,"2":0}`)
+
+		res := SyncTraffic(conn)
+
+		// The healthy node must be billed: its 700 bytes, not the dead
+		// node's 500.
+		if res.BytesBilled != 700 {
+			t.Errorf("attempt %d: BytesBilled = %d, want 700 (the healthy node only)", attempt+1, res.BytesBilled)
+			continue
+		}
+		if got := userUsed(t, conn, 1); got != 700 {
+			t.Errorf("attempt %d: used = %d, want 700", attempt+1, got)
+		}
 	}
 }

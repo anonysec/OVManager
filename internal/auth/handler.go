@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/anonysec/OVManager/go/internal/audit"
 )
 
 // Response is the FastAPI ResponseModel envelope.
@@ -43,6 +44,15 @@ func (s *Service) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
+	// The session is a cookie and this response sets it, so a cross-site POST
+	// would leave the victim's browser holding the attacker's session — the
+	// SPA acts on the cookie, so the victim would act as the attacker.
+	// Rejected before the rate limiter sees it, so a cross-site caller cannot
+	// spend the victim's login budget either.
+	if s.originRejected(r) {
+		writeDetail(w, http.StatusForbidden, "Origin not allowed")
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid form data")
 		return
@@ -51,10 +61,10 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.PostFormValue("password")
 	ip := s.clientIP(r)
 
-	s.purgeStaleAttempts()
-	if s.bucketExceeded(s.rateKey(ip, username), maxAttempts) ||
-		s.bucketExceeded(s.ipKey(ip), maxPerIP) ||
-		s.bucketExceeded(s.userKey(username), maxPerUser) {
+	// Check all three rate limit buckets atomically
+	if s.checkBucket(s.rateKey(ip, username), maxAttempts) ||
+		s.checkBucket(s.ipKey(ip), maxPerIP) ||
+		s.checkBucket(s.userKey(username), maxPerUser) {
 		w.Header().Set("Retry-After", "300")
 		writeDetail(w, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
 		return
@@ -62,16 +72,18 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	ident, ok := s.Authenticate(username, password)
 	if !ok {
-		now := nowSecs()
-		s.putBucket(s.rateKey(ip, username), append(s.bucket(s.rateKey(ip, username)), now))
-		s.putBucket(s.ipKey(ip), append(s.bucket(s.ipKey(ip)), now))
-		s.putBucket(s.userKey(username), append(s.bucket(s.userKey(username)), now))
+		// Record the failed attempt in all three buckets
+		s.incrementBucket(s.rateKey(ip, username))
+		s.incrementBucket(s.ipKey(ip))
+		s.incrementBucket(s.userKey(username))
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		writeDetail(w, http.StatusUnauthorized, "The username or password is incorrect")
 		return
 	}
 	s.clearBucket(s.rateKey(ip, username))
 	s.clearBucket(s.userKey(username))
+	audit.Record(s.DB(), ident.Username, "auth.login", "info",
+		"Signed in.", map[string]any{"target": ident.Username, "role": ident.Type})
 	s.IssueSession(w, r, ident.Username, ident.Type)
 }
 
@@ -158,11 +170,9 @@ func (s *Service) RequireUser(next http.HandlerFunc) http.HandlerFunc {
 		// clients and same-origin fetches that omit it); a mismatched Origin is
 		// rejected. This blocks cross-site POST/PUT/DELETE without breaking the
 		// existing test harness, which sends no Origin header.
-		if isMutatingMethod(r.Method) {
-			if o := r.Header.Get("Origin"); o != "" && !originAllowed(o, r) {
-				writeDetail(w, http.StatusForbidden, "Origin not allowed")
-				return
-			}
+		if s.originRejected(r) {
+			writeDetail(w, http.StatusForbidden, "Origin not allowed")
+			return
 		}
 		next(w, r)
 	}
@@ -188,6 +198,19 @@ func isMutatingMethod(m string) bool {
 	return false
 }
 
+// originRejected reports whether a mutating request comes from another origin.
+//
+// A missing Origin is allowed: non-browser clients and the test harness send
+// none, and a browser always sends it on a cross-site POST. A mismatched
+// Origin is rejected.
+func (s *Service) originRejected(r *http.Request) bool {
+	if !isMutatingMethod(r.Method) {
+		return false
+	}
+	o := r.Header.Get("Origin")
+	return o != "" && !originAllowed(o, r)
+}
+
 func originAllowed(origin string, r *http.Request) bool {
 	u, err := url.Parse(origin)
 	if err != nil || u.Host == "" {
@@ -208,24 +231,8 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// clientIP honours X-Forwarded-For only behind a trusted proxy.
-//
-// ponytail: rightmost XFF entry only; add X-Real-IP/Forwarded when a second
-// proxy hop shows up in the field.
 func (s *Service) clientIP(r *http.Request) string {
-	if s.TrustedProxy {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			if v := strings.TrimSpace(parts[len(parts)-1]); v != "" {
-				return v
-			}
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	return host
+	return ClientIP(s.TrustedProxy, r)
 }
 
 func firstProto(v string) string {
@@ -255,7 +262,14 @@ func (s *Service) ipKey(ip string) string { return Sha16(ip) }
 
 // --- in-memory rate-limit buckets (auth.py) ---
 
-func (s *Service) bucket(key string) []float64 {
+func (s *Service) clearBucket(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.attempts, key)
+}
+
+// checkBucket reports whether a bucket is at or over its limit, without modifying it.
+func (s *Service) checkBucket(key string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
@@ -265,45 +279,28 @@ func (s *Service) bucket(key string) []float64 {
 			fresh = append(fresh, t)
 		}
 	}
-	if len(fresh) == 0 {
-		delete(s.attempts, key)
-	} else {
-		s.attempts[key] = fresh
-	}
-	return fresh
+	return len(fresh) >= limit
 }
 
-func (s *Service) putBucket(key string, times []float64) {
+// incrementBucket adds the current timestamp to a bucket (used on failed login).
+func (s *Service) incrementBucket(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.attempts[key] = times
+	now := nowSecs()
+	fresh := s.attempts[key][:0]
+	for _, t := range s.attempts[key] {
+		if now-t < lockoutSeconds {
+			fresh = append(fresh, t)
+		}
+	}
+	fresh = append(fresh, now)
+	s.attempts[key] = fresh
 	if overflow := len(s.attempts) - maxBuckets; overflow > 0 {
 		for k := range s.attempts {
 			delete(s.attempts, k)
 			if overflow--; overflow == 0 {
 				break
 			}
-		}
-	}
-}
-
-func (s *Service) clearBucket(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.attempts, key)
-}
-
-func (s *Service) bucketExceeded(key string, limit int) bool {
-	return len(s.bucket(key)) >= limit
-}
-
-func (s *Service) purgeStaleAttempts() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := nowSecs()
-	for k, times := range s.attempts {
-		if len(times) == 0 || now-times[len(times)-1] > lockoutSeconds {
-			delete(s.attempts, k)
 		}
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/anonysec/OVManager/go/internal/audit"
 )
 
 // owner-claim constants (backend/routers/owner_claim.py).
@@ -78,8 +80,8 @@ func (s *Service) handleClaimStatus(w http.ResponseWriter, r *http.Request) {
 		keyPresent = key != ""
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"claimable":    !claimed && keyPresent,
-		"recoverable":  claimed && keyPresent,
+		"claimable":   !claimed && keyPresent,
+		"recoverable": claimed && keyPresent,
 	})
 }
 
@@ -160,6 +162,8 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = os.Remove(s.claimKeyPath())
+	audit.Record(s.DB(), chosen, "auth.claim", "warning",
+		"Panel claimed.", map[string]any{"target": chosen})
 	s.IssueSession(w, r, chosen, "owner")
 }
 
@@ -206,6 +210,8 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 	}
 	s.RevokeUserSessions(chosen)
 	_ = os.Remove(s.claimKeyPath())
+	audit.Record(s.DB(), chosen, "auth.recover", "warning",
+		"Owner credentials reset with a fresh setup key.", map[string]any{"target": chosen})
 	s.IssueSession(w, r, chosen, "owner")
 }
 
@@ -281,6 +287,7 @@ func writeValidation(w http.ResponseWriter, field, msg string) {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 			"detail": []map[string]any{{

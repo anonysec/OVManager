@@ -62,10 +62,10 @@
     <h2 id="now">Take a backup now</h2>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm backup                # write a database copy now
-sudo ovm backup --keep 30      # how many to keep (1-500, default 14)
-sudo ovm restore               # list what is available
-sudo ovm restore NAME.db       # restore one by name</code></pre>
+      <pre><code>sudo ovmanager backup                # write a database copy now
+sudo ovmanager backup --keep 30      # how many to keep (1-500, default 14)
+sudo ovmanager restore               # list what is available
+sudo ovmanager restore NAME.db       # restore one by name</code></pre>
     </figure>
     <p>
       Backups land in <code>/var/lib/ovmanager/backups</code>, and the newest 14
@@ -89,9 +89,9 @@ sudo ovm restore NAME.db       # restore one by name</code></pre>
     <h2 id="schedule">A daily backup</h2>
     <figure class="cmd">
       <figcaption>systemd timer, outside the panel</figcaption>
-      <pre><code>sudo ovm auto-backup on --time 03:30 --keep 30
-sudo ovm auto-backup status
-sudo ovm auto-backup off</code></pre>
+      <pre><code>sudo ovmanager auto-backup on --time 03:30 --keep 30
+sudo ovmanager auto-backup status
+sudo ovmanager auto-backup off</code></pre>
     </figure>
     <p>
       This is a systemd timer, so it keeps running even if the panel is stopped.
@@ -106,9 +106,10 @@ sudo ovm auto-backup off</code></pre>
     <p>
       A daily backup on the same disk is not a backup. The scheduled backup can
       push the newest backup to another machine: fill in a target like
-      <code>backup@server:/backups/panel</code> and, after each automatic
-      backup, the newest file is copied there with <code>rsync</code> (or
-      <code>scp</code> when <code>rsync</code> is not installed).
+      <code>backup@server:/backups/panel</code> and, after each backup (the
+      daily timer, and any manual <code>ovmanager backup</code>), the newest file is
+      copied there with <code>rsync</code> (or <code>scp</code> when
+      <code>rsync</code> is not installed).
     </p>
     <ul>
       <li>The transfer uses plain SSH with key-based login and <code>BatchMode</code> &mdash; no password prompts, ever.</li>
@@ -119,7 +120,7 @@ sudo ovm auto-backup off</code></pre>
     <h2 id="restore">Restoring</h2>
     <h3>From the CLI</h3>
     <p>
-      <code>ovm restore</code> with no name lists what is available and changes
+      <code>ovmanager restore</code> with no name lists what is available and changes
       nothing. Naming a backup restores it, with the service stopped and
       restarted around the swap.
     </p>
@@ -139,7 +140,7 @@ sudo ovm auto-backup off</code></pre>
     <div class="table-scroll">
       <table>
         <thead>
-          <tr><th scope="col">Item</th><th scope="col">Backed up by <code>ovm backup</code></th></tr>
+          <tr><th scope="col">Item</th><th scope="col">Backed up by <code>ovmanager backup</code></th></tr>
         </thead>
         <tbody>
           <tr><td>Users, expiry, quotas, tags</td><td>Yes &mdash; in the database</td></tr>

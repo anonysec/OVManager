@@ -53,24 +53,46 @@ func auth404(w http.ResponseWriter, msg string) {
 	auth.WriteDetail(w, http.StatusNotFound, msg)
 }
 
-// writeValidationBody writes FastAPI's 422 error-list shape for a missing
-// multipart field.
-func writeValidationBody(w http.ResponseWriter, field, msg string) {
+// writeValidationError writes FastAPI's 422 error-list shape with an explicit
+// error type.
+func writeValidationError(w http.ResponseWriter, kind, field, msg string) {
 	auth.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
 		"detail": []map[string]any{{
-			"type": "missing", "loc": []any{"body", field}, "msg": msg,
+			"type": kind, "loc": []any{"body", field}, "msg": msg,
 		}},
 	})
 }
 
-// detachSysProcAttr detaches a spawned restart from this process (setsid).
-func detachSysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
+// writeValidationBody writes FastAPI's 422 error-list shape for a missing
+// multipart field.
+func writeValidationBody(w http.ResponseWriter, field, msg string) {
+	writeValidationError(w, "missing", field, msg)
+}
 
-// offsiteTargetRe is backend/operations/backup/offsite.TARGET_RE.
+// offsiteTargetRe is the accepted shape of an offsite backup target:
+// [user@]host:/absolute/path
 var offsiteTargetRe = regexp.MustCompile(`^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]+):(/[\w./-]+)$`)
 
-// parseOffsiteTarget splits [user@]host:/path and rejects anything else.
-func parseOffsiteTarget(target string) (user, host, path string, err error) {
+// removeMultipartTemps deletes the files the multipart parser spooled to the
+// system temp dir: a file part larger than the in-memory limit is written
+// there, and the request never removes it on its own. Without this every
+// upload leaves a copy of its payload behind in /tmp.
+func removeMultipartTemps(r *http.Request) {
+	if r.MultipartForm != nil {
+		_ = r.MultipartForm.RemoveAll()
+	}
+}
+
+// ParseOffsiteTarget splits [user@]host:/path and rejects anything else.
+//
+// The host is restricted to letters, digits, dot, dash and underscore, and
+// the path to word characters, slashes, dots and dashes. A ".." segment is
+// refused: the target is handed to rsync/scp, which run the remote side
+// through a shell, so a path that walks out of the intended folder would
+// write somewhere the operator did not name. A leading dash is refused too:
+// rsync and scp hand the host to ssh, which would read "-oProxyCommand=..."
+// as an option rather than a host.
+func ParseOffsiteTarget(target string) (user, host, path string, err error) {
 	trimmed := strings.TrimSpace(target)
 	if trimmed == "" {
 		return "", "", "", errors.New("Offsite backup target is empty")
@@ -80,8 +102,23 @@ func parseOffsiteTarget(target string) (user, host, path string, err error) {
 		return "", "", "", errors.New(
 			"Offsite backup target must look like user@server:/path/to/backups (absolute path, no special characters)")
 	}
+	for _, segment := range strings.Split(match[3], "/") {
+		if segment == ".." {
+			return "", "", "", errors.New("Offsite backup target must not contain '..'")
+		}
+	}
+	if strings.HasPrefix(match[2], "-") || strings.HasPrefix(match[1], "-") {
+		return "", "", "", errors.New("Offsite backup target must not start with '-'")
+	}
 	return strings.TrimSuffix(match[1], "@"), match[2], match[3], nil
 }
+
+// detachSysProcAttr detaches a spawned restart from this process (setsid).
+func detachSysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
+
+// Offsite backup copies are not implemented: the SSH/rsync copy that this
+// setting used to advertise was never wired up. Re-adding the control
+// requires a real implementation; do not re-add the dead helper here.
 
 // safeFilename is maintenance._safe_filename: basename + ASCII allowlist.
 func safeFilename(name string) string {
@@ -126,5 +163,83 @@ func copyFile(src, dst string) error {
 		out.Close()
 		return err
 	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
 	return out.Close()
+}
+
+// stageFile copies src into a temp file beside dst and returns the temp path.
+// The destination is NOT touched: the copy happens while the live database is
+// still being served, so a 100 MB restore does not spend seconds with the
+// pool closed. On any failure the temp file is removed and dst is untouched.
+//
+// commitStaged renames the staged file over dst. The rename is atomic, and
+// the directory is fsynced so the rename itself survives a crash.
+func stageFile(src, dst string) (string, error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer in.Close()
+	info, err := in.Stat()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Dir(dst)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dst)+".*.tmp")
+	if err != nil {
+		return "", err
+	}
+	name := tmp.Name()
+	cleanup := func() { _ = os.Remove(name) }
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		tmp.Close()
+		cleanup()
+		return "", err
+	}
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		cleanup()
+		return "", err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		cleanup()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return "", err
+	}
+	return name, nil
+}
+
+// commitStaged renames a staged file over dst and fsyncs the directory, so
+// both the file contents and the rename survive a crash.
+func commitStaged(tmp, dst string) error {
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(dst))
+	if err != nil {
+		return nil // the rename happened; the directory fsync is best-effort
+	}
+	defer dir.Close()
+	_ = dir.Sync()
+	return nil
+}
+
+// panelActor is the username of the authenticated caller, for the audit
+// trail.
+func panelActor(h *Handler, r *http.Request) string {
+	if ident, ok := h.Svc.CurrentUser(r); ok {
+		return ident.Username
+	}
+	return "system"
 }

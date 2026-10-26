@@ -69,7 +69,7 @@ DROP TABLE IF EXISTS nodes;
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, tunnel_address VARCHAR,
   protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194, port INTEGER DEFAULT 2083,
   key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR, country_code VARCHAR,
-  latitude REAL, longitude REAL);
+  latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
@@ -230,54 +230,53 @@ func TestPanelSurface(t *testing.T) {
 			wantKeys: []string{"issued_by", "install_hint"}},
 
 		// --- server/settings ---
-		{name: "settings get", method: "GET", path: "/api/server/settings", wantStatus: 200, wantEnvelope: true,
+		{name: "settings get", method: "GET", path: "/api/settings", wantStatus: 200, wantEnvelope: true,
 			dataKeys: []string{"subscription_path", "subscription_url_prefix", "timezone", "panel_version",
 				"bot_configured", "urlpath", "sub_profile_title", "sub_update_interval_hours",
 				"auto_backup_time", "telegram_backup_available", "panel_id"}},
-		{name: "settings get slash", method: "GET", path: "/api/server/settings/", wantStatus: 200, wantEnvelope: true},
-		{name: "settings timezone", method: "PUT", path: "/api/server/settings/timezone",
+		{name: "settings timezone", method: "PUT", path: "/api/settings/timezone",
 			body: map[string]any{"timezone": "UTC"}, wantStatus: 200, wantEnvelope: true,
 			dataKeys: []string{"timezone"}, wantSuccess: boolPtr(true)},
-		{name: "settings timezone invalid", method: "PUT", path: "/api/server/settings/timezone",
+		{name: "settings timezone invalid", method: "PUT", path: "/api/settings/timezone",
 			body: map[string]any{"timezone": "Not/AZone"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "settings subscription", method: "PUT", path: "/api/server/settings/subscription",
+		{name: "settings subscription", method: "PUT", path: "/api/settings/subscription",
 			body:       map[string]any{"sub_announce": "hi", "sub_update_interval_hours": 24},
 			wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(true),
 			dataKeys: []string{"sub_announce", "sub_update_interval_hours"}},
-		{name: "settings subscription bad hours", method: "PUT", path: "/api/server/settings/subscription",
+		{name: "settings subscription bad hours", method: "PUT", path: "/api/settings/subscription",
 			body: map[string]any{"sub_update_interval_hours": 999}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false)},
-		{name: "settings subscription bad support url", method: "PUT", path: "/api/server/settings/subscription",
+		{name: "settings subscription bad support url", method: "PUT", path: "/api/settings/subscription",
 			body: map[string]any{"sub_support_url": "javascript:alert(1)"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false)},
-		{name: "settings domain", method: "PUT", path: "/api/server/settings/domain",
+		{name: "settings domain", method: "PUT", path: "/api/settings/domain",
 			body: map[string]any{"panel_domain": "vpn.example.com"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(true), dataKeys: []string{"panel_domain"}},
-		{name: "settings domain invalid", method: "PUT", path: "/api/server/settings/domain",
+		{name: "settings domain invalid", method: "PUT", path: "/api/settings/domain",
 			body: map[string]any{"panel_domain": "http://vpn.example.com"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false)},
-		{name: "settings bot", method: "PUT", path: "/api/server/settings/bot",
+		{name: "settings bot", method: "PUT", path: "/api/settings/bot",
 			body: map[string]any{"default_days": 45}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(true), dataKeys: []string{"default_days"}},
-		{name: "settings bot bad backup time", method: "PUT", path: "/api/server/settings/bot",
+		{name: "settings bot bad backup time", method: "PUT", path: "/api/settings/bot",
 			body: map[string]any{"auto_backup_time": "25:00"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false)},
-		{name: "settings bot telegram without bot", method: "PUT", path: "/api/server/settings/bot",
+		{name: "settings bot telegram without bot", method: "PUT", path: "/api/settings/bot",
 			body: map[string]any{"telegram_backup_enabled": true}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false)},
-		{name: "alerts test unknown channel", method: "POST", path: "/api/server/alerts/test",
+		{name: "alerts test unknown channel", method: "POST", path: "/api/settings/alerts/test",
 			body: map[string]any{"channel": "slack"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "alerts test telegram unconfigured", method: "POST", path: "/api/server/alerts/test",
+		{name: "alerts test telegram unconfigured", method: "POST", path: "/api/settings/alerts/test",
 			body: map[string]any{"channel": "telegram"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(false), dataKeys: []string{"channel", "sent"}},
-		{name: "settings urlpath", method: "PUT", path: "/api/server/settings/urlpath",
+		{name: "settings urlpath", method: "PUT", path: "/api/settings/urlpath",
 			body: map[string]any{"urlpath": "panel"}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(true), dataKeys: []string{"urlpath", "panel_url"}},
-		{name: "settings urlpath reserved", method: "PUT", path: "/api/server/settings/urlpath",
+		{name: "settings urlpath reserved", method: "PUT", path: "/api/settings/urlpath",
 			body: map[string]any{"urlpath": "api"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "settings urlpath bad chars", method: "PUT", path: "/api/server/settings/urlpath",
+		{name: "settings urlpath bad chars", method: "PUT", path: "/api/settings/urlpath",
 			body: map[string]any{"urlpath": "a b"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "server info", method: "GET", path: "/api/server/info", wantStatus: 200, wantEnvelope: true,
+		{name: "server info", method: "GET", path: "/api/settings/info", wantStatus: 200, wantEnvelope: true,
 			dataKeys: []string{"cpu", "memory_total", "memory_used", "memory_percent", "disk_total",
 				"disk_used", "disk_percent", "uptime"}},
 
@@ -311,36 +310,6 @@ func TestPanelSurface(t *testing.T) {
 		{name: "usage purge confirmed", method: "POST", path: "/api/maintenance/usage/purge",
 			body: map[string]any{"older_than_days": 90, "confirm": true}, wantStatus: 200, wantEnvelope: true,
 			wantSuccess: boolPtr(true), dataKeys: []string{"removed", "removed_ledger"}},
-
-		// --- tls ---
-		{name: "tls settings", method: "GET", path: "/api/tls/settings", wantStatus: 200, wantEnvelope: true,
-			dataKeys: []string{"fields", "methods", "restart_required"}},
-		{name: "tls settings bad method", method: "PUT", path: "/api/tls/settings",
-			body: map[string]any{"cert_method": "bogus"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "tls settings bad domain", method: "PUT", path: "/api/tls/settings",
-			body: map[string]any{"acme_domain": "not a domain"}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false)},
-		{name: "tls settings bad email", method: "PUT", path: "/api/tls/settings",
-			body: map[string]any{"acme_email": "nope"}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "tls settings traversal rejected", method: "PUT", path: "/api/tls/settings",
-			body: map[string]any{"key_file": "../../etc/passwd"}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false), msgContains: "must not contain '..'"},
-		{name: "tls status", method: "GET", path: "/api/tls/status", wantStatus: 200, wantEnvelope: true,
-			dataKeys: []string{"mode", "source", "cert_path", "expires_days", "names", "fingerprint_sha256",
-				"issued_by", "restart_required", "previous_available"}},
-		{name: "tls rollback none", method: "POST", path: "/api/tls/rollback", wantStatus: 200,
-			wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "tls restart", method: "POST", path: "/api/tls/restart", wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false), dataKeys: []string{"restart_required", "restarted"}},
-		{name: "tls renew no domain", method: "POST", path: "/api/tls/renew",
-			body: map[string]any{}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
-		{name: "tls renew bad domain", method: "POST", path: "/api/tls/renew",
-			body: map[string]any{"domain": "not a domain"}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false), msgContains: "not valid"},
-		{name: "tls renew missing email", method: "POST", path: "/api/tls/renew",
-			body: map[string]any{"domain": "vpn.example.com"}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(false), msgContains: "contact email address is required"},
-		{name: "https status alias", method: "GET", path: "/api/https/status", wantStatus: 200, wantEnvelope: true},
 
 		// --- updater ---
 		{name: "updater operation no state", method: "GET", path: "/api/updater/operation", wantStatus: 200,
@@ -514,73 +483,6 @@ func postPair(t *testing.T, url, token, path, keyPEM, certPEM string) (*http.Res
 // TestTLSUploadValidatesAndActivates covers the upload path: validation
 // failures keep the previous pair, a valid pair is written at the declared
 // paths (0600/0644) and rollback restores the previous one.
-func TestTLSUploadValidatesAndActivates(t *testing.T) {
-	env := newPanelEnv(t)
-	keyPath := filepath.Join(env.dataDir, "declared", "privkey.pem")
-	certPath := filepath.Join(env.dataDir, "declared", "fullchain.pem")
-	t.Setenv("SSL_KEYFILE", keyPath)
-	t.Setenv("SSL_CERTFILE", certPath)
-
-	key1, cert1 := mintPair(t, "one.example.com")
-	res, raw := postPair(t, env.srv.URL, env.token, "/api/tls/upload", key1, cert1)
-	if res.StatusCode != 200 || !strings.Contains(string(raw), `"success":true`) {
-		t.Fatalf("upload valid pair: %d %s", res.StatusCode, raw)
-	}
-	info, err := os.Stat(keyPath)
-	if err != nil {
-		t.Fatalf("declared key not written: %v", err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("key mode = %v, want 0600", info.Mode().Perm())
-	}
-	if info, err = os.Stat(certPath); err != nil {
-		t.Fatalf("declared cert not written: %v", err)
-	}
-
-	// A mismatched pair is refused and must not disturb the active pair.
-	otherKey, otherCert := mintPair(t, "two.example.com")
-	_, raw = postPair(t, env.srv.URL, env.token, "/api/tls/upload", otherKey, cert1)
-	if !strings.Contains(string(raw), "does not match the certificate") {
-		t.Fatalf("mismatched pair not rejected: %s", raw)
-	}
-
-	// Garbage PEM is refused with the exact wording.
-	_, raw = postPair(t, env.srv.URL, env.token, "/api/tls/upload", "not a key", "not a cert")
-	if !strings.Contains(string(raw), "not a valid PEM private key") {
-		t.Fatalf("garbage pair not rejected: %s", raw)
-	}
-
-	// A second valid pair activates, retaining the first as the previous one
-	// (the backup only happens once a pair is already installed).
-	res, raw = postPair(t, env.srv.URL, env.token, "/api/tls/upload", otherKey, otherCert)
-	if res.StatusCode != 200 || !strings.Contains(string(raw), `"success":true`) {
-		t.Fatalf("second upload: %d %s", res.StatusCode, raw)
-	}
-
-	// Status now reports the declared pair, and rollback restores pair one.
-	res, raw = rawReq(t, "GET", env.srv.URL+"/api/tls/status", env.token, nil, "")
-	if !strings.Contains(string(raw), `"mode":"managed"`) {
-		t.Fatalf("tls status after upload: %s", raw)
-	}
-	res, raw = rawReq(t, "POST", env.srv.URL+"/api/tls/rollback", env.token, nil, "")
-	if res.StatusCode != 200 || !strings.Contains(string(raw), `"success":true`) {
-		t.Fatalf("rollback: %d %s", res.StatusCode, raw)
-	}
-	if restored, err := os.ReadFile(keyPath); err != nil || string(restored) != key1 {
-		t.Fatalf("rollback did not restore pair one (err=%v)", err)
-	}
-
-	// Self-signed generation lands at the same declared paths.
-	res, raw = rawReq(t, "POST", env.srv.URL+"/api/tls/self-signed", env.token, nil, "")
-	if res.StatusCode != 200 || !strings.Contains(string(raw), `"success":true`) {
-		t.Fatalf("self-signed: %d %s", res.StatusCode, raw)
-	}
-	// https_router aliases share the same handlers.
-	if res, raw = postPair(t, env.srv.URL, env.token, "/api/https/existing", key1, cert1); res.StatusCode != 200 {
-		t.Fatalf("https/existing alias: %d %s", res.StatusCode, raw)
-	}
-}
-
 // TestUpdaterStateMachine pins the /operation shape for every persisted phase.
 func TestUpdaterStateMachine(t *testing.T) {
 	env := newPanelEnv(t)
@@ -646,7 +548,7 @@ func TestUpdaterStateMachine(t *testing.T) {
 func TestPanelRequiresOwner(t *testing.T) {
 	env := newPanelEnv(t)
 	for _, path := range []string{
-		"/api/health/overview", "/api/server/settings", "/api/tls/status",
+		"/api/health/overview", "/api/settings",
 		"/api/updater/operation", "/api/security/summary", "/api/maintenance/backup/list",
 	} {
 		res, _ := rawReq(t, "GET", env.srv.URL+path, "", nil, "")
@@ -656,4 +558,107 @@ func TestPanelRequiresOwner(t *testing.T) {
 	}
 }
 
+// An upload must not leave the multipart parser's spooled copy behind in the
+// system temp dir. The parser writes a file part that does not fit in memory
+// there, and the request owns the cleanup: without it every restore — a whole
+// database — would sit in /tmp for good.
+// multipartTempFiles counts the spooled upload files in the system temp dir.
+func multipartTempFiles(t *testing.T) int {
+	t.Helper()
+	entries, err := os.ReadDir(os.TempDir())
+	if err != nil {
+		t.Fatalf("read temp dir: %v", err)
+	}
+	n := 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "multipart-") {
+			n++
+		}
+	}
+	return n
+}
+
+// TestRestoreBodyLimit refuses an oversized restore upload.
+func TestRestoreBodyLimit(t *testing.T) {
+	env := newPanelEnv(t)
+	big := bytes.Repeat([]byte("B"), 102*1024*1024)
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	part, _ := mw.CreateFormFile("file", "big.db")
+	_, _ = part.Write(big)
+	_ = mw.Close()
+	res, raw := rawReq(t, "POST", env.srv.URL+"/api/maintenance/backup/restore", env.token, &buf, mw.FormDataContentType())
+	var got map[string]any
+	_ = json.Unmarshal(raw, &got)
+	if res.StatusCode != 200 || got["success"] != false {
+		t.Fatalf("restore large: %d %v", res.StatusCode, got)
+	}
+	if msg, _ := got["msg"].(string); !strings.Contains(msg, "File too large") {
+		t.Fatalf("msg = %q", msg)
+	}
+}
+
+// TestSetColumnsRollsBackOnFailure ensures a mixed update is rolled back.
+//
+// Go randomises map iteration order, so a single call with one good key and
+// one bad key only exercises the "good key first" order half the time. The
+// call is repeated so the test fails against an implementation that does NOT
+// wrap the updates in a transaction (which would commit the good column
+// whenever it happens to be visited first).
+func TestSetColumnsRollsBackOnFailure(t *testing.T) {
+	conn, _ := newTestDB(t)
+	if _, err := conn.Exec(`ALTER TABLE settings ADD COLUMN a TEXT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`ALTER TABLE settings ADD COLUMN b TEXT`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO settings (id, a, b) VALUES (1, 'orig-a', 'orig-b')`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 24; i++ {
+		err := panel.SetColumns(conn, map[string]any{"a": "new-a", "no_such_column": "x"})
+		if err == nil {
+			t.Fatal("expected error for unknown column")
+		}
+		var a, b string
+		if err := conn.QueryRow(`SELECT a, b FROM settings WHERE id=1`).Scan(&a, &b); err != nil {
+			t.Fatal(err)
+		}
+		if a != "orig-a" || b != "orig-b" {
+			t.Fatalf("rollback failed on attempt %d: a=%q b=%q", i+1, a, b)
+		}
+	}
+}
+
 var _ = time.Now
+
+// The settings hint says "0 = unlimited" for the default device count, so
+// the settings GET must report the stored value instead of coercing it.
+func TestSettingsReportTheUnlimitedDefault(t *testing.T) {
+	env := newPanelEnv(t)
+	if _, err := env.conn.Exec(
+		`INSERT INTO settings (id, default_max_users) VALUES (1, 0)
+		 ON CONFLICT(id) DO UPDATE SET default_max_users = 0`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	res, body := rawReq(t, "GET", env.srv.URL+"/api/settings", env.token, nil, "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+	var got struct {
+		Data struct {
+			DefaultMaxUsers *int `json:"default_max_users"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode: %v (%s)", err, body)
+	}
+	if got.Data.DefaultMaxUsers == nil {
+		t.Fatalf("default_max_users missing: %s", body)
+	}
+	if *got.Data.DefaultMaxUsers != 0 {
+		t.Errorf("default_max_users = %d, want 0", *got.Data.DefaultMaxUsers)
+	}
+}

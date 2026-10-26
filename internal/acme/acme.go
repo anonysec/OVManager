@@ -207,6 +207,9 @@ func newClient(key crypto.Signer, directoryURL string) (*acme.Client, []byte, er
 func challengeHandler(client *acme.Client) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(challengePrefix, func(w http.ResponseWriter, r *http.Request) {
+		// Limit request body to 1 MiB to prevent memory exhaustion from large
+		// POSTs to the challenge endpoint (which should only be GET).
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		resp, err := client.HTTP01ChallengeResponse(strings.TrimPrefix(r.URL.Path, challengePrefix))
 		if err != nil {
 			http.Error(w, "not found", http.StatusNotFound)

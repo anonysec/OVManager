@@ -221,8 +221,17 @@ func StreamHandler(svc *auth.Service, b *Bus) http.HandlerFunc {
 
 		q := b.Subscribe()
 		defer b.Unsubscribe(q)
+		// ResponseController unwraps to the server's *http.ResponseWriter so the
+		// per-write deadline is the only write deadline in play (the server has
+		// WriteTimeout=0 to keep the SSE stream alive).
+		rc := http.NewResponseController(w)
+		streamDeadline := func() time.Time { return time.Now().Add(30 * time.Second) }
+
 		// ready frame: {"ts": <time>, "cap": <cap>} — ts first, like the dict.
-		_, _ = w.Write([]byte("event: ready\ndata: " + orderedObject([]KV{{"ts", nowSecs()}, {"cap", SnapshotCap()}}) + "\n\n"))
+		_ = rc.SetWriteDeadline(streamDeadline())
+		if _, err := w.Write([]byte("event: ready\ndata: " + orderedObject([]KV{{"ts", nowSecs()}, {"cap", SnapshotCap()}}) + "\n\n")); err != nil {
+			return
+		}
 		flusher.Flush()
 
 		timer := time.NewTimer(heartbeatSeconds * time.Second)
@@ -232,10 +241,20 @@ func StreamHandler(svc *auth.Service, b *Bus) http.HandlerFunc {
 			case <-r.Context().Done():
 				return
 			case ev := <-q:
-				_, _ = w.Write([]byte(formatEvent(ev.Topic, ev.TS, ev.Data)))
+				if err := rc.SetWriteDeadline(streamDeadline()); err != nil {
+					return
+				}
+				if _, err := w.Write([]byte(formatEvent(ev.Topic, ev.TS, ev.Data))); err != nil {
+					return
+				}
 				flusher.Flush()
 			case <-timer.C:
-				_, _ = w.Write([]byte(": hb\n\n"))
+				if err := rc.SetWriteDeadline(streamDeadline()); err != nil {
+					return
+				}
+				if _, err := w.Write([]byte(": hb\n\n")); err != nil {
+					return
+				}
 				flusher.Flush()
 				timer.Reset(heartbeatSeconds * time.Second)
 			}

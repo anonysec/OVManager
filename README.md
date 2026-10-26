@@ -41,7 +41,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - **The VPN servers are independent of the panel.** Nodes never call the panel and do not store its address, so the panel can be moved, rebuilt or replaced without touching a single VPN server. Re-attach them with the same address, name and key.
 - **Limits that hold while the panel is down.** The device limit is pushed to each node and enforced there at connect time. The panel is not asked permission, and its absence changes nothing.
 - **Accounting that cannot double-bill.** Each node reports a lifetime byte total per user; the panel remembers the last number it saw and bills only the increase. A dropped session, a restart or a rebuilt node cannot over-count.
-- **Updates that undo themselves.** `sudo ovm update` downloads a verified release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up.
+- **Updates that undo themselves.** `sudo ovmanager update` downloads a verified release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up.
 - **A real API underneath.** The dashboard is a client of the panel's own JSON API and speaks the same login session.
 
 ## ✨ Features
@@ -81,22 +81,22 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Rate limits on failed logins, per username and per address, with a `Retry-After` on the claim endpoint.
 - The panel is served under a random secret URL prefix; anything outside it gets an empty 404, so scanners see nothing.
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
-- Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovm tls` shows the installed certificate.
-- Built-in Let's Encrypt (`ovm tls acme <domain>` or `install.sh --acme DOMAIN`) issues over HTTP-01: **port 80 must be free** on this server for up to ~60 seconds while the certificate is issued, then renewals happen automatically (T-30 days). Anything else bound to port 80 makes issuance fail; the panel keeps serving plain HTTP meanwhile.
+- Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` shows the installed certificate.
+- Built-in Let's Encrypt (`ovmanager tls acme <domain>` or `install.sh --acme DOMAIN`) issues over HTTP-01: **port 80 must be free** on this server for up to ~60 seconds while the certificate is issued, then renewals happen automatically (T-30 days). Anything else bound to port 80 makes issuance fail; the panel keeps serving plain HTTP meanwhile.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.
 - A filterable audit log of who changed what, exportable as CSV.
 
 ### 🤖 Automation and API
-- Backup scheduler: the installer writes a daily systemd timer (`ovm-backup.timer`) that runs a verified backup and prunes to 7 copies, whether or not the panel process is up.
+- Backup scheduler: the installer writes a daily systemd timer (`ovmanager-backup.timer`) that runs a verified backup and prunes to 7 copies, whether or not the panel process is up.
 - Public subscription endpoint that answers with a page, a usage summary or the `.ovpn` itself.
 - Staged updates and every manual-verifying step are fully scripted.
 
 ### 🔧 Operations
-- `ovm doctor` runs the health checks over the service, autostart, file modes, data directory, disk space, worker, HTTP health and backup age and certificate.
-- Staged updates with automatic failover; an update interrupted by a reboot is recovered on the next `ovm update` run.
-- Verified `.db` backups, listed and restored by name (`ovm backup --keep N`, `ovm restore`).
-- A bare `ovm` run prints the available screens and exits; every command has `--help`.
+- `ovmanager doctor` runs the health checks over the service, autostart, file modes, data directory, disk space, worker, HTTP health and backup age and certificate.
+- Staged updates with automatic failover; an update interrupted by a reboot is recovered on the next `ovmanager update` run.
+- Verified `.db` backups, listed and restored by name (`ovmanager backup --keep N`, `ovmanager restore`).
+- A bare `ovmanager` run prints the available screens and exits; every command has `--help`.
 
 ## 🚀 Install
 
@@ -108,10 +108,12 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Port `2095` free.
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
 ```
 
 The installer fetches the bare release binary for this platform (plus its SHA-256 sidecar, verified before install), puts it in `/opt/ovmanager`, writes a systemd service and a daily backup timer, starts the panel and health-checks the result. There is nothing to prompt for; `-y` is accepted for compatibility and the script never asks questions mid-run. `bash install.sh --help` prints the full surface.
+
+The command above pulls `install.sh` from the tagged release (v2.1.2, matching the binary's version constant), not from `main`, so a `main` change cannot silently change what root executes. The binary's SHA-256 is verified at install time against the sidecar shipped with that release; the installer script itself is not separately checksum-verified — there is no published sidecar for it, so only the binary's integrity is checked.
 
 **From source** (development): point the installer at a working tree — it builds the SPA and the binary in place:
 
@@ -136,7 +138,7 @@ setup key      9f1c8b2e…  (one-time)
 user           admin — change it any time in Settings
 ```
 
-**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address shows the claim form; once claimed, the same address is the setup checklist. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovm owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovm reset-password`.
+**First login.** Open the URL, paste the key, and choose the owner password — at least 8 characters, and not a placeholder like `change-me`. No password exists until you do this. On a panel nobody has claimed yet, that address shows the claim form; once claimed, the same address is the setup checklist. The key is spent the moment it works, and the password is stored as a bcrypt hash in the panel database, never in `.env`. Lost the key before claiming? `sudo ovmanager owner-claim` prints a fresh one. Claimed already and lost the password? `sudo ovmanager reset-password`.
 
 **Where things live:**
 
@@ -145,27 +147,27 @@ user           admin — change it any time in Settings
 | `/opt/ovmanager` | The installed tree: the binary (with the dashboard inside), `.env` |
 | `/opt/ovmanager/.env` | Configuration — port, data dir, owner login name |
 | `/var/lib/ovmanager` | The database, backups and node material (mode `0700`) |
-| `/usr/local/bin/ovm` | Symlink to the binary — the operator CLI |
+| `/usr/local/bin/ovmanager` | Symlink to the binary — the operator CLI |
 | `.github/site` | Not on disk: the docs are the Pages site below |
 
 **Then attach a server.** The panel manages accounts; it does not carry VPN traffic. Install OVNode on the machine your users will connect to and register it under **Nodes → Add Node** — the panel's Ready card prints a ready-to-paste command with the API key already filled in. Until a node is green, the panel has nothing to hand out.
 
-**Managing it afterwards** is `ovm`, a symlink to the same binary that serves the panel. Run it bare for a command list, or `--help` per command. There is no `uninstall` command: stop the service and remove `/opt/ovmanager` and `/var/lib/ovmanager` (data is kept unless you remove it).
+**Managing it afterwards** is `ovmanager`, a symlink to the same binary that serves the panel. Run it bare for a command list, or `--help` per command. There is no `uninstall` command: stop the service and remove `/opt/ovmanager` and `/var/lib/ovmanager` (data is kept unless you remove it).
 
 | What | How |
 | --- | --- |
-| Status, health, version, URL | `sudo ovm status [--all]` |
-| Health checks | `sudo ovm doctor` |
-| Service control | `sudo ovm service start \| stop \| restart \| enable \| disable` |
-| Server logs | `sudo ovm logs [N\|-f]` |
-| Backup now (verified, pruned) | `sudo ovm backup [--keep N]` — default 14 |
-| List backups, or restore | `sudo ovm restore [NAME]` |
-| The daily timer | written by the installer; runs `ovm backup --keep 7` daily |
-| Panel URL prefix | `sudo ovm urlpath` |
-| Installed certificate | `sudo ovm tls` |
-| Staged update with failover | `sudo ovm update` |
-| Reset the owner password | `sudo ovm reset-password` |
-| Shell completion | `sudo ovm completion bash\|zsh\|fish` |
+| Status, health, version, URL | `sudo ovmanager status [--all]` |
+| Health checks | `sudo ovmanager doctor` |
+| Service control | `sudo ovmanager service start \| stop \| restart \| enable \| disable` |
+| Server logs | `sudo ovmanager logs [N\|-f]` |
+| Backup now (verified, pruned) | `sudo ovmanager backup [--keep N]` — default 14 |
+| List backups, or restore | `sudo ovmanager restore [NAME]` |
+| The daily timer | written by the installer; runs `ovmanager backup --keep 7` daily |
+| Panel URL prefix | `sudo ovmanager urlpath` |
+| Installed certificate | `sudo ovmanager tls` |
+| Staged update with failover | `sudo ovmanager update` |
+| Reset the owner password | `sudo ovmanager reset-password` |
+| Shell completion | `sudo ovmanager completion bash\|zsh\|fish` |
 
 ## ⚡ Performance notes
 
@@ -179,23 +181,23 @@ The panel is designed to be light on a small VPS and gentle on the nodes.
 
 ## 🧰 Day-to-day commands
 
-Every `ovm` command needs root, because each one reads the panel's `.env` to find the panel URL path and the install layout. The panel itself does not: any account can log in through the browser.
+Every `ovmanager` command needs root, because each one reads the panel's `.env` to find the panel URL path and the install layout. The panel itself does not: any account can log in through the browser.
 
 | Command | What it does |
 | --- | --- |
-| `sudo ovm status` | Service, health, version and panel URL. `--all` adds mode, port, data and install paths. |
-| `sudo ovm doctor` | Run the health checks (service, autostart, modes, data dir, disk, worker, HTTP health, backup age, certificate). |
-| `sudo ovm logs [N\|-f]` | Last N log lines (default 100), or follow live. |
-| `sudo ovm service start \| stop \| restart` | Service control. `enable` / `disable` set automatic start. |
-| `sudo ovm backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. The installer's daily timer pins `--keep 7`. |
-| `sudo ovm restore [NAME]` | List backups, or restore one by name. |
-| `sudo ovm urlpath` | Print the secret URL prefix the panel is served under. |
-| `sudo ovm tls` | The installed certificate and when it expires. Read-only. |
-| `sudo ovm update` | Staged update with automatic failover; recovers an interrupted update first. |
-| `sudo ovm reset-password` | Set a new owner password, then restart the panel. |
-| `sudo ovm completion` | Install shell completion (`bash\|zsh\|fish\|powershell`). |
+| `sudo ovmanager status` | Service, health, version and panel URL. `--all` adds mode, port, data and install paths. |
+| `sudo ovmanager doctor` | Run the health checks (service, autostart, modes, data dir, disk, worker, HTTP health, backup age, certificate). |
+| `sudo ovmanager logs [N\|-f]` | Last N log lines (default 100), or follow live. |
+| `sudo ovmanager service start \| stop \| restart` | Service control. `enable` / `disable` set automatic start. |
+| `sudo ovmanager backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. The installer's daily timer pins `--keep 7`. |
+| `sudo ovmanager restore [NAME]` | List backups, or restore one by name. |
+| `sudo ovmanager urlpath` | Print the secret URL prefix the panel is served under. |
+| `sudo ovmanager tls` | The installed certificate and when it expires. Read-only. |
+| `sudo ovmanager update` | Staged update with automatic failover; recovers an interrupted update first. |
+| `sudo ovmanager reset-password` | Set a new owner password, then restart the panel. |
+| `sudo ovmanager completion` | Install shell completion (`bash\|zsh\|fish\|powershell`). |
 
-`ovm update` covers rollback too: the pre-update tree is kept, `ovm restore` restores backups, and an update interrupted mid-flight is recovered automatically at the next `ovm update` call.
+`ovmanager update` covers rollback too: the pre-update tree is kept, `ovmanager restore` restores backups, and an update interrupted mid-flight is recovered automatically at the next `ovmanager update` call.
 
 ## 📚 Docs
 
@@ -211,7 +213,7 @@ Full documentation is published at **<https://anonysec.github.io/OVManager/>**.
 | [TLS certificates](https://anonysec.github.io/OVManager/wiki/tls.html) | Self-signed vs Let's Encrypt, renewing, and the node-side certificate story. |
 | [Backups & restore](https://anonysec.github.io/OVManager/wiki/backup.html) | Backup bundles, the daily timer, offsite copies, and restoring without taking the panel down. |
 | [Troubleshooting](https://anonysec.github.io/OVManager/wiki/troubleshooting.html) | The symptoms people actually hit, in the order worth checking. |
-| [CLI reference](https://anonysec.github.io/OVManager/wiki/cli.html) | Every `ovm` and `ovn` command, the installer's flags, and the `OVM_*` settings. |
+| [CLI reference](https://anonysec.github.io/OVManager/wiki/cli.html) | Every `ovmanager` and `ovn` command, the installer's flags, and the `OVM_*` settings. |
 
 Elsewhere in this repository:
 

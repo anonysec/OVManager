@@ -8,7 +8,7 @@
 | < 2.0   | no        |
 
 Only the latest `2.x` release of OVManager + OVNode is supported.
-Always upgrade both together: panel `2.x` requires node `>= 2.0` (sync API).
+Always upgrade both together: panel `2.x` pairs with node `>= 1.x` (current node line 1.3).
 
 ## Reporting a vulnerability
 

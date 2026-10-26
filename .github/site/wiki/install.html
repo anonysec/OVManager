@@ -178,7 +178,7 @@ Login     admin</code></pre>
     <p>Print a fresh one on the server, as long as the panel has not been claimed yet:</p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm owner-claim</code></pre>
+      <pre><code>sudo ovmanager owner-claim</code></pre>
     </figure>
     <p>
       The panel reads the key file per attempt, so a reprint needs no restart.
@@ -243,7 +243,7 @@ cd .. &amp;&amp; uv run main.py</code></pre>
     </p>
     <figure class="cmd">
       <figcaption>Set the owner password</figcaption>
-      <pre><code>.venv/bin/python -m cli.main reset-password --admin-pass 'a-strong-password'</code></pre>
+      <pre><code>ovmanager reset-password --admin-pass 'a-strong-password'</code></pre>
     </figure>
     <p>
       The repository's
@@ -255,16 +255,16 @@ cd .. &amp;&amp; uv run main.py</code></pre>
 
     <h2 id="update">Update and uninstall</h2>
     <p>
-      These live in <code>ovm</code>, which the installer adds and refreshes on
+      These live in <code>ovmanager</code>, which the installer adds and refreshes on
       every update &mdash; you do not need to re-download <code>install.sh</code>.
     </p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovm update              # staged update with automatic failover
-ovm status                   # service, health, version, panel URL
-sudo ovm rollback            # restore the newest pre-update code snapshot
-sudo ovm uninstall           # remove the app, keep data
-sudo ovm uninstall --purge   # also delete data</code></pre>
+      <pre><code>sudo ovmanager update              # staged update with automatic failover
+ovmanager status                   # service, health, version, panel URL
+sudo ovmanager rollback            # restore the newest pre-update code snapshot
+sudo ovmanager uninstall           # remove the app, keep data
+sudo ovmanager uninstall --purge   # also delete data</code></pre>
     </figure>
     <p>
       Updates are staged and verified, and roll back automatically if the new
@@ -274,7 +274,7 @@ sudo ovm uninstall --purge   # also delete data</code></pre>
     </p>
     <p>
       The same operations exist in the terminal menu: run <code>ovmanager</code>
-      (alias <code>ovm</code>) with no arguments and pick from
+      (alias <code>ovmanager</code>) with no arguments and pick from
       <strong>Status · Start/Stop/Restart · Logs · Backup · Auto backup · Update · TLS · Recovery · Uninstall</strong>.
       Recovery shows the panel URL and login name, and can reset the owner
       password or clear the secret URL path.
