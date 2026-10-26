@@ -370,25 +370,31 @@ func CollectMetrics(db *sql.DB) {
 	now := nowSecs()
 
 	type userRow struct {
+		id        int64
 		name      string
 		isActive  int64
 		used      int64
 		maxLogins int64
 	}
 	users := []userRow{}
-	if rows, err := db.Query(`SELECT name, is_active, COALESCE(used,0), COALESCE(max_logins,0) FROM users`); err == nil {
+	if rows, err := db.Query(`SELECT id, name, is_active, COALESCE(used,0), COALESCE(max_logins,0) FROM users`); err == nil {
 		for rows.Next() {
 			var u userRow
-			if rows.Scan(&u.name, &u.isActive, &u.used, &u.maxLogins) == nil {
+			if rows.Scan(&u.id, &u.name, &u.isActive, &u.used, &u.maxLogins) == nil {
 				users = append(users, u)
 			}
 		}
 		rows.Close()
 	}
 
-	idToName := map[string]string{}
+	idToName := make(map[string]string, len(users))
+	known := make(map[string]bool, len(users))
+	for _, u := range users {
+		idToName[strconv.FormatInt(u.id, 10)] = u.name
+		known[u.name] = true
+	}
 	nodeRows := []map[string]any{}
-	sessionsByNode := []map[string]any{}
+	sessionsByNode := []snapshotPair{}
 	if nrows, err := db.Query(`SELECT id FROM nodes WHERE status = 1`); err == nil {
 		ids := []int64{}
 		for nrows.Next() {
@@ -410,25 +416,15 @@ func CollectMetrics(db *sql.DB) {
 			n := n
 			calls = append(calls, func() any {
 				row, sessions := nodeSnapshot(n, pid)
-				return snapshotPair{row: row, sessions: sessions}
+				return snapshotPair{row: row, sessions: sessions, nodeName: n.Name}
 			})
 		}
 		for _, res := range node.GatherNodes(calls, metricsFanoutDeadline) {
 			if p, ok := res.(snapshotPair); ok {
 				nodeRows = append(nodeRows, p.row)
-				sessionsByNode = append(sessionsByNode, p.sessions)
+				sessionsByNode = append(sessionsByNode, p)
 			}
 		}
-	}
-	if rows, err := db.Query(`SELECT id, name FROM users`); err == nil {
-		for rows.Next() {
-			var id int64
-			var name string
-			if rows.Scan(&id, &name) == nil {
-				idToName[strconv.FormatInt(id, 10)] = name
-			}
-		}
-		rows.Close()
 	}
 
 	checkNodeAlerts(db, nodeRows, readSettings(db).notifyNodeDown)
@@ -456,8 +452,8 @@ func CollectMetrics(db *sql.DB) {
 
 	// last_online + full-user count from the per-user live connection counts.
 	activeCounts := map[string]int{}
-	for _, sessions := range sessionsByNode {
-		live, ok := sessions["live_sessions"].([]any)
+	for _, snapshot := range sessionsByNode {
+		live, ok := snapshot.sessions["live_sessions"].([]any)
 		if !ok {
 			continue
 		}
@@ -467,11 +463,10 @@ func CollectMetrics(db *sql.DB) {
 				continue
 			}
 			cn, _ := sess["common_name"].(string)
-			username := cn
-			if mapped, ok := idToName[cn]; ok {
-				username = mapped
+			username := resolveSessionUsername(cn, snapshot.nodeName, idToName, known)
+			if username != "" {
+				activeCounts[username]++
 			}
-			activeCounts[username]++
 		}
 	}
 	fullUsers := int64(0)
@@ -512,6 +507,13 @@ func CollectMetrics(db *sql.DB) {
 type snapshotPair struct {
 	row      map[string]any
 	sessions map[string]any
+	nodeName string
+}
+
+// resolveSessionUsername normalizes the name-shaped and numeric common-name
+// formats shared by the metrics and live-snapshot collectors.
+func resolveSessionUsername(commonName, nodeName string, idToName map[string]string, known map[string]bool) string {
+	return billing.ResolveSessionUsername(commonName, nodeName, idToName, known)
 }
 
 func nodeSnapshot(n *node.Node, pid string) (map[string]any, map[string]any) {
@@ -669,13 +671,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 				continue
 			}
 			cn, _ := sess["common_name"].(string)
-			username := cn
-			if mapped, ok := idToName[cn]; ok {
-				username = mapped
-			} else {
-				// Legacy/foreign nodes report name-shaped CNs; strip the node suffix.
-				username = billing.ExtractUsername(cn, n.Name, known)
-			}
+			username := resolveSessionUsername(cn, n.Name, idToName, known)
 			if username != "" {
 				counts[username]++
 				touched[username] = true

@@ -662,3 +662,22 @@ func TestSettingsReportTheUnlimitedDefault(t *testing.T) {
 		t.Errorf("default_max_users = %d, want 0", *got.Data.DefaultMaxUsers)
 	}
 }
+
+func TestSubscriptionResponsesAreNotCached(t *testing.T) {
+	env := newPanelEnv(t)
+	if _, err := env.conn.Exec(
+		`INSERT INTO users (uuid, name, used, max_logins, is_active) VALUES ('cache-test-user', 'alice', 0, 1, 1)`,
+	); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	for _, path := range []string{
+		"/sub/cache-test-user",
+		"/sub/download/cache-test-user/missing-node",
+	} {
+		res, _ := rawReq(t, http.MethodGet, env.srv.URL+path, "", nil, "")
+		if got := res.Header.Get("Cache-Control"); got != "no-store" {
+			t.Errorf("GET %s Cache-Control = %q, want no-store", path, got)
+		}
+	}
+}

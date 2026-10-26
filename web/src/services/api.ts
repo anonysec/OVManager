@@ -171,7 +171,10 @@ async function request<T = any>(
 
   if (method === 'GET' && data === undefined) {
     inflightCache.set(cacheKey, promise);
-    promise.finally(() => inflightCache.delete(cacheKey));
+    void promise.then(
+      () => { inflightCache.delete(cacheKey); },
+      () => { inflightCache.delete(cacheKey); },
+    );
   }
   return promise;
 }

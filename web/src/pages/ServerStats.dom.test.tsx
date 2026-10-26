@@ -3,7 +3,7 @@
 
 /** ServerStats dashboard: per-source errors must not blank the whole page. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import '../i18n';
 
@@ -13,8 +13,21 @@ vi.mock('../services/api', () => ({
   AUTH_EXPIRED_EVENT: 'auth:expired', API_ERROR_EVENT: 'api:error',
 }));
 
+const liveMock = vi.hoisted(() => {
+  const listeners = new Map<string, Set<(data?: any) => void>>();
+  return {
+    listeners,
+    subscribe: (event: string, callback: (data?: any) => void) => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(callback);
+      return () => listeners.get(event)?.delete(callback);
+    },
+    emit: (event: string, data?: any) => listeners.get(event)?.forEach((callback) => callback(data)),
+  };
+});
+
 vi.mock('../context/LiveContext', () => ({
-  useLive: () => ({ subscribe: () => () => {}, unsubscribe: () => {}, streamConnected: false, refreshTick: 0 }),
+  useLive: () => ({ subscribe: liveMock.subscribe, unsubscribe: () => {}, streamConnected: false, refreshTick: 0 }),
 }));
 
 let mockRole = 'owner';
@@ -63,7 +76,68 @@ const renderWithPath = () => {
 };
 
 describe('ServerStats resilience', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockRole = 'owner'; });
+  beforeEach(() => { vi.clearAllMocks(); liveMock.listeners.clear(); mockRole = 'owner'; });
+
+  it('refreshes on domain invalidations but not an unrelated global tick', async () => {
+    baseMock(() => undefined);
+    renderStats();
+    await screen.findByText('12%');
+    const initialCalls = (apiClient.get as any).mock.calls.length;
+    expect([...liveMock.listeners.keys()]).toEqual(expect.arrayContaining(['ready', 'users.changed', 'nodes.changed']));
+    expect(liveMock.listeners.has('tick')).toBe(false);
+
+    await act(async () => { liveMock.emit('tick'); });
+    expect((apiClient.get as any).mock.calls).toHaveLength(initialCalls);
+
+    await act(async () => { liveMock.emit('users.changed'); });
+    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBeGreaterThan(initialCalls));
+  });
+
+  it('refreshes only the affected dashboard slice for live user and node events', async () => {
+    baseMock((url) => {
+      if (isNodeList(url)) {
+        return ok({ nodes: [{ id: 7, name: 'edge-7', status: true, address: '10.0.0.7', port: 2083 }] });
+      }
+      return undefined;
+    });
+    renderStats();
+    await waitFor(() => expect((apiClient.get as any).mock.calls.some(([url]: [string]) => url === '/nodes/7/status')).toBe(true));
+    await act(async () => { await Promise.resolve(); });
+
+    let calls = (apiClient.get as any).mock.calls as Array<[string]>;
+    const beforeUsers = calls.length;
+    await act(async () => { liveMock.emit('users.changed', { op: 'connections' }); });
+    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBe(beforeUsers + 2));
+    calls = (apiClient.get as any).mock.calls as Array<[string]>;
+    expect(calls.slice(beforeUsers).map(([url]) => url).sort()).toEqual([
+      '/metrics/history?hours=24', '/users/',
+    ]);
+
+    const beforeUsageReset = calls.length;
+    await act(async () => { liveMock.emit('users.changed', { op: 'reset-usage' }); });
+    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBe(beforeUsageReset + 5));
+    calls = (apiClient.get as any).mock.calls as Array<[string]>;
+    expect(calls.slice(beforeUsageReset).map(([url]) => url).sort()).toEqual([
+      '/activity/?limit=8', '/metrics/history?hours=24', '/notifications/', '/users/', '/users/traffic/top',
+    ]);
+
+    const beforeNodes = calls.length;
+    await act(async () => { liveMock.emit('nodes.changed'); });
+    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBe(beforeNodes + 2));
+    calls = (apiClient.get as any).mock.calls as Array<[string]>;
+    expect(calls.slice(beforeNodes).map(([url]) => url).sort()).toEqual(['/nodes/', '/nodes/7/status']);
+
+    const beforeBurst = calls.length;
+    await act(async () => {
+      liveMock.emit('users.changed', { op: 'connections' });
+      liveMock.emit('nodes.changed');
+    });
+    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBe(beforeBurst + 4));
+    calls = (apiClient.get as any).mock.calls as Array<[string]>;
+    expect(calls.slice(beforeBurst).map(([url]) => url).sort()).toEqual([
+      '/metrics/history?hours=24', '/nodes/', '/nodes/7/status', '/users/',
+    ]);
+  });
 
   it('renders the dashboard when only /activity fails', async () => {
     baseMock((url) => {
@@ -245,7 +319,7 @@ describe('ServerStats resilience', () => {
 });
 
 describe('ServerStats admin scoping', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockRole = 'admin'; });
+  beforeEach(() => { vi.clearAllMocks(); liveMock.listeners.clear(); mockRole = 'admin'; });
 
   it('hides owner-only widgets and never calls owner-only endpoints', async () => {
     baseMock(() => undefined);

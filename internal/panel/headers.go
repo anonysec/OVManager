@@ -1,7 +1,6 @@
 // Security-header middleware (all panel responses: API, SPA, subscription
-// page). HSTS is emitted only when the connection itself is TLS — the panel
-// is served plain HTTP behind a front proxy in release installs — either via
-// r.TLS or an X-Forwarded-Proto: https from that proxy.
+// page). HSTS is emitted for a direct TLS connection or an HTTPS request
+// forwarded by a proxy explicitly configured as trusted.
 package panel
 
 import "net/http"
@@ -14,7 +13,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("X-Content-Type-Options", "nosniff")
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		if externallySecure(r) {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		next.ServeHTTP(w, r)

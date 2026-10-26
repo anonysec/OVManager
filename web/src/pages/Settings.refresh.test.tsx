@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * A live event must not blank the Settings tab. The backend publishes a
- * `users` / `nodes` event whenever a connection count or a node's state
- * changes, and every event bumped the refresh tick — which used to replace
- * the whole card with a skeleton and silently throw away whatever the
- * operator had typed into an open editor.
+ * A full resynchronization (such as a reconnect or foreground refresh) must
+ * not replace an open Settings editor or discard the operator's typed value.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -74,7 +71,7 @@ describe('Settings live refresh', () => {
     fireEvent.change(input, { target: { value: '/ovm' } });
     expect(input.value).toBe('/ovm');
 
-    // A live event: the refresh tick bumps and the hub would reload.
+    // A full resynchronization tick may reload shared settings while editing.
     refreshTick += 1;
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url.includes('/settings')) return ok(settings);

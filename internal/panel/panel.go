@@ -460,13 +460,28 @@ func (h *Handler) clientIP(r *http.Request) string {
 	return auth.ClientIP(h.Svc.TrustedProxy, r)
 }
 
-// baseURL is FastAPI's str(request.base_url).
+// baseURL is FastAPI's str(request.base_url), using the externally visible
+// scheme only when X-Forwarded-Proto comes from a configured trusted proxy.
 func baseURL(r *http.Request) string {
 	scheme := "http"
-	if r.TLS != nil {
+	if externallySecure(r) {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + "/"
+}
+
+func externallySecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	if !TrustedProxyEnabled() {
+		return false
+	}
+	forwarded := r.Header.Get("X-Forwarded-Proto")
+	if i := strings.IndexByte(forwarded, ','); i >= 0 {
+		forwarded = forwarded[:i]
+	}
+	return strings.EqualFold(strings.TrimSpace(forwarded), "https")
 }
 
 func intQuery(r *http.Request, key string, def int) int {

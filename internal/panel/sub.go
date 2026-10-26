@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,7 +114,6 @@ func (h *Handler) subRateLimited(r *http.Request) bool {
 	now := float64(time.Now().UnixNano()) / 1e9
 	subMu.Lock()
 	defer subMu.Unlock()
-	subEnforceCap()
 	if now-subLastCleanup >= subWindow {
 		subLastCleanup = now
 		for k, hits := range subAttempts {
@@ -133,6 +133,7 @@ func (h *Handler) subRateLimited(r *http.Request) bool {
 		return true
 	}
 	subAttempts[key] = append(hits, now)
+	subEnforceCap()
 	return false
 }
 
@@ -153,11 +154,9 @@ func subEnforceCap() {
 		}
 		buckets = append(buckets, bucket{k, ts})
 	}
-	for i := 1; i < len(buckets); i++ {
-		for j := i; j > 0 && buckets[j].ts < buckets[j-1].ts; j-- {
-			buckets[j], buckets[j-1] = buckets[j-1], buckets[j]
-		}
-	}
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].ts < buckets[j].ts
+	})
 	for i := 0; i < overflow && i < len(buckets); i++ {
 		delete(subAttempts, buckets[i].key)
 	}
@@ -181,6 +180,7 @@ func (h *Handler) subStaticJS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) subPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if h.subRateLimited(r) {
 		writeSubError(w, 429, "Too Many Requests", "Please try again in a minute.")
 		return
@@ -231,6 +231,7 @@ func (h *Handler) subPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) subDownload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if h.subRateLimited(r) {
 		writeSubError(w, 429, "Too Many Requests", "Please try again in a minute.")
 		return

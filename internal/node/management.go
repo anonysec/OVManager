@@ -794,6 +794,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	h.register(mux, "GET /nodes/", owner(h.handleListNodes))
 	h.register(mux, "GET /nodes", owner(h.handleListNodes))
 	h.register(mux, "GET /nodes/ovpn/{uuid}/{node_id}", user(h.handleDownloadOVPN))
+	h.register(mux, "GET /nodes/ovpn/id/{user_id}/{node_id}", user(h.handleDownloadOVPN))
 	h.register(mux, "GET /nodes/ovpn-all/{node_id}", owner(h.handleDownloadAllOVPN))
 	h.register(mux, "GET /nodes/{first}/{second}", owner(h.handleNodeSubresource))
 	h.register(mux, "DELETE /nodes/{node_id}", owner(h.handleDeleteNode))
@@ -1108,6 +1109,19 @@ func (h *Handler) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
 }
 
+func parsePositiveRouteID(raw string) (int64, bool) {
+	if raw == "" {
+		return 0, false
+	}
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return 0, false
+		}
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	return id, err == nil && id > 0
+}
+
 func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 	uuid := r.PathValue("uuid")
 	nodeID, err := strconv.ParseInt(r.PathValue("node_id"), 10, 64)
@@ -1115,11 +1129,22 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusNotFound, "OVPN file not found")
 		return
 	}
+	userQuery := `SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`
+	var userLookup any = uuid
+	if rawID := r.PathValue("user_id"); rawID != "" {
+		id, ok := parsePositiveRouteID(rawID)
+		if !ok {
+			auth.WriteDetail(w, http.StatusNotFound, "User not found")
+			return
+		}
+		userQuery = `SELECT id, is_active, total, used, expiry_date FROM users WHERE id = ?`
+		userLookup = id
+	}
 	var userID int64
 	var active bool
 	var total, used sql.NullInt64
 	var expiry sql.NullString
-	if err := h.svc.DB().QueryRow(`SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`, uuid).Scan(&userID, &active, &total, &used, &expiry); err != nil {
+	if err := h.svc.DB().QueryRow(userQuery, userLookup).Scan(&userID, &active, &total, &used, &expiry); err != nil {
 		auth.WriteDetail(w, http.StatusNotFound, "User not found")
 		return
 	}

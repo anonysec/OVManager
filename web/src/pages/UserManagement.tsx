@@ -16,6 +16,8 @@ import { setDisplayTimezone } from '../utils/displayTimezone';
 import { formatBytes } from '../utils/format';
 import { buildSubscriptionLink } from '../utils/subscriptionLink';
 import { errorMessageOf } from '../utils/errorMessage';
+import { createQueuedRefresh } from '../utils/queuedRefresh';
+import { userApiPath } from '../utils/userIdentifier';
 import UserFormModal from '../components/UserFormModal';
 import ExtendUserModal from '../components/ExtendUserModal';
 import SelectNodeForDownloadModal from '../components/SelectNodeForDownloadModal';
@@ -97,7 +99,7 @@ const UserManagement = () => {
     setConfirm({ open: true, title, message, onConfirm, danger, confirmLabel });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
 
-  const fetchUsers = useCallback(async ({ background = false } = {}) => {
+  const fetchUsersWork = useCallback(async ({ background = false } = {}) => {
     setLoadError(false);
     if (!background) setIsLoading((prev) => (usersRef.current.length === 0 ? true : prev));
     try {
@@ -112,6 +114,7 @@ const UserManagement = () => {
       setIsLoading(false);
     }
   }, [addToast, t]);
+  const fetchUsers = useMemo(() => createQueuedRefresh(fetchUsersWork), [fetchUsersWork]);
 
   const fetchSubSettings = useCallback(async () => {
     try {
@@ -139,23 +142,25 @@ const UserManagement = () => {
     } catch { /* fall back to the global defaults below */ }
   }, []);
 
-  const { subscribe } = useLive();
+  const { subscribe, streamConnected } = useLive();
   useEffect(() => {
     const u1 = subscribe('users.changed', () => fetchUsers({ background: true }));
     const u2 = subscribe('users.created', () => fetchUsers({ background: true }));
     const u3 = subscribe('users.deleted', () => fetchUsers({ background: true }));
-    const u4 = subscribe('users', () => fetchUsers({ background: true }));
-    const u5 = subscribe('tick', () => fetchUsers({ background: true }));
-    return () => { u1(); u2(); u3(); u4(); u5(); };
+    const u4 = subscribe('tick', () => fetchUsers({ background: true }));
+    return () => { u1(); u2(); u3(); u4(); };
   }, [subscribe, fetchUsers]);
 
-  // Periodic polling fallback so connection status stays live even without SSE events
+  // When the stream is healthy, keep this page fresh for older writers that do
+  // not yet publish CRUD events. During an outage, LiveProvider's shared tick
+  // already performs the fallback refresh, so don't run a second timer here.
   useEffect(() => {
+    if (!streamConnected) return undefined;
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') fetchUsers({ background: true });
     }, 10000);
     return () => clearInterval(id);
-  }, [fetchUsers]);
+  }, [fetchUsers, streamConnected]);
 
   useEffect(() => { fetchUsers(); fetchSubSettings(); fetchMyDefaults(); }, [fetchUsers, fetchSubSettings, fetchMyDefaults]);
 
@@ -302,7 +307,7 @@ const UserManagement = () => {
   const handleToggleStatus = useCallback(async (user: any) => {
     const next = !user.is_active;
     try {
-      const res = await apiClient.put(`/users/${user.uuid}/status`, { name: user.name, status: next });
+      const res = await apiClient.put(`${userApiPath(user)}/status`, { name: user.name, status: next });
       if (res.data?.success) {
         addToast(t(next ? 'userEnabled' : 'userDisabled', next ? 'User {{name}} enabled.' : 'User {{name}} disabled.', { name: user.name }), 'success');
       } else {
@@ -320,7 +325,7 @@ const UserManagement = () => {
       t('confirmKick', 'Disconnect {{name}} from all nodes now?', { name: user.name }),
       async () => {
         try {
-          const res = await apiClient.post(`/users/${user.uuid}/kick`);
+          const res = await apiClient.post(`${userApiPath(user)}/kick`);
           const kicked = res.data?.data?.kicked ?? 0;
           addToast(t('kickedDone', '{{count}} session(s) terminated.', { count: kicked }), 'success');
         } catch (e) {
@@ -338,7 +343,7 @@ const UserManagement = () => {
       t('confirmDelete', 'Delete {{name}} and all their data?', { name: user.name }),
       async () => {
         try {
-          const res = await apiClient.delete(`/users/${user.uuid}`);
+          const res = await apiClient.delete(userApiPath(user));
           if (res.data?.success) {
             setLastDeleted({ uuid: user.uuid, name: user.name });
             setSelected((prev) => { const n = new Set(prev); n.delete(String(user.uuid)); return n; });
@@ -371,7 +376,7 @@ const UserManagement = () => {
   }, [lastDeleted, addToast, fetchUsers, t]);
 
   const handleExtend = useCallback(async (user: any, { days, bytes }: { days: any; bytes: any }) => {
-    const res = await apiClient.post(`/users/${user.uuid}/extend`, { days, bytes });
+    const res = await apiClient.post(`${userApiPath(user)}/extend`, { days, bytes });
     if (res.data?.success) {
       addToast(t('extended', 'User {{name}} extended.', { name: user.name }), 'success');
       fetchUsers({ background: true });
@@ -388,7 +393,7 @@ const UserManagement = () => {
     setIsSessionsModalOpen(true);
     const reqId = ++sessionsReqRef.current;
     try {
-      const res = await apiClient.get(`/users/${user.uuid}/sessions`);
+      const res = await apiClient.get(`${userApiPath(user)}/sessions`);
       if (reqId !== sessionsReqRef.current) return;
       setSessionDiagnostics(res.data?.data || res.data);
     } catch (e) {
@@ -402,9 +407,11 @@ const UserManagement = () => {
   const handleDisconnect = useCallback(async () => {
     if (!selectedUser) return;
     try {
-      const res = await apiClient.post(`/users/${selectedUser.uuid}/disconnect`);
-      addToast(res.data?.msg || t('disconnected', 'Disconnect requested'), 'success');
-      const refreshed = await apiClient.get(`/users/${selectedUser.uuid}/sessions`).catch(() => null);
+      const res = await apiClient.post(`${userApiPath(selectedUser)}/kick`);
+      if (res.data?.success === false) throw new Error(res.data?.msg || t('error'));
+      const kicked = res.data?.data?.kicked ?? 0;
+      addToast(t('kickedDone', '{{count}} session(s) terminated.', { count: kicked }), 'success');
+      const refreshed = await apiClient.get(`${userApiPath(selectedUser)}/sessions`).catch(() => null);
       if (refreshed) setSessionDiagnostics(refreshed.data?.data || refreshed.data);
     } catch (e) {
       addToast(errorMessageOf(e, t('error')), 'error');
@@ -432,7 +439,7 @@ const UserManagement = () => {
       t('confirmResetUsage', 'Reset all usage data for "{{name}}"? This cannot be undone.', { name: user.name }),
       async () => {
         try {
-          const res = await apiClient.post(`/users/${user.uuid}/reset-usage`);
+          const res = await apiClient.post(`${userApiPath(user)}/reset-usage`);
           addToast(res.data?.success ? t('usageResetSuccess', 'Usage for {{name}} has been reset.', { name: user.name }) : (res.data?.msg || t('error')), res.data?.success ? 'success' : 'error');
           fetchUsers({ background: true });
         } catch { addToast(t('error'), 'error'); }
@@ -472,11 +479,11 @@ const UserManagement = () => {
       if (!u) { fail += 1; continue; }
       try {
         let res: any;
-        if (op === 'delete') res = await apiClient.delete(`/users/${uuid}`);
-        else if (op === 'enable') res = await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: true });
-        else if (op === 'disable') res = await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: false });
-        else if (op === 'reset') res = await apiClient.post(`/users/${uuid}/reset-usage`);
-        else if (op === 'extend30') res = await apiClient.post(`/users/${uuid}/extend`, { days: 30, bytes: 0 });
+        if (op === 'delete') res = await apiClient.delete(userApiPath(u));
+        else if (op === 'enable') res = await apiClient.put(`${userApiPath(u)}/status`, { name: u.name, status: true });
+        else if (op === 'disable') res = await apiClient.put(`${userApiPath(u)}/status`, { name: u.name, status: false });
+        else if (op === 'reset') res = await apiClient.post(`${userApiPath(u)}/reset-usage`);
+        else if (op === 'extend30') res = await apiClient.post(`${userApiPath(u)}/extend`, { days: 30, bytes: 0 });
         // A refused change answers HTTP 200 with {success:false}: that is a
         // failure, not a done.
         if (res?.data?.success === false) { fail += 1; } else { ok += 1; }

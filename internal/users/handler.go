@@ -52,11 +52,27 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /users/{uuid}/{$}", guard(h.update))
 	mux.HandleFunc("PUT /users/{uuid}/status", guard(h.status))
 	mux.HandleFunc("GET /users/{uuid}/sessions", guard(h.sessions))
-	mux.HandleFunc("POST /users/{uuid}/disconnect", guard(h.disconnect))
+	mux.HandleFunc("POST /users/{uuid}/disconnect", guard(h.kickHandler))
 	mux.HandleFunc("POST /users/{uuid}/kick", guard(h.kickHandler))
 	mux.HandleFunc("DELETE /users/{uuid}", guard(h.remove))
 	mux.HandleFunc("POST /users/{uuid}/restore", guard(h.restore))
 	mux.HandleFunc("POST /users/{uuid}/extend", guard(h.extend))
+
+	// Explicit numeric-ID aliases avoid changing the meaning of an existing
+	// UUID path that happens to contain only digits. Both forms use the same
+	// authenticated handlers; restore intentionally remains UUID-only because
+	// deleted users no longer have a live numeric key.
+	const numeric = "/users/id/{id}"
+	mux.HandleFunc("GET "+numeric+"/traffic", guard(h.traffic))
+	mux.HandleFunc("POST "+numeric+"/reset-usage", guard(h.resetUsage))
+	mux.HandleFunc("PUT "+numeric, guard(h.update))
+	mux.HandleFunc("PUT "+numeric+"/{$}", guard(h.update))
+	mux.HandleFunc("PUT "+numeric+"/status", guard(h.status))
+	mux.HandleFunc("GET "+numeric+"/sessions", guard(h.sessions))
+	mux.HandleFunc("POST "+numeric+"/disconnect", guard(h.kickHandler))
+	mux.HandleFunc("POST "+numeric+"/kick", guard(h.kickHandler))
+	mux.HandleFunc("DELETE "+numeric, guard(h.remove))
+	mux.HandleFunc("POST "+numeric+"/extend", guard(h.extend))
 }
 
 // userRow is the scanned users table row (backend/db/models.py User).
@@ -150,6 +166,44 @@ func (h *Handler) byUUID(uuidStr string) (userRow, bool) {
 	return u, true
 }
 
+func (h *Handler) byID(id int64) (userRow, bool) {
+	if id <= 0 {
+		return userRow{}, false
+	}
+	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	if err != nil {
+		return userRow{}, false
+	}
+	return u, true
+}
+
+func parseUserID(raw string) (int64, bool) {
+	if raw == "" {
+		return 0, false
+	}
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return 0, false
+		}
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	return id, err == nil && id > 0
+}
+
+// byPathUser keeps the existing UUID form intact while resolving the explicit
+// /users/id/{id} aliases to a currently existing row. Numeric IDs are keys for
+// live rows, not durable/public identifiers; deleted-user restore stays UUID-based.
+func (h *Handler) byPathUser(r *http.Request) (userRow, bool) {
+	if rawID := r.PathValue("id"); rawID != "" {
+		id, ok := parseUserID(rawID)
+		if !ok {
+			return userRow{}, false
+		}
+		return h.byID(id)
+	}
+	return h.byUUID(r.PathValue("uuid"))
+}
+
 func userNotFound(w http.ResponseWriter) { auth.WriteDetail(w, http.StatusNotFound, "User not found") }
 
 // --- handlers ---
@@ -170,23 +224,18 @@ func (h *Handler) topTraffic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) sessions(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.byUUID(r.PathValue("uuid")); !ok {
+	user, ok := h.byPathUser(r)
+	if !ok {
 		userNotFound(w)
 		return
 	}
-	// ponytail: node session diagnostics land with Phase 2.
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User session diagnostics",
-		Data: map[string]any{"sessions": []any{}, "active": 0}})
-}
-
-func (h *Handler) disconnect(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.byUUID(r.PathValue("uuid")); !ok {
+	hours := max(1, min(queryInt(r, "hours", 8), 24*30))
+	data := node.LoginDiagnostics(user.Name, h.Svc.DB(), hours)
+	if found, ok := data["found"].(bool); !ok || !found {
 		userNotFound(w)
 		return
 	}
-	// ponytail: node fan-out lands with Phase 2.
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Disconnect command processed",
-		Data: map[string]any{}})
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User session diagnostics", Data: data})
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -327,8 +376,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
-	uuidStr := r.PathValue("uuid")
-	row, ok := h.byUUID(uuidStr)
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return
@@ -412,7 +460,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := h.Svc.DB().Exec(
 		`UPDATE users SET total = ?, max_logins = ?, expiry_date = ?, is_active = ?, tag = ? WHERE uuid = ?`,
-		row.Total, row.MaxLogins, row.ExpiryDate.String, row.IsActive, nullTag(row.Tag), uuidStr,
+		row.Total, row.MaxLogins, row.ExpiryDate.String, row.IsActive, nullTag(row.Tag), row.UUID,
 	); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not update user")
 		return
@@ -429,8 +477,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
-	uuidStr := r.PathValue("uuid")
-	row, ok := h.byUUID(uuidStr)
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return
@@ -459,7 +506,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	if *req.Status {
 		active = 1
 	}
-	if _, err := h.Svc.DB().Exec(`UPDATE users SET is_active = ? WHERE uuid = ?`, active, uuidStr); err != nil {
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET is_active = ? WHERE uuid = ?`, active, row.UUID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not change user status")
 		return
 	}
@@ -469,13 +516,11 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
-	uuidStr := r.PathValue("uuid")
-	row, ok := h.byUUID(uuidStr)
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return
 	}
-	_ = row
 	// Keep per-node baselines and push_hash; zero only the counters, and set the
 	// reseed marker so the next traffic pass seeds every node with delta 0
 	// instead of re-billing bytes the panel already counted (design §4.6).
@@ -484,7 +529,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 	for attempt := 0; attempt < 3; attempt++ {
 		var used int64
 		var state string
-		if err := h.Svc.DB().QueryRow(`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE uuid = ?`, uuidStr).Scan(&used, &state); err != nil {
+		if err := h.Svc.DB().QueryRow(`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE uuid = ?`, row.UUID).Scan(&used, &state); err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 			return
 		}
@@ -494,7 +539,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		data[node.ReseedMarkerKey] = json.RawMessage("true")
 		merged := string(mustJSON(data))
-		res, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, merged, uuidStr, used, state)
+		res, err := h.Svc.DB().Exec(`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, merged, row.UUID, used, state)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 			return
@@ -510,8 +555,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
-	uuidStr := r.PathValue("uuid")
-	row, ok := h.byUUID(uuidStr)
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return
@@ -633,8 +677,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusUnprocessableEntity, "days or bytes must be greater than 0")
 		return
 	}
-	uuidStr := r.PathValue("uuid")
-	row, ok := h.byUUID(uuidStr)
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return
@@ -657,16 +700,16 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		row.Total = &total
 	}
 	if _, err := h.Svc.DB().Exec(`UPDATE users SET total = ?, expiry_date = ? WHERE uuid = ?`,
-		row.Total, row.ExpiryDate.String, uuidStr); err != nil {
+		row.Total, row.ExpiryDate.String, row.UUID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not extend user")
 		return
 	}
-	row, _ = h.byUUID(uuidStr)
+	row, _ = h.byUUID(row.UUID)
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated", Data: row.base()})
 }
 
 func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
-	row, ok := h.byUUID(r.PathValue("uuid"))
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return

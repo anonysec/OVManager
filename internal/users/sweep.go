@@ -99,11 +99,12 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// kickHandler is POST /users/{uuid}/kick: revoke the user's sessions and kill
-// their live connections on every reachable node, reporting how many were
-// terminated. Zero terminated sessions is still a 200.
+// kickHandler serves the UUID routes and their /users/id/{id} aliases:
+// revoke the user's sessions and kill their live connections on every
+// reachable node, reporting how many were terminated. Zero terminated
+// sessions is still a 200.
 func (h *Handler) kickHandler(w http.ResponseWriter, r *http.Request) {
-	row, ok := h.byUUID(r.PathValue("uuid"))
+	row, ok := h.byPathUser(r)
 	if !ok {
 		userNotFound(w)
 		return

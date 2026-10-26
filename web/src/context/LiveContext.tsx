@@ -59,19 +59,27 @@ export const LiveProvider = ({ children }: { children?: any }) => {
     const set = listenersRef.current.get(event);
     if (set) set.delete(cb);
   }, []);
-  const publish = useCallback((event: any) => {
+  const publish = useCallback((event: any, data?: any) => {
     const set = listenersRef.current.get(event);
-    if (set) set.forEach((cb: () => void) => cb());
+    if (set) set.forEach((cb: (data?: any) => void) => cb(data));
   }, []);
 
-  const tickWithPublish = useCallback((topic?: any) => {
-    setRefreshTick((n) => n + 1);
-    publish('tick');
+  const publishLiveUpdate = useCallback((topic?: any, data?: any) => {
+    // The stream's ready frame is a full resynchronization after connect or
+    // reconnect. Ordinary domain events are scoped invalidations: broadcasting
+    // them as a global tick made unrelated pages (including Settings and the
+    // dashboard's full metrics bundle) refetch on every node/user update.
+    const fullRefresh = !topic || topic === 'ready';
+    if (fullRefresh) {
+      setRefreshTick((n) => n + 1);
+      publish('tick');
+    }
     if (topic) {
-      publish(topic);
-      if (!topic.includes('.')) publish(`${topic}.changed`);
+      publish(topic, data);
+      if (!topic.includes('.')) publish(`${topic}.changed`, data);
     }
   }, [publish]);
+  const tickWithPublish = useCallback((topic?: any, data?: any) => publishLiveUpdate(topic, data), [publishLiveUpdate]);
 
   useEffect(() => {
     let stopped = false;
@@ -104,8 +112,9 @@ export const LiveProvider = ({ children }: { children?: any }) => {
         if (!resp.ok || !resp.body) throw new Error(`live stream HTTP ${resp.status}`);
         if (!stopped) setStreamConnected(true);
         await readEventStream(resp.body, (topic: string | null, data?: any) => {
-          void data;
-          if (!stopped) tickWithPublish(topic);
+          // Current payloads are operation/timestamp metadata, not full domain
+          // records, so consumers refetch the affected resource by topic.
+          if (!stopped) tickWithPublish(topic, data);
         });
       } catch (e) { console.warn('live stream error', e); /* retry below */
       }
@@ -124,7 +133,9 @@ export const LiveProvider = ({ children }: { children?: any }) => {
 
   useEffect(() => {
     if (streamConnected) return undefined;
-    const id = setInterval(tickWithPublish, POLL_INTERVAL);
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') tickWithPublish();
+    }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [streamConnected, tickWithPublish]);
 

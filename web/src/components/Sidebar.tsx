@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
+import { createQueuedRefresh } from '../utils/queuedRefresh';
 import Logo from './Logo';
 import ConfirmModal from './ConfirmModal';
 
@@ -70,16 +71,20 @@ const Sidebar = () => {
     };
   }, [mobileOpen]);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStatsWork = useCallback(async () => {
     try {
-      const [usersRes] = await Promise.all([
-        apiClient.get('/users/'),
-      ]);
+      const usersRes = await apiClient.get('/users/');
       const users = asList(usersRes.data, 'users');
       const totalUsage = users.reduce((sum: number, u: any) => sum + Number(u.used || 0), 0);
       setStats({ totalUsers: users.length, totalUsage });
     } catch { /* ignore */ }
   }, []);
+  const fetchStats = useMemo(() => createQueuedRefresh(fetchStatsWork), [fetchStatsWork]);
+  const refreshStatsForUserEvent = useCallback((data?: any) => {
+    const op = data?.op;
+    if (op && !['create', 'delete', 'restore', 'reset-usage'].includes(op)) return;
+    fetchStats();
+  }, [fetchStats]);
 
   useEffect(() => {
     if (userRole !== 'owner') {
@@ -87,11 +92,12 @@ const Sidebar = () => {
       return undefined;
     }
     fetchStats();
-    const u1 = subscribe('users.changed', fetchStats);
+    const u1 = subscribe('users.changed', refreshStatsForUserEvent);
     const u2 = subscribe('users.created', fetchStats);
     const u3 = subscribe('users.deleted', fetchStats);
-    return () => { u1(); u2(); u3(); };
-  }, [subscribe, unsubscribe, fetchStats, userRole]);
+    const u4 = subscribe('tick', fetchStats);
+    return () => { u1(); u2(); u3(); u4(); };
+  }, [subscribe, unsubscribe, fetchStats, refreshStatsForUserEvent, userRole]);
 
   const toggleCollapse = useCallback(() => setCollapsed(c => !c), []);
 

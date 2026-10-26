@@ -11,6 +11,7 @@ import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDateTime, formatUptime } from '../utils/time';
 import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta, FLAG_SVGS } from '../utils/geo';
+import { createQueuedRefresh } from '../utils/queuedRefresh';
 import { settle } from '../hooks/settle';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -115,16 +116,22 @@ const ServerStats = () => {
   const [topUsers, setTopUsers] = useState<any[] | null>(null);
   const [trafficSeries, setTrafficSeries] = useState<{ conns: number[]; bytes: number[] }>({ conns: [], bytes: [] });
   const [probesDone, setProbesDone] = useState(false);
-  const [refreshStale, setRefreshStale] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [errors, setErrors] = useState<any>({});
+  const refreshStale = Object.keys(errors).length > 0;
 
   const probeGen = useRef(0);
+  const usersRequestGen = useRef(0);
+  const nodesRequestGen = useRef(0);
+  const metricsRequestGen = useRef(0);
 
-  const loadData = useCallback(async (background = false) => {
+  const loadDataWork = useCallback(async (background = false) => {
     if (!background) setLoading(true);
+    const usersRequest = ++usersRequestGen.current;
+    const nodesRequest = isOwner ? ++nodesRequestGen.current : null;
+    const metricsRequest = isOwner ? ++metricsRequestGen.current : null;
 
     const res: any = await settle({
       ...(isOwner ? {
@@ -143,27 +150,30 @@ const ServerStats = () => {
     if (res.stats?.ok) setStats(res.stats.data.data?.data || res.stats.data.data || null);
     else if (res.stats) nextErrors.stats = res.stats.error;
 
-    if (res.users.ok) setUsers(asList(res.users.data, 'users'));
-    else nextErrors.users = res.users.error;
+    const usersCurrent = usersRequest === usersRequestGen.current;
+    if (usersCurrent && res.users.ok) setUsers(asList(res.users.data, 'users'));
+    else if (usersCurrent) nextErrors.users = res.users.error;
 
+    const nodesCurrent = nodesRequest === null || nodesRequest === nodesRequestGen.current;
     let nodesData: any[] = [];
-    if (res.nodes?.ok) {
+    if (nodesCurrent && res.nodes?.ok) {
       nodesData = asList(res.nodes.data, 'nodes');
       setNodes(nodesData);
-    } else if (res.nodes) nextErrors.nodes = res.nodes.error;
+    } else if (nodesCurrent && res.nodes) nextErrors.nodes = res.nodes.error;
 
-    if (res.metrics?.ok) {
+    const metricsCurrent = metricsRequest === null || metricsRequest === metricsRequestGen.current;
+    if (metricsCurrent && res.metrics?.ok) {
       const series = res.metrics.data.data?.data?.traffic || res.metrics.data.data?.traffic || [];
       setTrafficSeries({
         conns: series.map((p: any) => Number(p.active_connections || 0)),
         bytes: series.map((p: any) => Number(p.total_used || 0)),
       });
-    } else if (res.metrics) nextErrors.metrics = res.metrics.error;
+    } else if (metricsCurrent && res.metrics) nextErrors.metrics = res.metrics.error;
 
     if (res.notifs?.ok) {
       const items = res.notifs.data.data?.data ?? res.notifs.data.data ?? [];
       setServerNotifs(Array.isArray(items) ? items : []);
-    }
+    } else if (res.notifs) nextErrors.notifs = res.notifs.error;
 
     if (res.activity?.ok) {
       const items = res.activity.data.data?.data ?? res.activity.data.data ?? [];
@@ -181,16 +191,22 @@ const ServerStats = () => {
       setTopUsers(null);
     }
 
-    setErrors(nextErrors);
-    if (!background || Object.keys(nextErrors).length === 0) {
-      setLastUpdated(new Date());
-      setRefreshStale(false);
-    } else {
-      setRefreshStale(true);
-    }
+    const errorKeys = ['stats', 'users', 'nodes', 'metrics', 'notifs', 'activity', 'topUsers'];
+    setErrors((previous: any) => {
+      const next = { ...previous };
+      errorKeys.forEach((key) => {
+        if ((key === 'users' && !usersCurrent) || (key === 'nodes' && !nodesCurrent) || (key === 'metrics' && !metricsCurrent)) return;
+        if (nextErrors[key]) next[key] = nextErrors[key];
+        else delete next[key];
+      });
+      return next;
+    });
+    if (!background || Object.keys(nextErrors).length === 0) setLastUpdated(new Date());
     setLoading(false);
 
     try {
+      const shouldProbe = !isOwner || (nodesCurrent && res.nodes?.ok);
+      if (!shouldProbe) return;
       const gen = ++probeGen.current;
       const results = await Promise.all(nodesData.map(async (n: any) => {
         if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0, reachable: false }];
@@ -199,18 +215,141 @@ const ServerStats = () => {
           return [n.id, r.data?.data || {}];
         } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0, reachable: false }]; }
       }));
-      if (gen !== probeGen.current) return;
+      if (gen !== probeGen.current || (nodesRequest !== null && nodesRequest !== nodesRequestGen.current)) return;
       setNodeStatus(Object.fromEntries(results));
       setProbesDone(true);
     } catch (e) { console.warn('server stats load failed', e); /* keep previous */ }
   }, [isOwner]);
+  const loadDataQueueRef = useRef<((background?: boolean) => Promise<void>) | null>(null);
+  const loadDataWorkRef = useRef<typeof loadDataWork | null>(null);
+  const loadData = useCallback((background = false) => {
+    if (loadDataWorkRef.current !== loadDataWork) {
+      loadDataWorkRef.current = loadDataWork;
+      loadDataQueueRef.current = createQueuedRefresh(loadDataWork);
+    }
+    return loadDataQueueRef.current?.(background) ?? Promise.resolve();
+  }, [loadDataWork]);
+
+  const loadUsersEventWork = useCallback(async (includeSecondaryData = true) => {
+    const request = ++usersRequestGen.current;
+    const metricsRequest = isOwner ? ++metricsRequestGen.current : null;
+    const res: any = await settle({
+      users: apiClient.get('/users/'),
+      ...(includeSecondaryData ? {
+        notifs: apiClient.get('/notifications/'),
+        activity: apiClient.get('/activity/?limit=8'),
+        ...(isOwner ? { topUsers: apiClient.get('/users/traffic/top') } : {}),
+      } : {}),
+      ...(isOwner ? { metrics: apiClient.get('/metrics/history?hours=24') } : {}),
+    });
+    if (request !== usersRequestGen.current || (metricsRequest !== null && metricsRequest !== metricsRequestGen.current)) return;
+
+    if (res.users.ok) setUsers(asList(res.users.data, 'users'));
+    if (res.notifs?.ok) {
+      const items = res.notifs.data.data?.data ?? res.notifs.data.data ?? [];
+      setServerNotifs(Array.isArray(items) ? items : []);
+    }
+    if (res.activity?.ok) {
+      const items = res.activity.data.data?.data ?? res.activity.data.data ?? [];
+      setActivity(Array.isArray(items) ? items : []);
+    }
+    if (res.topUsers?.ok) {
+      const items = res.topUsers.data.data?.data ?? res.topUsers.data.data ?? [];
+      setTopUsers(Array.isArray(items) ? items : []);
+    }
+    if (res.metrics?.ok) {
+      const series = res.metrics.data.data?.data?.traffic || res.metrics.data.data?.traffic || [];
+      setTrafficSeries({
+        conns: series.map((p: any) => Number(p.active_connections || 0)),
+        bytes: series.map((p: any) => Number(p.total_used || 0)),
+      });
+    }
+    setErrors((previous: any) => {
+      const next = { ...previous };
+      if (res.users.ok) delete next.users;
+      else next.users = res.users.error;
+      if (res.notifs) {
+        if (res.notifs.ok) delete next.notifs;
+        else next.notifs = res.notifs.error;
+      }
+      if (res.activity) {
+        if (res.activity.ok) delete next.activity;
+        else next.activity = res.activity.error;
+      }
+      if (res.topUsers) {
+        if (res.topUsers.ok) delete next.topUsers;
+        else next.topUsers = res.topUsers.error;
+      }
+      if (res.metrics) {
+        if (res.metrics.ok) delete next.metrics;
+        else next.metrics = res.metrics.error;
+      }
+      return next;
+    });
+    const secondaryDataOk = !includeSecondaryData
+      || (res.notifs?.ok && res.activity?.ok && (!isOwner || res.topUsers?.ok));
+    if (res.users.ok && secondaryDataOk && (!isOwner || res.metrics?.ok)) setLastUpdated(new Date());
+  }, [isOwner]);
+  const loadUsersForEvent = useMemo(() => createQueuedRefresh(loadUsersEventWork), [loadUsersEventWork]);
+
+  const loadNodesEventWork = useCallback(async () => {
+    const request = ++nodesRequestGen.current;
+    try {
+      const response = await apiClient.get('/nodes/');
+      if (request !== nodesRequestGen.current) return;
+      if (response.data?.success === false) throw new Error(response.data?.msg || 'Could not load nodes');
+      const nodesData = asList(response.data, 'nodes');
+      setNodes(nodesData);
+      setErrors((previous: any) => {
+        const next = { ...previous };
+        delete next.nodes;
+        return next;
+      });
+
+      const gen = ++probeGen.current;
+      const results = await Promise.all(nodesData.map(async (n: any) => {
+        if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0, reachable: false }];
+        try {
+          const r = await apiClient.get(`/nodes/${n.id}/status`, { timeout: 4000 });
+          return [n.id, r.data?.data || {}];
+        } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0, reachable: false }]; }
+      }));
+      if (request !== nodesRequestGen.current || gen !== probeGen.current) return;
+      setNodeStatus(Object.fromEntries(results));
+      setProbesDone(true);
+      setLastUpdated(new Date());
+    } catch (error) {
+      if (request === nodesRequestGen.current) {
+        setErrors((previous: any) => ({ ...previous, nodes: error }));
+      }
+    }
+  }, []);
+  const loadNodesForEvent = useMemo(() => createQueuedRefresh(loadNodesEventWork), [loadNodesEventWork]);
 
   const { subscribe, streamConnected } = useLive();
 
   useEffect(() => {
-    const off = subscribe('tick', () => loadData(true));
-    return () => off();
-  }, [subscribe, loadData]);
+    const offReady = subscribe('ready', () => loadData(true));
+    const refreshUsers = (data?: any) => loadUsersForEvent(data?.op !== 'connections');
+    const offUsersChanged = subscribe('users.changed', refreshUsers);
+    const offUsersCreated = subscribe('users.created', () => loadUsersForEvent());
+    const offUsersDeleted = subscribe('users.deleted', () => loadUsersForEvent());
+    const offNodesChanged = isOwner ? subscribe('nodes.changed', () => loadNodesForEvent()) : () => {};
+    const offNodesCreated = isOwner ? subscribe('nodes.created', () => loadNodesForEvent()) : () => {};
+    const offNodesDeleted = isOwner ? subscribe('nodes.deleted', () => loadNodesForEvent()) : () => {};
+    return () => {
+      offReady(); offUsersChanged(); offUsersCreated(); offUsersDeleted();
+      offNodesChanged(); offNodesCreated(); offNodesDeleted();
+    };
+  }, [subscribe, loadData, loadUsersForEvent, loadNodesForEvent, isOwner]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadData(true);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadData]);
 
   const firstRun = useRef(true);
   useEffect(() => {

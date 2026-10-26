@@ -6,6 +6,7 @@ import Modal from './Modal';
 import { Badge } from './ui';
 import { FiServer, FiDownload, FiCheck } from 'react-icons/fi';
 import './SelectNodeForDownloadModal.css';
+import { userIdentifierSegment } from '../utils/userIdentifier';
 
 const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isOpen?: any; onClose?: any }) => {
   const [nodes, setNodes] = useState<any[]>([]);
@@ -65,7 +66,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
       if (!selectedNodeId) throw new Error(t('noNodeSelected', 'No node selected for download.'));
       const selectedNode = nodes.find((n: any) => String(n.id) === String(selectedNodeId));
       if (!selectedNode) throw new Error(t('noNodeSelected', 'Selected node not found.'));
-      const downloadUrl = `/nodes/ovpn/${user.uuid}/${selectedNode.id}`;
+      const downloadUrl = `/nodes/ovpn/${userIdentifierSegment(user)}/${selectedNode.id}`;
       const downloadFileName = `${user.name}-${selectedNode.name}.ovpn`;
       const response = await apiClient.get(downloadUrl, {
         responseType: 'arraybuffer',

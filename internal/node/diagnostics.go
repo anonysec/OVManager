@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/anonysec/OVManager/go/internal/billing"
 )
 
 type diagUser struct {
@@ -46,6 +48,25 @@ func idToName(db *sql.DB) map[string]string {
 	return out
 }
 
+func diagUserNameMaps(db *sql.DB) (map[string]string, map[string]bool) {
+	names := map[string]string{}
+	known := map[string]bool{}
+	rows, err := db.Query(`SELECT id, name FROM users`)
+	if err != nil {
+		return names, known
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			names[strconv.FormatInt(id, 10)] = name
+			known[name] = true
+		}
+	}
+	return names, known
+}
+
 // GetUserSessionDiagnostics aggregates one user's sessions across nodes.
 func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]any {
 	var name string
@@ -53,8 +74,10 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 		return map[string]any{"username": strconv.FormatInt(userID, 10), "found": false}
 	}
 	nodes := getActiveNodes(db)
+	names, known := diagUserNameMaps(db)
+	names[strconv.FormatInt(userID, 10)] = name
+	known[name] = true
 	pid := PanelIDFor(db)
-	cn := strconv.FormatInt(userID, 10)
 
 	share := FairShareTimeout(RequestFanoutDeadline, len(nodes), NodeFanoutLimit)
 	calls := make([]func() any, 0, len(nodes))
@@ -66,20 +89,25 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 		})
 	}
 	nodeRows := []any{}
-	totalLive, totalStale, totalAuth := 0, 0, 0
-	for _, item := range GatherNodes(calls, RequestFanoutDeadline) {
-		pair, ok := item.([]any)
-		if !ok || idxString(pair, 0) == "" {
+	totalLive, totalStale, totalAuth, totalUserAuth := 0, 0, 0, 0
+	unavailableNodes := 0
+	for i, item := range GatherNodes(calls, RequestFanoutDeadline) {
+		fallbackName := ""
+		if i < len(nodes) && nodes[i] != nil {
+			fallbackName = nodes[i].Name
+		}
+		nodeName, data := diagnosticNodeResult(item, fallbackName)
+		if nodeName == "" {
 			continue
 		}
-		nodeName := idxString(pair, 0)
-		data, _ := pair[1].(map[string]any)
 		if data == nil {
+			unavailableNodes++
 			nodeRows = append(nodeRows, map[string]any{"node": nodeName, "reachable": false})
 			continue
 		}
-		live := filterCN(sessionList(data["live_sessions"]), cn)
-		stale := filterCN(sessionList(data["stale_markers"]), cn)
+		live := filterUserCN(sessionList(data["live_sessions"]), name, nodeName, names, known)
+		stale := filterUserCN(sessionList(data["stale_markers"]), name, nodeName, names, known)
+		userAuth := userAuthErrorCount(data["auth_errors_by_cn"], name, nodeName, names, known)
 		nodeRows = append(nodeRows, map[string]any{
 			"node":               nodeName,
 			"reachable":          true,
@@ -88,32 +116,53 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 			"live_count":         len(live),
 			"stale_marker_count": len(stale),
 			"auth_errors":        intOf(data["auth_errors"]),
+			"auth_events":        userAuth,
 		})
 		totalLive += len(live)
 		totalStale += len(stale)
 		totalAuth += intOf(data["auth_errors"])
+		totalUserAuth += userAuth
 	}
 	return map[string]any{
-		"username": name,
-		"user_id":  userID,
-		"found":    true,
-		"nodes":    nodeRows,
+		"username":          name,
+		"user_id":           userID,
+		"found":             true,
+		"nodes":             nodeRows,
+		"partial":           unavailableNodes > 0,
+		"unavailable_nodes": unavailableNodes,
+		"total_nodes":       len(nodes),
 		"totals": map[string]any{
 			"live_count":         totalLive,
 			"stale_marker_count": totalStale,
 			"auth_errors":        totalAuth,
+			"user_auth_errors":   totalUserAuth,
 		},
 	}
 }
 
-func filterCN(list []map[string]any, cn string) []map[string]any {
+func filterUserCN(list []map[string]any, username, nodeName string, names map[string]string, known map[string]bool) []map[string]any {
 	out := []map[string]any{}
-	for _, s := range list {
-		if c, _ := s["common_name"].(string); c == cn {
-			out = append(out, s)
+	for _, session := range list {
+		commonName, _ := session["common_name"].(string)
+		if resolved(names, commonName, nodeName, known) == username {
+			out = append(out, session)
 		}
 	}
 	return out
+}
+
+func userAuthErrorCount(values any, username, nodeName string, names map[string]string, known map[string]bool) int {
+	byCN, ok := values.(map[string]any)
+	if !ok {
+		return 0
+	}
+	total := 0
+	for commonName, value := range byCN {
+		if resolved(names, commonName, nodeName, known) == username {
+			total += intOf(value)
+		}
+	}
+	return total
 }
 
 func idxString(pair []any, i int) string {
@@ -124,13 +173,29 @@ func idxString(pair []any, i int) string {
 	return s
 }
 
+// diagnosticNodeResult keeps the configured node identity when a fan-out
+// returns an error/timeout instead of the normal {name, data} pair.
+func diagnosticNodeResult(result any, fallbackName string) (string, map[string]any) {
+	pair, ok := result.([]any)
+	if !ok || len(pair) < 2 {
+		return fallbackName, nil
+	}
+	if name := idxString(pair, 0); name != "" {
+		fallbackName = name
+	}
+	data, _ := pair[1].(map[string]any)
+	return fallbackName, data
+}
+
 // LoginHealthSummary aggregates login health for every user with activity.
 func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 	users := diagUsers(db)
 	nodes := getActiveNodes(db)
-	names := map[string]string{}
+	names := make(map[string]string, len(users))
+	known := make(map[string]bool, len(users))
 	for _, u := range users {
 		names[strconv.FormatInt(u.id, 10)] = u.name
+		known[u.name] = true
 	}
 	pid := PanelIDFor(db)
 
@@ -148,20 +213,24 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 	staleCounts := map[string]int{}
 	authCounts := map[string]int{}
 	nodeRows := []any{}
-	for _, item := range GatherNodes(calls, RequestFanoutDeadline) {
-		pair, ok := item.([]any)
-		if !ok || idxString(pair, 0) == "" {
+	unavailableNodes := 0
+	for i, item := range GatherNodes(calls, RequestFanoutDeadline) {
+		fallbackName := ""
+		if i < len(nodes) && nodes[i] != nil {
+			fallbackName = nodes[i].Name
+		}
+		nodeName, data := diagnosticNodeResult(item, fallbackName)
+		if nodeName == "" {
 			continue
 		}
-		nodeName := idxString(pair, 0)
-		data, _ := pair[1].(map[string]any)
 		if data == nil {
+			unavailableNodes++
 			nodeRows = append(nodeRows, map[string]any{"node": nodeName, "reachable": false})
 			continue
 		}
 		for _, sess := range sessionList(data["live_sessions"]) {
 			cn, _ := sess["common_name"].(string)
-			username := resolved(names, cn)
+			username := resolved(names, cn, nodeName, known)
 			activeCounts[username]++
 			if _, ok := staleCounts[username]; !ok {
 				staleCounts[username] = 0
@@ -169,11 +238,11 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 		}
 		for _, marker := range sessionList(data["stale_markers"]) {
 			cn, _ := marker["common_name"].(string)
-			staleCounts[resolved(names, cn)]++
+			staleCounts[resolved(names, cn, nodeName, known)]++
 		}
 		if byCN, ok := data["auth_errors_by_cn"].(map[string]any); ok {
 			for cn, v := range byCN {
-				authCounts[resolved(names, cn)] += intOf(v)
+				authCounts[resolved(names, cn, nodeName, known)] += intOf(v)
 			}
 		}
 		nodeRows = append(nodeRows, map[string]any{
@@ -259,8 +328,11 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 		}
 	}
 	return map[string]any{
-		"users": rows,
-		"nodes": nodeRows,
+		"users":             rows,
+		"nodes":             nodeRows,
+		"partial":           unavailableNodes > 0,
+		"unavailable_nodes": unavailableNodes,
+		"total_nodes":       len(nodes),
 		"totals": map[string]any{
 			"shown":         len(rows),
 			"users":         len(users),
@@ -269,6 +341,49 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 			"stale":         staleSum,
 			"takeover_mode": takeover,
 		},
+	}
+}
+
+// userHealthRow derives the per-user summary from the same node snapshot as the
+// session detail. This keeps LoginDiagnostics from issuing a second session
+// fan-out merely to reconstruct one row of LoginHealthSummary.
+func userHealthRow(u diagUser, diag map[string]any) map[string]any {
+	totals, _ := diag["totals"].(map[string]any)
+	active := intOf(totals["live_count"])
+	stale := intOf(totals["stale_marker_count"])
+	if active <= 0 && stale <= 0 {
+		return nil
+	}
+
+	mode := "strict"
+	if u.maxLogins == 0 {
+		mode = "unlimited"
+	} else if u.maxLogins == 1 {
+		mode = "takeover"
+	}
+	full := u.maxLogins > 0 && active >= u.maxLogins
+	status := "idle"
+	switch {
+	case !u.isActive:
+		status = "inactive"
+	case stale > 0:
+		status = "stale"
+	case full && mode == "strict":
+		status = "full"
+	case active > 0:
+		status = "online"
+	}
+	return map[string]any{
+		"name":               u.name,
+		"user_id":            u.id,
+		"active_connections": active,
+		"max_logins":         u.maxLogins,
+		"mode":               mode,
+		"full":               full,
+		"is_active":          u.isActive,
+		"stale_markers":      stale,
+		"auth_events":        intOf(totals["user_auth_errors"]),
+		"status":             status,
 	}
 }
 
@@ -282,16 +397,7 @@ func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 		return map[string]any{"username": name, "found": false}
 	}
 	diag := GetUserSessionDiagnostics(u.id, db, hours)
-	health := LoginHealthSummary(db, hours)
-	var healthRow map[string]any
-	if list, ok := health["users"].([]map[string]any); ok {
-		for _, row := range list {
-			if n, _ := row["name"].(string); n == name {
-				healthRow = row
-				break
-			}
-		}
-	}
+	healthRow := userHealthRow(u, diag)
 
 	policy := []string{}
 	if !u.isActive {
@@ -308,22 +414,25 @@ func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 	}
 
 	active := 0
-	if healthRow != nil {
-		active, _ = healthRow["active_connections"].(int)
-	} else if totals, ok := diag["totals"].(map[string]any); ok {
+	if totals, ok := diag["totals"].(map[string]any); ok {
 		active = intOf(totals["live_count"])
 	}
 	maxLogins := u.maxLogins
 	var recommendation string
-	switch {
-	case maxLogins == 0:
-		recommendation = "Unlimited login mode; no max-login block expected."
-	case maxLogins == 1:
-		recommendation = "Takeover mode: new connection should disconnect old session and be allowed."
-	case active >= maxLogins:
-		recommendation = "Strict mode is full; disconnect a session or increase max logins."
-	default:
-		recommendation = "User is below max-login limit. If connection fails, check node logs/config."
+	partial, _ := diag["partial"].(bool)
+	if partial {
+		recommendation = "Node diagnostics are incomplete; counts include reachable nodes only."
+	} else {
+		switch {
+		case maxLogins == 0:
+			recommendation = "Unlimited login mode; no max-login block expected."
+		case maxLogins == 1:
+			recommendation = "Takeover mode: new connection should disconnect old session and be allowed."
+		case active >= maxLogins:
+			recommendation = "Strict mode is full; disconnect a session or increase max logins."
+		default:
+			recommendation = "User is below max-login limit. If connection fails, check node logs/config."
+		}
 	}
 	mode := "strict"
 	if maxLogins == 0 {
@@ -339,19 +448,19 @@ func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 		"mode":                  mode,
 		"active_connections":    active,
 		"global_registry":       []any{},
-		"global_registry_error": nil,
+		"global_registry_error": "The panel does not currently collect global registry data.",
 		"nodes":                 diag["nodes"],
+		"partial":               diag["partial"],
+		"unavailable_nodes":     diag["unavailable_nodes"],
+		"total_nodes":           diag["total_nodes"],
 		"totals":                diag["totals"],
 		"health":                healthRow,
 		"recommendation":        recommendation,
 	}
 }
 
-func resolved(names map[string]string, cn string) string {
-	if n, ok := names[cn]; ok {
-		return n
-	}
-	return cn
+func resolved(names map[string]string, commonName, nodeName string, known map[string]bool) string {
+	return billing.ResolveSessionUsername(commonName, nodeName, names, known)
 }
 
 func expiredBefore(date string) bool {

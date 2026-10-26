@@ -251,6 +251,21 @@ func ExtractUsername(clientName, nodeName string, known map[string]bool) string 
 	return clientName
 }
 
+// ResolveSessionUsername resolves a node-reported common name through the
+// optional numeric-ID map. A known username (including its node-suffix-stripped
+// form) takes precedence over an identical numeric ID string; without this
+// check, a user named "42" could be reported as the unrelated row whose ID is 42.
+func ResolveSessionUsername(clientName, nodeName string, idToName map[string]string, known map[string]bool) string {
+	username := ExtractUsername(clientName, nodeName, known)
+	if known != nil && known[username] {
+		return username
+	}
+	if mapped, ok := idToName[username]; ok {
+		return mapped
+	}
+	return username
+}
+
 // extractNodeUsageData extracts the "data" map from a versioned node_usage state.
 // Returns nil if the state is not a valid versioned format.
 func extractNodeUsageData(state any) map[string]map[string]int64 {

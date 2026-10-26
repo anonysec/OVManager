@@ -242,3 +242,59 @@ func TestTouchLastOnline(t *testing.T) {
 		t.Errorf("bob last_online = %q, want untouched", bob)
 	}
 }
+
+func TestResolveSessionUsernameForms(t *testing.T) {
+	idToName := map[string]string{"42": "alice"}
+	known := map[string]bool{"alice": true, "bob": true}
+	for _, tc := range []struct {
+		commonName string
+		want       string
+	}{
+		{commonName: "42", want: "alice"},
+		{commonName: "42-nodeA", want: "alice"},
+		{commonName: "alice-nodeA", want: "alice"},
+		{commonName: "bob", want: "bob"},
+	} {
+		if got := resolveSessionUsername(tc.commonName, "nodeA", idToName, known); got != tc.want {
+			t.Errorf("resolveSessionUsername(%q) = %q, want %q", tc.commonName, got, tc.want)
+		}
+	}
+}
+
+func TestResolveSessionUsernamePrefersNumericUsernameOverCollidingID(t *testing.T) {
+	idToName := map[string]string{"42": "alice", "99": "42"}
+	known := map[string]bool{"alice": true, "42": true}
+	for _, commonName := range []string{"42", "42-nodeA"} {
+		if got := resolveSessionUsername(commonName, "nodeA", idToName, known); got != "42" {
+			t.Errorf("resolveSessionUsername(%q) = %q, want the known numeric username", commonName, got)
+		}
+	}
+}
+
+// TestCollectMetricsResolvesNodeSuffixedCommonNames verifies that the metrics
+// collector applies the same node-name suffix mapping as the live snapshot.
+func TestCollectMetricsResolvesNodeSuffixedCommonNames(t *testing.T) {
+	resetLiveState()
+	conn := newCollectorDB(t)
+	if _, err := conn.Exec(`CREATE TABLE security_snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, auth_errors INTEGER NOT NULL,
+		rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL, offline_nodes INTEGER NOT NULL,
+		full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL)`); err != nil {
+		t.Fatalf("create security snapshots: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO users (id, name, max_logins) VALUES (42, 'alice', 1)`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	addNode(t, conn, 1, "nodeA", fakeNode(t,
+		`{"live_count":1,"live_sessions":[{"common_name":"alice-nodeA"}]}`, nil))
+
+	CollectMetrics(conn)
+
+	var fullUsers int64
+	if err := conn.QueryRow(`SELECT full_users FROM security_snapshots ORDER BY id DESC LIMIT 1`).Scan(&fullUsers); err != nil {
+		t.Fatalf("read security snapshot: %v", err)
+	}
+	if fullUsers != 1 {
+		t.Errorf("full_users = %d, want 1 for alice's active device", fullUsers)
+	}
+}

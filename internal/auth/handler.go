@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
@@ -166,10 +167,10 @@ func (s *Service) RequireUser(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		// CSRF guard: a cross-origin mutating request must carry an Origin that
-		// matches the panel host. Missing Origin is allowed (non-browser / test
-		// clients and same-origin fetches that omit it); a mismatched Origin is
-		// rejected. This blocks cross-site POST/PUT/DELETE without breaking the
-		// existing test harness, which sends no Origin header.
+		// matches the panel's scheme, host and effective port. Missing Origin is
+		// allowed for non-browser clients; a mismatched or malformed Origin is
+		// rejected. SameSite cookies and the browser's Origin header protect the
+		// cookie-authenticated browser flow without breaking API clients.
 		if s.originRejected(r) {
 			writeDetail(w, http.StatusForbidden, "Origin not allowed")
 			return
@@ -198,29 +199,100 @@ func isMutatingMethod(m string) bool {
 	return false
 }
 
-// originRejected reports whether a mutating request comes from another origin.
-//
-// A missing Origin is allowed: non-browser clients and the test harness send
-// none, and a browser always sends it on a cross-site POST. A mismatched
-// Origin is rejected.
+// originRejected reports whether a mutating request carries a malformed or
+// cross-origin Origin header. A missing Origin remains allowed for non-browser
+// API clients; a supplied Origin must match the request's externally visible
+// scheme, host and port.
 func (s *Service) originRejected(r *http.Request) bool {
 	if !isMutatingMethod(r.Method) {
 		return false
 	}
-	o := r.Header.Get("Origin")
-	return o != "" && !originAllowed(o, r)
-}
-
-func originAllowed(origin string, r *http.Request) bool {
-	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 {
 		return false
 	}
+	if len(origins) != 1 {
+		return true
+	}
+	return !s.originAllowed(origins[0], r)
+}
+
+func (s *Service) originAllowed(origin string, r *http.Request) bool {
+	if strings.Contains(origin, "#") {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Opaque != "" || u.User != nil || u.Host == "" ||
+		u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery ||
+		u.Fragment != "" || u.RawFragment != "" {
+		return false
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return false
+	}
+
+	requestScheme := "http"
+	if r.TLS != nil {
+		requestScheme = "https"
+	} else if s.TrustedProxy {
+		forwardedScheme := strings.ToLower(firstProto(r.Header.Get("X-Forwarded-Proto")))
+		if forwardedScheme != "" && forwardedScheme != "http" && forwardedScheme != "https" {
+			return false
+		}
+		if forwardedScheme != "" {
+			requestScheme = forwardedScheme
+		}
+	}
+	if scheme != requestScheme {
+		return false
+	}
+
 	host := r.Host
-	if host == "" {
+	if host == "" && r.URL != nil {
 		host = r.URL.Host
 	}
-	return strings.EqualFold(u.Host, host)
+	originHost, originPort, ok := originHostPort(u.Host, scheme)
+	if !ok {
+		return false
+	}
+	requestHost, requestPort, ok := originHostPort(host, requestScheme)
+	return ok && originHost == requestHost && originPort == requestPort
+}
+
+// originHostPort normalizes the host part of an HTTP origin, including the
+// scheme's default port, so an explicit :443 and an omitted HTTPS port compare
+// as the same origin. Malformed and out-of-range ports are rejected.
+func originHostPort(host, scheme string) (string, string, bool) {
+	u, err := url.Parse("//" + host)
+	if err != nil || u.Host == "" || u.User != nil || u.Path != "" ||
+		u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" {
+		return "", "", false
+	}
+	hostname := strings.ToLower(u.Hostname())
+	if hostname == "" || strings.HasSuffix(u.Host, ":") {
+		return "", "", false
+	}
+
+	port := u.Port()
+	if port == "" {
+		switch scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			return "", "", false
+		}
+	} else {
+		parsedPort, err := strconv.Atoi(port)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			return "", "", false
+		}
+		port = strconv.Itoa(parsedPort)
+	}
+	return hostname, port, true
 }
 
 func bearerToken(r *http.Request) string {

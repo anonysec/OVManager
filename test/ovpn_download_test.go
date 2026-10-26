@@ -178,6 +178,63 @@ func TestDownloadOVPNGating(t *testing.T) {
 	}
 }
 
+// TestDownloadOVPNNumericUserIDAlias: the authenticated numeric alias resolves
+// the live user row, applies the same account gates, and leaves UUID paths intact.
+func TestDownloadOVPNNumericUserIDAlias(t *testing.T) {
+	env := newPanelEnv(t)
+	agent := fakeOVPNAgent(t, ovpnProfile, nil, nil)
+	host, port := hostPort(t, agent.URL)
+	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
+
+	future := time.Now().UTC().AddDate(0, 0, 5).Format("2006-01-02")
+	for _, user := range []struct {
+		id     int64
+		uuid   string
+		name   string
+		active int
+	}{
+		{42, "aaaaaaaa-0000-0000-0000-000000000042", "numeric-active", 1},
+		{43, "bbbbbbbb-0000-0000-0000-000000000043", "numeric-inactive", 0},
+	} {
+		if _, err := env.conn.Exec(
+			`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			 VALUES (?, ?, ?, 1000000000, 0, 0, '{}', 1, ?, ?)`,
+			user.id, user.uuid, user.name, future, user.active,
+		); err != nil {
+			t.Fatalf("insert user %s: %v", user.name, err)
+		}
+	}
+
+	res, raw := rawReq(t, http.MethodGet, env.srv.URL+"/api/nodes/ovpn/id/42/1", env.token, nil, "")
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(raw), "remote node-native.example 1194") {
+		t.Fatalf("numeric OVPN = %d, body %s", res.StatusCode, raw)
+	}
+	if got := res.Header.Get("Content-Disposition"); got != `attachment; filename="42.ovpn"` {
+		t.Errorf("numeric OVPN disposition = %q, want filename for row 42", got)
+	}
+
+	// The old UUID path still works for the same row.
+	res, raw = rawReq(t, http.MethodGet, env.srv.URL+"/api/nodes/ovpn/aaaaaaaa-0000-0000-0000-000000000042/1", env.token, nil, "")
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(raw), "remote node-native.example 1194") {
+		t.Errorf("UUID OVPN alias = %d, body %s", res.StatusCode, raw)
+	}
+
+	res, raw = rawReq(t, http.MethodGet, env.srv.URL+"/api/nodes/ovpn/id/43/1", env.token, nil, "")
+	if res.StatusCode != http.StatusForbidden || !strings.Contains(string(raw), "User account is not active") {
+		t.Errorf("numeric route account gate = %d, body %s; want inactive-user denial", res.StatusCode, raw)
+	}
+	for _, id := range []string{"abc", "0", "9223372036854775808", "999"} {
+		res, _ = rawReq(t, http.MethodGet, env.srv.URL+"/api/nodes/ovpn/id/"+id+"/1", env.token, nil, "")
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("numeric OVPN id %q status = %d, want 404", id, res.StatusCode)
+		}
+	}
+	res, _ = rawReq(t, http.MethodGet, env.srv.URL+"/api/nodes/ovpn/id/42/1", "", nil, "")
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated numeric OVPN status = %d, want 401", res.StatusCode)
+	}
+}
+
 // TestDeleteUserFansOutToNodes: deleting a panel user also evicts it from every
 // reachable node.
 func TestDeleteUserFansOutToNodes(t *testing.T) {

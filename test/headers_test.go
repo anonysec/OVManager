@@ -1,7 +1,7 @@
 // Parity tests for the security-header middleware: every panel response —
 // API, SPA static and the subscription page — carries the same baseline
-// headers, and HSTS appears only when the connection is TLS (direct or
-// forwarded by a front proxy).
+// headers, and HSTS appears only for direct TLS or HTTPS forwarded by a
+// configured trusted proxy.
 package tests
 
 import (
@@ -59,6 +59,7 @@ func TestSecurityHeadersSubscriptionPage(t *testing.T) {
 }
 
 func TestSecurityHeadersHSTSRules(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY", "false")
 	env := newPanelEnv(t)
 
 	// Plain HTTP: no HSTS, the install may sit behind TLS where this header
@@ -68,7 +69,14 @@ func TestSecurityHeadersHSTSRules(t *testing.T) {
 		t.Errorf("/health plain http: unexpected HSTS %q", hst)
 	}
 
-	// Forwarded by an HTTPS front: HSTS present with a sane max-age.
+	// An untrusted client cannot spoof the HTTPS scheme with a forwarded header.
+	h = headers(t, env, http.MethodGet, "/health", map[string]string{"X-Forwarded-Proto": "https"})
+	if hst := h.Get("Strict-Transport-Security"); hst != "" {
+		t.Errorf("/health untrusted forwarded https: unexpected HSTS %q", hst)
+	}
+
+	// Forwarded by an explicitly trusted HTTPS front: HSTS present with a sane max-age.
+	t.Setenv("TRUSTED_PROXY", "true")
 	h = headers(t, env, http.MethodGet, "/health", map[string]string{"X-Forwarded-Proto": "https"})
 	hst := h.Get("Strict-Transport-Security")
 	if hst == "" {

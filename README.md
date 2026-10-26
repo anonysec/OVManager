@@ -59,7 +59,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Per-user traffic quota in GB (empty means unlimited), expiry date, and device limit.
 - Free-text tags up to 64 characters for grouping, search and filtering.
 - Handoff straight after creation: download a `.ovpn` profile for a chosen node, or copy a subscription link. Both stay available from the user's row.
-- Subscription links served outside the secret panel path, so they can actually be shared — with a QR code for phone clients.
+- Subscription UUID URLs act as bearer links outside the secret panel path, so they can be shared — with a QR code for phone clients.
 - Additional admin accounts alongside the owner, each of which can be enabled or disabled, with their own sessions listed and revocable.
 
 ### 📊 Traffic accounting
@@ -79,7 +79,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 ### 🔐 Security and TLS
 - Login sessions are opaque tokens in the database, stored as a SHA-256 hash, sliding on activity and revocable per account.
 - Rate limits on failed logins, per username and per address, with a `Retry-After` on the claim endpoint.
-- The panel is served under a random secret URL prefix; anything outside it gets an empty 404, so scanners see nothing.
+- The panel UI is served under a random secret URL prefix; unrelated paths show a decoy 404. `/api/` and `/health` remain fixed routes; protected operations still require authentication.
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
 - Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` shows the installed certificate.
 - Built-in Let's Encrypt (`ovmanager tls acme <domain>` or `install.sh --acme DOMAIN`) issues over HTTP-01: **port 80 must be free** on this server for up to ~60 seconds while the certificate is issued, then renewals happen automatically (T-30 days). Anything else bound to port 80 makes issuance fail; the panel keeps serving plain HTTP meanwhile.

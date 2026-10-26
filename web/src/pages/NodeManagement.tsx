@@ -13,6 +13,7 @@ import { asList } from '../utils/apiData';
 import { DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo';
 import { errorMessageOf } from '../utils/errorMessage';
+import { createQueuedRefresh } from '../utils/queuedRefresh';
 import {
   Badge, Button, Card, EmptyState, ErrorState, PageHeader, StatCard, StatusBadge,
 } from '../components/ui';
@@ -61,7 +62,7 @@ const NodeManagement = () => {
     return next;
   });
 
-  const fetchNodes = useCallback(async ({ background = false } = {}) => {
+  const fetchNodesWork = useCallback(async ({ background = false } = {}) => {
     if (!background) setIsLoading(true);
     setLoadError(false);
     try {
@@ -74,11 +75,16 @@ const NodeManagement = () => {
       setIsLoading(false);
     }
   }, []);
+  const fetchNodes = useMemo(() => createQueuedRefresh(fetchNodesWork), [fetchNodesWork]);
 
   const { subscribe } = useLive();
   useEffect(() => {
-    const unsubscribe = subscribe('nodes.changed', () => fetchNodes({ background: true }));
-    return () => unsubscribe();
+    const refreshNodes = () => fetchNodes({ background: true });
+    const unsubscribeNodes = subscribe('nodes.changed', refreshNodes);
+    const unsubscribeCreated = subscribe('nodes.created', refreshNodes);
+    const unsubscribeDeleted = subscribe('nodes.deleted', refreshNodes);
+    const unsubscribeTick = subscribe('tick', refreshNodes);
+    return () => { unsubscribeNodes(); unsubscribeCreated(); unsubscribeDeleted(); unsubscribeTick(); };
   }, [subscribe, fetchNodes]);
 
   useEffect(() => { fetchNodes(); }, [fetchNodes]);

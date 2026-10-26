@@ -46,13 +46,14 @@ describe('UserDetailModal usage', () => {
 
     render(
       <UserDetailModal
-        user={{ uuid: 'u-1', name: 'amy', used: 0, total: GIB, is_active: true, max_logins: 1 }}
+        user={{ id: 42, uuid: 'u-1', name: 'amy', used: 0, total: GIB, is_active: true, max_logins: 1 }}
         isOpen
         onClose={() => {}}
       />
     );
 
     await waitFor(() => expect(document.querySelector('[role="progressbar"]')).toBeTruthy());
+    expect(apiClient.get).toHaveBeenCalledWith('/users/id/42/traffic', { params: { days: 14 } });
     expect(dataUsedCell()).toBe(formatBytes(0));
     expect(document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('0');
     expect(screen.queryByText(formatBytes(3 * GIB))).toBeNull();

@@ -11,6 +11,7 @@ import apiClient from '../services/api';
 import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDate, fmtRelative } from '../utils/time';
 import { copyText } from '../utils/clipboard';
+import { userApiPath } from '../utils/userIdentifier';
 
 const statusOf = (user: any, t: any) => {
   const online = user.online || Number(user.active_connections || 0) > 0;
@@ -53,7 +54,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     }
     let cancelled = false;
     apiClient
-      .get(`/users/${user.uuid}/traffic`, { params: { days: 14 } })
+      .get(`${userApiPath({ id: user?.id, uuid: user?.uuid })}/traffic`, { params: { days: 14 } })
       .then((r) => {
         if (cancelled) return;
         const list = r.data?.data?.days;
@@ -65,7 +66,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     return () => {
       cancelled = true;
     };
-  }, [isOpen, user?.uuid]);
+  }, [isOpen, user?.id, user?.uuid]);
 
   useEffect(() => {
     if (!subscriptionLink || !isOpen) return;

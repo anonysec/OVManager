@@ -5,6 +5,7 @@ import { FiCheckCircle, FiCopy, FiPlus } from 'react-icons/fi';
 import Modal from './Modal';
 import { Button, Field } from './ui';
 import { copyText } from '../utils/clipboard';
+import { userApiPath } from '../utils/userIdentifier';
 
 const bytesFromGB = (value: any) => {
   const cleaned = value?.toString().trim();
@@ -97,7 +98,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
         max_logins: Number.isNaN(parsedLogins) ? 1 : parsedLogins,
       };
       const response = isEdit
-        ? await apiClient.put(`/users/${user.uuid}`, payload)
+        ? await apiClient.put(userApiPath(user), payload)
         : await apiClient.post('/users/', payload);
       if (response.data.success) {
         if (!isEdit) {

@@ -19,15 +19,16 @@ version:
 # One binary = the panel (bare invocation) + the `ovmanager` operator CLI. The SPA is
 # embedded (internal/webfs/dist), so the build stages web/dist into the package
 # before compiling. web/dist is built only when absent — CI hands it over as an
-# artifact, so the Go job never needs npm.
+# artifact, so the Go job never needs npm. Keep .gitkeep in the staged embed
+# directory so go vet works from a source-only checkout and `make build` is safe.
 build:
 	@if [ ! -f web/dist/index.html ]; then \
 		echo "web/dist missing — building SPA"; \
 		$(MAKE) -s version; \
 		cd web && npm ci && npm run build; \
 	fi
-	@rm -rf internal/webfs/dist
 	@mkdir -p internal/webfs/dist
+	@find internal/webfs/dist -mindepth 1 ! -name .gitkeep -delete
 	@cp -a web/dist/. internal/webfs/dist/
 	@cp -a web/templates/subscription.js internal/webfs/templates/subscription.js
 	go build -o ovmanager ./cmd
