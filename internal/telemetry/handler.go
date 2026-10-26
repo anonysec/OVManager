@@ -383,14 +383,25 @@ func CollectMetrics(db *sql.DB) {
 		}
 		nrows.Close()
 		pid := node.PanelIDFor(db)
+		nodes := make([]*node.Node, 0, len(ids))
 		for _, id := range ids {
-			n := node.GetNodeByID(db, id)
-			if n == nil {
-				continue
+			if n := node.GetNodeByID(db, id); n != nil {
+				nodes = append(nodes, n)
 			}
-			row, sessions := nodeSnapshot(n, pid)
-			nodeRows = append(nodeRows, row)
-			sessionsByNode = append(sessionsByNode, sessions)
+		}
+		calls := make([]func() any, 0, len(nodes))
+		for _, n := range nodes {
+			n := n
+			calls = append(calls, func() any {
+				row, sessions := nodeSnapshot(n, pid)
+				return snapshotPair{row: row, sessions: sessions}
+			})
+		}
+		for _, res := range node.GatherNodes(calls, metricsFanoutDeadline) {
+			if p, ok := res.(snapshotPair); ok {
+				nodeRows = append(nodeRows, p.row)
+				sessionsByNode = append(sessionsByNode, p.sessions)
+			}
 		}
 	}
 	if rows, err := db.Query(`SELECT id, name FROM users`); err == nil {
@@ -477,6 +488,13 @@ func CollectMetrics(db *sql.DB) {
 }
 
 // nodeSnapshot probes one node for info + sessions (metrics._node_snapshot).
+// snapshotPair carries nodeSnapshot's two return values through GatherNodes,
+// which types every call result as any.
+type snapshotPair struct {
+	row      map[string]any
+	sessions map[string]any
+}
+
 func nodeSnapshot(n *node.Node, pid string) (map[string]any, map[string]any) {
 	start := time.Now()
 	info := node.NodeClient(n, pid).GetNodeInfo()
@@ -511,6 +529,10 @@ func idlePollSeconds() float64 { return envFloat("OVMANAGER_LIVE_IDLE_POLL_SECON
 // liveFanoutDeadline bounds one CollectLiveSnapshot fan-out. A var so tests can
 // shrink it; production uses the shared request fan-out deadline.
 var liveFanoutDeadline = node.RequestFanoutDeadline
+
+// metricsFanoutDeadline bounds one CollectMetrics fan-out. A var so tests can
+// shrink it; production uses the shared request fan-out deadline.
+var metricsFanoutDeadline = node.RequestFanoutDeadline
 
 // PollSeconds mirrors live.poll_seconds.
 func PollSeconds() float64 {

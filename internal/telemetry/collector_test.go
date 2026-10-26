@@ -20,7 +20,7 @@ const collectorSchema = `
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   tunnel_address VARCHAR, protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194,
   port INTEGER DEFAULT 2083, key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR,
-  country_code VARCHAR, latitude REAL, longitude REAL);
+  country_code VARCHAR, latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
 CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
 CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
@@ -120,6 +120,30 @@ func TestCollectLiveSnapshotFanout(t *testing.T) {
 	}
 	if !SnapshotFresh() {
 		t.Errorf("snapshot should be fresh after a tick")
+	}
+}
+
+// TestCollectMetricsFanout: one node answers, one hangs past the deadline; the
+// pass still completes within the deadline instead of waiting out the hung
+// node's own 10 s + 30 s timeouts one after another.
+func TestCollectMetricsFanout(t *testing.T) {
+	old := metricsFanoutDeadline
+	metricsFanoutDeadline = 1 * time.Second
+	t.Cleanup(func() { metricsFanoutDeadline = old })
+	resetLiveState()
+	conn := newCollectorDB(t)
+
+	release := make(chan struct{})
+	slow := fakeNode(t, `{"live_sessions":[]}`, release)
+	t.Cleanup(func() { close(release) }) // LIFO: runs before slow.Close
+	fast := fakeNode(t, `{"live_sessions":[]}`, nil)
+	addNode(t, conn, 1, "fast", fast)
+	addNode(t, conn, 2, "slow", slow)
+
+	start := time.Now()
+	CollectMetrics(conn)
+	if elapsed := time.Since(start); elapsed > metricsFanoutDeadline+100*time.Millisecond {
+		t.Fatalf("collect took %v, want within %v", elapsed, metricsFanoutDeadline)
 	}
 }
 
