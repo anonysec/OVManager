@@ -129,8 +129,27 @@
   margin-bottom: 6px;
 }
 
+.sidebar-profile-user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sidebar-profile-user-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+}
+
 .sidebar-profile-name {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;

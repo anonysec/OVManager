@@ -5,7 +5,7 @@ import type { IconType } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import {
   FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronsLeft, FiChevronsRight,
-  FiMenu, FiBarChart2, FiFileText,
+  FiMenu, FiBarChart2, FiFileText, FiUser,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -200,7 +200,10 @@ const Sidebar = () => {
           <div className="sidebar-profile">
             <div className="sidebar-profile-info" aria-hidden={collapsed}>
               <div className="sidebar-profile-name-row">
-                <strong className="sidebar-profile-name">{username}</strong>
+                <span className="sidebar-profile-user-badge">
+                  <FiUser className="sidebar-profile-user-icon" aria-hidden="true" />
+                  <strong className="sidebar-profile-name">{username}</strong>
+                </span>
               </div>
               <div className="sidebar-profile-stats">
                 <span className="stat-chip" title={t('totalUsers', 'Total users')}>
