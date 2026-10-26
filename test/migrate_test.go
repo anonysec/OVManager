@@ -320,3 +320,278 @@ func TestMigrateLeavesEncryptedRowsWithoutAKey(t *testing.T) {
 		t.Fatalf("bot_token = %q, want the enc: row left untouched", bot)
 	}
 }
+
+// collectTableNames returns the set of user tables in conn.
+func collectTableNames(t *testing.T, conn *sql.DB) map[string]bool {
+	t.Helper()
+	rows, err := conn.Query("SELECT name FROM sqlite_master WHERE type='table'")
+	if err != nil {
+		t.Fatalf("tables: %v", err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatalf("scan table: %v", err)
+		}
+		out[n] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("tables rows: %v", err)
+	}
+	return out
+}
+
+// collectIndexNames returns the set of index names in conn.
+func collectIndexNames(t *testing.T, conn *sql.DB) map[string]bool {
+	t.Helper()
+	rows, err := conn.Query("SELECT name FROM sqlite_master WHERE type='index'")
+	if err != nil {
+		t.Fatalf("indices: %v", err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatalf("scan index: %v", err)
+		}
+		// Auto-indices back UNIQUE/PK constraints declared in CREATE TABLE;
+		// legacy tables carry different constraints, so compare explicit indices.
+		if strings.HasPrefix(n, "sqlite_autoindex_") {
+			continue
+		}
+		out[n] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("indices rows: %v", err)
+	}
+	return out
+}
+
+// collectColumns returns the set of column names for a table.
+func collectColumns(t *testing.T, conn *sql.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := conn.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		t.Fatalf("table_info %s: %v", table, err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid, notnull, pk int
+			name, ctype      string
+			dflt             sql.NullString
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			t.Fatalf("scan table_info: %v", err)
+		}
+		out[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("table_info rows: %v", err)
+	}
+	return out
+}
+
+func equalStringSets(a, b map[string]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestMigrateFreshAndUpgradedConverge proves a fresh DB and an upgraded legacy
+// DB end up with the same tables, indices and columns per table.
+func TestMigrateFreshAndUpgradedConverge(t *testing.T) {
+	t.Setenv("ADMIN_USERNAME", "migrate-owner")
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	t.Setenv("DEFAULT_USER", "user1")
+	t.Setenv("URLPATH", "")
+
+	fresh := newMigrateDB(t)
+	if _, err := db.Migrate(fresh); err != nil {
+		t.Fatalf("fresh Migrate: %v", err)
+	}
+
+	upgraded := newMigrateDB(t)
+	if _, err := upgraded.Exec(legacyUpgradeSchema); err != nil {
+		t.Fatalf("legacy schema: %v", err)
+	}
+	if _, err := upgraded.Exec("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
+		t.Fatalf("legacy traffic row: %v", err)
+	}
+	if _, err := upgraded.Exec("PRAGMA user_version = 3"); err != nil {
+		t.Fatalf("stamp legacy: %v", err)
+	}
+	if _, err := db.Migrate(upgraded); err != nil {
+		t.Fatalf("upgraded Migrate: %v", err)
+	}
+
+	// tables
+	ft, ut := collectTableNames(t, fresh), collectTableNames(t, upgraded)
+	if !equalStringSets(ft, ut) {
+		t.Fatalf("table sets differ: fresh=%v upgraded=%v", ft, ut)
+	}
+	// indices
+	fi, ui := collectIndexNames(t, fresh), collectIndexNames(t, upgraded)
+	if !equalStringSets(fi, ui) {
+		t.Fatalf("index sets differ: fresh=%v upgraded=%v", fi, ui)
+	}
+	// columns per table
+	for table := range ft {
+		fc := collectColumns(t, fresh, table)
+		uc := collectColumns(t, upgraded, table)
+		if !equalStringSets(fc, uc) {
+			t.Fatalf("columns for %s differ: fresh=%v upgraded=%v", table, fc, uc)
+		}
+	}
+}
+
+// TestMigrateV25BackfillRerunnable proves re-running the v25 backfill (after a
+// simulated crash between insert and stamp) does not hit the unique constraint.
+func TestMigrateV25BackfillRerunnable(t *testing.T) {
+	t.Setenv("ADMIN_USERNAME", "migrate-owner")
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	t.Setenv("DEFAULT_USER", "user1")
+	t.Setenv("URLPATH", "")
+
+	conn := newMigrateDB(t)
+	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
+		t.Fatalf("legacy schema: %v", err)
+	}
+	if _, err := conn.Exec("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
+		t.Fatalf("legacy traffic row: %v", err)
+	}
+	if _, err := conn.Exec("PRAGMA user_version = 3"); err != nil {
+		t.Fatalf("stamp legacy: %v", err)
+	}
+
+	if _, err := db.Migrate(conn); err != nil {
+		t.Fatalf("first Migrate: %v", err)
+	}
+	var first int
+	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&first); err != nil {
+		t.Fatalf("count ledger: %v", err)
+	}
+
+	// Simulate crash-after-backfill-before-stamp: roll the version back to 24.
+	if _, err := conn.Exec("PRAGMA user_version = 24"); err != nil {
+		t.Fatalf("rollback stamp: %v", err)
+	}
+	v, err := db.Migrate(conn)
+	if err != nil {
+		t.Fatalf("second Migrate: %v", err)
+	}
+	if v != 26 {
+		t.Fatalf("version = %d, want 26", v)
+	}
+	var second int
+	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
+		t.Fatalf("count ledger: %v", err)
+	}
+	if second != first {
+		t.Fatalf("ledger rows changed: %d -> %d", first, second)
+	}
+}
+
+// An older database can hold more than one is_owner row: step 22 flags the
+// owner active, and the legacy import path can add another. Step 26 is what
+// dedupes them, and the UNIQUE index it creates must come AFTER that dedupe
+// — creating the index first makes such an upgrade fail outright.
+func TestMigrateDeduplicatesOwnersBeforeTheUniqueIndex(t *testing.T) {
+	t.Setenv("ADMIN_USERNAME", "migrate-owner")
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	conn := newMigrateDB(t)
+	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
+		t.Fatalf("legacy schema: %v", err)
+	}
+	if _, err := conn.Exec(`ALTER TABLE admins ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
+		t.Fatalf("add is_owner: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec("PRAGMA user_version = 25"); err != nil {
+		t.Fatalf("stamp: %v", err)
+	}
+
+	if _, err := db.Migrate(conn); err != nil {
+		t.Fatalf("Migrate refused a database with two owner rows: %v", err)
+	}
+	var owners int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM admins WHERE is_owner = 1`).Scan(&owners); err != nil {
+		t.Fatal(err)
+	}
+	if owners != 1 {
+		t.Errorf("owner rows = %d, want 1", owners)
+	}
+	if !hasIndex(t, conn, "uq_admins_owner") {
+		t.Error("uq_admins_owner missing")
+	}
+}
+
+// A pre-runner database (user_version 0) can hold more than one is_owner row
+// as well. Its path creates the mapped tables up front, so the unique index
+// must not be created there either: the panel has to start, dedupe the rows
+// and end up with one owner.
+func TestMigratePreRunnerDatabaseDeduplicatesOwners(t *testing.T) {
+	t.Setenv("ADMIN_USERNAME", "migrate-owner")
+	t.Setenv("ADMIN_PASSWORD_HASH", "")
+	conn := newMigrateDB(t)
+	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
+		t.Fatalf("legacy schema: %v", err)
+	}
+	if _, err := conn.Exec(`ALTER TABLE admins ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
+		t.Fatalf("add is_owner: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := db.Migrate(conn); err != nil {
+		t.Fatalf("Migrate refused a pre-runner database with two owner rows: %v", err)
+	}
+	var owners int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM admins WHERE is_owner = 1`).Scan(&owners); err != nil {
+		t.Fatal(err)
+	}
+	if owners != 1 {
+		t.Errorf("owner rows = %d, want 1", owners)
+	}
+	if !hasIndex(t, conn, "uq_admins_owner") {
+		t.Error("uq_admins_owner missing")
+	}
+}
+
+// TestMigrateDropsUnusableAuditIndex: an index on the rowid alias cannot serve
+// a query; a database that already carries it must lose it, and a fresh one
+// must never gain it.
+func TestMigrateDropsUnusableAuditIndex(t *testing.T) {
+	conn := newMigrateDB(t)
+	if _, err := db.Migrate(conn); err != nil {
+		t.Fatalf("first migrate: %v", err)
+	}
+	if _, err := conn.Exec(`CREATE INDEX idx_audit_logs_promoted ON audit_logs(id) WHERE promoted = 0`); err != nil {
+		t.Fatalf("pre-create index: %v", err)
+	}
+	if _, err := db.Migrate(conn); err != nil {
+		t.Fatalf("second migrate: %v", err)
+	}
+	if hasIndex(t, conn, "idx_audit_logs_promoted") {
+		t.Error("idx_audit_logs_promoted still present after migrate")
+	}
+}

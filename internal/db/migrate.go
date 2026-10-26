@@ -68,6 +68,9 @@ func Migrate(conn *sql.DB) (int, error) {
 		if _, err := reconcileColumns(conn); err != nil {
 			return 0, err
 		}
+		if err := createMappedIndices(conn); err != nil {
+			return 0, err
+		}
 		if err := seedSettings(conn); err != nil {
 			return 0, err
 		}
@@ -94,6 +97,9 @@ func Migrate(conn *sql.DB) (int, error) {
 		if _, err := reconcileColumns(conn); err != nil {
 			return 0, err
 		}
+		// No indices here: uq_admins_owner must come after step 26 dedupes
+		// the owner rows an older database can hold. The step loop below
+		// creates them.
 		if err := seedSettings(conn); err != nil {
 			return 0, err
 		}
@@ -109,17 +115,48 @@ func Migrate(conn *sql.DB) (int, error) {
 			before, SchemaVersion)
 	}
 
+	// Converge on the mapped schema on every upgrade path too, so a database
+	// that predates a mapped table (e.g. a legacy DB with no sessions table)
+	// gets it. Tables first, then reconcile adds missing columns.
+	//
+	// The indices are created AFTER the step loop, not here: uq_admins_owner
+	// is a UNIQUE index, and step 26 is what dedupes the multiple is_owner
+	// rows an older database can hold. Creating the index first would make
+	// such an upgrade fail with a UNIQUE constraint error instead of
+	// deduping.
+	if err := createMappedTables(conn); err != nil {
+		return before, err
+	}
+	if _, err := reconcileColumns(conn); err != nil {
+		return before, err
+	}
+
 	for _, s := range steps {
 		if s.version <= before {
 			continue
 		}
-		if err := s.run(conn); err != nil {
+		tx, err := conn.Begin()
+		if err != nil {
+			return before, err
+		}
+		if err := s.run(tx); err != nil {
+			_ = tx.Rollback()
 			return before, fmt.Errorf("migration v%d (%s): %w", s.version, s.description, err)
 		}
-		if err := stamp(conn, s.version); err != nil {
+		if err := stamp(tx, s.version); err != nil {
+			_ = tx.Rollback()
+			return before, err
+		}
+		if err := tx.Commit(); err != nil {
 			return before, err
 		}
 		before = s.version
+	}
+
+	// The mapped indices land on every path, after the steps that may have
+	// to dedupe the rows they constrain.
+	if err := createMappedIndices(conn); err != nil {
+		return before, err
 	}
 
 	if err := createExtraTables(conn); err != nil {
@@ -255,6 +292,7 @@ var mappedColumns = map[string][]mcolumn{
 		{"country_code", "VARCHAR"},
 		{"latitude", "FLOAT"},
 		{"longitude", "FLOAT"},
+		{"extra_ports", "VARCHAR DEFAULT '' NOT NULL"},
 	},
 	"settings": {
 		{"id", "INTEGER"},
@@ -312,6 +350,9 @@ var mappedUniques = map[string][]string{
 var mappedIndices = []string{
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON admins (is_owner) WHERE is_owner = 1",
 	"CREATE INDEX IF NOT EXISTS ix_sessions_username ON sessions (username)",
+	"CREATE INDEX IF NOT EXISTS idx_users_expiry ON users(expiry_date)",
+	"CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)",
+	"CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name)",
 }
 
 func createMappedTables(x execer) error {
@@ -320,6 +361,10 @@ func createMappedTables(x execer) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func createMappedIndices(x execer) error {
 	for _, stmt := range mappedIndices {
 		if _, err := x.Exec(stmt); err != nil {
 			return err
@@ -343,8 +388,12 @@ func createTableSQL(table string) string {
 
 // extraTables is constants._EXTRA_DDL: the non-ORM tables.
 var extraTables = []string{
-	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT)`,
+	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0)`,
 	`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)`,
+	`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, id)`,
+	// shortcut: this index targets the rowid alias, so it can never serve a
+	// query and every insert maintained it. Drop it wherever it lingers.
+	`DROP INDEX IF EXISTS idx_audit_logs_promoted`,
 	`CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL, reachable INTEGER NOT NULL DEFAULT 0)`,
 	`CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)`,
 	`CREATE INDEX IF NOT EXISTS idx_node_health_node_ts ON node_health_snapshots(node_id, ts)`,
@@ -359,6 +408,8 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
 	`CREATE INDEX IF NOT EXISTS idx_traffic_ledger_user_ts ON traffic_ledger(user_id, ts)`,
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
+	`CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at)`,
 }
 
 func createExtraTables(x execer) error {
@@ -388,6 +439,15 @@ func reconcileColumns(x execer) ([]string, error) {
 				return added, err
 			}
 			added = append(added, table+"."+c.name)
+		}
+	}
+	// Ensure audit_logs.promoted column exists (for promoteEvents optimization).
+	if present["audit_logs"] {
+		if !columnNames(x, "audit_logs")["promoted"] {
+			if _, err := x.Exec(`ALTER TABLE audit_logs ADD COLUMN promoted BOOLEAN NOT NULL DEFAULT 0`); err != nil {
+				return added, err
+			}
+			added = append(added, "audit_logs.promoted")
 		}
 	}
 	return added, nil
@@ -767,7 +827,7 @@ func createTrafficLedgerAndKV(x execer) error {
 		return nil
 	}
 	_, err := x.Exec(
-		"INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) " +
+		"INSERT OR IGNORE INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) " +
 			"SELECT user_id, CAST(strftime('%s', day || 'T00:00:00Z') AS REAL), '', 'backfill', bytes, '{}' " +
 			"FROM user_traffic_daily")
 	return err
