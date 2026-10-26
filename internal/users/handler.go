@@ -143,12 +143,9 @@ func (u userRow) base() map[string]any {
 
 // live adds the panel-only connection fields (routers/users.py serialize()),
 // read from the live snapshot the telemetry collector keeps.
-//
-// ponytail: Connections() copies the whole map per row; hoist it to the caller
-// if user lists ever grow past the page size.
-func (u userRow) live() map[string]any {
+func (u userRow) live(conns map[string]int) map[string]any {
 	m := u.base()
-	count := telemetry.Connections()[u.Name]
+	count := conns[u.Name]
 	m["active_connections"] = count
 	m["online"] = count > 0
 	return m
@@ -306,9 +303,10 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		total = int64(len(rows))
 	}
 
+	conns := telemetry.Connections()
 	out := make([]map[string]any, 0, len(rows))
 	for _, u := range rows {
-		out = append(out, u.live())
+		out = append(out, u.live(conns))
 	}
 	respPage, respSize := 1, int(total)
 	if serverFilter {

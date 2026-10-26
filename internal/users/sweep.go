@@ -26,10 +26,11 @@ func (h *Handler) expiredHandler(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 		return
 	}
+	conns := telemetry.Connections()
 	out := make([]map[string]any, 0)
 	for _, u := range scanAll(res) {
 		if activationBlocked(u) != "" {
-			out = append(out, u.live())
+			out = append(out, u.live(conns))
 		}
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
