@@ -198,16 +198,10 @@ const Sidebar = () => {
           </button>
 
           <div className="sidebar-profile">
-            <div className="sidebar-profile-avatar" title={collapsed ? username : undefined}>
-              <span className="avatar-md" aria-hidden="true">{username.slice(0, 1).toUpperCase() || '?'}</span>
-              <span className={`sidebar-profile-pulse ${isOwner ? 'is-owner' : 'is-operator'}`} aria-hidden="true" />
-              {isOwner && <span className="sidebar-owner-badge" aria-label={t('soleOwner', 'Sole owner / administrator')}>👑</span>}
-            </div>
             <div className="sidebar-profile-info" aria-hidden={collapsed}>
               <div className="sidebar-profile-name-row">
-                <strong className="sidebar-profile-name">{username}</strong>
                 <span className={`sidebar-profile-role-pill${isOwner ? ' is-owner' : ''}`}>
-                  {isOwner ? t('soleOwnerShort', 'Sole Owner') : t('adminShort', 'Admin')}
+                  {username || (isOwner ? t('soleOwnerShort', 'Sole Owner') : t('adminShort', 'Admin'))}
                 </span>
               </div>
               <div className="sidebar-profile-stats">
