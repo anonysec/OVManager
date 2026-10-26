@@ -200,9 +200,7 @@ const Sidebar = () => {
           <div className="sidebar-profile">
             <div className="sidebar-profile-info" aria-hidden={collapsed}>
               <div className="sidebar-profile-name-row">
-                <span className={`sidebar-profile-role-pill${isOwner ? ' is-owner' : ''}`}>
-                  {username || (isOwner ? t('soleOwnerShort', 'Sole Owner') : t('adminShort', 'Admin'))}
-                </span>
+                <strong className="sidebar-profile-name">{username}</strong>
               </div>
               <div className="sidebar-profile-stats">
                 <span className="stat-chip" title={t('totalUsers', 'Total users')}>
