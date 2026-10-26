@@ -3,13 +3,13 @@
 ## Branch and safety
 
 - Repository: `anonysec/OVManager`; branch: `arena/26af3526-ovmanager` (active).
-- The previous uncommitted work was preserved. The user has now explicitly requested a pull request from this branch, authorizing the necessary commit and push to this branch only. No reset, deployment, release, or production operation was performed.
+- The previous uncommitted work was preserved. After explicit user authorization, commit `bf817ed` (`fix: harden sessions, auth, and live refresh`) was pushed only to this branch. Draft PR [#10](https://github.com/anonysec/OVManager/pull/10) is open against `main`. No reset, merge, deployment, release, or production operation was performed.
 - During the earlier embed follow-up, `internal/webfs/dist/.gitkeep` was found absent despite the checkpoint; it was restored and is present in the current worktree.
 
 ## Verification capabilities and results
 
 - The environment was rechecked: `go`, `gofmt`, `gccgo`, `tinygo`, Docker/Podman/nerdctl, `act`, Nix, mise, asdf, gvm, and common cached Go paths are absent. The repository has a production multi-stage `Dockerfile`, but no devcontainer definition; there is no container runtime to use it. No toolchain or infrastructure was installed or changed.
-- `.github/workflows/ci.yml` runs only on pushes to `main` and pull requests; it has no `workflow_dispatch`. The user has now authorized opening a PR from the active branch, so committing/pushing that branch is in scope. The available dispatch workflows publish/deploy (Docker image, Pages, release assets), so none were run.
+- `.github/workflows/ci.yml` runs only on pushes to `main` and pull requests; it has no `workflow_dispatch`. PR #10 is open; at the last check, its `frontend` and `frontend-dist` jobs were queued in run `40340373863`, with no completed result and no backend result reported yet. The available dispatch workflows publish/deploy (Docker image, Pages, release assets), so none were run.
 - Direct Go-check attempts recorded during this work session: `go test ./...`, `go vet ./...`, `gofmt -l .`, and `make lint` were blocked because Go/gofmt is not installed. The numeric-name resolver follow-up was added after those attempts and could not be rerun. `make build` and CI race/coverage were not run. Backend formatting, test, vet/lint, build, and embed compilation therefore remain **unverified**.
 - Read-only GitHub Actions inspection of baseline run [40312403766](https://github.com/anonysec/OVManager/actions/runs/40312403766), at `c4260c0`, showed both frontend jobs succeeded, the Go job failed at `Lint`, and Build/Test were skipped. The failed-log download returned EOF from GitHub's actions log receiver; the prior checkpoint records the known source-checkout error as `pattern all:dist: no matching files found`. The current `.gitkeep`/Makefile work addresses that diagnosis, but it has no Go result yet.
 - Latest `cd web && npm run verify` after the live-event, scoped-refresh, and polling changes: **passed** — production build, token/contrast, i18n, RTL, ESLint, TypeScript, and Vitest (**28 files / 95 tests**). No Go verification is inferred from it.
