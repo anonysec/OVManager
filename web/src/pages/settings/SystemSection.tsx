@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
+import ConfirmModal from '../../components/ConfirmModal';
 import { FiServer, FiZap, FiRefreshCw, FiDownload, FiPower, FiTrash2 } from 'react-icons/fi';
 import { Card, Field, Stat } from './shared';
 import { formatBytes } from '../../utils/format';
@@ -57,6 +58,13 @@ const SystemSection = () => {
   const [updateAction, setUpdateAction] = useState('');
   const [updateNote, setUpdateNote] = useState('');
   const updateBusy = updateAction !== '';
+
+  // Shared confirm modal — replaces window.confirm for all destructive actions.
+  type ConfirmState = { open: boolean; title: string; message: string; onConfirm: () => void | Promise<void> };
+  const [confirm, setConfirm] = useState<ConfirmState>({ open: false, title: '', message: '', onConfirm: () => {} });
+  const openConfirm = (title: string, message: string, onConfirm: () => void | Promise<void>) =>
+    setConfirm({ open: true, title, message, onConfirm });
+  const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
 
   const load = useCallback(async () => {
     try {
@@ -138,56 +146,66 @@ const SystemSection = () => {
 
   const runUpdate = async () => {
     if (updateBusy) return;
-    if (!window.confirm(t('updateConfirm', 'The panel will restart briefly and may be unavailable for up to a minute. Continue?'))) return;
-    setUpdateAction('run');
-    setUpdateNote('');
-    try {
-      const res = await apiClient.post('/updater/run');
-      const body = res.data || {};
-      if (!body.success) {
-        setUpdateNote(body.msg || t('updateRefused', 'The panel cannot start the update automatically.'));
-        return;
-      }
-      setUpdateNote(body.msg || t('updateStarted', 'Update started. The panel will restart shortly.'));
-      const backOnline = await pollUntilOnline();
-      if (backOnline) {
-        setUpdateNote(t('updateFinished', 'The panel is back online.'));
-        addToast(t('updateFinished', 'The panel is back online.'), 'success');
-        await load();
-      } else {
-        setUpdateNote(t('updateTimeout', 'The panel did not answer in time. Check the server logs.'));
-      }
-    } catch (err) {
-      setUpdateNote(updateErrorText(err) || t('updateRunFailed', 'Could not start the update.'));
-    } finally {
-      setUpdateAction('');
-    }
+    openConfirm(
+      t('updateConfirmTitle', 'Update panel'),
+      t('updateConfirm', 'The panel will restart briefly and may be unavailable for up to a minute. Continue?'),
+      async () => {
+        setUpdateAction('run');
+        setUpdateNote('');
+        try {
+          const res = await apiClient.post('/updater/run');
+          const body = res.data || {};
+          if (!body.success) {
+            setUpdateNote(body.msg || t('updateRefused', 'The panel cannot start the update automatically.'));
+            return;
+          }
+          setUpdateNote(body.msg || t('updateStarted', 'Update started. The panel will restart shortly.'));
+          const backOnline = await pollUntilOnline();
+          if (backOnline) {
+            setUpdateNote(t('updateFinished', 'The panel is back online.'));
+            addToast(t('updateFinished', 'The panel is back online.'), 'success');
+            await load();
+          } else {
+            setUpdateNote(t('updateTimeout', 'The panel did not answer in time. Check the server logs.'));
+          }
+        } catch (err) {
+          setUpdateNote(updateErrorText(err) || t('updateRunFailed', 'Could not start the update.'));
+        } finally {
+          setUpdateAction('');
+        }
+      },
+    );
   };
 
   const restartPanel = async () => {
     if (busy) return;
-    if (!window.confirm(t('restartConfirm', 'The panel will restart briefly and may be unavailable for up to a minute. Continue?'))) return;
-    setBusy('/maintenance/restart');
-    try {
-      const res = await apiClient.post('/maintenance/restart');
-      const body = res.data || {};
-      if (!body.success) {
-        addToast(body.msg || t('error', 'Failed'), 'error');
-        return;
-      }
-      addToast(body.msg || t('restartStarted', 'Restarting panel…'), 'success');
-      const backOnline = await pollUntilOnline();
-      if (backOnline) {
-        addToast(t('restartFinished', 'The panel is back online.'), 'success');
-        await load();
-      } else {
-        addToast(t('restartTimeout', 'The panel did not answer in time. Check the server logs.'), 'error');
-      }
-    } catch (err) {
-      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
-    } finally {
-      setBusy('');
-    }
+    openConfirm(
+      t('restartConfirmTitle', 'Restart panel'),
+      t('restartConfirm', 'The panel will restart briefly and may be unavailable for up to a minute. Continue?'),
+      async () => {
+        setBusy('/maintenance/restart');
+        try {
+          const res = await apiClient.post('/maintenance/restart');
+          const body = res.data || {};
+          if (!body.success) {
+            addToast(body.msg || t('error', 'Failed'), 'error');
+            return;
+          }
+          addToast(body.msg || t('restartStarted', 'Restarting panel…'), 'success');
+          const backOnline = await pollUntilOnline();
+          if (backOnline) {
+            addToast(t('restartFinished', 'The panel is back online.'), 'success');
+            await load();
+          } else {
+            addToast(t('restartTimeout', 'The panel did not answer in time. Check the server logs.'), 'error');
+          }
+        } catch (err) {
+          addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+        } finally {
+          setBusy('');
+        }
+      },
+    );
   };
 
   const spin = <span className="button-spinner" aria-hidden="true" />;
@@ -219,33 +237,43 @@ const SystemSection = () => {
     } finally { setCleanBusy(''); }
   };
 
-  const deleteCleanup = async () => {
+  const deleteCleanup = () => {
     if (cleanBusy || cleanPreviewed !== cleanKey) return;
-    if (!window.confirm(t('cleanupDeleteConfirm', 'Permanently delete the matching users and their usage rows? This cannot be undone.'))) return;
-    setCleanBusy('run');
-    try {
-      const res = await apiClient.post('/maintenance/cleanup/run', { ...cleanBody(), confirm: true });
-      const body = res.data || {};
-      if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
-      setCleanPreviewed(''); // counts changed; preview again before the next delete
-      setCleanNote(t('cleanupDeleted', { count: body.data?.deleted ?? 0 }));
-    } catch (err) {
-      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
-    } finally { setCleanBusy(''); }
+    openConfirm(
+      t('cleanupDeleteTitle', 'Delete users'),
+      t('cleanupDeleteConfirm', 'Permanently delete the matching users and their usage rows? This cannot be undone.'),
+      async () => {
+        setCleanBusy('run');
+        try {
+          const res = await apiClient.post('/maintenance/cleanup/run', { ...cleanBody(), confirm: true });
+          const body = res.data || {};
+          if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
+          setCleanPreviewed(''); // counts changed; preview again before the next delete
+          setCleanNote(t('cleanupDeleted', { count: body.data?.deleted ?? 0 }));
+        } catch (err) {
+          addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+        } finally { setCleanBusy(''); }
+      },
+    );
   };
 
-  const resetAllUsage = async () => {
+  const resetAllUsage = () => {
     if (cleanBusy) return;
-    if (!window.confirm(t('cleanupResetConfirm', 'Zero the usage counters of every user? Daily history is kept.'))) return;
-    setCleanBusy('reset');
-    try {
-      const res = await apiClient.post('/maintenance/usage/reset-all', { confirm: true });
-      const body = res.data || {};
-      if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
-      setCleanNote(t('cleanupResetDone', { count: body.data?.reset ?? 0 }));
-    } catch (err) {
-      addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
-    } finally { setCleanBusy(''); }
+    openConfirm(
+      t('cleanupResetTitle', 'Reset usage'),
+      t('cleanupResetConfirm', 'Zero the usage counters of every user? Daily history is kept.'),
+      async () => {
+        setCleanBusy('reset');
+        try {
+          const res = await apiClient.post('/maintenance/usage/reset-all', { confirm: true });
+          const body = res.data || {};
+          if (!body.success) { addToast(body.msg || t('error', 'Failed'), 'error'); return; }
+          setCleanNote(t('cleanupResetDone', { count: body.data?.reset ?? 0 }));
+        } catch (err) {
+          addToast(updateErrorText(err) || t('error', 'Failed'), 'error');
+        } finally { setCleanBusy(''); }
+      },
+    );
   };
 
   if (loading) return <PanelSkeleton lines={4} label={t('loading', 'Loading…')} />;
@@ -370,6 +398,15 @@ const SystemSection = () => {
         )}
       </Card>
     </div>
+    <ConfirmModal
+      open={confirm.open}
+      onClose={closeConfirm}
+      onConfirm={confirm.onConfirm}
+      title={confirm.title}
+      message={confirm.message}
+      confirmLabel={t('confirm', 'Confirm')}
+      danger={true}
+    />
   );
 };
 

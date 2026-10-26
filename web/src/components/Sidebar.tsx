@@ -1,9 +1,10 @@
+import './Sidebar.css';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { IconType } from 'react-icons';
 import { useTranslation } from 'react-i18next';
 import {
-  FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronLeft, FiChevronRight,
+  FiHome, FiUsers, FiServer, FiSettings, FiLogOut, FiChevronsLeft, FiChevronsRight,
   FiMenu, FiBarChart2, FiFileText,
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +12,7 @@ import { useLive } from '../context/LiveContext';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import Logo from './Logo';
+import ConfirmModal from './ConfirmModal';
 
 const readCollapsed = () => {
   try { return localStorage.getItem('ovmanager-sidebar-collapsed') === 'true'; }
@@ -35,6 +37,8 @@ const Sidebar = () => {
   const [stats, setStats] = useState({ totalUsers: 0, totalUsage: 0 });
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
+
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const username = useMemo(() => {
     try { return localStorage.getItem('username') || ''; }
@@ -106,10 +110,7 @@ const Sidebar = () => {
       { to: '/nodes',   label: t('navNodes',    'Nodes'),    icon: FiServer,             group: t('navGroupManage',   'Manage')   },
     ] : []),
     { to: '/settings',  label: t('navSettings', 'Settings'), icon: FiSettings,           group: t('navGroupSystem',   'System')   },
-    { to: '/logs',      label: t('navLogs',     'System logs'), icon: FiFileText,       group: t('navGroupSystem',   'System')   },
-    ...(isOwner ? [
-      { to: '/audit',   label: t('navAudit',    'Logs'),     icon: FiBarChart2,          group: t('navGroupSystem',   'System')   },
-    ] : []),
+    { to: '/logs',      label: t('navLogs',     'Logs'),        icon: FiFileText,       group: t('navGroupSystem',   'System')   },
   ];
 
   const renderNavItem = (item: NavItem, index: number) => (
@@ -168,17 +169,6 @@ const Sidebar = () => {
           <span className="sidebar-brand-text">OV<span className="brand-accent">Manager</span></span>
         </div>
 
-        <button
-          className="sidebar-toggle"
-          onClick={toggleCollapse}
-          aria-label={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
-          aria-expanded={!collapsed}
-          aria-controls="ops-sidebar"
-          title={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
-        >
-          {collapsed ? <FiChevronRight aria-hidden="true" /> : <FiChevronLeft aria-hidden="true" />}
-        </button>
-
         <nav className="sidebar-nav" aria-label={t('sidebarSections', 'Sections')}>
           <ul className="sidebar-nav-list">
             {navItems.map(renderNavItem)}
@@ -186,6 +176,21 @@ const Sidebar = () => {
         </nav>
 
         <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-collapse-bar"
+            onClick={toggleCollapse}
+            aria-label={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
+            aria-expanded={!collapsed}
+            aria-controls="ops-sidebar"
+            title={collapsed ? t('expandSidebar', 'Expand sidebar') : t('collapseSidebar', 'Collapse sidebar')}
+          >
+            {collapsed ? <FiChevronsRight aria-hidden="true" /> : <FiChevronsLeft aria-hidden="true" />}
+            <span className="sidebar-collapse-label" aria-hidden={collapsed}>
+              {t('collapseSidebar', 'Collapse sidebar')}
+            </span>
+          </button>
+
           <div className="sidebar-profile">
             <div className="sidebar-profile-avatar" title={collapsed ? username : undefined}>
               <span className="avatar-md" aria-hidden="true">{username.slice(0, 1).toUpperCase() || '?'}</span>
@@ -212,7 +217,7 @@ const Sidebar = () => {
             <button
               type="button"
               className="sidebar-logout-btn"
-              onClick={() => { if (window.confirm(t('logoutConfirm', 'Sign out of the panel?'))) logout(); }}
+              onClick={() => setLogoutOpen(true)}
               aria-label={t('logout', 'Logout')}
               title={t('logout', 'Logout')}
             >
@@ -221,6 +226,15 @@ const Sidebar = () => {
           </div>
         </div>
       </aside>
+      <ConfirmModal
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={logout}
+        title={t('logoutConfirm', 'Sign out?')}
+        message={t('logoutConfirmDetail', 'You will be returned to the login page.')}
+        confirmLabel={t('logout', 'Logout')}
+        danger={false}
+      />
     </>
   );
 };
