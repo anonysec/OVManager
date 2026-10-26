@@ -14,6 +14,7 @@ import (
 
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // expiredHandler is GET /users/expired: users whose account is expired or
@@ -88,6 +89,9 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 		}
 		deleted++
 	}
+	if deleted > 0 {
+		telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
+	}
 	list := make([]string, 0, len(skipped))
 	for name := range skipped {
 		list = append(list, name)
@@ -110,6 +114,9 @@ func (h *Handler) kickHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	killed, failed := h.kickUserNodes(row)
+	if killed > 0 {
+		telemetry.Publish("users", telemetry.KV{Key: "op", Val: "connections"})
+	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User kicked",

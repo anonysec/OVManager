@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-2.1.2-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
@@ -89,7 +89,9 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 
 ### 🤖 Automation and API
 - Backup scheduler: the installer writes a daily systemd timer (`ovmanager-backup.timer`) that runs a verified backup and prunes to 7 copies, whether or not the panel process is up.
-- Public subscription endpoint that answers with a page, a usage summary or the `.ovpn` itself.
+- Public subscription endpoint that answers with a page, a usage summary or the `.ovpn` itself with `no-store` caching protection.
+- Authenticated REST API supporting both durable UUIDs and compact numeric-ID aliases (`/api/users/id/{id}/...`, `/api/nodes/ovpn/id/{user_id}/{node_id}`) for operator automation, with full backward compatibility.
+- Real-time Server-Sent Events stream (`/api/live/stream`) with scoped domain invalidations across user and node fleet state changes.
 - Staged updates and every manual-verifying step are fully scripted.
 
 ### 🔧 Operations

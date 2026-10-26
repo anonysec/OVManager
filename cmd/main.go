@@ -75,7 +75,11 @@ func panelRouter(svc *auth.Service) http.Handler {
 	api := http.NewServeMux()
 	svc.Mount(api)
 	users.NewHandler(svc).Mount(api)
-	node.NewHandler(svc).Mount(api)
+	nodeH := node.NewHandler(svc)
+	nodeH.OnNodeChange = func(op string) {
+		telemetry.Publish("nodes", telemetry.KV{Key: "op", Val: op})
+	}
+	nodeH.Mount(api)
 	telemetry.NewHandler(svc).Mount(api)
 	h.Mount(api)
 	h.MountLogs(api)

@@ -6,13 +6,14 @@ type UserSessionsModalProps = {
   user: any;
   data: any;
   loading: boolean;
+  disconnecting?: boolean;
   error: string | null;
   onClose: () => void;
   onRefresh: () => void;
   onDisconnect: () => void;
 };
 
-const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefresh, onDisconnect }: UserSessionsModalProps) => {
+const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false, error, onClose, onRefresh, onDisconnect }: UserSessionsModalProps) => {
   const { t } = useTranslation();
   const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
   const unavailableNodeCount = Math.max(
@@ -120,8 +121,8 @@ const UserSessionsModal = ({ isOpen, user, data, loading, error, onClose, onRefr
         </>
       )}
       <div className="modal-footer">
-        <button type="button" className="btn btn-secondary" onClick={onRefresh}>{t('refresh', 'Refresh')}</button>
-        <button type="button" className="btn btn-danger" onClick={onDisconnect}>{t('disconnect', 'Disconnect sessions')}</button>
+        <button type="button" className="btn btn-secondary" onClick={onRefresh} disabled={loading || disconnecting}>{t('refresh', 'Refresh')}</button>
+        <button type="button" className="btn btn-danger" onClick={onDisconnect} disabled={loading || disconnecting || active === 0}>{t('disconnect', 'Disconnect sessions')}</button>
       </div>
     </Modal>
   );

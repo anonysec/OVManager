@@ -66,4 +66,30 @@ describe('UserSessionsModal diagnostics states', () => {
     expect(within(unavailableRow).getByText('Unavailable')).toBeTruthy();
     expect(within(unavailableRow).getAllByText('—')).toHaveLength(2);
   });
+
+  it('disables the disconnect button when active connections are zero', () => {
+    renderModal({ active_connections: 0, max_logins: 2, nodes: [] });
+    const disconnectBtn = screen.getByRole('button', { name: /^disconnect/i }) as HTMLButtonElement;
+    expect(disconnectBtn.disabled).toBe(true);
+  });
+
+  it('disables action buttons when disconnecting is in progress', () => {
+    render(
+      <UserSessionsModal
+        isOpen
+        user={{ name: 'alice' }}
+        data={{ active_connections: 1, max_logins: 2, nodes: [] }}
+        loading={false}
+        disconnecting={true}
+        error={null}
+        onClose={() => {}}
+        onRefresh={() => {}}
+        onDisconnect={() => {}}
+      />,
+    );
+    const refreshBtn = screen.getByRole('button', { name: /^refresh/i }) as HTMLButtonElement;
+    const disconnectBtn = screen.getByRole('button', { name: /^disconnect/i }) as HTMLButtonElement;
+    expect(refreshBtn.disabled).toBe(true);
+    expect(disconnectBtn.disabled).toBe(true);
+  });
 });

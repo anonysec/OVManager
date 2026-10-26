@@ -96,6 +96,9 @@ CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
   delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}',
   UNIQUE (user_id, ts, kind, node_id));
+CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL,
+  deleted_at REAL NOT NULL, expires_at REAL NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at);
 `
 
 // panelEnv is the isolated filesystem + PATH the panel server runs against.
@@ -142,7 +145,11 @@ func newPanelEnv(t *testing.T) *panelEnv {
 	inner := http.NewServeMux()
 	svc.Mount(inner)
 	users.NewHandler(svc).Mount(inner)
-	node.NewHandler(svc).Mount(inner)
+	nodeH := node.NewHandler(svc)
+	nodeH.OnNodeChange = func(op string) {
+		telemetry.Publish("nodes", telemetry.KV{Key: "op", Val: op})
+	}
+	nodeH.Mount(inner)
 	telemetry.NewHandler(svc).Mount(inner)
 	h.Mount(inner)
 

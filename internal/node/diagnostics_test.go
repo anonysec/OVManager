@@ -26,9 +26,9 @@ func TestFilterUserCNHandlesNumericAndNodeSuffixedNames(t *testing.T) {
 
 func TestUserAuthErrorCountResolvesNumericAndSuffixedCommonNames(t *testing.T) {
 	got := userAuthErrorCount(map[string]any{
-		"42-nodeA": float64(2),
+		"42-nodeA":    float64(2),
 		"alice-nodeA": float64(3),
-		"43-nodeA": float64(5),
+		"43-nodeA":    float64(5),
 	}, "alice", "nodeA", map[string]string{"42": "alice"}, map[string]bool{"alice": true})
 	if got != 5 {
 		t.Fatalf("user auth errors = %d, want 5 for numeric and username keys", got)

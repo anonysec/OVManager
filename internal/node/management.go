@@ -94,12 +94,17 @@ func getAllNodes(db *sql.DB) []*Node {
 }
 
 func getActiveNodes(db *sql.DB) []*Node {
+	nodes, _ := getActiveNodesWithErr(db)
+	return nodes
+}
+
+func getActiveNodesWithErr(db *sql.DB) ([]*Node, error) {
 	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM nodes WHERE status = 1`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
-	return collectNodes(rows)
+	return collectNodes(rows), nil
 }
 
 func collectNodes(rows *sql.Rows) []*Node {
@@ -764,7 +769,14 @@ func DeleteUserOnAllNodes(userID int64, db *sql.DB) map[string]any {
 // Handler serves the /nodes routes; it borrows the auth service's DB handle
 // and middleware.
 type Handler struct {
-	svc *auth.Service
+	svc          *auth.Service
+	OnNodeChange func(op string)
+}
+
+func (h *Handler) notifyChange(op string) {
+	if h != nil && h.OnNodeChange != nil {
+		h.OnNodeChange(op)
+	}
 }
 
 // NewHandler builds the node router over the shared auth service.
@@ -856,6 +868,7 @@ func (h *Handler) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, msg := AddNodeHandler(req, h.svc.DB())
 	if ok {
+		h.notifyChange("create")
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node added successfully"})
 		return
 	}
@@ -917,6 +930,9 @@ func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, msg := UpdateNodeHandler(id, req, h.svc.DB())
+	if ok {
+		h.notifyChange("update")
+	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
 }
 
@@ -1105,6 +1121,8 @@ func (h *Handler) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 	msg := "Node deleted successfully"
 	if !ok {
 		msg = "Failed to delete node"
+	} else {
+		h.notifyChange("delete")
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
 }

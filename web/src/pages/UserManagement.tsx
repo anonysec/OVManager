@@ -73,6 +73,8 @@ const UserManagement = () => {
   const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
   const [sessionDiagnostics, setSessionDiagnostics] = useState<any>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionDisconnecting, setSessionDisconnecting] = useState(false);
+  const isDisconnectingRef = useRef(false);
   const [sessionError, setSessionError] = useState('');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -405,7 +407,9 @@ const UserManagement = () => {
   }, [t]);
 
   const handleDisconnect = useCallback(async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isDisconnectingRef.current) return;
+    isDisconnectingRef.current = true;
+    setSessionDisconnecting(true);
     try {
       const res = await apiClient.post(`${userApiPath(selectedUser)}/kick`);
       if (res.data?.success === false) throw new Error(res.data?.msg || t('error'));
@@ -413,10 +417,14 @@ const UserManagement = () => {
       addToast(t('kickedDone', '{{count}} session(s) terminated.', { count: kicked }), 'success');
       const refreshed = await apiClient.get(`${userApiPath(selectedUser)}/sessions`).catch(() => null);
       if (refreshed) setSessionDiagnostics(refreshed.data?.data || refreshed.data);
+      fetchUsers({ background: true });
     } catch (e) {
       addToast(errorMessageOf(e, t('error')), 'error');
+    } finally {
+      isDisconnectingRef.current = false;
+      setSessionDisconnecting(false);
     }
-  }, [selectedUser, addToast, t]);
+  }, [selectedUser, addToast, fetchUsers, t]);
 
   const handleEdit = useCallback((user: any) => {
     setSelectedUser(user);
@@ -863,6 +871,7 @@ const UserManagement = () => {
         user={selectedUser}
         data={sessionDiagnostics}
         loading={sessionLoading}
+        disconnecting={sessionDisconnecting}
         error={sessionError}
         onRefresh={() => selectedUser && handleShowSessions(selectedUser)}
         onDisconnect={handleDisconnect}

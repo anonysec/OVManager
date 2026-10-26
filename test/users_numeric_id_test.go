@@ -145,3 +145,55 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 		t.Errorf("numeric restore route status = %d, want 404 (UUID-only undo contract)", res.StatusCode)
 	}
 }
+
+func TestUsersNumericIDRouteBoundariesAndAmbiguities(t *testing.T) {
+	env := newPanelEnv(t)
+	// Seed user with UUID "id" to test route disambiguation of /users/id/status
+	seedNumericRouteUser(t, env.conn, 50, "id", "user-with-id-as-uuid", 1)
+	seedNumericRouteUser(t, env.conn, 51, "regular-uuid-51", "user-51", 1)
+
+	// 1. PUT /users/id/status updates status of user whose UUID is "id"
+	res, body := doJSON(t, http.MethodPut, env.srv.URL+"/api/users/id/status", env.token, map[string]any{"status": false})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || body["success"] != true {
+		t.Fatalf("PUT /users/id/status = %d %v, want 200 for user with uuid='id'", res.StatusCode, body)
+	}
+	var active int64
+	if err := env.conn.QueryRow(`SELECT is_active FROM users WHERE uuid = 'id'`).Scan(&active); err != nil || active != 0 {
+		t.Errorf("user with uuid='id' active = %d, want 0", active)
+	}
+
+	// 2. PUT /users/id/51 updates user 51
+	res, body = doJSON(t, http.MethodPut, env.srv.URL+"/api/users/id/51", env.token, map[string]any{"tag": "tag-51"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || body["success"] != true {
+		t.Fatalf("PUT /users/id/51 = %d %v, want 200", res.StatusCode, body)
+	}
+	var tag string
+	if err := env.conn.QueryRow(`SELECT tag FROM users WHERE id = 51`).Scan(&tag); err != nil || tag != "tag-51" {
+		t.Errorf("user 51 tag = %q, want 'tag-51'", tag)
+	}
+
+	// 3. Invalid / out-of-range / malformed IDs on PUT /users/id/{id} return 404
+	for _, badID := range []string{"0", "-1", "abc", "9223372036854775808", "99999"} {
+		res, _ = doJSON(t, http.MethodPut, env.srv.URL+"/api/users/id/"+badID, env.token, map[string]any{"tag": "x"})
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("PUT /users/id/%s status = %d, want 404", badID, res.StatusCode)
+		}
+	}
+
+	// 4. Arbitrary unknown 3-segment PUT path returns 404
+	res, _ = doJSON(t, http.MethodPut, env.srv.URL+"/api/users/foo/bar", env.token, map[string]any{"tag": "x"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("PUT /users/foo/bar status = %d, want 404", res.StatusCode)
+	}
+
+	// 5. Unauthenticated PUT /users/id/51 is rejected with 401
+	res, _ = doJSON(t, http.MethodPut, env.srv.URL+"/api/users/id/51", "", map[string]any{"tag": "x"})
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unauthenticated PUT /users/id/51 status = %d, want 401", res.StatusCode)
+	}
+}

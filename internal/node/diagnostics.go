@@ -23,21 +23,26 @@ type diagUser struct {
 }
 
 func diagUsers(db *sql.DB) []diagUser {
+	users, _ := diagUsersWithErr(db)
+	return users
+}
+
+func diagUsersWithErr(db *sql.DB) ([]diagUser, error) {
 	rows, err := db.Query(`SELECT id, name, COALESCE(is_active,1), COALESCE(max_logins,0),
 		total, COALESCE(used,0), expiry_date FROM users`)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer rows.Close()
 	var out []diagUser
 	for rows.Next() {
 		var u diagUser
 		if err := rows.Scan(&u.id, &u.name, &u.isActive, &u.maxLogins, &u.total, &u.used, &u.expiry); err != nil {
-			return out
+			return out, err
 		}
 		out = append(out, u)
 	}
-	return out
+	return out, nil
 }
 
 func idToName(db *sql.DB) map[string]string {
@@ -73,7 +78,25 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 	if err := db.QueryRow(`SELECT name FROM users WHERE id = ?`, userID).Scan(&name); err != nil {
 		return map[string]any{"username": strconv.FormatInt(userID, 10), "found": false}
 	}
-	nodes := getActiveNodes(db)
+	nodes, nodeErr := getActiveNodesWithErr(db)
+	if nodeErr != nil {
+		return map[string]any{
+			"username":          name,
+			"user_id":           userID,
+			"found":             true,
+			"nodes":             []any{},
+			"partial":           true,
+			"unavailable_nodes": 1,
+			"total_nodes":       1,
+			"totals": map[string]any{
+				"live_count":         0,
+				"stale_marker_count": 0,
+				"auth_errors":        0,
+				"user_auth_errors":   0,
+			},
+			"recommendation": "Node diagnostics are incomplete; database query failed.",
+		}
+	}
 	names, known := diagUserNameMaps(db)
 	names[strconv.FormatInt(userID, 10)] = name
 	known[name] = true
@@ -142,10 +165,10 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 
 func filterUserCN(list []map[string]any, username, nodeName string, names map[string]string, known map[string]bool) []map[string]any {
 	out := []map[string]any{}
-	for _, session := range list {
-		commonName, _ := session["common_name"].(string)
+	for _, s := range list {
+		commonName, _ := s["common_name"].(string)
 		if resolved(names, commonName, nodeName, known) == username {
-			out = append(out, session)
+			out = append(out, s)
 		}
 	}
 	return out
@@ -189,8 +212,26 @@ func diagnosticNodeResult(result any, fallbackName string) (string, map[string]a
 
 // LoginHealthSummary aggregates login health for every user with activity.
 func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
-	users := diagUsers(db)
-	nodes := getActiveNodes(db)
+	users, userErr := diagUsersWithErr(db)
+	nodes, nodeErr := getActiveNodesWithErr(db)
+	if nodeErr != nil || userErr != nil {
+		return map[string]any{
+			"users":             []any{},
+			"nodes":             []any{},
+			"partial":           true,
+			"unavailable_nodes": 1,
+			"total_nodes":       1,
+			"totals": map[string]any{
+				"shown":         0,
+				"users":         len(users),
+				"online":        0,
+				"offline":       len(users),
+				"active_conns":  0,
+				"stale_markers": 0,
+				"auth_events":   0,
+			},
+		}
+	}
 	names := make(map[string]string, len(users))
 	known := make(map[string]bool, len(users))
 	for _, u := range users {
@@ -421,7 +462,11 @@ func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 	var recommendation string
 	partial, _ := diag["partial"].(bool)
 	if partial {
-		recommendation = "Node diagnostics are incomplete; counts include reachable nodes only."
+		if rec, ok := diag["recommendation"].(string); ok && rec != "" {
+			recommendation = rec
+		} else {
+			recommendation = "Node diagnostics are incomplete; counts include reachable nodes only."
+		}
 	} else {
 		switch {
 		case maxLogins == 0:

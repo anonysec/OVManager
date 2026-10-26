@@ -50,7 +50,34 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users/{uuid}/reset-usage", guard(h.resetUsage))
 	mux.HandleFunc("PUT /users/{uuid}", guard(h.update))
 	mux.HandleFunc("PUT /users/{uuid}/{$}", guard(h.update))
-	mux.HandleFunc("PUT /users/{uuid}/status", guard(h.status))
+	// In Go 1.22+ ServeMux, "PUT /users/id/{id}" conflicts with "PUT /users/{uuid}/status"
+	// because both match 3 segments like "/users/id/status". We dispatch them via a single
+	// 2-wildcard handler.
+	mux.HandleFunc("PUT /users/{first}/{second}", guard(func(w http.ResponseWriter, r *http.Request) {
+		first := r.PathValue("first")
+		second := r.PathValue("second")
+		if second == "status" {
+			r.SetPathValue("uuid", first)
+			h.status(w, r)
+			return
+		}
+		if first == "id" {
+			r.SetPathValue("id", second)
+			h.update(w, r)
+			return
+		}
+		userNotFound(w)
+	}))
+	mux.HandleFunc("PUT /users/{first}/{second}/{$}", guard(func(w http.ResponseWriter, r *http.Request) {
+		first := r.PathValue("first")
+		second := r.PathValue("second")
+		if first == "id" {
+			r.SetPathValue("id", second)
+			h.update(w, r)
+			return
+		}
+		userNotFound(w)
+	}))
 	mux.HandleFunc("GET /users/{uuid}/sessions", guard(h.sessions))
 	mux.HandleFunc("POST /users/{uuid}/disconnect", guard(h.kickHandler))
 	mux.HandleFunc("POST /users/{uuid}/kick", guard(h.kickHandler))
@@ -65,8 +92,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	const numeric = "/users/id/{id}"
 	mux.HandleFunc("GET "+numeric+"/traffic", guard(h.traffic))
 	mux.HandleFunc("POST "+numeric+"/reset-usage", guard(h.resetUsage))
-	mux.HandleFunc("PUT "+numeric, guard(h.update))
-	mux.HandleFunc("PUT "+numeric+"/{$}", guard(h.update))
 	mux.HandleFunc("PUT "+numeric+"/status", guard(h.status))
 	mux.HandleFunc("GET "+numeric+"/sessions", guard(h.sessions))
 	mux.HandleFunc("POST "+numeric+"/disconnect", guard(h.kickHandler))
@@ -368,6 +393,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	row, _ := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
 	audit.Record(h.Svc.DB(), h.actor(r), "user.create", "info",
 		"User created.", map[string]any{"target": name, "max_logins": maxLogins})
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "create"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User created successfully. VPN config will be generated on first download.",
@@ -471,6 +497,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(h.Svc.DB(), h.actor(r), "user.update", "info",
 		updateMsg, map[string]any{"target": row.Name, "active": row.IsActive != 0, "changes": diffs})
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "update"})
 	// ponytail: node status/limit fan-out lands with Phase 2; with zero nodes
 	// the node helpers return true, so success matches.
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated successfully"})
@@ -512,6 +539,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(h.Svc.DB(), h.actor(r), "user.status", "info",
 		"User enabled or disabled.", map[string]any{"target": row.Name, "active": *req.Status})
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "status"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Changed user status successfully"})
 }
 
@@ -547,6 +575,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		if n, _ := res.RowsAffected(); n == 1 {
 			audit.Record(h.Svc.DB(), h.actor(r), "user.reset_usage", "info",
 				"User usage reset.", map[string]any{"target": row.Name})
+			telemetry.Publish("users", telemetry.KV{Key: "op", Val: "reset-usage"})
 			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User usage reset successfully"})
 			return
 		}
@@ -576,6 +605,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Record(h.Svc.DB(), h.actor(r), "user.delete", "warning",
 		"User deleted.", map[string]any{"target": row.Name})
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
 }
 
@@ -662,6 +692,7 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	row, _ := h.byUUID(snap.UUID)
 	audit.Record(h.Svc.DB(), h.actor(r), "user.restore", "info",
 		"User restored.", map[string]any{"target": snap.Name})
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "restore"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User restored successfully", Data: row.base()})
 }
 
@@ -705,6 +736,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, _ = h.byUUID(row.UUID)
+	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "extend"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated", Data: row.base()})
 }
 

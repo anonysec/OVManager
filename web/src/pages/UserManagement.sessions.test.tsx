@@ -133,10 +133,15 @@ describe('UserManagement session actions', () => {
     expect(within(dialog).getByText('The panel does not currently collect global registry data.')).toBeTruthy();
     expect(within(dialog).getByText('42')).toBeTruthy();
     expect(within(dialog).getByText('3')).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: /^disconnect$/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^disconnect/i }));
+    // A second immediate click is guarded by isDisconnecting
+    fireEvent.click(within(dialog).getByRole('button', { name: /^disconnect/i }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/users/id/1/kick'));
+    expect((apiClient.post as any).mock.calls.filter(([url]: [string]) => url === '/users/id/1/kick')).toHaveLength(1);
     expect(apiClient.post).not.toHaveBeenCalledWith('/users/id/1/disconnect');
     await waitFor(() => expect(screen.getByText('2 session(s) terminated.')).toBeTruthy());
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users/id/1/sessions'));
+    await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users/'));
   });
 });
