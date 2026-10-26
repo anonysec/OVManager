@@ -172,6 +172,11 @@ func spaHandler(h *panel.Handler) http.Handler {
 		}
 		if rel != "index.html" {
 			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
+				if rel == "sw.js" {
+					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				} else if strings.HasPrefix(rel, "assets/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				}
 				http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
 				return
 			}
@@ -189,6 +194,7 @@ func spaHandler(h *panel.Handler) http.Handler {
 		if !strings.Contains(html, "<base") {
 			html = strings.Replace(html, "<head>", "<head><base href=\""+bp+"\">", 1)
 		}
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(html))
 	})
