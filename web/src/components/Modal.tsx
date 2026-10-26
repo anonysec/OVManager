@@ -44,7 +44,13 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prevOverflow;
-      if (rootEl) rootEl.setAttribute('inert', inertPrev ?? '');
+      if (rootEl) {
+        if (inertPrev !== null) {
+          rootEl.setAttribute('inert', inertPrev);
+        } else {
+          rootEl.removeAttribute('inert');
+        }
+      }
     };
   }, [isOpen]);
 
