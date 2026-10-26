@@ -488,14 +488,20 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 		manual = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
 	}
 	var cc any
+	var lat any
+	var lon any
 	if manual != "" {
 		cc = manual
+	} else if code, lLat, lLon, ok := Geolocate(req.Address); ok {
+		cc = code
+		lat = lLat
+		lon = lLon
 	}
 	res, err := db.Exec(
-		`INSERT INTO nodes (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO nodes (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(),
-		req.key(), req.status(), nullIfEmpty(serverCA), cc,
+		req.key(), req.status(), nullIfEmpty(serverCA), cc, lat, lon,
 	)
 	if err != nil {
 		return 0, err
@@ -513,6 +519,9 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 	if manual != "" {
 		set += `, country_code=?, latitude=NULL, longitude=NULL`
 		args = append(args, manual)
+	} else if code, lat, lon, ok := Geolocate(req.Address); ok {
+		set += `, country_code=?, latitude=?, longitude=?`
+		args = append(args, code, lat, lon)
 	}
 	if cert != "" {
 		set += `, server_ca=?`
