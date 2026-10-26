@@ -71,9 +71,10 @@ const isPreAuth = (url: string) => url.includes('/login') || url.includes('/owne
 
 function handleAuthExpired(requestUrl: string) {
   if (isPreAuth(requestUrl)) return;
-  localStorage.removeItem('authToken');
-  localStorage.removeItem('refreshToken');
+  // The session is a cookie: the server clears it on /logout. Only the UI
+  // hint (the role) is cleared here; no secret is kept in storage.
   localStorage.removeItem('userRole');
+  localStorage.removeItem('username');
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
@@ -86,6 +87,14 @@ function reportError(status: number, data: any, message: string, requestUrl: str
   }));
 }
 
+// In-flight request deduplication cache.
+// Key: `${method}:${url}:${JSON.stringify(params)}`
+const inflightCache = new Map<string, Promise<ApiResponse<any>>>();
+
+function makeCacheKey(method: string, url: string, params?: QueryParams | null): string {
+  return `${method}:${url}:${JSON.stringify(params ?? {})}`;
+}
+
 async function request<T = any>(
   method: string,
   url: string,
@@ -95,53 +104,76 @@ async function request<T = any>(
   const { params, timeout = DEFAULT_TIMEOUT, responseType, headers = {}, validateStatus } = config;
   const fullUrl = withQuery(`${apiBase}${url}`, params);
 
-  const token = localStorage.getItem('authToken');
-  const reqHeaders: Record<string, string> = { 'X-Requested-With': 'XMLHttpRequest', ...headers };
-  if (token) reqHeaders.Authorization = `Bearer ${token}`;
+  // Deduplicate identical in-flight requests (GET only, no body).
+  const cacheKey = makeCacheKey(method, url, params);
+  if (method === 'GET' && data === undefined) {
+    const cached = inflightCache.get(cacheKey) as Promise<ApiResponse<T>> | undefined;
+    if (cached) return cached;
+  }
 
-  let body: BodyInit | undefined;
-  if (data !== undefined) {
-    if (data instanceof FormData) {
-      delete reqHeaders['Content-Type'];
-      body = data;
-    } else if (data instanceof URLSearchParams || typeof data === 'string') {
-      body = data;
-    } else {
-      reqHeaders['Content-Type'] = reqHeaders['Content-Type'] || 'application/json';
-      body = JSON.stringify(data);
+  // Capture config values for the async closure.
+  const capturedTimeout = timeout;
+  const capturedValidateStatus: ((status: number) => boolean) | undefined = validateStatus;
+
+  const promise = (async () => {
+    // Capture validateStatus locally for TypeScript narrowing.
+    const localValidateStatus = capturedValidateStatus;
+    // No Authorization header: the session is the HttpOnly cookie the server
+    // set at login, and it rides along on every same-origin request. A token
+    // in JavaScript would be readable by any script on this origin, which is
+    // exactly what the cookie prevents.
+    const reqHeaders: Record<string, string> = { 'X-Requested-With': 'XMLHttpRequest', ...headers };
+
+    let body: BodyInit | undefined;
+    if (data !== undefined) {
+      if (data instanceof FormData) {
+        delete reqHeaders['Content-Type'];
+        body = data;
+      } else if (data instanceof URLSearchParams || typeof data === 'string') {
+        body = data;
+      } else {
+        reqHeaders['Content-Type'] = reqHeaders['Content-Type'] || 'application/json';
+        body = JSON.stringify(data);
+      }
     }
-  }
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
-  let res: Response;
-  try {
-    res = await fetch(fullUrl, { method, headers: reqHeaders, body, credentials: 'same-origin', signal: ctrl.signal });
-  } catch (e) {
-    clearTimeout(timer);
-    const err = new Error(
-      (e as Error)?.name === 'AbortError'
-        ? `Request timed out after ${timeout}ms`
-        : ((e as Error)?.message || 'Network error'),
-    ) as ApiError;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), capturedTimeout);
+    let res: Response;
+    try {
+      res = await fetch(fullUrl, { method, headers: reqHeaders, body, credentials: 'same-origin', signal: ctrl.signal });
+    } catch (e) {
+      clearTimeout(timer);
+      const err = new Error(
+        (e as Error)?.name === 'AbortError'
+          ? `Request timed out after ${capturedTimeout}ms`
+          : ((e as Error)?.message || 'Network error'),
+      ) as ApiError;
+      err.config = { url };
+      reportError(0, null, err.message, url);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const ok = typeof localValidateStatus === 'function' ? localValidateStatus(res.status) : (res.status >= 200 && res.status < 300);
+    const parsed = await parseBody(res, responseType);
+    const result: ApiResponse<T> = { data: parsed as T, status: res.status, headers: lowerHeaders(res.headers), config: { url } };
+    if (ok) return result;
+
+    if (res.status === 401) handleAuthExpired(url);
+    const err = new Error(`Request failed with status ${res.status}`) as ApiError;
+    err.response = { status: res.status, data: parsed };
     err.config = { url };
-    reportError(0, null, err.message, url);
+    reportError(res.status, parsed, err.message, url);
     throw err;
-  } finally {
-    clearTimeout(timer);
+  })();
+
+  if (method === 'GET' && data === undefined) {
+    inflightCache.set(cacheKey, promise);
+    promise.finally(() => inflightCache.delete(cacheKey));
   }
-
-  const ok = validateStatus ? validateStatus(res.status) : (res.status >= 200 && res.status < 300);
-  const parsed = await parseBody(res, responseType);
-  const result: ApiResponse<T> = { data: parsed as T, status: res.status, headers: lowerHeaders(res.headers), config: { url } };
-  if (ok) return result;
-
-  if (res.status === 401) handleAuthExpired(url);
-  const err = new Error(`Request failed with status ${res.status}`) as ApiError;
-  err.response = { status: res.status, data: parsed };
-  err.config = { url };
-  reportError(res.status, parsed, err.message, url);
-  throw err;
+  return promise;
 }
 
 const apiClient = {

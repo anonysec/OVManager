@@ -225,6 +225,23 @@ describe('ServerStats resilience', () => {
     const { container } = renderStats();
     await waitFor(() => expect(container.querySelector('.ds-kpi--danger')).toBeTruthy());
   });
+
+  it('requests a node status without a trailing slash', async () => {
+    // Go's ServeMux matches "GET /nodes/{first}/{second}" only on a non-empty
+    // second segment. A trailing slash falls through to the "GET /nodes/"
+    // subtree pattern, which returns the node LIST, not a status object.
+    baseMock((url) => {
+      if (isNodeList(url)) {
+        return ok({ nodes: [{ id: 7, name: 'edge-1', status: true, address: '10.0.0.7', port: 2083 }] });
+      }
+      return undefined;
+    });
+    renderStats();
+    await waitFor(() => expect(screen.getAllByText('edge-1').length).toBeGreaterThan(0));
+    const calls = (apiClient.get as any).mock.calls.map((c: any) => c[0]);
+    expect(calls).toContain('/nodes/7/status');
+    expect(calls.some((u: string) => /\/nodes\/\d+\/status\/$/.test(u))).toBe(false);
+  });
 });
 
 describe('ServerStats admin scoping', () => {

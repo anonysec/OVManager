@@ -1,0 +1,23 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ── Toast dismiss ─────────────────────────────────────── */
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.toast-dismiss {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-dismiss:hover { color: var(--text-primary); background: var(--surface-2); }

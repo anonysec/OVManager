@@ -158,6 +158,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   letter-spacing: -0.02em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
   line-height: 1.1;
   font-family: var(--font-display);
   min-width: 0;
@@ -215,7 +216,7 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
 .ds-kpi-meter-fill {
   display: block;
   height: 100%;
-  background: var(--accent-text);
+  background: var(--info);
   transition: width var(--transition-normal);
 }
 

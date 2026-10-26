@@ -3,7 +3,7 @@
 
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { apiBase } from '../services/api';
+import { apiBase, AUTH_EXPIRED_EVENT } from '../services/api';
 
 const LiveContext = createContext<any>(null);
 
@@ -79,8 +79,10 @@ export const LiveProvider = ({ children }: { children?: any }) => {
 
     const connect = async () => {
       if (stopped) return;
-      const token = localStorage.getItem('authToken');
-      if (!token) {
+      // The stream authenticates with the session cookie. The role in
+      // storage is only the "we believe there is a session" hint; the server
+      // has the last word (a 401 fails the stream like any other error).
+      if (!localStorage.getItem('userRole')) {
         retryTimer = setTimeout(connect, RETRY_WHEN_LOGGED_OUT_MS);
         return;
       }
@@ -88,9 +90,17 @@ export const LiveProvider = ({ children }: { children?: any }) => {
       abortRef.current = ctrl;
       try {
         const resp = await fetch(`${apiBase}/live/stream`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'same-origin',
           signal: ctrl.signal,
         });
+        if (resp.status === 401) {
+          // The session died. The stream does its own fetch, so the api
+          // client's 401 handling never sees it: without this the operator
+          // is left looking at a frozen dashboard with every action
+          // failing, and the stream retries forever.
+          window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+          return;
+        }
         if (!resp.ok || !resp.body) throw new Error(`live stream HTTP ${resp.status}`);
         if (!stopped) setStreamConnected(true);
         await readEventStream(resp.body, (topic: string | null, data?: any) => {

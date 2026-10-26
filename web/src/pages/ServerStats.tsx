@@ -11,7 +11,7 @@ import { formatBytes } from '../utils/format';
 import { daysUntil, fmtDateTime, formatUptime } from '../utils/time';
 import { readPrefs, alertPrefKey, DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta, FLAG_SVGS } from '../utils/geo';
-import { settle } from '../hooks/useAsyncData';
+import { settle } from '../hooks/settle';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -195,7 +195,7 @@ const ServerStats = () => {
       const results = await Promise.all(nodesData.map(async (n: any) => {
         if (!n.status) return [n.id, { status: 'inactive', session_diagnostics: {}, node_info: {}, latency_ms: 0, reachable: false }];
         try {
-          const r = await apiClient.get(`/nodes/${n.id}/status/`, { timeout: 4000 });
+          const r = await apiClient.get(`/nodes/${n.id}/status`, { timeout: 4000 });
           return [n.id, r.data?.data || {}];
         } catch { return [n.id, { status: 'unreachable', session_diagnostics: undefined, node_info: undefined, latency_ms: 0, reachable: false }]; }
       }));

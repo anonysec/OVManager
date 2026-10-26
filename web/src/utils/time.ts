@@ -7,7 +7,7 @@ import { getDisplayTimezone } from './displayTimezone';
 
 type DateInput = string | number | Date | null | undefined;
 
-function displayLocale(): string {
+export function displayLocale(): string {
   const l = (i18n.language || '').toLowerCase();
   // ponytail: any RTL → Persian formatter; add locale map when second RTL lands
   if (isRTL(l)) return 'fa-u-ca-gregory-nu-latn';
@@ -69,9 +69,9 @@ export function fmtRelative(iso: DateInput): string {
   const diffMs = d.getTime() - Date.now();
   const abs = Math.abs(diffMs);
   if (abs < 30000) return safeT('justNow', 'just now');
-  const lang = (i18n.language || 'en').slice(0, 2);
+  const locale = displayLocale();
   try {
-    const rtf = new Intl.RelativeTimeFormat(lang === 'en' ? 'en' : lang, { numeric: 'auto' });
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
     if (abs < 3600000) return rtf.format(Math.round(diffMs / 60000), 'minute');
     if (abs < 86400000) return rtf.format(Math.round(diffMs / 3600000), 'hour');
     if (abs < 2592000000) return rtf.format(Math.round(diffMs / 86400000), 'day');

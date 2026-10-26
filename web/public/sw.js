@@ -11,7 +11,7 @@
  *
  * Bump CACHE_VERSION on every release; the old cache is deleted on activate.
  */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `ovmanager-static-${CACHE_VERSION}`;
 
 // Paths are resolved against this script's location, so the worker works at
@@ -26,6 +26,9 @@ const PRECACHE_URLS = [
 ];
 
 // Never intercepted: authenticated data, subscription pages, health checks.
+// Keep this list in sync with the panel's configured SUBSCRIPTION_PATH (and any
+// urlpath prefix): settings can rename the subscription route, and the SW has
+// no build-time access to that value. Add the new path here when it changes.
 const BYPASS_PREFIXES = ['/api', '/sub', '/health'];
 
 self.addEventListener('install', (event) => {

@@ -1,0 +1,89 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ===== ErrorState styles =====
+   Mirrors EmptyState geometry so both read as one family. The badge uses the
+   danger soft + danger-text pair: failure hue without losing AA in light. */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 14px;
+  color: var(--text);
+}
+.error-state-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger-text) 28%, transparent);
+}
+.error-state-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 440px;
+}
+.error-state h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.error-state p {
+  margin: 0;
+  max-width: 420px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+}
+.error-state-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* Secondary/retry actions: same geometry language as .btn / ui-btn. */
+.btn-retry, .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h-lg);
+  padding: 0 var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    filter var(--transition-fast);
+}
+.btn-retry {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+.btn-retry:hover {
+  filter: brightness(1.08);
+}
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}

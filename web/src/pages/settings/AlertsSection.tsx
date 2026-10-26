@@ -42,7 +42,7 @@ const AlertsSection = () => {
 
   useEffect(() => {
     let cancelled = false;
-    apiClient.get('/server/settings')
+    apiClient.get('/settings')
       .then((res) => {
         if (cancelled) return;
         const data = res?.data?.data || {};
@@ -73,7 +73,7 @@ const AlertsSection = () => {
     const previous = telegram;
     setTelegram((current) => ({ ...current, [key]: value }));
     try {
-      const res = await apiClient.put('/server/settings/bot', { [key]: value });
+      const res = await apiClient.put('/settings/bot', { [key]: value });
       if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
     } catch {
       setTelegram(previous);
@@ -97,7 +97,7 @@ const AlertsSection = () => {
     }
     setSavingThresholds(true);
     try {
-      const res = await apiClient.put('/server/settings/bot', payload);
+      const res = await apiClient.put('/settings/bot', payload);
       if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) {

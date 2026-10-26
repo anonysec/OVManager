@@ -1,0 +1,51 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT OVERHAUL — full-height sidebar, topbar beside it,
+   tighter collapsed rail, RTL, profile in sidebar footer.
+═══════════════════════════════════════════════════════════ */
+
+.ops-sidebar .sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
+.ops-sidebar--collapsed .sidebar-toggle {
+  inset-inline-end: 2px;
+  width: 22px;
+  height: 22px;
+}
+
+/* Driven by the same tokens the <aside> uses, so the rail and the content
+   edge cannot drift apart again (they were 72px vs 60px). */
+.ops-main-container {
+  margin-inline-start: var(--sidebar-width);
+  transition: margin-inline-start .2s ease;
+}
+
+.ops-main-container--collapsed {
+  margin-inline-start: var(--sidebar-collapsed-width);
+}
+
+.ops-main-container--mobile {
+  margin-inline-start: 0;
+}
+
+/* Topbar starts to the right of the sidebar and slides with it. */
+.ops-topbar-minimal {
+  inset-inline-start: var(--sidebar-width);
+  inset-inline-end: 0;
+  transition: inset-inline-start .2s ease;
+}
+
+.ops-main-container--collapsed .ops-topbar-minimal {
+  inset-inline-start: var(--sidebar-collapsed-width);
+}
+
+.ops-main-container--mobile .ops-topbar-minimal {
+  inset-inline-start: 0;
+}

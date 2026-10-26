@@ -1,3 +1,4 @@
+import './ErrorState.css';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 
 // Pairs with EmptyState: same badge geometry, different hue. Uses the danger

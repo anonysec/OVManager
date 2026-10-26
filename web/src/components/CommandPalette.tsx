@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FiSearch, FiServer, FiUsers, FiSettings, FiFileText, FiArrowUp, FiShield } from 'react-icons/fi';
+import { FiSearch, FiServer, FiUsers, FiSettings, FiFileText, FiArrowUp } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 
@@ -9,10 +9,10 @@ const PAGES = (t: any, isAdmin: any): any[] => [
   { label: t('navDashboard', 'Dashboard'), path: '/', icon: FiServer, group: t('navGroupPages', 'Pages') },
   { label: t('navUsers', 'Users'), path: '/users', icon: FiUsers, group: t('navGroupPages', 'Pages') },
   { label: t('navSettings', 'Settings'), path: '/settings', icon: FiSettings, group: t('navGroupPages', 'Pages') },
+  { label: t('navLogs', 'Logs'), path: '/logs', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   { label: t('addNewUser', 'Add user'), path: '/users?add=1', icon: FiUsers, group: t('navGroupPages', 'Pages') },
   ...(isAdmin ? [
     { label: t('navNodes', 'Nodes'), path: '/nodes', icon: FiFileText, group: t('navGroupPages', 'Pages') },
-    { label: t('navAudit', 'Logs'), path: '/audit', icon: FiShield, group: t('navGroupPages', 'Pages') },
     { label: t('addNewNode', 'Add node'), path: '/nodes?add=1', icon: FiFileText, group: t('navGroupPages', 'Pages') },
   ] : []),
 ];

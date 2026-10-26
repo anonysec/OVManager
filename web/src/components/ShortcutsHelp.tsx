@@ -1,3 +1,4 @@
+import './ShortcutsHelp.css';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

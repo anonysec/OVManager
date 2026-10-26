@@ -88,7 +88,7 @@ const TelegramSection = ({ shared }: { shared?: SharedState }) => {
     } finally { setTesting(false); }
   };
 
-  if (loading) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
+  if (loading && !shared?.data) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (

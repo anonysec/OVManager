@@ -1,5 +1,8 @@
+import './ToastContext.css';
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { API_ERROR_EVENT } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 const ToastContext = createContext<any>(null);
 
@@ -24,8 +27,10 @@ const DEFAULT_DURATION: Record<string, number | null> = {
 };
 
 export const ToastProvider = ({ children }: { children?: any }) => {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<any[]>([]);
   const timers = useRef<any>(new Map());
+  const recentErrors = useRef<Map<string, number>>(new Map());
 
   const removeToast = useCallback((id: any) => {
     const t = timers.current.get(id);
@@ -63,6 +68,24 @@ export const ToastProvider = ({ children }: { children?: any }) => {
     if (toast.duration) schedule(toast.id, toast.duration);
   };
 
+  useEffect(() => {
+    const DEDUPE_MS = 5000;
+    const onErr = (e: any) => {
+      const msg = e?.detail?.message || 'Request failed';
+      const now = Date.now();
+      const last = recentErrors.current.get(msg) || 0;
+      if (now - last < DEDUPE_MS) return;
+      recentErrors.current.set(msg, now);
+      // prune
+      for (const [k, v] of recentErrors.current) {
+        if (now - v > DEDUPE_MS * 2) recentErrors.current.delete(k);
+      }
+      addToast(msg, 'error');
+    };
+    window.addEventListener(API_ERROR_EVENT, onErr);
+    return () => window.removeEventListener(API_ERROR_EVENT, onErr);
+  }, [addToast]);
+
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
@@ -82,7 +105,7 @@ export const ToastProvider = ({ children }: { children?: any }) => {
               type="button"
               className="toast-dismiss"
               onClick={() => removeToast(toast.id)}
-              aria-label="Dismiss"
+              aria-label={t('dismiss', 'Dismiss')}
             >
               ×
             </button>

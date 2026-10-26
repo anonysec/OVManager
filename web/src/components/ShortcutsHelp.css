@@ -1,0 +1,42 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ── Keyboard shortcuts sheet ──────────────────────────── */
+.shortcuts-sheet {
+  width: min(440px, calc(100vw - 32px));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+}
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.shortcuts-head h2 { margin: 0; font-size: var(--font-size-lg); }
+.shortcuts-hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.shortcuts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.shortcuts-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--font-size-sm);
+}
+.shortcuts-keys { display: inline-flex; gap: 4px; }
+.shortcuts-keys kbd {
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-align: center;
+}
+.cert-chip.is-ok { background: color-mix(in srgb, var(--success-color) 10%, transparent); color: var(--success-color); border-color: color-mix(in srgb, var(--success-color) 30%, var(--border)); }
+.cert-chip.is-soon { background: color-mix(in srgb, var(--accent-color) 10%, transparent); color: var(--accent-color); border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border)); }
+.cert-chip.is-critical, .cert-chip.is-expired { background: color-mix(in srgb, var(--danger-color) 12%, transparent); color: var(--danger-color); border-color: color-mix(in srgb, var(--danger-color) 38%, var(--border)); }

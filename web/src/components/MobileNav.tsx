@@ -1,3 +1,4 @@
+import './MobileNav.css';
 import { NavLink } from 'react-router-dom';
 import { FiGrid, FiUsers, FiServer, FiSettings } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';

@@ -1,0 +1,25 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ── Route progress bar ─────────────────────────────────── */
+.route-progress {
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  height: 2.5px;
+  z-index: var(--z-progress);
+  pointer-events: none;
+  opacity: 0;
+  background: color-mix(in srgb, var(--accent-color) 18%, transparent);
+  transition: opacity .15s ease;
+}
+.route-progress.is-active { opacity: 1; }
+.route-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, var(--accent-color), color-mix(in srgb, var(--accent-color) 55%, #fff));
+  animation: routeSlide 1s ease-in-out infinite;
+}
+@keyframes routeSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }

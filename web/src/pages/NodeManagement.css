@@ -96,7 +96,37 @@
   box-shadow: var(--focus-ring-shadow);
 }
 
-/* ── Node rows ───────────────────────────────────────────────────── */
+/* Meta row: only shown on degraded nodes. Healthy nodes produce no row. */
+.nm-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.nm-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.nm-meta-chip--danger {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.nm-meta-chip--warn {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
 .nm-list {
   display: flex;
   flex-direction: column;
@@ -105,7 +135,13 @@
 
 .nm-node {
   overflow: hidden;
+  border-inline-start: 3px solid transparent;
+  transition: border-color var(--transition-fast);
 }
+
+.nm-node--online  { border-inline-start-color: var(--success); }
+.nm-node--warn    { border-inline-start-color: var(--warning); }
+.nm-node--offline { border-inline-start-color: var(--danger); }
 
 .nm-node-main {
   display: grid;
@@ -178,6 +214,7 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .nm-users-label {
@@ -189,7 +226,28 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-1);
+  gap: var(--space-2);
+}
+
+.nm-power-btn--online {
+  color: var(--success-text) !important;
+}
+.nm-power-btn--online:hover {
+  background: var(--success-soft) !important;
+}
+
+.nm-power-btn--warning {
+  color: var(--warning-text) !important;
+}
+.nm-power-btn--warning:hover {
+  background: var(--warning-soft) !important;
+}
+
+.nm-power-btn--offline {
+  color: var(--danger-text) !important;
+}
+.nm-power-btn--offline:hover {
+  background: var(--danger-soft) !important;
 }
 
 /* ── NodeDrawer widths ──────────────────────────────────────────────── */

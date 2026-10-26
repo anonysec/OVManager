@@ -3,10 +3,15 @@
 // against the live panel.
 import { test, expect } from '@playwright/test';
 
-const CREDS = { username: 'admin', password: 'TestPass123!' };
+// The owner credentials of the panel under test; the env override lets
+// the suite run against another panel without editing the file.
+const CREDS = {
+  username: process.env.OVM_E2E_USER || 'admin',
+  password: process.env.OVM_E2E_PASS || 'TestPass123!',
+};
 
 async function login(page: any) {
-  await page.goto('/login');
+  await page.goto('login');
   await page.waitForLoadState('networkidle');
   await page.fill('input[name="username"], input[type="text"]', CREDS.username).catch(() => {});
   const userIn = page.locator('input').first();
@@ -25,13 +30,13 @@ test('login succeeds and lands on dashboard', async ({ page }) => {
 
 test('settings has no TLS card and no TLS deep-link section', async ({ page }) => {
   await login(page);
-  await page.goto('/settings');
+  await page.goto('settings');
   await page.waitForLoadState('networkidle');
   // No tab labeled TLS / HTTPS certificate in the settings tab bar.
   const tabs = page.locator('[role="tablist"] [role="tab"]');
   await expect(tabs.filter({ hasText: /tls|https/i })).toHaveCount(0);
   // A stale /settings#tls deep-link must not produce a TLS section.
-  await page.goto('/settings#tls');
+  await page.goto('settings#tls');
   await page.waitForLoadState('networkidle');
   await expect(page.locator('#tls, [id^="tls-"]')).toHaveCount(0);
 });

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { daysUntil, fmtRelative, fmtDate } from '../utils/time';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import { formatBytes } from '../utils/format';
+import { buildSubscriptionLink } from '../utils/subscriptionLink';
 import { errorMessageOf } from '../utils/errorMessage';
 import UserFormModal from '../components/UserFormModal';
 import ExtendUserModal from '../components/ExtendUserModal';
@@ -25,7 +26,6 @@ import { Button, DataTable, EmptyState, ErrorState, PageHeader, StatCard, Status
 import './UserManagement.css';
 
 const PAGE_SIZE_KEY = 'ovmanager-ui-users-pagesize';
-const MAX_VISIBLE_TAGS = 8;
 const SORT_KEY = 'ovmanager-ui-users-sort-v2';
 
 const statusOf = (u: any) => {
@@ -115,16 +115,19 @@ const UserManagement = () => {
 
   const fetchSubSettings = useCallback(async () => {
     try {
-      const res = await apiClient.get('/server/settings');
+      const res = await apiClient.get('/settings');
       const data = res.data?.data || res.data;
-      if (data?.subscription_url_prefix) setSubSettings(data);
+      // Store the settings even when there is no external subscription
+      // prefix: the link falls back to the panel's own subscription page, and
+      // the other fields here (expiry defaults) are needed either way.
+      if (data) setSubSettings(data);
       if (data?.timezone) setDisplayTimezone(data.timezone);
     } catch { /* subscription links degrade to hidden, table still works */ }
   }, []);
 
   const fetchMyDefaults = useCallback(async () => {
     try {
-      const res = await apiClient.get('/server/settings');
+      const res = await apiClient.get('/settings');
       const data = res.data?.data || res.data;
       if (data?.default_days) {
         setMyDefaults({
@@ -141,9 +144,18 @@ const UserManagement = () => {
     const u1 = subscribe('users.changed', () => fetchUsers({ background: true }));
     const u2 = subscribe('users.created', () => fetchUsers({ background: true }));
     const u3 = subscribe('users.deleted', () => fetchUsers({ background: true }));
-    const u4 = subscribe('tick', () => {});
-    return () => { u1(); u2(); u3(); u4(); };
+    const u4 = subscribe('users', () => fetchUsers({ background: true }));
+    const u5 = subscribe('tick', () => fetchUsers({ background: true }));
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, [subscribe, fetchUsers]);
+
+  // Periodic polling fallback so connection status stays live even without SSE events
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchUsers({ background: true });
+    }, 10000);
+    return () => clearInterval(id);
+  }, [fetchUsers]);
 
   useEffect(() => { fetchUsers(); fetchSubSettings(); fetchMyDefaults(); }, [fetchUsers, fetchSubSettings, fetchMyDefaults]);
 
@@ -171,21 +183,6 @@ const UserManagement = () => {
       expired: c((u: any) => isExpiredUser(u)),
     };
   }, [users]);
-
-  const userTags = useMemo(
-    () => [...new Set(users.map((u) => u.tag).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [users],
-  );
-  const tagCounts = useMemo(() => {
-    const counts = new Map();
-    for (const u of users) {
-      if (!u.tag) continue;
-      counts.set(u.tag, (counts.get(u.tag) || 0) + 1);
-    }
-    return counts;
-  }, [users]);
-  const [tagsExpanded, setTagsExpanded] = useState(false);
-  const visibleTags = tagsExpanded ? userTags : userTags.slice(0, MAX_VISIBLE_TAGS);
 
   const searchTerm = searchParams.get('q') || '';
   const view = searchParams.get('view') || 'all';
@@ -216,7 +213,7 @@ const UserManagement = () => {
     const term = searchTerm.trim().toLowerCase();
     return users.filter((user) => {
       if (term) {
-        const hay = `${user.name || ''} ${user.tag || ''}`.toLowerCase();
+        const hay = `${user.name || ''} #${user.id || ''}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       const remaining = daysUntil(user.expiry_date);
@@ -224,7 +221,6 @@ const UserManagement = () => {
       if (view === 'expiring') { if (!(remaining > 0 && remaining <= 7)) return false; }
       if (view === 'expired' && !isExpiredUser(user)) return false;
       if (view === 'disabled' && !(!user.is_active && remaining >= 0)) return false;
-      if (view.startsWith('tag:') && (user.tag || '') !== view.slice(4)) return false;
       return true;
     });
   }, [users, searchTerm, view]);
@@ -295,11 +291,12 @@ const UserManagement = () => {
 
   const getSubscriptionLink = useCallback((user: any) => {
     if (!user?.uuid || !subSettings) return '';
-    const rawPrefix = subSettings.subscription_url_prefix || '';
-    const rawPath = (subSettings.subscription_path || 'sub').replace(/^\/+|\/+$/g, '') || 'sub';
-    if (!rawPrefix) return '';
-    const prefix = rawPrefix.endsWith('/') ? rawPrefix : `${rawPrefix}/`;
-    return `${prefix}${rawPath}/${user.uuid}`;
+    return buildSubscriptionLink(
+      window.location.origin,
+      subSettings.subscription_url_prefix || '',
+      subSettings.subscription_path || 'sub',
+      user.uuid,
+    );
   }, [subSettings]);
 
   const handleToggleStatus = useCallback(async (user: any) => {
@@ -474,12 +471,15 @@ const UserManagement = () => {
       const u = byUuid.get(String(uuid));
       if (!u) { fail += 1; continue; }
       try {
-        if (op === 'delete') await apiClient.delete(`/users/${uuid}`);
-        else if (op === 'enable') await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: true });
-        else if (op === 'disable') await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: false });
-        else if (op === 'reset') await apiClient.post(`/users/${uuid}/reset-usage`);
-        else if (op === 'extend30') await apiClient.post(`/users/${uuid}/extend`, { days: 30, bytes: 0 });
-        ok += 1;
+        let res: any;
+        if (op === 'delete') res = await apiClient.delete(`/users/${uuid}`);
+        else if (op === 'enable') res = await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: true });
+        else if (op === 'disable') res = await apiClient.put(`/users/${uuid}/status`, { name: u.name, status: false });
+        else if (op === 'reset') res = await apiClient.post(`/users/${uuid}/reset-usage`);
+        else if (op === 'extend30') res = await apiClient.post(`/users/${uuid}/extend`, { days: 30, bytes: 0 });
+        // A refused change answers HTTP 200 with {success:false}: that is a
+        // failure, not a done.
+        if (res?.data?.success === false) { fail += 1; } else { ok += 1; }
       } catch { fail += 1; }
     }
     setBulkBusy(false);
@@ -557,15 +557,13 @@ const UserManagement = () => {
           type="button"
           className="dt-rowlink"
           onClick={() => handleUserClick(u)}
-          title={`${u.name ?? ''}${u.tag ? ` · ${u.tag}` : ''} · ${u.uuid}`}
+          title={`${u.name ?? ''} · ${u.uuid}`}
         >
           <span className="dt-cell-main">
             <span className="dt-avatar" aria-hidden="true">{String(u.name || '?').slice(0, 1).toUpperCase()}</span>
-            <span style={{ minWidth: 0 }}>
-              <span className="dt-cell-title">
-                {u.name}
-                {u.tag && <span className="dt-tag">{u.tag}</span>}
-              </span>
+            <span style={{ minWidth: 0, textAlign: 'start' }}>
+              <span className="dt-cell-title">{u.name}</span>
+              <span className="dt-cell-sub" style={{ opacity: 0.7, fontSize: '11px', display: 'block' }}>#{u.id}</span>
             </span>
           </span>
         </button>
@@ -615,7 +613,20 @@ const UserManagement = () => {
     },
     {
       key: 'last_online', label: t('th_lastOnline', 'Last online'), sortable: true, hideOnMobile: true,
-      render: (u: any) => <span className="dt-num">{u.last_online ? fmtRelative(u.last_online) : t('never', 'Never')}</span>,
+      render: (u: any) => {
+        const isOnline = u.online || Number(u.active_connections || 0) > 0;
+        return (
+          <span className="dt-num">
+            {isOnline ? (
+              <span style={{ color: 'var(--success-text)', fontWeight: 600 }}>{t('statusOnline', 'Online')}</span>
+            ) : u.last_online ? (
+              fmtRelative(u.last_online)
+            ) : (
+              t('never', 'Never')
+            )}
+          </span>
+        );
+      },
     },
     {
       key: 'actions', label: t('th_actions', 'Actions'),
@@ -691,30 +702,6 @@ const UserManagement = () => {
               {f.label} <span className="um-chip-count">{(filterCounts as Record<string, number>)[f.id] ?? 0}</span>
             </button>
           ))}
-          {visibleTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={`um-chip um-chip-tag${view === `tag:${tag}` ? ' is-active' : ''}`}
-              aria-pressed={view === `tag:${tag}`}
-              onClick={() => setView(`tag:${tag}`)}
-              title={tag}
-            >
-              <span className="um-chip-label">{tag}</span> <span className="um-chip-count">{tagCounts.get(tag) ?? 0}</span>
-            </button>
-          ))}
-          {userTags.length > MAX_VISIBLE_TAGS && (
-            <button
-              type="button"
-              className="um-chip um-chip-more"
-              aria-expanded={tagsExpanded}
-              onClick={() => setTagsExpanded((v) => !v)}
-            >
-              {tagsExpanded
-                ? t('showLess', 'Show less')
-                : t('showMoreTags', '+{{count}} more', { count: userTags.length - MAX_VISIBLE_TAGS })}
-            </button>
-          )}
           {(searchTerm || view !== 'all') && (
             <button type="button" className="um-clear" onClick={clearFilters}>
               {t('clear', 'Clear')}

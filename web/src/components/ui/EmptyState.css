@@ -1,0 +1,47 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ===== EmptyState (shared) polish =====
+   Placeholder family: skeleton / error / empty. The glyph is a bare muted
+   marker — a tinted disc would out-shout the message it introduces. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  gap: var(--space-3);
+  color: var(--text-secondary);
+}
+.empty-state-badge {
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.empty-state-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 420px;
+}
+.empty-state h3 {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+.empty-state p {
+  margin: 0;
+  max-width: 360px;
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+}
+.empty-state-action {
+  margin-top: 4px;
+}
+
+/* Kept for older call-sites that still pass a bare icon; new code should use
+   .empty-state-badge. */

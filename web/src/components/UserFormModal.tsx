@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import apiClient from '../services/api';
 import { useTranslation } from 'react-i18next';
-import { FiCheckCircle, FiCopy, FiPlus, FiZap } from 'react-icons/fi';
+import { FiCheckCircle, FiCopy, FiPlus } from 'react-icons/fi';
 import Modal from './Modal';
 import { Button, Field } from './ui';
 import { copyText } from '../utils/clipboard';
@@ -45,15 +45,11 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
   const days = Number(defaults?.days) || 30;
   const defaultLogins = String(defaults?.maxLogins ?? 1);
   const [name, setName] = useState('');
-  const [tag, setTag] = useState('');
   const [expiryDate, setExpiryDate] = useState(defaultExpiryDate(days));
   const [totalTraffic, setTotalTraffic] = useState('');
   const [maxLogins, setMaxLogins] = useState(defaultLogins);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [suggest, setSuggest] = useState('');
-  const [suggestUnavailable, setSuggestUnavailable] = useState(false);
-  const [suggestLoading, setSuggestLoading] = useState(false);
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const { t } = useTranslation();
@@ -68,73 +64,19 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
       }
       setTotalTraffic(gbFromBytes(user.total));
       setMaxLogins(user.max_logins === null || user.max_logins === undefined ? '1' : user.max_logins.toString());
-      setTag(user.tag || '');
       setError('');
     } else if (!isEdit && isOpen) {
       setName('');
-      setTag('');
       setExpiryDate(defaultExpiryDate(days));
       setTotalTraffic('');
       setMaxLogins(defaultLogins);
-      setSuggest('');
-      setSuggestUnavailable(false);
       setCreatedUser(null);
       setCopied(false);
       setError('');
     }
   }, [user, isOpen, isEdit, days, defaultLogins]);
 
-  const fetchSuggest = useCallback(async () => {
-    setSuggestLoading(true);
-    try {
-      const res = await apiClient.get('/users/next-username');
-      if (res.data?.success && res.data?.data?.username) {
-        setSuggest(res.data.data.username);
-        setSuggestUnavailable(false);
-        return res.data.data.username;
-      }
-      setSuggest('');
-      setSuggestUnavailable(true);
-      return '';
-    } catch {
-      setSuggest('');
-      setSuggestUnavailable(true);
-      return '';
-    } finally {
-      setSuggestLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen || isEdit) return undefined;
-    setSuggestLoading(true);
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiClient.get('/users/next-username');
-        if (cancelled) return;
-        if (res.data?.success && res.data?.data?.username) {
-          setSuggest(res.data.data.username);
-          setSuggestUnavailable(false);
-        } else {
-          setSuggest('');
-          setSuggestUnavailable(true);
-        }
-      } catch {
-        if (!cancelled) { setSuggest(''); setSuggestUnavailable(true); }
-      } finally {
-        if (!cancelled) setSuggestLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isOpen, isEdit]);
-
-  const handleSuggest = async () => {
-    const value = suggest || (await fetchSuggest());
-    if (value) setName(value);
-  };
-
-  const reset = () => { setName(''); setTag(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setSuggest(''); setCreatedUser(null); setCopied(false); };
+  const reset = () => { setName(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setCreatedUser(null); setCopied(false); };
 
   const handleClose = () => {
     if (!isEdit) reset();
@@ -153,7 +95,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
         expiry_date: expiryDate,
         total: bytesFromGB(totalTraffic),
         max_logins: Number.isNaN(parsedLogins) ? 1 : parsedLogins,
-        tag: tag.trim() || null,
       };
       const response = isEdit
         ? await apiClient.put(`/users/${user.uuid}`, payload)
@@ -198,7 +139,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
       {createdUser && (
         <div className="uf-created" role="status">
           <FiCheckCircle className="uf-created-icon" aria-hidden="true" />
-          <h3 className="uf-created-title">{createdUser.name}{createdUser.tag ? ` · ${createdUser.tag}` : ''}</h3>
+          <h3 className="uf-created-title">{createdUser.name}</h3>
           <p className="uf-created-note">
             {t('createdNote', 'Hand the profile to the customer — the VPN config is generated on first download.')}
           </p>
@@ -241,35 +182,9 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
                 aria-invalid={Boolean(error) || undefined}
                 aria-describedby={!isEdit ? 'uf-username-hint' : undefined}
               />
-              {!isEdit && !suggestUnavailable && (
-                <Button
-                  variant="secondary"
-                  onClick={handleSuggest}
-                  loading={suggestLoading}
-                  icon={<FiZap size={14} aria-hidden="true" />}
-                  title={t('suggestUsername', 'Suggest next username')}
-                  className="uf-suggest"
-                >
-                  {suggest ? `${t('suggest', 'Suggest')}: ${suggest}` : t('suggest', 'Suggest')}
-                </Button>
-              )}
             </div>
             {!isEdit && <p className="ui-field-hint" id="uf-username-hint">{t('usernameFootnote', 'Usernames can’t be changed after creation.')}</p>}
           </div>
-
-          <Field
-            label={t('userTag', 'Label')}
-            hint={t('userTagHint', 'Optional — e.g. monthly, vip, reseller-a. Shown as a chip on the user row.')}
-          >
-            <input
-              type="text"
-              className="ui-input"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              maxLength={64}
-              placeholder={t('userTagPlaceholder', 'monthly, vip, reseller-a…')}
-            />
-          </Field>
 
           <Field label={t('modal_expiryDate')} required>
             <input
@@ -314,7 +229,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
                 type="number"
                 value={maxLogins}
                 onChange={(e) => setMaxLogins(e.target.value)}
-                min="1"
+                min="0"
                 step="1"
                 placeholder={t('modal_maxLoginsPlaceholder')}
                 title={t('modal_maxLoginsHint')}

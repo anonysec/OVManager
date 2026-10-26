@@ -2,6 +2,7 @@
 // in Suspense fallbacks on the critical path, so they must not drag extra
 // modules into the entry chunk.
 
+import './Skeleton.css';
 import type { CSSProperties } from 'react';
 
 type SkeletonBlockProps = {

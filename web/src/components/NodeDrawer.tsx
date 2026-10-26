@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiActivity, FiShield, FiCheck, FiCpu, FiDownload, FiGlobe, FiPower, FiRefreshCw,
-  FiTrash2, FiX, FiZap,
+  FiSave, FiTrash2, FiX, FiZap,
 } from 'react-icons/fi';
 import apiClient from '../services/api';
 import { formatBytes } from '../utils/format';
+import { CODES } from '../utils/geo';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
-
-
 
 const FOCUSABLE = [
   'a[href]',
@@ -32,7 +31,6 @@ const NodeDrawer = ({
   node,
   initialTab = 'overview',
   onClose,
-  onEdit,
   onDelete,
   onDownloadAll,
   onChanged,
@@ -42,17 +40,51 @@ const NodeDrawer = ({
   const previousFocusRef = useRef<any>(null);
   const onCloseRef = useRef<any>(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   const [tab, setTab] = useState(initialTab);
   const [status, setStatus] = useState<any>(null);
   const [statusState, setStatusState] = useState('loading');
   const [enabled, setEnabled] = useState(Boolean(node?.status));
   const [busy, setBusy] = useState('');
   const [results, setResults] = useState<any>({});
+
+  // Node endpoint edit state
+  const [formData, setFormData] = useState({
+    name: node?.name || '',
+    address: node?.address || '',
+    port: node?.port || 2083,
+    ovpn_port: node?.ovpn_port || 1194,
+    protocol: node?.protocol || 'udp',
+    tunnel_address: node?.tunnel_address || '',
+    country_code: node?.country_code || '',
+    key: '',
+    cert: '',
+  });
+
+  // Settings state (DNS, IPv6, Extra Ports)
   const [dns1, setDns1] = useState('');
   const [dns2, setDns2] = useState('');
   const [ipv6On, setIpv6On] = useState(false);
   const [ipv6Prefix, setIpv6Prefix] = useState('');
-  const [extraPorts, setExtraPorts] = useState('');
+  const [extraPorts, setExtraPorts] = useState(node?.extra_ports || '');
+
+  useEffect(() => {
+    if (node) {
+      setFormData({
+        name: node.name || '',
+        address: node.address || '',
+        port: node.port || 2083,
+        ovpn_port: node.ovpn_port || 1194,
+        protocol: node.protocol || 'udp',
+        tunnel_address: node.tunnel_address || '',
+        country_code: node.country_code || '',
+        key: '',
+        cert: '',
+      });
+      setExtraPorts(node.extra_ports || '');
+      setEnabled(Boolean(node.status));
+    }
+  }, [node]);
 
   const setResult = (key: any, ok: any, text: any) => setResults((prev: any) => ({ ...prev, [key]: { ok, text } }));
 
@@ -60,8 +92,12 @@ const NodeDrawer = ({
     if (!node) return;
     setStatusState('loading');
     try {
-      const res = await apiClient.get(`/nodes/${node.id}/status/`);
-      setStatus(res.data?.data || null);
+      const res = await apiClient.get(`/nodes/${node.id}/status`);
+      const data = res.data?.data || null;
+      setStatus(data);
+      if (data?.node?.extra_ports !== undefined) {
+        setExtraPorts(data.node.extra_ports);
+      }
       setStatusState('ready');
     } catch {
       setStatusState('error');
@@ -120,29 +156,35 @@ const NodeDrawer = ({
     }
   };
 
-  const info: any = status?.node_info || {};
-  const sessions: any = status?.session_diagnostics || {};
-  const live = Number(sessions?.live_count ?? 0);
-  const liveList = useMemo(() => {
-    const raw = status?.session_diagnostics || {};
-    if (Array.isArray(raw.live_sessions)) return raw.live_sessions;
-    if (Array.isArray(raw.sessions)) return raw.sessions;
-    return [];
-  }, [status]);
-  const reachable = status?.reachable === true || (status?.reachable === undefined && Boolean(status?.node_info) && statusState === 'ready');
-  const latency = Number(status?.latency_ms || 0);
-  const cpu = Number(info?.cpu_usage);
-  const mem = Number(info?.memory_usage);
-  const certExpiry = info?.cert_expiry;
+  const handleFormChange = (e: any) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const applyNodeEdit = () => run('edit', async () => {
+    const payload: any = {
+      name: formData.name.trim(),
+      address: formData.address.trim(),
+      port: Number(formData.port),
+      ovpn_port: Number(formData.ovpn_port),
+      protocol: formData.protocol || 'udp',
+      tunnel_address: formData.tunnel_address.trim() || null,
+      country_code: formData.country_code || null,
+      status: enabled,
+    };
+    if (formData.key.trim()) payload.key = formData.key.trim();
+    if (formData.cert.trim()) payload.cert = formData.cert.trim();
+
+    const res = await apiClient.put(`/nodes/${node.id}`, payload);
+    const ok = Boolean(res.data?.success);
+    setResult('edit', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : t('nodeUpdateFailed', 'Could not update the node.')));
+    if (ok) onChanged?.();
+  });
 
   const applyDns = () => run('dns', async () => {
     const body: any = {};
     if (dns1.trim()) body.dns1 = dns1.trim();
     if (dns2.trim()) body.dns2 = dns2.trim();
-    if (!body.dns1 && !body.dns2) {
-      setResult('dns', false, t('nodeKeepCurrentHint', 'Leave empty to keep the current value.'));
-      return;
-    }
     const res = await apiClient.put(`/nodes/${node.id}/dns`, body);
     setResult('dns', Boolean(res.data?.success), res.data?.msg || '');
     if (res.data?.success) { setDns1(''); setDns2(''); }
@@ -158,12 +200,13 @@ const NodeDrawer = ({
 
   const applyPorts = () => run('ports', async () => {
     const res = await apiClient.put(`/nodes/${node.id}/ports`, { extra_ports: extraPorts.trim() });
-    setResult('ports', Boolean(res.data?.success), res.data?.msg || '');
-    if (res.data?.success) setExtraPorts('');
+    const ok = Boolean(res.data?.success);
+    setResult('ports', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : 'Failed to save extra ports'));
+    if (ok) onChanged?.();
   });
 
   const checkNow = () => run('check', async () => {
-    const res = await apiClient.get(`/nodes/${node.id}/status/`);
+    const res = await apiClient.get(`/nodes/${node.id}/status`);
     if (res.data?.data) setStatus(res.data.data);
     setResult('check', Boolean(res.data?.success), res.data?.msg || t('nodeStatusCheckDone', 'Status check complete.'));
   });
@@ -200,42 +243,34 @@ const NodeDrawer = ({
     const res = await apiClient.post(`/nodes/${node.id}/update`);
     const data = res.data || {};
     setResult('update', Boolean(data.success), data.msg || t('nodeRequestFailed', 'The panel could not reach the node.'));
-    onChanged?.();
   });
 
-  const downloadAll = () => run('download', async () => {
+  const downloadAll = async () => {
     if (onDownloadAll) {
       await onDownloadAll(node);
       setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
       return;
     }
-    const response = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob', timeout: 300000 });
-    const blob = new Blob([response.data], { type: 'application/zip' });
+    const r = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob' });
+    const blob = new Blob([r.data], { type: 'application/zip' });
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `ovpn-configs-${node.name}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${node.name}-all-configs.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
     setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
-  });
+  };
 
   const toggleStatus = () => run('toggle', async () => {
     const next = !enabled;
     const res = await apiClient.put(`/nodes/${node.id}`, {
       name: node.name,
       address: node.address,
-      tunnel_address: node.tunnel_address || null,
-      protocol: node.protocol || 'udp',
-      ovpn_port: Number(node.ovpn_port || 1194),
-      port: Number(node.port || 2083),
       status: next,
     });
-    setResult('toggle', Boolean(res.data?.success), res.data?.msg || (next
-      ? t('nodeEnabledToast', 'Node enabled.')
-      : t('nodeDisabledToast', 'Node disabled.')));
     if (res.data?.success) {
       setEnabled(next);
       onChanged?.();
@@ -250,6 +285,16 @@ const NodeDrawer = ({
     { id: 'actions', label: t('nodeTabActions', 'Actions') },
     { id: 'logs', label: t('nodeTabLogs', 'Logs') },
   ];
+
+  const info = status?.node_info;
+  const sessions = status?.session_diagnostics;
+  const reachable = status?.reachable;
+  const latency = status?.latency_ms;
+  const cpu = info?.cpu_usage;
+  const mem = info?.memory_usage;
+  const certExpiry = info?.cert_expiry;
+  const live = sessions?.live_count ?? (Array.isArray(sessions?.live_sessions) ? sessions.live_sessions.length : 0);
+  const liveList = Array.isArray(sessions?.live_sessions) ? sessions.live_sessions : [];
 
   return (
     <div className="node-drawer-backdrop" onClick={onClose}>
@@ -267,7 +312,7 @@ const NodeDrawer = ({
             <span className="avatar-xs">{String(node.name || '?').slice(0, 2).toUpperCase()}</span>
             <div>
               <strong>{node.name}</strong>
-              <small>https://{node.address}:{node.port}</small>
+              <small>{node.address} · Port {node.port}</small>
             </div>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={t('nodeClose', 'Close')}><FiX /></button>
@@ -314,7 +359,6 @@ const NodeDrawer = ({
                 <Button size="sm" variant="secondary" loading={busy === 'check'} icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={checkNow}>
                   {t('checkStatus', 'Check Status')}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => onEdit?.(node)}>{t('editButton', 'Edit')}</Button>
               </div>
               <ResultLine result={results.check} />
             </div>
@@ -322,8 +366,83 @@ const NodeDrawer = ({
 
           {tab === 'settings' && (
             <div className="nd-stack">
-              <p className="nd-note">{t('nodeSettingsNote', 'Saving any setting here reloads the VPN and briefly interrupts connected users.')}</p>
+              {/* 1. Connection & Endpoint Editing */}
+              <section className="nd-section">
+                <h3 className="nd-section-title">{t('nodeSectionConnection', 'Connection')}</h3>
+                <div className="nd-grid-2">
+                  <Field label={t('nodeName')}>
+                    <input type="text" name="name" value={formData.name} onChange={handleFormChange} />
+                  </Field>
+                  <Field label={t('th_address')}>
+                    <input type="text" name="address" value={formData.address} onChange={handleFormChange} />
+                  </Field>
+                  <Field label={t('nodePort')}>
+                    <input type="number" name="port" value={formData.port} onChange={handleFormChange} min="1" max="65535" />
+                  </Field>
+                  <Field label={t('tunnelAddress', 'Tunnel address')}>
+                    <input type="text" name="tunnel_address" value={formData.tunnel_address} onChange={handleFormChange} placeholder="e.g. 10.8.0.1" />
+                  </Field>
+                </div>
 
+                <div className="nd-grid-2" style={{ marginTop: '8px' }}>
+                  <Field label={t('th_protocol', 'Protocol')}>
+                    <select name="protocol" value={formData.protocol} onChange={handleFormChange}>
+                      <option value="udp">UDP</option>
+                      <option value="tcp">TCP</option>
+                    </select>
+                  </Field>
+                  <Field label={t('ovpnPort', 'OpenVPN port')}>
+                    <input type="number" name="ovpn_port" value={formData.ovpn_port} onChange={handleFormChange} min="1" max="65535" />
+                  </Field>
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <Field label={t('nodeCountry', 'Country')}>
+                    <select name="country_code" value={formData.country_code} onChange={handleFormChange}>
+                      <option value="">{t('nodeCountryAuto', 'Auto-detect from IP')}</option>
+                      {Object.entries(CODES).map(([code, entry]) => (
+                        <option key={code} value={code}>{entry.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <Field label={t('key', 'API key')} hint={t('keyKeepExistingHint', 'Leave blank to keep the current key')}>
+                    <input type="text" name="key" value={formData.key} onChange={handleFormChange} placeholder={t('keyKeepExistingHint', 'Leave blank to keep the current key')} autoComplete="off" />
+                  </Field>
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <Field label={t('certFieldLabel', 'Certificate (PEM)')} hint={t('keyKeepExistingHint', 'Leave blank to keep the current key')}>
+                    <textarea name="cert" value={formData.cert} onChange={handleFormChange} rows={3} placeholder={t('keyKeepExistingHint', 'Leave blank to keep the current key')} />
+                  </Field>
+                </div>
+
+                <div className="nd-section-foot">
+                  <Button size="sm" variant="primary" loading={busy === 'edit'} disabled={Boolean(busy) && busy !== 'edit'} icon={<FiSave size={12} />} onClick={applyNodeEdit}>
+                    {busy === 'edit' ? t('nodeApplying', 'Applying...') : t('updateNodeButton', 'Save changes')}
+                  </Button>
+                </div>
+                <ResultLine result={results.edit} />
+              </section>
+
+              {/* 2. Extra Ports with Persistent Save */}
+              <section className="nd-section">
+                <h3 className="nd-section-title">{t('nodePortsTitle', 'Extra ports')}</h3>
+                <p className="nd-section-hint">{t('nodePortsHint', 'Extra ports the node opens for the VPN, like 443,8443. Leave empty to close them again.')}</p>
+                <Field label={t('nodePortsTitle', 'Extra ports')}>
+                  <input type="text" value={extraPorts} onChange={(e) => setExtraPorts(e.target.value)} placeholder="443,8443" disabled={busy === 'ports'} />
+                </Field>
+                <div className="nd-section-foot">
+                  <Button size="sm" variant="primary" loading={busy === 'ports'} disabled={Boolean(busy) && busy !== 'ports'} onClick={applyPorts}>
+                    {busy === 'ports' ? t('nodeApplying', 'Applying...') : t('nodeApply', 'Apply')}
+                  </Button>
+                </div>
+                <ResultLine result={results.ports} />
+              </section>
+
+              {/* 3. DNS Servers */}
               <section className="nd-section">
                 <h3 className="nd-section-title">{t('nodeDnsTitle', 'DNS servers')}</h3>
                 <p className="nd-section-hint">{t('nodeDnsHint', 'DNS servers pushed to VPN clients. Leave a box empty to keep the current value.')}</p>
@@ -343,6 +462,7 @@ const NodeDrawer = ({
                 <ResultLine result={results.dns} />
               </section>
 
+              {/* 4. IPv6 */}
               <section className="nd-section">
                 <h3 className="nd-section-title">{t('nodeIpv6Title', 'IPv6')}</h3>
                 <label className="nd-check">
@@ -359,20 +479,6 @@ const NodeDrawer = ({
                 </div>
                 <ResultLine result={results.ipv6} />
               </section>
-
-              <section className="nd-section">
-                <h3 className="nd-section-title">{t('nodePortsTitle', 'Extra ports')}</h3>
-                <p className="nd-section-hint">{t('nodePortsHint', 'Extra ports the node opens for the VPN, like 443,8443. Leave empty to close them again.')}</p>
-                <Field label={t('nodePortsTitle', 'Extra ports')}>
-                  <input type="text" value={extraPorts} onChange={(e) => setExtraPorts(e.target.value)} placeholder="443,8443" disabled={busy === 'ports'} />
-                </Field>
-                <div className="nd-section-foot">
-                  <Button size="sm" variant="primary" loading={busy === 'ports'} disabled={Boolean(busy) && busy !== 'ports'} onClick={applyPorts}>
-                    {busy === 'ports' ? t('nodeApplying', 'Applying...') : t('nodeApply', 'Apply')}
-                  </Button>
-                </div>
-                <ResultLine result={results.ports} />
-              </section>
             </div>
           )}
 
@@ -388,7 +494,7 @@ const NodeDrawer = ({
                   disabled={Boolean(busy) && busy !== 'restart'}
                   icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={restartVpn}
                 >
-                  {busy === 'restart' ? t('nodeRestarting', 'Restarting...') : t('nodeRestartButton', 'Restart VPN')}
+                  {t('nodeRestartButton', 'Restart VPN')}
                 </Button>
                 <ResultLine result={results.restart} />
               </section>
@@ -401,9 +507,9 @@ const NodeDrawer = ({
                 <Button
                   size="sm" variant="secondary" loading={busy === 'renewCert'}
                   disabled={Boolean(busy) && busy !== 'renewCert'}
-                  icon={<FiShield size={12} aria-hidden="true" />} onClick={renewCert}
+                  icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={renewCert}
                 >
-                  {busy === 'renewCert' ? t('nodeRenewCerting', 'Renewing...') : t('nodeRenewCertButton', 'Renew certificate')}
+                  {t('nodeRenewCertButton', 'Renew certificate')}
                 </Button>
                 <ResultLine result={results.renewCert} />
               </section>
@@ -418,7 +524,7 @@ const NodeDrawer = ({
                   disabled={Boolean(busy) && busy !== 'update'}
                   icon={<FiDownload size={12} aria-hidden="true" />} onClick={updateSoftware}
                 >
-                  {busy === 'update' ? t('nodeUpdating', 'Updating...') : t('nodeUpdateButton', 'Update node')}
+                  {t('nodeUpdateButton', 'Update node')}
                 </Button>
                 <ResultLine result={results.update} />
               </section>
@@ -499,10 +605,10 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
       setLogs({
         records: Array.isArray(data.records) ? data.records : [],
         lastError: data.last_error || null,
-        errors: data.errors_1h || 0,
+        errors1h: data.errors_1h || 0,
       });
     } catch {
-      setLogs({ records: [], lastError: null, errors: 0, failed: true });
+      setLogs({ records: [], lastError: null, failed: true });
     } finally {
       setLoading(false);
     }
@@ -514,33 +620,33 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
     <div className="nd-stack">
       <div className="nd-logbar">
         <label className="nd-loglevel">
-          {t('logLevel', 'Level')}
-          <select value={level} onChange={(e) => setLevel(e.target.value)} aria-label={t('logLevel', 'Level')}>
-            {['ERROR', 'WARNING', 'INFO'].map((lv) => (
-              <option key={lv} value={lv}>{lv}</option>
-            ))}
+          <span>{t('logLevel', 'Level')}</span>
+          <select value={level} onChange={(e) => setLevel(e.target.value)}>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
           </select>
         </label>
-        <Button
-          size="sm" variant="secondary" loading={loading}
-          icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={() => load(level)}
-        >
+        <Button size="sm" variant="secondary" icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={() => load(level)}>
           {t('refreshLogs', 'Refresh')}
         </Button>
       </div>
+
       {logs?.lastError && (
         <div className="nd-logerror" role="alert">{logs.lastError}</div>
       )}
+
       {loading && logs === null ? (
-        <div className="nd-empty">{t('loading', 'Loading...')}</div>
+        <div className="nd-empty">{t('loading', 'Loading…')}</div>
       ) : logs?.failed ? (
         <div className="nd-empty">{t('nodeLogsFailed', 'Could not load node logs.')}</div>
       ) : logs?.records?.length ? (
-        <div className="nd-loglist">
+        <div className="nd-loglist" tabIndex={0} role="region" aria-label={t('nodeTabLogs', 'Logs')}>
           {logs.records.slice().reverse().map((r: any, i: number) => (
-            <div key={i} className={`nd-log nd-log--${String(r.level || 'info').toLowerCase()}`}>
-              <span className="nd-log-time">{r.time || ''}</span>
-              <span className="nd-log-msg" title={r.where || ''}>{r.message || ''}</span>
+            <div key={i} className={`nd-log nd-log--${(r.level || '').toLowerCase()}`}>
+              <span className="nd-log-time">{r.time?.slice(11, 19) || '—'}</span>
+              <span className="nd-log-msg">[{r.level}] {r.message}{r.where ? ` (${r.where})` : ''}</span>
             </div>
           ))}
         </div>
@@ -552,20 +658,28 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
 };
 
 const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
+  const pin = status?.cert_pin;
+  const verified = status?.tls_verified;
   const mode = status?.tls_mode;
-  if (!mode || mode === 'verified' || mode === 'unknown') return null;
+  if (!status) return null;
+
+  let label = t('tlsVerified', 'Encrypted');
+  let tone = 'is-ok';
   if (mode === 'plain') {
-    return (
-      <div className="nd-cert is-critical" role="alert">
-        <span aria-hidden="true">!</span>
-        {t('tlsPlainDetail', 'Plain HTTP — API key crosses the network in cleartext. Enable TLS on the node.')}
-      </div>
-    );
+    label = t('tlsPlain', 'Plain HTTP');
+    tone = 'is-critical';
+  } else if (!verified || mode === 'unverified-self-signed') {
+    label = t('tlsSelfSigned', 'Self-signed');
+    tone = 'is-soon';
+  } else if (pin?.pinned && !pin.match) {
+    label = t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate');
+    tone = 'is-critical';
   }
+
   return (
-    <div className="nd-cert is-soon" role="alert">
-      <span aria-hidden="true">!</span>
-      {t('tlsUnverified', "Unverified TLS (self-signed) — no MITM protection. Switch the node to Let's Encrypt.")}
+    <div className={`nd-cert ${tone}`}>
+      <FiShield size={13} aria-hidden="true" />
+      <span>{label}</span>
     </div>
   );
 };
@@ -573,28 +687,24 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
 const CertPinSection = ({ pin, onRepin, busy, result }: { pin?: any; onRepin?: any; busy?: any; result?: any }) => {
   const { t } = useTranslation();
   if (!pin?.pinned) return null;
-  const tone = pin.match === true ? 'is-ok' : pin.match === false ? 'is-critical' : 'is-soon';
-  const label = pin.match === true
-    ? t('nodeTlsPinMatch', 'Pin matches the live certificate')
-    : pin.match === false
-      ? t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate')
-      : t('nodeTlsPinUnknown', 'Live certificate not checked');
+
+  const expiry = pin.expiry ? new Date(pin.expiry).toLocaleDateString() : '—';
+  const match = pin.match;
+
   return (
-    <section className="nd-section">
-      <h3 className="nd-section-title">{t('nodeTlsPinTitle', 'TLS certificate pin')}</h3>
-      <div className={`nd-cert ${tone}`}>
-        <span aria-hidden="true">◆</span>
-        {label}
+    <section className="nd-pin">
+      <div className="nd-pin-head">
+        <span className="nd-pin-title">{t('nodeTlsPinTitle', 'TLS certificate pin')}</span>
+        <span className={`nd-pin-chip ${match ? 'is-ok' : 'is-mismatch'}`}>
+          {match ? t('nodeTlsPinMatch', 'Pin matches the live certificate') : t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate')}
+        </span>
       </div>
-      <p className="nd-note ts-mono">{pin.fingerprint}</p>
-      {pin.issuer && <p className="nd-note">{t('nodeTlsPinIssuer', 'Issuer')}: {pin.issuer}</p>}
-      {pin.expiry && <p className="nd-note">{t('nodeTlsPinExpiry', 'Expires')}: {pin.expiry}</p>}
-      <div className="nd-section-foot">
-        <Button
-          size="sm" variant="secondary" loading={busy === 'repin'}
-          disabled={Boolean(busy) && busy !== 'repin'}
-          icon={<FiShield size={12} aria-hidden="true" />} onClick={onRepin}
-        >
+      <dl className="nd-pin-meta">
+        <div><dt>{t('nodeTlsPinIssuer', 'Issuer')}</dt><dd>{pin.issuer || '—'}</dd></div>
+        <div><dt>{t('nodeTlsPinExpiry', 'Expires')}</dt><dd>{expiry}</dd></div>
+      </dl>
+      <div className="nd-pin-foot">
+        <Button size="sm" variant="secondary" loading={busy === 'repin'} disabled={Boolean(busy) && busy !== 'repin'} icon={<FiRefreshCw size={12} aria-hidden="true" />} onClick={onRepin}>
           {t('nodeRepinButton', 'Re-pin from current cert')}
         </Button>
       </div>
@@ -605,19 +715,18 @@ const CertPinSection = ({ pin, onRepin, busy, result }: { pin?: any; onRepin?: a
 
 const CertExpiryChip = ({ expiry }: { expiry?: any }) => {
   const { t } = useTranslation();
-  // eslint-disable-next-line react-hooks/purity
-  const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86400000);
-  const cls = days < 0 ? 'is-expired' : days <= 7 ? 'is-critical' : days <= 30 ? 'is-soon' : 'is-ok';
-  return (
-    <div className={`nd-cert ${cls}`}>
-      <span aria-hidden="true">◆</span>
-      {days < 0
-        ? t('certExpired', 'TLS certificate expired')
-        : days <= 30
-          ? t('certDaysLeft', 'TLS certificate expires in {{days}} days', { days })
-          : t('certValidDays', 'TLS certificate valid — {{days}} days left', { days })}
-    </div>
-  );
+  if (!expiry) return null;
+  const now = new Date();
+  const exp = new Date(expiry);
+  const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) {
+    return <div className="nd-cert is-expired">{t('certExpired', 'TLS certificate expired')}</div>;
+  }
+  if (diffDays <= 30) {
+    return <div className="nd-cert is-soon">{t('certDaysLeft', 'TLS certificate expires in {{days}} days', { days: diffDays })}</div>;
+  }
+  return <div className="nd-cert is-ok">{t('certValidDays', 'TLS certificate valid — {{days}} days left', { days: diffDays })}</div>;
 };
 
 export default NodeDrawer;

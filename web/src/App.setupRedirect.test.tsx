@@ -18,7 +18,6 @@ vi.mock('./services/api', () => ({
   AUTH_EXPIRED_EVENT: 'auth:expired', API_ERROR_EVENT: 'api:error',
 }));
 
-vi.mock('./pages/LoginPage', () => ({ default: () => mark('login-page') }));
 vi.mock('./pages/AuthPage', () => ({ default: () => mark('auth-page') }));
 vi.mock('./pages/DashboardLayout', () => ({ default: () => mark('dashboard-layout') }));
 
@@ -62,31 +61,29 @@ describe('first-setup redirect', () => {
     get.mockResolvedValue({ data: { claimable: true } });
     renderApp('/');
     await waitFor(() => expect(rendered).toContain('auth-page'));
-    expect(rendered).not.toContain('login-page');
   });
 
   it('claimable + no token visiting /login: lands on /setup, login never mounts', async () => {
     get.mockResolvedValue({ data: { claimable: true } });
     renderApp('/login');
     await waitFor(() => expect(rendered).toContain('auth-page'));
-    expect(rendered).not.toContain('login-page');
   });
 
-  it('not claimable + no token: /login as today', async () => {
+  it('not claimable + no session: /login as today', async () => {
     get.mockResolvedValue({ data: { claimable: false } });
     renderApp('/');
     await waitFor(() => expect(rendered).toContain('auth-page'));
     expect(rendered).not.toContain('dashboard-layout');
   });
 
-  it('token present: dashboard even when claimable', async () => {
-    localStorage.setItem('authToken', 't');
+  it('signed in: dashboard even when claimable', async () => {
+    // The session is an HttpOnly cookie; the role in storage is only the
+    // "we believe there is a session" hint the router uses.
     localStorage.setItem('userRole', 'owner');
     get.mockResolvedValue({ data: { claimable: true } });
     renderApp('/');
     await waitFor(() => expect(rendered).toContain('dashboard-layout'));
     expect(rendered).not.toContain('auth-page');
-    expect(rendered).not.toContain('login-page');
   });
 
   it('while the claim check is pending: neither login nor setup', async () => {
@@ -97,6 +94,5 @@ describe('first-setup redirect', () => {
     expect(rendered).toEqual([]);
     resolveClaim({ data: { claimable: true } });
     await waitFor(() => expect(rendered).toContain('auth-page'));
-    expect(rendered).not.toContain('login-page');
   });
 });

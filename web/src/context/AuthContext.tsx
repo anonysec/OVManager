@@ -19,33 +19,37 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function storeSession(data: any, fallbackName = '') {
-  const newToken = data.access_token;
-  const refreshToken = data.refresh_token;
+/** Session is the server's HttpOnly cookie plus the UI hint kept here. */
+type Session = { role: string; name: string };
 
+function readStoredSession(): Session | null {
+  const role = localStorage.getItem('userRole');
+  if (!role) return null;
+  return { role, name: localStorage.getItem('username') || '' };
+}
+
+function storeSession(data: any, fallbackName = '') {
   const role = data.role || null;
   const resolvedName = data.username || fallbackName || '';
   if (!role) throw new Error('Login response did not include a role');
 
-  localStorage.setItem('authToken', newToken);
-  if (refreshToken) {
-    localStorage.setItem('refreshToken', refreshToken);
-  } else {
-    localStorage.removeItem('refreshToken');
-  }
+  // The session token is NOT kept. The server set an HttpOnly cookie, and a
+  // copy in localStorage would be readable by any script on this origin —
+  // which is exactly what the cookie exists to prevent. Only the role and
+  // the display name are kept, and neither is a secret.
   localStorage.setItem('userRole', role);
   if (resolvedName) localStorage.setItem('username', resolvedName);
-  return { token: newToken, role };
+  else localStorage.removeItem('username');
+  return { role, name: resolvedName };
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
-  const [token, setToken] = useState(localStorage.getItem('authToken'));
-  const [userRole, setUserRole] = useState(localStorage.getItem('userRole'));
+  const [session, setSession] = useState<Session | null>(readStoredSession);
   // No session at mount → find out whether setup still owns this panel, once.
   const [claimable, setClaimable] = useState(false);
   const [recoverable, setRecoverable] = useState(false);
-  const [claimPending, setClaimPending] = useState(() => !localStorage.getItem('authToken'));
+  const [claimPending, setClaimPending] = useState(() => !localStorage.getItem('userRole'));
 
   const login = async (username: string, password: string) => {
     const formData = new URLSearchParams();
@@ -56,9 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
-    const { token: newToken, role } = storeSession(response.data, username);
-    setToken(newToken);
-    setUserRole(role);
+    setSession(storeSession(response.data, username));
   };
 
   const claim = async (claimKey: string, password: string, username?: string) => {
@@ -68,25 +70,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       ...(username ? { username } : {}),
     });
 
-    const { token: newToken, role } = storeSession(response.data);
-    setToken(newToken);
-    setUserRole(role);
+    setSession(storeSession(response.data));
   };
 
   const logout = useCallback(() => {
-    const accessToken = localStorage.getItem('authToken');
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (accessToken || refreshToken) {
-      apiClient.post('/logout', null, {
-        headers: refreshToken ? { 'X-Refresh-Token': refreshToken } : undefined,
-      }).catch(() => { /* local logout must still complete */ });
-    }
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('refreshToken');
+    // The session is a cookie, so the SERVER has to clear it: without this
+    // the next request would still authenticate while the SPA shows the
+    // login form. /logout is unauthenticated, so it works even for a session
+    // that has already expired.
+    apiClient.post('/logout', null).catch(() => { /* local logout must still complete */ });
     localStorage.removeItem('userRole');
     localStorage.removeItem('username');
-    setToken(null);
-    setUserRole(null);
+    setSession(null);
   }, []);
 
   useEffect(() => {
@@ -95,11 +90,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, [logout]);
 
-  // First-run probe: one GET at mount, only when there is no session to check
-  // it against. Resolves claimPending either way so the router never waits on
-  // a hung request — failure means "not claimable", i.e. today's /login.
+  // First-run probe: one GET at mount, only when there is no session to
+  // check it against. Resolves claimPending either way so the router never
+  // waits on a hung request — failure means "not claimable", i.e. today's
+  // /login.
   useEffect(() => {
-    if (localStorage.getItem('authToken')) return;
+    if (localStorage.getItem('userRole')) return;
     let alive = true;
     apiClient.get('/owner-claim')
       .then((res) => { if (alive) { setClaimable(!!res.data?.claimable); setRecoverable(!!res.data?.recoverable); } })
@@ -110,13 +106,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
+      // Another tab signed in or out: the role is the shared hint.
       if (e.key === 'userRole') {
-        setUserRole(e.newValue);
-        return;
-      }
-      if (e.key === 'authToken') {
-        setToken(e.newValue);
-        if (!e.newValue) setUserRole(null);
+        setSession(e.newValue ? { role: e.newValue, name: localStorage.getItem('username') || '' } : null);
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -124,7 +116,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
 
-  const isAuthenticated = !!token;
+  const isAuthenticated = !!session;
+  const userRole = session?.role ?? null;
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, login, claim, logout, userRole, claimable, recoverable, claimPending }}>

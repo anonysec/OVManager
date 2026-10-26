@@ -1,0 +1,18 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+/* ---- User detail popup (mirrors the sub/download page) ---- */
+.udetail { display: flex; flex-direction: column; gap: 18px; }
+
+.udetail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.udetail-cell { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(125,135,150,.06); }
+.ud-ico { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,122,30,.14); color: var(--orange); }
+.ud-k { display: block; font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+.udetail-cell strong { font-size: 14px; }
+.udetail-sub { display: flex; flex-direction: column; gap: 8px; }
+.udetail-linkrow { display: flex; gap: 8px; }
+.udetail-link { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(125,135,150,.08); color: var(--text); font-size: 12px; }
+
+/* ── Usage history (user detail graph) ── */
+
+.uhist .ud-k { display: block; margin-bottom: 8px; }

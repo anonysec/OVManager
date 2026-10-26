@@ -25,7 +25,7 @@ type SharedState = {
 
 type DisplayApiError = { response?: { data?: { msg?: string } } };
 
-const DisplaySection = ({ shared }: { shared?: SharedState }) => {
+const DisplaySection = ({ shared, onEditingChange }: { shared?: SharedState; onEditingChange?: (v: boolean) => void }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [timezone, setTimezone] = useState('UTC');
@@ -39,6 +39,7 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
   const inputRef = useRef(null);
   const triggerRef = useRef(null);
   useInlineEditFocus(editing, inputRef, triggerRef);
+  useEffect(() => { onEditingChange?.(editing); }, [editing, onEditingChange]);
 
   useEffect(() => {
     const tz = shared?.data?.timezone;
@@ -51,7 +52,10 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
   const save = async () => {
     setSaving(true);
     try {
-      await apiClient.put('/server/settings/timezone', { timezone: tzValue });
+      const res = await apiClient.put('/settings/timezone', { timezone: tzValue });
+      // A refused write answers HTTP 200 with {success:false}: report it and
+      // keep the previous zone instead of storing the rejected one.
+      if (res?.data?.success === false) { addToast(res.data.msg || t('error', 'Error'), 'error'); return; }
       setTimezone(tzValue); setEditing(false);
       setDisplayTimezone(tzValue);
       addToast(t('saved', 'Saved.'), 'success');
@@ -61,7 +65,7 @@ const DisplaySection = ({ shared }: { shared?: SharedState }) => {
 
   const cancel = () => setEditing(false);
 
-  if (loading) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
+  if (loading && !shared?.data) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (

@@ -7,10 +7,12 @@ import { loadLanguage, SUPPORTED_LANGS, LANG_LABELS } from '../i18n';
 import { LangFlag } from '../components/LangFlag';
 import { FiAlertCircle, FiSun, FiMoon, FiMonitor } from 'react-icons/fi';
 import apiClient from '../services/api';
+import { errorMessageOf } from '../utils/errorMessage';
 import Logo from '../components/Logo';
 import { Button, Field } from '../components/ui';
 import PasswordInput from '../components/PasswordInput';
-import './LoginPage.css';
+import '../components/TopBar.css';
+import './AuthPage.css';
 
 const AuthPage = () => {
   const [view, setView] = useState<'login' | 'setup'>('login');
@@ -35,12 +37,6 @@ const AuthPage = () => {
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [langOpen]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (!token) return;
-    apiClient.get('/server/settings').then(() => { window.location.replace('/'); }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -76,7 +72,7 @@ const AuthPage = () => {
       await apiClient.post('/owner-claim/verify', { claim_key: setupKey.trim() });
       setStep('create');
     } catch (err: any) {
-      setError(err?.response?.data?.detail || t('claimError', 'The claim failed. Check the key and try again.'));
+      setError(errorMessageOf(err, t('claimError', 'The claim failed. Check the key and try again.')));
     } finally {
       setLoading(false);
     }
@@ -95,7 +91,7 @@ const AuthPage = () => {
       await claim(setupKey.trim(), password, username.trim());
       navigate('/');
     } catch (err: any) {
-      setError(err?.response?.data?.detail || t('claimError', 'The claim failed. Check the key and try again.'));
+      setError(errorMessageOf(err, t('claimError', 'The claim failed. Check the key and try again.')));
     } finally {
       setLoading(false);
     }
@@ -104,7 +100,7 @@ const AuthPage = () => {
   return (
     <div className="login-page">
       <div className="login-topbar">
-        <button type="button" className="icon-btn" onClick={cycleTheme} aria-label="Toggle theme" title={theme}>
+        <button type="button" className="icon-btn" onClick={cycleTheme} aria-label={t('toggleTheme', 'Toggle theme')} title={theme}>
           {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
         </button>
         <div className="lang-picker-wrap" ref={langRef}>

@@ -72,7 +72,7 @@ const BackupSection = () => {
 
   useEffect(() => {
     let cancelled = false;
-    apiClient.get('/server/settings')
+    apiClient.get('/settings')
       .then((res) => {
         if (cancelled) return;
         const d = res?.data?.data || {};
@@ -98,7 +98,7 @@ const BackupSection = () => {
     setAutoMsg(null);
     const keep = clampKeep(autoKeep);
     try {
-      const r = await apiClient.put('/server/settings/bot', {
+      const r = await apiClient.put('/settings/bot', {
         auto_backup_enabled: autoEnabled,
         auto_backup_time: autoTime || DEFAULT_TIME,
         auto_backup_keep: keep,
@@ -148,7 +148,7 @@ const BackupSection = () => {
       const url = URL.createObjectURL(new Blob([r.data]));
       const a = document.createElement('a'); a.href = url; a.download = backups[0]?.name || 'ovmanager-backup.db';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    } catch { addToast(t('error', 'Download failed'), 'error'); }
+    } catch { addToast(t('backupDownloadFailed', 'Download failed'), 'error'); }
   };
 
   const doRestore = async () => {
@@ -165,9 +165,9 @@ const BackupSection = () => {
         addToast(r.data.msg || t('restored', 'Restored successfully'), 'success');
         setRestoreFile(null);
       } else {
-        addToast(r.data?.msg || t('error', 'Restore failed'), 'error');
+        addToast(r.data?.msg || t('backupRestoreFailed', 'Restore failed'), 'error');
       }
-    } catch (e) { addToast(errorMessageOf(e, t('error', 'Restore failed')), 'error'); }
+    } catch (e) { addToast(errorMessageOf(e, t('backupRestoreFailed', 'Restore failed')), 'error'); }
     finally { setBusy(''); }
   };
 

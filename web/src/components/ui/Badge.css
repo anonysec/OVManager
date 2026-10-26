@@ -62,3 +62,47 @@
   border-color: color-mix(in srgb, var(--info) 32%, transparent);
   color: var(--info-text);
 }
+
+
+/* ===== StatusBadge (shared) ===== */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.status-badge svg {
+  flex-shrink: 0;
+}
+/* Tinted background + the matching read-safe text tone. These were hardcoded
+   dark-mode hues that stayed put in light mode, where they scored 1.44:1
+   (online), 1.76:1 (warning) and 2.5:1 (offline/danger) against white. */
+.status-badge.status-online {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+/* Idle: an enabled user with no live session. Was surface-3 + text-secondary
+   — 4.45:1 in light mode, right at the AA floor, and indistinguishable from
+   muted. info-soft + info-text clears 4.5:1 in both themes; the thin accent
+   border keeps it reading as a chip rather than text. */
+.status-badge.status-idle {
+  background: color-mix(in srgb, var(--info-soft) 70%, var(--surface-1));
+  color: var(--info-text);
+  border: 1px solid color-mix(in srgb, var(--info-text) 30%, transparent);
+}
+.status-badge.status-offline {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.status-badge.status-warning {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+.status-badge.status-danger {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}

@@ -1,0 +1,22 @@
+/* Copyright (c) 2026 anonysec
+ * SPDX-License-Identifier: MIT */
+
+.accent-picker { display: flex; gap: 9px; flex-wrap: wrap; }
+.accent-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px;
+  box-sizing: border-box;
+}
+.accent-swatch:hover { transform: scale(1.08); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.accent-swatch:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: 0 0 0 3px var(--focus-ring-shadow); }
+.accent-swatch.active { border-color: var(--text-primary); }
+.accent-swatch.active::after { content: '✓'; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: var(--font-size-sm); font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.5); }

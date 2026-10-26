@@ -1,3 +1,4 @@
+import './EmptyState.css';
 import { FiInbox } from 'react-icons/fi';
 
 // The soft accent-tinted badge disc makes an empty region read as

@@ -1,3 +1,4 @@
+import './UserDetailModal.css';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -44,12 +45,10 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
   const [history, setHistory] = useState<any>(null);
-  const [totalUsed, setTotalUsed] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isOpen || !user?.uuid) {
       setHistory(null);
-      setTotalUsed(null);
       return;
     }
     let cancelled = false;
@@ -59,11 +58,9 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
         if (cancelled) return;
         const list = r.data?.data?.days;
         setHistory(Array.isArray(list) ? list : []);
-        const total = r.data?.data?.total_used;
-        setTotalUsed(typeof total === 'number' ? total : null);
       })
       .catch(() => {
-        if (!cancelled) { setHistory([]); setTotalUsed(null); }
+        if (!cancelled) { setHistory([]); }
       });
     return () => {
       cancelled = true;
@@ -89,7 +86,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
 
   const st = statusOf(user, t);
   const d = daysUntil(user.expiry_date);
-  const used = totalUsed ?? Number(user.used || 0);
+  const used = Number(user.used || 0);
   const total = Number(user.total || 0);
   const unlimited = !total;
   const pct = unlimited ? 0 : Math.min(100, Math.round((used / total) * 100));

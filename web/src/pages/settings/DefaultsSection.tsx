@@ -14,7 +14,7 @@ import { errorMessageOf } from '../../utils/errorMessage';
 
 /* ═══════════════════════════════════════════════════════
    DEFAULTS — new user defaults (used by the Telegram bot)
-   Values come from the root's shared /server/settings load.
+   Values come from the root's shared /settings load.
 ═══════════════════════════════════════════════════════ */
 type SharedState = {
   loading?: boolean;
@@ -41,16 +41,16 @@ const DefaultsSection = ({ shared }: { shared?: SharedState }) => {
     if (!s) return;
     setDays(Number(s.default_days) || 30);
     setTrafficGb(Number(s.default_traffic_gb) || 100);
-    setDevices(Number(s.default_max_users) || 1);
+    setDevices(Number(s.default_max_users ?? 1));
   }, [shared]);
 
   const save = async () => {
     setSaving(true);
     try {
-      await apiClient.put('/server/settings/bot', {
+      await apiClient.put('/settings/bot', {
         default_days: Math.max(1, Math.min(3650, Number(days) || 30)),
         default_traffic_gb: Math.max(1, Number(trafficGb) || 100),
-        default_max_users: Math.max(1, Math.min(1000, Number(devices) || 1)),
+        default_max_users: Math.max(0, Math.min(1000, Number(devices) || 0)),
       });
       addToast(t('saved', 'Defaults saved.'), 'success');
     } catch (e) {
@@ -59,7 +59,7 @@ const DefaultsSection = ({ shared }: { shared?: SharedState }) => {
     } finally { setSaving(false); }
   };
 
-  if (loading) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
+  if (loading && !shared?.data) return <PanelSkeleton lines={3} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (

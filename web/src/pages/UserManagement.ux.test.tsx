@@ -10,7 +10,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import '../i18n';
 
 vi.mock('../services/api', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), put: vi.fn(), post: vi.fn(), delete: vi.fn() },
   apiBase: '/api', urlPath: '',
   AUTH_EXPIRED_EVENT: 'auth:expired', API_ERROR_EVENT: 'api:error',
 }));
@@ -96,25 +96,30 @@ describe('UserManagement search debounce', () => {
   });
 });
 
-describe('UserManagement tag chips', () => {
+// describe('UserManagement tag chips', () => { ... }) removed: label was deprecated and removed from user management.
+
+describe('UserManagement bulk actions', () => {
   beforeEach(() => { vi.clearAllMocks(); stubStorage(); });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  it('collapses past eight labels behind a +N more chip', async () => {
-    renderPage(taggedUsers(10));
-    const group = await screen.findByRole('group', { name: /user filters/i });
-    const chipLabels = () => within(group).getAllByRole('button').map((b) => b.textContent);
-    await waitFor(() => expect(chipLabels().join(' ')).toContain('label-7'));
-    expect(chipLabels().join(' ')).not.toContain('label-8');
-    fireEvent.click(within(group).getByText('+2 more'));
-    await waitFor(() => expect(chipLabels().join(' ')).toContain('label-8'));
-    fireEvent.click(within(group).getByText(/show less/i));
-    await waitFor(() => expect(chipLabels().join(' ')).not.toContain('label-8'));
-  });
+  it('counts a refused bulk change as a failure, not a success', async () => {
+    // The panel answers HTTP 200 with {success:false} when it refuses to
+    // activate an expired user. The bulk counter must not read that as done.
+    (apiClient.put as any).mockResolvedValue({
+      data: { success: false, msg: 'Cannot activate: user is expired' },
+    });
+    const expired = [
+      { id: 1, uuid: 'u-1', name: 'exp1', is_active: false, expiry_date: '2000-01-01', total: null, used: 0, owner: 'admin' },
+      { id: 2, uuid: 'u-2', name: 'exp2', is_active: false, expiry_date: '2000-01-01', total: null, used: 0, owner: 'admin' },
+    ];
+    renderPage(expired);
 
-  it('truncates long labels with the full text in the title', async () => {
-    renderPage([{ id: 1, uuid: 'u-1', name: 'user1', tag: 'a-quite-long-label-value', is_active: true, expiry_date: '2099-01-01', total: null, used: 0, owner: 'admin' }]);
-    const chip = await screen.findByTitle('a-quite-long-label-value');
-    expect(chip.className).toContain('um-chip-tag');
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select all' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Enable' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enable' }));
+
+    await waitFor(() => expect(screen.getByText('Enable: 0 done, 2 failed.')).toBeTruthy());
+    expect(screen.queryByText('Enable: 2 done.')).toBeNull();
   });
 });

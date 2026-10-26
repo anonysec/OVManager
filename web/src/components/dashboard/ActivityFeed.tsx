@@ -26,7 +26,7 @@ export default function ActivityFeed({ items, error, loading, onRetry }: { items
       title={t('activityLogCard', 'Recent activity')}
       icon={null}
       action={
-        <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/audit')}>
+        <button type="button" className="btn btn-sm btn-secondary" onClick={() => navigate('/logs?tab=audit')}>
           {t('viewAll', 'View all')}
         </button>
       }

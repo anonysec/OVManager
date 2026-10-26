@@ -709,3 +709,88 @@
     min-height: var(--control-h-lg);
   }
 }
+
+
+/* ---- User Management: online view, pills, search, actions ---- */
+.seg-toggle button.active { background: var(--accent); color: var(--accent-contrast); }
+
+/* Single border, compact. The "2 borders" look came from the outer border plus
+   a focus-ring box-shadow reading as a second outline, so the shadow is gone. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  max-width: 260px;
+  height: 32px;
+  transition: border-color .12s ease;
+  box-shadow: none !important;
+}
+.search-field:focus-within { border-color: var(--accent); box-shadow: none !important; outline: none; }
+.search-field .search-icon { color: var(--muted); font-size: 14px; flex: 0 0 auto; }
+.search-field input {
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  color: var(--text) !important;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  height: 100%;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-field input::placeholder { color: var(--muted); }
+.search-field input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.exp.ok { color: var(--text); }
+.exp.soon { color: var(--warning-text); }
+.exp.expired { color: var(--danger-text); }
+.exp small { font-weight: 700; }
+.set-list.small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+.notice.warning { border-color: var(--orange); color: var(--orange); }
+.notice.danger { border-color: var(--red); color: var(--red); }
+.notice.info { border-inline-start-color: var(--cyan); color: var(--cyan); }
+.seg.active { background: var(--accent); color: var(--accent-contrast); box-shadow: 0 6px 16px rgba(255,106,26,.35); }
+
+.code-copy { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--cyan); border-radius: 8px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.code-copy:hover { background: rgba(255,255,255,.1); }
+.code-copy svg { width: 15px; height: 15px; }
+
+
+
+@media (max-width: 860px) {
+  .ops-userbar { grid-area: userbar; justify-self: end; }
+}
+@media (max-width: 520px) {
+  .ops-userbar { gap: 4px; }
+}
+
+/* ===== Custom checkbox ===== */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 17px; height: 17px; margin: 0;
+  border: 2px solid var(--line); border-radius: 5px;
+  background: var(--panel); cursor: pointer;
+  position: relative; transition: background .12s ease, border-color .12s ease;
+  flex: 0 0 auto;
+}
+input[type="checkbox"]:hover { border-color: var(--orange); }
+input[type="checkbox"]:checked { background: var(--orange); border-color: var(--orange); }
+input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; inset-inline-start: 50%; margin-inline-start: -2.5px; top: 1px;
+  width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+input[type="checkbox"]:indeterminate { background: var(--orange); border-color: var(--orange); }
+input[type="checkbox"]:indeterminate::after {
+  content: ''; position: absolute; inset-inline-start: 50%; margin-inline-start: -4.5px; top: 6.5px;
+  width: 9px; height: 2px; background: #fff; border-radius: 1px;
+}

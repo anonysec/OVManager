@@ -3,7 +3,7 @@
 //   2. the users table must actually render a skeleton on first load
 
 import { describe, it, expect } from 'vitest';
-import { settle } from './useAsyncData';
+import { settle } from './settle';
 
 describe('settle()', () => {
   it('keeps successful results when a sibling request rejects', async () => {

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  FiCheckCircle, FiDownload, FiEdit2, FiFileText, FiPlus, FiPower,
-  FiRefreshCw, FiSearch, FiServer, FiTrash2, FiUsers, FiXCircle,
+  FiCheckCircle, FiPlus, FiPower,
+  FiSearch, FiServer, FiShield, FiSliders, FiTrash2, FiUsers, FiXCircle,
 } from 'react-icons/fi';
 import NodeDrawer from '../components/NodeDrawer';
 import NodeFormModal from '../components/NodeFormModal';
@@ -48,7 +48,6 @@ const NodeManagement = () => {
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [drawer, setDrawer] = useState<{ node: any; tab: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [editNode, setEditNode] = useState<any>(null);
   type NodeConfirm = { open: boolean; title: string; message: string; onConfirm: (() => void | Promise<void>) | null };
   const [confirm, setConfirm] = useState<NodeConfirm>({ open: false, title: '', message: '', onConfirm: null });
 
@@ -95,7 +94,7 @@ const NodeManagement = () => {
       const fresh: Record<string, any> = {};
       await Promise.all(nodesRef.current.map(async (node: any) => {
         try {
-          const res = await apiClient.get(`/nodes/${node.id}/status/`);
+          const res = await apiClient.get(`/nodes/${node.id}/status`);
           if (res.data?.success && res.data?.data) fresh[node.id] = res.data.data;
         } catch { /* keep previous status */ }
       }));
@@ -147,20 +146,6 @@ const NodeManagement = () => {
     () => [...filteredNodes].sort((a, b) => Number(b.id) - Number(a.id)),
     [filteredNodes],
   );
-
-  const handleCheckStatus = useCallback(async (node: any) => {
-    const key = `check-${node.id}`;
-    markBusy(key, true);
-    try {
-      const response = await apiClient.get(`/nodes/${node.id}/status/`);
-      if (response.data?.data) setNodeInfo((prev) => ({ ...prev, [node.id]: response.data.data }));
-      addToast(response.data?.msg || t('nodeStatusCheckDone', 'Status check complete.'), 'success');
-    } catch (e) {
-      addToast(errorMessageOf(e, t('nodeStatusCheckFailed', 'Failed to check node status.')), 'error');
-    } finally {
-      markBusy(key, false);
-    }
-  }, [addToast, t]);
 
   const handleDownloadAll = useCallback(async (node: any) => {
     const key = `download-${node.id}`;
@@ -230,12 +215,6 @@ const NodeManagement = () => {
   const handleNodeCreated = (msg: any) => {
     setAddOpen(false);
     addToast(msg || t('nodeCreatedSuccess', 'Node created successfully.'), 'success');
-    fetchNodes();
-  };
-
-  const handleNodeUpdated = (msg: any) => {
-    setEditNode(null);
-    addToast(msg || t('nodeUpdatedSuccess', 'Node updated successfully.'), 'success');
     fetchNodes();
   };
 
@@ -335,7 +314,7 @@ const NodeManagement = () => {
             const health = !node.status ? 'offline' : info?.reachable === false ? 'warning' : 'online';
             const transport = (node.protocol || 'udp').toUpperCase();
             return (
-              <Card as="article" key={node.id} className="nm-node" padded={false}>
+              <Card as="article" key={node.id} className={`nm-node nm-node--${health}`} padded={false}>
                 <div className="nm-node-main">
                   <StatusBadge
                     status={health}
@@ -371,29 +350,13 @@ const NodeManagement = () => {
                   </div>
                   <div className="nm-actions" role="group" aria-label={`${node.name} ${t('actions', 'Actions')}`}>
                     <Button
-                      variant="ghost" size="sm" icon={<FiRefreshCw size={15} />}
-                      loading={Boolean(busy[`check-${node.id}`])}
-                      title={t('checkStatus', 'Check Status')} aria-label={`${t('checkStatus', 'Check Status')} ${node.name}`}
-                      onClick={() => handleCheckStatus(node)}
-                    />
-                    <Button
-                      variant="ghost" size="sm" icon={<FiFileText size={15} />}
-                      title={t('nodeOpenLogs', 'Open logs')} aria-label={`${t('nodeOpenLogs', 'Open logs')} ${node.name}`}
-                      onClick={() => openDrawer(node, 'logs')}
-                    />
-                    <Button
-                      variant="ghost" size="sm" icon={<FiEdit2 size={15} />}
-                      title={t('editButton', 'Edit')} aria-label={`${t('editButton', 'Edit')} ${node.name}`}
-                      onClick={() => setEditNode(node)}
-                    />
-                    <Button
-                      variant="ghost" size="sm" icon={<FiDownload size={15} />}
-                      loading={Boolean(busy[`download-${node.id}`])}
-                      title={t('downloadAll', 'Download all')} aria-label={`${t('downloadAll', 'Download all')} ${node.name}`}
-                      onClick={() => handleDownloadAll(node)}
+                      variant="ghost" size="sm" icon={<FiSliders size={15} />}
+                      title={t('manage', 'Manage')} aria-label={`${t('manage', 'Manage')} ${node.name}`}
+                      onClick={() => openDrawer(node, 'settings')}
                     />
                     <Button
                       variant="ghost" size="sm" icon={<FiPower size={15} />}
+                      className={`nm-power-btn--${health}`}
                       loading={Boolean(busy[`toggle-${node.id}`])}
                       title={node.status ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
                       aria-label={`${node.status ? t('disableUser', 'Disable') : t('enableUser', 'Enable')} ${node.name}`}
@@ -406,6 +369,28 @@ const NodeManagement = () => {
                     />
                   </div>
                 </div>
+                {(health !== 'online' || tls.tone === 'warning' || tls.tone === 'danger') && (
+                  <div className="nm-node-meta">
+                    {health === 'offline' && (
+                      <span className="nm-meta-chip nm-meta-chip--danger">
+                        <FiXCircle size={11} aria-hidden="true" />
+                        {t('statusOffline', 'Offline')}
+                      </span>
+                    )}
+                    {health === 'warning' && (
+                      <span className="nm-meta-chip nm-meta-chip--warn">
+                        <FiXCircle size={11} aria-hidden="true" />
+                        {t('nodeUnreachable', 'Unreachable')}
+                      </span>
+                    )}
+                    {(tls.tone === 'warning' || tls.tone === 'danger') && (
+                      <span className={`nm-meta-chip nm-meta-chip--${tls.tone === 'danger' ? 'danger' : 'warn'}`}>
+                        <FiShield size={11} aria-hidden="true" />
+                        {tls.label}
+                      </span>
+                    )}
+                  </div>
+                )}
               </Card>
             );
           })}
@@ -415,20 +400,11 @@ const NodeManagement = () => {
       {addOpen && (
         <NodeFormModal node={null} isOpen={addOpen} onClose={() => setAddOpen(false)} onSaved={handleNodeCreated} />
       )}
-      {editNode && (
-        <NodeFormModal
-          isOpen={Boolean(editNode)}
-          node={editNode}
-          onClose={() => setEditNode(null)}
-          onSaved={handleNodeUpdated}
-        />
-      )}
       {drawer && (
         <NodeDrawer
           node={drawer.node}
           initialTab={drawer.tab}
           onClose={() => setDrawer(null)}
-          onEdit={(n: any) => { setDrawer(null); setEditNode(n); }}
           onDelete={(n: any) => { setDrawer(null); handleDelete(n); }}
           onDownloadAll={handleDownloadAll}
           onChanged={() => fetchNodes({ background: true })}

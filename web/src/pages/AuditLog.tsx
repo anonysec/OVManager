@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
-import { FiActivity, FiRefreshCw, FiDownload, FiCopy, FiCheck, FiFilter } from 'react-icons/fi';
+import { FiActivity, FiRefreshCw, FiCopy, FiCheck, FiFilter } from 'react-icons/fi';
 import { fmtDateTime, fmtRelative } from '../utils/time';
 import { copyText } from '../utils/clipboard';
-import { useToast } from '../context/ToastContext';
-import { useLive } from '../context/LiveContext';
 import EmptyState from '../components/ui/EmptyState';
 import ErrorState from '../components/ui/ErrorState';
 import DataTable from '../components/ui/DataTable';
@@ -19,6 +17,25 @@ const ACTION_TONES: Record<string, string> = {
   user: 'info', node: 'accent', admin: 'warning',
   maintenance: 'warning', auth: 'danger', security: 'danger',
 };
+
+const ACTION_LABELS: Record<string, string> = {
+  'auth.login': 'Sign In',
+  'auth.claim': 'Owner Claim',
+  'auth.recover': 'Account Recovery',
+  'user.create': 'Create User',
+  'user.update': 'Update User',
+  'user.delete': 'Delete User',
+  'user.status': 'Toggle User Status',
+  'user.restore': 'Restore User',
+  'user.reset_usage': 'Reset User Usage',
+  'node.create': 'Add Node',
+  'node.update': 'Update Node',
+  'node.delete': 'Delete Node',
+  'admin.settings': 'Change Settings',
+  'admin.urlpath': 'Change URL Path',
+};
+
+const formatActionName = (action: string) => ACTION_LABELS[action] || action.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const toneForAction = (action: any) => (ACTION_TONES as Record<string, string>)[String(action || '').split('.')[0]] || 'neutral';
 
@@ -46,9 +63,8 @@ const fmtDetail = (d: any) => {
   try { return JSON.stringify(v); } catch { return String(v); }
 };
 
-const AuditLog = () => {
+const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
   const { t, i18n } = useTranslation();
-  const { addToast } = useToast();
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -93,12 +109,6 @@ const AuditLog = () => {
     const id = setInterval(update, 30000);
     return () => clearInterval(id);
   }, []);
-
-  const { subscribe } = useLive();
-  useEffect(() => {
-    const u = subscribe('tick', () => {});
-    return () => u();
-  }, [subscribe]);
 
   const relative = useMemo(() => {
     let rtf: Intl.RelativeTimeFormat | null;
@@ -190,22 +200,6 @@ const AuditLog = () => {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'ts' ? 'desc' : 'asc' }));
   }, []);
 
-  const handleExportCsv = useCallback(() => {
-    const esc = (v: any) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-    const head = ['time', 'actor', 'action', 'target', 'detail'];
-    const rows = filtered.map((e) => [
-      e.ts ? new Date(e.ts * 1000).toISOString() : '',
-      e.actor || '', e.action || '', e.target || '', fmtDetail(e.detail),
-    ]);
-    const csv = [head, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `ovmanager-audit-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    addToast(t('exported', 'CSV exported'), 'success');
-  }, [filtered, addToast, t]);
-
   const copyDetail = async () => {
     if (!detailEvent) return;
     const ok = await copyText(fmtDetail(detailEvent.detail));
@@ -227,7 +221,7 @@ const AuditLog = () => {
       },
     },
     {
-      key: 'actor', label: t('th_admin', 'Actor'), sortable: true,
+      key: 'actor', label: t('auditColActor', 'Actor'), sortable: true,
       render: (e: any) => (
         <span className="dt-cell-main">
           <span className="dt-avatar" aria-hidden="true">{String(e.actor || 's').slice(0, 1).toUpperCase()}</span>
@@ -237,7 +231,7 @@ const AuditLog = () => {
     },
     {
       key: 'action', label: t('th_action', 'Action'), sortable: true,
-      render: (e: any) => <Badge tone={toneForAction(e.action)}>{e.action || '—'}</Badge>,
+      render: (e: any) => <Badge tone={toneForAction(e.action)}>{formatActionName(e.action || '') || '—'}</Badge>,
     },
     {
       key: 'target', label: t('th_target', 'Target'), sortable: true, hideOnMobile: true,
@@ -257,24 +251,12 @@ const AuditLog = () => {
 
   return (
     <div id="audit-view" className="view adt-page">
-      {/* Same header as every other page: PageHeader owns the h1, the icon
-          tile and the action row. This used to be a one-off <h2> at a smaller
-          size, which left Audit as the only page with a wrong heading level
-          and a visibly lower title than Users / Nodes / Settings. */}
-      <PageHeader
-        title={t('navAudit', 'Logs')}
-        icon={<FiActivity aria-hidden="true" />}
-        subtitle={t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}
-        actions={(
-          <>
-            <Button
-              variant="secondary" size="sm"
-              icon={<FiDownload size={13} aria-hidden="true" />}
-              onClick={handleExportCsv}
-              disabled={filtered.length === 0}
-            >
-              {t('exportCsv', 'CSV')}
-            </Button>
+      {!hideHeader && (
+        <PageHeader
+          title={t('audit', 'Audit')}
+          icon={<FiActivity aria-hidden="true" />}
+          subtitle={t('auditSubtitle', 'Who changed what, and when. Entries are scoped to the admins you can see.')}
+          actions={(
             <Button
               variant="secondary" size="sm"
               icon={<FiRefreshCw size={13} aria-hidden="true" />}
@@ -282,9 +264,9 @@ const AuditLog = () => {
             >
               {t('refresh', 'Refresh')}
             </Button>
-          </>
-        )}
-      />
+          )}
+        />
+      )}
 
       <div className="adt-filters">
         <label className="adt-filter adt-search">
@@ -320,7 +302,7 @@ const AuditLog = () => {
           >
             <option value="all">{t('auditAllActions', 'All actions')}</option>
             {actions.map(([action, count]) => (
-              <option key={action} value={action}>{action} ({count})</option>
+              <option key={action} value={action}>{formatActionName(action)} ({count})</option>
             ))}
           </select>
         </label>
@@ -349,6 +331,15 @@ const AuditLog = () => {
             <button type="button" className="toolbar-clear" onClick={clearFilters}>
               {t('clear', 'Clear')}
             </button>
+          )}
+          {hideHeader && (
+            <Button
+              variant="secondary" size="sm"
+              icon={<FiRefreshCw size={13} aria-hidden="true" />}
+              onClick={() => load()}
+            >
+              {t('refresh', 'Refresh')}
+            </Button>
           )}
         </div>
       </div>
@@ -390,11 +381,11 @@ const AuditLog = () => {
         {detailEvent && (
           <div className="udetail">
             <div className="udetail-grid">
-              <div className="udetail-cell"><div><span className="ud-k">{t('th_lastOnline', 'Time')}</span><strong>{detailEvent.ts ? fmtDateTime(new Date(detailEvent.ts * 1000).toISOString()) : '—'}</strong></div></div>
-              <div className="udetail-cell"><div><span className="ud-k">{t('th_admin', 'Actor')}</span><strong>{detailEvent.actor || 'system'}</strong></div></div>
+              <div className="udetail-cell"><div><span className="ud-k">{t('auditColTime', 'Time')}</span><strong>{detailEvent.ts ? fmtDateTime(new Date(detailEvent.ts * 1000).toISOString()) : '—'}</strong></div></div>
+              <div className="udetail-cell"><div><span className="ud-k">{t('auditColActor', 'Actor')}</span><strong>{detailEvent.actor || 'system'}</strong></div></div>
             </div>
             <div className="udetail-sub">
-              <span className="ud-k">{t('node', 'Detail')}</span>
+              <span className="ud-k">{t('auditDetailLabel', 'Detail')}</span>
               <div className="udetail-linkrow">
                 <code className="udetail-link" style={{ whiteSpace: 'pre-wrap' }}>{fmtDetail(detailEvent.detail)}</code>
                 <button type="button" className="code-copy" onClick={copyDetail} aria-label={t('copyLink', 'Copy')}>

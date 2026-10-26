@@ -34,6 +34,12 @@
   justify-content: flex-start;
 }
 
+.bento-tile:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--focus-ring-shadow);
+}
+
 .bento-tile:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
@@ -292,15 +298,6 @@
 /* The knob starts at inset-inline-start, so it travels the other way in RTL. */
 html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { transform: translateX(-18px); }
 .sp-toggle input:disabled ~ .sp-toggle-track { opacity: .45; cursor: not-allowed; }
-.accent-swatch {
-  width: 24px; height: 24px;
-  border-radius: var(--radius-sm);
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-.accent-swatch:hover { transform: scale(1.08); }
-.accent-swatch.active { border-color: var(--text-primary, var(--text)); box-shadow: 0 0 0 2px var(--accent); }
 
 /* ── Theme/Style pills ───────────────────── */
 .sp-theme-pills { display: flex; gap: var(--space-2); flex-wrap: wrap; }
@@ -310,7 +307,8 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   justify-content: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  min-height: var(--control-h-sm);
+  min-height: 44px;
+  min-width: 44px;
   border: 1px solid var(--border, var(--line));
   border-radius: var(--radius-md);
   background: transparent;
@@ -326,6 +324,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   border-color: color-mix(in srgb, var(--accent) 32%, var(--border, var(--line)));
   color: var(--accent-text, var(--orange));
 }
+.sp-theme-pill:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
 
 /* ── Button row ──────────────────────────── */
 .sp-btn-group { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
@@ -518,10 +517,12 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   flex: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -535,10 +536,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   border-color: var(--border);
 }
 
-.sp-icon-btn:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+.sp-icon-btn:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
 
 .sp-inline-edit {
   display: flex;
@@ -559,7 +557,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--warning);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--warning-soft);
 }
 
@@ -592,6 +590,8 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-height: 44px;
+  min-width: 44px;
   color: var(--accent-text);
   text-decoration: none;
   overflow-wrap: anywhere;
@@ -611,7 +611,8 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 
 .sp-hour-btn {
   padding: var(--space-2) var(--space-3);
-  min-height: var(--control-h-sm);
+  min-height: 44px;
+  min-width: 44px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
@@ -633,10 +634,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   color: var(--accent-text);
 }
 
-.sp-hour-btn:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+.sp-hour-btn:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
 
 /* Node / backup rows. */
 .sp-node-list {
@@ -800,7 +798,8 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  min-height: var(--control-h-sm);
+  min-height: 44px;
+  min-width: 44px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
@@ -822,10 +821,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   color: var(--accent-text);
 }
 
-.sp-lang-btn:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
+.sp-lang-btn:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
 
 .sp-alert-list {
   display: flex;
@@ -910,7 +906,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-section:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -24,7 +24,7 @@ type SharedState = {
 
 type GeneralApiError = { response?: { data?: { msg?: string } } };
 
-const GeneralSection = ({ shared }: { shared?: SharedState }) => {
+const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onEditingChange?: (v: boolean) => void }) => {
   const { t } = useTranslation();
   const { addToast } = useToast();
   const [urlPath, setUrlPath] = useState('');
@@ -49,6 +49,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const subTriggerRef = useRef(null);
   useInlineEditFocus(editing, urlInputRef, urlTriggerRef);
   useInlineEditFocus(subPrefixEditing, subInputRef, subTriggerRef);
+  useEffect(() => { onEditingChange?.(editing || subPrefixEditing); }, [editing, subPrefixEditing, onEditingChange]);
 
   useEffect(() => {
     const s = shared?.data;
@@ -68,10 +69,13 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
     setSaving(true); setError('');
     try {
       const v = editValue.trim().replace(/^\/+|\/+$/g, '');
-      if (v && !/^[A-Za-z0-9_-]+$/.test(v)) { setError(t('urlInvalid', 'Only letters, numbers, dashes and underscores.')); return; }
-      if (v.length > 64) { setError(t('urlInvalid', 'Max 64 characters.')); return; }
-      const res = await apiClient.put('/server/settings/urlpath', { urlpath: v });
-      const next = (res?.data?.urlpath || (v ? v : 'dashboard')).toString().replace(/^\/+|\/+$/g, '');
+      if (v && !/^[A-Za-z0-9_-]+$/.test(v)) { setError(t('urlPathInvalid', 'Only letters, numbers, dashes and underscores.')); return; }
+      if (v.length > 64) { setError(t('urlPathTooLong', 'Max 64 characters.')); return; }
+      const res = await apiClient.put('/settings/urlpath', { urlpath: v });
+      // A refused write answers HTTP 200 with {success:false}: report it, and
+      // do not navigate the operator off the panel.
+      if (res?.data?.success === false) { setError(res.data.msg || t('error', 'Error')); return; }
+      const next = (res?.data?.data?.urlpath || (v ? v : 'dashboard')).toString().replace(/^\/+|\/+$/g, '');
       setUrlPath(next); setEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
       const newBase = next ? `/${next}` : '/dashboard';
@@ -84,7 +88,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const saveSubPrefix = async () => {
     setSubPrefixSaving(true);
     try {
-      await apiClient.put('/server/settings/subscription', { subscription_url_prefix: subPrefixValue.trim() });
+      await apiClient.put('/settings/subscription', { subscription_url_prefix: subPrefixValue.trim() });
       setSubPrefix(subPrefixValue.trim()); setSubPrefixEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
@@ -99,7 +103,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
     }
     setProfileSaving(true);
     try {
-      const res = await apiClient.put('/server/settings/subscription', {
+      const res = await apiClient.put('/settings/subscription', {
         sub_profile_title: profile.title.trim(),
         sub_support_url: profile.support.trim(),
         sub_announce: profile.announce.trim(),
@@ -118,7 +122,7 @@ const GeneralSection = ({ shared }: { shared?: SharedState }) => {
   const pathChanged = editValueClean !== urlPath;
   const newPanelUrl = editValueClean ? `${window.location.origin}/${editValueClean}/` : `${window.location.origin}/`;
 
-  if (loading) return <PanelSkeleton lines={4} label={t('loading', 'Loading…')} />;
+  if (loading && !shared?.data) return <PanelSkeleton lines={4} label={t('loading', 'Loading…')} />;
   if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
