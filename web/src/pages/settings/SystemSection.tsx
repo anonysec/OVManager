@@ -1,20 +1,19 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import { useLive } from '../../context/LiveContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
-import { settle } from '../../hooks/useAsyncData';
 import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiServer, FiZap, FiRefreshCw, FiDownload, FiPower, FiTrash2 } from 'react-icons/fi';
 import { Card, Field, Stat } from './shared';
 import { formatBytes } from '../../utils/format';
 import { formatUptime } from '../../utils/time';
-import '../UpdateNotice.css';
+import './UpdateNotice.css';
 
 const sleep = (ms: number) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
@@ -63,18 +62,27 @@ const SystemSection = () => {
     try {
       setLoading(true);
       setLoadError(false);
-      const res: any = await settle({
-        info: apiClient.get('/server/info'),
-        metrics: apiClient.get('/metrics/history?hours=24'),
-      });
-      if (res.info.ok) setSysInfo(res.info.data.data?.data || null);
-      else setLoadError(true);
-      const traffic = res.metrics.ok ? (res.metrics.data.data?.data?.traffic || []) : [];
-      if (traffic.length) {
-        setTrafficTotal(traffic.reduce((s: number, h: any) => s + Number(h.total_used || 0), 0));
-        setActiveConns(traffic[traffic.length - 1]?.active_connections || 0);
-      }
+      const res: any = await apiClient.get('/server/info');
+      if (res?.data?.success === false) setLoadError(true);
+      else setSysInfo(res?.data?.data || null);
     } catch { setLoadError(true); } finally { setLoading(false); }
+  }, []);
+
+  // The 24 h traffic total is a background number, not a live one: fetching
+  // it on every live tick pulled ~800 KB of history JSON each time.
+  const metricsLoaded = useRef(false);
+  useEffect(() => {
+    if (metricsLoaded.current) return;
+    metricsLoaded.current = true;
+    apiClient.get('/metrics/history?hours=24')
+      .then((res: any) => {
+        const traffic = res?.data?.data?.traffic || [];
+        if (traffic.length) {
+          setTrafficTotal(traffic.reduce((s: number, h: any) => s + Number(h.total_used || 0), 0));
+          setActiveConns(traffic[traffic.length - 1]?.active_connections || 0);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load, refreshTick]);
