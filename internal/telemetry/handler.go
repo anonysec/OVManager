@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/node"
@@ -227,6 +228,7 @@ func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
 var metricsTables = []string{
 	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT)`,
 	`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)`,
+	`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, id)`,
 	`CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL, reachable INTEGER NOT NULL DEFAULT 0)`,
 	`CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)`,
 	`CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, total_used REAL NOT NULL, active_connections INTEGER NOT NULL, online_users INTEGER NOT NULL, active_users INTEGER NOT NULL, total_users INTEGER NOT NULL)`,
@@ -312,6 +314,38 @@ func history(db *sql.DB, hours int) map[string]any {
 	}
 
 	return map[string]any{"traffic": traffic, "security": security, "nodes": nodes}
+}
+
+// metricsEvery is the collector's own cadence. shortcut: 5 min bounds the node
+// probes and the history tables (288 samples/day); a node-down alert lands up
+// to 5 min late. Drop to 1 min when alert latency matters more than probe load.
+const metricsEvery = 5 * time.Minute
+
+var (
+	metricsLastMu sync.Mutex
+	metricsLastTS time.Time
+)
+
+// metricsDue reports whether a collect is due at now, and claims the window.
+func metricsDue(now time.Time) bool {
+	metricsLastMu.Lock()
+	defer metricsLastMu.Unlock()
+	if metricsLastTS.IsZero() || now.Sub(metricsLastTS) >= metricsEvery {
+		metricsLastTS = now
+		return true
+	}
+	return false
+}
+
+// CollectMetricsIfDue runs one metrics pass at most every metricsEvery and
+// reports whether it did. It is the only scheduled entry point: the panel's
+// live and traffic workers must not each run a full collect.
+func CollectMetricsIfDue(db *sql.DB) bool {
+	if !metricsDue(time.Now()) {
+		return false
+	}
+	CollectMetrics(db)
+	return true
 }
 
 // CollectMetrics mirrors metrics.collect_metrics (synchronous in Go).
@@ -437,6 +471,9 @@ func CollectMetrics(db *sql.DB) {
 	for _, table := range []string{"node_health_snapshots", "traffic_snapshots", "security_snapshots"} {
 		_, _ = db.Exec(`DELETE FROM `+table+` WHERE ts < ?`, cutoff)
 	}
+	// audit_logs grows forever otherwise: every login and user mutation writes
+	// a row, and the only other caller of PruneAuditLogs is the manual cleanup.
+	PruneAuditLogs(db, 90)
 }
 
 // nodeSnapshot probes one node for info + sessions (metrics._node_snapshot).
@@ -561,11 +598,12 @@ func CollectLiveSnapshot(db *sql.DB) {
 			nodes = append(nodes, n)
 		}
 	}
+	share := node.FairShareTimeout(liveFanoutDeadline, len(nodes), node.NodeFanoutLimit)
 	calls := make([]func() any, len(nodes))
 	for i, n := range nodes {
 		n := n
 		calls[i] = func() any {
-			return node.NodeClient(n, pid).GetSessions("", 1, node.ProbeTimeout(n))
+			return node.NodeClient(n, pid).GetSessions("", 1, node.NodeTimeout(n, share))
 		}
 	}
 	results := node.GatherNodes(calls, liveFanoutDeadline)
@@ -598,6 +636,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 			}
 			if username != "" {
 				counts[username]++
+				_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name = ?`, time.Now().UTC().Format("2006-01-02 15:04:05.000000"), username)
 			}
 		}
 	}
@@ -646,18 +685,13 @@ func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
 // --- audit (observability/audit.py) ---
 
 // RecordEvent writes one system event row (audit.record_event).
+//
+// The row is attributed to "system": it is a system event, not something a
+// person did. An operation a person performed goes through audit.Record with
+// the real username. The payload shape is identical either way, so the event
+// promoter and the audit prune see the same rows.
 func RecordEvent(db *sql.DB, kind, severity, message string, meta map[string]any) {
-	if meta == nil {
-		meta = map[string]any{}
-	}
-	payload := map[string]any{"severity": severity, "message": message, "meta": meta}
-	detail, _ := json.Marshal(payload)
-	var target any
-	if t, ok := meta["target"].(string); ok && t != "" {
-		target = t
-	}
-	_, _ = db.Exec(`INSERT INTO audit_logs (ts, actor, action, target, detail) VALUES (?, 'system', ?, ?, ?)`,
-		nowSecs(), kind, target, string(detail))
+	audit.Record(db, "system", kind, severity, message, meta)
 }
 
 // lastEventMeta returns the meta of the newest record_event row for kind.
@@ -679,53 +713,130 @@ func lastEventMeta(db *sql.DB, kind string) map[string]any {
 // number sent. Exported for the health overview and panel alert routes.
 func PromoteEvents(db *sql.DB, send func(string) bool) int { return promoteEvents(db, send) }
 
-// promoteEvents delivers enrolled audit events to Telegram, once each.
-func promoteEvents(db *sql.DB, send func(string) bool) int {
-	delivered := map[string]bool{}
-	if rows, err := db.Query(`SELECT subscription, event_key FROM delivered`); err == nil {
-		for rows.Next() {
-			var s, k string
-			if rows.Scan(&s, &k) == nil {
-				delivered[s+"\x00"+k] = true
-			}
-		}
-		rows.Close()
+// PruneAuditLogs deletes audit_logs rows older than keepDays, but only those
+// that have already been delivered (or carry no event_key), so an undelivered
+// alert is never dropped. Returns the number removed.
+//
+// One statement: the delivered check is a correlated subquery, so the prune
+// does not issue a query per candidate row.
+func PruneAuditLogs(db *sql.DB, keepDays int) int {
+	if keepDays <= 0 {
+		keepDays = 90
 	}
-	rows, err := db.Query(`SELECT action, detail FROM audit_logs WHERE actor = 'system' ORDER BY id ASC`)
+	keepDays = clamp(keepDays, 1, 1<<30)
+	cutoff := float64(time.Now().UTC().AddDate(0, 0, -keepDays).UnixNano()) / 1e9
+
+	if !auditDeliveredTableExists(db) {
+		// Without the delivered table there is no way to tell a delivered row
+		// from a pending one: keep everything rather than drop an alert.
+		return 0
+	}
+	res, err := db.Exec(
+		`DELETE FROM audit_logs WHERE ts < ? AND (
+		   detail IS NULL OR detail = '' OR NOT json_valid(detail)
+		   OR json_extract(detail, '$.meta.event_key') IS NULL
+		   OR EXISTS (
+		     SELECT 1 FROM delivered d
+		     WHERE d.subscription = audit_logs.action
+		       AND d.event_key = json_extract(audit_logs.detail, '$.meta.event_key')
+		   )
+		 )`,
+		cutoff,
+	)
 	if err != nil {
 		return 0
 	}
-	type ev struct{ action, detail string }
-	events := []ev{}
-	for rows.Next() {
-		var e ev
-		if rows.Scan(&e.action, &e.detail) == nil {
-			events = append(events, e)
-		}
+	n, _ := res.RowsAffected()
+	return int(n)
+}
+func auditDeliveredTableExists(db *sql.DB) bool {
+	var n int64
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='delivered'`,
+	).Scan(&n); err != nil {
+		return false
 	}
-	rows.Close()
+	return n > 0
+}
 
+// promoteEvents delivers enrolled audit events to Telegram, once each.
+//
+// Reads are bounded: the query filters by promoted=0 (partial index) and
+// excludes rows that have already been delivered, so the work is proportional
+// to the PENDING events, not to the whole audit history. The event key lives
+// inside the JSON detail, so the exclusion uses SQLite's json_extract against
+// the delivered table.
+func promoteEvents(db *sql.DB, send func(string) bool) int {
 	sent := 0
-	for _, e := range events {
-		var payload map[string]any
-		if json.Unmarshal([]byte(e.detail), &payload) != nil {
-			continue
+	if !auditDeliveredTableExists(db) {
+		return 0
+	}
+	var lastID int64
+	for {
+		rows, err := db.Query(
+			`SELECT a.id, a.action, a.detail FROM audit_logs a
+			 WHERE a.actor = 'system' AND a.promoted = 0 AND a.id > ?
+			   AND a.detail IS NOT NULL AND a.detail != ''
+			   AND json_valid(a.detail)
+			   AND json_extract(a.detail, '$.meta.event_key') IS NOT NULL
+			   AND NOT EXISTS (
+			     SELECT 1 FROM delivered d
+			     WHERE d.subscription = a.action
+			       AND d.event_key = json_extract(a.detail, '$.meta.event_key')
+			   )
+			 ORDER BY a.id ASC LIMIT 100`,
+			lastID,
+		)
+		if err != nil {
+			break
 		}
-		meta, _ := payload["meta"].(map[string]any)
-		key, _ := meta["event_key"].(string)
-		if key == "" || delivered[e.action+"\x00"+key] {
-			continue
+		batch := 0
+		maxID := lastID
+		for rows.Next() {
+			var id int64
+			var action string
+			var detail sql.NullString
+			if rows.Scan(&id, &action, &detail) != nil {
+				continue
+			}
+			batch++
+			if id > maxID {
+				maxID = id
+			}
+			if !detail.Valid || detail.String == "" {
+				continue
+			}
+			var payload map[string]any
+			if json.Unmarshal([]byte(detail.String), &payload) != nil {
+				continue
+			}
+			meta, _ := payload["meta"].(map[string]any)
+			key, _ := meta["event_key"].(string)
+			if key == "" {
+				continue
+			}
+			message, _ := payload["message"].(string)
+			if message == "" {
+				message = action
+			}
+			if !send(message) {
+				continue
+			}
+			_, _ = db.Exec(
+				`INSERT OR IGNORE INTO delivered (subscription, event_key, ts) VALUES (?, ?, ?)`,
+				action, key, nowSecs(),
+			)
+			_, _ = db.Exec(
+				`UPDATE audit_logs SET promoted = 1 WHERE id = ?`,
+				id,
+			)
+			sent++
 		}
-		message, _ := payload["message"].(string)
-		if message == "" {
-			message = e.action
+		rows.Close()
+		lastID = maxID
+		if batch < 100 {
+			break
 		}
-		if !send(message) {
-			continue
-		}
-		_, _ = db.Exec(`INSERT OR IGNORE INTO delivered (subscription, event_key, ts) VALUES (?, ?, ?)`, e.action, key, nowSecs())
-		delivered[e.action+"\x00"+key] = true
-		sent++
 	}
 	return sent
 }

@@ -55,7 +55,7 @@ func (h *Handler) startLiveWorker() {
 			ticker := time.NewTicker(livePollInterval())
 			defer ticker.Stop()
 			for range ticker.C {
-				h.liveTick()
+				runGuarded("live worker", h.liveTick)
 			}
 		}()
 	})
@@ -73,5 +73,7 @@ func livePollInterval() time.Duration {
 
 // liveTick runs one collector pass. SwapDB-safe: h.Svc.DB() is read per tick.
 func (h *Handler) liveTick() {
-	runLiveCollect(h.Svc.DB())
+	db := h.Svc.DB()
+	runLiveCollect(db)
+	telemetry.CollectMetricsIfDue(db)
 }

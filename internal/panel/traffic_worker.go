@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // trafficBootDelay leaves the panel time to settle before the first poll;
@@ -70,7 +71,7 @@ func (h *Handler) startTrafficWorker() {
 			ticker := time.NewTicker(time.Duration(trafficPollSeconds()) * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				h.trafficTick()
+				runGuarded("traffic worker", h.trafficTick)
 			}
 		}()
 	})
@@ -79,9 +80,25 @@ func (h *Handler) startTrafficWorker() {
 // trafficTick runs one accounting pass. SwapDB-safe: h.Svc.DB() is read per
 // tick, not cached.
 func (h *Handler) trafficTick() {
-	res := runTrafficSync(h.Svc.DB())
+	db := h.Svc.DB()
+	res := runTrafficSync(db)
 	log.Printf("traffic: polled %d node(s), failed %d, users updated %d, seeded %d, billed %d bytes",
 		res.NodesPolled, res.NodesFailed, res.UsersUpdated, res.UsersSeeded, res.BytesBilled)
+	recordAliasCollisions(db, res)
+}
+
+// recordAliasCollisions surfaces the (user, node) pairs where a node reported
+// more than one key for the same user. The bytes are summed, so nothing is
+// lost — but a node whose keying has drifted is worth knowing about, and the
+// accounting package cannot write the event itself (internal/telemetry
+// imports internal/node, so the reverse would be an import cycle).
+func recordAliasCollisions(db *sql.DB, res node.TrafficResult) {
+	for _, msg := range res.AliasCollisions {
+		log.Printf("traffic: alias keys for one user: %s", msg)
+		telemetry.RecordEvent(db, "traffic_alias_keys", "warning",
+			"A node reported more than one key for the same user; the byte pools were summed.",
+			map[string]any{"target": msg, "detail": msg})
+	}
 }
 
 // syncTraffic is POST /maintenance/sync-traffic: run one accounting pass now
