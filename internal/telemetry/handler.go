@@ -349,6 +349,22 @@ func CollectMetricsIfDue(db *sql.DB) bool {
 }
 
 // CollectMetrics mirrors metrics.collect_metrics (synchronous in Go).
+// touchLastOnline stamps last_online for a batch of usernames in one
+// statement — the collect path runs per live session, and one Exec per
+// session is a write storm on SQLite's single writer.
+func touchLastOnline(db *sql.DB, names []string, stamp string) {
+	if len(names) == 0 {
+		return
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
+	args := make([]any, 0, len(names)+1)
+	args = append(args, stamp)
+	for _, n := range names {
+		args = append(args, n)
+	}
+	_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name IN (`+placeholders+`)`, args...)
+}
+
 func CollectMetrics(db *sql.DB) {
 	EnsureExtraTables(db)
 	now := nowSecs()
@@ -459,15 +475,18 @@ func CollectMetrics(db *sql.DB) {
 		}
 	}
 	fullUsers := int64(0)
+	stamp := time.Now().UTC().Format("2006-01-02 15:04:05.000000")
+	touched := make([]string, 0, len(users))
 	for _, u := range users {
 		count := activeCounts[u.name]
 		if count > 0 {
-			_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name = ?`, time.Now().UTC().Format("2006-01-02 15:04:05.000000"), u.name)
+			touched = append(touched, u.name)
 		}
 		if u.maxLogins > 0 && int64(count) >= u.maxLogins {
 			fullUsers++
 		}
 	}
+	touchLastOnline(db, touched, stamp)
 
 	for _, row := range nodeRows {
 		_, _ = db.Exec(`INSERT INTO node_health_snapshots (ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -632,6 +651,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 
 	counts := map[string]int{}
 	online := map[string]bool{}
+	touched := map[string]bool{}
 	for i, n := range nodes {
 		data, _ := results[i].(map[string]any)
 		if len(data) == 0 {
@@ -658,10 +678,15 @@ func CollectLiveSnapshot(db *sql.DB) {
 			}
 			if username != "" {
 				counts[username]++
-				_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name = ?`, time.Now().UTC().Format("2006-01-02 15:04:05.000000"), username)
+				touched[username] = true
 			}
 		}
 	}
+	names := make([]string, 0, len(touched))
+	for u := range touched {
+		names = append(names, u)
+	}
+	touchLastOnline(db, names, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
 	online = applyGrace(online, NodeOnline(), time.Since(procStart).Seconds())
 	countsChanged, nodesChanged := updateSnapshot(counts, online, cap)
 	if nodesChanged {

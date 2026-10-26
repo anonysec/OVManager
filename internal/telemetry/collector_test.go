@@ -24,7 +24,8 @@ CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
 CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
 CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
-  max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1, tag VARCHAR);
+  max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1, tag VARCHAR,
+  last_online VARCHAR);
 CREATE TABLE settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 `
 
@@ -218,5 +219,26 @@ func TestApplyGrace(t *testing.T) {
 	// Past the window it goes down.
 	if got := applyGrace(map[string]bool{"a": false}, map[string]bool{"a": true}, now+graceSeconds+1); got["a"] {
 		t.Errorf("past grace = online, want down")
+	}
+}
+
+// TestTouchLastOnline stamps every name in one statement and leaves the rest.
+func TestTouchLastOnline(t *testing.T) {
+	conn := newCollectorDB(t)
+	stamp := "2026-10-26 12:00:00.000000"
+	if _, err := conn.Exec(`INSERT INTO users (id, name) VALUES (1, 'alice'), (2, 'bob'), (3, 'carol')`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	touchLastOnline(conn, []string{"alice", "carol"}, stamp)
+
+	var alice, bob string
+	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM users WHERE name = 'alice'`).Scan(&alice)
+	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM users WHERE name = 'bob'`).Scan(&bob)
+	if alice != stamp {
+		t.Errorf("alice last_online = %q, want %q", alice, stamp)
+	}
+	if bob != "" {
+		t.Errorf("bob last_online = %q, want untouched", bob)
 	}
 }
