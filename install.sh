@@ -292,6 +292,7 @@ unit_hardening() {
 }
 
 write_systemd_unit() {
+    local dest="${1:-$INSTALL_DIR}"
     cat > "/etc/systemd/system/$SYSTEMD_SERVICE" <<UNIT
 [Unit]
 Description=OVManager OpenVPN Panel
@@ -299,20 +300,20 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=$INSTALL_DIR
-EnvironmentFile=$INSTALL_DIR/.env
-Environment="OVM_APP_DIR=$INSTALL_DIR"
+WorkingDirectory=$dest
+EnvironmentFile=$dest/.env
+Environment="OVM_APP_DIR=$dest"
 User=$PANEL_USER
 Group=$PANEL_USER
 SupplementaryGroups=systemd-journal
-ExecStart=$INSTALL_DIR/$APP_SLUG
+ExecStart=$dest/$APP_SLUG
 Restart=on-failure
 RestartSec=3
 # The built-in ACME client binds the standalone HTTP-01 listener on port 80
 # only during issuance; the bind must work even though the panel runs as
 # $PANEL_USER.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
-$(unit_hardening "$INSTALL_DIR" "$DATA_DIR")
+$(unit_hardening "$dest" "$DATA_DIR")
 # ProtectSystem is deliberately NOT set. The panel writes the operator-
 # declared certificate and key (SSL_CERTFILE / SSL_KEYFILE), which on a
 # standard Let's Encrypt install live under /etc/letsencrypt — outside
@@ -331,6 +332,7 @@ UNIT
 # that runs `ovmanager backup --keep 7`. Retention mirrors the CLI default (7, vs the
 # 14 default for manual runs) so disk stays bounded under automation.
 write_backup_units() {
+    local dest="${1:-$INSTALL_DIR}"
     cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service" <<UNIT
 [Unit]
 Description=OVManager daily backup
@@ -338,10 +340,10 @@ After=${SYSTEMD_SERVICE}
 
 [Service]
 Type=oneshot
-EnvironmentFile=$INSTALL_DIR/.env
+EnvironmentFile=$dest/.env
 User=$PANEL_USER
 Group=$PANEL_USER
-ExecStart=$INSTALL_DIR/$APP_SLUG backup --keep 7
+ExecStart=$dest/$APP_SLUG backup --keep 7
 UNIT
 
     cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.timer" <<UNIT
@@ -370,18 +372,20 @@ enable_backup_timer() {
 # data dir — and nothing else. The .env stays root-owned and group-readable so
 # the config never lands in a file the panel user owns (and could rewrite).
 grant_panel_access() {
-    chmod 755 "$INSTALL_DIR"
-    chmod 755 "$INSTALL_DIR/$APP_SLUG"
+    local dest="${1:-$INSTALL_DIR}"
+    chmod 755 "$dest"
+    chmod 755 "$dest/$APP_SLUG"
     mkdir -p "$DATA_DIR"
     chown -R "$PANEL_USER:$PANEL_USER" "$DATA_DIR"
     chmod 700 "$DATA_DIR"
-    chown "root:$PANEL_USER" "$INSTALL_DIR/.env"
-    chmod 640 "$INSTALL_DIR/.env"
+    chown "root:$PANEL_USER" "$dest/.env"
+    chmod 640 "$dest/.env"
 }
 
 install_cli() {
+    local dest="${1:-$INSTALL_DIR}"
     mkdir -p "$BIN_DIR" 2>/dev/null || { _warn "Could not create $BIN_DIR"; return 0; }
-    if ln -sf "$INSTALL_DIR/$APP_SLUG" "$BIN_DIR/$CLI_NAME"; then
+    if ln -sf "$dest/$APP_SLUG" "$BIN_DIR/$CLI_NAME"; then
         _ok "command  $BIN_DIR/$CLI_NAME"
     else
         _warn "Could not install the $CLI_NAME command into $BIN_DIR"
@@ -548,9 +552,9 @@ do_install() {
     fetch_release "$dest"
     write_env "$dest/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
-    write_systemd_unit
-    write_backup_units
-    grant_panel_access
+    write_systemd_unit "$dest"
+    write_backup_units "$dest"
+    grant_panel_access "$dest"
 
     systemctl daemon-reload
     systemctl enable --now "$SYSTEMD_SERVICE" >/dev/null 2>&1 \
@@ -563,8 +567,8 @@ do_install() {
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
     write_install_result "$DATA_DIR/install-result.env"
-    install_cli
-    _ok "installed v$VERSION to $INSTALL_DIR (service $SYSTEMD_SERVICE, port $port)"
+    install_cli "$dest"
+    _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
     if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
         verify_acme "$DATA_DIR"
     fi
@@ -592,6 +596,69 @@ do_update() {
     exec "$INSTALL_DIR/$APP_SLUG" update "$@"
 }
 
+# do_uninstall: remove panel binary, systemd units, data, and CLI link
+do_uninstall() {
+    local purge=0 dest="${DEST:-$INSTALL_DIR}"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --purge) purge=1; shift ;;
+            *) die "Unknown option for uninstall: $1" ;;
+        esac
+    done
+
+    check_root
+    has_systemd || die "systemd not found — a native install needs it"
+
+    # Stop and disable service
+    if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
+        systemctl stop "$SYSTEMD_SERVICE"
+        _ok "stopped $SYSTEMD_SERVICE"
+    fi
+    if systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
+        systemctl disable "$SYSTEMD_SERVICE"
+        _ok "disabled $SYSTEMD_SERVICE"
+    fi
+
+    # Remove systemd units
+    for unit in "$SYSTEMD_SERVICE" "${SYSTEMD_SERVICE%.service}-backup.service" "${SYSTEMD_SERVICE%.service}-backup.timer"; do
+        if [[ -f "/etc/systemd/system/$unit" ]]; then
+            rm -f "/etc/systemd/system/$unit"
+            _ok "removed /etc/systemd/system/$unit"
+        fi
+    done
+    systemctl daemon-reload
+
+    # Remove binary and install dirs
+    for d in "$INSTALL_DIR" "$dest"; do
+        if [[ -d "$d" ]]; then
+            rm -rf "$d"
+            _ok "removed $d"
+        fi
+    done
+
+    # Remove CLI link
+    if [[ -f "$BIN_DIR/$APP_SLUG" ]]; then
+        rm -f "$BIN_DIR/$APP_SLUG"
+        _ok "removed $BIN_DIR/$APP_SLUG"
+    fi
+
+    # Optionally purge data
+    if [[ "$purge" -eq 1 ]]; then
+        if [[ -d "$DATA_DIR" ]]; then
+            rm -rf "$DATA_DIR"
+            _ok "purged $DATA_DIR"
+        fi
+        # Remove panel user
+        if id -u "$PANEL_USER" >/dev/null 2>&1; then
+            userdel "$PANEL_USER" 2>/dev/null && _ok "removed user $PANEL_USER" || true
+        fi
+    else
+        _note "data preserved at $DATA_DIR (use --purge to remove)"
+    fi
+
+    _ok "OVManager uninstalled"
+}
+
 # ── Help / args / main ─────────────────────────────────────────────────
 usage() {
     cat <<EOF
@@ -602,6 +669,7 @@ USAGE
 
 COMMANDS
   update [--version vX.Y.Z]  Hand off to \`ovmanager update\` (staged, with failover)
+  uninstall [--purge]        Remove panel, service, and CLI (data kept unless --purge)
   version-script             Print this installer's version and commit
   help                       Show this help
 
@@ -680,6 +748,7 @@ parse_args() {
             help)          usage ;;
             version-script|script-version) ACTION="version-script"; shift ;;
             update)        ACTION="update"; shift; UPDATE_ARGS=("$@"); break ;;
+            uninstall)     ACTION="uninstall"; shift; UPDATE_ARGS=("$@"); break ;;
             install|interactive) shift ;;
             *)             die "Unknown option: $1  (see --help)" ;;
         esac
@@ -691,6 +760,7 @@ main() {
     case "$ACTION" in
         version-script) print_version_script; return 0 ;;
         update)         do_update "${UPDATE_ARGS[@]}" ;;
+        uninstall)      do_uninstall "${UPDATE_ARGS[@]}"; return 0 ;;
     esac
     if [[ "$FROM_SOURCE" -eq 1 ]]; then
         do_from_source
