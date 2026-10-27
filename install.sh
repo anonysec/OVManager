@@ -45,6 +45,9 @@ CLI_NAME="ovmanager"
 # ── Defaults ───────────────────────────────────────────────────────────
 PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
 URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
+HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
+ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
+DRY_RUN=0
 INTERACTIVE=0
 FROM_SOURCE=0
 SRC=""
@@ -53,10 +56,24 @@ ACTION="install"
 UPDATE_ARGS=()
 
 # ── Output helpers ─────────────────────────────────────────────────────
-_ok()   { printf '  ok    %s\n' "$*" >&2; }
-_note() { printf '  ..    %s\n' "$*" >&2; }
-_warn() { printf '  warn  %s\n' "$*" >&2; }
-die()   { printf 'install: error: %s\n' "$*" >&2; exit 1; }
+if [[ -t 2 ]]; then
+    _GREEN='\033[32m'
+    _YELLOW='\033[33m'
+    _BLUE='\033[34m'
+    _RED='\033[31m'
+    _RESET='\033[0m'
+else
+    _GREEN=''
+    _YELLOW=''
+    _BLUE=''
+    _RED=''
+    _RESET=''
+fi
+
+_ok()   { printf "  ${_GREEN}ok${_RESET}    %s\n" "$*" >&2; }
+_note() { printf "  ${_BLUE}..${_RESET}    %s\n" "$*" >&2; }
+_warn() { printf "  ${_YELLOW}warn${_RESET}  %s\n" "$*" >&2; }
+die()   { printf "install: ${_RED}error${_RESET}: %s\n" "$*" >&2; exit 1; }
 
 # ── Dependency checks ──────────────────────────────────────────────────
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
@@ -382,8 +399,8 @@ verify_acme() {
     local data_dir="$1" cert key i check
     cert="$data_dir/tls/fullchain.pem"
     key="$data_dir/tls/privkey.pem"
-    _note "waiting for the Let's Encrypt certificate (up to 180s)…"
-    for ((i = 0; i < 60; i++)); do
+    _note "waiting for the Let's Encrypt certificate (up to $((ACME_TIMEOUT * 3))s)…"
+    for ((i = 0; i < ACME_TIMEOUT; i++)); do
         if [[ -s "$cert" && -s "$key" ]]; then
             if check="$(openssl x509 -in "$cert" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
                 _ok "acme    certificate installed at $cert"
@@ -402,7 +419,7 @@ verify_acme() {
 verify_health() {
     local port="$1" want="$2" i body got
     local host="127.0.0.1"
-    for ((i = 0; i < 40; i++)); do
+    for ((i = 0; i < HEALTH_TIMEOUT; i++)); do
         body="$(curl -fsS --max-time 3 "http://${host}:${port}/health" 2>/dev/null || true)"
         if [[ -n "$body" ]]; then
             got="$(printf '%s' "$body" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)"
@@ -542,6 +559,19 @@ write_install_result() {
 # ── Main install ────────────────────────────────────────────────────────
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf '\n  ── DRY RUN ─────────────────────────────────────\n' >&2
+        printf '  Would install to:   %s\n' "$dest" >&2
+        printf '  Port:               %s\n' "$PORT_VAL" >&2
+        printf '  URL Path:           /%s/\n' "$URLPATH_VAL" >&2
+        printf '  Data Dir:           %s\n' "$DATA_DIR" >&2
+        printf '  Panel User:         %s\n' "$PANEL_USER" >&2
+        printf '  ACME Domain:        %s\n' "${OVM_ACME_DOMAIN:-none}" >&2
+        printf '  Health Timeout:     %ss\n' "$HEALTH_TIMEOUT" >&2
+        printf '  ACME Timeout:       %ss\n' "$ACME_TIMEOUT" >&2
+        printf '  ────────────────────────────────────────────────\n\n' >&2
+        return 0
+    fi
     [[ -e "$dest" ]] \
         && die "Already installed ($dest). Use: ovmanager update"
     check_root
@@ -617,6 +647,16 @@ do_uninstall() {
         esac
     done
 
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf '\n  ── DRY RUN (uninstall) ───────────────────────\n' >&2
+        printf '  Would remove:     %s\n' "$dest" >&2
+        printf '  Would remove:     %s\n' "$INSTALL_DIR" >&2
+        printf '  Would remove:     %s/%s\n' "$BIN_DIR" "$APP_SLUG" >&2
+        printf '  Would purge data: %s\n' "$DATA_DIR" >&2
+        printf '  ────────────────────────────────────────────────\n\n' >&2
+        return 0
+    fi
+
     check_root
     has_systemd || die "systemd not found — a native install needs it"
 
@@ -686,6 +726,7 @@ COMMANDS
 
 OPTIONS
   -i, --interactive          Ask for port, URL path, and optional Let's Encrypt domain
+  --dry-run                  Preview what would be done without making changes
   --acme DOMAIN              Request a Let's Encrypt certificate for DOMAIN
                              (HTTP-01; port 80 must reach this server). Same as
                              pre-setting OVM_ACME_DOMAIN in the environment.
@@ -708,6 +749,8 @@ ENVIRONMENT
   OVM_REPO=<owner/repo>      Use a different GitHub repository
   OVM_BIN_DIR=<dir>          Override CLI binary directory (default: /usr/local/bin)
   OVM_PANEL_USER=<user>      Override panel service user (default: ovmanager)
+  OVM_HEALTH_TIMEOUT=<sec>   Health check timeout in seconds (default: 40)
+  OVM_ACME_TIMEOUT=<sec>     ACME certificate wait timeout in seconds (default: 60)
 
 After installation, use ovmanager for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery and updates.
@@ -751,6 +794,7 @@ parse_args() {
             --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
+            --dry-run)     DRY_RUN=1; shift ;;
             -h|--help)     usage ;;
             help)          usage ;;
             version-script|script-version) ACTION="version-script"; shift ;;
