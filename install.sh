@@ -35,8 +35,11 @@ SYSTEMD_SERVICE="ovmanager.service"
 # Keep in sync with internal/version/version.go: the installer fetches this
 # release tag, and the /health check requires the running binary to report it.
 # The version is extracted from internal/version/version.go (the single source of truth).
-# This script must be run from the repository root (or with OVM_REPO set).
-VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
+# Default fallback version if run as a piped script outside a git tree:
+VERSION="${OVM_VERSION:-2.1.2}"
+if [[ -f internal/version/version.go ]]; then
+    VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
+fi
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 
 # The panel runs as an unprivileged service account on a native install: it is
