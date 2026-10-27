@@ -30,6 +30,7 @@ APP_SLUG="ovmanager"
 INSTALL_DIR="/opt/ovmanager"
 DATA_DIR="/var/lib/ovmanager"
 DEFAULT_PORT=2095
+DEFAULT_URLPATH="dashboard"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 # Keep in sync with internal/version/version.go: the installer fetches this
@@ -115,6 +116,12 @@ read_env_port() {  # read_env_port <envfile> → the PORT it sets
     printf '%s' "${p:-$DEFAULT_PORT}"
 }
 
+read_env_urlpath() {  # read_env_urlpath <envfile> → the URLPATH it sets
+    local envfile="$1" u
+    u="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" 2>/dev/null | tr -d '[:space:]')"
+    printf '%s' "${u:-$DEFAULT_URLPATH}"
+}
+
 # write_install_result <path>: the facts of this install, machine-readable.
 #
 # The terminal output is for a human; this file is for a program. A provisioning
@@ -135,6 +142,38 @@ write_install_result() {
     _note "install result written to $path"
 }
 
+# prompt_interactive: ask operator for port, urlpath, and optional domain unless interactive flag is not set
+prompt_interactive() {
+    [[ "$INTERACTIVE" -eq 1 ]] || return 0
+    # If not connected to a terminal, do not hang waiting for input
+    [[ -t 0 ]] || return 0
+
+    printf '\n  ── OVManager Setup ─────────────────────────────\n' >&2
+    local in_port in_path in_acme
+
+    read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
+    if [[ -n "${in_port// /}" ]]; then
+        PORT_VAL="${in_port// /}"
+    fi
+
+    read -r -p "  URL Path (leave blank for /dashboard/) [${URLPATH_VAL}]: " in_path </dev/tty || true
+    in_path="${in_path// /}"
+    in_path="${in_path#/}"
+    in_path="${in_path%/}"
+    if [[ -n "$in_path" ]]; then
+        URLPATH_VAL="$in_path"
+    fi
+
+    if [[ -z "${OVM_ACME_DOMAIN:-}" ]]; then
+        read -r -p "  Let's Encrypt Domain (optional, e.g. star.example.com): " in_acme </dev/tty || true
+        in_acme="${in_acme// /}"
+        if [[ -n "$in_acme" ]]; then
+            OVM_ACME_DOMAIN="$in_acme"
+        fi
+    fi
+    printf '  ────────────────────────────────────────────────\n\n' >&2
+}
+
 # write_env <envfile> <data_dir>: create once, never overwrite. A rerun must
 # not rotate the operator's config, so an existing file is only re-tightened.
 write_env() {
@@ -150,8 +189,8 @@ write_env() {
     umask 077
     {
         printf 'HOST=127.0.0.1\n'
-        printf 'PORT=%s\n' "$DEFAULT_PORT"
-        printf 'URLPATH=\n'
+        printf 'PORT=%s\n' "$PORT_VAL"
+        printf 'URLPATH=%s\n' "$URLPATH_VAL"
         printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"
         printf 'DATA_DIR=%s\n' "$data_dir"
         if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
@@ -494,17 +533,20 @@ UNIT
 }
 
 do_install() {
-    [[ -e "$INSTALL_DIR" || -f "/etc/systemd/system/$SYSTEMD_SERVICE" ]] \
-        && die "Already installed ($INSTALL_DIR). Use: ovmanager update"
+    local dest="${DEST:-$INSTALL_DIR}"
+    [[ -e "$dest" ]] \
+        && die "Already installed ($dest). Use: ovmanager update"
     check_root
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
 
-    local key port
+    prompt_interactive
+
+    local key port urlpath
     ensure_panel_user
     check_acme_domain
-    fetch_release "$INSTALL_DIR"
-    write_env "$INSTALL_DIR/.env" "$DATA_DIR"
+    fetch_release "$dest"
+    write_env "$dest/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
     write_systemd_unit
     write_backup_units
@@ -516,6 +558,7 @@ do_install() {
     enable_backup_timer
 
     port="$(read_env_port "$INSTALL_DIR/.env")"
+    urlpath="$(read_env_urlpath "$INSTALL_DIR/.env")"
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
@@ -525,9 +568,13 @@ do_install() {
     if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
         verify_acme "$DATA_DIR"
     fi
+    local display_path="${urlpath#/}"
+    display_path="${display_path%/}"
+    [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
+
     if [[ -n "$key" ]]; then
-        printf '\n  Open  http://127.0.0.1:%s/dashboard/  (plaintext is loopback-only;\n' \
-            "$port" >&2
+        printf '\n  Open  http://127.0.0.1:%s%s  (plaintext is loopback-only;\n' \
+            "$port" "$display_path" >&2
         printf '        tunnel in with:  ssh -L %s:127.0.0.1:%s <host>)\n' \
             "$port" "$port" >&2
         printf '  and claim the panel with this key:\n\n      %s\n\n' \
@@ -559,6 +606,7 @@ COMMANDS
   help                       Show this help
 
 OPTIONS
+  -i, --interactive          Ask for port, URL path, and optional Let's Encrypt domain
   --acme DOMAIN              Request a Let's Encrypt certificate for DOMAIN
                              (HTTP-01; port 80 must reach this server). Same as
                              pre-setting OVM_ACME_DOMAIN in the environment.
@@ -568,7 +616,6 @@ OPTIONS
                              no release fetch. (--from-source is a deprecated
                              alias.)
   --dest DIR                 with --build: destination (default /opt/ovmanager)
-  -y, --yes                  Accept all defaults (the bootstrap never prompts)
   -h, --help                 Show this help
 
 ENVIRONMENT
@@ -616,6 +663,9 @@ print_version_script() {
 
 FROM_SOURCE=0 SRC="" DEST=""
 ACTION="install"
+INTERACTIVE=0
+PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
+URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
 UPDATE_ARGS=()
 
 parse_args() {
@@ -625,7 +675,7 @@ parse_args() {
                                    if [[ $# -ge 1 && "$1" != -* ]]; then SRC="$1"; shift; fi ;;
             --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
-            -y|--yes)      shift ;;
+            -i|--interactive) INTERACTIVE=1; shift ;;
             -h|--help)     usage ;;
             help)          usage ;;
             version-script|script-version) ACTION="version-script"; shift ;;
