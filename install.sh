@@ -4,58 +4,61 @@
 #
 # OVManager installer — bootstraps the Go binary.
 #
-# The panel and the `ovmanager` operator CLI are one Go binary with the built SPA
-# embedded, so a release ships bare per-platform binaries. A default install
-# fetches the checksummed binary for this platform straight into $INSTALL_DIR,
-# writes the systemd unit, restarts, and verifies /health reports the release
-# version. That last check
-# is the v1.6.0 gap: the old verify did not restart the service and probed a
-# dev layout, so a release that never came up still reported success.
-#
 # Zero-question by default:
-#   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
+#   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+#
+# Interactive mode (prompts for port, URL path, and optional Let's Encrypt domain):
+#   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) -i
+#
+# Environment overrides (CI/CD):
+#   OVM_PORT=8443 OVM_URLPATH=panel bash <(curl -fsSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
+#
+# Automatic Let's Encrypt TLS at bootstrap:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) --acme star.example.com
+#
+# Uninstall:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall
+#   bash <(curl -fsSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) uninstall --purge
 #
 # Dev install from a working tree (rsync + go build + a dev unit):
 #   ./install.sh --build [DIR] [--dest DIR]
 #
-# No owner password is set here: the install prints a one-time claim key and
-# the operator claims the panel in the browser. Day-to-day operations (status,
-# logs, backup, restore, TLS, recovery, update) live in the `ovmanager` binary.
-#
 set -Eeuo pipefail
 
-# Forks: point release downloads (and update pulls) at your own repo.
+# ── Configuration ──────────────────────────────────────────────────────
 REPO="${OVM_REPO:-anonysec/OVManager}"
 APP_SLUG="ovmanager"
-INSTALL_DIR="/opt/ovmanager"
-DATA_DIR="/var/lib/ovmanager"
-DEFAULT_PORT=2095
-DEFAULT_URLPATH="dashboard"
+INSTALL_DIR="${OVM_INSTALL_DIR:-/opt/ovmanager}"
+DATA_DIR="${OVM_DATA_DIR:-/var/lib/ovmanager}"
+DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
+DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-# Keep in sync with internal/version/version.go: the installer fetches this
-# release tag, and the /health check requires the running binary to report it.
-# The version is extracted from internal/version/version.go (the single source of truth).
-# Default fallback version if run as a piped script outside a git tree:
 VERSION="${OVM_VERSION:-2.1.2}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 fi
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
-
-# The panel runs as an unprivileged service account on a native install: it is
-# a server parsing untrusted input from anyone who can reach the port, so as
-# root a remote compromise of the panel would be a compromise of the box. It
-# needs only its own code, its .env, its data dir and the TLS key, and cannot
-# update itself because `ovmanager update` replaces the tree and restarts the unit.
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
 CLI_NAME="ovmanager"
 
+# ── Defaults ───────────────────────────────────────────────────────────
+PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
+URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
+INTERACTIVE=0
+FROM_SOURCE=0
+SRC=""
+DEST=""
+ACTION="install"
+UPDATE_ARGS=()
+
+# ── Output helpers ─────────────────────────────────────────────────────
 _ok()   { printf '  ok    %s\n' "$*" >&2; }
 _note() { printf '  ..    %s\n' "$*" >&2; }
 _warn() { printf '  warn  %s\n' "$*" >&2; }
 die()   { printf 'install: error: %s\n' "$*" >&2; exit 1; }
 
+# ── Dependency checks ──────────────────────────────────────────────────
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
 check_root()  { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
 
@@ -68,10 +71,7 @@ check_deps() {
         || die "Missing required tools: ${missing[*]}"
 }
 
-# ── Release fetch ──────────────────────────────────────────────────────
-# Release assets are bare per-platform binaries (the built SPA is embedded in
-# the binary), each with a .sha256 sidecar. Map the machine's arch onto the
-# asset suffix release.yml publishes.
+# ── Architecture detection ──────────────────────────────────────────────
 detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64)   printf 'amd64' ;;
@@ -89,63 +89,86 @@ release_url() {
 
 release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
 
-# fetch_release <dir>: download this platform's binary and its sha256 sidecar,
-# verify, then install it as $APP_SLUG under <dir>. No archive, no extract.
+# ── Release fetch with retry ────────────────────────────────────────────
 fetch_release() {
     local dest="$1" work asset
     asset="$(release_asset)"
     work="$(mktemp -d)"
+    trap 'rm -rf "$work"' EXIT
+
     _note "fetching v$VERSION ($asset)"
-    curl -fsSL -o "$work/$asset" "$(release_url)" \
-        || { rm -rf "$work"; die "No release file for v$VERSION — see https://github.com/$REPO/releases"; }
-    curl -fsSL -o "$work/$asset.sha256" "$(release_checksum_url)" \
-        || { rm -rf "$work"; die "Release checksum file is missing for v$VERSION"; }
-    ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null ) \
-        || { rm -rf "$work"; die "Release checksum mismatch for v$VERSION"; }
+
+    # Retry up to 3 times with exponential backoff
+    local retries=0
+    while true; do
+        if curl -fsSL --max-time 60 --retry 3 --retry-delay 2 --retry-max-time 120 \
+            -o "$work/$asset" "$(release_url)" 2>/dev/null; then
+            break
+        fi
+        retries=$((retries + 1))
+        if [[ $retries -ge 3 ]]; then
+            rm -rf "$work"
+            die "No release file for v$VERSION — see https://github.com/$REPO/releases"
+        fi
+        sleep $((2 ** retries))
+    done
+
+    if ! curl -fsSL --max-time 30 --retry 2 \
+        -o "$work/$asset.sha256" "$(release_checksum_url)" 2>/dev/null; then
+        rm -rf "$work"
+        die "Release checksum file is missing for v$VERSION"
+    fi
+
+    if ! ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null 2>&1 ); then
+        rm -rf "$work"
+        die "Release checksum mismatch for v$VERSION — possible tampering or incomplete download"
+    fi
+
     mkdir -p "$dest"
     install -m 0755 "$work/$asset" "$dest/$APP_SLUG"
     chown root:root "$dest/$APP_SLUG"
     rm -rf "$work"
+    trap - EXIT
     _ok "installed v$VERSION to $dest"
 }
 
-# ── Configuration ──────────────────────────────────────────────────────
-read_env_port() {  # read_env_port <envfile> → the PORT it sets
-    local envfile="$1" p
-    p="$(awk -F= '/^PORT=/{print $2; exit}' "$envfile" 2>/dev/null | tr -d '[:space:]')"
-    printf '%s' "${p:-$DEFAULT_PORT}"
+# ── Environment helpers ─────────────────────────────────────────────────
+read_env_value() {
+    local envfile="$1" key="$2" val
+    val="$(awk -F= -v k="$key" '$1==k {print $2; exit}' "$envfile" 2>/dev/null)"
+    printf '%s' "${val:-}"
 }
 
-read_env_urlpath() {  # read_env_urlpath <envfile> → the URLPATH it sets
-    local envfile="$1" u
-    u="$(awk -F= '/^URLPATH=/{print $2; exit}' "$envfile" 2>/dev/null | tr -d '[:space:]')"
-    printf '%s' "${u:-$DEFAULT_URLPATH}"
+# ── Interactive prompt ───────────────────────────────────────────────────
+validate_port() {
+    local p="$1"
+    [[ "$p" =~ ^[0-9]+$ ]] && [[ "$p" -ge 1 && "$p" -le 65535 ]]
 }
 
-# write_install_result <path>: the facts of this install, machine-readable.
-#
-# The terminal output is for a human; this file is for a program. A provisioning
-# run that cannot see the terminal still needs the port, the service and where
-# the claim key lives. The values are escaped with %q so the file is safe to
-# source even when one of them contains a space or a quote.
-write_install_result() {
-    local path="$1"
-    mkdir -p "$(dirname "$path")"
-    {
-        printf 'OVManager_VERSION=%q\n' "$VERSION"
-        printf 'OVManager_PORT=%q\n' "$DEFAULT_PORT"
-        printf 'OVManager_DATA_DIR=%q\n' "$DATA_DIR"
-        printf 'OVManager_SERVICE=%q\n' "$SYSTEMD_SERVICE"
-        printf 'OVManager_CLAIM_KEY=%q\n' "$DATA_DIR/owner-claim.key"
-    } > "$path"
-    chmod 600 "$path"
-    _note "install result written to $path"
+validate_urlpath() {
+    local p="$1"
+    # Must not be empty, reserved, or contain special chars
+    [[ -n "$p" ]] || return 0
+    [[ "$p" != "api" && "$p" != "assets" && "$p" != "health" && \
+       "$p" != "static" && "$p" != "doc" && "$p" != "openapi.json" ]] || return 1
+    [[ "$p" =~ ^[A-Za-z0-9_-]+$ ]]
 }
 
-# prompt_interactive: ask operator for port, urlpath, and optional domain unless interactive flag is not set
+check_acme_domain() {
+    [[ -z "${OVM_ACME_DOMAIN:-}" ]] && return 0
+    local d="$OVM_ACME_DOMAIN"
+    # Basic DNS name validation
+    if [[ "$d" != *[!A-Za-z0-9.-]* && "$d" == *.* && \
+          "$d" != -* && "$d" != *. && "$d" != *..* && "$d" != *-. && "$d" != -*. ]]; then
+        _ok "acme    Let's Encrypt issuance scheduled for $OVM_ACME_DOMAIN"
+        return 0
+    fi
+    _warn "OVM_ACME_DOMAIN '$OVM_ACME_DOMAIN' is not a valid DNS name — issuing is skipped, the panel stays on plain HTTP"
+    OVM_ACME_DOMAIN=""
+}
+
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 ]] || return 0
-    # If not connected to a terminal, do not hang waiting for input
     [[ -t 0 ]] || return 0
 
     printf '\n  ── OVManager Setup ─────────────────────────────\n' >&2
@@ -153,7 +176,12 @@ prompt_interactive() {
 
     read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
     if [[ -n "${in_port// /}" ]]; then
-        PORT_VAL="${in_port// /}"
+        in_port="${in_port// /}"
+        if validate_port "$in_port"; then
+            PORT_VAL="$in_port"
+        else
+            _warn "Invalid port '$in_port', using default $PORT_VAL"
+        fi
     fi
 
     read -r -p "  URL Path (leave blank for /dashboard/) [${URLPATH_VAL}]: " in_path </dev/tty || true
@@ -161,7 +189,11 @@ prompt_interactive() {
     in_path="${in_path#/}"
     in_path="${in_path%/}"
     if [[ -n "$in_path" ]]; then
-        URLPATH_VAL="$in_path"
+        if validate_urlpath "$in_path"; then
+            URLPATH_VAL="$in_path"
+        else
+            _warn "Invalid URL path '$in_path', using default $URLPATH_VAL"
+        fi
     fi
 
     if [[ -z "${OVM_ACME_DOMAIN:-}" ]]; then
@@ -174,17 +206,16 @@ prompt_interactive() {
     printf '  ────────────────────────────────────────────────\n\n' >&2
 }
 
-# write_env <envfile> <data_dir>: create once, never overwrite. A rerun must
-# not rotate the operator's config, so an existing file is only re-tightened.
+# ── Environment file ────────────────────────────────────────────────────
 write_env() {
-    local envfile="$1" data_dir="$2"
+    local envfile="$1" data_dir="$2" dest="${3:-$INSTALL_DIR}"
     if [[ -f "$envfile" ]]; then
         chmod 600 "$envfile" 2>/dev/null || true
         return 0
     fi
-    # No credential here, ever: the owner is a row in the panel database. The
-    # install prints a one-time claim key instead, and the browser turns it into
-    # the bcrypt row.
+
+    mkdir -p "$data_dir"
+
     (
     umask 077
     {
@@ -194,22 +225,20 @@ write_env() {
         printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"
         printf 'DATA_DIR=%s\n' "$data_dir"
         if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
-            # One-click TLS at bootstrap: the panel issues a Let's Encrypt
-            # certificate over HTTP-01 shortly after first start (daily worker),
-            # writing this declared pair. The paths live under DATA_DIR so the
-            # unprivileged panel account can write them.
             printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
             printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
             printf 'OVM_ACME_DOMAIN=%s\n' "$OVM_ACME_DOMAIN"
+            mkdir -p "$data_dir/tls"
         fi
     } > "$envfile"
     )
     chmod 600 "$envfile"
+    chown "root:$PANEL_USER" "$envfile"
+    chmod 640 "$envfile"
     _note "$envfile"
 }
 
-# mint_claim_key <path>: create once and print it. A rerun must never
-# invalidate the key a live panel is still holding for its owner claim.
+# ── Claim key ──────────────────────────────────────────────────────────
 mint_claim_key() {
     local path="$1" key
     mkdir -p "$(dirname "$path")"
@@ -219,46 +248,11 @@ mint_claim_key() {
     key="$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)"
     ( umask 077; printf '%s\n' "$key" > "$path" )
     chmod 600 "$path"
+    chown "$PANEL_USER:$PANEL_USER" "$path"
     printf '%s\n' "$key"
 }
 
-# ── Service ────────────────────────────────────────────────────────────
-# check_acme_domain validates the operator's OVM_ACME_DOMAIN early. Fail-soft:
-# an invalid domain is a warning and a plain-HTTP install, never a dead run.
-check_acme_domain() {
-    [[ -z "${OVM_ACME_DOMAIN:-}" ]] && return 0
-    if [[ "$OVM_ACME_DOMAIN" != *[!A-Za-z0-9.-]* && "$OVM_ACME_DOMAIN" == *.* ]]; then
-        _ok "acme    Let's Encrypt issuance scheduled for $OVM_ACME_DOMAIN"
-        return 0
-    fi
-    _warn "OVM_ACME_DOMAIN '$OVM_ACME_DOMAIN' is not a valid DNS name — issuing is skipped, the panel stays on plain HTTP"
-    OVM_ACME_DOMAIN=""
-}
-
-# verify_acme <data_dir>: the panel's worker issues shortly after first start.
-# Poll up to 3 minutes for the declared pair; a miss is a warning and the
-# panel keeps serving plain HTTP. The certificate must parse and hold at
-# least one day — otherwise the pair cannot terminate TLS anywhere.
-verify_acme() {
-    local data_dir="$1" cert key i check
-    cert="$data_dir/tls/fullchain.pem"
-    key="$data_dir/tls/privkey.pem"
-    _note "waiting for the Let's Encrypt certificate (up to 180s)…"
-    for ((i = 0; i < 60; i++)); do
-        if [[ -s "$cert" && -s "$key" ]]; then
-            if check="$(openssl x509 -in "$cert" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
-                _ok "acme    certificate installed at $cert"
-                _note "point your front TLS proxy (or a TLS vhost) at these files to go live"
-                return 0
-            fi
-        fi
-        sleep 3
-    done
-    _warn "no Let's Encrypt certificate after 3 minutes — the panel continues on plain HTTP"
-    _warn "  check journalctl -u $SYSTEMD_SERVICE, or issue from Settings → HTTPS in the panel"
-    return 0
-}
-
+# ── Panel user ─────────────────────────────────────────────────────────
 ensure_panel_user() {
     mkdir -p "$DATA_DIR"
     if ! id -u "$PANEL_USER" >/dev/null 2>&1; then
@@ -272,15 +266,7 @@ ensure_panel_user() {
     fi
 }
 
-# unit_hardening prints the sandboxing directives for a unit whose working
-# directory and data dir live at the given paths.
-#
-# systemd's PrivateTmp= masks /tmp, /var/tmp and /run with a private tmpfs,
-# and ProtectHome= masks /home, /root and /run/user. A unit whose ExecStart
-# or WorkingDirectory sits under one of those can no longer see its own
-# files, so the service fails to start. The script recommends a test install
-# under /tmp, so the hardening is applied only when the paths are outside
-# the masked ones.
+# ── Unit hardening ──────────────────────────────────────────────────────
 unit_hardening() {
     local p
     for p in "$@"; do
@@ -291,6 +277,7 @@ unit_hardening() {
     printf 'NoNewPrivileges=yes\nPrivateTmp=yes\nProtectHome=yes\n'
 }
 
+# ── Systemd units ───────────────────────────────────────────────────────
 write_systemd_unit() {
     local dest="${1:-$INSTALL_DIR}"
     cat > "/etc/systemd/system/$SYSTEMD_SERVICE" <<UNIT
@@ -309,9 +296,6 @@ SupplementaryGroups=systemd-journal
 ExecStart=$dest/$APP_SLUG
 Restart=on-failure
 RestartSec=3
-# The built-in ACME client binds the standalone HTTP-01 listener on port 80
-# only during issuance; the bind must work even though the panel runs as
-# $PANEL_USER.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 $(unit_hardening "$dest" "$DATA_DIR")
 # ProtectSystem is deliberately NOT set. The panel writes the operator-
@@ -328,9 +312,6 @@ UNIT
     chmod 644 "/etc/systemd/system/$SYSTEMD_SERVICE"
 }
 
-# A daily verified backup, independent of the panel being up: a system timer
-# that runs `ovmanager backup --keep 7`. Retention mirrors the CLI default (7, vs the
-# 14 default for manual runs) so disk stays bounded under automation.
 write_backup_units() {
     local dest="${1:-$INSTALL_DIR}"
     cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service" <<UNIT
@@ -385,21 +366,44 @@ grant_panel_access() {
 install_cli() {
     local dest="${1:-$INSTALL_DIR}"
     mkdir -p "$BIN_DIR" 2>/dev/null || { _warn "Could not create $BIN_DIR"; return 0; }
-    if ln -sf "$dest/$APP_SLUG" "$BIN_DIR/$CLI_NAME"; then
-        _ok "command  $BIN_DIR/$CLI_NAME"
-    else
-        _warn "Could not install the $CLI_NAME command into $BIN_DIR"
+    if [[ -L "$BIN_DIR/$CLI_NAME" ]]; then
+        local existing
+        existing="$(readlink -f "$BIN_DIR/$CLI_NAME" 2>/dev/null || true)"
+        if [[ "$existing" != "$dest/$APP_SLUG" ]]; then
+            _warn "CLI link already points to $existing — replacing with $dest/$APP_SLUG"
+        fi
     fi
+    ln -sf "$dest/$APP_SLUG" "$BIN_DIR/$CLI_NAME"
+    _ok "command  $BIN_DIR/$CLI_NAME"
 }
 
-# verify_health <port> <expected-version>: poll the loopback /health until the
-# running binary reports the version we installed. The version match is the
-# point: an answer from a stale process (the v1.6.0 dev-layout gap) must fail,
-# not pass as "healthy".
+# ── ACME verification ──────────────────────────────────────────────────
+verify_acme() {
+    local data_dir="$1" cert key i check
+    cert="$data_dir/tls/fullchain.pem"
+    key="$data_dir/tls/privkey.pem"
+    _note "waiting for the Let's Encrypt certificate (up to 180s)…"
+    for ((i = 0; i < 60; i++)); do
+        if [[ -s "$cert" && -s "$key" ]]; then
+            if check="$(openssl x509 -in "$cert" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
+                _ok "acme    certificate installed at $cert"
+                _note "point your front TLS proxy (or a TLS vhost) at these files to go live"
+                return 0
+            fi
+        fi
+        sleep 3
+    done
+    _warn "no Let's Encrypt certificate after 3 minutes — the panel continues on plain HTTP"
+    _warn "  check journalctl -u $SYSTEMD_SERVICE, or issue from Settings → HTTPS in the panel"
+    return 0
+}
+
+# ── Health check ────────────────────────────────────────────────────────
 verify_health() {
     local port="$1" want="$2" i body got
+    local host="127.0.0.1"
     for ((i = 0; i < 40; i++)); do
-        body="$(curl -fsS --max-time 3 "http://127.0.0.1:${port}/health" 2>/dev/null || true)"
+        body="$(curl -fsS --max-time 3 "http://${host}:${port}/health" 2>/dev/null || true)"
         if [[ -n "$body" ]]; then
             got="$(printf '%s' "$body" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)"
             if [[ "$got" == "$want" ]]; then
@@ -413,28 +417,17 @@ verify_health() {
     return 1
 }
 
-# Dev install from a working tree (--build [DIR]). Validate src -> rsync
-# to dest -> build the binary -> minimal .env and unit -> restart -> loopback
-# health. Rerunning updates in place; dev-only (no release fetch, no update
-# transaction).
-#
-# The unit name is derived from DEST, so a test --dest (e.g. /tmp/...) writes
-# its own unit and can never clobber /etc/systemd/system/ovmanager.service on a
-# box that already runs a panel.
+# ── Dev install from source ─────────────────────────────────────────────
 do_from_source() {
     local src="${SRC:-$PWD}" dest="${DEST:-$INSTALL_DIR}"
     local service unit port key health
 
-    # Validation runs before the root gate so a broken tree reports its real
-    # reason, and --help/bad flags work for whoever ran them.
     [[ -d "$src" ]] || die "no source directory: $src"
     [[ -f "$src/cmd/main.go" ]] || die "no Go source tree in $src (cmd/main.go missing)"
     [[ -d "$src/web/dist" ]] || die "web/dist missing in $src — run: cd web && npm run build"
 
     check_root
     ensure_panel_user
-    # rm -rf and a --delete rsync live behind this: an empty or / destination is
-    # never intended.
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     command -v rsync >/dev/null || die "rsync not found"
     command -v go >/dev/null || die "go not found — install Go 1.27+ (https://go.dev/dl/)"
@@ -448,8 +441,6 @@ do_from_source() {
     service="$(basename "$dest").service"
     unit="/etc/systemd/system/$service"
 
-    # .env is excluded so a dest credential file is never overwritten by a
-    # rerun (--delete alone would not touch an excluded file).
     rsync -a --delete \
         --exclude .git \
         --exclude .venv \
@@ -461,10 +452,6 @@ do_from_source() {
         --exclude /data \
         "$src/" "$dest/"
 
-    # The binary is the service: build it in place so the unit can ExecStart it.
-    # Stage the built SPA into the embed package first — this mirrors `make
-    # build`, the only step the release path does not need (its dist ships
-    # pre-embedded).
     mkdir -p "$dest/internal/webfs/dist"
     cp -a "$dest/web/dist/." "$dest/internal/webfs/dist/"
     ( cd "$dest" && go build -o "$APP_SLUG" ./cmd )
@@ -472,29 +459,30 @@ do_from_source() {
     mkdir -p "$dest/data"
     chown -R "$PANEL_USER:$PANEL_USER" "$dest/data"
     chmod 700 "$dest/data"
-    # Never copy the source tree's .env: dev trees carry real credentials. This
-    # one is kept across reruns and never overwritten.
+
     if [[ ! -f "$dest/.env" ]]; then
         cat > "$dest/.env" <<EOF
 # Generated by install.sh --build. Kept across reruns, never overwritten.
 PORT=2095
+URLPATH=dashboard
+HOST=127.0.0.1
 DATA_DIR=$dest/data
 ADMIN_USERNAME=admin
 EOF
+        chown "root:$PANEL_USER" "$dest/.env"
+        chmod 640 "$dest/.env"
     fi
-    chown "root:$PANEL_USER" "$dest/.env"
-    chmod 640 "$dest/.env"
-    # Claim key is create-once like .env: reruns must never invalidate it.
+
     if [[ ! -f "$dest/data/owner-claim.key" ]]; then
         key="$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-32)"
         ( umask 077; printf '%s\n' "$key" > "$dest/data/owner-claim.key" )
         chmod 600 "$dest/data/owner-claim.key"
-        # The panel runs as $PANEL_USER and reads the key itself: it must be
-        # owned by that user, not by root.
         chown "$PANEL_USER:$PANEL_USER" "$dest/data/owner-claim.key"
         _note "setup key (shown once, then claim in the panel): $key"
     fi
-    port="$(read_env_port "$dest/.env")"
+
+    port="$(read_env_value "$dest/.env" "PORT")"
+    port="${port:-2095}"
 
     cat > "$unit" <<UNIT
 [Unit]
@@ -513,17 +501,16 @@ ExecStart=$dest/$APP_SLUG
 Restart=on-failure
 RestartSec=3
 $(unit_hardening "$dest" "$dest/data")
-# No ProtectSystem here either — see the release unit: the declared
-# certificate path is outside the data dir.
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target
 UNIT
+    chmod 644 "$unit"
+
     systemctl daemon-reload
     systemctl restart "$service"
 
-    # Fail open: a slow panel is a warning, not a failed install.
     health=""
     for _ in $(seq 1 30); do
         if curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
@@ -536,6 +523,23 @@ UNIT
     _ok "installed $dest (service $service, port $port)"
 }
 
+write_install_result() {
+    local path="$1" dest="${2:-$INSTALL_DIR}"
+    mkdir -p "$(dirname "$path")"
+    {
+        printf 'OVManager_VERSION=%q\n' "$VERSION"
+        printf 'OVManager_PORT=%q\n' "$PORT_VAL"
+        printf 'OVManager_URLPATH=%q\n' "$URLPATH_VAL"
+        printf 'OVManager_DATA_DIR=%q\n' "$DATA_DIR"
+        printf 'OVManager_SERVICE=%q\n' "$SYSTEMD_SERVICE"
+        printf 'OVManager_DEST=%q\n' "$dest"
+        printf 'OVManager_CLAIM_KEY=%q\n' "$DATA_DIR/owner-claim.key"
+    } > "$path"
+    chmod 600 "$path"
+    _note "install result written to $path"
+}
+
+# ── Main install ────────────────────────────────────────────────────────
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -e "$dest" ]] \
@@ -550,28 +554,37 @@ do_install() {
     ensure_panel_user
     check_acme_domain
     fetch_release "$dest"
-    write_env "$dest/.env" "$DATA_DIR"
+    write_env "$dest/.env" "$DATA_DIR" "$dest"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
     write_systemd_unit "$dest"
     write_backup_units "$dest"
     grant_panel_access "$dest"
+    install_cli "$dest"
 
     systemctl daemon-reload
-    systemctl enable --now "$SYSTEMD_SERVICE" >/dev/null 2>&1 \
-        || die "Could not start $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
+    if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
+        systemctl restart "$SYSTEMD_SERVICE" \
+            || die "Could not restart $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
+    else
+        systemctl enable --now "$SYSTEMD_SERVICE" >/dev/null 2>&1 \
+            || die "Could not start $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
+    fi
     enable_backup_timer
 
-    port="$(read_env_port "$INSTALL_DIR/.env")"
-    urlpath="$(read_env_urlpath "$INSTALL_DIR/.env")"
+    port="$(read_env_value "$dest/.env" "PORT")"
+    port="${port:-$DEFAULT_PORT}"
+    urlpath="$(read_env_value "$dest/.env" "URLPATH")"
+    urlpath="${urlpath:-$DEFAULT_URLPATH}"
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
-    write_install_result "$DATA_DIR/install-result.env"
-    install_cli "$dest"
+    write_install_result "$DATA_DIR/install-result.env" "$dest"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
+
     if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
         verify_acme "$DATA_DIR"
     fi
+
     local display_path="${urlpath#/}"
     display_path="${display_path%/}"
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
@@ -588,15 +601,13 @@ do_install() {
     fi
 }
 
-# `install.sh update` is what the panel's own updater execs (panel/updater.go).
-# The transaction lives in the binary now, so this is a hand-off, not a second
-# implementation.
+# ── Update ──────────────────────────────────────────────────────────────
 do_update() {
     [[ -x "$INSTALL_DIR/$APP_SLUG" ]] || die "not installed at $INSTALL_DIR — run the installer first"
     exec "$INSTALL_DIR/$APP_SLUG" update "$@"
 }
 
-# do_uninstall: remove panel binary, systemd units, data, and CLI link
+# ── Uninstall ──────────────────────────────────────────────────────────
 do_uninstall() {
     local purge=0 dest="${DEST:-$INSTALL_DIR}"
     while [[ $# -gt 0 ]]; do
@@ -637,7 +648,7 @@ do_uninstall() {
     done
 
     # Remove CLI link
-    if [[ -f "$BIN_DIR/$APP_SLUG" ]]; then
+    if [[ -L "$BIN_DIR/$APP_SLUG" ]]; then
         rm -f "$BIN_DIR/$APP_SLUG"
         _ok "removed $BIN_DIR/$APP_SLUG"
     fi
@@ -665,7 +676,7 @@ usage() {
 OVManager Setup v${VERSION}
 
 USAGE
-  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
+  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 
 COMMANDS
   update [--version vX.Y.Z]  Hand off to \`ovmanager update\` (staged, with failover)
@@ -692,6 +703,11 @@ ENVIRONMENT
                              and renews automatically (T-30 days). The install
                              never dies over issuance; it warns and the panel
                              keeps serving plain HTTP until it works.
+  OVM_PORT=<port>            Override default port (default: 2095)
+  OVM_URLPATH=<path>         Override default URL path (default: dashboard)
+  OVM_REPO=<owner/repo>      Use a different GitHub repository
+  OVM_BIN_DIR=<dir>          Override CLI binary directory (default: /usr/local/bin)
+  OVM_PANEL_USER=<user>      Override panel service user (default: ovmanager)
 
 After installation, use ovmanager for status, service controls,
 logs, backups, HTTPS, diagnostics, recovery and updates.
@@ -702,8 +718,6 @@ EOF
     exit 0
 }
 
-# `version-script`: which installer did you actually run? VERSION is embedded; a
-# commit only exists when this file sits in a git checkout.
 script_commit() {
     local dir candidate
     dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)" || { printf 'unknown'; return 0; }
@@ -728,13 +742,6 @@ print_version_script() {
         printf 'commit     %s\n' "$commit"
     fi
 }
-
-FROM_SOURCE=0 SRC="" DEST=""
-ACTION="install"
-INTERACTIVE=0
-PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
-URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
-UPDATE_ARGS=()
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
