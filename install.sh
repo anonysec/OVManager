@@ -47,7 +47,6 @@ PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
 URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
 HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
 ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
-DRY_RUN=0
 INTERACTIVE=0
 FROM_SOURCE=0
 SRC=""
@@ -86,6 +85,23 @@ check_deps() {
     done
     [[ ${#missing[@]} -eq 0 ]] \
         || die "Missing required tools: ${missing[*]}"
+}
+
+# ── Port conflict check ────────────────────────────────────────────────
+is_port_in_use() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
+        return
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -lnt 2>/dev/null | awk -v p=":${port} " '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
+        return
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    fi
+    return 1
 }
 
 # ── Architecture detection ──────────────────────────────────────────────
@@ -559,19 +575,6 @@ write_install_result() {
 # ── Main install ────────────────────────────────────────────────────────
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        printf '\n  ── DRY RUN ─────────────────────────────────────\n' >&2
-        printf '  Would install to:   %s\n' "$dest" >&2
-        printf '  Port:               %s\n' "$PORT_VAL" >&2
-        printf '  URL Path:           /%s/\n' "$URLPATH_VAL" >&2
-        printf '  Data Dir:           %s\n' "$DATA_DIR" >&2
-        printf '  Panel User:         %s\n' "$PANEL_USER" >&2
-        printf '  ACME Domain:        %s\n' "${OVM_ACME_DOMAIN:-none}" >&2
-        printf '  Health Timeout:     %ss\n' "$HEALTH_TIMEOUT" >&2
-        printf '  ACME Timeout:       %ss\n' "$ACME_TIMEOUT" >&2
-        printf '  ────────────────────────────────────────────────\n\n' >&2
-        return 0
-    fi
     [[ -e "$dest" ]] \
         && die "Already installed ($dest). Use: ovmanager update"
     check_root
@@ -579,6 +582,16 @@ do_install() {
     check_deps
 
     prompt_interactive
+
+    # Check for port conflicts before proceeding
+    if is_port_in_use "$PORT_VAL"; then
+        _warn "Port $PORT_VAL is already in use. The install may fail."
+        if [[ "$INTERACTIVE" -eq 1 ]]; then
+            local confirm
+            read -r -p "  Continue anyway? [y/N]: " confirm </dev/tty || true
+            [[ "$confirm" =~ ^[Yy]$ ]] || die "Installation aborted due to port conflict"
+        fi
+    fi
 
     local key port urlpath
     ensure_panel_user
@@ -646,16 +659,6 @@ do_uninstall() {
             *) die "Unknown option for uninstall: $1" ;;
         esac
     done
-
-    if [[ "$DRY_RUN" -eq 1 ]]; then
-        printf '\n  ── DRY RUN (uninstall) ───────────────────────\n' >&2
-        printf '  Would remove:     %s\n' "$dest" >&2
-        printf '  Would remove:     %s\n' "$INSTALL_DIR" >&2
-        printf '  Would remove:     %s/%s\n' "$BIN_DIR" "$APP_SLUG" >&2
-        printf '  Would purge data: %s\n' "$DATA_DIR" >&2
-        printf '  ────────────────────────────────────────────────\n\n' >&2
-        return 0
-    fi
 
     check_root
     has_systemd || die "systemd not found — a native install needs it"
@@ -726,7 +729,6 @@ COMMANDS
 
 OPTIONS
   -i, --interactive          Ask for port, URL path, and optional Let's Encrypt domain
-  --dry-run                  Preview what would be done without making changes
   --acme DOMAIN              Request a Let's Encrypt certificate for DOMAIN
                              (HTTP-01; port 80 must reach this server). Same as
                              pre-setting OVM_ACME_DOMAIN in the environment.
@@ -794,7 +796,6 @@ parse_args() {
             --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
-            --dry-run)     DRY_RUN=1; shift ;;
             -h|--help)     usage ;;
             help)          usage ;;
             version-script|script-version) ACTION="version-script"; shift ;;
