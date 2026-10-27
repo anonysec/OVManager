@@ -1,0 +1,121 @@
+# Copyright (c) 2026 anonysec
+# SPDX-License-Identifier: MIT
+#
+# Tests the install.sh bootstrap script end-to-end on a fresh Ubuntu runner.
+# Verifies: zero-question default, interactive mode, --dest, --acme, uninstall,
+# --purge, environment variable overrides, and health check.
+name: Install script test
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'install.sh'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'install.sh'
+  workflow_dispatch:
+
+jobs:
+  test-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build backend
+        run: |
+          mkdir -p internal/webfs/dist
+          cp -a web/dist/. internal/webfs/dist/
+          go build -o ovmanager ./cmd
+
+      - name: Test zero-question default install
+        run: |
+          bash install.sh --dest /tmp/ovm-test-default
+          # Verify .env contents
+          test -f /tmp/ovm-test-default/.env
+          grep -q "PORT=2095" /tmp/ovm-test-default/.env
+          grep -q "URLPATH=dashboard" /tmp/ovm-test-default/.env
+          # Verify health
+          curl -fsS http://127.0.0.1:2095/health
+          echo "Zero-question default: PASS"
+
+      - name: Test environment variable overrides
+        run: |
+          ./install.sh --dest /tmp/ovm-test-env uninstall --purge
+          OVM_PORT=8443 OVM_URLPATH=panel bash install.sh --dest /tmp/ovm-test-env
+          grep -q "PORT=8443" /tmp/ovm-test-env/.env
+          grep -q "URLPATH=panel" /tmp/ovm-test-env/.env
+          curl -fsS http://127.0.0.1:8443/health
+          echo "Environment overrides: PASS"
+
+      - name: Test interactive mode
+        run: |
+          ./install.sh --dest /tmp/ovm-test-env uninstall --purge
+          printf '9090\nmyvpn\nstar.example.com\n' | bash install.sh --interactive --dest /tmp/ovm-test-int
+          grep -q "PORT=9090" /tmp/ovm-test-int/.env
+          grep -q "URLPATH=myvpn" /tmp/ovm-int/.env
+          grep -q "OVM_ACME_DOMAIN=star.example.com" /tmp/ovm-int/.env
+          curl -fsS http://127.0.0.1:9090/health
+          echo "Interactive mode: PASS"
+
+      - name: Test uninstall --purge
+        run: |
+          ./install.sh --dest /tmp/ovm-test-default uninstall --purge
+          test ! -d /tmp/ovm-test-default
+          echo "Uninstall --purge: PASS"
+
+      - name: Test uninstall (keep data)
+        run: |
+          ./install.sh --dest /tmp/ovm-test-keep
+          ./install.sh --dest /tmp/ovm-test-keep uninstall
+          test ! -d /tmp/ovm-test-keep
+          test -d /var/lib/ovmanager
+          echo "Uninstall (keep data): PASS"
+
+      - name: Test --acme flag
+        run: |
+          ./install.sh --dest /tmp/ovm-test-keep uninstall --purge
+          ./install.sh --acme test.example.com --dest /tmp/ovm-test-acme
+          grep -q "OVM_ACME_DOMAIN=test.example.com" /tmp/ovm-test-acme/.env
+          grep -q "SSL_CERTFILE=" /tmp/ovm-test-acme/.env
+          echo "--acme flag: PASS"
+
+      - name: Test invalid port rejection
+        run: |
+          ./install.sh --dest /tmp/ovm-test-acme uninstall --purge
+          # Test that interactive mode rejects invalid ports
+          printf '99999\nmyvpn\n\n' | bash install.sh --interactive --dest /tmp/ovm-test-invalid
+          grep -q "PORT=2095" /tmp/ovm-test-invalid/.env
+          echo "Invalid port rejection: PASS"
+
+      - name: Test invalid URL path rejection
+        run: |
+          ./install.sh --dest /tmp/ovm-test-invalid uninstall --purge
+          printf '8080\napi\n\n' | bash install.sh --interactive --dest /tmp/ovm-test-urlpath
+          grep -q "URLPATH=dashboard" /tmp/ovm-test-urlpath/.env
+          echo "Invalid URL path rejection: PASS"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./install.sh uninstall --purge 2>/dev/null || true
+          rm -rf /tmp/ovm-*
