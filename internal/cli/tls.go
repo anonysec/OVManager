@@ -19,6 +19,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,6 +121,13 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
 	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	dnsNames := []string{}
+	var ipAddrs []net.IP
+	if ip := net.ParseIP(domain); ip != nil {
+		ipAddrs = append(ipAddrs, ip)
+	} else if domain != "" {
+		dnsNames = append(dnsNames, domain)
+	}
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: domain},
@@ -127,7 +135,8 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{domain},
+		DNSNames:     dnsNames,
+		IPAddresses:  ipAddrs,
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
