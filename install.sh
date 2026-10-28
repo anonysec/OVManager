@@ -287,6 +287,19 @@ write_env() {
         fi
     } > "$envfile"
     )
+    cat >> "$envfile" <<'OPTS'
+
+# ── Optional (uncomment to use) ────────────────────────────────────────
+# PUBLIC_URL=https://panel.example.com
+# SSL_CERTFILE=/path/to/fullchain.pem
+# SSL_KEYFILE=/path/to/privkey.pem
+# TRUSTED_PROXY=false
+# OVM_ACME_DOMAIN=
+# OVM_ACME_DIRECTORY_URL=
+# OVM_ACME_HTTP_PORT=80
+# OVM_TRAFFIC_POLL_SECONDS=10
+# NODE_TLS_INSECURE_FALLBACK=false
+OPTS
     chmod 600 "$envfile"
     chown "root:$PANEL_USER" "$envfile"
     chmod 640 "$envfile"
