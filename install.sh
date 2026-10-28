@@ -642,12 +642,13 @@ do_install() {
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
 
     if [[ -n "$key" ]]; then
-        printf '\n  Open  http://127.0.0.1:%s%s  (plaintext is loopback-only;\n' \
-            "$port" "$display_path" >&2
-        printf '        tunnel in with:  ssh -L %s:127.0.0.1:%s <host>)\n' \
-            "$port" "$port" >&2
-        printf '  and claim the panel with this key:\n\n      %s\n\n' \
-            "$key" >&2
+        printf '\n  ╔══════════════════════════════════════════════╗\n' >&2
+        printf '  ║  ✓  Installation complete                    ║\n' >&2
+        printf '  ╠══════════════════════════════════════════════╣\n' >&2
+        printf '  ║  URL   http://127.0.0.1:%-21s ║\n' "$port$display_path" >&2
+        printf '  ║  Key   %-38s ║\n' "$key" >&2
+        printf '  ║  SSH   ssh -L %s:127.0.0.1:%s <host>        ║\n' "$port" "$port" >&2
+        printf '  ╚══════════════════════════════════════════════╝\n\n' >&2
     else
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
     fi
