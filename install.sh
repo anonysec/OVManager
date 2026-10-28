@@ -131,14 +131,14 @@ fetch_release() {
     work="$(mktemp -d)"
     _note "fetching v$VERSION ($asset)"
     while true; do
-        if curl -fsSL --max-time 60 --retry 3 --retry-delay 2 --retry-max-time 120 -o "$work/$asset" "$(release_url)" 2>/dev/null; then
+        if curl -fsSL --max-time 300 --retry 3 --retry-delay 2 --retry-max-time 600 -o "$work/$asset" "$(release_url)" 2>/dev/null; then
             break
         fi
         retries=$((retries + 1))
         if [[ $retries -ge 3 ]]; then rm -rf "$work"; die "No release file for v$VERSION"; fi
         sleep $((2 ** retries))
     done
-    if ! curl -fsSL --max-time 30 --retry 2 -o "$work/$asset.sha256" "$(release_checksum_url)" 2>/dev/null; then
+    if ! curl -fsSL --max-time 120 --retry 2 -o "$work/$asset.sha256" "$(release_checksum_url)" 2>/dev/null; then
         rm -rf "$work"; die "Release checksum file is missing for v$VERSION"
     fi
     if ! ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null 2>&1 ); then
