@@ -66,7 +66,7 @@ _ok()    { colorized_echo green "✓ $*"; }
 _warn()  { colorized_echo yellow "⚠ $*"; }
 _err()   { colorized_echo red "✗ $*"; }
 _note()  { colorized_echo blue "… $*"; }
-_stage() { printf '\n  ============================== %s ==============================\n' "$*" >&2; }
+
 die()    { colorized_echo red "error: $*"; exit 1; }
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
@@ -161,7 +161,7 @@ validate_urlpath() {
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
-    colorized_echo blue "# Executing ovmanager install script"
+    colorized_echo blue "# Executing ovmanager install script, commit: $(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     local in_port in_path
     read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
     if [[ -n "${in_port// /}" ]]; then
@@ -610,7 +610,7 @@ do_install() {
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     if [[ -e "$dest" ]]; then _note "Already installed at $dest - running update instead"; do_update "$@"; return $?; fi
     check_root; has_systemd || die "systemd not found — a native install needs it"; check_deps
-    colorized_echo blue "# Executing ovmanager install script"
+    colorized_echo blue "# Executing ovmanager install script, commit: $(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     colorized_echo blue "Configuration"
     prompt_interactive; setup_ssl_wizard
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
