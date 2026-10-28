@@ -162,18 +162,12 @@ prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
     colorized_echo blue "# Executing ovmanager install script, commit: $(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
-    local in_port in_path
+    local in_port
     read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
     if [[ -n "${in_port// /}" ]]; then
         in_port="${in_port// /}"
         if validate_port "$in_port"; then PORT_VAL="$in_port"; else _warn "Invalid port '$in_port', using default $PORT_VAL"; fi
     fi
-    read -r -p "  URL Path [${URLPATH_VAL}]: " in_path </dev/tty || true
-    in_path="${in_path// /}"; in_path="${in_path#/}"; in_path="${in_path%/}"
-    if [[ -n "$in_path" ]]; then
-        if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else _warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
-    fi
-    printf '  ────────────────────────────────────────────────\n' >&2
 }
 
 setup_ssl_wizard() {
@@ -183,12 +177,11 @@ setup_ssl_wizard() {
     colorized_echo green "  1) Let's Encrypt Domain certificate"
     colorized_echo green "  2) Let's Encrypt IP certificate (short-lived)"
     colorized_echo green "  3) Custom certificate + key paths"
-    colorized_echo green "  4) Self-signed certificate"
-    colorized_echo yellow "  5) No SSL"
+    colorized_echo yellow "  4) No SSL"
     colorized_echo yellow "Port 80 must be reachable for Let's Encrypt."
     local choice=""
-    read -r -p "Select SSL option [1-5] (default: 5): " choice </dev/tty || true
-    choice="${choice// /}"; [[ -z "$choice" ]] && choice="5"
+    read -r -p "Select SSL option [1-4] (default: 4): " choice </dev/tty || true
+    choice="${choice// /}"; [[ -z "$choice" ]] && choice="4"
     case "$choice" in
     1)
         SSL_MODE="domain"
@@ -228,14 +221,7 @@ setup_ssl_wizard() {
             colorized_echo red "Private key file not found/readable: $SSL_KEY_SRC"
         done
         ;;
-    4)
-        SSL_MODE="selfsigned"
-        read -r -p "Enter domain or IP for self-signed cert (default: localhost): " SELF_SIGNED_TARGET </dev/tty || true
-        SELF_SIGNED_TARGET="${SELF_SIGNED_TARGET// /}"
-        [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
-        INSTALL_SELF_SIGNED=1
-        ;;
-    5|*) SSL_MODE="none" ;;
+    4|*) SSL_MODE="none" ;;
     esac
 }
 
@@ -616,10 +602,19 @@ do_install() {
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
     _ok "port=$PORT_VAL  path=$URLPATH_VAL  ssl=$SSL_MODE"
     if is_port_in_use "$PORT_VAL"; then
-        _warn "Port $PORT_VAL is already in use. The install may fail."
+        _warn "Port $PORT_VAL is already in use."
         if [[ "$INTERACTIVE" -eq 1 ]]; then
-            local confirm; read -r -p "  Continue anyway? [y/N]: " confirm </dev/tty || true
-            [[ "$confirm" =~ ^[Yy]$ ]] || die "Installation aborted due to port conflict"
+            local new_port
+            while true; do
+                read -r -p "Enter a different port for OVManager (1-65535) or 'q' to abort: " new_port </dev/tty || true
+                new_port="${new_port// /}"
+                [[ "$new_port" == "q" ]] && die "Installation aborted due to port conflict"
+                if validate_port "$new_port"; then
+                    if is_port_in_use "$new_port"; then _warn "Port $new_port is also in use."; else PORT_VAL="$new_port"; break; fi
+                else
+                    _warn "Invalid port: $new_port"
+                fi
+            done
         fi
     fi
     local key port urlpath
@@ -638,19 +633,8 @@ do_install() {
     enable_backup_timer
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && { write_acme_renew_units; enable_acme_renew_timer; }
     _ok "service $SYSTEMD_SERVICE started"
-    if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
-        colorized_echo blue "TLS (self-signed)"
-        "$dest/$APP_SLUG" tls self-signed "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1 || _warn "self-signed cert issuance failed"
-        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
-        _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
-    fi
-    if [[ "$INSTALL_IP_SSL" -eq 1 && -n "$SSL_IP" ]]; then
-        colorized_echo blue "TLS (self-signed IP)"
-        "$dest/$APP_SLUG" tls self-signed "$SSL_IP" >/dev/null 2>&1 || _warn "self-signed cert issuance failed"
-        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
-        _ok "self-signed certificate issued for $SSL_IP"
-    fi
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
+    [[ "$SSL_MODE" == "ip" ]] && _note "run 'ovmanager tls' to issue the Let's Encrypt IP certificate for $SSL_IP"
     port="$(awk -F= -v k=PORT '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; port="${port:-$DEFAULT_PORT}"
     urlpath="$(awk -F= -v k=URLPATH '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; urlpath="${urlpath:-$DEFAULT_URLPATH}"
     colorized_echo blue "Verification"
