@@ -206,7 +206,9 @@ prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
 
-    printf '\n  ── OVManager Setup ─────────────────────────────\n' >&2
+    printf '\n  ╔══════════════════════════════════════════════╗\n' >&2
+    printf '  ║  OVManager installer  v%-24s║\n' "$VERSION" >&2
+    printf '  ╚══════════════════════════════════════════════╝\n' >&2
     local in_port in_path in_acme
 
     read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
