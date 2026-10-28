@@ -72,9 +72,9 @@ else
     _RESET=''
 fi
 
-_ok()    { printf "  ${_GREEN}ok${_RESET}    %s\n" "$*" >&2; }
-_note()  { printf "  ${_BLUE}..${_RESET}    %s\n" "$*" >&2; }
-_warn()  { printf "  ${_YELLOW}warn${_RESET}  %s\n" "$*" >&2; }
+_ok()    { printf "  ${_GREEN}✓${_RESET}  %s\n" "$*" >&2; }
+_note()  { printf "  ${_BLUE}…${_RESET}  %s\n" "$*" >&2; }
+_warn()  { printf "  ${_YELLOW}⚠${_RESET}  %s\n" "$*" >&2; }
 _stage() { printf '\n  ============================== %s ==============================\n' "$*" >&2; }
 die()    { printf "install: ${_RED}error${_RESET}: %s\n" "$*" >&2; exit 1; }
 
