@@ -23,7 +23,6 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - [Features](#-features)
 - [Install](#-install)
 - [After it finishes](#-after-it-finishes)
-- [Performance notes](#-performance-notes)
 - [Day-to-day commands](#-day-to-day-commands)
 - [Docs](#-docs)
 - [License](#-license)
@@ -172,16 +171,6 @@ user           admin — change it any time in Settings
 | Staged update with failover | `sudo ovmanager update` |
 | Reset the owner password | `sudo ovmanager reset-password` |
 | Shell completion | `sudo ovmanager completion bash\|zsh\|fish` |
-
-## ⚡ Performance notes
-
-The panel is designed to be light on a small VPS and gentle on the nodes.
-
-- **One collector, not one request per node.** A background collector polls every node and caches the result; request handlers read that snapshot, so a node that has stopped answering cannot stall a page.
-- **Polling backs off when nobody is watching.** The live collector polls every 30 seconds while a browser holds the live stream open and falls back to `OVMANAGER_LIVE_IDLE_POLL_SECONDS` (default `300`) when it does not. The public subscription page is still served from that snapshot, so it does not go stale.
-- **Both of those are tunable** in `.env` as `OVMANAGER_LIVE_POLL_SECONDS` and `OVMANAGER_LIVE_IDLE_POLL_SECONDS`.
-- **No Redis, on purpose.** A broker pays off when several application processes must share state. Here a single web process owns the live cache and the periodic jobs coordinate through SQLite, which is already the source of truth, so a Redis hop would add latency, memory and another service to operate without buying anything. It becomes worthwhile when the panel moves to multiple web workers — and that means replacing SQLite with a networked database first.
-- **A bounded working set.** A scheduled job prunes the audit log and the daily traffic history on an age limit, so a long-running panel does not grow without limit.
 
 ## 🧰 Day-to-day commands
 
