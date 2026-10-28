@@ -229,6 +229,9 @@ func (a *app) tlsCmd() *cobra.Command {
 				}
 				text, code := runTLSInstall(inst, args[1], args[2])
 				a.emit(text, code)
+			case args[0] == "renew":
+				text, code := runTLSRenew(inst)
+				a.emit(text, code)
 			case args[0] == "acme":
 				if len(args) < 2 {
 					a.emit("usage: ovmanager tls acme <domain-or-ip> [email]\n", 2)

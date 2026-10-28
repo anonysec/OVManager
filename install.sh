@@ -413,6 +413,40 @@ UNIT
               /etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.timer
 }
 
+write_acme_renew_units() {
+    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.service" <<UNIT
+[Unit]
+Description=OVManager ACME certificate renewal check
+After=${SYSTEMD_SERVICE}
+
+[Service]
+Type=oneshot
+EnvironmentFile=$INSTALL_DIR/.env
+ExecStart=$INSTALL_DIR/$APP_SLUG tls renew
+UNIT
+
+    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.timer" <<UNIT
+[Unit]
+Description=Run the OVManager ACME renewal check weekly
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+    chmod 644 /etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.service \
+              /etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.timer
+}
+
+enable_acme_renew_timer() {
+    systemctl daemon-reload
+    systemctl enable --now "${SYSTEMD_SERVICE%.service}-acme-renew.timer" >/dev/null 2>&1 \
+        || _warn "Could not enable the ACME renew timer"
+}
+
 enable_backup_timer() {
     systemctl daemon-reload
     systemctl enable --now "${SYSTEMD_SERVICE%.service}-backup.timer" >/dev/null 2>&1 \
@@ -723,6 +757,8 @@ do_install() {
             || die "Could not start $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
     fi
     enable_backup_timer
+    write_acme_renew_units
+    enable_acme_renew_timer
     _ok "service $SYSTEMD_SERVICE started"
 
     port="$(read_env_value "$dest/.env" "PORT")"
@@ -798,7 +834,7 @@ do_uninstall() {
     fi
 
     # Remove systemd units
-    for unit in "$SYSTEMD_SERVICE" "${SYSTEMD_SERVICE%.service}-backup.service" "${SYSTEMD_SERVICE%.service}-backup.timer"; do
+    for unit in "$SYSTEMD_SERVICE" "${SYSTEMD_SERVICE%.service}-backup.service" "${SYSTEMD_SERVICE%.service}-backup.timer" "${SYSTEMD_SERVICE%.service}-acme-renew.service" "${SYSTEMD_SERVICE%.service}-acme-renew.timer"; do
         if [[ -f "/etc/systemd/system/$unit" ]]; then
             rm -f "/etc/systemd/system/$unit"
             _ok "removed /etc/systemd/system/$unit"

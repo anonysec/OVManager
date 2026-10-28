@@ -166,6 +166,38 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	return block([]string{heading("HTTPS certificate"), "self-signed cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
 }
 
+func runTLSRenew(inst Install) (string, int) {
+	certPath, _ := tlsTargetPaths(inst)
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		return block([]string{heading("HTTPS certificate"), "no certificate found: " + err.Error()}), 1
+	}
+	pb, _ := pem.Decode(data)
+	if pb == nil {
+		return block([]string{heading("HTTPS certificate"), "invalid certificate file"}), 1
+	}
+	cert, err := x509.ParseCertificate(pb.Bytes)
+	if err != nil {
+		return block([]string{heading("HTTPS certificate"), "could not parse certificate: " + err.Error()}), 1
+	}
+	if time.Until(cert.NotAfter) > 30*24*time.Hour {
+		return block([]string{heading("HTTPS certificate"), "certificate still valid until " + cert.NotAfter.UTC().Format(time.RFC3339) + " - skipping renewal"}), 0
+	}
+	domain := ""
+	if len(cert.DNSNames) > 0 {
+		domain = cert.DNSNames[0]
+	} else if len(cert.IPAddresses) > 0 {
+		domain = cert.IPAddresses[0].String()
+	} else {
+		domain = cert.Subject.CommonName
+	}
+	if domain == "" {
+		return block([]string{heading("HTTPS certificate"), "could not determine domain from certificate"}), 1
+	}
+	text, code := runTLSAcme(inst, domain, "")
+	return text, code
+}
+
 func runTLSAcme(inst Install, domain, email string) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
