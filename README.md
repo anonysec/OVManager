@@ -1,8 +1,9 @@
 # OVManager
 
-Web panel for a self-hosted OpenVPN service: users, traffic quotas, expiry dates, device limits and live sessions, across one server or many.
+[![Version](https://img.shields.io/badge/version-2.1.3-blue)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red)](LICENSE)
 
-Full documentation: https://anonysec.github.io/OVManager/
+Web panel for a self-hosted OpenVPN service: users, traffic quotas, expiry dates, device limits and live sessions across one or many servers.
 
 ## Install
 
@@ -10,16 +11,14 @@ Full documentation: https://anonysec.github.io/OVManager/
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 ```
 
-Zero questions by default. Interactive mode: add `-i`.
+Zero questions by default. Interactive mode: add `-i`. See [docs](https://anonysec.github.io/OVManager/).
 
 ## Day-to-day
 
 ```bash
-ovmanager status
-ovmanager logs
-ovmanager update
+ovmanager status | logs | update | backup
 ```
 
 ## License
 
-See [LICENSE](LICENSE). Forks allowed; redistribution and rebranding not.
+Forks allowed. Redistribution and rebranding not. See [LICENSE](LICENSE).
