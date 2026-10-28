@@ -14,6 +14,8 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   [![Runtime](https://img.shields.io/badge/runtime-systemd%20%7C%20docker-555555)](#-install)
 </div>
 
+> Full documentation: https://anonysec.github.io/OVManager/
+
 ## 📖 Table of contents
 
 - [What is this?](#-what-is-this)
