@@ -700,6 +700,8 @@ setup_docker() {
 do_install() {
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
+        printf '\n  ${_BLUE}OVManager${_RESET} installer  v%s  (docker)\n' "$VERSION" >&2
+        printf '  ${_BLUE}────────────────────────────────${_RESET}\n\n' >&2
         _stage "[1/3] Configuration"
         prompt_interactive
         _ok "port=$PORT_VAL  path=$URLPATH_VAL  acme=${OVM_ACME_DOMAIN:-none}"
@@ -722,6 +724,8 @@ do_install() {
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
 
+    printf '\n  ${_BLUE}OVManager${_RESET} installer  v%s\n' "$VERSION" >&2
+    printf '  ${_BLUE}────────────────────────────────${_RESET}\n\n' >&2
     _stage "[1/5] Configuration"
     prompt_interactive
     _ok "port=$PORT_VAL  path=$URLPATH_VAL  acme=${OVM_ACME_DOMAIN:-none}"
