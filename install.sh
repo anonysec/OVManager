@@ -581,23 +581,7 @@ UNIT
     _ok "installed $dest (service $service, port $port)"
 }
 
-write_install_result() {
-    local path="$1" dest="${2:-$INSTALL_DIR}"
-    mkdir -p "$(dirname "$path")"
-    {
-        printf 'OVManager_VERSION=%q\n' "$VERSION"
-        printf 'OVManager_PORT=%q\n' "$PORT_VAL"
-        printf 'OVManager_URLPATH=%q\n' "$URLPATH_VAL"
-        printf 'OVManager_DATA_DIR=%q\n' "$DATA_DIR"
-        printf 'OVManager_SERVICE=%q\n' "$SYSTEMD_SERVICE"
-        printf 'OVManager_DEST=%q\n' "$dest"
-        printf 'OVManager_CLAIM_KEY=%q\n' "$DATA_DIR/owner-claim.key"
-    } > "$path"
-    chmod 600 "$path"
-    _note "install result written to $path"
-}
-
-# ── Main install ────────────────────────────────────────────────────────
+# ── Main install ────────────────────────────────────────────────
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
@@ -652,7 +636,6 @@ do_install() {
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
-    write_install_result "$DATA_DIR/install-result.env" "$dest"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
 
     if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
