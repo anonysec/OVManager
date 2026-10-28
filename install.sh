@@ -642,6 +642,7 @@ do_install() {
             || die "Could not start $SYSTEMD_SERVICE — journalctl -u $SYSTEMD_SERVICE"
     fi
     enable_backup_timer
+    _ok "service $SYSTEMD_SERVICE started"
 
     port="$(read_env_value "$dest/.env" "PORT")"
     port="${port:-$DEFAULT_PORT}"
