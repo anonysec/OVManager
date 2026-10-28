@@ -14,7 +14,7 @@ import (
 )
 
 // TokenBytes = 256 bits of entropy; only the SHA-256 digest is stored
-// (backend/auth/sessions.py).
+// (auth/sessions).
 const TokenBytes = 32
 
 // touchThrottleSeconds throttles the sliding last_seen write.
@@ -43,8 +43,8 @@ type Service struct {
 	IdleSeconds int
 
 	mu       sync.Mutex
-	attempts map[string][]float64 // login buckets (auth.py)
-	failures map[string][]float64 // claim buckets (owner_claim.py)
+	attempts map[string][]float64 // login buckets
+	failures map[string][]float64 // claim buckets
 }
 
 // NewService builds the auth service with the panel defaults
@@ -132,7 +132,7 @@ func newToken() (string, error) {
 }
 
 // VerifySession resolves a raw token to its identity, or false when
-// invalid/expired. Expired rows are deleted eagerly (sessions.py).
+// invalid/expired. Expired rows are deleted eagerly (sessions).
 func (s *Service) VerifySession(raw string) (Identity, bool) {
 	var zero Identity
 	if raw == "" {
@@ -201,7 +201,7 @@ func (s *Service) PurgeExpired() int {
 }
 
 // roleIsCurrent re-checks the session role against the admins table
-// (auth.py role_is_current).
+// (auth role_is_current).
 func (s *Service) roleIsCurrent(username, role string) bool {
 	var isOwner int64
 	err := s.DB().QueryRow(`SELECT is_owner FROM admins WHERE username = ?`, username).Scan(&isOwner)
@@ -215,7 +215,7 @@ func (s *Service) roleIsCurrent(username, role string) bool {
 }
 
 // Authenticate checks the single owner credential row. Only the is_owner row
-// authenticates; a leftover second-admin row never does (auth.py).
+// authenticates; a leftover second-admin row never does (auth).
 func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	var hash string
 	var isOwner int64
@@ -236,7 +236,7 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 }
 
 // bcryptWaste spends the same bcrypt time a real credential would so a
-// missing/foreign row is not distinguishable by timing (auth.py _waste_verify).
+// missing/foreign row is not distinguishable by timing (auth _waste_verify).
 func bcryptWaste(password string) (bool, error) {
 	return VerifyPassword(password, dummyBcryptHash), nil
 }

@@ -1,4 +1,4 @@
-// `ovm status` (cli/status.py): same rows as manager.sh do_status.
+// `ovm status` (cli): same rows as manager.sh do_status.
 package cli
 
 import (

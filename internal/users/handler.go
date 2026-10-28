@@ -125,7 +125,7 @@ func scanUser(row interface{ Scan(...any) error }) (userRow, error) {
 	return u, err
 }
 
-// base renders the Users response model (backend/schema/api.py).
+// base renders the Users response model (backend).
 func (u userRow) base() map[string]any {
 	return map[string]any{
 		"id":          u.ID,

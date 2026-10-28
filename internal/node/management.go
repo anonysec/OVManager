@@ -773,7 +773,7 @@ func DeleteUserOnAllNodes(userID int64, db *sql.DB) map[string]any {
 	return map[string]any{"ok": len(failed) == 0, "failed": failed}
 }
 
-// --- HTTP handlers (backend/routers/node.py) ---
+// --- HTTP handlers (backend) ---
 
 // Handler serves the /nodes routes; it borrows the auth service's DB handle
 // and middleware.

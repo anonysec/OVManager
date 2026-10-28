@@ -1,4 +1,4 @@
-// Per-node connection registry with health tracking (backend/node/connection.py).
+// Per-node connection registry with health tracking (backend).
 package node
 
 import (

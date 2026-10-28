@@ -461,7 +461,7 @@ func addColumn(x execer, table, name, add string) error {
 	return err
 }
 
-// --- first-run seeds (seeds.py) ---
+// --- first-run seeds (seeds) ---
 
 func seedSettings(x execer) error {
 	var n int

@@ -63,7 +63,7 @@ func runBackup(install Install, keepRaw string) (string, int) {
 	return block(lines), 0
 }
 
-// runRestore lists backups, or restores one by name (cli/restore.py).
+// runRestore lists backups, or restores one by name (cli).
 func runRestore(install Install, name string) (string, int) {
 	if name == "" {
 		return listBackups(install)

@@ -1,4 +1,4 @@
-// Install layout + .env parsing shared by every CLI command (cli/env.py).
+// Install layout + .env parsing shared by every CLI command (cli).
 package cli
 
 import (

@@ -25,7 +25,7 @@ const (
 	bcryptHash    = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
 )
 
-// testSchema mirrors the columns the ported code touches (backend/db/models.py).
+// testSchema mirrors the columns the ported code touches (backend).
 const testSchema = `
 CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
   is_owner BOOLEAN DEFAULT 0, telegram_id INTEGER);
@@ -62,7 +62,7 @@ func newTestDB(t *testing.T) (*sql.DB, string) {
 	return conn, dir
 }
 
-// seedOwner inserts the single owner credential row (backend/auth/auth.py).
+// seedOwner inserts the single owner credential row (backend).
 func seedOwner(t *testing.T, conn *sql.DB, username, hash string) {
 	t.Helper()
 	if _, err := conn.Exec(

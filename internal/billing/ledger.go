@@ -162,7 +162,7 @@ func PruneLedger(db *sql.DB, keepDays, batch int) int {
 	return total
 }
 
-// --- pure helpers (daily.py) ---
+// --- pure helpers (daily) ---
 
 // Canon renders the canonical node_usage text both sides of an OCC compare speak.
 //

@@ -1,4 +1,4 @@
-// Fan-out bounds shared by every node RPC site (backend/node/fanout.py).
+// Fan-out bounds shared by every node RPC site (backend).
 package nodeclient
 
 import (

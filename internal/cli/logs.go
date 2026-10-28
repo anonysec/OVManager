@@ -1,4 +1,4 @@
-// `ovm logs` (cli/logs.py): docker logs or journalctl, same selection rules.
+// `ovm logs` (cli): docker logs or journalctl, same selection rules.
 package cli
 
 import (

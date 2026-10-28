@@ -12,7 +12,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/audit"
 )
 
-// owner-claim constants (backend/routers/owner_claim.py).
+// owner-claim constants (backend).
 const (
 	claimKeyFile    = "owner-claim.key"
 	maxClaimFail    = 5

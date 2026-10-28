@@ -1,4 +1,4 @@
-// Probe helpers: HTTP health, systemd/docker state (cli/probes.py). Every probe
+// Probe helpers: HTTP health, systemd/docker state (cli). Every probe
 // used by a golden screen is a package var so tests can inject deterministically.
 package cli
 

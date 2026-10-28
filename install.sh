@@ -48,6 +48,7 @@ URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
 HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
 ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
+YES=0
 FROM_SOURCE=0
 SRC=""
 DEST=""
@@ -69,10 +70,11 @@ else
     _RESET=''
 fi
 
-_ok()   { printf "  ${_GREEN}ok${_RESET}    %s\n" "$*" >&2; }
-_note() { printf "  ${_BLUE}..${_RESET}    %s\n" "$*" >&2; }
-_warn() { printf "  ${_YELLOW}warn${_RESET}  %s\n" "$*" >&2; }
-die()   { printf "install: ${_RED}error${_RESET}: %s\n" "$*" >&2; exit 1; }
+_ok()    { printf "  ${_GREEN}ok${_RESET}    %s\n" "$*" >&2; }
+_note()  { printf "  ${_BLUE}..${_RESET}    %s\n" "$*" >&2; }
+_warn()  { printf "  ${_YELLOW}warn${_RESET}  %s\n" "$*" >&2; }
+_stage() { printf '\n  ── %s ──\n' "$*" >&2; }
+die()    { printf "install: ${_RED}error${_RESET}: %s\n" "$*" >&2; exit 1; }
 
 # ── Dependency checks ──────────────────────────────────────────────────
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
@@ -201,7 +203,7 @@ check_acme_domain() {
 }
 
 prompt_interactive() {
-    [[ "$INTERACTIVE" -eq 1 ]] || return 0
+    [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
 
     printf '\n  ── OVManager Setup ─────────────────────────────\n' >&2
@@ -236,7 +238,8 @@ prompt_interactive() {
             OVM_ACME_DOMAIN="$in_acme"
         fi
     fi
-    printf '  ────────────────────────────────────────────────\n\n' >&2
+    printf '  ────────────────────────────────────────────────\n' >&2
+    printf '  Summary: port=%s  path=%s  acme=%s\n\n' "$PORT_VAL" "$URLPATH_VAL" "${OVM_ACME_DOMAIN:-none}" >&2
 }
 
 # ── Environment file ────────────────────────────────────────────────────
@@ -581,6 +584,7 @@ do_install() {
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
 
+    _stage "Configuration"
     prompt_interactive
 
     # Check for port conflicts before proceeding
@@ -596,6 +600,7 @@ do_install() {
     local key port urlpath
     ensure_panel_user
     check_acme_domain
+    _stage "Download"
     fetch_release "$dest"
     write_env "$dest/.env" "$DATA_DIR" "$dest"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
@@ -604,6 +609,7 @@ do_install() {
     grant_panel_access "$dest"
     install_cli "$dest"
 
+    _stage "Service"
     systemctl daemon-reload
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
         systemctl restart "$SYSTEMD_SERVICE" \
@@ -618,6 +624,7 @@ do_install() {
     port="${port:-$DEFAULT_PORT}"
     urlpath="$(read_env_value "$dest/.env" "URLPATH")"
     urlpath="${urlpath:-$DEFAULT_URLPATH}"
+    _stage "Verification"
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
@@ -729,6 +736,7 @@ COMMANDS
 
 OPTIONS
   -i, --interactive          Ask for port, URL path, and optional Let's Encrypt domain
+  -y, --yes                  Accept defaults without prompts (CI-friendly)
   --acme DOMAIN              Request a Let's Encrypt certificate for DOMAIN
                              (HTTP-01; port 80 must reach this server). Same as
                              pre-setting OVM_ACME_DOMAIN in the environment.
@@ -796,6 +804,7 @@ parse_args() {
             --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
+            -y|--yes)         YES=1; shift ;;
             -h|--help)     usage ;;
             help)          usage ;;
             version-script|script-version) ACTION="version-script"; shift ;;

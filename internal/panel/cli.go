@@ -1,6 +1,6 @@
 // CLI reuse API (Phase 5). The ovm subcommands reuse the panel's own backup,
 // restore and urlpath transactions rather than re-implementing them, so there
-// is exactly one implementation of each (cli/restore.py, cli/urlpath.py).
+// is exactly one implementation of each (cli).
 //
 // These wrappers set DATA_DIR to the CLI's resolved data dir, then open the
 // panel database the same way the panel does.

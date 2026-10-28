@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-// Per-node connection registry with health tracking (backend/node/connection.py).
+// Per-node connection registry with health tracking (backend).
 package nodeclient
 
 import (

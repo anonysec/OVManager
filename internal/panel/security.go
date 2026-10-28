@@ -12,7 +12,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/node"
 )
 
-// Security summary (backend/routers/security.py). Aggregates per-node login
+// Security summary (backend). Aggregates per-node login
 // diagnostics, re-classifying lines from nodes that predate structured events.
 
 const (

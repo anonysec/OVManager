@@ -19,7 +19,7 @@ type Response struct {
 	Data    any    `json:"data"`
 }
 
-// Login rate limits (backend/auth/auth.py).
+// Login rate limits (backend).
 const (
 	maxAttempts     = 5
 	maxPerIP        = 20
@@ -332,7 +332,7 @@ func (s *Service) userKey(username string) string {
 
 func (s *Service) ipKey(ip string) string { return Sha16(ip) }
 
-// --- in-memory rate-limit buckets (auth.py) ---
+// --- in-memory rate-limit buckets (auth) ---
 
 func (s *Service) clearBucket(key string) {
 	s.mu.Lock()

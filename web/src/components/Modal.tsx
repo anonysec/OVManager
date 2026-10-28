@@ -1,5 +1,6 @@
 import './Modal.css';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type MouseEvent } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { FiX } from 'react-icons/fi';
@@ -23,7 +24,7 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: any; onClose?: any; title?: any; children?: any; size?: any }) => {
+const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large' }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
   const titleId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -99,8 +100,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: any) => {
-    if (e.target === e.currentTarget) onClose();
+  const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose?.();
   };
 
   return createPortal(

@@ -1,4 +1,4 @@
-// `ovm doctor` checks and auto-fixes (cli/doctor.py).
+// `ovm doctor` checks and auto-fixes (cli).
 package cli
 
 import (

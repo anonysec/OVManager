@@ -2,7 +2,7 @@
 // panel settings, security summary, TLS management, updater, maintenance and
 // the subscription page.
 //
-// Configuration mirrors backend/config.py: process environment first, the
+// Configuration mirrors backend config: process environment first, the
 // panel's .env second (pydantic-settings precedence). The .env is read from
 // OVM_APP_DIR — install.sh chdirs to APP_DIR before exec — falling back to the
 // working directory.
@@ -29,7 +29,7 @@ type Handler struct {
 	Svc       *auth.Service
 	startedAt time.Time
 
-	// urlpath cache (backend/urlpath/_core.py, 5s TTL). Per-handler rather
+	// urlpath cache (backend/urlpath, 5s TTL). Per-handler rather
 	// than process-global: observable behaviour is identical for the single
 	// panel process, and it keeps tests hermetic.
 	urlMu    sync.Mutex
@@ -62,7 +62,7 @@ func NewHandler(svc *auth.Service) *Handler {
 	return &Handler{Svc: svc, startedAt: time.Now()}
 }
 
-// Mount registers the Phase 4 routes relative to the caller's prefix (app.py
+// Mount registers the Phase 4 routes relative to the caller's prefix (app
 // includes every router under /api).
 func (h *Handler) Mount(mux *http.ServeMux) {
 	owner := h.Svc.RequireOwner
@@ -135,7 +135,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 }
 
 // MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside
-// the /api prefix (app.py includes that router unprefixed).
+// the /api prefix (app includes that router unprefixed).
 func (h *Handler) MountSub(mux *http.ServeMux) {
 	prefix := "/" + subscriptionPath()
 	mux.HandleFunc("GET "+prefix+"/static/subscription.js", h.subStaticJS)
@@ -143,7 +143,7 @@ func (h *Handler) MountSub(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+prefix+"/{uuid}", h.subPage)
 }
 
-// --- configuration (backend/config.py + backend/tls_paths.py) ---
+// --- configuration (backend) ---
 
 // appDir is where .env and frontend/ live.
 func appDir() string {
@@ -270,7 +270,7 @@ func serverPort() int {
 	return 2095
 }
 
-// --- settings row (backend/db/crud/settings.py) ---
+// --- settings row (backend) ---
 
 // settings is the single settings row as a column->value map. Column names
 // come from the schema, not from user input, so building UPDATE statements
@@ -493,7 +493,7 @@ func intQuery(r *http.Request, key string, def int) int {
 	return def
 }
 
-// --- urlpath (backend/urlpath/_core.py) ---
+// --- urlpath (backend) ---
 
 const urlPathTTL = 5.0
 

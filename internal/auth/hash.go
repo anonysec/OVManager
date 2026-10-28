@@ -10,13 +10,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// BcryptCost matches passlib/bcrypt's default (backend/auth/hash.py).
+// BcryptCost matches passlib/bcrypt's default (backend).
 const BcryptCost = 12
 
 const maxBytes = 72
 
 // prepare encodes a password for bcrypt, truncating on a UTF-8 boundary so a
-// multibyte password is never split mid-sequence (backend/auth/hash.py).
+// multibyte password is never split mid-sequence (backend).
 func prepare(password string) []byte {
 	raw := []byte(password)
 	if len(raw) <= maxBytes {
@@ -54,7 +54,7 @@ func VerifyPassword(plain, hashed string) bool {
 }
 
 // NeedsRehash reports a stored hash weaker than the current policy: unknown
-// prefix, unparsable cost, or fewer than 12 rounds (backend/auth/hash.py).
+// prefix, unparsable cost, or fewer than 12 rounds (backend).
 func NeedsRehash(hashed string) bool {
 	if hashed == "" {
 		return true

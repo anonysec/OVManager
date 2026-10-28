@@ -1,4 +1,4 @@
-// TLS pinning helpers (backend/node/pki.py).
+// TLS pinning helpers (backend).
 package node
 
 import (

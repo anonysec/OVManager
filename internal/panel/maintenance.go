@@ -24,7 +24,7 @@ import (
 )
 
 // Panel maintenance: backups, restore, sync, cleanup and usage levers
-// (backend/routers/maintenance.py).
+// (backend).
 const (
 	maxBackupFileSize = 100 * 1024 * 1024
 	maxBackups        = 50

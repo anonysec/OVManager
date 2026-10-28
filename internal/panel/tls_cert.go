@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-// Panel-side TLS certificate management (backend/routers/tls.py).
+// Panel-side TLS certificate management (backend).
 const (
 	maxTLSFileSize = 1024 * 1024
 	restartHint    = "Restart the panel to use the new certificate: " +

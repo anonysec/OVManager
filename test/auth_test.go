@@ -15,7 +15,7 @@ import (
 )
 
 // TestAuthVerifiesHash is the hash-parity guard: a hash written by the
-// backend (backend/auth/hash.py, $2b$12$) must verify in Go.
+// backend (auth/hash, $2b$12$) must verify in Go.
 func TestAuthVerifiesHash(t *testing.T) {
 	if !auth.VerifyPassword(knownPassword, bcryptHash) {
 		t.Fatalf("Go could not verify the bcrypt hash")
@@ -45,7 +45,7 @@ func TestAuthVerifiesHash(t *testing.T) {
 	}
 }
 
-// TestAuthLoginSuccess mirrors backend/auth/auth.py login: token envelope plus
+// TestAuthLoginSuccess mirrors backend/auth login: token envelope plus
 // the ovm_session cookie (max-age = SESSION_MAX_SECONDS, HttpOnly, Lax, "/").
 func TestAuthLoginSuccess(t *testing.T) {
 	conn, dir := newTestDB(t)
@@ -101,7 +101,7 @@ func TestAuthLoginSuccess(t *testing.T) {
 	}
 }
 
-// TestAuthLoginWrongPassword mirrors the 401 shape (backend/auth/auth.py).
+// TestAuthLoginWrongPassword mirrors the 401 shape (backend).
 func TestAuthLoginWrongPassword(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
@@ -123,7 +123,7 @@ func TestAuthLoginWrongPassword(t *testing.T) {
 }
 
 // TestAuthLoginUnknownNonOwnerNeverAuthenticates: only the is_owner row is a
-// credential (backend/auth/auth.py authenticate_user).
+// credential (backend/auth authenticate_user).
 func TestAuthLoginUnknownNonOwner(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
@@ -158,7 +158,7 @@ func TestAuthLoginLockout(t *testing.T) {
 	}
 }
 
-// TestAuthSessionVerifyRevoke covers sessions.py semantics directly: expiry,
+// TestAuthSessionVerifyRevoke covers sessions semantics directly: expiry,
 // idle timeout, revocation.
 func TestAuthSessionVerifyRevoke(t *testing.T) {
 	conn, _ := newTestDB(t)
@@ -207,7 +207,7 @@ func TestAuthSessionVerifyRevoke(t *testing.T) {
 }
 
 // TestAuthExpiredSessionShape: the retired JWT /refresh endpoint returns 401
-// with the login-again detail (backend/auth/auth.py).
+// with the login-again detail (backend).
 func TestAuthRefreshRetired(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
@@ -273,7 +273,7 @@ func TestAuthRequireOwner403(t *testing.T) {
 	}
 }
 
-// TestOwnerClaimFlow mirrors backend/routers/owner_claim.py: the key file is
+// TestOwnerClaimFlow mirrors backend/routers/owner_claim: the key file is
 // consumed by a successful claim and the response is a login-shaped session.
 func TestOwnerClaimFlow(t *testing.T) {
 	conn, dir := newTestDB(t)

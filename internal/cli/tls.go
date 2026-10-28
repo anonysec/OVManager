@@ -1,4 +1,4 @@
-// `ovm tls` (cli/tls.py): terminal-side HTTPS certificate management.
+// `ovm tls` (cli): terminal-side HTTPS certificate management.
 // Issuance and installation happen here; the panel process only reads the
 // resulting files at startup to decide bind mode. The target pair is the
 // DECLARED pair — SSL_CERTFILE/SSL_KEYFILE from the install .env (or the

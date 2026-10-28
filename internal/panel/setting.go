@@ -17,7 +17,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/version"
 )
 
-// Panel-settings validation (backend/routers/setting.py).
+// Panel-settings validation (backend).
 const (
 	autoBackupKeepMin = 1
 	autoBackupKeepMax = 500

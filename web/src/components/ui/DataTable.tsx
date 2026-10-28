@@ -140,7 +140,7 @@ const DataTable = ({
                 const k = rowKey(row, i);
                 const checked = selectedKeys?.has?.(String(k)) ?? false;
                 return (
-                  <tr key={k} className={`dt-row${checked ? ' dt-selected' : ''}`}>
+                  <tr key={k} className={`dt-row${checked ? ' dt-selected' : ''}`} aria-selected={selectable ? checked : undefined}>
                     {selectable && (
                       <td className="dt-td dt-col-check">
                         <input

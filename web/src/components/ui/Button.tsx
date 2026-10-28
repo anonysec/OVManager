@@ -4,18 +4,21 @@
 import './Button.css';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success';
+type ButtonSize = 'sm' | 'md' | 'lg';
+
 type ButtonProps = {
-  variant?: any;
-  size?: any;
-  icon?: any;
-  iconRight?: any;
-  loading?: any;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: ReactNode;
+  iconRight?: ReactNode;
+  loading?: boolean;
   disabled?: boolean;
-  block?: any;
+  block?: boolean;
   type?: ButtonHTMLAttributes<HTMLButtonElement>['type'];
   className?: string;
   children?: ReactNode;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 

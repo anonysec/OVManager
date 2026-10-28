@@ -15,7 +15,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/version"
 )
 
-// Panel update checker (backend/routers/updater.py).
+// Panel update checker (backend).
 //
 // The panel never downloads or installs anything: /status only reads GitHub's
 // public release API (fail-soft, so an unreachable GitHub never turns the

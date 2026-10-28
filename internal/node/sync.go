@@ -1,4 +1,4 @@
-// Background sync operations (backend/node/sync.py): traffic collection,
+// Background sync operations (backend): traffic collection,
 // limit pushing, stale-session cleanup.
 package node
 

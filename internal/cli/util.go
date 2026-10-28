@@ -1,4 +1,4 @@
-// Shared small formatters (cli/restore.py _human_size, cli/status.py).
+// Shared small formatters (cli).
 package cli
 
 import (

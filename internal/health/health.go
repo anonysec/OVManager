@@ -1,6 +1,6 @@
 // Package health serves the panel /health endpoint.
 //
-// Contract (backend/app.py): {"status":"ok"} plus "version" for loopback
+// Contract (backend): {"status":"ok"} plus "version" for loopback
 // clients, so the public internet cannot fingerprint the build.
 package health
 

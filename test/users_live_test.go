@@ -1,5 +1,5 @@
 // Task 9: the user list reads real live-connection counts from the telemetry
-// snapshot (backend/operations/observability/live.py) instead of the old
+// snapshot (backend) instead of the old
 // hardcoded 0/false.
 package tests
 

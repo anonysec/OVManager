@@ -67,7 +67,7 @@ func main() {
 	}
 }
 
-// panelRouter assembles app.py's surface: root /health, every router under
+// panelRouter assembles the panel surface: root /health, every router under
 // /api, the unprefixed subscription page, and the built SPA as the fallback.
 func panelRouter(svc *auth.Service) http.Handler {
 	h := panel.NewHandler(svc)
@@ -100,7 +100,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	return panel.SecurityHeaders(wrapped)
 }
 
-// appDir is where .env and web/ live (backend/config.py app_dir).
+// appDir is where .env and web/ live (backend config app_dir).
 func appDir() string {
 	if d := os.Getenv("OVM_APP_DIR"); d != "" {
 		return d
@@ -139,7 +139,7 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 }
 
 // spaHandler serves the built web and falls back to index.html for the
-// client-side router. Reserved prefixes answer 404 like app.py's catch-all,
+// client-side router. Reserved prefixes answer 404 like the catch-all,
 // never SPA HTML.
 //
 // The SPA comes from <appDir>/web/dist when that tree exists (a dev checkout,
@@ -315,7 +315,7 @@ func fileExists(p string) bool {
 // migrateLegacyTLS copies the pre-declaration pair in DATA_DIR/tls onto the
 // declared paths when the declared ones are empty, so an install that keeps
 // its certificate in the legacy location does not silently fall back to plain
-// HTTP after the restart that lands the declared-path resolution (tls.py
+// HTTP after the restart that lands TLS resolution (tls migrate_legacy_tls).
 // migrate_legacy_tls). Copy, never move: the legacy files stay as a fallback.
 func migrateLegacyTLS(dataDirPath string) {
 	certPath := panel.SSLCertPath()

@@ -1,5 +1,5 @@
 // Session diagnostics and login health monitoring
-// (backend/node/diagnostics.py).
+// (backend).
 package node
 
 import (

@@ -4,7 +4,7 @@
 //
 // Two halves:
 //   - stream.go: the in-process event bus, the live snapshot, the SSE handler
-//     and the background collector (backend/operations/observability/live.py).
+//     and the background collector (backend).
 //   - handler.go: activity, notifications and metrics endpoints plus the
 //     audit / threshold / notifier helpers they and the collector use.
 package telemetry

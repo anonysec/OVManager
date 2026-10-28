@@ -2,7 +2,7 @@
 // the connection/health registry, fan-out bounds, sync workers, diagnostics
 // and the node management handlers.
 //
-// TLS policy (backend/node/requests.py): a stored server_ca pin verifies the
+// TLS policy (backend): a stored server_ca pin verifies the
 // node against exactly that certificate and an SSL failure fails closed. With
 // no pin, an SSL failure also fails closed unless NODE_TLS_INSECURE_FALLBACK
 // is set, in which case one unverified retry happens with a loud warning.

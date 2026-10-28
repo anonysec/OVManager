@@ -21,7 +21,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/webfs"
 )
 
-// Subscription page (backend/routers/sub.py). The template is the Jinja source
+// Subscription page (backend). The template is the Jinja source
 // from frontend/templates/subscription.html converted to html/template syntax
 // (backend/ is going away, so the Go copy is the live one).
 //
