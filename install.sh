@@ -582,6 +582,7 @@ write_install_result() {
 # ── Main install ────────────────────────────────────────────────────────
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
+    [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     [[ -e "$dest" ]] \
         && die "Already installed ($dest). Use: ovmanager update"
     check_root
@@ -665,6 +666,7 @@ do_update() {
 # ── Uninstall ──────────────────────────────────────────────────────────
 do_uninstall() {
     local purge=0 dest="${DEST:-$INSTALL_DIR}"
+    [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --purge) purge=1; shift ;;
