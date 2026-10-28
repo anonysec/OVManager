@@ -650,9 +650,12 @@ do_install() {
     _ok "service $SYSTEMD_SERVICE started"
     if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
         colorized_echo blue "TLS (self-signed)"
-        "$dest/$APP_SLUG" tls self-signed "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1 || _warn "self-signed cert issuance failed"
-        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
-        _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
+        if "$dest/$APP_SLUG" tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
+            systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+            _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
+        else
+            _warn "self-signed cert issuance failed"
+        fi
     fi
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
     if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
