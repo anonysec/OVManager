@@ -202,6 +202,17 @@ func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
+	if webroot == "" {
+		if f, err := os.Open("/dev/tcp/127.0.0.1/80"); err == nil {
+			f.Close()
+			return block([]string{
+				heading("HTTPS certificate"),
+				"port 80 is in use - ACME HTTP-01 needs it",
+				"stop the occupant (e.g. systemctl stop nginx) and retry,",
+				"or use --webroot <dir> with a reverse proxy serving it.",
+			}), 1
+		}
+	}
 	// account key
 	dir := tlsDir(inst)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
