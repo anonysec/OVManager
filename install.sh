@@ -671,6 +671,14 @@ do_uninstall() {
     while [[ $# -gt 0 ]]; do
         case "$1" in --purge) purge=1; shift ;; *) die "Unknown option for uninstall: $1" ;; esac
     done
+    # Interactive confirmation (PasarGuard style)
+    if [[ -t 0 && "$YES" -eq 0 && $# -eq 0 ]]; then
+        local confirm purge_confirm
+        read -r -p "Do you really want to uninstall OVManager? (y/n) " confirm </dev/tty || true
+        [[ "$confirm" =~ ^[Yy]$ ]] || { colorized_echo yellow "Aborted."; return 0; }
+        read -r -p "Do you want to remove OVManager data files too ($DATA_DIR)? (y/n) " purge_confirm </dev/tty || true
+        [[ "$purge_confirm" =~ ^[Yy]$ ]] && purge=1
+    fi
     check_root
     if command -v docker >/dev/null 2>&1; then
         docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ovmanager' && { docker rm -f ovmanager >/dev/null 2>&1 && _ok "removed container ovmanager" || true; }
