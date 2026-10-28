@@ -191,6 +191,14 @@ validate_urlpath() {
 
 check_acme_domain() {
     [[ -z "${OVM_ACME_DOMAIN:-}" ]] && return 0
+    # If a valid certificate already exists, do not re-issue.
+    if [[ -s "$DATA_DIR/tls/fullchain.pem" && -s "$DATA_DIR/tls/privkey.pem" ]]; then
+        if check="$(openssl x509 -in "$DATA_DIR/tls/fullchain.pem" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
+            _ok "acme    existing certificate still valid - skipping issuance"
+            OVM_ACME_DOMAIN=""
+            return 0
+        fi
+    fi
     local d="$OVM_ACME_DOMAIN"
     # Basic DNS name validation
     if [[ "$d" != *[!A-Za-z0-9.-]* && "$d" == *.* && \
