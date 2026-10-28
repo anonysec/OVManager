@@ -34,7 +34,7 @@ DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
 DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="${OVM_VERSION:-2.1.2}"
+VERSION="${OVM_VERSION:-2.1.3}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 fi
