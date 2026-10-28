@@ -655,7 +655,12 @@ do_install() {
         _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
     fi
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
-    [[ "$SSL_MODE" == "ip" ]] && _note "run 'ovmanager tls' to issue the Let's Encrypt IP certificate for $SSL_IP"
+    if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
+        colorized_echo blue "TLS (Let's Encrypt IP)"
+        "$dest/$APP_SLUG" tls acme "$SSL_IP" >/dev/null 2>&1 || _warn "IP certificate issuance failed - run 'ovmanager tls acme $SSL_IP' later"
+        systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
+        _ok "IP certificate step done for $SSL_IP"
+    fi
     port="$(awk -F= -v k=PORT '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; port="${port:-$DEFAULT_PORT}"
     urlpath="$(awk -F= -v k=URLPATH '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; urlpath="${urlpath:-$DEFAULT_URLPATH}"
     colorized_echo blue "Verification"

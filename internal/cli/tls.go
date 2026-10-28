@@ -214,10 +214,15 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	profile := ""
+	if net.ParseIP(domain) != nil {
+		profile = "shortlived"
+	}
 	res, err := acme.Issue(ctx, acme.Options{
 		Domains:    []string{domain},
 		AccountKey: key,
 		HTTPPort:   80,
+		Profile:    profile,
 	})
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1

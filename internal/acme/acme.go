@@ -38,6 +38,9 @@ type Options struct {
 	// HTTPPort is the standalone HTTP-01 challenge listener's port, normally
 	// 80 (the CA connects to the domain on port 80). 0 → ephemeral (tests).
 	HTTPPort int
+	// Profile is the ACME issuance profile name (e.g. "shortlived" for IP
+	// certificates). Empty uses the CA default.
+	Profile string
 }
 
 // Result is what a successful issuance leaves behind.
@@ -106,7 +109,11 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 			ids = append(ids, acme.AuthzID{Type: "dns", Value: d})
 		}
 	}
-	order, err := client.AuthorizeOrder(ctx, ids)
+	var orderOpts []acme.OrderOption
+	if o.Profile != "" {
+		orderOpts = append(orderOpts, acme.WithOrderIssuanceProfile(acme.ProfileName(o.Profile)))
+	}
+	order, err := client.AuthorizeOrder(ctx, ids, orderOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("acme: new order failed: %w", err)
 	}
