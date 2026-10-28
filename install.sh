@@ -239,7 +239,7 @@ prompt_interactive() {
         fi
     fi
 
-    read -r -p "  URL Path (leave blank for /dashboard/) [${URLPATH_VAL}]: " in_path </dev/tty || true
+    read -r -p "  URL Path [${URLPATH_VAL}]: " in_path </dev/tty || true
     in_path="${in_path// /}"
     in_path="${in_path#/}"
     in_path="${in_path%/}"
@@ -252,7 +252,7 @@ prompt_interactive() {
     fi
 
     if [[ -z "${OVM_ACME_DOMAIN:-}" ]]; then
-        read -r -p "  TLS domain (optional, e.g. panel.example.com): " in_acme </dev/tty || true
+        read -r -p "  Panel domain (optional, e.g. panel.example.com): " in_acme </dev/tty || true
         in_acme="${in_acme// /}"
         if [[ -n "$in_acme" ]]; then
             OVM_ACME_DOMAIN="$in_acme"
