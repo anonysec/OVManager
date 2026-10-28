@@ -597,8 +597,11 @@ UNIT
 do_install() {
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
-    [[ -e "$dest" ]] \
-        && die "Already installed ($dest). Use: ovmanager update"
+    if [[ -e "$dest" ]]; then
+        _note "Already installed at $dest - running update instead"
+        do_update "$@"
+        return $?
+    fi
     check_root
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
