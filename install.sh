@@ -199,6 +199,16 @@ check_acme_domain() {
             return 0
         fi
     fi
+    # Let'''s Encrypt HTTP-01 needs port 80 free. If something (nginx/apache)
+    # already holds it, skip auto-issuance and let the operator run
+    # `ovmanager tls` later, optionally behind a reverse proxy.
+    if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
+        exec 3>&- 3<&- 2>/dev/null || true
+        _warn "port 80 is in use - skipping auto ACME issuance"
+        _note "free port 80 or proxy /.well-known/acme-challenge/ to the panel, then run: ovmanager tls issue $OVM_ACME_DOMAIN"
+        OVM_ACME_DOMAIN=""
+        return 0
+    fi
     local d="$OVM_ACME_DOMAIN"
     # Basic DNS name validation
     if [[ "$d" != *[!A-Za-z0-9.-]* && "$d" == *.* && \
