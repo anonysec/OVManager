@@ -84,6 +84,9 @@ func TestCLITLSInstallBadPairPath(t *testing.T) {
 // TestCLITLSSelfSignedOwnership: when run as root with a unit naming a real
 // service account, the written key is chowned to that account and stays 0600.
 func TestCLITLSSelfSignedOwnership(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires root")
+	}
 	installDir, dataDir := cliFixture(t)
 	unit := filepath.Join(t.TempDir(), "ovmanager.service")
 	if err := os.WriteFile(unit, []byte("[Service]\nUser=daemon\n"), 0o644); err != nil {
