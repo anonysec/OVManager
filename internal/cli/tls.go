@@ -203,8 +203,9 @@ func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
 	if webroot == "" {
-		if f, err := os.Open("/dev/tcp/127.0.0.1/80"); err == nil {
-			f.Close()
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
+		if err == nil {
+			conn.Close()
 			return block([]string{
 				heading("HTTPS certificate"),
 				"port 80 is in use - ACME HTTP-01 needs it",
