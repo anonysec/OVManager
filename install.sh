@@ -35,6 +35,7 @@ DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 VERSION="${OVM_VERSION:-2.1.3}"
+IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 fi
@@ -50,6 +51,7 @@ ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
 YES=0
 FROM_SOURCE=0
+DOCKER=0
 SRC=""
 DEST=""
 ACTION="install"
@@ -593,8 +595,88 @@ UNIT
     _ok "installed $dest (service $service, port $port)"
 }
 
+
+# ── Docker helpers ──────────────────────────────────────────────────────
+ensure_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        _note "installing Docker Engine..."
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq >/dev/null 2>&1 || true
+            apt-get install -y -qq docker.io docker-compose-plugin >/dev/null 2>&1 \
+                || apt-get install -y -qq docker-ce docker-compose-plugin >/dev/null 2>&1 \
+                || die "Could not install Docker via apt. Install manually: https://docs.docker.com/engine/install/"
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y docker docker-compose-plugin >/dev/null 2>&1 || die "Could not install Docker via dnf"
+        else
+            die "Docker not found. Install it manually: https://docs.docker.com/engine/install/"
+        fi
+    fi
+    command -v docker >/dev/null 2>&1 || die "Docker binary not found"
+    docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1 \
+        || die "Docker Compose v2 is required (docker compose plugin)"
+    _ok "Docker present"
+}
+
+compose_file() { printf '%s/docker-compose.yml' "$DATA_DIR"; }
+
+write_compose_file() {
+    local compose
+    compose="$(compose_file)"
+    mkdir -p "$DATA_DIR"
+    {
+        printf 'services:\n'
+        printf '  ovmanager:\n'
+        printf '    image: %s:%s\n' "$IMAGE_REPO" "$VERSION"
+        printf '    container_name: ovmanager\n'
+        printf '    restart: unless-stopped\n'
+        printf '    network_mode: host\n'
+        printf '    environment:\n'
+        printf '      HOST: 0.0.0.0\n'
+        printf '      PORT: %s\n' "$PORT_VAL"
+        printf '      URLPATH: %s\n' "$URLPATH_VAL"
+        printf '      ADMIN_USERNAME: %s\n' "$DEFAULT_USER"
+        printf '      DATA_DIR: /app/data\n'
+        if [[ -n "${OVM_ACME_DOMAIN:-}" ]]; then
+            printf '      OVM_ACME_DOMAIN: %s\n' "$OVM_ACME_DOMAIN"
+            printf '      SSL_CERTFILE: /app/data/tls/fullchain.pem\n'
+            printf '      SSL_KEYFILE: /app/data/tls/privkey.pem\n'
+        fi
+        printf '    volumes:\n'
+        printf '      - %s:/app/data\n' "$DATA_DIR"
+        printf '    logging:\n'
+        printf '      options:\n'
+        printf '        max-size: "5m"\n'
+        printf '        max-file: "3"\n'
+    } > "$compose"
+    chmod 600 "$compose"
+    _ok "Compose file written: $compose"
+}
+
+setup_docker() {
+    ensure_docker
+    write_compose_file
+    _note "pulling ${IMAGE_REPO}:${VERSION}"
+    docker pull "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1 || _warn "pull failed; continuing with cached image"
+    _note "starting container"
+    docker compose -f "$(compose_file)" up -d
+    _ok "container started"
+}
+
 # ── Main install ────────────────────────────────────────────────
 do_install() {
+    if [[ "$DOCKER" -eq 1 ]]; then
+        check_root
+        _stage "[1/3] Configuration"
+        prompt_interactive
+        _ok "port=$PORT_VAL  path=$URLPATH_VAL  acme=${OVM_ACME_DOMAIN:-none}"
+        _stage "[2/3] Docker"
+        setup_docker
+        _stage "[3/3] Verification"
+        verify_health "$PORT_VAL" "$VERSION" \
+            || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
+        _ok "installed v$VERSION via Docker (port $PORT_VAL)"
+        return 0
+    fi
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     if [[ -e "$dest" ]]; then
@@ -694,7 +776,16 @@ do_uninstall() {
     done
 
     check_root
-    has_systemd || die "systemd not found — a native install needs it"
+    # Docker-mode cleanup (best effort)
+    if command -v docker >/dev/null 2>&1; then
+        if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ovmanager'; then
+            docker rm -f ovmanager >/dev/null 2>&1 && _ok "removed container ovmanager" || true
+        fi
+        rm -f "$(compose_file)" 2>/dev/null || true
+    fi
+    if [[ -d "$dest" || -f "/etc/systemd/system/$SYSTEMD_SERVICE" ]]; then
+        has_systemd || die "systemd not found — a native install needs it"
+    fi
 
     # Stop and disable service
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
@@ -772,6 +863,7 @@ OPTIONS
                              no release fetch. (--from-source is a deprecated
                              alias.)
   --dest DIR                 with --build: destination (default /opt/ovmanager)
+  --docker                   Install/run via Docker instead of a native systemd service
   -h, --help                 Show this help
 
 ENVIRONMENT
@@ -830,6 +922,7 @@ parse_args() {
             --acme)        [[ $# -ge 2 ]] || die "--acme needs a domain"; OVM_ACME_DOMAIN="$2"; shift 2 ;;
             --dest)        [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
+            --docker)         DOCKER=1; shift ;;
             -y|--yes)         YES=1; shift ;;
             -h|--help)     usage ;;
             help)          usage ;;
