@@ -651,7 +651,9 @@ do_install() {
         printf '  ╠══════════════════════════════════════════════╣\n' >&2
         printf '  ║  URL   http://127.0.0.1:%-21s ║\n' "$port$display_path" >&2
         printf '  ║  Key   %-38s ║\n' "$key" >&2
-        printf '  ║  SSH   ssh -L %s:127.0.0.1:%s <host>        ║\n' "$port" "$port" >&2
+        local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+        host_ip="${host_ip:-<host>}"
+        printf '  ║  SSH   ssh -L %s:127.0.0.1:%s %s  ║\n' "$port" "$port" "$host_ip" >&2
         printf '  ╚══════════════════════════════════════════════╝\n\n' >&2
     else
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
