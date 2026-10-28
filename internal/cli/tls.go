@@ -194,11 +194,11 @@ func runTLSRenew(inst Install) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "could not determine domain from certificate"}), 1
 	}
-	text, code := runTLSAcme(inst, domain, "")
+	text, code := runTLSAcme(inst, domain, "", "")
 	return text, code
 }
 
-func runTLSAcme(inst Install, domain, email string) (string, int) {
+func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
@@ -223,6 +223,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		AccountKey: key,
 		HTTPPort:   80,
 		Profile:    profile,
+		Webroot:    webroot,
 	})
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1

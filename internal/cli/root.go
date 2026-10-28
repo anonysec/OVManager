@@ -210,6 +210,7 @@ func (a *app) restoreCmd() *cobra.Command {
 }
 
 func (a *app) tlsCmd() *cobra.Command {
+	var webroot string
 	cmd := &cobra.Command{
 		Use:     "tls [status|issue|selfsigned|install|remove|renew]",
 		Aliases: []string{"ssl", "cert"},
@@ -261,7 +262,7 @@ func (a *app) tlsCmd() *cobra.Command {
 				if len(args) > 2 {
 					email = args[2]
 				}
-				text, code := runTLSAcme(inst, args[1], email)
+				text, code := runTLSAcme(inst, args[1], email, webroot)
 				a.emit(text, code)
 			default:
 				// treat as domain/IP → issue Let's Encrypt cert
@@ -269,15 +270,15 @@ func (a *app) tlsCmd() *cobra.Command {
 				if len(args) > 1 {
 					email = args[1]
 				}
-				text, code := runTLSAcme(inst, args[0], email)
+				text, code := runTLSAcme(inst, args[0], email, webroot)
 				a.emit(text, code)
 			}
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&webroot, "webroot", "", "serve HTTP-01 challenges from this dir (nginx/reverse-proxy setups)")
 	return cmd
 }
-
 func (a *app) urlpathCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "urlpath",
@@ -422,7 +423,7 @@ func runTLSMenu(a *app, inst Install) {
 			if target == "" {
 				continue
 			}
-			text, code := runTLSAcme(inst, target, "")
+			text, code := runTLSAcme(inst, target, "", "")
 			a.emit(text, code)
 		case "selfsigned":
 			fmt.Fprint(a.out, "Domain or IP (default localhost): ")

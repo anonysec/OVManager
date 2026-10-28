@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,6 +43,10 @@ type Options struct {
 	// Profile is the ACME issuance profile name (e.g. "shortlived" for IP
 	// certificates). Empty uses the CA default.
 	Profile string
+	// Webroot, when set, serves HTTP-01 challenges from this directory
+	// (nginx/reverse-proxy setups) instead of binding a standalone listener
+	// on HTTPPort. The directory must be served at the domain root.
+	Webroot string
 }
 
 // Result is what a successful issuance leaves behind.
@@ -65,6 +71,11 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 	if len(o.Domains) == 0 {
 		return nil, errors.New("acme: no domains given")
 	}
+	if o.Webroot != "" {
+		defer func() {
+			_ = os.RemoveAll(filepath.Join(o.Webroot, ".well-known"))
+		}()
+	}
 	key := o.AccountKey
 	if key == nil {
 		generated, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -82,18 +93,23 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", o.HTTPPort))
-	if err != nil {
-		return nil, fmt.Errorf("acme: the standalone HTTP-01 listener could not bind port %d: %w",
-			o.HTTPPort, err)
+	var challenge *http.Server
+	var listener net.Listener
+	if o.Webroot == "" {
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", o.HTTPPort))
+		if err != nil {
+			return nil, fmt.Errorf("acme: the standalone HTTP-01 listener could not bind port %d: %w",
+				o.HTTPPort, err)
+		}
+		listener = l
+		challenge = &http.Server{Handler: challengeHandler(client)}
+		go func() { _ = challenge.Serve(listener) }()
+		defer func() {
+			ctxd, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = challenge.Shutdown(ctxd)
+		}()
 	}
-	challenge := &http.Server{Handler: challengeHandler(client)}
-	go func() { _ = challenge.Serve(listener) }()
-	defer func() {
-		ctxd, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = challenge.Shutdown(ctxd)
-	}()
 
 	if _, err := client.Register(ctx, &acme.Account{}, acme.AcceptTOS); err != nil {
 		if !errors.Is(err, acme.ErrAccountAlreadyExists) {
@@ -125,6 +141,19 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 		accepted := false
 		for _, ch := range authz.Challenges {
 			if ch.Type == "http-01" {
+				if o.Webroot != "" {
+					keyAuth, err := client.HTTP01ChallengeResponse(ch.Token)
+					if err != nil {
+						return nil, fmt.Errorf("acme: challenge response: %w", err)
+					}
+					dir := filepath.Join(o.Webroot, ".well-known", "acme-challenge")
+					if err := os.MkdirAll(dir, 0o755); err != nil {
+						return nil, fmt.Errorf("acme: webroot dir: %w", err)
+					}
+					if err := os.WriteFile(filepath.Join(dir, ch.Token), []byte(keyAuth), 0o644); err != nil {
+						return nil, fmt.Errorf("acme: write challenge: %w", err)
+					}
+				}
 				if _, err := client.Accept(ctx, ch); err != nil {
 					return nil, fmt.Errorf("acme: HTTP-01 challenge for %s: %w", authz.Identifier.Value, err)
 				}
