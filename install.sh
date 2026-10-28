@@ -259,7 +259,6 @@ prompt_interactive() {
         fi
     fi
     printf '  ────────────────────────────────────────────────\n' >&2
-    printf '  Summary: port=%s  path=%s  acme=%s\n\n' "$PORT_VAL" "$URLPATH_VAL" "${OVM_ACME_DOMAIN:-none}" >&2
 }
 
 # ── Environment file ────────────────────────────────────────────────────
@@ -593,7 +592,7 @@ do_install() {
 
     _stage "[1/5] Configuration"
     prompt_interactive
-
+    _ok "port=$PORT_VAL  path=$URLPATH_VAL  acme=${OVM_ACME_DOMAIN:-none}"
     # Check for port conflicts before proceeding
     if is_port_in_use "$PORT_VAL"; then
         _warn "Port $PORT_VAL is already in use. The install may fail."
