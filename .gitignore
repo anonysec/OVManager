@@ -31,9 +31,7 @@ internal/webfs/dist/*
 .DS_Store
 
 # Local tools (never published)
-graphify-out/
 .opencode/
-.my-agent-team/
 AGENTS.md
 .worktrees/
 .pre-commit-cache/
