@@ -252,7 +252,7 @@ prompt_interactive() {
     fi
 
     if [[ -z "${OVM_ACME_DOMAIN:-}" ]]; then
-        read -r -p "  Let's Encrypt Domain (optional, e.g. star.example.com): " in_acme </dev/tty || true
+        read -r -p "  TLS domain (optional, e.g. panel.example.com): " in_acme </dev/tty || true
         in_acme="${in_acme// /}"
         if [[ -n "$in_acme" ]]; then
             OVM_ACME_DOMAIN="$in_acme"
