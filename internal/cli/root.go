@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -210,16 +211,24 @@ func (a *app) restoreCmd() *cobra.Command {
 
 func (a *app) tlsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "tls [domain-or-ip|status|remove|selfsigned|install|acme]",
+		Use:     "tls [status|issue|selfsigned|install|remove|renew]",
 		Aliases: []string{"ssl", "cert"},
 		Short:   "HTTPS certificate management (terminal-side)",
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			inst := a.install()
-			switch {
-			case len(args) == 0:
+			// Interactive menu on a TTY with no args.
+			if len(args) == 0 {
+				fi, _ := os.Stdin.Stat()
+				if fi != nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+					runTLSMenu(a, inst)
+					return nil
+				}
 				text, code := runTLSStatus(inst)
 				a.emit(text, code)
+				return nil
+			}
+			switch {
 			case args[0] == "status":
 				text, code := runTLSStatus(inst)
 				a.emit(text, code)
@@ -243,9 +252,9 @@ func (a *app) tlsCmd() *cobra.Command {
 			case args[0] == "renew":
 				text, code := runTLSRenew(inst)
 				a.emit(text, code)
-			case args[0] == "acme":
+			case args[0] == "issue" || args[0] == "acme":
 				if len(args) < 2 {
-					a.emit("usage: ovmanager tls acme <domain-or-ip> [email]\n", 2)
+					a.emit("usage: ovmanager tls issue <domain-or-ip> [email]\n", 2)
 					return nil
 				}
 				email := ""
@@ -373,6 +382,78 @@ func (a *app) serviceCmd() *cobra.Command {
 	return cmd
 }
 
+func runTLSMenu(a *app, inst Install) {
+	items := []struct{ label, action string }{
+		{"Status", "status"},
+		{"Issue Let's Encrypt (domain or IP)", "issue"},
+		{"Self-signed certificate", "selfsigned"},
+		{"Install custom cert + key", "install"},
+		{"Renew (if due)", "renew"},
+		{"Remove certificate", "remove"},
+		{"Quit", ""},
+	}
+	for {
+		fmt.Fprintln(a.out, "")
+		fmt.Fprintln(a.out, "TLS menu:")
+		for i, it := range items {
+			fmt.Fprintf(a.out, "  %d) %s\n", i+1, it.label)
+		}
+		fmt.Fprint(a.out, "Choice: ")
+		var line string
+		fmt.Scanln(&line)
+		n := 0
+		fmt.Sscan(line, &n)
+		if n < 1 || n > len(items) {
+			fmt.Fprintln(a.out, "invalid choice")
+			continue
+		}
+		if items[n-1].action == "" {
+			return
+		}
+		switch items[n-1].action {
+		case "status":
+			text, code := runTLSStatus(inst)
+			a.emit(text, code)
+		case "issue":
+			fmt.Fprint(a.out, "Domain or IP: ")
+			var target string
+			fmt.Scanln(&target)
+			target = strings.TrimSpace(target)
+			if target == "" {
+				continue
+			}
+			text, code := runTLSAcme(inst, target, "")
+			a.emit(text, code)
+		case "selfsigned":
+			fmt.Fprint(a.out, "Domain or IP (default localhost): ")
+			var target string
+			fmt.Scanln(&target)
+			target = strings.TrimSpace(target)
+			if target == "" {
+				target = "localhost"
+			}
+			text, code := runTLSSelfSigned(inst, target)
+			a.emit(text, code)
+		case "install":
+			fmt.Fprint(a.out, "Cert path: ")
+			var c, k string
+			fmt.Scanln(&c)
+			fmt.Fprint(a.out, "Key path: ")
+			fmt.Scanln(&k)
+			text, code := runTLSInstall(inst, strings.TrimSpace(c), strings.TrimSpace(k))
+			a.emit(text, code)
+		case "renew":
+			text, code := runTLSRenew(inst)
+			a.emit(text, code)
+		case "remove":
+			text, code := runTLSRemove(inst)
+			a.emit(text, code)
+		}
+		if a.exit != 0 {
+			a.exit = 0
+		}
+	}
+}
 
 func runInteractiveMenu(a *app, cmd *cobra.Command) {
 	items := []struct{ label, command string }{
