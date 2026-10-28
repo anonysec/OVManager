@@ -459,6 +459,7 @@ func runInteractiveMenu(a *app, cmd *cobra.Command) {
 	items := []struct{ label, command string }{
 		{"Status", "status"},
 		{"Health", "health"},
+		{"TLS / HTTPS", "tls"},
 		{"Quit", ""},
 	}
 	for {
