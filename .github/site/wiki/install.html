@@ -233,9 +233,9 @@ Login     admin</code></pre>
       <pre><code>git clone https://github.com/anonysec/OVManager.git /opt/ovmanager
 cd /opt/ovmanager
 cp .env.example .env   # set PUBLIC_URL
-pip install uv &amp;&amp; uv sync
+go mod download
 cd frontend &amp;&amp; npm ci &amp;&amp; npm run build
-cd .. &amp;&amp; uv run main.py</code></pre>
+cd .. &amp;&amp; go build -o ovmanager ./cmd &amp;&amp; sudo ./ovmanager</code></pre>
     </figure>
     <p>
       The first run creates the schema and the owner row. There is no claim key

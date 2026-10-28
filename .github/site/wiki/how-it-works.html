@@ -324,8 +324,8 @@
     </p>
     <figure class="cmd">
       <figcaption>From a checkout</figcaption>
-      <pre><code>uv run python -m backend.db.migrations --check    # CI drift gate
-uv run python -m backend.db.migrations --migrate  # apply to the live database</code></pre>
+      <pre><code>make lint  # CI drift gate
+ovmanager migrate  # apply to the live database
     </figure>
 
     <h2 id="design-system">The design system</h2>
