@@ -450,8 +450,10 @@ verify_health() {
             fi
             [[ -n "$got" ]] && _warn "health reports '$got', expected '$want'"
         fi
+        printf '.' >&2
         sleep 1
     done
+    printf '\n' >&2
     return 1
 }
 
