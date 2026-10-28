@@ -47,6 +47,17 @@ func (a *app) rootCmd() *cobra.Command {
 		Short:         "OVManager local operator CLI",
 		SilenceUsage:  true,
 		SilenceErrors: false,
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) > 0 {
+				return
+			}
+			fi, _ := os.Stdin.Stat()
+			if fi == nil || (fi.Mode()&os.ModeCharDevice) == 0 {
+				cmd.Help()
+				return
+			}
+			runInteractiveMenu(a, cmd)
+		},
 	}
 	pf := root.PersistentFlags()
 	pf.StringVar(&a.installDir, "install-dir", "", "override install dir (default: $OVM_APP_DIR or /opt/ovmanager)")
@@ -360,4 +371,40 @@ func (a *app) serviceCmd() *cobra.Command {
 		})
 	}
 	return cmd
+}
+
+
+func runInteractiveMenu(a *app, cmd *cobra.Command) {
+	items := []struct{ label, command string }{
+		{"Status", "status"},
+		{"Health", "health"},
+		{"Quit", ""},
+	}
+	for {
+		fmt.Fprintln(a.out, "")
+		fmt.Fprintln(a.out, "OVManager menu:")
+		for i, it := range items {
+			fmt.Fprintf(a.out, "  %d) %s\n", i+1, it.label)
+		}
+		fmt.Fprint(a.out, "Choice: ")
+		var line string
+		fmt.Scanln(&line)
+		n := 0
+		fmt.Sscan(line, &n)
+		if n < 1 || n > len(items) {
+			fmt.Fprintln(a.out, "invalid choice")
+			continue
+		}
+		if items[n-1].command == "" {
+			return
+		}
+		sub, _, err := cmd.Root().Find([]string{items[n-1].command})
+		if err != nil || sub == nil {
+			fmt.Fprintln(a.out, "command not found")
+			continue
+		}
+		if err := sub.RunE(sub, []string{}); err != nil {
+			fmt.Fprintln(a.out, err)
+		}
+	}
 }
