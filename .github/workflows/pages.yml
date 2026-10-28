@@ -40,8 +40,8 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
-          token: ${{ secrets.PAGES_TOKEN || github.token }}
-          enablement: true
+          token: ${{ github.token }}
+          enablement: false
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
