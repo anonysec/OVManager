@@ -5,6 +5,8 @@
 
 Web panel for a self-hosted OpenVPN service: users, traffic quotas, expiry dates, device limits and live sessions across one or many servers.
 
+**Highlights:** claim-key first login · single binary · SQLite · no compile on server · limits enforced on nodes · accounting that can't double-bill · self-updating with rollback.
+
 ## Install
 
 ```bash
