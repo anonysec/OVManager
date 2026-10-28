@@ -586,7 +586,7 @@ do_install() {
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
 
-    _stage "Configuration"
+    _stage "[1/5] Configuration"
     prompt_interactive
 
     # Check for port conflicts before proceeding
@@ -602,7 +602,7 @@ do_install() {
     local key port urlpath
     ensure_panel_user
     check_acme_domain
-    _stage "Download"
+    _stage "[2/5] Download"
     fetch_release "$dest"
     write_env "$dest/.env" "$DATA_DIR" "$dest"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
@@ -611,7 +611,7 @@ do_install() {
     grant_panel_access "$dest"
     install_cli "$dest"
 
-    _stage "Service"
+    _stage "[3/5] Service"
     systemctl daemon-reload
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
         systemctl restart "$SYSTEMD_SERVICE" \
@@ -626,7 +626,7 @@ do_install() {
     port="${port:-$DEFAULT_PORT}"
     urlpath="$(read_env_value "$dest/.env" "URLPATH")"
     urlpath="${urlpath:-$DEFAULT_URLPATH}"
-    _stage "Verification"
+    _stage "[4/5] Verification"
     verify_health "$port" "$VERSION" \
         || die "The panel did not report v$VERSION on /health after 40s — journalctl -u $SYSTEMD_SERVICE"
 
