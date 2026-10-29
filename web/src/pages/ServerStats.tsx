@@ -449,7 +449,7 @@ const ServerStats = () => {
     { key: 'used', label: t('th_dataUsed', 'Data'), className: 'dt-num',
       render: (u: any) => formatBytes(u.used || 0) },
     { key: 'sessions', label: t('th_sessions', 'Sessions'), className: 'dt-num', hideOnMobile: true,
-      render: (u: any) => `${Number(u.active_connections || 0)}/${u.max_logins === 0 ? '∞' : (u.max_logins ?? '—')}` },
+      render: (u: any) => `${Number(u.active_connections || 0)}/${u.max_logins === 0 ? t('unlimited', 'Unlimited') : (u.max_logins ?? t('notSet', '(not set)'))}` },
     { key: 'actions', label: t('th_actions', 'Actions'),
       render: (u: any) => (
         <span className="dt-actions">
@@ -645,10 +645,10 @@ const ServerStats = () => {
       {allFailed ? (
         <div className="ds-empty-wrap" role="status">
           <ErrorState
-            title={t('loadFailedTitle')}
-            message={t('loadFailedMessage')}
+            title={t('loadFailedTitle', 'Failed to load')}
+            message={t('loadFailedMessage', 'Some services are unavailable. Try again in a moment.')}
             onRetry={() => loadData()}
-            retryLabel={t('retry')}
+            retryLabel={t('retry', 'Retry')}
           />
         </div>
       ) : (
@@ -689,7 +689,7 @@ const ServerStats = () => {
                     <li key={node.id} className="ds-node-row">
                       <span className="ds-node-name">
                         {flagHtml && (
-                          <span className="flag-icon" dangerouslySetInnerHTML={{ __html: flagHtml }} />
+                          <span className="flag-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: flagHtml }} />
                         )}
                         <span title={node.name}>{node.name}</span>
                       </span>
@@ -789,14 +789,12 @@ const ServerStats = () => {
             />
           </div>
 
-          {topUsers && topUsers.length > 0 && (
-            <TopUsers
-              items={topUsers}
-              error={errors.topUsers}
-              loading={loading}
-              onRetry={() => loadData()}
-            />
-          )}
+          <TopUsers
+            items={topUsers}
+            error={errors.topUsers}
+            loading={loading}
+            onRetry={() => loadData()}
+          />
 
         </>
       )}

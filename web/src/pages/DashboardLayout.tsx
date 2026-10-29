@@ -158,8 +158,12 @@ const DashboardLayout = () => {
       if (!e.target.closest('.notification-wrap')) setNotifOpen(false);
       if (!e.target.closest('.lang-picker-wrap')) setLangOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setNotifOpen(false); setLangOpen(false); }
+    };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); }
   }, [notifOpen, langOpen]);
 
   const skipToContent = () => {
@@ -356,12 +360,12 @@ const DashboardLayout = () => {
           <div className={`ops-main-container${collapsed ? ' ops-main-container--collapsed' : ''}${isMobile ? ' ops-main-container--mobile' : ''}`}>
             <header className="ops-topbar-minimal" role="banner">
               {isMobile && (
-                <div className="topbar-brand" aria-label="OVManager">
+                <div className="topbar-brand" aria-label={t('brand', 'OVManager')}>
                   <Logo size={30} />
                   <span>OV<span className="brand-accent">Manager</span></span>
                 </div>
               )}
-              <nav className="ops-breadcrumb" aria-label="Breadcrumb">
+              <nav className="ops-breadcrumb" aria-label={t('breadcrumb', 'Breadcrumb')}>
                 <ol>
                   {location.pathname !== '/' && (
                     <>
@@ -401,13 +405,13 @@ const DashboardLayout = () => {
                   <ThemeIcon aria-hidden="true" />
                 </button>
                 <div className="notification-wrap">
-                  <button type="button" ref={bellRef} className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', { count: notifCount }) : t('noNotif')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
+                  <button type="button" ref={bellRef} className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', 'You have {{count}} notifications', { count: notifCount }) : t('noNotif', 'No notifications')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
                     <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
                   </button>
-                  <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-label={t('notifTitle')}>
+                  <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-hidden={!notifOpen} aria-label={t('notifTitle', 'Notifications')}>
                     <div className="notif-head">
                       <strong>{t('notifTitle')}</strong>
-                      {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label={t('notifRefresh')}>↻</button>}
+                      {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label={t('notifRefresh', 'Refresh notifications')}>↻</button>}
                     </div>
                     {notifCount === 0 ? (
                       <p className="notification-empty">{t('notifEmpty')}</p>
