@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import apiClient from '../services/api';
 import { FiActivity, FiRefreshCw, FiCopy, FiCheck, FiFilter } from 'react-icons/fi';
 import { fmtDateTime, fmtRelative } from '../utils/time';
@@ -35,7 +36,8 @@ const ACTION_LABELS: Record<string, string> = {
   'admin.urlpath': 'Change URL Path',
 };
 
-const formatActionName = (action: string) => ACTION_LABELS[action] || action.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const formatActionName = (t: TFunction, action: string) =>
+  t(`auditAction_${action}`, { defaultValue: ACTION_LABELS[action] || action.replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) });
 
 const toneForAction = (action: any) => (ACTION_TONES as Record<string, string>)[String(action || '').split('.')[0]] || 'neutral';
 
@@ -231,7 +233,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
     },
     {
       key: 'action', label: t('th_action', 'Action'), sortable: true,
-      render: (e: any) => <Badge tone={toneForAction(e.action)}>{formatActionName(e.action || '') || '—'}</Badge>,
+      render: (e: any) => <Badge tone={toneForAction(e.action)}>{formatActionName(t, e.action || '') || '—'}</Badge>,
     },
     {
       key: 'target', label: t('th_target', 'Target'), sortable: true, hideOnMobile: true,
@@ -302,7 +304,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
           >
             <option value="all">{t('auditAllActions', 'All actions')}</option>
             {actions.map(([action, count]) => (
-              <option key={action} value={action}>{formatActionName(action)} ({count})</option>
+              <option key={action} value={action}>{formatActionName(t, action)} ({count})</option>
             ))}
           </select>
         </label>

@@ -128,7 +128,7 @@ describe('UserManagement session actions', () => {
     fireEvent.click(await screen.findByRole('button', { name: /more actions alice/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /^sessions$/i }));
     const dialog = await screen.findByRole('dialog');
-    expect(await within(dialog).findByText('Active/Max: 1/2')).toBeTruthy();
+    expect(await within(dialog).findByText('Active / Max: 1/2')).toBeTruthy();
     expect(within(dialog).getByText('Registry: Unavailable')).toBeTruthy();
     expect(within(dialog).getByText('The panel does not currently collect global registry data.')).toBeTruthy();
     expect(within(dialog).getByText('42')).toBeTruthy();

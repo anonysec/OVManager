@@ -806,5 +806,15 @@
   "offsiteTargetHint": "Необязательно. После каждого автоматического резервного копирования новейший файл копируется сюда с помощью rsync (или scp). Формат: user@server:/path — папка должна существовать, вход по SSH-ключу должен работать.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
   "toggleTheme": "Переключить тему",
-  "selectLanguage": "Выбрать язык: {name}"
+  "selectLanguage": "Выбрать язык: {name}",
+  "activeMax": "Active / Max",
+  "mode": "Mode",
+  "policy": "Policy",
+  "dismissAll": "Dismiss all",
+  "accent_orange": "Orange",
+  "accent_emerald": "Emerald",
+  "accent_indigo": "Indigo",
+  "accent_rose": "Rose",
+  "accent_cyan": "Cyan",
+  "accent_amber": "Amber"
 }

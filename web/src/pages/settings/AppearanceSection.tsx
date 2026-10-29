@@ -120,8 +120,8 @@ const AppearanceSection = () => {
               className={`accent-swatch${accent === a.hex ? ' active' : ''}`}
               style={{ background: a.hex }}
               onClick={() => chooseAccent(a.hex)}
-              title={a.name}
-              aria-label={a.name}
+              title={t(`accent_${a.name.toLowerCase()}`, a.name)}
+              aria-label={t(`accent_${a.name.toLowerCase()}`, a.name)}
               aria-pressed={accent === a.hex}
             />
           ))}

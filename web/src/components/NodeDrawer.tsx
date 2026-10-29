@@ -34,7 +34,7 @@ const NodeDrawer = ({
   onDelete,
   onDownloadAll,
   onChanged,
-}: { node?: any; initialTab?: any; onClose?: any; onEdit?: any; onDelete?: any; onDownloadAll?: any; onChanged?: any }) => {
+}: { node?: any; initialTab?: any; onClose?: any; onDelete?: any; onDownloadAll?: any; onChanged?: any }) => {
   const { t } = useTranslation();
   const drawerRef = useRef<any>(null);
   const previousFocusRef = useRef<any>(null);
@@ -297,7 +297,7 @@ const NodeDrawer = ({
   const liveList = Array.isArray(sessions?.live_sessions) ? sessions.live_sessions : [];
 
   return (
-    <div className="node-drawer-backdrop" onClick={onClose} role="presentation" onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') onClose(); }}>
+    <div className="node-drawer-backdrop" onClick={onClose} role="presentation" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <aside
         ref={drawerRef}
         className="node-drawer"
@@ -408,14 +408,14 @@ const NodeDrawer = ({
                 </div>
 
                 <div style={{ marginTop: '8px' }}>
-                  <Field label={t('key', 'API key')} hint={t('keyKeepExistingHint', 'Leave blank to keep the current key')}>
+                  <Field label={t('key', 'API key')} hint={t('certFieldHint', 'Paste the full PEM from node install. Used for TLS verification.')}>
                     <input type="text" name="key" value={formData.key} onChange={handleFormChange} placeholder={t('keyKeepExistingHint', 'Leave blank to keep the current key')} autoComplete="off" />
                   </Field>
                 </div>
 
                 <div style={{ marginTop: '8px' }}>
-                  <Field label={t('certFieldLabel', 'Certificate (PEM)')} hint={t('keyKeepExistingHint', 'Leave blank to keep the current key')}>
-                    <textarea name="cert" value={formData.cert} onChange={handleFormChange} rows={3} placeholder={t('keyKeepExistingHint', 'Leave blank to keep the current key')} />
+                  <Field label={t('certFieldLabel', 'Certificate (PEM)')} hint={t('certFieldHint', 'Paste the full PEM from node install. Used for TLS verification.')}>
+                    <textarea name="cert" value={formData.cert} onChange={handleFormChange} rows={3} placeholder={t('certFieldPlaceholder', '-----BEGIN CERTIFICATE-----')} />
                   </Field>
                 </div>
 

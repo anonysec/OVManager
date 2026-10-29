@@ -806,5 +806,15 @@
   "offsiteTargetHint": "可选。每次自动备份后，最新的文件会通过 rsync（或 scp）复制到这里。格式：user@server:/path — 目标文件夹必须已存在，且 SSH 密钥登录可用。",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
   "toggleTheme": "切换主题",
-  "selectLanguage": "选择语言: {name}"
+  "selectLanguage": "选择语言: {name}",
+  "activeMax": "Active / Max",
+  "mode": "Mode",
+  "policy": "Policy",
+  "dismissAll": "Dismiss all",
+  "accent_orange": "Orange",
+  "accent_emerald": "Emerald",
+  "accent_indigo": "Indigo",
+  "accent_rose": "Rose",
+  "accent_cyan": "Cyan",
+  "accent_amber": "Amber"
 }

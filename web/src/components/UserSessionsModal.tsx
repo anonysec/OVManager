@@ -50,10 +50,10 @@ const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false,
       {loading ? <p>{t('loading', 'Loading...')}</p> : (
         <>
           <div className="diagnostic-summary">
-            <span className="status-active">Active/Max: {active}/{max}</span>
-            <span>Mode: {data?.mode || '-'}</span>
-            <span>Policy: {policy || '-'}</span>
-            <span>Registry: {registryUnavailable ? t('unavailable', 'Unavailable') : fmt(registry.length)}</span>
+            <span className="status-active">{t('activeMax', 'Active / Max')}: {active}/{max}</span>
+            <span>{t('mode', 'Mode')}: {data?.mode || '-'}</span>
+            <span>{t('policy', 'Policy')}: {policy || '-'}</span>
+            <span>{t('registry', 'Registry')}: {registryUnavailable ? t('unavailable', 'Unavailable') : fmt(registry.length)}</span>
           </div>
           {hasPartialDiagnostics && (
             <p className="diagnostic-partial" role="status">

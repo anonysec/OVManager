@@ -178,7 +178,7 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
       </div>
       {onClear && (
         <button type="button" className="ds-alerts-more" onClick={dismissAll}>
-          {t('dismiss', 'Dismiss')}
+          {t('dismissAll', 'Dismiss all')}
         </button>
       )}
     </div>

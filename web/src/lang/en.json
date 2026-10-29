@@ -806,5 +806,15 @@
   "offsiteTargetHint": "Optional. After each automatic backup, the newest file is copied here with rsync (or scp). Format: user@server:/path — the target folder must already exist and SSH key login must work.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
   "toggleTheme": "Toggle theme",
-  "selectLanguage": "Select language: {name}"
+  "selectLanguage": "Select language: {name}",
+  "activeMax": "Active / Max",
+  "mode": "Mode",
+  "policy": "Policy",
+  "dismissAll": "Dismiss all",
+  "accent_orange": "Orange",
+  "accent_emerald": "Emerald",
+  "accent_indigo": "Indigo",
+  "accent_rose": "Rose",
+  "accent_cyan": "Cyan",
+  "accent_amber": "Amber"
 }

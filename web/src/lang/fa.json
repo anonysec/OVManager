@@ -806,5 +806,15 @@
   "offsiteTargetHint": "اختیاری. بعد از هر پشتیبان خودکار، تازه‌ترین فایل با rsync (یا scp) به این مقصد کپی می‌شود. قالب: user@server:/path — پوشه مقصد باید از قبل موجود باشد و ورود با کلید SSH کار کند.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
   "toggleTheme": "تغییر تم",
-  "selectLanguage": "انتخاب زبان: {name}"
+  "selectLanguage": "انتخاب زبان: {name}",
+  "activeMax": "Active / Max",
+  "mode": "Mode",
+  "policy": "Policy",
+  "dismissAll": "Dismiss all",
+  "accent_orange": "Orange",
+  "accent_emerald": "Emerald",
+  "accent_indigo": "Indigo",
+  "accent_rose": "Rose",
+  "accent_cyan": "Cyan",
+  "accent_amber": "Amber"
 }

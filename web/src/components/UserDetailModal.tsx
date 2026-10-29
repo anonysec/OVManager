@@ -195,7 +195,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
           </div>
           {qr && (
             <div className="ud-qr" aria-label={t('qrAlt', 'Subscription link QR code')}>
-              <img src={qr} alt="" />
+              <img src={qr} alt={t('qrAlt', 'VPN config QR code')} />
             </div>
           )}
           <p className="ud-note">{t('subIsOpenvpn')}</p>

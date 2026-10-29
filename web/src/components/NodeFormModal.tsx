@@ -213,7 +213,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
           >
             <textarea
               name="cert" value={formData.cert} onChange={handleChange} rows={5}
-              placeholder={isEdit ? t('keyKeepExistingHint', 'Leave blank to keep the current key') : t('certFieldPlaceholder', '-----BEGIN CERTIFICATE-----')}
+              placeholder={t('certFieldPlaceholder', '-----BEGIN CERTIFICATE-----')}
               autoComplete="off" spellCheck={false}
             />
           </Field>
