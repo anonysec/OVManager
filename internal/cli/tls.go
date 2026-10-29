@@ -209,7 +209,7 @@ func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
 			return block([]string{
 				heading("HTTPS certificate"),
 				"port 80 is in use - ACME HTTP-01 needs it",
-				"stop the occupant (e.g. systemctl stop nginx) and retry,",
+				"stop the occupant (nginx/apache/caddy) and retry,",
 				"or use --webroot <dir> with a reverse proxy serving it.",
 			}), 1
 		}

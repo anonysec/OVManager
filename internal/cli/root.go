@@ -213,9 +213,9 @@ func (a *app) restoreCmd() *cobra.Command {
 func (a *app) tlsCmd() *cobra.Command {
 	var webroot string
 	cmd := &cobra.Command{
-		Use:     "tls [status|issue|selfsigned|install|remove|renew]",
+		Use:     "tls",
 		Aliases: []string{"ssl", "cert"},
-		Short:   "HTTPS certificate management (terminal-side)",
+		Short:   "HTTPS certificate management (interactive menu)",
 		Args:    cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			inst := a.install()
