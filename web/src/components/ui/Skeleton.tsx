@@ -21,7 +21,7 @@ export const SkeletonBlock = ({ width, height = 14, radius = 6, className = '', 
   />
 );
 
-export const SkeletonText = ({ lines = 3, width = '100%' }: { lines?: number; width?: any }) => (
+const SkeletonText = ({ lines = 3, width = '100%' }: { lines?: number; width?: any }) => (
   <span className="sk-text" aria-hidden="true">
     {Array.from({ length: lines }, (_, i) => (
       <SkeletonBlock
@@ -55,4 +55,4 @@ export const SkeletonTable = ({ rows = 8, cols = 9, label = 'Loading' }: { rows?
   </div>
 );
 
-export default SkeletonBlock;
+

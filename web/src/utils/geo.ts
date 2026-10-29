@@ -2,13 +2,13 @@
 // page does not have to pull in the map chunk's d3-geo/world-atlas.
 
 
-export interface CountryEntry {
+interface CountryEntry {
   name: string;
   coords: [number, number];
 }
 
 /** Node shape the geo helpers read; extra fields are ignored. */
-export interface NodeLocation {
+interface NodeLocation {
   country_code?: string | null;
   name?: string | null;
   latitude?: number | string | null;

@@ -46,4 +46,3 @@ export function PanelState({ loading, error, isEmpty, onRetry, skeleton, childre
 }
 
 export { Panel };
-export default Panel;

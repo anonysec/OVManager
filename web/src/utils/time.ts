@@ -7,7 +7,7 @@ import { getDisplayTimezone } from './displayTimezone';
 
 type DateInput = string | number | Date | null | undefined;
 
-export function displayLocale(): string {
+function displayLocale(): string {
   const l = (i18n.language || '').toLowerCase();
   // ponytail: any RTL → Persian formatter; add locale map when second RTL lands
   if (isRTL(l)) return 'fa-u-ca-gregory-nu-latn';

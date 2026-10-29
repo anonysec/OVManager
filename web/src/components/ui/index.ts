@@ -4,7 +4,7 @@
 export { default as ErrorState } from './ErrorState';
 export { default as EmptyState } from './EmptyState';
 export { default as DataTable } from './DataTable';
-export { SkeletonBlock, SkeletonText, SkeletonPanel, SkeletonTable } from './Skeleton';
+export { SkeletonTable } from './Skeleton';
 export { SkeletonPanel as PanelSkeleton } from './Skeleton';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
