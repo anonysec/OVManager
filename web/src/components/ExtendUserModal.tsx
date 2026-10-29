@@ -61,7 +61,7 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
             step="1"
             value={days}
             onChange={(e) => setDays(e.target.value)}
-            autoFocus
+           
           />
           <small className="input-hint">{t('extendDaysHint', 'Added to the current expiry date.')}</small>
         </div>

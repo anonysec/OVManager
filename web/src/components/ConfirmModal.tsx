@@ -48,7 +48,7 @@ const ConfirmModal = ({
           onClick={handleConfirm}
           disabled={busy}
           aria-busy={busy || undefined}
-          autoFocus
+         
         >
           {busy && <span className="button-spinner" aria-hidden="true" />}
           {confirmLabel}

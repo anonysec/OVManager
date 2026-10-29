@@ -148,7 +148,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
             <Field label={t('nodeName')} required error={fieldErrors.name} hint={!isEdit ? t('nodeNameHint', 'Must match the --name given to the node installer, exactly.') : undefined}>
               <input
                 type="text" name="name" value={formData.name} onChange={handleChange}
-                autoFocus={!isEdit} autoComplete="off" spellCheck={false}
+                autoComplete="off" spellCheck={false}
               />
             </Field>
             <Field label={t('th_address')} required error={fieldErrors.address} hint={!isEdit ? t('nodeAddressHint', 'Public IP or hostname of the node server.') : undefined}>

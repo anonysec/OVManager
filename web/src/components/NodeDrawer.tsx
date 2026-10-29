@@ -297,7 +297,7 @@ const NodeDrawer = ({
   const liveList = Array.isArray(sessions?.live_sessions) ? sessions.live_sessions : [];
 
   return (
-    <div className="node-drawer-backdrop" onClick={onClose} role="presentation">
+    <div className="node-drawer-backdrop" onClick={onClose} role="presentation" onKeyDown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') onClose(); }}>
       <aside
         ref={drawerRef}
         className="node-drawer"
@@ -642,6 +642,7 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
       ) : logs?.failed ? (
         <div className="nd-empty">{t('nodeLogsFailed', 'Could not load node logs.')}</div>
       ) : logs?.records?.length ? (
+        <>
         <div className="nd-loglist" tabIndex={0} role="region" aria-label={t('nodeTabLogs', 'Logs')}>
           {logs.records.slice().reverse().map((r: any, i: number) => (
             <div key={i} className={`nd-log nd-log--${(r.level || '').toLowerCase()}`}>
@@ -650,6 +651,7 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
             </div>
           ))}
         </div>
+        </>
       ) : (
         <div className="nd-empty">{t('nodeLogsEmpty', 'No log records at this level.')}</div>
       )}

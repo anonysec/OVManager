@@ -38,6 +38,7 @@ const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?
     <div
       ref={listRef}
       role="tablist"
+      tabIndex={0}
       aria-label={ariaLabel}
       className={['ui-tabs', className].filter(Boolean).join(' ')}
       onKeyDown={onKeyDown}

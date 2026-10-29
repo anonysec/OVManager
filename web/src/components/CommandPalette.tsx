@@ -93,7 +93,7 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
   if (!open) return null;
 
   return (
-    <div className="palette-overlay" onMouseDown={(e: any) => { if (e.target === e.currentTarget) setOpen(false); }}>
+    <div className="palette-overlay" role="presentation" onMouseDown={(e: any) => { if (e.target === e.currentTarget) setOpen(false); }}>
       <div className="palette" role="dialog" aria-modal="true" aria-label={t('palTitle', 'Command palette')}>
         <div className="palette-input-row">
           <FiSearch className="palette-search-icon" aria-hidden="true" />

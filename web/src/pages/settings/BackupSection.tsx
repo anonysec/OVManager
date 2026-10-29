@@ -291,10 +291,11 @@ const BackupSection = () => {
           horizontal
           inputId="backup-telegram-enabled"
         >
-          <label className="sp-toggle">
+          <label className="sp-toggle" htmlFor="backup-telegram-enabled">
             <input
               id="backup-telegram-enabled"
               type="checkbox"
+              aria-label={t('telegramBackup', 'Telegram copy')}
               checked={telegramBackup}
               disabled={autoSaving || !telegramBackupAvailable}
               onChange={(e) => setTelegramBackup(e.target.checked)}

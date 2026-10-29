@@ -177,7 +177,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
                 required={!isEdit}
                 minLength={isEdit ? undefined : 3}
                 maxLength={64}
-                autoFocus={!isEdit}
+
                 disabled={isEdit}
                 placeholder={t('usernameHint', '3–64 characters.')}
                 aria-invalid={Boolean(error) || undefined}

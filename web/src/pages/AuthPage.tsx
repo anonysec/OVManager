@@ -137,7 +137,7 @@ const AuthPage = () => {
         {view === 'login' ? (
           <form className="login-form" onSubmit={handleLogin}>
             <Field label={t('username')}>
-              <input type="text" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} autoComplete="username" placeholder={t('usernamePlaceholder', 'admin')} required autoFocus />
+              <input type="text" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} autoComplete="username" placeholder={t('usernamePlaceholder', 'admin')} required />
             </Field>
             <PasswordInput label={t('password')} value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} autoComplete="current-password" placeholder={t('passwordPlaceholder', '••••••••')} required />
             <Button type="submit" variant="primary" size="lg" block loading={loading}>{t('loginButton', 'Login')}</Button>
@@ -146,7 +146,7 @@ const AuthPage = () => {
         ) : step === 'verify' ? (
           <form className="login-form" onSubmit={handleVerify}>
             <Field label={t('claimKey', 'Setup key')} hint={t('claimKeyHint', 'Printed at the end of the install; regenerate it with: ovm owner-claim')}>
-              <input type="text" value={setupKey} onChange={(e) => { setSetupKey(e.target.value); clearError(); }} autoComplete="off" spellCheck={false} required autoFocus />
+              <input type="text" value={setupKey} onChange={(e) => { setSetupKey(e.target.value); clearError(); }} autoComplete="off" spellCheck={false} required />
             </Field>
             <Button type="submit" variant="primary" size="lg" block loading={loading}>{t('verifyButton', 'Verify')}</Button>
             <button type="button" className="login-claim-link" onClick={() => setView('login')}>{t('backToLogin', 'Back to login')}</button>
@@ -154,7 +154,7 @@ const AuthPage = () => {
         ) : (
           <form className="login-form" onSubmit={handleClaim}>
             <Field label={t('username')}>
-              <input type="text" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} autoComplete="username" placeholder={t('usernamePlaceholder', 'admin')} required autoFocus />
+              <input type="text" value={username} onChange={(e) => { setUsername(e.target.value); clearError(); }} autoComplete="username" placeholder={t('usernamePlaceholder', 'admin')} required />
             </Field>
             <PasswordInput label={t('claimPassword', 'Owner password')} value={password} onChange={(e: any) => { setPassword(e.target.value); clearError(); }} autoComplete="new-password" placeholder={t('passwordPlaceholder', '••••••••')} minLength={8} required />
             <PasswordInput label={t('confirmPassword', 'Confirm password')} value={confirmPassword} onChange={(e: any) => { setConfirmPassword(e.target.value); clearError(); }} autoComplete="new-password" placeholder={t('passwordPlaceholder', '••••••••')} minLength={8} required />

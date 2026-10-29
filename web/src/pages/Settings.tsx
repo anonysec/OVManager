@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+
 import apiClient from '../services/api';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import {
@@ -45,8 +45,6 @@ const Settings = () => {
   const { refreshTick } = useLive();
   const { userRole } = useAuth();
   const isOwner = userRole === 'owner';
-  const navigate = useNavigate();
-
   const [shared, setShared] = useState<{ data: any; loading: boolean; error: boolean }>({ data: null, loading: true, error: false });
   const [editing, setEditing] = useState(false);
   const reloadShared = useCallback(async () => {
@@ -98,16 +96,8 @@ const Settings = () => {
               key={s.id}
               className={`bento-tile bento-tile--${s.id}${s.bare ? ' bento-tile--bare' : ''}`}
               id={`sp-section-${s.id}`}
-              tabIndex={0}
-              role="region"
               aria-labelledby={s.bare ? undefined : `sp-heading-${s.id}`}
               aria-label={t(s.labelKey, s.label)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  navigate(`/${s.id === 'general' ? '' : s.id}`);
-                }
-              }}
             >
               {s.bare ? (
                 <s.Component />

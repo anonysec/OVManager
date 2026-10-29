@@ -31,7 +31,7 @@ const ShortcutsHelp = ({ open, onClose, isOwner }: { open: boolean; onClose: () 
   if (!open) return null;
 
   return (
-    <div className="palette-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="palette-overlay" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div
         className="shortcuts-sheet"
         role="dialog"
