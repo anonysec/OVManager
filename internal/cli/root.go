@@ -212,7 +212,7 @@ func (a *app) restoreCmd() *cobra.Command {
 
 func (a *app) tlsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "tls",
+		Use:     "tls [status|issue|selfsigned|install|remove|renew]",
 		Aliases: []string{"ssl", "cert"},
 		Short:   "HTTPS certificate management (interactive menu)",
 		Args:    cobra.ArbitraryArgs,
@@ -421,8 +421,7 @@ func runTLSMenu(a *app, inst Install) {
 			fmt.Fprintf(a.out, "  %d) %s\n", i+1, it.label)
 		}
 		fmt.Fprint(a.out, "Choice: ")
-		var line string
-		fmt.Scanln(&line)
+		line := strings.TrimSpace(readLine())
 		n := 0
 		fmt.Sscan(line, &n)
 		if n < 1 || n > len(items) {
@@ -473,10 +472,26 @@ func runTLSMenu(a *app, inst Install) {
 }
 
 func runInteractiveMenu(a *app, cmd *cobra.Command) {
+	in := os.Stdin
+	if f, err := os.Open("/dev/tty"); err == nil {
+		defer f.Close()
+		in = f
+	}
+	sc := bufio.NewScanner(in)
+	sc.Buffer(make([]byte, 1024), 1024*1024)
+	readLine := func() string {
+		if sc.Scan() {
+			return sc.Text()
+		}
+		return ""
+	}
 	items := []struct{ label, command string }{
 		{"Status", "status"},
 		{"Health", "health"},
 		{"TLS / HTTPS", "tls"},
+		{"Backup now", "backup"},
+		{"Logs", "logs"},
+		{"Update", "update"},
 		{"Quit", ""},
 	}
 	for {
@@ -486,8 +501,7 @@ func runInteractiveMenu(a *app, cmd *cobra.Command) {
 			fmt.Fprintf(a.out, "  %d) %s\n", i+1, it.label)
 		}
 		fmt.Fprint(a.out, "Choice: ")
-		var line string
-		fmt.Scanln(&line)
+		line := strings.TrimSpace(readLine())
 		n := 0
 		fmt.Sscan(line, &n)
 		if n < 1 || n > len(items) {

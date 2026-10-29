@@ -37,3 +37,4 @@ AGENTS.md
 .pre-commit-cache/
 docs/
 .review/
+cover.out

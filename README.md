@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-2.1.2-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-2.1.8-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
@@ -82,8 +82,8 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Rate limits on failed logins, per username and per address, with a `Retry-After` on the claim endpoint.
 - The panel UI is served under a random secret URL prefix; unrelated paths show a decoy 404. `/api/` and `/health` remain fixed routes; protected operations still require authentication.
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
-- Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` shows the installed certificate.
-- Built-in Let's Encrypt (`ovmanager tls acme <domain>` or `install.sh --acme DOMAIN`) issues over HTTP-01: **port 80 must be free** on this server for up to ~60 seconds while the certificate is issued, then renewals happen automatically (T-30 days). Anything else bound to port 80 makes issuance fail; the panel keeps serving plain HTTP meanwhile.
+- Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` opens the interactive TLS menu (status, issue, renew, remove, self-signed, custom install).
+- Built-in Let's Encrypt issues over HTTP-01. Port 80 must be reachable for ~60 seconds while the certificate is issued; if something else (nginx/apache/caddy) is bound to port 80, `ovmanager tls issue <domain>` offers to stop it temporarily (with confirmation) and restart it afterwards. Renewals happen automatically (T-30 days) via the `ovmanager-acme-renew.timer`. Issuance never needs an API key or DNS provider.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.
 - A filterable audit log of who changed what, exportable as CSV.
@@ -111,7 +111,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Port `2095` free.
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.2/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.8/install.sh)
 ```
 
 The installer fetches the bare release binary for this platform (plus its SHA-256 sidecar, verified before install), puts it in `/opt/ovmanager`, writes a systemd service and a daily backup timer, starts the panel and health-checks the result. There is nothing to prompt for; `-y` is accepted for compatibility and the script never asks questions mid-run. `bash install.sh --help` prints the full surface.
@@ -167,7 +167,7 @@ user           admin — change it any time in Settings
 | List backups, or restore | `sudo ovmanager restore [NAME]` |
 | The daily timer | written by the installer; runs `ovmanager backup --keep 7` daily |
 | Panel URL prefix | `sudo ovmanager urlpath` |
-| Installed certificate | `sudo ovmanager tls` |
+| TLS (interactive menu) | `sudo ovmanager tls` |
 | Staged update with failover | `sudo ovmanager update` |
 | Reset the owner password | `sudo ovmanager reset-password` |
 | Shell completion | `sudo ovmanager completion bash\|zsh\|fish` |
@@ -185,7 +185,7 @@ Every `ovmanager` command needs root, because each one reads the panel's `.env` 
 | `sudo ovmanager backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. The installer's daily timer pins `--keep 7`. |
 | `sudo ovmanager restore [NAME]` | List backups, or restore one by name. |
 | `sudo ovmanager urlpath` | Print the secret URL prefix the panel is served under. |
-| `sudo ovmanager tls` | The installed certificate and when it expires. Read-only. |
+| `sudo ovmanager tls` | Interactive TLS menu: status, issue Let's Encrypt, self-signed, install a custom cert, renew, remove. |
 | `sudo ovmanager update` | Staged update with automatic failover; recovers an interrupted update first. |
 | `sudo ovmanager reset-password` | Set a new owner password, then restart the panel. |
 | `sudo ovmanager completion` | Install shell completion (`bash\|zsh\|fish\|powershell`). |

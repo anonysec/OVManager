@@ -599,7 +599,7 @@ do_install() {
         colorized_echo blue "Configuration"
         prompt_interactive; setup_ssl_wizard
         [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
-        _ok "port=$PORT_VAL  path=$URLPATH_VAL  ssl=$SSL_MODE"
+        _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
         colorized_echo blue "Docker"; setup_docker
         colorized_echo blue "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
@@ -613,7 +613,7 @@ do_install() {
     colorized_echo blue "Configuration"
     prompt_interactive; setup_ssl_wizard
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
-    _ok "port=$PORT_VAL  path=$URLPATH_VAL  ssl=$SSL_MODE"
+    _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
     if is_port_in_use "$PORT_VAL"; then
         _warn "Port $PORT_VAL is already in use."
         if [[ "$INTERACTIVE" -eq 1 ]]; then
@@ -685,7 +685,7 @@ do_install() {
     local display_path="${urlpath#/}"; display_path="${display_path%/}"
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
     if [[ -n "$key" ]]; then
-        colorized_echo green "✓ Installation complete"
+        colorized_echo green "Installation complete"
         colorized_echo green "URL   http://127.0.0.1:$port$display_path"
         colorized_echo green "Key   $key"
         local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
