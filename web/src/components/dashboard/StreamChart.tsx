@@ -94,10 +94,10 @@ export default function StreamChart({ period: initialPeriod = '24h' }: { period?
       .then((r) => {
         if (isStale()) return;
         const data: RawPoint[] = r.data?.data?.traffic || [];
-        if (data.length) setSeries(data);
-        else if (!quiet) setSeries([]);
+        if (isStale()) return;
+        setSeries(data);
       })
-      .catch(() => { if (!quiet && !isStale()) { setLoadError(true); setSeries([]); } })
+      .catch(() => { if (!isStale()) { setLoadError(true); setSeries([]); } })
       .finally(() => { if (!quiet && !isStale()) setLoading(false); });
   }, [period]);
 
