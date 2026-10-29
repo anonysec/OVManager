@@ -44,7 +44,7 @@ const AppearanceSection = () => {
     { hex: '#19d3e9', name: 'Cyan' },
     { hex: '#eab308', name: 'Amber' },
   ];
-  const [accent, setAccent] = useState<string>(() => (getUiPref as (key: string, fallback?: string | null) => string | null)('accent', '') ?? '');
+  const [accent, setAccent] = useState<string>(() => getUiPref('accent', '') ?? '');
   const chooseAccent = (hex: string) => {
     setAccent(hex);
     setUiPref('accent', hex);

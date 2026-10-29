@@ -89,8 +89,8 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   const d = daysUntil(user.expiry_date);
   const used = Number(user.used || 0);
   const total = Number(user.total || 0);
-  const unlimited = !total;
-  const pct = unlimited ? 0 : Math.min(100, Math.round((used / total) * 100));
+  const unlimited = !total || total <= 0;
+  const pct = unlimited ? 0 : Math.min(100, Math.max(0, Math.round((used / total) * 100)));
   const expirySoon = d >= 0 && d <= 7;
 
   const copyLink = async () => {
@@ -98,7 +98,8 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     try {
       const ok = await copyText(subscriptionLink);
       setCopied(ok);
-      setTimeout(() => setCopied(false), 1600);
+      const timer = setTimeout(() => setCopied(false), 1600);
+      void timer;
     } catch { /* ignore */ }
   };
 
@@ -106,10 +107,10 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
     <Modal isOpen={isOpen} onClose={onClose} title={`${t('user')}: ${user.name}`} size="medium">
       <div className="ud-page">
         <header className="ud-header">
-          <span className="ud-avatar" aria-hidden="true">{user.name.slice(0, 1).toUpperCase()}</span>
+          <span className="ud-avatar" aria-hidden="true">{String(user?.name || '').slice(0, 1).toUpperCase() || '?'}</span>
           <div className="ud-identity">
             <strong className="ud-name">{user.name}</strong>
-            <code className="ud-uuid" title={user.uuid}>{user.uuid.slice(0, 8)}…</code>
+            <code className="ud-uuid" title={user.uuid}>{user?.uuid ? `${user.uuid.slice(0, 8)}…` : '—'}</code>
           </div>
           <Badge tone={st.tone} dot>{st.label}</Badge>
         </header>

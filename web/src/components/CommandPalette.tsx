@@ -25,6 +25,8 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
   const [cursor, setCursor] = useState(0);
+
+  useEffect(() => { setCursor(0); }, [query]);
   const inputRef = useRef<any>(null);
 
   const isAdmin = userRole === 'owner';
@@ -85,8 +87,8 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
   };
 
   const onKeyDown = (e: any) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => Math.min(c + 1, results.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => results.length ? Math.min(c + 1, results.length - 1) : 0); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => results.length ? Math.max(c - 1, 0) : 0); }
     else if (e.key === 'Enter' && results[cursor]) { go(results[cursor]); }
   };
 
@@ -117,7 +119,7 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
             return (
               <button
                 type="button"
-                key={`${item.kind}-${item.label}`}
+                key={`${item.kind}-${item.path ?? item.label}`}
                 role="option"
                 aria-selected={i === cursor}
                 className={`palette-item${i === cursor ? ' is-active' : ''}`}

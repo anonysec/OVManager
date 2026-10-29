@@ -7,6 +7,7 @@ import {
 import apiClient from '../services/api';
 import { formatBytes } from '../utils/format';
 import { CODES } from '../utils/geo';
+import { errorMessageOf } from '../utils/errorMessage';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
 
@@ -201,7 +202,7 @@ const NodeDrawer = ({
   const applyPorts = () => run('ports', async () => {
     const res = await apiClient.put(`/nodes/${node.id}/ports`, { extra_ports: extraPorts.trim() });
     const ok = Boolean(res.data?.success);
-    setResult('ports', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : 'Failed to save extra ports'));
+    setResult('ports', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : t('nodePortsSaveFailed', 'Failed to save extra ports')));
     if (ok) onChanged?.();
   });
 
@@ -246,22 +247,29 @@ const NodeDrawer = ({
   });
 
   const downloadAll = async () => {
-    if (onDownloadAll) {
-      await onDownloadAll(node);
+    setBusy('download');
+    try {
+      if (onDownloadAll) {
+        await onDownloadAll(node);
+        setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
+        return;
+      }
+      const r = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob' });
+      const blob = new Blob([r.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${node.name}-all-configs.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
       setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
-      return;
+    } catch (e) {
+      setResult('download', false, errorMessageOf(e, t('nodeDownloadFailed', 'Could not download configs.')));
+    } finally {
+      setBusy('');
     }
-    const r = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob' });
-    const blob = new Blob([r.data], { type: 'application/zip' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${node.name}-all-configs.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
   };
 
   const toggleStatus = () => run('toggle', async () => {
@@ -345,7 +353,7 @@ const NodeDrawer = ({
               {liveList.length > 0 && (
                 <div className="nd-list">
                   {liveList.map((s: any, i: number) => (
-                    <div key={i} className="nd-row">
+                    <div key={`${s.common_name || i}-${i}`} className="nd-row">
                       <span className="nd-row-dot" />
                       <span className="nd-row-main">{s.common_name}</span>
                       <span className="nd-row-sub">{s.trusted_ip || ''}</span>
@@ -720,6 +728,7 @@ const CertExpiryChip = ({ expiry }: { expiry?: any }) => {
   if (!expiry) return null;
   const now = new Date();
   const exp = new Date(expiry);
+  if (Number.isNaN(exp.getTime())) return null;
   const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays <= 0) {

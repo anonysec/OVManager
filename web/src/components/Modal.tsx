@@ -24,6 +24,8 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+let dialogCount = 0;
+
 const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large' }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
@@ -35,22 +37,24 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
   }, [onClose]);
 
   // Dialog semantics: inert the app root while open so background content is
-  // not focusable/operable, and lock body scroll.
+  // not focusable/operable, and lock body scroll. Reference-count nested dialogs
+  // so closing one does not un-inert the page while another stays open.
   useEffect(() => {
     if (!isOpen) return undefined;
+    dialogCount += 1;
     const rootEl = document.getElementById('root');
-    const inertPrev = rootEl ? rootEl.getAttribute('inert') : null;
-    if (rootEl) rootEl.setAttribute('inert', '');
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const ownsInert = dialogCount === 1;
+    const inertPrev = ownsInert ? (rootEl ? rootEl.getAttribute('inert') : null) : null;
+    if (ownsInert && rootEl) rootEl.setAttribute('inert', '');
+    const ownsOverflow = dialogCount === 1;
+    const prevOverflow = ownsOverflow ? document.body.style.overflow : '';
+    if (ownsOverflow) document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = prevOverflow;
-      if (rootEl) {
-        if (inertPrev !== null) {
-          rootEl.setAttribute('inert', inertPrev);
-        } else {
-          rootEl.removeAttribute('inert');
-        }
+      dialogCount = Math.max(0, dialogCount - 1);
+      if (ownsOverflow) document.body.style.overflow = prevOverflow;
+      if (ownsInert && rootEl) {
+        if (inertPrev !== null) rootEl.setAttribute('inert', inertPrev);
+        else rootEl.removeAttribute('inert');
       }
     };
   }, [isOpen]);
@@ -69,7 +73,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
 
     const onKeyDown = (e: any) => {
       if (e.key === 'Escape') {
-        onCloseRef.current();
+        onCloseRef.current?.();
         return;
       }
 

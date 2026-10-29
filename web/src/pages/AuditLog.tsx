@@ -379,7 +379,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
         />
       )}
 
-      <Modal isOpen={!!detailEvent} onClose={() => setDetailEvent(null)} title={`${detailEvent?.action || ''} — ${detailEvent?.target || ''}`} size="medium">
+      <Modal isOpen={!!detailEvent} onClose={() => setDetailEvent(null)} title={`${detailEvent?.action || t('audit', 'Audit')} — ${detailEvent?.target || '—'}`} size="medium">
         {detailEvent && (
           <div className="udetail">
             <div className="udetail-grid">

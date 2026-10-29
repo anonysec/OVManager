@@ -32,7 +32,7 @@ const Sidebar = () => {
   const { userRole, logout } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
-  const { subscribe, unsubscribe } = useLive();
+  const { subscribe } = useLive();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [stats, setStats] = useState({ totalUsers: 0, totalUsage: 0 });
@@ -97,7 +97,7 @@ const Sidebar = () => {
     const u3 = subscribe('users.deleted', fetchStats);
     const u4 = subscribe('tick', fetchStats);
     return () => { u1(); u2(); u3(); u4(); };
-  }, [subscribe, unsubscribe, fetchStats, refreshStatsForUserEvent, userRole]);
+  }, [subscribe, fetchStats, refreshStatsForUserEvent, userRole]);
 
   const toggleCollapse = useCallback(() => setCollapsed(c => !c), []);
 

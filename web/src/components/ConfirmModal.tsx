@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 
 type ConfirmModalProps = {
@@ -19,13 +20,17 @@ const ConfirmModal = ({
   open,
   onClose,
   onConfirm,
-  title = 'Are you sure?',
+  title,
   message,
-  confirmLabel = 'Delete',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   danger = true,
 }: ConfirmModalProps) => {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const resolvedTitle = title ?? t('confirmTitle', 'Are you sure?');
+  const resolvedConfirm = confirmLabel ?? t('confirmDelete', 'Delete');
+  const resolvedCancel = cancelLabel ?? t('cancel', 'Cancel');
   const handleConfirm = async () => {
     setBusy(true);
     try {
@@ -36,11 +41,11 @@ const ConfirmModal = ({
     }
   };
   return (
-    <Modal isOpen={open} onClose={onClose} title={title} size="small">
+    <Modal isOpen={open} onClose={onClose} title={resolvedTitle} size="small">
       {message && <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{message}</p>}
       <div className="confirm-modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>
-          {cancelLabel}
+          {resolvedCancel}
         </button>
         <button
           type="button"
@@ -51,7 +56,7 @@ const ConfirmModal = ({
          
         >
           {busy && <span className="button-spinner" aria-hidden="true" />}
-          {confirmLabel}
+          {resolvedConfirm}
         </button>
       </div>
     </Modal>

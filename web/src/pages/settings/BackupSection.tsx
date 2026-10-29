@@ -146,14 +146,15 @@ const BackupSection = () => {
     try {
       const r = await apiClient.get('/maintenance/backup/download', { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement('a'); a.href = url; a.download = backups[0]?.name || 'ovmanager-backup.db';
+      const safeName = String(backups[0]?.name || 'ovmanager-backup.db').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const a = document.createElement('a'); a.href = url; a.download = safeName;
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     } catch { addToast(t('backupDownloadFailed', 'Download failed'), 'error'); }
   };
 
   const doRestore = async () => {
     if (!restoreFile) return;
-    if (!restoreFile.name.endsWith('.db')) {
+    if (!restoreFile.name.toLowerCase().endsWith('.db')) {
       addToast(t('backupMustBeDb', 'Backup file must be a .db file.'), 'error');
       return;
     }

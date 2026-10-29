@@ -32,6 +32,10 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
       setError(t('invalidExtendInput', 'Enter valid non-negative numbers.'));
       return;
     }
+    if (d > 3650) {
+      setError(t('daysTooLarge', 'Days cannot exceed 3650.'));
+      return;
+    }
     const bytes = Math.round(gb * 1024 * 1024 * 1024);
     if (d === 0 && bytes === 0) {
       setError(t('extendEmpty', 'Enter days or traffic to add.'));

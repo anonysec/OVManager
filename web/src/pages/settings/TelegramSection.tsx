@@ -51,6 +51,10 @@ const TelegramSection = ({ shared }: { shared?: SharedState }) => {
   }, [shared]);
 
   const save = async () => {
+    if (chatId && !Number.isFinite(Number(chatId))) {
+      addToast(t('invalidChatId', 'Chat ID must be a number.'), 'error');
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, any> = {
@@ -94,9 +98,9 @@ const TelegramSection = ({ shared }: { shared?: SharedState }) => {
   return (
     <div className="sp-cards">
       <Card title={t('settingsTelegram', 'Telegram notifications')} icon={FiSend}>
-        <Field label={t('botEnabled', 'Enable Bot')} hint={t('telegramEnabledHint', 'Daily summary, expired/over-quota events and node/CPU alerts go to the owner chat.')} horizontal>
+        <Field label={t('botEnabled', 'Enable Bot')} hint={t('telegramEnabledHint', 'Daily summary, expired/over-quota events and node/CPU alerts go to the owner chat.')} horizontal inputId="telegram-enabled">
           <label className="sp-toggle">
-            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} aria-label={t('botEnabled', 'Enable Bot')} />
+            <input id="telegram-enabled" type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} aria-label={t('botEnabled', 'Enable Bot')} />
             <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>
           </label>
         </Field>

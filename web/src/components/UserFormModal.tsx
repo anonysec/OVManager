@@ -135,6 +135,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      title={isEdit ? t('updateUser', 'Update user') : t('addUser', 'Add user')}
       size="medium"
     >
       {createdUser && (
@@ -173,7 +174,7 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
                 className="ui-input"
                 type="text"
                 value={isEdit ? (user?.name || '') : name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={isEdit ? undefined : (e) => setName(e.target.value)}
                 required={!isEdit}
                 minLength={isEdit ? undefined : 3}
                 maxLength={64}

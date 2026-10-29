@@ -31,9 +31,10 @@ interface ActivityEvent {
   target?: string;
 }
 
-const readableAction = (action: string | null | undefined) => {
+import type { TFunction } from 'i18next';
+const readableAction = (action: string | null | undefined, t: TFunction) => {
   const raw = String(action || '').trim();
-  if (!raw) return '—';
+  if (!raw) return t('notAvailable', { defaultValue: '—' });
   return raw
     .split('.')
     .map((part) => ACTION_WORDS[part] || part.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()))
@@ -119,8 +120,8 @@ const MyActivitySection = () => {
           {events.map((e, index) => (
             <li className="ma-row" key={e.id ?? `${e.ts}-${index}`}>
               <span className="ma-time">{timeAgo(e.ts)}</span>
-              <span className="ma-action">{readableAction(e.action)}</span>
-              <span className="ma-target">{e.target || '—'}</span>
+              <span className="ma-action">{readableAction(e.action, t)}</span>
+              <span className="ma-target">{e.target || t('notAvailable', '—')}</span>
             </li>
           ))}
         </ul>

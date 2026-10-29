@@ -90,7 +90,7 @@ const SystemSection = () => {
           setActiveConns(traffic[traffic.length - 1]?.active_connections || 0);
         }
       })
-      .catch(() => {});
+      .catch(() => { metricsLoaded.current = false; });
   }, []);
 
   useEffect(() => { load(); }, [load, refreshTick]);

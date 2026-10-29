@@ -34,8 +34,10 @@ const AuthPage = () => {
   useEffect(() => {
     if (!langOpen) return;
     const onDoc = (e: MouseEvent) => { if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLangOpen(false); };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [langOpen]);
 
   useEffect(() => {
@@ -104,10 +106,10 @@ const AuthPage = () => {
           {theme === 'light' ? <FiSun aria-hidden="true" /> : theme === 'dark' ? <FiMoon aria-hidden="true" /> : <FiMonitor aria-hidden="true" />}
         </button>
         <div className="lang-picker-wrap" ref={langRef}>
-          <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen((o) => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
+          <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen((o) => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')} aria-expanded={langOpen} aria-haspopup="menu">
             <LangIcon size={18} />
           </button>
-          <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
+          <div className={`lang-dropdown${langOpen ? ' open' : ''}`} role="menu">
             {SUPPORTED_LANGS.map((code) => (
               <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { void loadLanguage(code); setLangOpen(false); }}>
                 <LangFlag code={code} />

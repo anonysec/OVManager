@@ -80,20 +80,20 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
         if (contentType.includes('application/json')) {
           try {
             const errorData = JSON.parse(text);
-            throw new Error(errorData.detail || errorData.msg || `Download failed with HTTP ${response.status}.`);
+            throw new Error(errorData.detail || errorData.msg || t('downloadFailedHttp', 'Download failed with HTTP {{status}}.', { status: response.status }));
           } catch {
-            throw new Error(`Download failed with HTTP ${response.status}.`);
+            throw new Error(t('downloadFailedHttp', 'Download failed with HTTP {{status}}.', { status: response.status }));
           }
         }
-        throw new Error(text.slice(0, 300) || `Download failed with HTTP ${response.status}.`);
+        throw new Error(text.slice(0, 300) || t('downloadFailedHttp', 'Download failed with HTTP {{status}}.', { status: response.status }));
       }
       if (contentType.includes('application/json')) {
         try {
           const errorData = JSON.parse(text);
-          throw new Error(errorData.detail || errorData.msg || 'Server returned JSON instead of an OVPN profile.');
+          throw new Error(errorData.detail || errorData.msg || t('downloadJsonInstead', 'Server returned JSON instead of an OVPN profile.'));
         } catch (jsonError: any) {
           if (jsonError.message) throw jsonError;
-          throw new Error('Server returned JSON instead of an OVPN profile.', { cause: jsonError });
+          throw new Error(t('downloadJsonInstead', 'Server returned JSON instead of an OVPN profile.'), { cause: jsonError });
         }
       }
       if (contentType.includes('text/html') || startsWithHtml || !looksLikeOpenVpnConfig(text)) {

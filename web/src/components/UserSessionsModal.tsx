@@ -42,7 +42,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false,
 
   const policy = (data?.policy || []).join(', ');
   const active = data?.active_connections ?? data?.totals?.live_count ?? 0;
-  const max = data?.max_logins === 0 ? '∞' : data?.max_logins;
+  const max = data?.max_logins === 0 ? '∞' : (data?.max_logins ?? '—');
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${t('sessionsTitle', 'Login Diagnostics')} — ${user?.name || ''}`} size="large">
