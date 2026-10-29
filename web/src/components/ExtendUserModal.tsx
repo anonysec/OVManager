@@ -53,7 +53,7 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${t('extend', 'Extend')} — ${user.name}`} size="small">
+    <Modal isOpen={isOpen} onClose={busy ? undefined : onClose} title={`${t('extend', 'Extend')} — ${user.name}`} size="small">
       <form onSubmit={handleSubmit} className="modal-form">
         <div className="input-group">
           <label htmlFor="extend-days">{t('extendDays', 'Add days')}</label>
@@ -91,7 +91,7 @@ const ExtendUserModal = ({ user, isOpen, onClose, onExtend }: { user?: any; isOp
         </div>
         {error && <p className="error-message" role="alert">{error}</p>}
         <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancelButton')}</button>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>{t('cancelButton')}</button>
           <LoadingButton type="submit" className="btn" isLoading={busy}>{t('extend', 'Extend')}</LoadingButton>
         </div>
       </form>

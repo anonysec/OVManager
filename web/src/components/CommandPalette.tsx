@@ -28,6 +28,7 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
 
   useEffect(() => { setCursor(0); }, [query]);
   const inputRef = useRef<any>(null);
+  const paletteRef = useRef<any>(null);
 
   const isAdmin = userRole === 'owner';
 
@@ -69,6 +70,22 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
     }
   }, [open, load]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const rootEl = document.getElementById('root');
+    const prevInert = rootEl ? rootEl.getAttribute('inert') : null;
+    if (rootEl) rootEl.setAttribute('inert', '');
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (rootEl) {
+        if (prevInert !== null) rootEl.setAttribute('inert', prevInert);
+        else rootEl.removeAttribute('inert');
+      }
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   const q = query.trim().toLowerCase();
   const pages: any[] = PAGES(t, isAdmin);
   const matchedUsers = q ? users.filter((x: any) => (x.name || '').toLowerCase().includes(q)) : [];
@@ -87,6 +104,16 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
   };
 
   const onKeyDown = (e: any) => {
+    if (e.key === 'Tab') {
+      const palette = paletteRef.current;
+      const focusable: any[] = palette ? Array.from(palette.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter((el: any) => !el.disabled) : [];
+      if (!focusable.length) { e.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      return;
+    }
     if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((c) => results.length ? Math.min(c + 1, results.length - 1) : 0); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((c) => results.length ? Math.max(c - 1, 0) : 0); }
     else if (e.key === 'Enter' && results[cursor]) { go(results[cursor]); }
@@ -96,7 +123,7 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
 
   return (
     <div className="palette-overlay" role="presentation" onMouseDown={(e: any) => { if (e.target === e.currentTarget) setOpen(false); }}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label={t('palTitle', 'Command palette')}>
+      <div ref={paletteRef} className="palette" role="dialog" aria-modal="true" aria-label={t('palTitle', 'Command palette')}>
         <div className="palette-input-row">
           <FiSearch className="palette-search-icon" aria-hidden="true" />
           <input

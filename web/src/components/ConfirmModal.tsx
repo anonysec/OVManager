@@ -36,12 +36,15 @@ const ConfirmModal = ({
     try {
       await onConfirm();
       onClose();
+    } catch (e) {
+      // Keep the dialog open so the caller can retry; surface via toast at caller.
+      void e;
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Modal isOpen={open} onClose={onClose} title={resolvedTitle} size="small">
+    <Modal isOpen={open} onClose={busy ? undefined : onClose} title={resolvedTitle} size="small">
       {message && <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{message}</p>}
       <div className="confirm-modal-actions">
         <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>

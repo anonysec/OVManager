@@ -10,9 +10,9 @@ import apiClient from '../services/api';
 import { setDisplayTimezone } from '../utils/displayTimezone';
 import {
   FiServer, FiShield, FiArchive, FiSend, FiLink, FiUserPlus,
-  FiClock, FiMonitor, FiBell, FiLock, FiSettings, FiActivity,
+  FiClock, FiMonitor, FiBell, FiSettings, FiActivity,
 } from 'react-icons/fi';
-import { Card, PageHeader } from '../components/ui';
+import { PageHeader } from '../components/ui';
 import { SectionHeader } from './settings/shared';
 import DefaultsSection from './settings/DefaultsSection';
 import DisplaySection from './settings/DisplaySection';
@@ -79,18 +79,7 @@ const Settings = () => {
         subtitle={t('settingsSubtitle', 'All panel settings in one place.')}
       />
 
-      {activeSections.length === 0 ? (
-        <Card className="sp-owner-note" tone="warning">
-          <div className="sp-owner-note-inner">
-            <FiLock aria-hidden="true" />
-            <div>
-              <strong>{t('settingsOwnerOnly', 'Owner only')}</strong>
-              <p>{t('settingsOwnerOnlyBody', 'These settings can only be changed by the panel owner.')}</p>
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <div className="bento-grid" role="region" aria-label={t('settingsNavigation', 'Settings sections')}>
+      <div className="bento-grid" role="region" aria-label={t('settingsNavigation', 'Settings sections')}>
           {activeSections.map((s) => (
             <section
               key={s.id}
@@ -115,7 +104,6 @@ const Settings = () => {
             </section>
           ))}
         </div>
-      )}
     </div>
   );
 };

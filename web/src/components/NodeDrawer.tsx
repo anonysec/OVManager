@@ -45,7 +45,7 @@ const NodeDrawer = ({
   const [tab, setTab] = useState(initialTab);
   const [status, setStatus] = useState<any>(null);
   const [statusState, setStatusState] = useState('loading');
-  const [enabled, setEnabled] = useState(Boolean(node?.status));
+  const [enabled, setEnabled] = useState(node?.status === true || node?.status === 'active');
   const [busy, setBusy] = useState('');
   const [results, setResults] = useState<any>({});
 
@@ -83,7 +83,7 @@ const NodeDrawer = ({
         cert: '',
       });
       setExtraPorts(node.extra_ports || '');
-      setEnabled(Boolean(node.status));
+      setEnabled(node.status === true || node.status === 'active');
     }
   }, [node]);
 
@@ -320,7 +320,7 @@ const NodeDrawer = ({
             <span className="avatar-xs">{String(node.name || '?').slice(0, 2).toUpperCase()}</span>
             <div>
               <strong>{node.name}</strong>
-              <small>{node.address} · Port {node.port}</small>
+              <small>{node.address} · {t('port', 'Port')} {node.port}</small>
             </div>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label={t('nodeClose', 'Close')}><FiX /></button>
@@ -336,7 +336,7 @@ const NodeDrawer = ({
                 <div className="nd-cell"><FiZap /><span>{t('nodeVersion', 'Version')}</span><b>{info?.version || '—'}</b></div>
                 <div className="nd-cell"><FiCpu /><span>{t('th_cpu', 'CPU%')}</span><b>{Number.isFinite(cpu) ? `${cpu.toFixed(0)}%` : '—'}</b></div>
                 <div className="nd-cell"><FiActivity /><span>{t('kv_memory', 'Memory')}</span><b>{Number.isFinite(mem) ? `${mem.toFixed(0)}%` : '—'}</b></div>
-                <div className="nd-cell"><FiActivity /><span>{t('avgLatency', 'Avg latency')}</span><b>{latency ? `${latency.toFixed(0)}ms` : '—'}</b></div>
+                <div className="nd-cell"><FiActivity /><span>{t('avgLatency', 'Avg latency')}</span><b>{Number.isFinite(latency) ? `${latency.toFixed(0)}ms` : '—'}</b></div>
                 <div className="nd-cell"><FiGlobe /><span>{t('th_protocol', 'Protocol')}</span><b>{(node.protocol || 'udp').toUpperCase()} · {node.ovpn_port ?? '—'}</b></div>
               </div>
 
@@ -607,6 +607,7 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
 
   const load = useCallback(async (lv: any) => {
     setLoading(true);
+    setLogs(null);
     try {
       const r = await apiClient.get(`/nodes/${nodeId}/logs`, { params: { level: lv, limit: 100 } });
       const data = r.data?.data || {};

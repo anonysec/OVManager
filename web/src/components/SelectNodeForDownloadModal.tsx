@@ -90,9 +90,11 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
       if (contentType.includes('application/json')) {
         try {
           const errorData = JSON.parse(text);
-          throw new Error(errorData.detail || errorData.msg || t('downloadJsonInstead', 'Server returned JSON instead of an OVPN profile.'));
+          const friendly = new Error(errorData.detail || errorData.msg || t('downloadJsonInstead', 'Server returned JSON instead of an OVPN profile.'));
+            (friendly as any).isFriendly = true;
+            throw friendly;
         } catch (jsonError: any) {
-          if (jsonError.message) throw jsonError;
+          if (jsonError?.isFriendly) throw jsonError;
           throw new Error(t('downloadJsonInstead', 'Server returned JSON instead of an OVPN profile.'), { cause: jsonError });
         }
       }
@@ -141,7 +143,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
                   <span className="npi-ico"><FiServer /></span>
                   <span className="npi-body">
                     <span className="npi-name">{node.name}</span>
-                    <span className="npi-addr">{node.address} · Port {node.ovpn_port || 1194}</span>
+                    <span className="npi-addr">{node.address} · {t('port', 'Port')} {node.ovpn_port || 1194}</span>
                   </span>
                   <span className="npi-chip">
                     <Badge tone="neutral">

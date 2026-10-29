@@ -29,13 +29,13 @@ const LoadingButton = ({ isLoading, onClick, className, children, disabled = fal
 
   return (
     <Button
+      {...rest}
       type={type}
       onClick={onClick}
       variant={variant}
       size={size}
       loading={isLoading}
       disabled={disabled}
-      {...rest}
     >
       {children}
     </Button>

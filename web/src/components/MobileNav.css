@@ -86,6 +86,7 @@ html[data-theme="light"] .mobile-nav {
 }
 
 @media (max-width: 767.98px) {
+  .mobile-nav--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mobile-nav--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mobile-nav--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
