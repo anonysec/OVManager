@@ -88,13 +88,14 @@ const UserManagement = () => {
 
   const [sort, setSort] = useState<{ key: string; dir: string }>(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem(SORT_KEY) || 'null');
+      let raw = null;
+      try { raw = JSON.parse(localStorage.getItem(SORT_KEY) || 'null'); } catch { raw = null; }
       if (raw?.key) return raw;
     } catch { /* ignore */ }
     return { key: 'id', dir: 'desc' };
   });
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
+  const [pageSize, setPageSize] = useState(() => { try { return Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25; } catch { return 25; } });
 
   type UserConfirm = { open: boolean; title: string; message: string; onConfirm: (() => void | Promise<void>) | null; danger: boolean; confirmLabel: string | null };
   const [confirm, setConfirm] = useState<UserConfirm>({ open: false, title: '', message: '', onConfirm: null, danger: true, confirmLabel: null });
@@ -281,7 +282,7 @@ const UserManagement = () => {
       const next = prev.key === key
         ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
         : { key, dir: 'asc' };
-      localStorage.setItem(SORT_KEY, JSON.stringify(next));
+      try { localStorage.setItem(SORT_KEY, JSON.stringify(next)); } catch { /* blocked storage */ }
       return next;
     });
   }, []);
@@ -806,7 +807,7 @@ const UserManagement = () => {
           pageSize={pageSize}
           total={sortedUsers.length}
           onPageChange={setPage}
-          onPageSizeChange={(n) => { setPageSize(n); localStorage.setItem(PAGE_SIZE_KEY, String(n)); setPage(1); }}
+          onPageSizeChange={(n) => { setPageSize(n); try { localStorage.setItem(PAGE_SIZE_KEY, String(n)); } catch { /* blocked storage */ } setPage(1); }}
           caption={t('users', 'Users')}
         />
       )}

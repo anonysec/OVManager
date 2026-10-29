@@ -76,7 +76,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
   const [timeFilter, setTimeFilter] = useState('all');
   const [sort, setSort] = useState<{ key: string; dir: string }>({ key: 'ts', dir: 'desc' });
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25);
+  const [pageSize, setPageSize] = useState(() => { try { return Number(localStorage.getItem(PAGE_SIZE_KEY) || 25) || 25; } catch { return 25; } });
   const [detailEvent, setDetailEvent] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [nowTs, setNowTs] = useState(0);
@@ -374,7 +374,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
           pageSize={pageSize}
           total={sorted.length}
           onPageChange={setPage}
-          onPageSizeChange={(n) => { setPageSize(n); localStorage.setItem(PAGE_SIZE_KEY, String(n)); setPage(1); }}
+          onPageSizeChange={(n) => { setPageSize(n); try { localStorage.setItem(PAGE_SIZE_KEY, String(n)); } catch { /* blocked storage */ } setPage(1); }}
           caption={t('navAudit', 'Logs')}
         />
       )}

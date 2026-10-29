@@ -44,7 +44,7 @@ const SetupBanner = () => {
   const { pathname } = useLocation();
   const { userRole } = useAuth();
   const [setup, setSetup] = useState<any>(null);
-  const [hidden, setHidden] = useState(() => localStorage.getItem(SETUP_DISMISS_KEY) === '1');
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(SETUP_DISMISS_KEY) === '1'; } catch { return false; } });
 
   useEffect(() => {
     if (hidden) return undefined;
@@ -57,7 +57,7 @@ const SetupBanner = () => {
   }, [hidden]);
 
   const dismiss = () => {
-    localStorage.setItem(SETUP_DISMISS_KEY, '1');
+    try { localStorage.setItem(SETUP_DISMISS_KEY, '1'); } catch { /* blocked storage */ }
     setHidden(true);
   };
 
@@ -67,7 +67,7 @@ const SetupBanner = () => {
   const isOwner = userRole === 'owner';
   if (userDone) return null;
   if (!isOwner && !setup.has_node) return null;
-  const configDone = localStorage.getItem(SETUP_CONFIG_DONE_KEY) === '1';
+  const configDone = (() => { try { return localStorage.getItem(SETUP_CONFIG_DONE_KEY) === '1'; } catch { return false; } })();
   const doneCount = [nodeDone, userDone, configDone].filter(Boolean).length;
 
   return (
@@ -322,7 +322,7 @@ const DashboardLayout = () => {
       : t('systemMode', 'System default');
 
   const getIsMobile = useCallback(() => (typeof window !== 'undefined' && window.innerWidth < 768), []);
-  const computeCollapsed = useCallback(() => (localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile()), [getIsMobile]);
+  const computeCollapsed = useCallback(() => { try { return localStorage.getItem('ovmanager-sidebar-collapsed') === 'true' && !getIsMobile(); } catch { return false; } }, [getIsMobile]);
   const [collapsed, setCollapsed] = useState(computeCollapsed);
   const [isMobile, setIsMobile] = useState(getIsMobile);
 

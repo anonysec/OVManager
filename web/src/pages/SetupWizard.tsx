@@ -29,7 +29,7 @@ const SetupWizard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [configDone, setConfigDone] = useState(() => localStorage.getItem(CONFIG_DONE_KEY) === '1');
+  const [configDone, setConfigDone] = useState(() => { try { return localStorage.getItem(CONFIG_DONE_KEY) === '1'; } catch { return false; } });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,12 +66,12 @@ const SetupWizard = () => {
   };
 
   const markConfigDone = () => {
-    localStorage.setItem(CONFIG_DONE_KEY, '1');
+    try { localStorage.setItem(CONFIG_DONE_KEY, '1'); } catch { /* blocked storage */ }
     setConfigDone(true);
   };
 
   const skip = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
+    try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* blocked storage */ }
     addToast(t('setupSkipped', 'Setup wizard hidden. Open /setup any time to return.'), 'info');
     navigate('/');
   };
@@ -79,7 +79,7 @@ const SetupWizard = () => {
   useEffect(() => {
     if (loading || !allDone) return undefined;
     const id = setTimeout(() => {
-      localStorage.setItem(DISMISS_KEY, '1');
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* blocked storage */ }
       addToast(t('setupComplete', 'Setup complete — your panel is ready.'), 'success');
       navigate('/');
     }, 2500);

@@ -31,7 +31,7 @@ const Logs = () => {
   };
 
   const [unit, setUnit] = useState('ovmanager');
-  const [lines, setLines] = useState(() => Number(localStorage.getItem(LINES_KEY)) || 200);
+  const [lines, setLines] = useState(() => { try { return Number(localStorage.getItem(LINES_KEY)) || 200; } catch { return 200; } });
   const [nodes, setNodes] = useState<{ name: string }[]>([]);
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');
@@ -40,7 +40,7 @@ const Logs = () => {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { localStorage.setItem(LINES_KEY, String(lines)); }, [lines]);
+  useEffect(() => { try { localStorage.setItem(LINES_KEY, String(lines)); } catch { /* blocked storage */ } }, [lines]);
 
   // Nodes are owner-gated; admins just see the Panel until they pick one up
   // another way — the select degrades quietly.

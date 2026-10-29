@@ -73,8 +73,7 @@ function handleAuthExpired(requestUrl: string) {
   if (isPreAuth(requestUrl)) return;
   // The session is a cookie: the server clears it on /logout. Only the UI
   // hint (the role) is cleared here; no secret is kept in storage.
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('username');
+  try { localStorage.removeItem('userRole'); localStorage.removeItem('username'); } catch { /* blocked storage */ }
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
