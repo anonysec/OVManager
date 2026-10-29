@@ -23,9 +23,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 type Session = { role: string; name: string };
 
 function readStoredSession(): Session | null {
-  const role = localStorage.getItem('userRole');
-  if (!role) return null;
-  return { role, name: localStorage.getItem('username') || '' };
+  try {
+    const role = localStorage.getItem('userRole');
+    if (!role) return null;
+    return { role, name: localStorage.getItem('username') || '' };
+  } catch { return null; }
 }
 
 function storeSession(data: any, fallbackName = '') {
@@ -37,9 +39,11 @@ function storeSession(data: any, fallbackName = '') {
   // copy in localStorage would be readable by any script on this origin —
   // which is exactly what the cookie exists to prevent. Only the role and
   // the display name are kept, and neither is a secret.
-  localStorage.setItem('userRole', role);
-  if (resolvedName) localStorage.setItem('username', resolvedName);
-  else localStorage.removeItem('username');
+  try {
+    localStorage.setItem('userRole', role);
+    if (resolvedName) localStorage.setItem('username', resolvedName);
+    else localStorage.removeItem('username');
+  } catch { /* blocked storage: session still lives in memory */ }
   return { role, name: resolvedName };
 }
 
@@ -49,7 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // No session at mount → find out whether setup still owns this panel, once.
   const [claimable, setClaimable] = useState(false);
   const [recoverable, setRecoverable] = useState(false);
-  const [claimPending, setClaimPending] = useState(() => !localStorage.getItem('userRole'));
+  const [claimPending, setClaimPending] = useState(() => { try { return !localStorage.getItem('userRole'); } catch { return true; } });
 
   const login = async (username: string, password: string) => {
     const formData = new URLSearchParams();
@@ -79,8 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // login form. /logout is unauthenticated, so it works even for a session
     // that has already expired.
     apiClient.post('/logout', null).catch(() => { /* local logout must still complete */ });
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('username');
+    try { localStorage.removeItem('userRole'); localStorage.removeItem('username'); } catch { /* blocked storage */ }
     setSession(null);
   }, []);
 
@@ -95,7 +98,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // waits on a hung request — failure means "not claimable", i.e. today's
   // /login.
   useEffect(() => {
-    if (localStorage.getItem('userRole')) return;
+    const hasSession = (() => { try { return !!localStorage.getItem('userRole'); } catch { return false; } })();
+    if (hasSession) return;
     let alive = true;
     apiClient.get('/owner-claim')
       .then((res) => { if (alive) { setClaimable(!!res.data?.claimable); setRecoverable(!!res.data?.recoverable); } })
@@ -108,7 +112,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleStorage = (e: StorageEvent) => {
       // Another tab signed in or out: the role is the shared hint.
       if (e.key === 'userRole') {
-        setSession(e.newValue ? { role: e.newValue, name: localStorage.getItem('username') || '' } : null);
+        const name = (() => { try { return localStorage.getItem('username') || ''; } catch { return ''; } })();
+        setSession(e.newValue ? { role: e.newValue, name } : null);
       }
     };
     window.addEventListener('storage', handleStorage);

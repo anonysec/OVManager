@@ -7,6 +7,8 @@
  * "Objects are not valid as a React child". Normalize to a plain string here.
  */
 
+import i18n from '../i18n';
+
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 
 /** Normalize one `detail` value: array → join msgs, object → JSON, string → as-is. */
@@ -27,5 +29,5 @@ export function errorMessageOf(err: any, fallback?: string): string {
   const data = err?.response?.data;
   const fromDetail = detailMessage(data?.detail);
   if (fromDetail) return fromDetail;
-  return str(fallback) ?? str(data?.msg) ?? str(err?.message) ?? 'Request failed';
+  return str(fallback) ?? str(data?.msg) ?? str(err?.message) ?? (i18n.t('requestFailed', { defaultValue: 'Request failed' }) || 'Request failed');
 }

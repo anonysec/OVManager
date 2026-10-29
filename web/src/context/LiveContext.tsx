@@ -18,7 +18,7 @@ async function readEventStream(body: any, onEvent: any) {
   let buf = '';
   for (;;) {
     const { value, done } = await reader.read();
-    if (done) return;
+    if (done) break;
     buf += decoder.decode(value, { stream: true });
     let idx;
     while ((idx = buf.indexOf('\n\n')) !== -1) {
@@ -32,6 +32,22 @@ async function readEventStream(body: any, onEvent: any) {
         if (trimmed.startsWith('event:')) {
           topic = trimmed.slice(6).trim();
         } else if (trimmed.startsWith('data:')) {
+          const raw = trimmed.slice(5).trim();
+          try { data = JSON.parse(raw); } catch { data = raw; }
+        }
+      }
+      onEvent(topic, data);
+    }
+  }
+  if (buf.trim()) {
+    const block = buf;
+    if (block && !block.startsWith(':')) {
+      let topic = null;
+      let data: any = null;
+      for (const line of block.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('event:')) topic = trimmed.slice(6).trim();
+        else if (trimmed.startsWith('data:')) {
           const raw = trimmed.slice(5).trim();
           try { data = JSON.parse(raw); } catch { data = raw; }
         }
@@ -90,7 +106,8 @@ export const LiveProvider = ({ children }: { children?: any }) => {
       // The stream authenticates with the session cookie. The role in
       // storage is only the "we believe there is a session" hint; the server
       // has the last word (a 401 fails the stream like any other error).
-      if (!localStorage.getItem('userRole')) {
+      const hasRole = (() => { try { return !!localStorage.getItem('userRole'); } catch { return false; } })();
+      if (!hasRole) {
         retryTimer = setTimeout(connect, RETRY_WHEN_LOGGED_OUT_MS);
         return;
       }

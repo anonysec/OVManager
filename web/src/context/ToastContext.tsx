@@ -32,6 +32,14 @@ export const ToastProvider = ({ children }: { children?: any }) => {
   const timers = useRef<any>(new Map());
   const recentErrors = useRef<Map<string, number>>(new Map());
 
+  useEffect(() => {
+    const currentTimers = timers.current;
+    return () => {
+      for (const timer of currentTimers.values()) clearTimeout(timer);
+      currentTimers.clear();
+    };
+  }, []);
+
   const removeToast = useCallback((id: any) => {
     const t = timers.current.get(id);
     if (t) {

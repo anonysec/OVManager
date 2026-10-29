@@ -80,11 +80,11 @@ export function fmtRelative(iso: DateInput): string {
   }
   const min = Math.floor(-diffMs / 60000);
   if (min < 1) return safeT('justNow', 'just now');
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return i18n.t('minutesAgo', { defaultValue: '{{min}}m ago', min }) || `${min}m ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
+  if (hr < 24) return i18n.t('hoursAgo', { defaultValue: '{{hr}}h ago', hr }) || `${hr}h ago`;
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
+  if (day < 30) return i18n.t('daysAgo', { defaultValue: '{{day}}d ago', day }) || `${day}d ago`;
   return fmtDate(iso);
 }
 

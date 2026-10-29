@@ -21,7 +21,8 @@ export const setUiPref = (key: string, value: unknown): void => {
 export const applyAccent = (): void => {
   const accent = getUiPref('accent', '');
   const root = document.documentElement;
-  if (accent) {
+  const safe = /^#[0-9a-f]{3,8}$/i.test(accent || '') || /^(rgb|rgba|hsl|hsla)\([\d\s,%.]+\)$/i.test(accent || '');
+  if (accent && safe) {
     root.style.setProperty('--accent-color', accent);
   } else {
     root.style.removeProperty('--accent-color');

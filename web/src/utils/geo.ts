@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 // Shared by the dashboard map and the node list. Kept in its own module so the
 // page does not have to pull in the map chunk's d3-geo/world-atlas.
 
@@ -72,7 +73,7 @@ const nodeMeta = (node: NodeLocation) => {
   const entry = code ? CODES[code] : null;
 
   return {
-    name: entry?.name || (code || 'Location unavailable'),
+    name: entry?.name || (code || (i18n.t('locationUnavailable', { defaultValue: 'Location unavailable' }) || 'Location unavailable')),
     flagCode: entry ? code : null,
     coords: hasCoordinates ? [longitude, latitude] as [number, number] : (entry?.coords || null),
     approximate: !hasCoordinates && Boolean(entry?.coords),

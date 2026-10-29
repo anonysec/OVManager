@@ -65,7 +65,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     document.documentElement.classList.add('theme-transition');
 
     setThemeState(safeTheme);
-    localStorage.setItem(THEME_KEY, safeTheme);
+    try { localStorage.setItem(THEME_KEY, safeTheme); } catch { /* blocked storage */ }
 
     if (safeTheme === 'system') {
       const isLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
