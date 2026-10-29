@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bufio"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -220,8 +221,17 @@ func (a *app) tlsCmd() *cobra.Command {
 			inst := a.install()
 			// Interactive menu on a TTY with no args.
 			if len(args) == 0 {
-				fi, _ := os.Stdin.Stat()
-				if fi != nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+				isTTY := false
+				if fi, _ := os.Stdin.Stat(); fi != nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+					isTTY = true
+				}
+				if !isTTY {
+					if f, err := os.Open("/dev/tty"); err == nil {
+						f.Close()
+						isTTY = true
+					}
+				}
+				if isTTY {
 					runTLSMenu(a, inst)
 					return nil
 				}
@@ -384,6 +394,19 @@ func (a *app) serviceCmd() *cobra.Command {
 }
 
 func runTLSMenu(a *app, inst Install) {
+	in := os.Stdin
+	if f, err := os.Open("/dev/tty"); err == nil {
+		defer f.Close()
+		in = f
+	}
+	sc := bufio.NewScanner(in)
+	sc.Buffer(make([]byte, 1024), 1024*1024)
+	readLine := func() string {
+		if sc.Scan() {
+			return sc.Text()
+		}
+		return ""
+	}
 	items := []struct{ label, action string }{
 		{"Status", "status"},
 		{"Issue Let's Encrypt (domain or IP)", "issue"},
@@ -417,9 +440,7 @@ func runTLSMenu(a *app, inst Install) {
 			a.emit(text, code)
 		case "issue":
 			fmt.Fprint(a.out, "Domain or IP: ")
-			var target string
-			fmt.Scanln(&target)
-			target = strings.TrimSpace(target)
+			target := strings.TrimSpace(readLine())
 			if target == "" {
 				continue
 			}
@@ -427,9 +448,7 @@ func runTLSMenu(a *app, inst Install) {
 			a.emit(text, code)
 		case "selfsigned":
 			fmt.Fprint(a.out, "Domain or IP (default localhost): ")
-			var target string
-			fmt.Scanln(&target)
-			target = strings.TrimSpace(target)
+			target := strings.TrimSpace(readLine())
 			if target == "" {
 				target = "localhost"
 			}
@@ -437,10 +456,9 @@ func runTLSMenu(a *app, inst Install) {
 			a.emit(text, code)
 		case "install":
 			fmt.Fprint(a.out, "Cert path: ")
-			var c, k string
-			fmt.Scanln(&c)
+			c := strings.TrimSpace(readLine())
 			fmt.Fprint(a.out, "Key path: ")
-			fmt.Scanln(&k)
+			k := strings.TrimSpace(readLine())
 			text, code := runTLSInstall(inst, strings.TrimSpace(c), strings.TrimSpace(k))
 			a.emit(text, code)
 		case "renew":
