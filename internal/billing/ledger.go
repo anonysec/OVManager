@@ -190,55 +190,6 @@ func compact(v any) string {
 	return string(b)
 }
 
-// migrateNodeUsage upgrades legacy node_usage formats to the current version.
-// Handles:
-// - empty string → {"version": 2, "data": {}}
-// - legacy flat map (node_name → int64) → {"version": 2, "data": {node_id: {"total": int64}}}
-// - legacy flat map (node_name → {"total": int64}) → {"version": 2, "data": {node_id: {"total": int64}}}
-// - already versioned → returns as-is (or upgrades if version < current)
-func migrateNodeUsage(raw string) string {
-	if raw == "" {
-		return `{"version":2,"data":{}}`
-	}
-	var parsed any
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return `{"version":2,"data":{}}`
-	}
-
-	// Already versioned?
-	if m, ok := parsed.(map[string]any); ok {
-		if v, ok := m["version"]; ok {
-			if f, ok := v.(float64); ok && int(f) >= NodeUsageVersion {
-				return raw // already current
-			}
-		}
-		// Legacy flat map: {"node1": 123, "node2": {"total": 456}}
-		data := make(map[string]map[string]int64)
-		for k, v := range m {
-			if k == "version" || k == "data" {
-				continue // skip version/data keys in legacy format
-			}
-			total := int64(0)
-			if num, ok := v.(float64); ok {
-				total = int64(num)
-			} else if sub, ok := v.(map[string]any); ok {
-				if t, ok := sub["total"]; ok {
-					if n, ok := t.(float64); ok {
-						total = int64(n)
-					}
-				}
-			}
-			if total > 0 {
-				data[k] = map[string]int64{"total": total}
-			}
-		}
-		if len(data) > 0 {
-			return compact(map[string]any{"version": NodeUsageVersion, "data": data})
-		}
-	}
-	return `{"version":2,"data":{}}`
-}
-
 // ExtractUsername resolves a node-reported key to a panel username.
 func ExtractUsername(clientName, nodeName string, known map[string]bool) string {
 	if known != nil && known[clientName] {

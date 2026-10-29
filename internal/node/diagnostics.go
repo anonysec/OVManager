@@ -22,11 +22,6 @@ type diagUser struct {
 	expiry    sql.NullString
 }
 
-func diagUsers(db *sql.DB) []diagUser {
-	users, _ := diagUsersWithErr(db)
-	return users
-}
-
 func diagUsersWithErr(db *sql.DB) ([]diagUser, error) {
 	rows, err := db.Query(`SELECT id, name, COALESCE(is_active,1), COALESCE(max_logins,0),
 		total, COALESCE(used,0), expiry_date FROM users`)
@@ -43,14 +38,6 @@ func diagUsersWithErr(db *sql.DB) ([]diagUser, error) {
 		out = append(out, u)
 	}
 	return out, nil
-}
-
-func idToName(db *sql.DB) map[string]string {
-	out := map[string]string{}
-	for _, u := range diagUsers(db) {
-		out[strconv.FormatInt(u.id, 10)] = u.name
-	}
-	return out
 }
 
 func diagUserNameMaps(db *sql.DB) (map[string]string, map[string]bool) {

@@ -63,12 +63,6 @@ func writeValidationError(w http.ResponseWriter, kind, field, msg string) {
 	})
 }
 
-// writeValidationBody writes FastAPI's 422 error-list shape for a missing
-// multipart field.
-func writeValidationBody(w http.ResponseWriter, field, msg string) {
-	writeValidationError(w, "missing", field, msg)
-}
-
 // offsiteTargetRe is the accepted shape of an offsite backup target:
 // [user@]host:/absolute/path
 var offsiteTargetRe = regexp.MustCompile(`^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]+):(/[\w./-]+)$`)

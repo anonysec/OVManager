@@ -1,7 +1,6 @@
 package panel
 
 import (
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -468,16 +467,6 @@ func classifyIssuer(cert *x509.Certificate) string {
 		return "self-signed"
 	}
 	return "custom"
-}
-
-// fingerprintSHA256 renders cert.fingerprint(SHA256).hex(":").upper().
-func fingerprintSHA256(cert *x509.Certificate) string {
-	sum := sha256.Sum256(cert.Raw)
-	out := make([]string, len(sum))
-	for i, b := range sum {
-		out[i] = strings.ToUpper(hex.EncodeToString([]byte{b}))
-	}
-	return strings.Join(out, ":")
 }
 
 // newHexKey is uuid4().hex for audit event keys.

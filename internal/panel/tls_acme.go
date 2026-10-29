@@ -22,7 +22,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -84,74 +83,6 @@ type acmeIssueRequest struct {
 type acmeIssueResult struct {
 	parsed      *x509.Certificate
 	expiresDays int
-}
-
-// tlsACMEIssue runs one issuance synchronously (like tlsRenew): request →
-// listener + ACME flow → transactional activation → settings + audit event.
-func (h *Handler) tlsACMEIssue(w http.ResponseWriter, r *http.Request) {
-	var payload acmeIssueRequest
-	if !decodeBody(w, r, &payload) {
-		return
-	}
-	domain := ""
-	if payload.Domain != nil {
-		domain = strings.TrimSpace(*payload.Domain)
-	}
-	if domain == "" || !validateDomain(domain) {
-		envelope(w, false, "That domain name is not valid. Use letters, digits, dots and hyphens only.", nil)
-		return
-	}
-	email := ""
-	if payload.Email != nil {
-		email = strings.TrimSpace(*payload.Email)
-	}
-	if email != "" && !validateEmail(email) {
-		envelope(w, false, "That email address is not valid.", nil)
-		return
-	}
-
-	// Idempotency: a managed pair covering the domain, a month+ from expiry,
-	// stays until the daily worker. Prevents a double-click from hammering
-	// the CA with a redundant order.
-	if cert, err := loadCertificate(sslCertPath()); err == nil && cert != nil &&
-		certMatchesName(cert, domain) && daysUntil(cert) > acmeWindowDays {
-		envelope(w, true, fmt.Sprintf("A certificate for %s covers the domain and is still valid (%d days left); renewal is automatic within the 30-day window.", domain, daysUntil(cert)),
-			map[string]any{"restart_required": false, "skipped": true,
-				"expires_days": daysUntil(cert), "domain": domain})
-		return
-	}
-
-	res, err := h.runIssuance(r.Context(), domain)
-	if err != nil {
-		telemetry.RecordEvent(h.Svc.DB(), "tls_acme", "error",
-			"Let's Encrypt certificate issuance failed for "+domain,
-			map[string]any{"target": domain, "detail": err.Error()})
-		envelope(w, false,
-			fmt.Sprintf("Let's Encrypt certificate issuance failed: %v. The previous certificate is still active.", err),
-			map[string]any{"restart_required": false})
-		return
-	}
-	// The pair is active on disk; make sure a settings row exists before
-	// pointing the SSL_* columns at it (readSettings seeds the row — a fresh
-	// install has none, and a 0-row UPDATE would silently pass).
-	readSettings(h.Svc.DB())
-	if err := setColumns(h.Svc.DB(), map[string]any{
-		"ssl_cert_file": sslCertPath(), "ssl_key_file": sslKeyPath(),
-	}); err != nil {
-		// The pair is active on disk; only the settings row failed.
-		envelope(w, true, "The certificate was installed, but the TLS settings row could not be updated. "+restartHint,
-			map[string]any{"restart_required": true, "cert_path": sslCertPath(),
-				"key_path": sslKeyPath(), "domain": domain, "expires_days": res.expiresDays})
-		return
-	}
-	telemetry.RecordEvent(h.Svc.DB(), "tls_acme", "info",
-		"Let's Encrypt certificate installed for "+domain,
-		map[string]any{"target": domain, "expires_days": res.expiresDays})
-	envelope(w, true, fmt.Sprintf("Let's Encrypt certificate for %s installed. %s", domain, restartHint),
-		map[string]any{
-			"restart_required": true, "cert_path": sslCertPath(), "key_path": sslKeyPath(),
-			"domain": domain, "expires_days": res.expiresDays,
-		})
 }
 
 // runIssuance serializes issuances (endpoint + worker share this mutex),
