@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
-import { withTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
 type ErrorBoundaryProps = {
   t?: any;
@@ -28,7 +28,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
-    const { t } = this.props;
+    const t = i18n.t.bind(i18n);
     if (this.state.hasError) {
       return (
         <div style={{
@@ -80,5 +80,4 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-const TranslatedErrorBoundary = withTranslation()(ErrorBoundary);
-export default TranslatedErrorBoundary;
+export default ErrorBoundary;
