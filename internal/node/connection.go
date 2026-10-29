@@ -176,4 +176,3 @@ func Forget(nodeID int64) {
 	defer connMu.Unlock()
 	delete(connections, nodeID)
 }
-
