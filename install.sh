@@ -62,10 +62,10 @@ colorized_echo() {
         *)      printf "%s\n" "$*" >&2 ;;
     esac
 }
-_ok()    { colorized_echo green "✓ $*"; }
-_warn()  { colorized_echo yellow "⚠ $*"; }
-_err()   { colorized_echo red "✗ $*"; }
-_note()  { colorized_echo blue "… $*"; }
+_ok()    { colorized_echo green "$*"; }
+_warn()  { colorized_echo yellow "$*"; }
+_err()   { colorized_echo red "$*"; }
+_note()  { colorized_echo blue "$*"; }
 
 die()    { colorized_echo red "error: $*"; exit 1; }
 
@@ -248,7 +248,6 @@ check_acme_domain() {
         fi
     fi
     if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
-        exec 3>&- 3<&- 2>/dev/null || true
         _warn "port 80 is in use - skipping auto ACME issuance"
         _note "free port 80, then run: ovmanager tls issue $SSL_DOMAIN"
         SSL_DOMAIN=""; SSL_MODE="none"; return 0
@@ -598,6 +597,7 @@ do_install() {
         check_root
         colorized_echo blue "Configuration"
         prompt_interactive; setup_ssl_wizard
+        if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
         [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
         _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
         colorized_echo blue "Docker"; setup_docker
