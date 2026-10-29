@@ -158,7 +158,7 @@ const Sidebar = () => {
       </button>
 
       {mobileOpen && (
-        <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+        <div className="sidebar-mobile-overlay" onClick={() => setMobileOpen(false)} aria-hidden="true" role="presentation" />
       )}
 
       {/* Sidebar — full height: the brand lives here, so the top-left corner
