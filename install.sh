@@ -46,9 +46,10 @@ INSTALL_SELF_SIGNED=0
 SELF_SIGNED_TARGET=""
 
 if [[ -t 2 ]]; then
-    _GREEN='\033[32m'; _YELLOW='\033[33m'; _BLUE='\033[34m'; _RED='\033[31m'; _CYAN='\033[36m'; _RESET='\033[0m'
+    _GREEN='\033[32m'; _YELLOW='\033[33m'; _BLUE='\033[34m'; _RED='\033[31m'; _CYAN='\033[36m'
+    _BOLD='\033[1m'; _DIM='\033[2m'; _RESET='\033[0m'
 else
-    _GREEN=''; _YELLOW=''; _BLUE=''; _RED=''; _CYAN=''; _RESET=''
+    _GREEN=''; _YELLOW=''; _BLUE=''; _RED=''; _CYAN=''; _BOLD=''; _DIM=''; _RESET=''
 fi
 
 colorized_echo() {
@@ -66,6 +67,12 @@ _ok()    { colorized_echo green "$*"; }
 _warn()  { colorized_echo yellow "$*"; }
 _err()   { colorized_echo red "$*"; }
 _note()  { colorized_echo blue "$*"; }
+
+# Section header: bold blue, used to group installer stages.
+section() { printf '\n%s%s%s%s\n' "${_BOLD}${_BLUE}" "$*" "${_RESET}" "" >&2; }
+
+# Step counter helper: step 3 9 "Fetching release"
+step() { printf '%s[%s/%s]%s %s\n' "${_DIM}" "$1" "$2" "${_RESET}" "$3" >&2; }
 
 die()    { colorized_echo red "error: $*"; exit 1; }
 
@@ -162,8 +169,9 @@ prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
+    _note "Press Enter to keep the default shown in brackets."
     local in_port in_path
-    read -r -p "  Panel Port [${PORT_VAL}]: " in_port </dev/tty || true
+    read -r -p "  Panel port [${PORT_VAL}]: " in_port </dev/tty || true
     if [[ -n "${in_port// /}" ]]; then
         in_port="${in_port// /}"
         if validate_port "$in_port"; then PORT_VAL="$in_port"; else _warn "Invalid port '$in_port', using default $PORT_VAL"; fi
@@ -178,13 +186,14 @@ prompt_interactive() {
 setup_ssl_wizard() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || { [[ -n "$SSL_DOMAIN" ]] && SSL_MODE="domain"; return 0; }
     [[ -t 0 ]] || return 0
-    colorized_echo cyan "Choose SSL setup method for panel installation:"
-    colorized_echo green "  1) Let's Encrypt Domain certificate"
-    colorized_echo green "  2) Let's Encrypt IP certificate (short-lived)"
+    section "SSL setup"
+    _note "Choose how the panel should serve HTTPS:"
+    colorized_echo green "  1) Let's Encrypt — domain certificate (recommended)"
+    colorized_echo green "  2) Let's Encrypt — short-lived IP certificate"
     colorized_echo green "  3) Custom certificate + key paths"
-    colorized_echo green "  4) Self-signed certificate"
-    colorized_echo yellow "  5) No SSL"
-    colorized_echo yellow "Port 80 must be reachable for Let's Encrypt."
+    colorized_echo green "  4) Self-signed certificate (testing)"
+    colorized_echo yellow "  5) No SSL (plain HTTP)"
+    _note "Let's Encrypt requires port 80 to be reachable from the internet."
     local choice=""
     read -r -p "Select SSL option [1-5] (default: 5): " choice </dev/tty || true
     choice="${choice// /}"; [[ -z "$choice" ]] && choice="5"
@@ -593,15 +602,17 @@ setup_docker() {
 }
 
 do_install() {
+    section "OVManager v${VERSION} installer"
+    _note "Repository: ${REPO}   Arch: $(detect_arch)   OS: $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
-        colorized_echo blue "Configuration"
+        section "Configuration"
         prompt_interactive; setup_ssl_wizard
         if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
         [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
         _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
-        colorized_echo blue "Docker"; setup_docker
-        colorized_echo blue "Verification"
+        section "Docker"; setup_docker
+        section "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
         _ok "installed v$VERSION via Docker (port $PORT_VAL)"; return 0
     fi
@@ -610,7 +621,7 @@ do_install() {
     if [[ -e "$dest" ]]; then _note "Already installed at $dest - running update instead"; do_update "$@"; return $?; fi
     check_root; has_systemd || die "systemd not found — a native install needs it"; check_deps
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
-    colorized_echo blue "Configuration"
+    section "Configuration"
     prompt_interactive; setup_ssl_wizard
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
     _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
@@ -631,14 +642,14 @@ do_install() {
         fi
     fi
     local key port urlpath
-    colorized_echo blue "Creating panel user"; ensure_panel_user
-    colorized_echo blue "Download"; fetch_release "$dest"
-    colorized_echo blue "Writing environment file"; write_env "$dest/.env" "$DATA_DIR"
+    section "Creating panel user"; ensure_panel_user
+    section "Download"; fetch_release "$dest"
+    section "Writing environment file"; write_env "$dest/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
-    colorized_echo blue "Installing systemd units"; write_systemd_unit "$dest"; write_backup_units "$dest"
-    colorized_echo blue "Granting permissions"; grant_panel_access "$dest"
-    colorized_echo blue "Installing CLI"; install_cli "$dest"
-    colorized_echo blue "Service"
+    section "Installing systemd units"; write_systemd_unit "$dest"; write_backup_units "$dest"
+    section "Granting permissions"; grant_panel_access "$dest"
+    section "Installing CLI"; install_cli "$dest"
+    section "Service"
     systemctl daemon-reload
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
         systemctl restart "$SYSTEMD_SERVICE" || die "Could not restart $SYSTEMD_SERVICE"
@@ -649,7 +660,7 @@ do_install() {
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && { write_acme_renew_units; enable_acme_renew_timer; }
     _ok "service $SYSTEMD_SERVICE started"
     if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
-        colorized_echo blue "TLS (self-signed)"
+        section "TLS (self-signed)"
         if "$dest/$APP_SLUG" tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
@@ -659,7 +670,7 @@ do_install() {
     fi
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
     if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
-        colorized_echo blue "TLS (Let's Encrypt domain)"
+        section "TLS (Let's Encrypt domain)"
         if "$dest/$APP_SLUG" tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "certificate issued for $SSL_DOMAIN"
@@ -668,7 +679,7 @@ do_install() {
         fi
     fi
     if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
-        colorized_echo blue "TLS (Let's Encrypt IP)"
+        section "TLS (Let's Encrypt IP)"
         if "$dest/$APP_SLUG" tls acme "$SSL_IP" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "IP certificate step done for $SSL_IP"
@@ -678,18 +689,22 @@ do_install() {
     fi
     port="$(awk -F= -v k=PORT '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; port="${port:-$DEFAULT_PORT}"
     urlpath="$(awk -F= -v k=URLPATH '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; urlpath="${urlpath:-$DEFAULT_URLPATH}"
-    colorized_echo blue "Verification"
+    section "Verification"
     verify_health "$port" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && verify_acme "$DATA_DIR"
     local display_path="${urlpath#/}"; display_path="${display_path%/}"
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
     if [[ -n "$key" ]]; then
-        colorized_echo green "Installation complete"
-        colorized_echo green "URL   http://127.0.0.1:$port$display_path"
-        colorized_echo green "Key   $key"
+        section "Installation complete"
+        _ok "URL     http://127.0.0.1:$port$display_path"
+        _ok "Key     $key   (shown once — save it)"
         local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
-        colorized_echo green "SSH   ssh -L $port:127.0.0.1:$port $host_ip"
+        _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
+        _note "Next steps:"
+        _note "  - open the URL above and paste the key to claim the panel"
+        _note "  - run 'ovmanager tls' to issue or manage a TLS certificate"
+        _note "  - run 'ovmanager status' to check the service"
     else
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
     fi
