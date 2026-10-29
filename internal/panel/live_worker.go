@@ -32,19 +32,6 @@ func runLiveCollect(db *sql.DB) {
 	fn(db)
 }
 
-// setLiveCollect swaps the collector and returns a restore func.
-func setLiveCollect(fn func(*sql.DB)) (restore func()) {
-	liveCollectMu.Lock()
-	prev := liveCollect
-	liveCollect = fn
-	liveCollectMu.Unlock()
-	return func() {
-		liveCollectMu.Lock()
-		liveCollect = prev
-		liveCollectMu.Unlock()
-	}
-}
-
 // startLiveWorker launches the live snapshot loop once per process.
 // Idempotent, so Mount can call it unconditionally.
 func (h *Handler) startLiveWorker() {

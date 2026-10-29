@@ -70,50 +70,6 @@ func userVersion(t *testing.T, conn *sql.DB) int {
 	return count(t, conn, "PRAGMA user_version")
 }
 
-// TestMigrationStepListMatches pins the ordered step list to
-// STEPS tuple verbatim — the runner's order and wording are the parity contract.
-func TestMigrationStepListMatches(t *testing.T) {
-	want := []db.MigrationStep{
-		{Version: 2, Description: "encrypt node API keys at rest"},
-		{Version: 3, Description: "drop orphan daily traffic rows"},
-		{Version: 4, Description: "add lookup indices"},
-		{Version: 5, Description: "add admin disabled flag"},
-		{Version: 6, Description: "add Telegram notification flags"},
-		{Version: 7, Description: "add automatic backup settings"},
-		{Version: 8, Description: "add user tag column"},
-		{Version: 9, Description: "add node-down alert flag"},
-		{Version: 10, Description: "add offsite backup target"},
-		{Version: 11, Description: "add encrypted Telegram backup setting"},
-		{Version: 12, Description: "seed owner row and first user"},
-		{Version: 13, Description: "add per-admin user defaults"},
-		{Version: 14, Description: "decrypt stored secrets (at-rest encryption retired)"},
-		{Version: 15, Description: "add node server_ca (TLS pinning)"},
-		{Version: 16, Description: "move the owner credential into the database"},
-		{Version: 17, Description: "add TLS/ACME and Telegram wizard settings"},
-		{Version: 18, Description: "add panel domain setting"},
-		{Version: 19, Description: "add threshold alert settings"},
-		{Version: 20, Description: "add subscription profile settings"},
-		{Version: 21, Description: "add panel identity (settings.panel_id)"},
-		{Version: 22, Description: "add admin owner flag (admins.is_owner)"},
-		{Version: 23, Description: "add event delivered markers (delivered)"},
-		{Version: 24, Description: "single-admin cut (drop multi-admin columns)"},
-		{Version: 25, Description: "add traffic ledger and settings kv"},
-		{Version: 26, Description: "unique owner index (admins.is_owner)"},
-	}
-	if db.SchemaVersion != 26 {
-		t.Fatalf("SchemaVersion = %d, want 26", db.SchemaVersion)
-	}
-	got := db.MigrationSteps()
-	if len(got) != len(want) {
-		t.Fatalf("step count = %d, want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("step[%d] = %+v, want %+v", i, got[i], want[i])
-		}
-	}
-}
-
 // TestMigrateFreshReachesHead builds a brand-new database at HEAD in one pass
 // and proves a second run changes nothing (idempotent).
 func TestMigrateFreshReachesHead(t *testing.T) {

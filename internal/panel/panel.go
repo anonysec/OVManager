@@ -429,9 +429,6 @@ func setColumns(db *sql.DB, values map[string]any) error {
 	return nil
 }
 
-// SetColumns is the exported form of setColumns for tests and external callers.
-func SetColumns(db *sql.DB, values map[string]any) error { return setColumns(db, values) }
-
 // --- HTTP helpers ---
 
 func envelope(w http.ResponseWriter, success bool, msg string, data any) {

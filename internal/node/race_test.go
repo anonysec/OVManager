@@ -18,15 +18,15 @@ func TestNodeClientHeadersRace(t *testing.T) {
 			if c == nil {
 				return
 			}
-			_ = c.Headers()
+			_ = c.panelIDHeader()
 		}(i)
 	}
 	wg.Wait()
 }
 
 func TestPanelIDHeaderResolution(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 
 	// Uncached client (NodeID == 0) carries its own panel id.
 	c0, err := NewClient("127.0.0.1", 1, "k", "", "panel-u", 0)
@@ -36,10 +36,6 @@ func TestPanelIDHeaderResolution(t *testing.T) {
 	if got := c0.panelIDHeader(); got != "panel-u" {
 		t.Errorf("uncached panelIDHeader = %q, want panel-u", got)
 	}
-	if _, ok := c0.Headers()["X-Panel-ID"]; ok {
-		t.Error("Headers() must not carry the per-request panel id")
-	}
-
 	// Cached client resolves it from the registry.
 	n := &Node{ID: 7, Name: "n", Address: "127.0.0.1", Port: 1, Key: "k"}
 	cached := NodeClient(n, "panel-c")

@@ -168,16 +168,6 @@ func Migrate(conn *sql.DB) (int, error) {
 	return SchemaVersion, nil
 }
 
-// MigrationSteps exposes the ordered step list so a parity test can pin it to
-// steps.py verbatim.
-func MigrationSteps() []MigrationStep {
-	out := make([]MigrationStep, len(steps))
-	for i, s := range steps {
-		out[i] = MigrationStep{Version: s.version, Description: s.description}
-	}
-	return out
-}
-
 // --- version tracking (PRAGMA user_version; schema.py current_version/_stamp) ---
 
 func userVersion(x execer) (int, error) {

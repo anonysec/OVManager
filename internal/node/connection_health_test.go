@@ -9,8 +9,8 @@ import (
 // gets the SHORT timeout, so a black-holed node cannot hold a fan-out slot
 // for the long one.
 func TestHealthyFollowsTheNodeState(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 
 	// A node we have never contacted is optimistic: it may simply be slow to
 	// start, so it gets the long probe timeout.
@@ -54,8 +54,8 @@ func TestHealthyFollowsTheNodeState(t *testing.T) {
 // The probe timeout follows the health: a node that is not healthy must be
 // probed briefly, or it holds a fan-out slot for the long timeout.
 func TestProbeTimeoutFollowsHealth(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 
 	connMu.Lock()
 	connections[1] = &connection{client: &Client{}, health: HealthHealthy, lastOK: time.Now().Add(-2 * healthTTL)}

@@ -637,15 +637,6 @@ func (c *Client) TriggerUpdate() map[string]any {
 	return c.request(http.MethodPost, "/sync/update", reqOpts{timeout: LongTimeout, allowFail: true})
 }
 
-// CreateUser provisions a user on the node.
-func (c *Client) CreateUser(name string, maxLogins int, uid string) bool {
-	data := map[string]any{"name": name, "max_logins": maxLogins}
-	if uid != "" {
-		data["id"] = uid
-	}
-	return c.request(http.MethodPost, "/sync/user", reqOpts{jsonBody: data, timeout: 180 * time.Second}) != nil
-}
-
 // ChangeUserStatus activates/deactivates a user on the node.
 // DeleteUser removes a user from the node.
 func (c *Client) DeleteUser(uid string) bool {
@@ -663,16 +654,6 @@ func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duratio
 		o.params = url.Values{"only_stale": {"true"}}
 	}
 	return dataOf(c.request(http.MethodPost, "/sync/user/"+uid+"/disconnect", o))
-}
-
-// ResetUsage zeroes a user's banked counters on the node.
-func (c *Client) ResetUsage(uid string) bool {
-	r := c.request(http.MethodPost, "/sync/user/"+uid+"/reset-usage", reqOpts{timeout: LongTimeout})
-	if r == nil {
-		return false
-	}
-	ok, _ := r["success"].(bool)
-	return ok
 }
 
 // GetSessions returns the node's live sessions/stale markers.

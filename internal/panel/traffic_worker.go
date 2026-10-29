@@ -37,19 +37,6 @@ func runTrafficSync(db *sql.DB) node.TrafficResult {
 	return fn(db)
 }
 
-// setTrafficSync swaps the accounting function and returns a restore func.
-func setTrafficSync(fn func(*sql.DB) node.TrafficResult) (restore func()) {
-	trafficSyncMu.Lock()
-	prev := trafficSync
-	trafficSync = fn
-	trafficSyncMu.Unlock()
-	return func() {
-		trafficSyncMu.Lock()
-		trafficSync = prev
-		trafficSyncMu.Unlock()
-	}
-}
-
 // trafficPollSeconds is OVM_TRAFFIC_POLL_SECONDS (default 60). A non-positive
 // or unparsable value falls back to the default rather than spinning the loop.
 func trafficPollSeconds() int {

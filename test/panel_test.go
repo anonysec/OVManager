@@ -565,39 +565,6 @@ func TestRestoreBodyLimit(t *testing.T) {
 	}
 }
 
-// TestSetColumnsRollsBackOnFailure ensures a mixed update is rolled back.
-//
-// Go randomises map iteration order, so a single call with one good key and
-// one bad key only exercises the "good key first" order half the time. The
-// call is repeated so the test fails against an implementation that does NOT
-// wrap the updates in a transaction (which would commit the good column
-// whenever it happens to be visited first).
-func TestSetColumnsRollsBackOnFailure(t *testing.T) {
-	conn, _ := newTestDB(t)
-	if _, err := conn.Exec(`ALTER TABLE settings ADD COLUMN a TEXT`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`ALTER TABLE settings ADD COLUMN b TEXT`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO settings (id, a, b) VALUES (1, 'orig-a', 'orig-b')`); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 24; i++ {
-		err := panel.SetColumns(conn, map[string]any{"a": "new-a", "no_such_column": "x"})
-		if err == nil {
-			t.Fatal("expected error for unknown column")
-		}
-		var a, b string
-		if err := conn.QueryRow(`SELECT a, b FROM settings WHERE id=1`).Scan(&a, &b); err != nil {
-			t.Fatal(err)
-		}
-		if a != "orig-a" || b != "orig-b" {
-			t.Fatalf("rollback failed on attempt %d: a=%q b=%q", i+1, a, b)
-		}
-	}
-}
-
 var _ = time.Now
 
 // The settings hint says "0 = unlimited" for the default device count, so

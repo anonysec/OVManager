@@ -158,16 +158,6 @@ var Contract = []ContractRow{
 		Note:      "the panel reads the envelope only (success, msg)",
 	},
 	{
-		// Provision a user on the node (client.go:601).
-		Method:    http.MethodPost,
-		Path:      "/sync/user",
-		RequestAt: "internal/node/client.go:CreateUser",
-		Request:   []string{"name", "max_logins", "id"},
-		Note: "no data key is read: the client only checks the envelope. " +
-			"Only CreateUserOnAllNodes calls it, and that fan-out is dead code " +
-			"(management.go:685) — the node mints the profile on first download",
-	},
-	{
 		// Delete a user (client.go:623).
 		Method:    http.MethodDelete,
 		Path:      "/sync/user/{uid}",
@@ -187,13 +177,6 @@ var Contract = []ContractRow{
 		},
 		Note: "only_stale is sent only when the panel asks the node to drop " +
 			"stale markers instead of live sessions (client.go:638)",
-	},
-	{
-		// Zero a user's banked counters (client.go:646).
-		Method:    http.MethodPost,
-		Path:      "/sync/user/{uid}/reset-usage",
-		RequestAt: "internal/node/client.go:ResetUsage",
-		Note:      "no data key is read: the client only checks the envelope's success",
 	},
 	{
 		// The .ovpn profile itself: raw text, not an envelope.

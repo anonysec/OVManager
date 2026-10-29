@@ -9,8 +9,8 @@ import (
 // Swapping the concurrency cap while calls are running must not race with
 // them: the swap writes the semaphore the running calls read and release.
 func TestFanoutLimitSwapDoesNotRaceWithRunningCalls(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup

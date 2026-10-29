@@ -370,7 +370,6 @@ func TestNodeContractRequests(t *testing.T) {
 	}
 
 	uid := "4242"
-	maxLogins := 3
 	dns1, dns2 := "1.1.1.1", "8.8.8.8"
 	ipv6 := true
 	prefix, extra := "2001:db8::/64", "1195,1196"
@@ -390,10 +389,8 @@ func TestNodeContractRequests(t *testing.T) {
 		{"RestartVPN", func(c *node.Client) { c.RestartVPN() }},
 		{"RenewServerCert", func(c *node.Client) { c.RenewServerCert() }},
 		{"TriggerUpdate", func(c *node.Client) { c.TriggerUpdate() }},
-		{"CreateUser", func(c *node.Client) { c.CreateUser("amy", maxLogins, uid) }},
 		{"DeleteUser", func(c *node.Client) { c.DeleteUser(uid) }},
 		{"DisconnectUser", func(c *node.Client) { c.DisconnectUser(uid, true, 0) }},
-		{"ResetUsage", func(c *node.Client) { c.ResetUsage(uid) }},
 		{"GetSessions", func(c *node.Client) { c.GetSessions("amy", 8, 0) }},
 		{"GetLogs", func(c *node.Client) { c.GetLogs("ERROR", 10) }},
 		{"DownloadOVPNBytes", func(c *node.Client) { c.DownloadOVPNBytes(uid) }},

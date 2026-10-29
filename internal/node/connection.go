@@ -74,16 +74,6 @@ func NodeClient(n *Node, panelID string) *Client {
 	return c
 }
 
-// Headers returns a copy of the client's static header map. Callers must not
-// rely on mutating it; the panel id travels via Client.panelIDHeader instead.
-func (c *Client) Headers() map[string]string {
-	out := make(map[string]string, len(c.headers))
-	for k, v := range c.headers {
-		out[k] = v
-	}
-	return out
-}
-
 func getConnection(n *Node) *Client {
 	sig := signatureOf(n)
 	if n.ID == 0 {
@@ -187,9 +177,3 @@ func Forget(nodeID int64) {
 	delete(connections, nodeID)
 }
 
-// ResetForTests clears the registry and health state.
-func ResetForTests() {
-	connMu.Lock()
-	defer connMu.Unlock()
-	connections = map[int64]*connection{}
-}

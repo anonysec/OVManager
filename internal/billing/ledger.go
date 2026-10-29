@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -51,31 +50,6 @@ func RecordDailyBytes(db Execer, userID, delta int64, day string) {
 		 ON CONFLICT(user_id, day) DO UPDATE SET bytes = bytes + ?`,
 		userID, day, delta, delta,
 	)
-}
-
-// WriteLedgerBatch inserts ledger rows sorted by (user_id, node_id).
-func WriteLedgerBatch(db *sql.DB, rows []LedgerRow) int {
-	if len(rows) == 0 {
-		return 0
-	}
-	ordered := append([]LedgerRow{}, rows...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		if ordered[i].UserID != ordered[j].UserID {
-			return ordered[i].UserID < ordered[j].UserID
-		}
-		return ordered[i].NodeID < ordered[j].NodeID
-	})
-	for _, r := range ordered {
-		meta := r.MetaJSON
-		if meta == "" {
-			meta = "{}"
-		}
-		_, _ = db.Exec(
-			`INSERT INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) VALUES (?, ?, ?, ?, ?, ?)`,
-			r.UserID, r.TS, r.NodeID, r.Kind, r.DeltaBytes, meta,
-		)
-	}
-	return len(ordered)
 }
 
 // UserDailySeries returns the last N UTC days for one user, oldest first, zero-filled.

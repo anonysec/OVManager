@@ -92,34 +92,6 @@ func mustJSON(t *testing.T, v any) string {
 	return string(b)
 }
 
-func TestLedgerBatchOrdersByUserAndNode(t *testing.T) {
-	conn, _ := newTestDB(t)
-	if _, err := conn.Exec(extraTelemetryDDL); err != nil {
-		t.Fatalf("ledger schema: %v", err)
-	}
-	billing.WriteLedgerBatch(conn, []billing.LedgerRow{
-		{UserID: 2, TS: 10, NodeID: "b", Kind: "poll", DeltaBytes: 5},
-		{UserID: 1, TS: 10, NodeID: "z", Kind: "poll", DeltaBytes: 1},
-		{UserID: 1, TS: 10, NodeID: "a", Kind: "poll", DeltaBytes: 2},
-	})
-	rows, err := conn.Query(`SELECT user_id, node_id FROM traffic_ledger ORDER BY id`)
-	if err != nil {
-		t.Fatalf("select: %v", err)
-	}
-	defer rows.Close()
-	var order []string
-	for rows.Next() {
-		var uid int64
-		var nid string
-		_ = rows.Scan(&uid, &nid)
-		order = append(order, string(rune('0'+uid))+nid)
-	}
-	want := []string{"1a", "1z", "2b"}
-	if len(order) != 3 || order[0] != want[0] || order[1] != want[1] || order[2] != want[2] {
-		t.Fatalf("insert order = %v, want %v", order, want)
-	}
-}
-
 func TestDailyBytesUpsertAndSeries(t *testing.T) {
 	conn, _ := newTestDB(t)
 	if _, err := conn.Exec(extraTelemetryDDL); err != nil {

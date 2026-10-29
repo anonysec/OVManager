@@ -45,7 +45,6 @@ func newCollectorDB(t *testing.T) *sql.DB {
 // resetLiveState clears the process-wide node registry and snapshot so a test
 // starts from a known-empty collector.
 func resetLiveState() {
-	node.ResetForTests()
 	snap.mu.Lock()
 	snap.connections = map[string]int{}
 	snap.nodes = map[string]bool{}

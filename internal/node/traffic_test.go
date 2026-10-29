@@ -116,8 +116,8 @@ func userState(t *testing.T, conn *sql.DB, id int64) map[string]any {
 }
 
 func TestSyncTrafficBillsTwoNodes(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"alice": int64(2000)}, 0))
@@ -139,8 +139,8 @@ func TestSyncTrafficBillsTwoNodes(t *testing.T) {
 }
 
 func TestSyncTrafficSkipsDeletedUser(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"ghost": int64(500)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", "{}")
@@ -155,8 +155,8 @@ func TestSyncTrafficSkipsDeletedUser(t *testing.T) {
 }
 
 func TestSyncTrafficOCCRetry(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
@@ -188,8 +188,8 @@ func TestSyncTrafficOCCRetry(t *testing.T) {
 }
 
 func TestSyncTrafficFirstPollSeeds(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", "{}")
@@ -207,8 +207,8 @@ func TestSyncTrafficFirstPollSeeds(t *testing.T) {
 }
 
 func TestSyncTrafficNullUsed(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "NULL", `{"1":0}`)
@@ -223,8 +223,8 @@ func TestSyncTrafficNullUsed(t *testing.T) {
 }
 
 func TestSyncTrafficNodeTimeout(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"alice": int64(5000)}, 2*time.Second))
@@ -250,8 +250,8 @@ func TestSyncTrafficNodeTimeout(t *testing.T) {
 }
 
 func TestSyncTrafficReseedMarker(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(600)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":500,"__reseed":true}`)
@@ -270,8 +270,8 @@ func TestSyncTrafficReseedMarker(t *testing.T) {
 }
 
 func TestSyncTrafficNullTotalsCountsPolled(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, nil, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", "{}")
@@ -291,8 +291,8 @@ func TestSyncTrafficNullTotalsCountsPolled(t *testing.T) {
 // larger one drops the other's bytes from users.used, from
 // user_traffic_daily and from the baseline, permanently.
 func TestSyncTrafficSumsAliasKeys(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	// The node reports the same user under its name and under its numeric id.
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
@@ -316,8 +316,8 @@ func TestSyncTrafficSumsAliasKeys(t *testing.T) {
 // The first poll must still SEED the baseline (delta 0), never bill a node's
 // lifetime total — including when the total is a sum of alias pools.
 func TestSyncTrafficAliasSumSeedsOnFirstPoll(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
 		"alice": int64(700),
@@ -340,8 +340,8 @@ func TestSyncTrafficAliasSumSeedsOnFirstPoll(t *testing.T) {
 // A collision is reported so a node whose keying has drifted is visible
 // instead of silent.
 func TestSyncTrafficAliasCollisionVisible(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
 		"alice": int64(700),
@@ -364,8 +364,8 @@ func TestSyncTrafficAliasCollisionVisible(t *testing.T) {
 // A node that reports one key per user (the documented contract) must not
 // report a collision.
 func TestSyncTrafficNoCollisionForOneKey(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	conn := newTrafficDB(t)
 	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
@@ -389,8 +389,8 @@ func TestSyncTrafficNoCollisionForOneKey(t *testing.T) {
 // healthy node is only billed when it happens to win the slot, and with the
 // fix it is billed either way.
 func TestSyncTrafficBillsHealthyNodesBehindHangingOnes(t *testing.T) {
-	ResetForTests()
-	defer ResetForTests()
+	resetForTests()
+	defer resetForTests()
 	restore := setFanoutLimit(1)
 	defer restore()
 	oldDeadline := trafficFanoutDeadline
