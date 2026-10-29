@@ -16,7 +16,7 @@ const actionTone = (action: any) => {
   return '';
 };
 
-export default function ActivityFeed({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
+export default function ActivityFeed({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const rows: any[] = (items || []).slice(0, 8);

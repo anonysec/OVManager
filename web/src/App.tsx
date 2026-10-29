@@ -38,11 +38,11 @@ const PageLoader = () => {
   <div className="page-loader" role="status" aria-live="polite" aria-label={t('loading', 'Loading')}>
     <SkeletonBlock width={230} height={26} radius={8} />
     <div className="page-loader-grid">
-      <SkeletonPanel lines={4} />
-      <SkeletonPanel lines={4} />
-      <SkeletonPanel lines={4} />
+      <SkeletonPanel lines={4} label={t('loading', 'Loading…')} />
+      <SkeletonPanel lines={4} label={t('loading', 'Loading…')} />
+      <SkeletonPanel lines={4} label={t('loading', 'Loading…')} />
     </div>
-    <SkeletonPanel lines={8} height={280} />
+    <SkeletonPanel lines={8} height={280} label={t('loading', 'Loading…')} />
   </div>
   );
 };

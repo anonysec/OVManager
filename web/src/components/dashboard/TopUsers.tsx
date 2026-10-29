@@ -7,7 +7,7 @@ import { EmptyState, PanelSkeleton } from '../ui';
 import { Panel, PanelState } from './Panel';
 import { formatBytes } from '../../utils/format';
 
-export default function TopUsers({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any; t?: any }) {
+export default function TopUsers({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any }) {
   const { t } = useTranslation();
   const rows: any[] = (items || []).slice(0, 5);
   const max = Math.max(1, ...rows.map((r: any) => r.bytes || 0));

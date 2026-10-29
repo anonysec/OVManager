@@ -12,7 +12,13 @@ const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?
 
   const focusTab = (index: number) => {
     if (!tabs.length) return;
-    const next = (index + tabs.length) % tabs.length;
+    let next = (index + tabs.length) % tabs.length;
+    let guard = 0;
+    while (tabs[next]?.disabled && guard < tabs.length) {
+      next = (next + 1) % tabs.length;
+      guard += 1;
+    }
+    if (tabs[next]?.disabled) return;
     const node: any = listRef.current?.querySelectorAll('[role="tab"]')[next];
     onChange?.(tabs[next].id);
     node?.focus();
@@ -38,7 +44,6 @@ const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?
     <div
       ref={listRef}
       role="tablist"
-      tabIndex={0}
       aria-label={ariaLabel}
       className={['ui-tabs', className].filter(Boolean).join(' ')}
       onKeyDown={onKeyDown}

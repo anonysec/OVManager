@@ -41,6 +41,12 @@ class SectionBoundaryInner extends Component<SectionBoundaryProps, SectionBounda
     this.props.onRetry?.();
   };
 
+  componentDidUpdate(prevProps: SectionBoundaryProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+
   render() {
     const { t, children, title, compact } = this.props;
 

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { FiAlertOctagon, FiAlertTriangle, FiCheckCircle, FiChevronDown, FiInfo } from 'react-icons/fi';
@@ -37,6 +37,7 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Set<GroupKey>>(new Set());
+  const snoozeTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [snoozed, setSnoozed] = useState<Set<string>>(new Set());
   const [seen, setSeen] = useState<Record<string, number>>({});
@@ -54,6 +55,11 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
       return changed ? next : prev;
     });
   }, [items]);
+
+  useEffect(() => () => {
+    for (const t of snoozeTimers.current) clearTimeout(t);
+    snoozeTimers.current = [];
+  }, []);
 
   const all = items || [];
   const visible = all.filter((it) => !dismissed.has(it.id) && !snoozed.has(it.id));
@@ -87,13 +93,14 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
 
   const snooze = (id: string) => {
     setSnoozed((prev) => new Set(prev).add(id));
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setSnoozed((prev) => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
     }, SNOOZE_MS);
+    snoozeTimers.current.push(timer);
   };
 
   const dismissAll = () => {

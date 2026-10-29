@@ -41,7 +41,7 @@ export function PanelState({ loading, error, isEmpty, onRetry, skeleton, childre
       </div>
     );
   }
-  if (isEmpty) return <EmptyState title={t('noData')} description={t('noDataDesc')} />;
+  if (isEmpty) return <EmptyState title={t('noData', 'No data')} description={t('noDataDesc', 'Nothing to show here yet.')} />;
   return typeof children === 'function' ? children() : children;
 }
 

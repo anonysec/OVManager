@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { FiChevronUp, FiChevronDown, FiChevronsLeft, FiChevronsRight, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
 import { SkeletonTable } from './Skeleton';
+import EmptyState from './EmptyState';
 import './DataTable.css';
 
 type DataTableColumn = {
@@ -85,7 +86,11 @@ const DataTable = ({
   }, [loading, rows, columns]);
 
   if (loading) {
-    return <SkeletonTable rows={8} cols={columns.length + (selectable ? 1 : 0)} />;
+    return <SkeletonTable rows={8} cols={columns.length + (selectable ? 1 : 0)} label={t('loading', 'Loading…')} />;
+  }
+
+  if (!rows || rows.length === 0) {
+    return <EmptyState title={t('noData', 'No data')} description={t('noDataDesc', 'Nothing to show here yet.')} />;
   }
 
   return (
