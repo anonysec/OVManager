@@ -11,6 +11,7 @@ import ErrorState from '../../components/ui/ErrorState';
 import { FiLink, FiEdit2, FiCheck, FiX, FiCopy, FiExternalLink, FiInfo } from 'react-icons/fi';
 import { Card, Field } from './shared';
 import useInlineEditFocus from './useInlineEditFocus';
+import { copyText } from '../../utils/clipboard';
 
 /* ═══════════════════════════════════════════════════════
    GENERAL (advanced) — Panel URL path + subscription prefix
@@ -80,7 +81,6 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
       addToast(t('saved', 'Saved.'), 'success');
       const newBase = next ? `/${next}` : '/dashboard';
       setTimeout(() => { window.location.assign(`${window.location.origin}${newBase}/settings`); }, 600);
-      void res;
     } catch (e) { setError((e as GeneralApiError).response?.data?.msg || t('error', 'Error')); }
     finally { setSaving(false); }
   };
@@ -155,7 +155,7 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
                   <code className="sp-code">{newPanelUrl}</code>
                   <button
                     type="button" className="sp-icon-btn" aria-label={t('copy', 'Copy')}
-                    onClick={() => { navigator.clipboard?.writeText(newPanelUrl).catch(() => {}); addToast(t('copied', 'Copied.'), 'success'); }}
+                    onClick={async () => { if (await copyText(newPanelUrl)) addToast(t('copied', 'Copied.'), 'success'); }}
                   >
                     <FiCopy size={12} aria-hidden="true" />
                   </button>

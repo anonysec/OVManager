@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { readPrefs, writePref } from '../../utils/notifPrefs';
 import { errorMessageOf } from '../../utils/errorMessage';
@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import LoadingButton from '../../components/LoadingButton';
 import { FiBell, FiAlertTriangle, FiSend } from 'react-icons/fi';
 import { Card } from './shared';
+import ErrorState from '../../components/ui/ErrorState';
 
 /* ═══════════════════════════════════════════════════════
    ALERTS & DASHBOARD — which alerts to surface + refresh
@@ -37,32 +38,35 @@ const AlertsSection = () => {
   });
   const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
   const [telegramReady, setTelegramReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [testing, setTesting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    apiClient.get('/settings')
-      .then((res) => {
-        if (cancelled) return;
-        const data = res?.data?.data || {};
-        setTelegram({
-          notify_expiry: data.notify_expiry !== false,
-          notify_traffic: data.notify_traffic !== false,
-          notify_node_down: data.notify_node_down !== false,
-          alert_usage_enabled: data.alert_usage_enabled !== false,
-          alert_cpu_enabled: data.alert_cpu_enabled !== false,
-        });
-        setThresholds({
-          alert_days_left: String(data.alert_days_left ?? 3),
-          alert_usage_pct: String(data.alert_usage_pct ?? 80),
-          alert_cpu_pct: String(data.alert_cpu_pct ?? 85),
-        });
-      })
-      .catch(() => { /* leave the defaults; the toggle still renders */ })
-      .finally(() => { if (!cancelled) setTelegramReady(true); });
-    return () => { cancelled = true; };
+  const load = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const res = await apiClient.get('/settings');
+      const data = res?.data?.data || {};
+      setTelegram({
+        notify_expiry: data.notify_expiry !== false,
+        notify_traffic: data.notify_traffic !== false,
+        notify_node_down: data.notify_node_down !== false,
+        alert_usage_enabled: data.alert_usage_enabled !== false,
+        alert_cpu_enabled: data.alert_cpu_enabled !== false,
+      });
+      setThresholds({
+        alert_days_left: String(data.alert_days_left ?? 3),
+        alert_usage_pct: String(data.alert_usage_pct ?? 80),
+        alert_cpu_pct: String(data.alert_cpu_pct ?? 85),
+      });
+    } catch {
+      setLoadError(true);
+    } finally {
+      setTelegramReady(true);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const toggle = (key: string, value: boolean) => {
     writePref(key, value);
@@ -141,6 +145,8 @@ const AlertsSection = () => {
     { key: 'alert_usage_pct', label: t('thresholdUsagePct', "Warn at {{n}}% of a user's quota", { n: thresholds.alert_usage_pct }), min: 1, max: 100 },
     { key: 'alert_cpu_pct', label: t('thresholdCpuPct', 'Warn at {{n}}% node CPU', { n: thresholds.alert_cpu_pct }), min: 1, max: 100 },
   ];
+
+  if (loadError) return <ErrorState title={t('settingsLoadError', 'Failed to load settings')} message={t('settingsLoadErrorDetail', 'Could not reach the server.')} onRetry={load} retryLabel={t('retry', 'Retry')} />;
 
   return (
     <div className="sp-cards">

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import apiClient from '../services/api';
 import { Badge, Button, Card, ErrorState, PanelSkeleton, PageHeader } from '../components/ui';
@@ -133,11 +133,9 @@ const SetupWizard = () => {
             {t('setupSameServerHint', 'Same server as OVManager? Run the command above here too. The OVNode installer prints the API key and the TLS certificate separately on its Ready card — paste both into Nodes → Add Node.')}
           </p>
           <div className="setup-actions">
-            <Link to="/nodes" className="setup-link">
-              <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />}>
-                {t('setupOpenNodes', 'Open Nodes')}
-              </Button>
-            </Link>
+            <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/nodes')}>
+              {t('setupOpenNodes', 'Open Nodes')}
+            </Button>
             {!nodeDone && (
               <Button variant="ghost" size="sm" icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={load}>
                 {t('setupRefresh', 'Refresh checks')}
@@ -170,11 +168,9 @@ const SetupWizard = () => {
             </p>
           )}
           <div className="setup-actions">
-            <Link to="/users" className="setup-link">
-              <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />}>
-                {t('setupOpenUsers', 'Open Users')}
-              </Button>
-            </Link>
+            <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/users')}>
+              {t('setupOpenUsers', 'Open Users')}
+            </Button>
             {!userDone && (
               <Button variant="ghost" size="sm" icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={load}>
                 {t('setupRefresh', 'Refresh checks')}
@@ -192,11 +188,9 @@ const SetupWizard = () => {
       done: configDone,
       content: (
         <div className="setup-actions">
-          <Link to="/users" className="setup-link">
-            <Button variant="secondary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />}>
-              {t('setupOpenUsers', 'Open Users')}
-            </Button>
-          </Link>
+          <Button variant="secondary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/users')}>
+            {t('setupOpenUsers', 'Open Users')}
+          </Button>
           {!configDone && (
             <Button variant="ghost" size="sm" icon={<FiCheck size={13} aria-hidden="true" />} onClick={markConfigDone}>
               {t('setupMarkDone', 'Mark as done')}

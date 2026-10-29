@@ -1,7 +1,7 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import apiClient from '../../services/api';
@@ -32,13 +32,15 @@ const DefaultsSection = ({ shared }: { shared?: SharedState }) => {
   const [trafficGb, setTrafficGb] = useState<any>(100);
   const [devices, setDevices] = useState<any>(1);
   const [saving, setSaving] = useState(false);
+  const synced = useRef(false);
   const loading = shared?.loading ?? true;
   const loadError = shared?.error ?? false;
   const load = shared?.reload ?? (() => {});
 
   useEffect(() => {
     const s = shared?.data;
-    if (!s) return;
+    if (!s || synced.current) return;
+    synced.current = true;
     setDays(Number(s.default_days) || 30);
     setTrafficGb(Number(s.default_traffic_gb) || 100);
     setDevices(Number(s.default_max_users ?? 1));

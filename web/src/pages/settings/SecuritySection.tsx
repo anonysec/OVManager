@@ -113,7 +113,7 @@ const SecuritySection = () => {
       <Card title={t('securityCard', 'Connection Events')} icon={FiShield}>
         <div className="sp-hours-toggle" role="group" aria-label={t('securityWindow', 'Time window')}>
           {[4, 8, 12, 24, 48].map(h => (
-            <button key={h} type="button" className={`sp-hour-btn${hours === h ? ' active' : ''}`} aria-pressed={hours === h} onClick={() => setHours(h)}>{h}h</button>
+            <button key={h} type="button" className={`sp-hour-btn${hours === h ? ' active' : ''}`} aria-pressed={hours === h} onClick={() => setHours(h)}>{t('hoursSuffix', '{{h}}h', { h })}</button>
           ))}
         </div>
         {error && <ErrorState title={t('error', 'Error')} message={error} onRetry={load} />}

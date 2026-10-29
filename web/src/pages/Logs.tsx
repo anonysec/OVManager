@@ -35,6 +35,7 @@ const Logs = () => {
   const [nodes, setNodes] = useState<{ name: string }[]>([]);
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const [follow, setFollow] = useState(true);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -53,14 +54,18 @@ const Logs = () => {
   }, []);
 
   const fetchLogs = useCallback(async (opts: { background?: boolean } = {}) => {
-    if (!opts.background) setError('');
+    if (!opts.background) { setError(''); setLoading(true); }
     try {
       const res = await apiClient.get('/logs', { params: { unit, lines } });
       setOutput(res.data || '');
       setError('');
     } catch (e) {
-      setOutput('');
-      if (!opts.background) setError(errorMessageOf(e, t('logsError', 'Failed to load logs.')));
+      if (!opts.background) {
+        setOutput('');
+        setError(errorMessageOf(e, t('logsError', 'Failed to load logs.')));
+      }
+    } finally {
+      if (!opts.background) setLoading(false);
     }
   }, [unit, lines, t]);
 
@@ -159,6 +164,8 @@ const Logs = () => {
           <div className={`logs-view${error ? ' logs-view--error' : ''}`}>
             {error ? (
               <div className="logs-error" role="alert">{error}</div>
+            ) : loading ? (
+              <div className="log-rows-empty" aria-live="polite" aria-busy="true">{t('loading', 'Loading…')}</div>
             ) : output ? (
               <pre className="log-rows">{output}</pre>
             ) : (
