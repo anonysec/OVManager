@@ -21,7 +21,9 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -194,26 +196,119 @@ func runTLSRenew(inst Install) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "could not determine domain from certificate"}), 1
 	}
-	text, code := runTLSAcme(inst, domain, "", "", "", "", "", "")
+	text, code := runTLSAcme(inst, domain, "")
 	return text, code
 }
 
-func runTLSAcme(inst Install, domain, email, webroot, dns, cfToken, cfEmail, cfKey string) (string, int) {
+// port80Occupant returns the process name and (best-effort) systemd unit
+// holding port 80, plus whether one was found.
+func port80Occupant() (proc string, unit string, found bool) {
+	out, err := exec.Command("ss", "-tlnp", "sport = :80").Output()
+	if err != nil {
+		return "", "", false
+	}
+	re := regexp.MustCompile(`pid=(\d+)`)
+	m := re.FindStringSubmatch(string(out))
+	if m == nil {
+		return "", "", false
+	}
+	pid := m[1]
+	data, err := os.ReadFile("/proc/" + pid + "/comm")
+	if err != nil {
+		return "", "", false
+	}
+	proc = strings.TrimSpace(string(data))
+	// try cgroup for the systemd unit
+	cg, _ := os.ReadFile("/proc/" + pid + "/cgroup")
+	for _, line := range strings.Split(string(cg), "\n") {
+		if i := strings.Index(line, ".service"); i >= 0 {
+			// extract the unit name
+			start := strings.LastIndex(line[:i], "/")
+			if start < 0 {
+				start = strings.LastIndex(line[:i], ":")
+			}
+			if start >= 0 {
+				unit = line[start+1 : i+len(".service")]
+				break
+			}
+		}
+	}
+	if unit == "" {
+		// fallback mapping by process name
+		switch proc {
+		case "nginx":
+			unit = "nginx"
+		case "apache2", "httpd":
+			unit = proc
+		case "caddy":
+			unit = "caddy"
+		}
+	}
+	return proc, unit, true
+}
+
+func runTLSAcme(inst Install, domain, email string) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
-	if webroot == "" && dns == "" {
-		conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
-		if err == nil {
-			conn.Close()
+
+	// If port 80 is busy, offer to free it temporarily (with confirmation).
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
+	if err == nil {
+		conn.Close()
+		proc, unit, found := port80Occupant()
+		msg := "port 80 is in use"
+		if found && proc != "" {
+			msg = "port 80 is in use by " + proc
+		}
+		// determine TTY
+		isTTY := false
+		if fi, _ := os.Stdin.Stat(); fi != nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+			isTTY = true
+		}
+		if !isTTY {
 			return block([]string{
 				heading("HTTPS certificate"),
-				"port 80 is in use - ACME HTTP-01 needs it",
-				"stop the occupant (nginx/apache/caddy) and retry,",
-				"or use --webroot <dir> with a reverse proxy serving it.",
+				msg,
+				"free port 80 and retry, or run interactively to confirm auto-stop.",
 			}), 1
 		}
+		if unit == "" {
+			return block([]string{
+				heading("HTTPS certificate"),
+				msg,
+				"could not map it to a systemd service; free port 80 manually and retry.",
+			}), 1
+		}
+		fmt.Fprintf(os.Stderr, "%s\nStop %s temporarily to free port 80? [y/N]: ", msg, unit)
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer != "y" && answer != "yes" {
+			return block([]string{
+				heading("HTTPS certificate"),
+				"aborted - port 80 left untouched.",
+			}), 1
+		}
+		// stop
+		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil {
+			return block([]string{heading("HTTPS certificate"), "could not stop " + unit + ": " + err.Error()}), 1
+		}
+		// restart on exit (success or failure)
+		defer func(u string) {
+			_ = exec.Command("systemctl", "start", u).Run()
+		}(unit)
+		// wait briefly for port to be released
+		for i := 0; i < 20; i++ {
+			c, err := net.DialTimeout("tcp", "127.0.0.1:80", 500*time.Millisecond)
+			if err != nil {
+				break
+			}
+			c.Close()
+			time.Sleep(250 * time.Millisecond)
+		}
 	}
+
 	// account key
 	dir := tlsDir(inst)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -231,15 +326,10 @@ func runTLSAcme(inst Install, domain, email, webroot, dns, cfToken, cfEmail, cfK
 		profile = "shortlived"
 	}
 	res, err := acme.Issue(ctx, acme.Options{
-		Domains:     []string{domain},
-		AccountKey:  key,
-		HTTPPort:    80,
-		Profile:     profile,
-		Webroot:     webroot,
-		DNSProvider: dns,
-		CFToken:     cfToken,
-		CFEmail:     cfEmail,
-		CFKey:       cfKey,
+		Domains:    []string{domain},
+		AccountKey: key,
+		HTTPPort:   80,
+		Profile:    profile,
 	})
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1

@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -43,18 +41,6 @@ type Options struct {
 	// Profile is the ACME issuance profile name (e.g. "shortlived" for IP
 	// certificates). Empty uses the CA default.
 	Profile string
-	// Webroot, when set, serves HTTP-01 challenges from this directory
-	// (nginx/reverse-proxy setups) instead of binding a standalone listener
-	// on HTTPPort. The directory must be served at the domain root.
-	Webroot string
-	// DNSProvider, when set (e.g. "cloudflare"), uses DNS-01 challenges
-	// instead of HTTP-01. No port 80 required.
-	DNSProvider string
-	// Cloudflare credentials for DNS-01. Token takes precedence over
-	// Email+Key (legacy global API key).
-	CFToken string
-	CFEmail string
-	CFKey   string
 }
 
 // Result is what a successful issuance leaves behind.
@@ -79,11 +65,6 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 	if len(o.Domains) == 0 {
 		return nil, errors.New("acme: no domains given")
 	}
-	if o.Webroot != "" {
-		defer func() {
-			_ = os.RemoveAll(filepath.Join(o.Webroot, ".well-known"))
-		}()
-	}
 	key := o.AccountKey
 	if key == nil {
 		generated, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -103,7 +84,7 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 	}
 	var challenge *http.Server
 	var listener net.Listener
-	if o.Webroot == "" && o.DNSProvider == "" {
+	{
 		l, err := net.Listen("tcp", fmt.Sprintf(":%d", o.HTTPPort))
 		if err != nil {
 			return nil, fmt.Errorf("acme: the standalone HTTP-01 listener could not bind port %d: %w",
@@ -148,45 +129,9 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 		}
 		accepted := false
 		for _, ch := range authz.Challenges {
-			if ch.Type == "http-01" && o.DNSProvider == "" {
-				if o.Webroot != "" {
-					keyAuth, err := client.HTTP01ChallengeResponse(ch.Token)
-					if err != nil {
-						return nil, fmt.Errorf("acme: challenge response: %w", err)
-					}
-					dir := filepath.Join(o.Webroot, ".well-known", "acme-challenge")
-					if err := os.MkdirAll(dir, 0o755); err != nil {
-						return nil, fmt.Errorf("acme: webroot dir: %w", err)
-					}
-					if err := os.WriteFile(filepath.Join(dir, ch.Token), []byte(keyAuth), 0o644); err != nil {
-						return nil, fmt.Errorf("acme: write challenge: %w", err)
-					}
-				}
+			if ch.Type == "http-01" {
 				if _, err := client.Accept(ctx, ch); err != nil {
 					return nil, fmt.Errorf("acme: HTTP-01 challenge for %s: %w", authz.Identifier.Value, err)
-				}
-				accepted = true
-			}
-			if ch.Type == "dns-01" && o.DNSProvider == "cloudflare" {
-				txtVal, err := client.DNS01ChallengeRecord(ch.Token)
-				if err != nil {
-					return nil, fmt.Errorf("acme: dns-01 record value: %w", err)
-				}
-				recordID, err := cfCreateTXT(o, authz.Identifier.Value, txtVal)
-				if err != nil {
-					return nil, fmt.Errorf("acme: cloudflare create: %w", err)
-				}
-				defer func(id, domain string) {
-					_ = cfDeleteTXT(o, domain, id)
-				}(recordID, authz.Identifier.Value)
-				// wait for propagation
-				select {
-				case <-time.After(15 * time.Second):
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-				if _, err := client.Accept(ctx, ch); err != nil {
-					return nil, fmt.Errorf("acme: DNS-01 challenge for %s: %w", authz.Identifier.Value, err)
 				}
 				accepted = true
 			}
