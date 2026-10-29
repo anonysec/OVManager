@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import '../i18n';
 import Modal from './Modal';
 
@@ -34,5 +34,12 @@ describe('Modal inert attribute cleanup', () => {
     );
 
     expect(root.hasAttribute('inert')).toBe(false);
+  });
+});
+
+describe('Modal optional onClose', () => {
+  it('does not throw on Escape when onClose is omitted', () => {
+    render(<Modal isOpen title="x" />);
+    fireEvent.keyDown(document.querySelector('[role="dialog"]') as HTMLElement, { key: 'Escape' });
   });
 });

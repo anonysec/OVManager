@@ -59,3 +59,21 @@ describe('UserDetailModal usage', () => {
     expect(screen.queryByText(formatBytes(3 * GIB))).toBeNull();
   });
 });
+
+describe('UserDetailModal null fields', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders without crashing when name or uuid is missing', async () => {
+    (apiClient.get as any).mockImplementation(() => Promise.resolve({ data: { success: true, data: { days: [] } } }));
+    render(
+      <UserDetailModal
+        user={{ id: 7, uuid: null, name: null, used: 5, total: -1, is_active: true, max_logins: 0 }}
+        isOpen
+        onClose={() => {}}
+      />
+    );
+    await waitFor(() => expect(document.querySelector('.ud-avatar')).toBeTruthy());
+    expect(document.querySelector('.ud-avatar')?.textContent).toBe('?');
+    expect(document.querySelector('.ud-uuid')?.textContent).toBe('—');
+  });
+});
