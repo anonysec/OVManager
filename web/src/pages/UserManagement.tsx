@@ -600,7 +600,7 @@ const UserManagement = () => {
               <span className={`dt-usage-fill${pct >= 95 ? ' is-danger' : pct >= 85 ? ' is-warn' : ''}`} style={{ width: `${total ? pct : 0}%` }} />
             </span>
             <span className="dt-num">
-              {formatBytes(used)}{total ? ` / ${formatBytes(total)}` : <>{' '}<span className="um-data-total">of ∞</span></>}
+              {formatBytes(used)}{total ? ` / ${formatBytes(total)}` : <>{' '}<span className="um-data-total">{t('ofInfinity', 'of ∞')}</span></>}
             </span>
           </span>
         );
