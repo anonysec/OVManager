@@ -105,7 +105,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
   };
 
   return createPortal(
-    <div className="modal-backdrop" onClick={handleBackdropClick}>
+    <div className="modal-backdrop" onClick={handleBackdropClick} role="presentation">
       <div
         ref={dialogRef}
         className={`modal-window modal-${size}`}

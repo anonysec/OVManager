@@ -297,7 +297,7 @@ const NodeDrawer = ({
   const liveList = Array.isArray(sessions?.live_sessions) ? sessions.live_sessions : [];
 
   return (
-    <div className="node-drawer-backdrop" onClick={onClose}>
+    <div className="node-drawer-backdrop" onClick={onClose} role="presentation">
       <aside
         ref={drawerRef}
         className="node-drawer"
