@@ -467,26 +467,6 @@ func mintPair(t *testing.T, cn string) (keyPEM, certPEM string) {
 	return keyPEM, certPEM
 }
 
-// postPair uploads a key + certificate pair to path as multipart form data.
-func postPair(t *testing.T, url, token, path, keyPEM, certPEM string) (*http.Response, []byte) {
-	t.Helper()
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	for field, content := range map[string]string{"key": keyPEM, "cert": certPEM} {
-		part, err := mw.CreateFormFile(field, field+".pem")
-		if err != nil {
-			t.Fatalf("form file: %v", err)
-		}
-		if _, err := part.Write([]byte(content)); err != nil {
-			t.Fatalf("write part: %v", err)
-		}
-	}
-	if err := mw.Close(); err != nil {
-		t.Fatalf("close writer: %v", err)
-	}
-	return rawReq(t, "POST", url+path, token, &buf, mw.FormDataContentType())
-}
-
 // TestTLSUploadValidatesAndActivates covers the upload path: validation
 // failures keep the previous pair, a valid pair is written at the declared
 // paths (0600/0644) and rollback restores the previous one.
@@ -563,26 +543,6 @@ func TestPanelRequiresOwner(t *testing.T) {
 			t.Fatalf("GET %s without token: status = %d, want 401", path, res.StatusCode)
 		}
 	}
-}
-
-// An upload must not leave the multipart parser's spooled copy behind in the
-// system temp dir. The parser writes a file part that does not fit in memory
-// there, and the request owns the cleanup: without it every restore — a whole
-// database — would sit in /tmp for good.
-// multipartTempFiles counts the spooled upload files in the system temp dir.
-func multipartTempFiles(t *testing.T) int {
-	t.Helper()
-	entries, err := os.ReadDir(os.TempDir())
-	if err != nil {
-		t.Fatalf("read temp dir: %v", err)
-	}
-	n := 0
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "multipart-") {
-			n++
-		}
-	}
-	return n
 }
 
 // TestRestoreBodyLimit refuses an oversized restore upload.
