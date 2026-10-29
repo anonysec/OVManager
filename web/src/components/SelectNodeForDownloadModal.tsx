@@ -110,7 +110,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
       window.URL.revokeObjectURL(url);
       onClose();
     } catch (err: any) {
-      setError(err.message || `Failed to download config for user "${user.name}".`);
+      setError(err.message || t('nodeExportFailed', 'Could not download the configs.'));
     } finally {
       setIsDownloading(false);
     }

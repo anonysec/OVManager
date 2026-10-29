@@ -794,3 +794,7 @@ input[type="checkbox"]:indeterminate::after {
   content: ''; position: absolute; inset-inline-start: 50%; margin-inline-start: -4.5px; top: 6.5px;
   width: 9px; height: 2px; background: #fff; border-radius: 1px;
 }
+
+.um-cell-main-text { min-width: 0; text-align: start; }
+.um-cell-id { opacity: 0.7; font-size: 11px; display: block; }
+.um-status-online { color: var(--success-text); font-weight: 600; }

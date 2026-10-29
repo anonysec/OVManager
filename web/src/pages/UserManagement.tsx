@@ -84,6 +84,7 @@ const UserManagement = () => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [lastDeleted, setLastDeleted] = useState<{ uuid: string; name: string } | null>(null);
   const [rowMenu, setRowMenu] = useState<{ uuid: string; user: any; left: number; top?: number; bottom?: number } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [sort, setSort] = useState<{ key: string; dir: string }>(() => {
     try {
@@ -354,7 +355,7 @@ const UserManagement = () => {
             addToast(res.data?.msg || t('error'), 'error');
           }
           fetchUsers({ background: true });
-        } catch { addToast(t('error'), 'error'); }
+        } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); fetchUsers({ background: true }); }
       },
       true,
       t('deleteUser')
@@ -450,7 +451,7 @@ const UserManagement = () => {
           const res = await apiClient.post(`${userApiPath(user)}/reset-usage`);
           addToast(res.data?.success ? t('usageResetSuccess', 'Usage for {{name}} has been reset.', { name: user.name }) : (res.data?.msg || t('error')), res.data?.success ? 'success' : 'error');
           fetchUsers({ background: true });
-        } catch { addToast(t('error'), 'error'); }
+        } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); fetchUsers({ background: true }); }
       },
       false,
       t('resetUsage')
@@ -551,12 +552,24 @@ const UserManagement = () => {
       if (el && (el.closest('.um-rowmenu-panel') || el.closest('.um-rowmenu-trigger'))) return;
       setRowMenu(null);
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setRowMenu(null); };
+    const items = () => Array.from(rowMenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') || []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setRowMenu(null); return; }
+      const list = items();
+      if (!list.length) return;
+      const idx = list.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); list[(idx + 1) % list.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); list[(idx - 1 + list.length) % list.length].focus(); }
+      else if (e.key === 'Home') { e.preventDefault(); list[0].focus(); }
+      else if (e.key === 'End') { e.preventDefault(); list[list.length - 1].focus(); }
+    };
     document.addEventListener('mousedown', close);
     document.addEventListener('keydown', onKey);
     window.addEventListener('resize', close);
     window.addEventListener('scroll', close, true);
+    const focusTimer = window.setTimeout(() => items()[0]?.focus(), 0);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener('mousedown', close);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', close);
@@ -576,9 +589,9 @@ const UserManagement = () => {
         >
           <span className="dt-cell-main">
             <span className="dt-avatar" aria-hidden="true">{String(u.name || '?').slice(0, 1).toUpperCase()}</span>
-            <span style={{ minWidth: 0, textAlign: 'start' }}>
+            <span className="um-cell-main-text">
               <span className="dt-cell-title">{u.name}</span>
-              <span className="dt-cell-sub" style={{ opacity: 0.7, fontSize: '11px', display: 'block' }}>#{u.id}</span>
+              <span className="dt-cell-sub um-cell-id">#{u.id}</span>
             </span>
           </span>
         </button>
@@ -633,7 +646,7 @@ const UserManagement = () => {
         return (
           <span className="dt-num">
             {isOnline ? (
-              <span style={{ color: 'var(--success-text)', fontWeight: 600 }}>{t('statusOnline', 'Online')}</span>
+              <span className="um-status-online">{t('statusOnline', 'Online')}</span>
             ) : u.last_online ? (
               fmtRelative(u.last_online)
             ) : (
@@ -687,10 +700,10 @@ const UserManagement = () => {
       />
 
       <div className="um-stats" role="region" aria-label={t('userStats', 'User statistics')}>
-        <StatCard className="um-stat" icon={<FiUsers aria-hidden="true" />} label={t('totalUsers')} value={userStats.total} tone="accent" hint={undefined} />
-        <StatCard className="um-stat" icon={<FiCheck aria-hidden="true" />} label={t('activeUsers')} value={userStats.active} tone="success" hint={undefined} />
-        <StatCard className="um-stat" icon={<FiWifi aria-hidden="true" />} label={t('onlineUsers')} value={userStats.online} tone="success" hint={undefined} />
-        <StatCard className="um-stat" icon={<FiUserX aria-hidden="true" />} label={t('inactiveUsers')} value={userStats.inactive} tone="danger" hint={undefined} />
+        <StatCard className="um-stat" icon={<FiUsers aria-hidden="true" />} label={t('totalUsers')} value={userStats.total} tone="accent" />
+        <StatCard className="um-stat" icon={<FiCheck aria-hidden="true" />} label={t('activeUsers')} value={userStats.active} tone="success" />
+        <StatCard className="um-stat" icon={<FiWifi aria-hidden="true" />} label={t('onlineUsers')} value={userStats.online} tone="success" />
+        <StatCard className="um-stat" icon={<FiUserX aria-hidden="true" />} label={t('inactiveUsers')} value={userStats.inactive} tone="danger" />
       </div>
 
       <div className="um-toolbar">
@@ -800,6 +813,7 @@ const UserManagement = () => {
 
       {rowMenu && createPortal(
         <div
+          ref={rowMenuRef}
           className="um-rowmenu-panel"
           role="menu"
           aria-label={t('moreActions', 'More actions')}

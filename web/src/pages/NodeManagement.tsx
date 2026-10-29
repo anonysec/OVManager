@@ -63,7 +63,7 @@ const NodeManagement = () => {
   });
 
   const fetchNodesWork = useCallback(async ({ background = false } = {}) => {
-    if (!background) setIsLoading(true);
+    if (!background) setIsLoading((prev) => (nodesRef.current.length === 0 ? true : prev));
     setLoadError(false);
     try {
       const response = await apiClient.get('/nodes/');
@@ -91,6 +91,7 @@ const NodeManagement = () => {
 
   const nodesRef = useRef<any[]>(nodes);
   const hasNodes = nodes.length > 0;
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   useEffect(() => {
@@ -299,6 +300,8 @@ const NodeManagement = () => {
         <EmptyState
           title={t('nodeEmptyTitle', 'No nodes yet')}
           description={t('nodeEmptyBody', 'Add your first OVNode to start.')}
+          actionLabel={t('addNode', 'Add node')}
+          onAction={() => setAddOpen(true)}
         />
       ) : filteredNodes.length === 0 ? (
         <EmptyState
@@ -364,8 +367,8 @@ const NodeManagement = () => {
                       variant="ghost" size="sm" icon={<FiPower size={15} />}
                       className={`nm-power-btn--${health}`}
                       loading={Boolean(busy[`toggle-${node.id}`])}
-                      title={node.status ? t('disableUser', 'Disable') : t('enableUser', 'Enable')}
-                      aria-label={`${node.status ? t('disableUser', 'Disable') : t('enableUser', 'Enable')} ${node.name}`}
+                      title={node.status ? t('disable', 'Disable') : t('enable', 'Enable')}
+                      aria-label={`${node.status ? t('disable', 'Disable') : t('enable', 'Enable')} ${node.name}`}
                       onClick={() => handleToggleStatus(node)}
                     />
                     <Button
