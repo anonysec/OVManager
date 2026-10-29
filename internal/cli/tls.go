@@ -194,15 +194,15 @@ func runTLSRenew(inst Install) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "could not determine domain from certificate"}), 1
 	}
-	text, code := runTLSAcme(inst, domain, "", "")
+	text, code := runTLSAcme(inst, domain, "", "", "", "", "", "")
 	return text, code
 }
 
-func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
+func runTLSAcme(inst Install, domain, email, webroot, dns, cfToken, cfEmail, cfKey string) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
 	}
-	if webroot == "" {
+	if webroot == "" && dns == "" {
 		conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
 		if err == nil {
 			conn.Close()
@@ -231,11 +231,15 @@ func runTLSAcme(inst Install, domain, email, webroot string) (string, int) {
 		profile = "shortlived"
 	}
 	res, err := acme.Issue(ctx, acme.Options{
-		Domains:    []string{domain},
-		AccountKey: key,
-		HTTPPort:   80,
-		Profile:    profile,
-		Webroot:    webroot,
+		Domains:     []string{domain},
+		AccountKey:  key,
+		HTTPPort:    80,
+		Profile:     profile,
+		Webroot:     webroot,
+		DNSProvider: dns,
+		CFToken:     cfToken,
+		CFEmail:     cfEmail,
+		CFKey:       cfKey,
 	})
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1

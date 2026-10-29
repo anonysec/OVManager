@@ -211,7 +211,7 @@ func (a *app) restoreCmd() *cobra.Command {
 }
 
 func (a *app) tlsCmd() *cobra.Command {
-	var webroot string
+	var webroot, dnsProvider, cfToken, cfEmail, cfKey string
 	cmd := &cobra.Command{
 		Use:     "tls",
 		Aliases: []string{"ssl", "cert"},
@@ -272,7 +272,7 @@ func (a *app) tlsCmd() *cobra.Command {
 				if len(args) > 2 {
 					email = args[2]
 				}
-				text, code := runTLSAcme(inst, args[1], email, webroot)
+				text, code := runTLSAcme(inst, args[1], email, webroot, dnsProvider, cfToken, cfEmail, cfKey)
 				a.emit(text, code)
 			default:
 				// treat as domain/IP → issue Let's Encrypt cert
@@ -280,13 +280,17 @@ func (a *app) tlsCmd() *cobra.Command {
 				if len(args) > 1 {
 					email = args[1]
 				}
-				text, code := runTLSAcme(inst, args[0], email, webroot)
+				text, code := runTLSAcme(inst, args[0], email, webroot, dnsProvider, cfToken, cfEmail, cfKey)
 				a.emit(text, code)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&webroot, "webroot", "", "serve HTTP-01 challenges from this dir (nginx/reverse-proxy setups)")
+	cmd.Flags().StringVar(&dnsProvider, "dns", "", "DNS provider for DNS-01 (e.g. cloudflare)")
+	cmd.Flags().StringVar(&cfToken, "cf-token", "", "Cloudflare API token (or $CF_API_TOKEN)")
+	cmd.Flags().StringVar(&cfEmail, "cf-email", "", "Cloudflare account email (legacy global key)")
+	cmd.Flags().StringVar(&cfKey, "cf-key", "", "Cloudflare global API key (legacy)")
 	return cmd
 }
 func (a *app) urlpathCmd() *cobra.Command {
@@ -444,8 +448,20 @@ func runTLSMenu(a *app, inst Install) {
 			if target == "" {
 				continue
 			}
-			text, code := runTLSAcme(inst, target, "", "")
-			a.emit(text, code)
+			fmt.Fprint(a.out, "Method [1=HTTP-01, 2=Cloudflare DNS]: ")
+			m := strings.TrimSpace(readLine())
+			if m == "2" {
+				fmt.Fprint(a.out, "CF API token (or set CF_API_TOKEN): ")
+				tok := strings.TrimSpace(readLine())
+				if tok == "" {
+					tok = os.Getenv("CF_API_TOKEN")
+				}
+				text, code := runTLSAcme(inst, target, "", "", "cloudflare", tok, os.Getenv("CF_EMAIL"), os.Getenv("CF_KEY"))
+				a.emit(text, code)
+			} else {
+				text, code := runTLSAcme(inst, target, "", "", "", "", "", "")
+				a.emit(text, code)
+			}
 		case "selfsigned":
 			fmt.Fprint(a.out, "Domain or IP (default localhost): ")
 			target := strings.TrimSpace(readLine())
