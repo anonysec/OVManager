@@ -173,17 +173,19 @@ validate_urlpath() {
 # Everything prints to stderr so `curl | bash` stays clean.
 
 ui_rule()    { printf "\n${_BOLD}${_BLUE}──────────────────────────────────────────${_RESET}\n" >&2; }
-# ui_menu <default-idx> <row>... → echoes the chosen index. Rows render as
-# "  1  <label>"; the caller prints its own section header.
+# ui_menu <default-idx> <row>... → echoes the chosen index. Renders a framed
+# box (x-ui style) listing the options, then reads the choice outside it.
 ui_menu() {
     local def="$1"; shift
     local rows=("$@")
     local count=${#rows[@]} i n input=""
-    [[ -t 1 ]] && ui_rule
+    local W=74
+    printf "${_BOLD}${_BLUE}┌%s┐${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
     for (( i = 0; i < count; i++ )); do
-        printf "  ${_BOLD}%d${_RESET}  %b\n" "$(( i + 1 ))" "${rows[$i]}" >&2
+        printf "${_BOLD}${_BLUE}│${_RESET}  ${_BOLD}%d${_RESET}  %-62s ${_BOLD}${_BLUE}│${_RESET}\n" "$(( i + 1 ))" "${rows[$i]}" >&2
     done
-    printf "\n${_DIM}Choose${_RESET} [1-%d] (default %s): " "$count" "$def" >&2
+    printf "${_BOLD}${_BLUE}└%s┘${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
+    printf "\n${_DIM}Choose [1-%d] (default %s):${_RESET} " "$count" "$def" >&2
     read -r input </dev/tty || true
     input="${input//[!0-9]/}"
     n="${input:-$def}"
