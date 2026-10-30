@@ -390,7 +390,7 @@ const DashboardLayout = () => {
                   <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')} aria-expanded={langOpen} aria-haspopup="menu">
                     <LangIcon size={18} />
                   </button>
-                  <div className={`lang-dropdown${langOpen ? ' open' : ''}`} hidden={!langOpen} inert={!langOpen}>
+                  <div className={`lang-dropdown${langOpen ? ' open' : ''}`} inert={!langOpen}>
                     {SUPPORTED_LANGS.map((code) => (
                           <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { switchLanguage(code); setLangOpen(false); }} aria-label={t('selectLanguage', 'Select language: {name}', { name: LANG_LABELS[code] })}>
                             <LangFlag code={code} />
