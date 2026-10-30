@@ -173,8 +173,13 @@ validate_urlpath() {
 # Everything prints to stderr so `curl | bash` stays clean.
 
 ui_rule()    { printf "\n${_BOLD}${_BLUE}──────────────────────────────────────────${_RESET}\n" >&2; }
-# ui_menu <default-idx> <row>... → echoes the chosen index. Renders a framed
-# box (x-ui style) listing the options, then reads the choice outside it.
+# ui_banner <name> <version> — framed header like x-ui's control menu.
+ui_banner() {
+    local name="$1" version="$2" W=74
+    printf "${_BOLD}${_BLUE}┌%s┐${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
+    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "$name  v$version" >&2
+    printf "${_BOLD}${_BLUE}└%s┘${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
+}
 ui_menu() {
     local def="$1"; shift
     local rows=("$@")
@@ -628,7 +633,7 @@ setup_docker() {
 }
 
 do_install() {
-    section "OVManager v${VERSION} installer"
+    ui_banner "OVManager" "$VERSION"
     _note "Repository: ${REPO}   Arch: $(detect_arch)   OS: $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
