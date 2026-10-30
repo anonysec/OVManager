@@ -34,6 +34,7 @@ DOCKER=0
 SRC=""
 DEST=""
 ACTION="install"
+ACTION_GIVEN=0
 UPDATE_ARGS=()
 
 SSL_MODE="${OVM_SSL_MODE:-}"
@@ -178,6 +179,8 @@ ui_banner() {
     local name="$1" version="$2" W=74
     printf "${_BOLD}${_BLUE}┌%s┐${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
     printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "$name  v$version" >&2
+    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "Repository: ${REPO}   Arch: $(detect_arch)" >&2
+    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "OS: $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)" >&2
     printf "${_BOLD}${_BLUE}└%s┘${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
 }
 ui_menu() {
@@ -634,7 +637,6 @@ setup_docker() {
 
 do_install() {
     ui_banner "OVManager" "$VERSION"
-    _note "Repository: ${REPO}   Arch: $(detect_arch)   OS: $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
         section "Configuration"
@@ -842,10 +844,10 @@ parse_args() {
             -y|--yes) YES=1; shift ;;
             -h|--help) usage ;;
             help) usage ;;
-            status) ACTION="status"; shift ;;
-            version-script|script-version) ACTION="version-script"; shift ;;
-            update) ACTION="update"; shift; UPDATE_ARGS=("$@"); break ;;
-            uninstall) ACTION="uninstall"; shift; UPDATE_ARGS=("$@"); break ;;
+            status) ACTION="status"; ACTION_GIVEN=1; shift ;;
+            version-script|script-version) ACTION="version-script"; ACTION_GIVEN=1; shift ;;
+            update) ACTION="update"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            uninstall) ACTION="uninstall"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
             install|interactive) shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
