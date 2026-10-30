@@ -68,11 +68,13 @@ _warn()  { colorized_echo yellow "$*"; }
 _err()   { colorized_echo red "$*"; }
 _note()  { colorized_echo blue "$*"; }
 
-# Section header: bold blue, used to group installer stages.
-section() { printf '\n%s%s%s%s\n' "${_BOLD}${_BLUE}" "$*" "${_RESET}" "" >&2; }
+# Section header: bold blue, used to group installer stages. The color codes
+# must live in the format string: printf decodes \033 only there, never in
+# %-substituted arguments.
+section() { printf "\n${_BOLD}${_BLUE}%s${_RESET}\n" "$*" >&2; }
 
 # Step counter helper: step 3 9 "Fetching release"
-step() { printf '%s[%s/%s]%s %s\n' "${_DIM}" "$1" "$2" "${_RESET}" "$3" >&2; }
+step() { printf "${_DIM}[%s/%s]${_RESET} %s\n" "$1" "$2" "$3" >&2; }
 
 die()    { colorized_echo red "error: $*"; exit 1; }
 
@@ -170,20 +172,18 @@ validate_urlpath() {
 # frame: a blue rule, aligned numbered rows, and one prompt line at the end.
 # Everything prints to stderr so `curl | bash` stays clean.
 
-ui_rule()    { printf '\n%s──────────────────────────────────────────%s\n' "${_BOLD}${_BLUE}" "${_RESET}" >&2; }
-# ui_menu <title> <default-idx> <<row>...>
-# Rows render as "  1  <label>"; the chosen index echoes back.
+ui_rule()    { printf "\n${_BOLD}${_BLUE}──────────────────────────────────────────${_RESET}\n" >&2; }
+# ui_menu <default-idx> <row>... → echoes the chosen index. Rows render as
+# "  1  <label>"; the caller prints its own section header.
 ui_menu() {
-    local title="$1" def="$2"; shift 2
+    local def="$1"; shift
     local rows=("$@")
-    local n=1 count=${#rows[@]} i
+    local count=${#rows[@]} i n input=""
     [[ -t 1 ]] && ui_rule
-    colorized_echo blue "  $title"
     for (( i = 0; i < count; i++ )); do
-        printf '  %s%s%s  %s\n' "${_BOLD}" "$(( i + 1 ))" "${_RESET}" "${rows[$i]}" >&2
+        printf "  ${_BOLD}%d${_RESET}  %b\n" "$(( i + 1 ))" "${rows[$i]}" >&2
     done
-    printf '\n%sChoose%s [1-%d] (default %s): ' "${_DIM}" "${_RESET}" "$count" "$def" >&2
-    local input=""
+    printf "\n${_DIM}Choose${_RESET} [1-%d] (default %s): " "$count" "$def" >&2
     read -r input </dev/tty || true
     input="${input//[!0-9]/}"
     n="${input:-$def}"
@@ -215,7 +215,7 @@ setup_ssl_wizard() {
     [[ -t 0 ]] || return 0
     section "SSL setup"
     local choice
-    choice="$(ui_menu "SSL setup — choose how the panel serves HTTPS" 5 \
+    choice="$(ui_menu 5 \
         "Let's Encrypt — domain certificate (requires port 80)" \
         "Let's Encrypt — short-lived IP certificate" \
         "Custom certificate + key paths" \
