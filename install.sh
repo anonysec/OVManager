@@ -575,6 +575,34 @@ uninstall_completion() {
     [[ -f "$completion_file" ]] && { rm -f "$completion_file"; _ok "removed $completion_file"; }
 }
 
+offer_node_and_logs() {
+    local mode="${1:-native}"
+    local choice
+    echo
+    colorized_echo blue "=============================="
+    colorized_echo yellow "OVManager installed."
+    echo
+    read -p "Do you want to install OVNode on the same server? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        if [ "$(id -u)" = "0" ]; then
+            bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install || _warn "OVNode installation failed."
+        else
+            sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install || _warn "OVNode installation failed."
+        fi
+    else
+        _note "Skipping OVNode installation."
+    fi
+    echo
+    read -p "Follow service logs? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        if [[ "$mode" == "docker" ]]; then
+            docker logs -f ovmanager
+        else
+            journalctl -u "$SYSTEMD_SERVICE" -f
+        fi
+    fi
+}
+
 verify_acme() {
     local data_dir="$1" cert key i check
     cert="$data_dir/tls/fullchain.pem"; key="$data_dir/tls/privkey.pem"
@@ -747,7 +775,9 @@ do_install() {
         section "Docker"; setup_docker
         section "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
-        _ok "installed v$VERSION via Docker (port $PORT_VAL)"; return 0
+        _ok "installed v$VERSION via Docker (port $PORT_VAL)"
+        offer_node_and_logs docker
+        return 0
     fi
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
@@ -756,6 +786,11 @@ do_install() {
         local override
         override="$(ask "OVManager already installed at $dest. Override previous installation?" "n")"
         if [[ "$override" =~ ^[Yy]$ ]]; then
+            local purge
+            purge="$(ask "Purge existing data at $DATA_DIR too?" "n")"
+            if [[ "$purge" =~ ^[Yy]$ ]]; then
+                rm -rf "$DATA_DIR"; _ok "purged $DATA_DIR"
+            fi
             do_update "$@"
             return $?
         else
@@ -852,6 +887,7 @@ do_install() {
     else
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
     fi
+    offer_node_and_logs native
 }
 
 do_update() {
