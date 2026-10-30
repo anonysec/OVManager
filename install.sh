@@ -174,26 +174,23 @@ validate_urlpath() {
 # Everything prints to stderr so `curl | bash` stays clean.
 
 ui_rule()    { printf "\n${_BOLD}${_BLUE}──────────────────────────────────────────${_RESET}\n" >&2; }
-# ui_banner <name> <version> — framed header like x-ui's control menu.
+# ui_banner <name> <version> — calm OVNode-style header.
 ui_banner() {
-    local name="$1" version="$2" W=74
-    printf "${_BOLD}${_BLUE}┌%s┐${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
-    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "$name  v$version" >&2
-    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "Repository: ${REPO}   Arch: $(detect_arch)" >&2
-    printf "${_BOLD}${_BLUE}│${_RESET}  %-68s ${_BOLD}${_BLUE}│${_RESET}\n" "OS: $(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)" >&2
-    printf "${_BOLD}${_BLUE}└%s┘${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
+    printf '\n%s  %s  v%s  ·  anonysec%s\n' "${_BOLD}${_BLUE}" "$1" "$2" "${_RESET}" >&2
+    printf '%s%s%s\n' "${_DIM}" "──────────────────────────────────────────────────────────────────────" "${_RESET}" >&2
+    printf '   %s%-12s%s %s\n' "${_DIM}" "repository" "${_RESET}" "${REPO}" >&2
+    printf '   %s%-12s%s %s\n' "${_DIM}" "arch" "${_RESET}" "$(detect_arch)" >&2
+    printf '   %s%-12s%s %s\n' "${_DIM}" "os" "${_RESET}" "$(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)" >&2
+    printf '\n' >&2
 }
 ui_menu() {
     local def="$1"; shift
     local rows=("$@")
     local count=${#rows[@]} i n input=""
-    local W=74
-    printf "${_BOLD}${_BLUE}┌%s┐${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
     for (( i = 0; i < count; i++ )); do
-        printf "${_BOLD}${_BLUE}│${_RESET}  ${_BOLD}%d${_RESET}  %-62s ${_BOLD}${_BLUE}│${_RESET}\n" "$(( i + 1 ))" "${rows[$i]}" >&2
+        printf '  %s%-2d%s  %s\n' "${_BOLD}" "$(( i + 1 ))" "${_RESET}" "${rows[$i]}" >&2
     done
-    printf "${_BOLD}${_BLUE}└%s┘${_RESET}\n" "$(printf '%*s' $((W-2)) '' | tr ' ' '─')" >&2
-    printf "\n${_DIM}Choose [1-%d] (default %s):${_RESET} " "$count" "$def" >&2
+    printf '\n%sChoose [1-%d] (default %s):%s ' "${_DIM}" "$count" "$def" "${_RESET}" >&2
     read -r input </dev/tty || true
     input="${input//[!0-9]/}"
     n="${input:-$def}"
