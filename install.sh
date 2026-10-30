@@ -284,7 +284,6 @@ step() { printf '%s[%s/%s]%s %s\n' "$D" "$1" "$2" "$NC" "$3" >&2; }
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
-    printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     render_note "Press Enter to keep the bracketed default."
     local in_port in_path
     in_port="$(ask "panel port" "$PORT_VAL")"
@@ -558,6 +557,24 @@ install_cli() {
     _ok "command  $BIN_DIR/$CLI_NAME"
 }
 
+install_completion() {
+    local dest="${1:-$INSTALL_DIR}"
+    local completion_dir="/etc/bash_completion.d"
+    local completion_file="$completion_dir/$CLI_NAME"
+    mkdir -p "$completion_dir" 2>/dev/null || return 0
+    if "$dest/$APP_SLUG" completion bash >"$completion_file" 2>/dev/null; then
+        chmod 644 "$completion_file" 2>/dev/null || true
+        _ok "completion  $completion_file"
+    else
+        rm -f "$completion_file" 2>/dev/null || true
+    fi
+}
+
+uninstall_completion() {
+    local completion_file="/etc/bash_completion.d/$CLI_NAME"
+    [[ -f "$completion_file" ]] && { rm -f "$completion_file"; _ok "removed $completion_file"; }
+}
+
 verify_acme() {
     local data_dir="$1" cert key i check
     cert="$data_dir/tls/fullchain.pem"; key="$data_dir/tls/privkey.pem"
@@ -734,8 +751,19 @@ do_install() {
     fi
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
-    if [[ -e "$dest" ]]; then _note "Already installed at $dest - running update instead"; do_update "$@"; return $?; fi
-    check_root; has_systemd || die "systemd not found — a native install needs it"; check_deps
+    check_root
+    if [[ -e "$dest" ]]; then
+        local override
+        override="$(ask "OVManager already installed at $dest. Override previous installation?" "n")"
+        if [[ "$override" =~ ^[Yy]$ ]]; then
+            do_update "$@"
+            return $?
+        else
+            render_warn "Aborted installation"; return 0
+        fi
+    fi
+    has_systemd || die "systemd not found — a native install needs it"
+    check_deps
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     section "Configuration"
     prompt_interactive; setup_ssl_wizard
@@ -764,7 +792,7 @@ do_install() {
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
     section "Installing systemd units"; write_systemd_unit "$dest"; write_backup_units "$dest"
     section "Granting permissions"; grant_panel_access "$dest"
-    section "Installing CLI"; install_cli "$dest"
+    section "Installing CLI"; install_cli "$dest"; install_completion "$dest"
     section "Service"
     systemctl daemon-reload
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
@@ -864,6 +892,7 @@ do_uninstall() {
     systemctl daemon-reload 2>/dev/null || true
     for d in "$INSTALL_DIR" "$dest"; do [[ -d "$d" ]] && { rm -rf "$d"; _ok "removed $d"; }; done
     [[ -L "$BIN_DIR/$APP_SLUG" ]] && { rm -f "$BIN_DIR/$APP_SLUG"; _ok "removed $BIN_DIR/$APP_SLUG"; }
+    uninstall_completion
     if [[ "$purge" -eq 1 ]]; then
         [[ -d "$DATA_DIR" ]] && { rm -rf "$DATA_DIR"; _ok "purged $DATA_DIR"; }
         id -u "$PANEL_USER" >/dev/null 2>&1 && { userdel "$PANEL_USER" 2>/dev/null && _ok "removed user $PANEL_USER" || true; }
