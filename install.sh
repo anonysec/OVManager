@@ -46,38 +46,55 @@ INSTALL_IP_SSL=0
 INSTALL_SELF_SIGNED=0
 SELF_SIGNED_TARGET=""
 
-if [[ -t 2 ]]; then
-    _GREEN='\033[32m'; _YELLOW='\033[33m'; _BLUE='\033[34m'; _RED='\033[31m'; _CYAN='\033[36m'
-    _BOLD='\033[1m'; _DIM='\033[2m'; _RESET='\033[0m'
+# ── Capability detection (OVNode-compatible) ────────────────────────
+if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+    RENDER_COLOR=1
 else
-    _GREEN=''; _YELLOW=''; _BLUE=''; _RED=''; _CYAN=''; _BOLD=''; _DIM=''; _RESET=''
+    RENDER_COLOR=0
 fi
+if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+    RENDER_SPINNER_UNICODE=1
+else
+    RENDER_SPINNER_UNICODE=0
+fi
+NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
+WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
+YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'
+OR=$'\033[38;5;208m'
+[[ "$RENDER_COLOR" -eq 1 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+if [[ "$RENDER_SPINNER_UNICODE" -eq 1 ]]; then
+    RENDER_OK='✓'; RENDER_BAD='✗'; RENDER_RULE='──────────────────────────────────────────────'
+else
+    RENDER_OK='ok'; RENDER_BAD='XX'; RENDER_RULE='----------------------------------------------'
+fi
+[[ -t 2 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
 
+_render_paint() { if [[ "$RENDER_COLOR" -eq 1 ]]; then printf '%b%s%b' "$1" "$2" "${NC:-}"; else printf '%s' "$2"; fi; }
+_render_out() { printf '  %b\n' "$*" >&2; }
+
+# Legacy aliases (kept for existing call sites)
+_GREEN="$GR"; _YELLOW="$YL"; _BLUE="$CY"; _RED="$RD"; _CYAN="$CY"
+_BOLD="$B"; _DIM="$D"; _RESET="$NC"
 colorized_echo() {
     local color="$1"; shift
     case "$color" in
-        green)  printf "${_GREEN}%s${_RESET}\n" "$*" >&2 ;;
-        yellow) printf "${_YELLOW}%s${_RESET}\n" "$*" >&2 ;;
-        red)    printf "${_RED}%s${_RESET}\n" "$*" >&2 ;;
-        blue)   printf "${_BLUE}%s${_RESET}\n" "$*" >&2 ;;
-        cyan)   printf "${_CYAN}%s${_RESET}\n" "$*" >&2 ;;
-        *)      printf "%s\n" "$*" >&2 ;;
+        green)  printf '%s%s%s\n' "$GR" "$*" "$NC" >&2 ;;
+        yellow) printf '%s%s%s\n' "$YL" "$*" "$NC" >&2 ;;
+        red)    printf '%s%s%s\n' "$RD" "$*" "$NC" >&2 ;;
+        blue)   printf '%s%s%s\n' "$CY" "$*" "$NC" >&2 ;;
+        cyan)   printf '%s%s%s\n' "$CY" "$*" "$NC" >&2 ;;
+        *)      printf '%s\n' "$*" >&2 ;;
     esac
 }
-_ok()    { colorized_echo green "$*"; }
-_warn()  { colorized_echo yellow "$*"; }
-_err()   { colorized_echo red "$*"; }
-_note()  { colorized_echo blue "$*"; }
+_ok()    { render_ok "$*"; }
+_warn()  { render_warn "$*"; }
+_err()   { render_fail "$*" "error"; }
+_note()  { render_ask_note "$*"; }
 
-# Section header: bold blue, used to group installer stages. The color codes
-# must live in the format string: printf decodes \033 only there, never in
-# %-substituted arguments.
-section() { printf "\n${_BOLD}${_BLUE}%s${_RESET}\n" "$*" >&2; }
+section() { render_stage "$*"; }
+step() { printf '%s[%s/%s]%s %s\n' "$D" "$1" "$2" "$NC" "$3" >&2; }
 
-# Step counter helper: step 3 9 "Fetching release"
-step() { printf "${_DIM}[%s/%s]${_RESET} %s\n" "$1" "$2" "$3" >&2; }
-
-die()    { colorized_echo red "error: $*"; exit 1; }
+die()    { printf '\n  %sError:%s %s\n\n' "$RD" "$NC" "$*" >&2; exit 1; }
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
 check_root()  { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
@@ -173,108 +190,173 @@ validate_urlpath() {
 # frame: a blue rule, aligned numbered rows, and one prompt line at the end.
 # Everything prints to stderr so `curl | bash` stays clean.
 
-ui_rule()    { printf "\n${_BOLD}${_BLUE}──────────────────────────────────────────${_RESET}\n" >&2; }
-# ui_banner <name> <version> — calm OVNode-style header.
-ui_banner() {
-    printf '\n%s  %s  v%s  ·  anonysec%s\n' "${_BOLD}${_BLUE}" "$1" "$2" "${_RESET}" >&2
-    printf '%s%s%s\n' "${_DIM}" "──────────────────────────────────────────────────────────────────────" "${_RESET}" >&2
-    printf '   %s%-12s%s %s\n' "${_DIM}" "repository" "${_RESET}" "${REPO}" >&2
-    printf '   %s%-12s%s %s\n' "${_DIM}" "arch" "${_RESET}" "$(detect_arch)" >&2
-    printf '   %s%-12s%s %s\n' "${_DIM}" "os" "${_RESET}" "$(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)" >&2
-    printf '\n' >&2
+# ── OVNode render helpers (verbatim port) ────────────────────────────
+RENDER_LABEL_W=14
+_render_paint() { if [[ "$RENDER_COLOR" -eq 1 ]]; then printf '%b%s%b' "$1" "$2" "${NC:-}"; else printf '%s' "$2"; fi; }
+_render_out() { printf '  %b\n' "$*" >&2; }
+
+render_banner() {  # render_banner <name> <version>
+    local name="$1" version="$2"
+    _render_out "$(_render_paint "$B" "$name")  $version  $(_render_paint "$GY" "· anonysec")"
+    render_rule
 }
-ui_menu() {
-    local def="$1"; shift
-    local rows=("$@")
-    local count=${#rows[@]} i n input=""
-    for (( i = 0; i < count; i++ )); do
-        printf '  %s%-2d%s  %s\n' "${_BOLD}" "$(( i + 1 ))" "${_RESET}" "${rows[$i]}" >&2
+
+render_rule() { _render_out "$(_render_paint "$GY" "$RENDER_RULE")"; }
+
+render_screen() {
+    [[ -t 2 ]] || return 0
+    clear 2>/dev/null || printf '\033[H\033[2J\033[3J' >&2 || true
+    return 0
+}
+
+render_menu() {
+    shift    # title is the caller's; the banner already said what this is
+    local -a tags=() labels=()
+    while [[ $# -ge 2 ]]; do tags+=("$1"); labels+=("$2"); shift 2; done
+    local count=${#tags[@]}
+    [[ "$count" -gt 0 ]] || return 1
+    local i=0
+    while (( i < count )); do
+        printf '  %b%d%b  %s\n' "$B" "$(( i + 1 ))" "$NC" "${labels[$i]}" >&2
+        i=$(( i + 1 ))
     done
-    printf '\n%sChoose [1-%d] (default %s):%s ' "${_DIM}" "$count" "$def" "${_RESET}" >&2
-    read -r input </dev/tty || true
-    input="${input//[!0-9]/}"
-    n="${input:-$def}"
-    [[ "$n" -ge 1 && "$n" -le "$count" ]] || n="$def"
-    echo "$n"
+    local n
+    n="$(ask "choice" "1")"
+    [[ "$n" =~ ^[0-9]+$ ]] || n=1
+    printf '%s' "${tags[$(( ((10#$n - 1) + count) % count ))]}"
+    return 0
 }
+
+RENDER_STEP_LABEL=""
+render_begin() { RENDER_STEP_LABEL="$1"; printf '  %b..%b    %s\n' "$GY" "$NC" "$1" >&2; return 0; }
+render_stage() { printf '\n  ============================== %s ==============================\n' "$1" >&2; return 0; }
+render_done() { RENDER_STEP_LABEL=""; printf '  %b%s%b  %s\n' "$GR" "$RENDER_OK" "$NC" "${1:-}" >&2; return 0; }
+render_end() { RENDER_STEP_LABEL=""; return 0; }
+render_note() { printf '  %b..%b    %s\n' "$GY" "$NC" "$1" >&2; return 0; }
+render_line() { _render_out "$*"; }
+render_blank() { printf '\n' >&2; }
+render_ok() { printf '  %b%s%b  %s\n' "$GR" "$RENDER_OK" "$NC" "$1" >&2; }
+render_warn() { printf '  %b%s%b\n' "$YL" "$1" "$NC" >&2; }
+render_kv() { printf '   %b%-*s%b %s\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$2" >&2; }
+render_kv_w() { printf '   %b%-*s%b %s\n' "$GY" "$1" "$2" "$NC" "$3" >&2; }
+render_key() { printf '   %b%-*s%b %b%s%b\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$B" "$2" "$NC" >&2; }
+render_url() { render_kv "$1" "$(_render_paint "$B" "$2")"; }
+render_fail() { RENDER_STEP_LABEL=""; printf '  %b%s%b %b%s%b  %s\n' "$RD" "$RENDER_BAD" "$NC" "$B" "$1" "$NC" "$2" >&2; return 0; }
+render_next() { printf '  %bnext%b  %s · uninstall: %s\n' "$GY" "$NC" "$1" "$2" >&2; }
+render_ask() { printf '  %b%s%b %b[%s]%b: ' "$GY" "$1" "$NC" "$B" "$2" "$NC" >&2; }
+render_ask_note() { _render_out "$(_render_paint "$GY" "$1")"; }
+
+# is_tty — OVNode-compatible: terminal on both ends.
+is_tty() { [[ -t 0 && -t 2 ]]; }
+ask() {
+    local label="$1" default="$2" hidden="${3:-}" val=""
+    if is_tty && [[ "${YES:-0}" -eq 0 ]]; then
+        render_ask "$label" "$default"
+        if [[ "$hidden" == "h" ]]; then
+            local buf="" ch
+            while IFS= read -rsn1 ch; do
+                case "$ch" in
+                    ""|$'\n'|$'\r') break ;;
+                    $'\x7f'|$'\b') if [[ -n "$buf" ]]; then buf="${buf%?}"; printf '\b \b' >&2; fi ;;
+                    *) buf+="$ch"; printf '*' >&2 ;;
+                esac
+            done
+            printf '\n' >&2
+            val="$buf"
+        else
+            read -r val
+        fi
+    fi
+    echo "${val:-$default}"
+}
+
+# Legacy aliases kept for existing call sites.
+ui_rule() { render_rule; }
+ui_banner() { render_banner "$1" "$2"; }
+ui_menu() { render_menu "" "$@"; }
+_ok() { render_ok "$*"; }
+_warn() { render_warn "$*"; }
+_err() { render_fail "$*" "error"; }
+_note() { render_ask_note "$*"; }
+section() { render_stage "$*"; }
+step() { printf '%s[%s/%s]%s %s\n' "$D" "$1" "$2" "$NC" "$3" >&2; }
 
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
-    ui_rule
-    _note "Press Enter to keep the bracketed default."
+    render_note "Press Enter to keep the bracketed default."
     local in_port in_path
-    read -r -p "  panel  port       [${PORT_VAL}]: " in_port </dev/tty || true
+    in_port="$(ask "panel port" "$PORT_VAL")"
     if [[ -n "${in_port// /}" ]]; then
         in_port="${in_port// /}"
-        if validate_port "$in_port"; then PORT_VAL="$in_port"; else _warn "Invalid port '$in_port', using default $PORT_VAL"; fi
+        if validate_port "$in_port"; then PORT_VAL="$in_port"; else render_warn "Invalid port '$in_port', using default $PORT_VAL"; fi
     fi
-    read -r -p "  panel  url path   [${URLPATH_VAL}]: " in_path </dev/tty || true
+    in_path="$(ask "panel url path" "$URLPATH_VAL")"
     in_path="${in_path// /}"; in_path="${in_path#/}"; in_path="${in_path%/}"
     if [[ -n "$in_path" ]]; then
-        if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else _warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
+        if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else render_warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
     fi
 }
 
 setup_ssl_wizard() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || { [[ -n "$SSL_DOMAIN" ]] && SSL_MODE="domain"; return 0; }
     [[ -t 0 ]] || return 0
-    section "SSL setup"
+    render_stage "SSL setup"
     local choice
-    choice="$(ui_menu 5 \
-        "Let's Encrypt — domain certificate (requires port 80)" \
-        "Let's Encrypt — short-lived IP certificate" \
-        "Custom certificate + key paths" \
-        "Self-signed certificate (testing)" \
-        "No SSL — plain HTTP")"
+    choice="$(render_menu "SSL setup" \
+        domain "Let's Encrypt — domain certificate (requires port 80)" \
+        ip "Let's Encrypt — short-lived IP certificate" \
+        custom "Custom certificate + key paths" \
+        selfsigned "Self-signed certificate (testing)" \
+        none "No SSL — plain HTTP")"
     case "$choice" in
-    1)
+    domain)
         SSL_MODE="domain"
         while [[ -z "$SSL_DOMAIN" ]]; do
-            read -r -p "Enter domain for SSL certificate: " SSL_DOMAIN </dev/tty || true
+            SSL_DOMAIN="$(ask "domain for SSL certificate" "")"
             SSL_DOMAIN="${SSL_DOMAIN// /}"
-            [[ -z "$SSL_DOMAIN" ]] && { colorized_echo red "Domain cannot be empty."; continue; }
-            is_domain "$SSL_DOMAIN" || { colorized_echo red "Invalid domain format: $SSL_DOMAIN"; SSL_DOMAIN=""; }
+            [[ -z "$SSL_DOMAIN" ]] && { render_fail "domain" "cannot be empty"; continue; }
+            is_domain "$SSL_DOMAIN" || { render_fail "domain" "invalid format: $SSL_DOMAIN"; SSL_DOMAIN=""; }
         done
         ;;
-    2)
+    ip)
         SSL_MODE="ip"
         local detected_ip input_ip
         detected_ip="$(get_public_ipv4 || true)"
         if [[ -n "$detected_ip" ]]; then
-            read -r -p "Enter IPv4 for SSL certificate (default: $detected_ip): " input_ip </dev/tty || true
-            input_ip="${input_ip// /}"; [[ -z "$input_ip" ]] && input_ip="$detected_ip"
+            input_ip="$(ask "IPv4 for SSL certificate" "$detected_ip")"
         else
-            read -r -p "Enter IPv4 for SSL certificate: " input_ip </dev/tty || true
-            input_ip="${input_ip// /}"
+            input_ip="$(ask "IPv4 for SSL certificate" "")"
         fi
-        if ! is_ipv4 "$input_ip"; then colorized_echo red "Invalid IPv4: $input_ip"; SSL_MODE="none"; return 0; fi
+        input_ip="${input_ip// /}"
+        if [[ -z "$input_ip" && -n "$detected_ip" ]]; then input_ip="$detected_ip"; fi
+        if ! is_ipv4 "$input_ip"; then render_fail "IPv4" "invalid: $input_ip"; SSL_MODE="none"; return 0; fi
         SSL_IP="$input_ip"; INSTALL_IP_SSL=1
         ;;
-    3)
+    custom)
         SSL_MODE="custom"
         while true; do
-            read -r -p "Enter full path to certificate file: " SSL_CERT_SRC </dev/tty || true
+            SSL_CERT_SRC="$(ask "full path to certificate file" "")"
             SSL_CERT_SRC=$(echo "$SSL_CERT_SRC" | tr -d '"' | tr -d "'" | xargs)
             [[ -f "$SSL_CERT_SRC" && -r "$SSL_CERT_SRC" && -s "$SSL_CERT_SRC" ]] && break
-            colorized_echo red "Certificate file not found/readable: $SSL_CERT_SRC"
+            render_fail "certificate" "file not found/readable: $SSL_CERT_SRC"
         done
         while true; do
-            read -r -p "Enter full path to private key file: " SSL_KEY_SRC </dev/tty || true
+            SSL_KEY_SRC="$(ask "full path to private key file" "")"
             SSL_KEY_SRC=$(echo "$SSL_KEY_SRC" | tr -d '"' | tr -d "'" | xargs)
             [[ -f "$SSL_KEY_SRC" && -r "$SSL_KEY_SRC" && -s "$SSL_KEY_SRC" ]] && break
-            colorized_echo red "Private key file not found/readable: $SSL_KEY_SRC"
+            render_fail "private key" "file not found/readable: $SSL_KEY_SRC"
         done
         ;;
-    4)
+    selfsigned)
         SSL_MODE="selfsigned"
-        read -r -p "Enter domain or IP for self-signed cert (default: localhost): " SELF_SIGNED_TARGET </dev/tty || true
+        SELF_SIGNED_TARGET="$(ask "domain or IP for self-signed cert" "localhost")"
         SELF_SIGNED_TARGET="${SELF_SIGNED_TARGET// /}"
         [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
         INSTALL_SELF_SIGNED=1
         ;;
-    5|*) SSL_MODE="none" ;;
+    none|*) SSL_MODE="none" ;;
     esac
 }
 
@@ -633,7 +715,11 @@ setup_docker() {
 }
 
 do_install() {
-    ui_banner "OVManager" "$VERSION"
+    render_banner "OVManager" "$VERSION"
+    render_kv "repository" "${REPO}"
+    render_kv "arch" "$(detect_arch)"
+    render_kv "os" "$(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
+    render_blank
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
         section "Configuration"
@@ -660,7 +746,7 @@ do_install() {
         if [[ "$INTERACTIVE" -eq 1 ]]; then
             local new_port
             while true; do
-                read -r -p "Enter a different port for OVManager (1-65535) or 'q' to abort: " new_port </dev/tty || true
+                new_port="$(ask "different port (1-65535) or q to abort" "")"
                 new_port="${new_port// /}"
                 [[ "$new_port" == "q" ]] && die "Installation aborted due to port conflict"
                 if validate_port "$new_port"; then
@@ -745,10 +831,10 @@ do_update() {
     exec "$INSTALL_DIR/$APP_SLUG" update "$@"
 }
 do_status() {
-    if [[ ! -d "$INSTALL_DIR" ]]; then colorized_echo red "Status: Not Installed"; return 1; fi
+    if [[ ! -d "$INSTALL_DIR" ]]; then render_fail "status" "Not Installed"; return 1; fi
     if command -v systemctl >/dev/null 2>&1; then
-        if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then colorized_echo green "Status: Up"; else colorized_echo yellow "Status: Down"; fi
-    else colorized_echo blue "Status: Unknown (no systemd)"; fi
+        if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then render_ok "Status: Up"; else render_warn "Status: Down"; fi
+    else render_ask_note "Status: Unknown (no systemd)"; fi
     [[ -x "$BIN_DIR/$CLI_NAME" ]] && "$BIN_DIR/$CLI_NAME" status 2>/dev/null || true
 }
 do_uninstall() {
@@ -760,9 +846,9 @@ do_uninstall() {
     # Interactive confirmation (PasarGuard style)
     if [[ -t 0 && "$YES" -eq 0 && $# -eq 0 ]]; then
         local confirm purge_confirm
-        read -r -p "Do you really want to uninstall OVManager? (y/n) " confirm </dev/tty || true
-        [[ "$confirm" =~ ^[Yy]$ ]] || { colorized_echo yellow "Aborted."; return 0; }
-        read -r -p "Do you want to remove OVManager data files too ($DATA_DIR)? (y/n) " purge_confirm </dev/tty || true
+        confirm="$(ask "really uninstall OVManager?" "n")"
+        [[ "$confirm" =~ ^[Yy]$ ]] || { render_warn "Aborted."; return 0; }
+        purge_confirm="$(ask "remove data files too ($DATA_DIR)?" "n")"
         [[ "$purge_confirm" =~ ^[Yy]$ ]] && purge=1
     fi
     check_root
