@@ -165,18 +165,45 @@ validate_urlpath() {
     [[ "$p" =~ ^[A-Za-z0-9_-]+$ ]]
 }
 
+# ── Interactive menu ────────────────────────────────────────────────────
+# The install wizard is a sequence of small numbered menus over a shared
+# frame: a blue rule, aligned numbered rows, and one prompt line at the end.
+# Everything prints to stderr so `curl | bash` stays clean.
+
+ui_rule()    { printf '\n%s──────────────────────────────────────────%s\n' "${_BOLD}${_BLUE}" "${_RESET}" >&2; }
+# ui_menu <title> <default-idx> <<row>...>
+# Rows render as "  1  <label>"; the chosen index echoes back.
+ui_menu() {
+    local title="$1" def="$2"; shift 2
+    local rows=("$@")
+    local n=1 count=${#rows[@]} i
+    [[ -t 1 ]] && ui_rule
+    colorized_echo blue "  $title"
+    for (( i = 0; i < count; i++ )); do
+        printf '  %s%s%s  %s\n' "${_BOLD}" "$(( i + 1 ))" "${_RESET}" "${rows[$i]}" >&2
+    done
+    printf '\n%sChoose%s [1-%d] (default %s): ' "${_DIM}" "${_RESET}" "$count" "$def" >&2
+    local input=""
+    read -r input </dev/tty || true
+    input="${input//[!0-9]/}"
+    n="${input:-$def}"
+    [[ "$n" -ge 1 && "$n" -le "$count" ]] || n="$def"
+    echo "$n"
+}
+
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
     [[ -t 0 ]] || return 0
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
-    _note "Press Enter to keep the default shown in brackets."
+    ui_rule
+    _note "Press Enter to keep the bracketed default."
     local in_port in_path
-    read -r -p "  Panel port [${PORT_VAL}]: " in_port </dev/tty || true
+    read -r -p "  panel  port       [${PORT_VAL}]: " in_port </dev/tty || true
     if [[ -n "${in_port// /}" ]]; then
         in_port="${in_port// /}"
         if validate_port "$in_port"; then PORT_VAL="$in_port"; else _warn "Invalid port '$in_port', using default $PORT_VAL"; fi
     fi
-    read -r -p "  URL Path [${URLPATH_VAL}]: " in_path </dev/tty || true
+    read -r -p "  panel  url path   [${URLPATH_VAL}]: " in_path </dev/tty || true
     in_path="${in_path// /}"; in_path="${in_path#/}"; in_path="${in_path%/}"
     if [[ -n "$in_path" ]]; then
         if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else _warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
@@ -187,16 +214,13 @@ setup_ssl_wizard() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || { [[ -n "$SSL_DOMAIN" ]] && SSL_MODE="domain"; return 0; }
     [[ -t 0 ]] || return 0
     section "SSL setup"
-    _note "Choose how the panel should serve HTTPS:"
-    colorized_echo green "  1) Let's Encrypt — domain certificate (recommended)"
-    colorized_echo green "  2) Let's Encrypt — short-lived IP certificate"
-    colorized_echo green "  3) Custom certificate + key paths"
-    colorized_echo green "  4) Self-signed certificate (testing)"
-    colorized_echo yellow "  5) No SSL (plain HTTP)"
-    _note "Let's Encrypt requires port 80 to be reachable from the internet."
-    local choice=""
-    read -r -p "Select SSL option [1-5] (default: 5): " choice </dev/tty || true
-    choice="${choice// /}"; [[ -z "$choice" ]] && choice="5"
+    local choice
+    choice="$(ui_menu "SSL setup — choose how the panel serves HTTPS" 5 \
+        "Let's Encrypt — domain certificate (requires port 80)" \
+        "Let's Encrypt — short-lived IP certificate" \
+        "Custom certificate + key paths" \
+        "Self-signed certificate (testing)" \
+        "No SSL — plain HTTP")"
     case "$choice" in
     1)
         SSL_MODE="domain"
@@ -832,4 +856,6 @@ main() {
     if [[ "$FROM_SOURCE" -eq 1 ]]; then do_from_source; else do_install; fi
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
