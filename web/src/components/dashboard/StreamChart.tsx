@@ -210,8 +210,8 @@ export default function StreamChart({ period: initialPeriod = '24h' }: { period?
             </button>
           </div>
           <div className="ds-segmented" role="group" aria-label={t('trafficChartPeriod', 'Period')}>
-            <button type="button" className={period === '24h' ? 'active' : ''} aria-pressed={period === '24h'} onClick={() => setPeriod('24h')}>24h</button>
-            <button type="button" className={`ds-hide-mobile${period === '7d' ? ' active' : ''}`} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>7d</button>
+            <button type="button" className={period === '24h' ? 'active' : ''} aria-pressed={period === '24h'} onClick={() => setPeriod('24h')}>{t('chartPeriod24h', '24h')}</button>
+            <button type="button" className={`ds-hide-mobile${period === '7d' ? ' active' : ''}`} aria-pressed={period === '7d'} onClick={() => setPeriod('7d')}>{t('chartPeriod7d', '7d')}</button>
           </div>
         </div>
       </div>
@@ -241,7 +241,7 @@ export default function StreamChart({ period: initialPeriod = '24h' }: { period?
         <div className={`ds-chart-wrap${isEmpty ? ' is-empty' : ''}`}>
           {/* Plot box reserves the axis gutters; bars, svg, live dot and
               tooltip share its coordinate space so % positions stay in sync. */}
-          <div className="ds-chart-plot" role="img" tabIndex={0} aria-label={t('trafficChart', 'Traffic chart')} onMouseMove={onMove} onMouseLeave={() => setHoverIdx(null)} onKeyDown={(e) => { if (!buckets.length) return; if (e.key === 'ArrowRight') { e.preventDefault(); setHoverIdx((i) => Math.min(buckets.length - 1, (i ?? -1) + 1)); } else if (e.key === 'ArrowLeft') { e.preventDefault(); setHoverIdx((i) => Math.max(0, (i ?? 1) - 1)); } else if (e.key === 'Escape') { setHoverIdx(null); } }}>
+                  <div className="ds-chart-plot" role="img" tabIndex={0} aria-label={t('trafficChart', 'Traffic chart')} onMouseMove={onMove} onMouseLeave={() => setHoverIdx(null)} onKeyDown={(e) => { if (!buckets.length) return; if (e.key === 'ArrowRight') { e.preventDefault(); setHoverIdx((i) => Math.min(buckets.length - 1, (i ?? -1) + 1)); } else if (e.key === 'ArrowLeft') { e.preventDefault(); setHoverIdx((i) => Math.max(0, (i ?? 1) - 1)); } else if (e.key === 'Escape') { setHoverIdx(null); } }}>
             <svg className="ds-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <defs>
                 <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">

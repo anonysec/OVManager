@@ -124,15 +124,6 @@ button.ds-kpi:hover {
   color: var(--text-muted);
 }
 
-.ds-kpi-arrow {
-  margin-inline-start: auto;
-  opacity: 0.4;
-  color: var(--text-muted);
-  flex: none;
-}
-
-button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
-
 .ds-kpi-label {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -646,6 +637,11 @@ button.ds-kpi:hover .ds-kpi-arrow { opacity: 1; }
   inset-inline-start: 0;
   inset-inline-end: 72px;
   cursor: crosshair;
+}
+
+.ds-chart-plot:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .ds-chart-svg {

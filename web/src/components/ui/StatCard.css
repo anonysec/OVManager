@@ -74,6 +74,11 @@
   transform: translateY(1px);
 }
 
+.ui-stat-card--interactive:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .ui-stat-card--success .ui-stat-card-icon {
   color: var(--success-text);
 }

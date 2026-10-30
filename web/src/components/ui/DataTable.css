@@ -234,6 +234,9 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  line-height: 1;
+  overflow: hidden;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -311,6 +314,9 @@
   justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  line-height: 1;
+  overflow: hidden;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -323,6 +329,11 @@
   cursor: not-allowed;
 }
 
+.dt-pbtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .dt-pbtn:not(:disabled):hover {
   border-color: var(--border-strong);
   background: var(--surface-3);
@@ -333,23 +344,6 @@
   color: var(--text-secondary);
   padding: 0 8px;
   white-space: nowrap;
-}
-
-.dt-bulkbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 14px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  border-radius: 12px;
-  margin-bottom: 10px;
-  font-size: 0.85rem;
-}
-
-.dt-bulkbar strong {
-  color: var(--accent-text);
 }
 
 .dt-rowlink {

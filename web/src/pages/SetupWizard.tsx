@@ -209,7 +209,7 @@ const SetupWizard = () => {
         subtitle={t('setupSubtitle', 'Three quick steps to get your panel ready for real users.')}
         meta={(
           <span className="setup-progress" aria-live="polite">
-            <span className="setup-progress-track" aria-hidden="true">
+            <span className="setup-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={doneCount}>
               <span className="setup-progress-fill" style={{ width: `${(doneCount / 3) * 100}%` }} />
             </span>
             <span>{t('setupProgress', '{{done}} of 3 done', { done: doneCount })}</span>

@@ -39,7 +39,7 @@ const writeStoredLang = (lng: string) => {
 };
 
 const stored = readStoredLang() || 'en';
-const initial = stored in LAZY_LOCALES ? 'en' : stored;
+const initial = SUPPORTED_LANGS.includes(stored) && !(stored in LAZY_LOCALES) ? stored : 'en';
 
 i18n
   .use(initReactI18next)
@@ -88,7 +88,7 @@ export async function loadLanguage(lng: string): Promise<void> {
   writeStoredLang(lng);
 }
 
-if (stored !== initial) {
+if (stored in LAZY_LOCALES) {
   const idle = window.requestIdleCallback || ((fn: () => void) => setTimeout(fn, 1));
   idle(() => { void loadLanguage(stored); });
 }

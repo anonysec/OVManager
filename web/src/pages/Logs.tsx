@@ -31,7 +31,7 @@ const Logs = () => {
   };
 
   const [unit, setUnit] = useState('ovmanager');
-  const [lines, setLines] = useState(() => { try { return Number(localStorage.getItem(LINES_KEY)) || 200; } catch { return 200; } });
+  const [lines, setLines] = useState(() => { try { const n = Number(localStorage.getItem(LINES_KEY)); return LINE_OPTIONS.includes(n) ? n : 200; } catch { return 200; } });
   const [nodes, setNodes] = useState<{ name: string }[]>([]);
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');

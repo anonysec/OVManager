@@ -96,7 +96,7 @@ const DataTable = ({
   return (
     <div className={`dt-wrap dt-${density}`}>
       <div className={`dt-body${swipeable ? ' is-swipeable' : ''}`}>
-        <div className="dt-scroll" ref={scrollRef} role="region" aria-label={caption || t('table', 'Table')} tabIndex={0}>
+              <div className="dt-scroll" ref={scrollRef} role="region" aria-label={caption || t('table', 'Table')} tabIndex={0}>
           <table className="dt-table">
             {caption && <caption className="dt-caption">{caption}</caption>}
             <thead>
@@ -127,7 +127,7 @@ const DataTable = ({
                           type="button"
                           className="dt-sort-btn"
                           onClick={() => onSort?.(c.key)}
-                          aria-label={`${c.label}: ${t('sort', 'sort')}`}
+                          aria-label={typeof c.label === 'string' ? `${c.label}: ${t('sort', 'sort')}` : `${c.key}: ${t('sort', 'sort')}`}
                         >
                           <span>{c.label}</span>
                           <span className="dt-sort-ico" aria-hidden="true">

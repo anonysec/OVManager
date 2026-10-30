@@ -32,13 +32,13 @@ const SkeletonText = ({ lines = 3, width = '100%' }: { lines?: number; width?: a
   </span>
 );
 
-export const SkeletonPanel = ({ lines = 3, label = 'Loading', height }: { lines?: number; label?: any; height?: any }) => (
+export const SkeletonPanel = ({ lines = 3, label, height }: { lines?: number; label?: any; height?: any }) => (
   <div className="sk-panel" role="status" aria-live="polite" aria-label={label} style={height ? { minHeight: height } : undefined}>
     <SkeletonText lines={lines} />
   </div>
 );
 
-export const SkeletonTable = ({ rows = 8, cols = 9, label = 'Loading' }: { rows?: number; cols?: number; label?: any }) => (
+export const SkeletonTable = ({ rows = 8, cols = 9, label }: { rows?: number; cols?: number; label?: any }) => (
   <div className="sk-table" role="status" aria-live="polite" aria-label={label} style={{ '--sk-cols': cols } as any}>
     <div className="sk-table-head" aria-hidden="true">
       {Array.from({ length: cols }, (_, i) => (

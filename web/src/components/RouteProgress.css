@@ -9,6 +9,7 @@
   height: 2.5px;
   z-index: var(--z-progress);
   pointer-events: none;
+  overflow: hidden;
   opacity: 0;
   background: color-mix(in srgb, var(--accent-color) 18%, transparent);
   transition: opacity .15s ease;

@@ -410,7 +410,7 @@ const ServerStats = () => {
 
   const nodeHealthRows = useMemo(() => (nodes || []).map((n) => {
     const st = nodeStatus[n.id] || {};
-    const reachable = Boolean(n.status) && (st.reachable === true || (st.reachable === undefined && st.node_info !== undefined));
+    const reachable = Boolean(n.status) && (st.reachable === true || (st.reachable === undefined && st.node_info !== undefined && st.session_diagnostics !== undefined));
     return {
       node: n,
       status: !n.status ? 'off' : reachable ? 'online' : 'down',

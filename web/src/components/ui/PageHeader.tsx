@@ -15,7 +15,7 @@ const PageHeader = ({
   <header className={['ui-page-header', className].filter(Boolean).join(' ')}>
     {icon && <span className="ui-page-header-icon" aria-hidden="true">{icon}</span>}
     <div className="ui-page-header-text">
-      <h1 className="ui-page-header-title">{title}</h1>
+      {title && <h1 className="ui-page-header-title">{title}</h1>}
       {subtitle && <p className="ui-page-header-subtitle">{subtitle}</p>}
       {meta && <div className="ui-page-header-meta">{meta}</div>}
     </div>

@@ -3,10 +3,8 @@
 
 import { detailMessage } from '../utils/errorMessage';
 
-const basePath = (document.querySelector('base')?.getAttribute('href') || '/').replace(/^\/+|\/+$/g, '');
 export const apiBase = '/api';
 
-export const urlPath = basePath ? `/${basePath}` : '';
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 export const API_ERROR_EVENT = 'api:error';
@@ -67,7 +65,18 @@ async function parseBody(res: Response, responseType?: ResponseType): Promise<un
   }
 }
 
-const isPreAuth = (url: string) => url.includes('/login') || url.includes('/owner-claim');
+const normalizePath = (url: string) => {
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch {
+    return url.split(/[?#]/)[0];
+  }
+};
+
+const isPreAuth = (url: string) => {
+  const path = normalizePath(url).replace(/\/+$/, '') || '/';
+  return path === '/login' || path === '/owner-claim' || path === '/owner-claim/verify';
+};
 
 function handleAuthExpired(requestUrl: string) {
   if (isPreAuth(requestUrl)) return;

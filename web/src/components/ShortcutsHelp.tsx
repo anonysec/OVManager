@@ -42,7 +42,7 @@ const ShortcutsHelp = ({ open, onClose, isOwner }: { open: boolean; onClose: () 
       >
         <div className="shortcuts-head">
           <h2 id="shortcuts-title">{t('shortcutsTitle', 'Keyboard shortcuts')}</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label={t('palClose', 'Close')}>×</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label={t('palClose', 'Close')}><span aria-hidden="true">×</span></button>
         </div>
         <p className="shortcuts-hint">{t('shortcutsHint', 'Type these anywhere except inside a field.')}</p>
         <ul className="shortcuts-list">

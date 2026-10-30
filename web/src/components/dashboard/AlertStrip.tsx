@@ -147,6 +147,7 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
                   type="button"
                   className="ds-alert-group-msg"
                   onClick={() => first.link && navigate(first.link)}
+                  disabled={!first.link}
                   title={first.detail || first.title}
                 >
                   {first.title}
@@ -157,12 +158,13 @@ export default function AlertStrip({ items, onClear }: { items?: AlertItem[] | n
                   {list.map((n) => (
                     <li key={n.id} className="ds-alert-row">
                       <span className="ds-alert-row-time">
-                        {seen[n.id] ? fmtDateTime(new Date(seen[n.id]).toISOString()) : '—'}
+                        {seen[n.id] ? fmtDateTime(new Date(seen[n.id]).toISOString()) : t('notAvailable', '—')}
                       </span>
                       <button
                         type="button"
                         className="ds-alert-row-title"
                         onClick={() => n.link && navigate(n.link)}
+                        disabled={!n.link}
                         title={n.detail || n.title}
                       >
                         {n.title}

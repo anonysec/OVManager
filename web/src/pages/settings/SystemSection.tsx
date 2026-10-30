@@ -107,7 +107,8 @@ const SystemSection = () => {
   const run = async (url: string, label: string) => {
     setBusy(url);
     try {
-      await apiClient.post(url);
+      const res = await apiClient.post(url);
+      if (res?.data?.success === false) throw new Error(res.data.msg || 'failed');
       addToast(label + ' ' + t('saved', 'done.'), 'success');
     } catch { addToast(t('error', 'Failed'), 'error'); }
     finally { setBusy(''); }

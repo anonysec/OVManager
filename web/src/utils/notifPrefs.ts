@@ -34,8 +34,10 @@ export const readPrefs = (): Record<string, boolean> => {
 };
 
 export const writePref = (key: string, value: unknown): void => {
+  const storageKey = KEYS[key];
+  if (!storageKey) return;
   try {
-    localStorage.setItem(KEYS[key], String(value));
+    localStorage.setItem(storageKey, String(value));
     window.dispatchEvent(new Event('ovmanager-prefs-changed'));
   } catch { /* noop */ }
 };

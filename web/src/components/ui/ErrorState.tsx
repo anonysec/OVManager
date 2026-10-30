@@ -13,7 +13,7 @@ const ErrorState = ({ title, message, onRetry, retryLabel }: { title?: any; mess
       <FiAlertTriangle size={28} />
     </span>
     <div className="error-state-body">
-      <h3>{title}</h3>
+      {title && <h3>{title}</h3>}
       {message && <p>{message}</p>}
     </div>
     {onRetry && (

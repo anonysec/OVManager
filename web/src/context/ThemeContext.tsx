@@ -18,8 +18,10 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    } catch { /* blocked storage */ }
     return 'system';
   });
 

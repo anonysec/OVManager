@@ -42,7 +42,7 @@ export default function ActivityFeed({ items, error, loading, onRetry }: { items
         {rows.length > 0 ? (
           <div className="ds-feed">
             {rows.map((e: any) => {
-              const actor = e.actor || e.username || 'system';
+              const actor = e.actor || e.username || t('systemActor', 'system');
               const initial = String(actor).slice(0, 1).toUpperCase();
               const tsIso = e.ts ? new Date(e.ts * 1000).toISOString() : null;
               return (

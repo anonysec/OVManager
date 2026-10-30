@@ -817,5 +817,10 @@
   "accent_rose": "Rose",
   "accent_cyan": "Cyan",
   "accent_amber": "Amber",
-  "ofInfinity": "of ∞"
+  "ofInfinity": "of ∞",
+  "escKey": "ESC",
+  "systemActor": "system",
+  "chartPeriod24h": "24h",
+  "chartPeriod7d": "7d",
+  "notAvailable": "—"
 }

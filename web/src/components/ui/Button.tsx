@@ -4,7 +4,7 @@
 import './Button.css';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'outline' | 'ghost' | 'success';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 type ButtonProps = {

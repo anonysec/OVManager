@@ -136,6 +136,7 @@ const BackupSection = () => {
     setBusy('create');
     try {
       const r = await apiClient.post('/maintenance/backup');
+      if (r?.data?.success === false) throw new Error(r.data?.msg || 'backup failed');
       addToast(r.data?.msg || t('createBackup', 'Backup created'), 'success');
       load();
     } catch (e) { addToast(errorMessageOf(e, t('error', 'Failed')), 'error'); }

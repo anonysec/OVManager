@@ -35,8 +35,6 @@ type LayoutNotif = {
   level: string;
   title: string;
   detail: string;
-  action: null;
-  action_path: null;
 };
 
 const SetupBanner = () => {
@@ -266,12 +264,12 @@ const DashboardLayout = () => {
       (Array.isArray(serverItems) ? serverItems : []).forEach((s: any) => {
         if (s?.type === 'node_offline' && s?.target) {
           serverOffline.add(String(s.target));
-          out.push({ id: `srv-node-${s.target}`, level: s.level || 'danger', title: s.title || t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: s.target }), detail: t('notifNodeUnreachableDetail', 'No API response from OVNode'), action: null, action_path: null });
+          out.push({ id: `srv-node-${s.target}`, level: s.level || 'danger', title: s.title || t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: s.target }), detail: t('notifNodeUnreachableDetail', 'No API response from OVNode') });
         }
       });
       nodes.forEach((n: any) => {
         if (!n.status && !serverOffline.has(String(n.name))) {
-          out.push({ id: `node-${n.id}`, level: 'warning', title: t('notifNodeDisabled', 'Node {{name}} is disabled', { name: n.name }), detail: t('notifNodeDisabledDetail', 'Marked offline in panel database'), action: null, action_path: null });
+          out.push({ id: `node-${n.id}`, level: 'warning', title: t('notifNodeDisabled', 'Node {{name}} is disabled', { name: n.name }), detail: t('notifNodeDisabledDetail', 'Marked offline in panel database') });
         }
       });
       // Full users notification removed: a user simply using their allocated device slots is not an alert.
@@ -280,16 +278,16 @@ const DashboardLayout = () => {
         if (quota > 0) {
           const pct = Number(u.used || 0) / quota;
           if (pct >= 1) {
-            out.push({ id: `quota-${u.uuid}`, level: 'danger', title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }), detail: t('notifUserOverQuotaDetail', 'Usage exceeded — will be disabled on next check'), action: null, action_path: null });
+            out.push({ id: `quota-${u.uuid}`, level: 'danger', title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }), detail: t('notifUserOverQuotaDetail', 'Usage exceeded — will be disabled on next check') });
           } else if (pct >= 0.8) {
-            out.push({ id: `quota-${u.uuid}`, level: 'warning', title: t('notifUserNearQuota', 'User {{name}} at {{pct}}% of quota', { name: u.name, pct: Math.round(pct * 100) }), detail: t('notifUserNearQuotaDetail', 'Quota almost used up'), action: null, action_path: null });
+            out.push({ id: `quota-${u.uuid}`, level: 'warning', title: t('notifUserNearQuota', 'User {{name}} at {{pct}}% of quota', { name: u.name, pct: Math.round(pct * 100) }), detail: t('notifUserNearQuotaDetail', 'Quota almost used up') });
           }
         }
       });
       const authFailures = Number(security.auth_failures ?? security.auth_errors ?? 0);
       const policyRejects = Number(security.policy_rejects ?? 0);
-      if (authFailures > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: authFailures }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes'), action: null, action_path: null });
-      if (policyRejects > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: policyRejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects'), action: null, action_path: null });
+      if (authFailures > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: authFailures }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes') });
+      if (policyRejects > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: policyRejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects') });
       const prefs = readPrefs();
       setNotifications(out.filter((n) => {
         const pref = alertPrefKey(n.id);
@@ -371,10 +369,10 @@ const DashboardLayout = () => {
                   {location.pathname !== '/' && (
                     <>
                       <li><Link to="/" className="ops-breadcrumb-link">{t('navHome', 'Home')}</Link></li>
-                      <li className="ops-breadcrumb-separator">/</li>
+                      <li className="ops-breadcrumb-separator" aria-hidden="true">/</li>
                     </>
                   )}
-                  <li className="ops-current-page">{getPageTitle(location.pathname)}</li>
+                  <li className="ops-current-page" aria-current="page">{getPageTitle(location.pathname)}</li>
                 </ol>
               </nav>
               <div className="ops-userbar">
@@ -389,10 +387,10 @@ const DashboardLayout = () => {
                   <kbd><FiCommand aria-hidden="true" />K</kbd>
                 </button>
                 <div className="lang-picker-wrap" ref={langRef}>
-                  <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')}>
+                  <button type="button" className={`icon-btn${langOpen ? ' active' : ''}`} onClick={() => setLangOpen(o => !o)} title={t('language', 'Language')} aria-label={t('changeLanguage', 'Change language')} aria-expanded={langOpen} aria-haspopup="menu">
                     <LangIcon size={18} />
                   </button>
-                  <div className={`lang-dropdown${langOpen ? ' open' : ''}`}>
+                  <div className={`lang-dropdown${langOpen ? ' open' : ''}`} hidden={!langOpen} inert={!langOpen}>
                     {SUPPORTED_LANGS.map((code) => (
                           <button key={code} className={`lang-option${i18n.language === code ? ' active' : ''}`} onClick={() => { switchLanguage(code); setLangOpen(false); }} aria-label={t('selectLanguage', 'Select language: {name}', { name: LANG_LABELS[code] })}>
                             <LangFlag code={code} />
@@ -407,9 +405,9 @@ const DashboardLayout = () => {
                 </button>
                 <div className="notification-wrap">
                   <button type="button" ref={bellRef} className={`icon-btn${notifCount ? ' has-alerts' : ''}`} aria-label={notifCount ? t('youHaveNotif', 'You have {{count}} notifications', { count: notifCount }) : t('noNotif', 'No notifications')} aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}>
-                    <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
+                    <FiBell />{notifCount > 0 && <span className="icon-btn-badge">{notifCount > 9 ? t('notifCountCapped', '9+') : notifCount}</span>}
                   </button>
-                  <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-hidden={!notifOpen} aria-label={t('notifTitle', 'Notifications')}>
+                  <div className={`notification-popover ${notifOpen ? 'is-open' : ''}`} role="dialog" aria-hidden={!notifOpen} hidden={!notifOpen} inert={!notifOpen} aria-label={t('notifTitle', 'Notifications')}>
                     <div className="notif-head">
                       <strong>{t('notifTitle')}</strong>
                       {notifCount > 0 && <button type="button" className="notif-refresh" onClick={loadNotifications} aria-label={t('notifRefresh', 'Refresh notifications')}>↻</button>}

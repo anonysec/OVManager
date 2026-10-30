@@ -49,11 +49,12 @@ const DefaultsSection = ({ shared }: { shared?: SharedState }) => {
   const save = async () => {
     setSaving(true);
     try {
-      await apiClient.put('/settings/bot', {
+      const res = await apiClient.put('/settings/bot', {
         default_days: Math.max(1, Math.min(3650, Number(days) || 30)),
         default_traffic_gb: Math.max(1, Number(trafficGb) || 100),
         default_max_users: Math.max(0, Math.min(1000, Number(devices) || 0)),
       });
+      if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
       addToast(t('saved', 'Defaults saved.'), 'success');
     } catch (e) {
       const err = e as DefaultsApiError;

@@ -46,7 +46,7 @@ const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false,
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${t('sessionsTitle', 'Login Diagnostics')} — ${user?.name || ''}`} size="large">
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="error-message" role="alert">{error}</div>}
       {loading ? <p>{t('loading', 'Loading...')}</p> : (
         <>
           <div className="diagnostic-summary">

@@ -46,6 +46,7 @@
 
 .ui-btn-label {
   display: inline-block;
+  line-height: 1;
 }
 
 /* ── Variants ───────────────────────────────────────────────────────────── */

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 import { useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import './Tabs.css';
 
 
 const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?: any[]; value?: any; onChange?: any; ariaLabel?: any; className?: string }) => {
+  const { t } = useTranslation();
   const listRef = useRef<any>(null);
   const found = tabs.findIndex((tab: any) => tab.id === value);
   const activeIndex = found === -1 ? 0 : found;
@@ -44,7 +46,7 @@ const Tabs = ({ tabs = [], value, onChange, ariaLabel, className = '' }: { tabs?
     <div
       ref={listRef}
       role="tablist"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t('tabs', 'Tabs')}
       className={['ui-tabs', className].filter(Boolean).join(' ')}
       onKeyDown={onKeyDown}
     >

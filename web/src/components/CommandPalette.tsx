@@ -135,7 +135,7 @@ const CommandPalette = ({ userRole }: { userRole?: any }) => {
             onKeyDown={onKeyDown}
             aria-label={t('palPlaceholder', 'Search pages, users, nodes…')}
           />
-          <kbd className="palette-kbd">ESC</kbd>
+          <kbd className="palette-kbd">{t('escKey', 'ESC')}</kbd>
         </div>
         <div className="palette-results" role="listbox" aria-label={t('palResults', 'Results')}>
           {results.length === 0 && (

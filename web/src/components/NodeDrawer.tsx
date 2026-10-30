@@ -305,7 +305,8 @@ const NodeDrawer = ({
   const liveList = Array.isArray(sessions?.live_sessions) ? sessions.live_sessions : [];
 
   return (
-    <div className="node-drawer-backdrop" onClick={onClose} role="presentation" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
+    <>
+      <button type="button" className="node-drawer-backdrop" onClick={onClose} aria-label={t('close', 'Close')} />
       <aside
         ref={drawerRef}
         className="node-drawer"
@@ -313,7 +314,6 @@ const NodeDrawer = ({
         aria-modal="true"
         tabIndex={-1}
         aria-label={`${node.name} — ${t('nodeDetails', 'Node details')}`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="node-drawer-head">
           <div className="nd-identity">
@@ -585,7 +585,7 @@ const NodeDrawer = ({
           {tab === 'logs' && <NodeLogsTab nodeId={node.id} />}
         </div>
       </aside>
-    </div>
+    </>
   );
 };
 
@@ -652,7 +652,7 @@ const NodeLogsTab = ({ nodeId }: { nodeId?: any }) => {
         <div className="nd-empty">{t('nodeLogsFailed', 'Could not load node logs.')}</div>
       ) : logs?.records?.length ? (
         <>
-        <div className="nd-loglist" tabIndex={0} role="region" aria-label={t('nodeTabLogs', 'Logs')}>
+              <div className="nd-loglist" tabIndex={0} role="region" aria-label={t('nodeTabLogs', 'Logs')}>
           {logs.records.slice().reverse().map((r: any, i: number) => (
             <div key={i} className={`nd-log nd-log--${(r.level || '').toLowerCase()}`}>
               <span className="nd-log-time">{r.time?.slice(11, 19) || '—'}</span>

@@ -9,11 +9,11 @@ const EmptyState = ({ title, description, actionLabel, onAction }: { title?: any
       <FiInbox size={20} />
     </span>
     <div className="empty-state-body">
-      <h3>{title}</h3>
+      {title && <h3>{title}</h3>}
       {description && <p>{description}</p>}
     </div>
     {actionLabel && onAction && (
-      <button type="button" className="btn btn-secondary empty-state-action" onClick={onAction}>
+      <button type="button" className="ui-btn ui-btn--secondary empty-state-action" onClick={onAction}>
         {actionLabel}
       </button>
     )}

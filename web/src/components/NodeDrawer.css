@@ -182,6 +182,9 @@
 
 /* ── Node drawer ────────────────────────────────────────── */
 .node-drawer-backdrop {
+  border: 0;
+  padding: 0;
+  font: inherit;
   position: fixed;
   inset: 0;
   z-index: var(--z-drawer);
@@ -190,7 +193,11 @@
   animation: fadeIn .15s ease both;
 }
 .node-drawer {
-  position: absolute;
+  /* Anchored to the viewport and painted above the backdrop button: it is a
+     sibling now (was a child of the fixed backdrop), so it must supply its
+     own z-index — positive z-index beats z-index:auto regardless of DOM order. */
+  position: fixed;
+  z-index: calc(var(--z-drawer) + 1);
   top: 0;
   inset-inline-end: 0;
   bottom: 0;

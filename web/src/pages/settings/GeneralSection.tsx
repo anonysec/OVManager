@@ -88,7 +88,8 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
   const saveSubPrefix = async () => {
     setSubPrefixSaving(true);
     try {
-      await apiClient.put('/settings/subscription', { subscription_url_prefix: subPrefixValue.trim() });
+      const res = await apiClient.put('/settings/subscription', { subscription_url_prefix: subPrefixValue.trim() });
+      if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
       setSubPrefix(subPrefixValue.trim()); setSubPrefixEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
