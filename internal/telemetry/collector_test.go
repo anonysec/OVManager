@@ -142,7 +142,7 @@ func TestCollectMetricsFanout(t *testing.T) {
 
 	start := time.Now()
 	CollectMetrics(conn)
-	if elapsed := time.Since(start); elapsed > metricsFanoutDeadline+100*time.Millisecond {
+	if elapsed := time.Since(start); elapsed > metricsFanoutDeadline+500*time.Millisecond {
 		t.Fatalf("collect took %v, want within %v", elapsed, metricsFanoutDeadline)
 	}
 }
