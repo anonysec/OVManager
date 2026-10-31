@@ -98,12 +98,34 @@ die()    { printf '\n  %sError:%s %s\n\n' "$RD" "$NC" "$*" >&2; exit 1; }
 
 has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
 check_root()  { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
+install_packages() {
+    local pkgs=("$@")
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1 || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v apk >/dev/null 2>&1; then
+        apk add --no-cache "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    else
+        return 1
+    fi
+    return 0
+}
+
 check_deps() {
-    local missing=()
+    local missing_pkgs=()
+    command -v curl >/dev/null 2>&1 || missing_pkgs+=("curl")
+    command -v openssl >/dev/null 2>&1 || missing_pkgs+=("openssl")
+    if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+        _note "installing missing dependencies: ${missing_pkgs[*]}"
+        install_packages "${missing_pkgs[@]}" || die "Could not install: ${missing_pkgs[*]}"
+    fi
     for cmd in curl install sha256sum openssl; do
-        command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+        command -v "$cmd" >/dev/null 2>&1 || die "Missing required tool: $cmd"
     done
-    [[ ${#missing[@]} -eq 0 ]] || die "Missing required tools: ${missing[*]}"
 }
 
 is_domain() { [[ "$1" =~ ^([A-Za-z0-9](-*[A-Za-z0-9])*\.)+(xn--[a-z0-9]{2,}|[A-Za-z]{2,})$ ]]; }
@@ -959,6 +981,7 @@ OPTIONS
   --build [DIR]              Dev install from a working tree
   --dest DIR                 with --build: destination
   --docker                   Install/run via Docker (default)
+  --version V                Override installer version (default from source tree)
   --native                   Install native binary (systemd) instead of Docker
   --ssl MODE                 SSL mode: domain|ip|custom|selfsigned|none
   -h, --help                 Show this help
@@ -986,7 +1009,7 @@ parse_args() {
         case "$1" in
             --build|--from-source) FROM_SOURCE=1; shift; if [[ $# -ge 1 && "$1" != -* ]]; then SRC="$1"; shift; fi ;;
             --acme) [[ $# -ge 2 ]] || die "--acme needs a domain"; SSL_DOMAIN="$2"; SSL_MODE="domain"; shift 2 ;;
-            --dest) [[ $# -ge 2 ]] || die "--dest needs a directory"; DEST="$2"; shift 2 ;;
+            --version) [[ $# -ge 2 ]] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
             --ssl)  [[ $# -ge 2 ]] || die "--ssl needs a mode"; SSL_MODE="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
             --docker) DOCKER=1; shift ;;
