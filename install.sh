@@ -654,6 +654,9 @@ verify_health() {
     local port="$1" want="$2" i body got
     for ((i = 0; i < HEALTH_TIMEOUT; i++)); do
         body="$(curl -fsS --max-time 3 "http://127.0.0.1:${port}/health" 2>/dev/null || true)"
+        if [[ -z "$body" ]]; then
+            body="$(curl -fsSk --max-time 3 "https://127.0.0.1:${port}/health" 2>/dev/null || true)"
+        fi
         if [[ -n "$body" ]]; then
             got="$(printf '%s' "$body" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)"
             if [[ "$got" == "$want" ]]; then _ok "health  v$got on port $port"; return 0; fi
@@ -924,7 +927,11 @@ do_install() {
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
     if [[ -n "$key" ]]; then
         colorized_echo blue "Installation complete"
-        _ok "URL     http://127.0.0.1:$port$display_path"
+        if [[ "$SSL_MODE" == "none" ]]; then
+            _ok "URL     http://127.0.0.1:$port$display_path"
+        else
+            _ok "URL     https://127.0.0.1:$port$display_path"
+        fi
         _ok "Key     $key   (shown once — save it)"
         local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
         _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
