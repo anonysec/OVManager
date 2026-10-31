@@ -31,6 +31,7 @@ INTERACTIVE=0
 YES=0
 FROM_SOURCE=0
 DOCKER="${OVM_DOCKER:-1}"
+DOCKER_EXPLICIT=0
 SRC=""
 DEST=""
 ACTION="install"
@@ -604,11 +605,15 @@ uninstall_completion() {
 offer_node_and_logs() {
     local mode="${1:-native}"
     local choice
+    if [[ "$INTERACTIVE" -ne 1 || "$YES" -eq 1 || ! -t 0 ]]; then
+        _note "Skipping optional OVNode/logs prompts (non-interactive)."
+        return 0
+    fi
     echo
     colorized_echo blue "=============================="
     colorized_echo yellow "OVManager installed."
     echo
-    read -p "Do you want to install OVNode on the same server? (y/n) " choice
+    read -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         if [ "$(id -u)" = "0" ]; then
             bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install || _warn "OVNode installation failed."
@@ -619,7 +624,7 @@ offer_node_and_logs() {
         _note "Skipping OVNode installation."
     fi
     echo
-    read -p "Follow service logs? (y/n) " choice
+    read -p "Follow service logs? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         if [[ "$mode" == "docker" ]]; then
             docker logs -f ovmanager
@@ -778,6 +783,9 @@ write_compose_file() {
 }
 setup_docker() {
     ensure_docker; write_compose_file
+    mkdir -p "$DATA_DIR"
+    chown -R 65532:65532 "$DATA_DIR" 2>/dev/null || true
+    chmod 700 "$DATA_DIR" 2>/dev/null || true
     _note "pulling ${IMAGE_REPO}:${VERSION}"
     docker pull "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1 || _warn "pull failed; continuing with cached image"
     _note "starting container"
@@ -791,6 +799,20 @@ do_install() {
     render_kv "arch" "$(detect_arch)"
     render_kv "os" "$(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
     render_blank
+    if [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 && "$DOCKER_EXPLICIT" -eq 0 && -t 0 ]]; then
+        render_stage "Installation method"
+        colorized_echo green "  1) Docker (default)"
+        colorized_echo green "  2) Native (systemd)"
+        local method_choice
+        read -p "Select install method [1-2] (default: 1): " method_choice
+        method_choice="${method_choice// /}"
+        [ -z "$method_choice" ] && method_choice="1"
+        case "$method_choice" in
+            1) DOCKER=1 ;;
+            2) DOCKER=0 ;;
+            *) render_warn "Invalid choice '$method_choice', using Docker"; DOCKER=1 ;;
+        esac
+    fi
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
         colorized_echo blue "Configuration"
@@ -1027,7 +1049,7 @@ parse_args() {
             --version) [[ $# -ge 2 ]] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
             --ssl)  [[ $# -ge 2 ]] || die "--ssl needs a mode"; SSL_MODE="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
-            --docker) DOCKER=1; shift ;;
+            --docker) DOCKER=1; DOCKER_EXPLICIT=1; shift ;;
             --native) DOCKER=0; shift ;;
             -y|--yes) YES=1; shift ;;
             -h|--help) usage ;;
