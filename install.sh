@@ -968,7 +968,11 @@ do_uninstall() {
     local purge=0 dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     while [[ $# -gt 0 ]]; do
-        case "$1" in --purge) purge=1; shift ;; *) die "Unknown option for uninstall: $1" ;; esac
+        case "$1" in
+            --purge) purge=1; shift ;;
+            -y|--yes) shift ;;
+            *) die "Unknown option for uninstall: $1" ;;
+        esac
     done
     # Interactive confirmation (PasarGuard style)
     if [[ -t 0 && "$YES" -eq 0 && $# -eq 0 ]]; then
