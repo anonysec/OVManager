@@ -802,6 +802,10 @@ do_install() {
     render_kv "arch" "$(detect_arch)"
     render_kv "os" "$(. /etc/os-release 2>/dev/null && echo "$ID $VERSION_ID" || uname -s)"
     render_blank
+    if [[ "$SSL_MODE" == "selfsigned" && "$INSTALL_SELF_SIGNED" -eq 0 ]]; then
+        INSTALL_SELF_SIGNED=1
+        [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
+    fi
     if [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 && "$DOCKER_EXPLICIT" -eq 0 && -t 0 ]]; then
         render_stage "Installation method"
         colorized_echo green "  1) Docker (default)"

@@ -21,8 +21,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -202,7 +204,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 
 	target := strings.TrimPrefix(strings.TrimSpace(opt.pin), "v")
 	from := version.Version
-	if reachable, reported := FetchHealth(install.HealthURL(), 5*time.Second, install.Cafile()); reachable && reported != "?" {
+	if reachable, reported := fetchHealthAny(healthURLs(install), 5*time.Second, install.Cafile()); reachable && reported != "?" {
 		from = reported
 	}
 
@@ -303,7 +305,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 	started := serviceRestart(install)
 	verified := false
 	if started {
-		if reachable, reported := waitHealth(install.HealthURL(), 60, install.Cafile()); reachable && reported == target {
+		if reachable, reported := waitHealthAny(healthURLs(install), 60, install.Cafile()); reachable && reported == target {
 			verified = true
 		} else if reachable {
 			fmt.Fprintln(out, "  warn: candidate reported version '"+reported+"', expected '"+target+"'")
@@ -331,7 +333,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 			dbRestored = true
 		}
 		if serviceRestart(install) {
-			if reachable, _ := waitHealth(install.HealthURL(), 60, install.Cafile()); reachable {
+			if reachable, _ := waitHealthAny(healthURLs(install), 60, install.Cafile()); reachable {
 				_ = os.Remove(updateMarkerPath(install))
 				writeUpdateState(install, "failed_over", from, target, safety)
 				note := " (database was untouched — no restore needed)"
@@ -351,7 +353,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 	fmt.Fprintln(out, kv("commit", "resuming writers"))
 	_ = os.Remove(updateMarkerPath(install))
 	serviceRestart(install)
-	if reachable, _ := waitHealth(install.HealthURL(), 60, install.Cafile()); !reachable {
+	if reachable, _ := waitHealthAny(healthURLs(install), 60, install.Cafile()); !reachable {
 		_ = os.WriteFile(updateMarkerPath(install), nil, 0o600)
 		writeUpdateState(install, "recovery_required", from, target, safety)
 		fmt.Fprint(out, block([]string{failedLine("Candidate passed verification but failed its final restart. Writes are blocked; run: ovm update")}))
@@ -434,7 +436,16 @@ func stageRelease(stage, target, src string, install Install) error {
 	env, err := os.ReadFile(filepath.Join(install.InstallDir, ".env"))
 	if err == nil {
 		stripped := stripEnvKey(string(env), "BACKUP_ENCRYPT_KEY")
-		_ = os.WriteFile(filepath.Join(stage, ".env"), []byte(stripped), 0o600)
+		envPath := filepath.Join(stage, ".env")
+		_ = os.WriteFile(envPath, []byte(stripped), 0o600) // #nosec G302 // intentional group-readable .env
+		_ = os.Chmod(envPath, 0o640)                      // #nosec G302 // intentional group-readable .env
+		if u := unitUser(); u != "" {
+			if _, err := user.Lookup(u); err == nil {
+				if gid := groupGID(u); gid >= 0 {
+					_ = os.Chown(envPath, 0, gid)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -505,6 +516,41 @@ func verifyChecksum(path, checksumBody string) error {
 func waitHealth(url string, tries int, cafile string) (bool, string) {
 	for i := 0; i < tries; i++ {
 		if reachable, reported := FetchHealth(url, 3*time.Second, cafile); reachable {
+			return true, reported
+		}
+		time.Sleep(time.Second)
+	}
+	return false, "?"
+}
+
+// healthURLs returns candidate health URLs for an install, trying the declared
+// scheme first and the other scheme as a fallback so a stale/incorrect TLS
+// detection cannot by itself fail an update.
+func healthURLs(inst Install) []string {
+	urls := []string{inst.HealthURL()}
+	other := "http"
+	if inst.Scheme() == "http" {
+		other = "https"
+	}
+	alt := other + "://127.0.0.1:" + strconv.Itoa(inst.Port) + "/health"
+	if alt != urls[0] {
+		urls = append(urls, alt)
+	}
+	return urls
+}
+
+func fetchHealthAny(urls []string, timeout time.Duration, cafile string) (bool, string) {
+	for _, u := range urls {
+		if reachable, reported := FetchHealth(u, timeout, cafile); reachable {
+			return true, reported
+		}
+	}
+	return false, "?"
+}
+
+func waitHealthAny(urls []string, tries int, cafile string) (bool, string) {
+	for i := 0; i < tries; i++ {
+		if reachable, reported := fetchHealthAny(urls, 2*time.Second, cafile); reachable {
 			return true, reported
 		}
 		time.Sleep(time.Second)

@@ -354,6 +354,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		if err := os.WriteFile(acctPath, res.AccountKeyPEM, 0o600); err != nil {
 			return block([]string{heading("HTTPS certificate"), "could not persist the ACME account key: " + err.Error()}), 1
 		}
+		_ = fixTLSOwnership(acctPath, 0o600)
 	}
 	_ = email
 	return block([]string{heading("HTTPS certificate"), fmt.Sprintf("Let's Encrypt cert issued for %s", domain), "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"os"
@@ -35,14 +36,50 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 	if err != nil {
 		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
 	}
+	// Pin to the leaf certificate's raw bytes so CA-issued (non-self-signed)
+	// certs validate even when the full chain/root is not in the pinned pool.
+	var pinnedDER []byte
 	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(raw) {
+	rest := raw
+	for len(rest) > 0 {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+			if pinnedDER == nil {
+				pinnedDER = cert.Raw
+			}
+			pool.AppendCertsFromPEM(block.Bytes)
+		}
+		break
+	}
+	if pinnedDER == nil {
 		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
 	}
 	return &tls.Config{
 		InsecureSkipVerify:     true, // #nosec G402 // TOFU pinning
 		SessionTicketsDisabled: true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			for _, der := range rawCerts {
+				if len(der) == len(pinnedDER) {
+					match := true
+					for i := range der {
+						if der[i] != pinnedDER[i] {
+							match = false
+							break
+						}
+					}
+					if match {
+						return nil
+					}
+				}
+			}
+			// Fallback: accept if any presented cert chains to the pinned pool.
 			for _, der := range rawCerts {
 				cert, err := x509.ParseCertificate(der)
 				if err != nil {
