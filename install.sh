@@ -616,9 +616,9 @@ offer_node_and_logs() {
     read -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         if [ "$(id -u)" = "0" ]; then
-            bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install || _warn "OVNode installation failed."
+            bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" || _warn "OVNode installation failed."
         else
-            sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install || _warn "OVNode installation failed."
+            sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" || _warn "OVNode installation failed."
         fi
     else
         _note "Skipping OVNode installation."
