@@ -16,6 +16,35 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 
 > Full documentation: https://anonysec.github.io/OVManager/
 
+
+## Project Status
+
+> **Early Development / Proof of Concept**
+>
+> This repository is currently an early-stage proof of concept. It is not production-ready, APIs and configuration formats may change, and operational guarantees are limited. Use in test environments only.
+
+## Tech Stack
+
+- Go
+- Linux (Ubuntu)
+- OpenVPN
+- RADIUS
+- iptables
+- systemd
+
+## Roadmap
+
+- Core Go refactor of legacy shell-based workflows
+- API implementation for node, user, session, and accounting operations
+- Security auditing and hardening of authentication, TLS, and filesystem access
+- Concurrency and routing logic improvements
+- Documentation and operator CLI polish
+- Community release and packaging
+
+## Upcoming Architecture
+
+The project is preparing for a major architectural refactor. Advanced AI-assisted development will be used to improve concurrent routing logic, strengthen security checks, and accelerate the transition from proof-of-concept scripts to a robust, production-oriented management platform. This phase will focus on safer defaults, clearer module boundaries, and more reliable operational behavior across OpenVPN and RADIUS-integrated environments.
+
 ## 📖 Table of contents
 
 - [What is this?](#-what-is-this)
