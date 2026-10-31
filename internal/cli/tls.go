@@ -255,7 +255,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 	// If port 80 is busy, offer to free it temporarily (with confirmation).
 	conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		proc, unit, found := port80Occupant()
 		msg := "port 80 is in use"
 		if found && proc != "" {
@@ -282,7 +282,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		}
 		fmt.Fprintf(os.Stderr, "%s\nStop %s temporarily to free port 80? [y/N]: ", msg, unit)
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "y" && answer != "yes" {
 			return block([]string{
@@ -304,7 +304,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 			if err != nil {
 				break
 			}
-			c.Close()
+			_ = c.Close()
 			time.Sleep(250 * time.Millisecond)
 		}
 	}

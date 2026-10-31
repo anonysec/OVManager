@@ -69,7 +69,7 @@ func UserDailySeries(db *sql.DB, userID int64, days int) []map[string]any {
 				have[day] = bytes
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	out := make([]map[string]any, 0, days)
 	for _, d := range wanted {

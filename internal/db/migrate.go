@@ -746,12 +746,12 @@ func addPanelID(x execer) error {
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
@@ -875,14 +875,14 @@ func decryptStoredSecrets(x execer) error {
 		var id int64
 		var key sql.NullString
 		if err := rows.Scan(&id, &key); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		if key.Valid && strings.HasPrefix(key.String, "enc:") {
 			todo = append(todo, kv{id, key.String})
 		}
 	}
-	rows.Close()
+	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}

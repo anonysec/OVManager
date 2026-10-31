@@ -125,7 +125,7 @@ func (h *Handler) notifications(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	for _, item := range thresholdItems(h.Svc.DB()) {
 		if t, _ := item["type"].(string); inboxTypes[t] {
@@ -279,7 +279,7 @@ func history(db *sql.DB, hours int) map[string]any {
 				})
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	security := []map[string]any{}
@@ -294,7 +294,7 @@ func history(db *sql.DB, hours int) map[string]any {
 				})
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	nodes := []map[string]any{}
@@ -310,7 +310,7 @@ func history(db *sql.DB, hours int) map[string]any {
 				})
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	return map[string]any{"traffic": traffic, "security": security, "nodes": nodes}
@@ -384,7 +384,7 @@ func CollectMetrics(db *sql.DB) {
 				users = append(users, u)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	idToName := make(map[string]string, len(users))
@@ -403,7 +403,7 @@ func CollectMetrics(db *sql.DB) {
 				ids = append(ids, id)
 			}
 		}
-		nrows.Close()
+		_ = nrows.Close()
 		pid := node.PanelIDFor(db)
 		nodes := make([]*node.Node, 0, len(ids))
 		for _, id := range ids {
@@ -599,7 +599,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 				ids = append(ids, id)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	} else {
 		nodesErr = err
 	}
@@ -615,7 +615,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 				known[name] = true
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	} else {
 		usersErr = err
 	}
@@ -875,7 +875,7 @@ func promoteEvents(db *sql.DB, send func(string) bool) int {
 			)
 			sent++
 		}
-		rows.Close()
+		_ = rows.Close()
 		lastID = maxID
 		if batch < 100 {
 			break

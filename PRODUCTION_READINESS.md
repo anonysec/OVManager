@@ -88,14 +88,12 @@ published, GHCR image published.
   advisory GO-2026-5932 (golang.org/x/crypto openpgp) is pulled in transitively
   but the affected symbols are not called; x/crypto is used only for bcrypt and
   acme.
-- `gosec ./...` (excluding web/node_modules): 41 remaining findings, all
-  G104 (unhandled errors on best-effort cleanup/close paths). All higher-severity
-  findings (G123, G124, G202, G204, G301-G306, G402, G702-G705, G112, G115,
-  G120, G122) were triaged: genuine issues fixed (logout cookie attributes,
-  session-resumption bypass via `SessionTicketsDisabled`, MaxBytesReader
-  ResponseWriter, ACME ReadHeaderTimeout) and the rest annotated as intentional
-  (TOFU certificate pinning/fallback, admin-controlled paths, allowlisted SQL
-  identifiers).
+- `gosec ./...` (excluding web/node_modules): 0 findings. All 41 previously
+  reported G104 unhandled-error findings were fixed by explicitly handling
+  returned errors (`_ = ...` / `_, _ = ...`).
+- `npm audit --omit=dev`: 0 vulnerabilities (12 moderate dev-only advisories
+  remain in the eslint/minimatch chain; not shipped and require a breaking
+  eslint downgrade to fix).
 - `go mod verify`: all modules verified; `go mod tidy` clean.
 - `npm audit --omit=dev`: 0 vulnerabilities (12 moderate dev-only, not shipped).","oldString":"## Known limitations / not addressed\n- Dev-only npm moderate vulnerabilities (eslint chain) — not shipped.\n- No air-gapped/offline installer bundle.\n- `govulncheck`/`gosec` not installed; manual review performed instead.\n- ACME requires network and port 80.\n- Multi-arch Docker image built via CI (QEMU) — local build was amd64 only.","path">
 /root/workspace/OVManager/PRODUCTION_READINESS.md

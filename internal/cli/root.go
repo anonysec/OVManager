@@ -55,7 +55,7 @@ func (a *app) rootCmd() *cobra.Command {
 			}
 			fi, _ := os.Stdin.Stat()
 			if fi == nil || (fi.Mode()&os.ModeCharDevice) == 0 {
-				cmd.Help()
+				_ = cmd.Help()
 				return
 			}
 			runInteractiveMenu(a, cmd)
@@ -111,12 +111,12 @@ func (a *app) healthCmd() *cobra.Command {
 			// TLS-only panel, accepting a self-signed/loopback cert.
 			resp, err := http.Get("http://127.0.0.1:" + port + "/health") // #nosec // localhost health probe
 			if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				a.emit("ok\n", 0)
 				return nil
 			}
 			if resp != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 			client := &http.Client{
 				Timeout:   5 * time.Second,
@@ -125,12 +125,12 @@ func (a *app) healthCmd() *cobra.Command {
 			resp, err = client.Get("https://127.0.0.1:" + port + "/health") // #nosec // localhost health probe
 			if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
-					resp.Body.Close()
+					_ = resp.Body.Close()
 				}
 				a.emit("unhealthy\n", 1)
 				return nil
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			a.emit("ok\n", 0)
 			return nil
 		},
@@ -226,7 +226,7 @@ func (a *app) tlsCmd() *cobra.Command {
 				}
 				if !isTTY {
 					if f, err := os.Open("/dev/tty"); err == nil {
-						f.Close()
+						_ = f.Close()
 						isTTY = true
 					}
 				}
@@ -423,7 +423,7 @@ func runTLSMenu(a *app, inst Install) {
 		fmt.Fprint(a.out, "Choice: ")
 		line := strings.TrimSpace(readLine())
 		n := 0
-		fmt.Sscan(line, &n)
+		_, _ = fmt.Sscan(line, &n)
 		if n < 1 || n > len(items) {
 			fmt.Fprintln(a.out, "invalid choice")
 			continue
@@ -503,7 +503,7 @@ func runInteractiveMenu(a *app, cmd *cobra.Command) {
 		fmt.Fprint(a.out, "Choice: ")
 		line := strings.TrimSpace(readLine())
 		n := 0
-		fmt.Sscan(line, &n)
+		_, _ = fmt.Sscan(line, &n)
 		if n < 1 || n > len(items) {
 			fmt.Fprintln(a.out, "invalid choice")
 			continue

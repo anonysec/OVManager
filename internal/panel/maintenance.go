@@ -96,7 +96,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 		return "", err
 	}
 	snapshot := snapshotFile.Name()
-	snapshotFile.Close()
+	_ = snapshotFile.Close()
 	_ = os.Chmod(snapshot, 0o600)
 	_ = os.Remove(snapshot) // VACUUM INTO refuses an existing target
 	defer func() { _ = os.Remove(snapshot) }()
@@ -379,7 +379,7 @@ func (h *Handler) atomicDBRestore(srcPath, actor, detail string) restoreResult {
 		return fail(err)
 	}
 	rollbackDB = rollbackFile.Name()
-	rollbackFile.Close()
+	_ = rollbackFile.Close()
 	if err := copyFile(safety, rollbackDB); err != nil {
 		return fail(err)
 	}
@@ -540,7 +540,7 @@ func stageCandidate(src string) (string, error) {
 		return "", err
 	}
 	path := file.Name()
-	file.Close()
+	_ = file.Close()
 	_ = os.Chmod(path, 0o600)
 	if err := copyFile(src, path); err != nil {
 		_ = os.Remove(path)
@@ -805,13 +805,13 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var u userState
 		if err := rows.Scan(&u.id, &u.used, &u.state); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 			return
 		}
 		recs = append(recs, u)
 	}
-	rows.Close()
+	_ = rows.Close()
 	marker := json.RawMessage("true")
 	reset := int64(0)
 	for _, u := range recs {

@@ -596,7 +596,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusConflict, "You must keep at least one user — create another before deleting this one")
 		return
 	}
-	h.remember(row)
+	_ = h.remember(row)
 	if err := h.deleteRow(row); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
 		return

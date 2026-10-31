@@ -154,11 +154,11 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := out.Sync(); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	return out.Close()
@@ -192,17 +192,17 @@ func stageFile(src, dst string) (string, error) {
 	name := tmp.Name()
 	cleanup := func() { _ = os.Remove(name) }
 	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		cleanup()
 		return "", err
 	}
 	if _, err := io.Copy(tmp, in); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		cleanup()
 		return "", err
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		cleanup()
 		return "", err
 	}

@@ -168,7 +168,7 @@ func (h *Handler) checkNodes() check {
 				names = append(names, name)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	total := len(names)
 	fresh := telemetry.SnapshotFresh()
