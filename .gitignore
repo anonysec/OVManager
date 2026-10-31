@@ -30,9 +30,15 @@ internal/webfs/dist/*
 # OS
 .DS_Store
 
-# Local tools (never published)
+# Local tools & planning (never published)
 .opencode/
 AGENTS.md
+CLAUDE.md
+GEMINI.md
+.plan/
+plan/
+*plan*
+*PLAN*
 .worktrees/
 .pre-commit-cache/
 docs/
