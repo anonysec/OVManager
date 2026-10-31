@@ -9,6 +9,12 @@ on:
   pull_request:
 
 jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n install.sh
+      - run: python3 -m unittest discover -s test/installer -v
   # The SPA build on its own, so the Go job can start as soon as the artifact
   # exists instead of idling behind the frontend gate. The panel tests serve
   # the built SPA from web/dist.
