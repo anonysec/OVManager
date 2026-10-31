@@ -599,7 +599,9 @@ install_completion() {
 
 uninstall_completion() {
     local completion_file="/etc/bash_completion.d/$CLI_NAME"
-    [[ -f "$completion_file" ]] && { rm -f "$completion_file"; _ok "removed $completion_file"; }
+    if [[ -f "$completion_file" ]]; then
+        rm -f "$completion_file" && _ok "removed $completion_file" || true
+    fi
 }
 
 offer_node_and_logs() {
