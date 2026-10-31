@@ -12,14 +12,16 @@
 
 # --- Go binary ---------------------------------------------------------
 # modernc.org/sqlite is pure Go, so CGO_ENABLED=0 yields a static binary.
-FROM golang:1.27 AS build
+# Use native builder platform + Go cross-compilation instead of QEMU emulation.
+FROM --platform=$BUILDPLATFORM golang:1.27 AS build
+ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY web/dist/ ./internal/webfs/dist/
-RUN CGO_ENABLED=0 go build -o /out/ovmanager ./cmd
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/ovmanager ./cmd
 # Writable data dir for the nonroot user, created here so the runtime stage
 # can COPY it with the right ownership (distroless has no shell).
 RUN mkdir -p /data
