@@ -91,9 +91,8 @@ published, GHCR image published.
 - `gosec ./...` (excluding web/node_modules): 0 findings. All 41 previously
   reported G104 unhandled-error findings were fixed by explicitly handling
   returned errors (`_ = ...` / `_, _ = ...`).
-- `npm audit --omit=dev`: 0 vulnerabilities (12 moderate dev-only advisories
-  remain in the eslint/minimatch chain; not shipped and require a breaking
-  eslint downgrade to fix).
+- `npm audit --omit=dev`: 0 vulnerabilities (minimatch overridden to ^11.0.1
+  via package.json overrides; eslint lint gate still passes).
 - `go mod verify`: all modules verified; `go mod tidy` clean.
 - `npm audit --omit=dev`: 0 vulnerabilities (12 moderate dev-only, not shipped).","oldString":"## Known limitations / not addressed\n- Dev-only npm moderate vulnerabilities (eslint chain) — not shipped.\n- No air-gapped/offline installer bundle.\n- `govulncheck`/`gosec` not installed; manual review performed instead.\n- ACME requires network and port 80.\n- Multi-arch Docker image built via CI (QEMU) — local build was amd64 only.","path">
 /root/workspace/OVManager/PRODUCTION_READINESS.md
