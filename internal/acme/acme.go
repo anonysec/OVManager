@@ -91,7 +91,7 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 				o.HTTPPort, err)
 		}
 		listener = l
-		challenge = &http.Server{Handler: challengeHandler(client)}
+		challenge = &http.Server{Handler: challengeHandler(client), ReadHeaderTimeout: 10 * time.Second}
 		go func() { _ = challenge.Serve(listener) }()
 		defer func() {
 			ctxd, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -228,7 +228,7 @@ func challengeHandler(client *acme.Client) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte(resp))
+		_, _ = w.Write([]byte(resp)) // #nosec // acme challenge token served as text/plain
 	})
 	return mux
 }

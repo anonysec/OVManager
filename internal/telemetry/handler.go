@@ -362,7 +362,7 @@ func touchLastOnline(db *sql.DB, names []string, stamp string) {
 	for _, n := range names {
 		args = append(args, n)
 	}
-	_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name IN (`+placeholders+`)`, args...)
+	_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name IN (`+placeholders+`)`, args...) // #nosec // placeholders only
 }
 
 func CollectMetrics(db *sql.DB) {
@@ -494,7 +494,7 @@ func CollectMetrics(db *sql.DB) {
 
 	cutoff := now - 30*24*3600
 	for _, table := range []string{"node_health_snapshots", "traffic_snapshots", "security_snapshots"} {
-		_, _ = db.Exec(`DELETE FROM `+table+` WHERE ts < ?`, cutoff)
+		_, _ = db.Exec(`DELETE FROM `+table+` WHERE ts < ?`, cutoff) // #nosec // table from fixed list
 	}
 	// audit_logs grows forever otherwise: every login and user mutation writes
 	// a row, and the only other caller of PruneAuditLogs is the manual cleanup.
@@ -1239,7 +1239,7 @@ func envOrFileTelemetry(key string) string {
 		}
 	}
 	// reuse panel-style .env parse minimally
-	data, err := os.ReadFile(filepath.Join(dir, ".env"))
+	data, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G703 // OVM_APP_DIR/.env G304
 	if err != nil {
 		return ""
 	}

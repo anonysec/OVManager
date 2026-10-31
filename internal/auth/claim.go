@@ -47,7 +47,7 @@ func (s *Service) readClaimKey() (string, error) {
 	if info.Size() > 4096 {
 		return "", errKeyUnreadable{path + " is not a claim key file"}
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 // triaged intentional
 	if err != nil {
 		return "", err
 	}

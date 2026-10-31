@@ -356,15 +356,15 @@ func pyString(s string) string {
 		default:
 			switch {
 			case r < 0x20:
-				sb.WriteString(unicodeEscape(uint16(r)))
+				sb.WriteString(unicodeEscape(uint16(r))) // #nosec // r <= 0xffff here
 			case r < 0x7f:
 				sb.WriteRune(r)
 			case r <= 0xffff:
-				sb.WriteString(unicodeEscape(uint16(r)))
+				sb.WriteString(unicodeEscape(uint16(r))) // #nosec // r <= 0xffff here
 			default:
 				hi, lo := utf16.EncodeRune(r)
-				sb.WriteString(unicodeEscape(uint16(hi)))
-				sb.WriteString(unicodeEscape(uint16(lo)))
+				sb.WriteString(unicodeEscape(uint16(hi))) // #nosec // utf16 surrogate half
+				sb.WriteString(unicodeEscape(uint16(lo))) // #nosec // utf16 surrogate half
 			}
 		}
 	}

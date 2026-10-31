@@ -280,8 +280,8 @@ func (h *Handler) checkDisk() check {
 	var stat syscall.Statfs_t
 	var free, total uint64
 	if err := syscall.Statfs(path, &stat); err == nil {
-		free = stat.Bavail * uint64(stat.Bsize)
-		total = stat.Blocks * uint64(stat.Bsize)
+		free = stat.Bavail * uint64(stat.Bsize)  // #nosec // filesystem block counts are non-negative
+		total = stat.Blocks * uint64(stat.Bsize) // #nosec // filesystem block counts are non-negative
 	}
 	const gb = 1024 * 1024 * 1024
 	percentFree := 0.0
@@ -440,12 +440,12 @@ func (h *Handler) healthTLS(w http.ResponseWriter, r *http.Request) {
 // --- shared certificate helpers ---
 
 func fileExists(path string) bool {
-	info, err := os.Stat(path)
+	info, err := os.Stat(path) // #nosec G703 // path from panel config
 	return err == nil && !info.IsDir()
 }
 
 func loadCertificate(path string) (*x509.Certificate, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 // triaged intentional
 	if err != nil {
 		return nil, err
 	}

@@ -81,8 +81,8 @@ func (h *Handler) logs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("journalctl", "-u", resolved, "-n",
-		strconv.Itoa(clampLines(intQuery(r, "lines", logsDefaultLines))), "-o", "cat", "--no-pager") //nolint:gosec // unit is whitelisted against the nodes table; the rest is static
+	cmd := exec.Command("journalctl", "-u", resolved, "-n", // #nosec // unit is whitelisted against the nodes table; the rest is static
+		strconv.Itoa(clampLines(intQuery(r, "lines", logsDefaultLines))), "-o", "cat", "--no-pager")
 	out, err := cmd.Output()
 	if err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {
@@ -102,5 +102,5 @@ func (h *Handler) logs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write(out)
+	_, _ = w.Write(out) // #nosec // journal output served as text/plain // #nosec // journal output served as text/plain
 }

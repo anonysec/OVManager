@@ -556,8 +556,8 @@ func (h *Handler) serverInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	var stat syscall.Statfs_t
 	if err := syscall.Statfs("/", &stat); err == nil {
-		total := stat.Blocks * uint64(stat.Bsize)
-		used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize)
+		total := stat.Blocks * uint64(stat.Bsize)                // #nosec // filesystem block counts are non-negative
+		used := (stat.Blocks - stat.Bavail) * uint64(stat.Bsize) // #nosec // filesystem block counts are non-negative
 		info["disk_total"] = total
 		info["disk_used"] = used
 		if total > 0 {

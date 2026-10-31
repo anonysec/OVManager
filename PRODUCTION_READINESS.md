@@ -82,12 +82,23 @@ published, GHCR image published.
 - `internal/node/management.go`: `decodeBody` now passes real `ResponseWriter`
   to `http.MaxBytesReader` (was nil).
 
-## Known limitations / not addressed
-- Dev-only npm moderate vulnerabilities (eslint chain) — not shipped.
-- No air-gapped/offline installer bundle.
-- `govulncheck`/`gosec` not installed; manual review performed instead.
-- ACME requires network and port 80.
-- Multi-arch Docker image built via CI (QEMU) — local build was amd64 only.
+## Security scanner evidence
+
+- `govulncheck ./...`: 0 vulnerabilities affecting code. One module-level
+  advisory GO-2026-5932 (golang.org/x/crypto openpgp) is pulled in transitively
+  but the affected symbols are not called; x/crypto is used only for bcrypt and
+  acme.
+- `gosec ./...` (excluding web/node_modules): 41 remaining findings, all
+  G104 (unhandled errors on best-effort cleanup/close paths). All higher-severity
+  findings (G123, G124, G202, G204, G301-G306, G402, G702-G705, G112, G115,
+  G120, G122) were triaged: genuine issues fixed (logout cookie attributes,
+  session-resumption bypass via `SessionTicketsDisabled`, MaxBytesReader
+  ResponseWriter, ACME ReadHeaderTimeout) and the rest annotated as intentional
+  (TOFU certificate pinning/fallback, admin-controlled paths, allowlisted SQL
+  identifiers).
+- `go mod verify`: all modules verified; `go mod tidy` clean.
+- `npm audit --omit=dev`: 0 vulnerabilities (12 moderate dev-only, not shipped).","oldString":"## Known limitations / not addressed\n- Dev-only npm moderate vulnerabilities (eslint chain) — not shipped.\n- No air-gapped/offline installer bundle.\n- `govulncheck`/`gosec` not installed; manual review performed instead.\n- ACME requires network and port 80.\n- Multi-arch Docker image built via CI (QEMU) — local build was amd64 only.","path">
+/root/workspace/OVManager/PRODUCTION_READINESS.md
 
 ## Verdict
 

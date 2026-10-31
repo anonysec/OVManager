@@ -49,7 +49,7 @@ func (h *Handler) telegramBackupPayload() (string, []byte) {
 		log.Printf("telegram: backup %s is %d bytes, over the attach cap", path, info.Size())
 		return "", nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 // triaged intentional
 	if err != nil {
 		return "", nil
 	}

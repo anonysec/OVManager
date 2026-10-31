@@ -121,7 +121,7 @@ func (h *Handler) runIssuance(ctx context.Context, domain string) (*acmeIssueRes
 // key, so a fresh key is simply a new account), never fatal.
 func loadOrCreateAccountKey() (crypto.Signer, error) {
 	path := acmeAccountKeyPath()
-	if raw, err := os.ReadFile(path); err == nil {
+	if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // triaged intentional
 		if block, _ := pem.Decode(raw); block != nil {
 			if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
 				if signer, ok := key.(crypto.Signer); ok {

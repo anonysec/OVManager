@@ -12,7 +12,7 @@ func systemdUnitExists(unit string) bool {
 	if err != nil {
 		return false
 	}
-	return exec.Command(systemctl, "cat", unit).Run() == nil
+	return exec.Command(systemctl, "cat", unit).Run() == nil // #nosec G204 // triaged intentional
 }
 
 func dockerContainerRunning(name string) bool {
@@ -20,7 +20,7 @@ func dockerContainerRunning(name string) bool {
 	if err != nil {
 		return false
 	}
-	out, err := exec.Command(docker, "inspect", "--format", "{{.State.Running}}", name).Output()
+	out, err := exec.Command(docker, "inspect", "--format", "{{.State.Running}}", name).Output() // #nosec G204 // triaged intentional
 	if err != nil {
 		return false
 	}
@@ -30,7 +30,7 @@ func dockerContainerRunning(name string) bool {
 // spawnDetached runs a fixed restart command after a short delay, detached.
 func spawnDetached(argv []string) {
 	args := append([]string{"-c", `sleep 1; exec "$@"`, "ovmanager-restart"}, argv...)
-	cmd := exec.Command("sh", args...)
+	cmd := exec.Command("sh", args...) // #nosec G204 // triaged intentional
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, nil, nil
 	cmd.SysProcAttr = detachSysProcAttr()
 	_ = cmd.Start()

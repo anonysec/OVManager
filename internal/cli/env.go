@@ -34,7 +34,7 @@ var envKeys = []string{
 
 func readEnvFile(path string) map[string]string {
 	values := map[string]string{}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G703 // admin-provided env file path G304
 	if err != nil {
 		return values
 	}

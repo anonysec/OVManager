@@ -39,13 +39,13 @@ func offsiteCopy(target, path string) (string, error) {
 	// a safe character set; -e is a constant, so nothing user-supplied
 	// reaches a shell.
 	if _, lookErr := exec.LookPath("rsync"); lookErr == nil {
-		cmd := exec.Command("rsync", "-a", "-e", "ssh -o BatchMode=yes", path, remote)
+		cmd := exec.Command("rsync", "-a", "-e", "ssh -o BatchMode=yes", path, remote) // #nosec G204 // triaged intentional
 		if out, runErr := cmd.CombinedOutput(); runErr != nil {
 			return "rsync", fmt.Errorf("rsync failed: %s", strings.TrimSpace(string(out)))
 		}
 		return "rsync", nil
 	}
-	cmd := exec.Command("scp", "-o", "BatchMode=yes", path, remote)
+	cmd := exec.Command("scp", "-o", "BatchMode=yes", path, remote) // #nosec G204 // triaged intentional
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		return "scp", fmt.Errorf("scp failed: %s", strings.TrimSpace(string(out)))
 	}

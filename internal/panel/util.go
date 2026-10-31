@@ -140,7 +140,7 @@ func isAlnum(r rune) bool {
 
 // copyFile is shutil.copy2 for the backup/restore paths.
 func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G703 // internal backup paths G304
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm()) // #nosec G703 // internal backup paths G304
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func copyFile(src, dst string) error {
 // commitStaged renames the staged file over dst. The rename is atomic, and
 // the directory is fsynced so the rename itself survives a crash.
 func stageFile(src, dst string) (string, error) {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G703 // internal backup paths G304
 	if err != nil {
 		return "", err
 	}

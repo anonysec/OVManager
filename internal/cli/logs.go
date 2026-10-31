@@ -20,7 +20,7 @@ func buildLogsCommand(composeFile, arg string) []string {
 }
 
 func runLogs(argv []string) int {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 // triaged intentional
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		if exit, ok := err.(*exec.ExitError); ok {

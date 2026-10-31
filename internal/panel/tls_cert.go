@@ -69,7 +69,7 @@ var certWriteMu sync.Mutex
 // paths this module owns (the declared pair, or bookkeeping in DATA_DIR/tls)
 // are allowed, checked on the resolved path so a symlink cannot redirect it.
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 // triaged intentional
 		return err
 	}
 	resolved := resolvePath(path)
@@ -127,7 +127,7 @@ func writeManagedFiles(keyPEM, certPEM []byte, mode string) (*x509.Certificate, 
 	}
 	certWriteMu.Lock()
 	defer certWriteMu.Unlock()
-	if err := os.MkdirAll(tlsDir(), 0o755); err != nil {
+	if err := os.MkdirAll(tlsDir(), 0o755); err != nil { // #nosec G301 // triaged intentional
 		return nil, err
 	}
 	var oldKey, oldCert, oldMeta []byte

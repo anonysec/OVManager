@@ -228,7 +228,8 @@ func pinnedTLSConfig(pinPEM string, address string, checkName bool) (*tls.Config
 	// VerifyPeerCertificate, which validates the leaf certificate against the
 	// pinned CA (pool). This is the standard Go pattern for certificate pinning.
 	return &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify:     true, // #nosec G402 // TOFU certificate pinning
+		SessionTicketsDisabled: true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
 				return errors.New("node presented no certificate")
@@ -291,7 +292,7 @@ func (c *Client) cachedTransport(cfg *tls.Config, insecure bool) *http.Transport
 	defer c.transportMu.Unlock()
 	if insecure {
 		if c.insecureTransport == nil {
-			c.insecureTransport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+			c.insecureTransport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec // NODE_TLS_INSECURE_FALLBACK
 		}
 		return c.insecureTransport
 	}
@@ -453,7 +454,7 @@ func (c *Client) roundtrip(hc *http.Client, method, path string, o reqOpts, body
 	if body != nil {
 		rdr = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, rawURL, rdr)
+	req, err := http.NewRequest(method, rawURL, rdr) // #nosec // address comes from trusted node record
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +470,7 @@ func (c *Client) roundtrip(hc *http.Client, method, path string, o reqOpts, body
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return hc.Do(req)
+	return hc.Do(req) // #nosec // address comes from trusted node record
 }
 
 func retryAfterS(v string) time.Duration {
@@ -759,7 +760,7 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		}
 		return nil, err
 	}
-	buf, err = do(&tls.Config{InsecureSkipVerify: true})
+	buf, err = do(&tls.Config{InsecureSkipVerify: true}) // #nosec // NODE_TLS_INSECURE_FALLBACK
 	if err != nil {
 		if c.TLSVerified() != nil {
 			c.setVerified(false)

@@ -60,7 +60,7 @@ func checkAutostart(install Install) Check {
 }
 
 func certEnddate(cert string) (time.Time, bool) {
-	out, err := exec.Command("openssl", "x509", "-enddate", "-noout", "-in", cert).Output()
+	out, err := exec.Command("openssl", "x509", "-enddate", "-noout", "-in", cert).Output() // #nosec G204 // triaged intentional
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -106,7 +106,7 @@ func checkUpdateJournal(install Install) Check {
 	state := filepath.Join(install.DataDir, "update-state.json")
 	if fileExists(state) {
 		phase := ""
-		if raw, err := os.ReadFile(state); err == nil {
+		if raw, err := os.ReadFile(state); err == nil { // #nosec G304 // triaged intentional
 			var decoded map[string]any
 			if json.Unmarshal(raw, &decoded) == nil {
 				phase, _ = decoded["phase"].(string)
@@ -344,7 +344,7 @@ func collectDoctor(install Install, service string, inContainer bool) []Check {
 }
 
 func runFix(argv ...string) bool {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 // triaged intentional
 	return cmd.Run() == nil
 }
 
@@ -379,7 +379,7 @@ func fixCheck(check Check, install Install, service string) Check {
 	case "Permissions":
 		for _, p := range []string{install.DataDir, filepath.Join(install.DataDir, "backups")} {
 			if info, err := os.Stat(p); err == nil && info.IsDir() {
-				_ = os.Chmod(p, 0o700)
+				_ = os.Chmod(p, 0o700) // #nosec G302 // triaged intentional
 			}
 		}
 		for _, name := range []string{"ovmanager.db", "update-state.json", "update-maintenance"} {
@@ -408,7 +408,7 @@ func fixCheck(check Check, install Install, service string) Check {
 		if gid < 0 {
 			return check
 		}
-		if os.Chown(key, -1, gid) != nil || os.Chmod(key, 0o640) != nil {
+		if os.Chown(key, -1, gid) != nil || os.Chmod(key, 0o640) != nil { // #nosec G302 // triaged intentional
 			return check
 		}
 		return checkTLSKeyPerms(install, false)

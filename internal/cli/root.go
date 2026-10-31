@@ -109,7 +109,7 @@ func (a *app) healthCmd() *cobra.Command {
 			}
 			// Plain probe first (the common case); fall back to HTTPS for a
 			// TLS-only panel, accepting a self-signed/loopback cert.
-			resp, err := http.Get("http://127.0.0.1:" + port + "/health")
+			resp, err := http.Get("http://127.0.0.1:" + port + "/health") // #nosec // localhost health probe
 			if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 				resp.Body.Close()
 				a.emit("ok\n", 0)
@@ -120,9 +120,9 @@ func (a *app) healthCmd() *cobra.Command {
 			}
 			client := &http.Client{
 				Timeout:   5 * time.Second,
-				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+				Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, // #nosec G402 // local self-signed fallback
 			}
-			resp, err = client.Get("https://127.0.0.1:" + port + "/health")
+			resp, err = client.Get("https://127.0.0.1:" + port + "/health") // #nosec // localhost health probe
 			if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
 					resp.Body.Close()

@@ -224,7 +224,7 @@ func (h *Handler) updateOperation(w http.ResponseWriter, r *http.Request) {
 		envelope(w, true, "No update transaction recorded", nil)
 		return
 	}
-	raw, err := os.ReadFile(statePath)
+	raw, err := os.ReadFile(statePath) // #nosec G304 // triaged intentional
 	if err != nil {
 		envelope(w, false, "The update state file is unreadable", nil)
 		return
@@ -280,18 +280,18 @@ func (h *Handler) runUpdate(w http.ResponseWriter, r *http.Request) {
 // startNativeUpdate detaches `bash <install_sh> update` and returns immediately.
 func (h *Handler) startNativeUpdate(w http.ResponseWriter, installSh string) {
 	logPath := filepath.Join(dataDir(), updateLogName)
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil { // #nosec G301 // triaged intentional
 		envelope(w, false, "Could not start the updater: "+err.Error(), nil)
 		return
 	}
-	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) // #nosec G304 // triaged intentional G302
 	if err != nil {
 		envelope(w, false, "Could not start the updater: "+err.Error(), nil)
 		return
 	}
 	defer logFile.Close()
 
-	cmd := exec.Command("bash", installSh, "update")
+	cmd := exec.Command("bash", installSh, "update") // #nosec G204 // triaged intentional
 	cmd.Stdin = nil
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile // stderr=subprocess.STDOUT

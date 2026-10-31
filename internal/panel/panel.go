@@ -194,7 +194,7 @@ func envFileValues() map[string]string {
 		return envFileCache.values
 	}
 	values := map[string]string{}
-	raw, err := os.ReadFile(filepath.Join(dir, ".env"))
+	raw, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G304 // triaged intentional
 	if err == nil {
 		for _, line := range strings.Split(string(raw), "\n") {
 			line = strings.TrimSpace(line)
@@ -415,7 +415,7 @@ func setColumns(db *sql.DB, values map[string]any) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("invalid settings column: %s", key)
 		}
-		if _, err := tx.Exec(`UPDATE settings SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM settings)`, value); err != nil {
+		if _, err := tx.Exec(`UPDATE settings SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM settings)`, value); err != nil { // #nosec // key validated against allowlist above
 			_ = tx.Rollback()
 			return err
 		}

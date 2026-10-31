@@ -40,7 +40,7 @@ func FetchServerCert(address string, port int, timeout time.Duration) string {
 	// TCP but never completes the handshake must not block indefinitely.
 	rawConn.SetDeadline(time.Now().Add(timeout))
 	defer rawConn.Close()
-	tconn := tls.Client(rawConn, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec // TOFU fetch
+	tconn := tls.Client(rawConn, &tls.Config{InsecureSkipVerify: true}) // #nosec // TOFU fetch
 	if err := tconn.Handshake(); err != nil {
 		return ""
 	}
