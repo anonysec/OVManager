@@ -1256,9 +1256,12 @@ func envOrFileTelemetry(key string) string {
 }
 
 func newEventKey() string {
-	buf := make([]byte, 16)
-	_, _ = rand.Read(buf)
-	return hex.EncodeToString(buf)
+	for {
+		buf := make([]byte, 16)
+		if _, err := rand.Read(buf); err == nil {
+			return hex.EncodeToString(buf)
+		}
+	}
 }
 
 func escapeLike(s string) string {
