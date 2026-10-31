@@ -324,15 +324,19 @@ setup_ssl_wizard() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || { [[ -n "$SSL_DOMAIN" ]] && SSL_MODE="domain"; return 0; }
     [[ -t 0 ]] || return 0
     render_stage "SSL setup"
+    colorized_echo cyan "Choose SSL setup method for panel installation:"
+    colorized_echo green "  1) Let's Encrypt Domain certificate"
+    colorized_echo green "  2) Let's Encrypt IP certificate (short-lived)"
+    colorized_echo green "  3) Custom certificate + key paths"
+    colorized_echo yellow "  4) Self-signed certificate (testing)"
+    colorized_echo yellow "  5) No SSL"
+    colorized_echo yellow "Port 80 (or configured --ssl-http-port) must be reachable for Let's Encrypt."
     local choice
-    choice="$(render_menu "SSL setup" \
-        domain "Let's Encrypt — domain certificate (requires port 80)" \
-        ip "Let's Encrypt — short-lived IP certificate" \
-        custom "Custom certificate + key paths" \
-        selfsigned "Self-signed certificate (testing)" \
-        none "No SSL — plain HTTP")"
+    read -p "Select SSL option [1-5] (default: 1): " choice
+    choice="${choice// /}"
+    [ -z "$choice" ] && choice="1"
     case "$choice" in
-    domain)
+    1)
         SSL_MODE="domain"
         while [[ -z "$SSL_DOMAIN" ]]; do
             SSL_DOMAIN="$(ask "domain for SSL certificate" "")"
@@ -341,7 +345,7 @@ setup_ssl_wizard() {
             is_domain "$SSL_DOMAIN" || { render_fail "domain" "invalid format: $SSL_DOMAIN"; SSL_DOMAIN=""; }
         done
         ;;
-    ip)
+    2)
         SSL_MODE="ip"
         local detected_ip input_ip
         detected_ip="$(get_public_ipv4 || true)"
@@ -355,7 +359,7 @@ setup_ssl_wizard() {
         if ! is_ipv4 "$input_ip"; then render_fail "IPv4" "invalid: $input_ip"; SSL_MODE="none"; return 0; fi
         SSL_IP="$input_ip"; INSTALL_IP_SSL=1
         ;;
-    custom)
+    3)
         SSL_MODE="custom"
         while true; do
             SSL_CERT_SRC="$(ask "full path to certificate file" "")"
@@ -370,14 +374,14 @@ setup_ssl_wizard() {
             render_fail "private key" "file not found/readable: $SSL_KEY_SRC"
         done
         ;;
-    selfsigned)
+    4)
         SSL_MODE="selfsigned"
         SELF_SIGNED_TARGET="$(ask "domain or IP for self-signed cert" "localhost")"
         SELF_SIGNED_TARGET="${SELF_SIGNED_TARGET// /}"
         [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
         INSTALL_SELF_SIGNED=1
         ;;
-    none|*) SSL_MODE="none" ;;
+    5|*) SSL_MODE="none" ;;
     esac
 }
 
@@ -789,13 +793,13 @@ do_install() {
     render_blank
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
-        section "Configuration"
+        colorized_echo blue "Configuration"
         prompt_interactive; setup_ssl_wizard
         if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
         [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
         _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
-        section "Docker"; setup_docker
-        section "Verification"
+        colorized_echo blue "Docker"; setup_docker
+        colorized_echo blue "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
         _ok "installed v$VERSION via Docker (port $PORT_VAL)"
         offer_node_and_logs docker
@@ -822,7 +826,7 @@ do_install() {
     has_systemd || die "systemd not found — a native install needs it"
     check_deps
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
-    section "Configuration"
+    colorized_echo blue "Configuration"
     prompt_interactive; setup_ssl_wizard
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
     _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
@@ -843,14 +847,14 @@ do_install() {
         fi
     fi
     local key port urlpath
-    section "Creating panel user"; ensure_panel_user
-    section "Download"; fetch_release "$dest"
-    section "Writing environment file"; write_env "$dest/.env" "$DATA_DIR"
+    colorized_echo blue "Creating panel user"; ensure_panel_user
+    colorized_echo blue "Download"; fetch_release "$dest"
+    colorized_echo blue "Writing environment file"; write_env "$dest/.env" "$DATA_DIR"
     key="$(mint_claim_key "$DATA_DIR/owner-claim.key")"
-    section "Installing systemd units"; write_systemd_unit "$dest"; write_backup_units "$dest"
-    section "Granting permissions"; grant_panel_access "$dest"
-    section "Installing CLI"; install_cli "$dest"; install_completion "$dest"
-    section "Service"
+    colorized_echo blue "Installing systemd units"; write_systemd_unit "$dest"; write_backup_units "$dest"
+    colorized_echo blue "Granting permissions"; grant_panel_access "$dest"
+    colorized_echo blue "Installing CLI"; install_cli "$dest"; install_completion "$dest"
+    colorized_echo blue "Service"
     systemctl daemon-reload
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then
         systemctl restart "$SYSTEMD_SERVICE" || die "Could not restart $SYSTEMD_SERVICE"
@@ -861,7 +865,7 @@ do_install() {
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && { write_acme_renew_units; enable_acme_renew_timer; }
     _ok "service $SYSTEMD_SERVICE started"
     if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
-        section "TLS (self-signed)"
+        colorized_echo blue "TLS (self-signed)"
         if "$dest/$APP_SLUG" tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
@@ -871,7 +875,7 @@ do_install() {
     fi
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
     if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
-        section "TLS (Let's Encrypt domain)"
+        colorized_echo blue "TLS (Let's Encrypt domain)"
         if "$dest/$APP_SLUG" tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "certificate issued for $SSL_DOMAIN"
@@ -880,7 +884,7 @@ do_install() {
         fi
     fi
     if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
-        section "TLS (Let's Encrypt IP)"
+        colorized_echo blue "TLS (Let's Encrypt IP)"
         if "$dest/$APP_SLUG" tls acme "$SSL_IP" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "IP certificate step done for $SSL_IP"
@@ -890,14 +894,14 @@ do_install() {
     fi
     port="$(awk -F= -v k=PORT '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; port="${port:-$DEFAULT_PORT}"
     urlpath="$(awk -F= -v k=URLPATH '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; urlpath="${urlpath:-$DEFAULT_URLPATH}"
-    section "Verification"
+    colorized_echo blue "Verification"
     verify_health "$port" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && verify_acme "$DATA_DIR"
     local display_path="${urlpath#/}"; display_path="${display_path%/}"
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
     if [[ -n "$key" ]]; then
-        section "Installation complete"
+        colorized_echo blue "Installation complete"
         _ok "URL     http://127.0.0.1:$port$display_path"
         _ok "Key     $key   (shown once — save it)"
         local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
@@ -968,9 +972,20 @@ USAGE
   bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)
 
 COMMANDS
+  install                    Install OVManager (default)
   update [--version vX.Y.Z]  Hand off to \`ovmanager update\`
   uninstall [--purge]        Remove panel, service, and CLI
   status                     Show installation status
+  up                         Start the panel
+  down                       Stop the panel
+  restart                    Restart the panel
+  logs                       Tail panel logs
+  cli                        Run the ovmanager CLI
+  backup                     Run a backup now
+  restore                    Restore a backup
+  edit-env                   Edit the .env file
+  install-script             (Re)install CLI + bash completion
+  install-node               Install OVNode on this server
   version-script             Print installer version and commit
   help                       Show this help
 
@@ -1021,10 +1036,74 @@ parse_args() {
             version-script|script-version) ACTION="version-script"; ACTION_GIVEN=1; shift ;;
             update) ACTION="update"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
             uninstall) ACTION="uninstall"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            up) ACTION="up"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            down) ACTION="down"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            restart) ACTION="restart"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            logs) ACTION="logs"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            cli) ACTION="cli"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            backup) ACTION="backup"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            restore) ACTION="restore"; ACTION_GIVEN=1; shift; UPDATE_ARGS=("$@"); break ;;
+            edit-env) ACTION="edit-env"; ACTION_GIVEN=1; shift ;;
+            install-script) ACTION="install-script"; ACTION_GIVEN=1; shift ;;
+            install-node) ACTION="install-node"; ACTION_GIVEN=1; shift ;;
             install|interactive) shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
     done
+}
+
+is_docker_install() { docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ovmanager'; }
+
+up_command() {
+    if is_docker_install; then
+        docker compose -f "$(compose_file)" up -d
+    else
+        "$INSTALL_DIR/$APP_SLUG" service start
+    fi
+}
+down_command() {
+    if is_docker_install; then
+        docker compose -f "$(compose_file)" down
+    else
+        "$INSTALL_DIR/$APP_SLUG" service stop
+    fi
+}
+restart_command() {
+    if is_docker_install; then
+        docker compose -f "$(compose_file)" restart
+    else
+        "$INSTALL_DIR/$APP_SLUG" service restart
+    fi
+}
+logs_command() {
+    if is_docker_install; then
+        docker logs -f ovmanager
+    else
+        "$INSTALL_DIR/$APP_SLUG" logs
+    fi
+}
+cli_command() { exec "$INSTALL_DIR/$APP_SLUG" "$@"; }
+backup_command() { "$INSTALL_DIR/$APP_SLUG" backup "$@"; }
+restore_command() { "$INSTALL_DIR/$APP_SLUG" restore "$@"; }
+edit_env_command() {
+    local editor="${EDITOR:-nano}"
+    command -v "$editor" >/dev/null 2>&1 || editor="vi"
+    "$editor" "$INSTALL_DIR/.env"
+}
+install_script_command() { install_cli "$INSTALL_DIR"; install_completion "$INSTALL_DIR"; }
+
+install_node_command() {
+    colorized_echo blue "=============================="
+    colorized_echo magenta "   Install OVNode   "
+    colorized_echo blue "=============================="
+    echo
+    if [ "$(id -u)" = "0" ]; then
+        colorized_echo blue "Running node installation as root..."
+        bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install
+    else
+        colorized_echo blue "Running node installation with sudo..."
+        sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install
+    fi
 }
 
 main() {
@@ -1034,6 +1113,16 @@ main() {
         update) do_update "${UPDATE_ARGS[@]}" ;;
         status) do_status; return 0 ;;
         uninstall) do_uninstall "${UPDATE_ARGS[@]}"; return 0 ;;
+        up) up_command; return 0 ;;
+        down) down_command; return 0 ;;
+        restart) restart_command; return 0 ;;
+        logs) logs_command; return 0 ;;
+        cli) shift; cli_command "$@"; return 0 ;;
+        backup) shift; backup_command "$@"; return 0 ;;
+        restore) shift; restore_command "$@"; return 0 ;;
+        edit-env) edit_env_command; return 0 ;;
+        install-script) install_script_command; return 0 ;;
+        install-node) install_node_command; return 0 ;;
     esac
     if [[ "$FROM_SOURCE" -eq 1 ]]; then do_from_source; else do_install; fi
 }
