@@ -362,3 +362,22 @@ func TestUsersKickEdgeCases(t *testing.T) {
 		t.Errorf("kicked = %v, want 0", data["kicked"])
 	}
 }
+
+func TestPurgeDeduplicatesIDs(t *testing.T) {
+	env := newPanelEnv(t)
+	for _, u := range []struct{ uuid, name string }{{"duplicate-a", "duplicate-a"}, {"duplicate-b", "duplicate-b"}} {
+		if _, err := env.conn.Exec(`INSERT INTO users (uuid, name, max_logins) VALUES (?, ?, 1)`, u.uuid, u.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, body := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/purge", env.token,
+		map[string]any{"user_ids": []string{"duplicate-a", "duplicate-a"}})
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("purge = %d %v, want 200", res.StatusCode, body)
+	}
+	data, _ := body["data"].(map[string]any)
+	if data["deleted"] != float64(1) {
+		t.Fatalf("deleted = %v, want 1", data["deleted"])
+	}
+}

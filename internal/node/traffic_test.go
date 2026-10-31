@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -415,5 +417,95 @@ func TestSyncTrafficBillsHealthyNodesBehindHangingOnes(t *testing.T) {
 		if got := userUsed(t, conn, 1); got != 700 {
 			t.Errorf("attempt %d: used = %d, want 700", attempt+1, got)
 		}
+	}
+}
+
+// If one node is unreachable after reset, its old baseline must not survive
+// the first successful poll of a different node.
+func TestReseedInvalidatesOfflineNodeBaselines(t *testing.T) {
+	conn := newTrafficDB(t)
+	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":500,"2":1000,"push_hash":{"2":"x"},"__reseed":true}`)
+	users, _ := loadTrafficUsers(conn)
+	_, _, billed := applyTrafficUser(conn, users[0], map[string]int64{"1": 600})
+	if billed != 0 {
+		t.Fatalf("first poll billed %d, want 0", billed)
+	}
+	state := userState(t, conn, 1)
+	if _, ok := state["2"]; ok {
+		t.Fatalf("offline node baseline survived reset: %v", state)
+	}
+	if state["push_hash"] == nil {
+		t.Fatalf("push hashes lost: %v", state)
+	}
+	users, _ = loadTrafficUsers(conn)
+	_, _, billed = applyTrafficUser(conn, users[0], map[string]int64{"1": 650, "2": 5000})
+	if billed != 50 || userUsed(t, conn, 1) != 50 {
+		t.Fatalf("recovered node should seed; billed=%d used=%d", billed, userUsed(t, conn, 1))
+	}
+	if got := userState(t, conn, 1)["2"]; got != float64(5000) {
+		t.Fatalf("recovered node baseline = %v, want 5000", got)
+	}
+}
+
+func TestSyncTrafficDefersAmbiguousNumericNames(t *testing.T) {
+	for _, reported := range []string{"123", "123-n1"} {
+		t.Run(reported, func(t *testing.T) {
+			resetForTests()
+			defer resetForTests()
+			conn := newTrafficDB(t)
+			seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{reported: int64(300), "alice": int64(700)}, 0))
+			seedTrafficUser(t, conn, 123, "alice", "0", `{"1":100}`)
+			seedTrafficUser(t, conn, 456, "123", "0", `{"1":100}`)
+			res := SyncTraffic(conn)
+			if len(res.AmbiguousKeys) != 1 || res.BytesBilled != 0 {
+				t.Fatalf("ambiguous result = %+v", res)
+			}
+			for _, id := range []int64{123, 456} {
+				if userUsed(t, conn, id) != 0 || userState(t, conn, id)["1"] != float64(100) {
+					t.Fatalf("user %d changed despite ambiguous key", id)
+				}
+			}
+		})
+	}
+}
+
+func TestSyncTrafficSerializesSnapshots(t *testing.T) {
+	resetForTests()
+	defer resetForTests()
+	conn := newTrafficDB(t)
+	firstEntered := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondEntered := make(chan struct{}, 1)
+	var count atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := count.Add(1)
+		if n == 1 {
+			close(firstEntered)
+			<-releaseFirst
+		} else {
+			secondEntered <- struct{}{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"totals":{"alice":%d}}}`, n*100)
+	}))
+	defer srv.Close()
+	seedTrafficNode(t, conn, 1, "n1", srv)
+	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
+	done := make(chan TrafficResult, 2)
+	go func() { done <- SyncTraffic(conn) }()
+	<-firstEntered
+	go func() { done <- SyncTraffic(conn) }()
+	select {
+	case <-secondEntered:
+		close(releaseFirst)
+		<-done
+		<-done
+		t.Fatal("second snapshot started before the first was applied")
+	case <-time.After(150 * time.Millisecond):
+	}
+	close(releaseFirst)
+	first, second := <-done, <-done
+	if first.BytesBilled+second.BytesBilled != 200 || userUsed(t, conn, 1) != 200 {
+		t.Fatalf("results = %+v, %+v; used = %d", first, second, userUsed(t, conn, 1))
 	}
 }

@@ -80,6 +80,12 @@ func (h *Handler) trafficTick() {
 // accounting package cannot write the event itself (internal/telemetry
 // imports internal/node, so the reverse would be an import cycle).
 func recordAliasCollisions(db *sql.DB, res node.TrafficResult) {
+	for _, msg := range res.AmbiguousKeys {
+		log.Printf("traffic: ambiguous usage key; accounting deferred: %s", msg)
+		telemetry.RecordEvent(db, "traffic_ambiguous_key", "warning",
+			"A node usage key matches both a username and another user's ID; accounting for both users on that node was deferred.",
+			map[string]any{"target": msg, "detail": msg})
+	}
 	for _, msg := range res.AliasCollisions {
 		log.Printf("traffic: alias keys for one user: %s", msg)
 		telemetry.RecordEvent(db, "traffic_alias_keys", "warning",
@@ -91,6 +97,8 @@ func recordAliasCollisions(db *sql.DB, res node.TrafficResult) {
 // syncTraffic is POST /maintenance/sync-traffic: run one accounting pass now
 // and return its TrafficResult envelope.
 func (h *Handler) syncTraffic(w http.ResponseWriter, r *http.Request) {
-	res := runTrafficSync(h.Svc.DB())
+	db := h.Svc.DB()
+	res := runTrafficSync(db)
+	recordAliasCollisions(db, res)
 	envelope(w, true, "Traffic synced", res)
 }

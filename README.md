@@ -67,6 +67,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 - Usage collected every five minutes from every node, counted as the increase over the last reading — short sessions, disconnects and restarts cannot double-count, and a total that shrinks bills zero.
 - Quota crossings enforced immediately after the tick that detects them; expiry-only cases caught by a separate ten-minute sweep.
 - Conditional database writes, so an admin action landing mid-tick becomes a no-op rather than being overwritten by stale data.
+- If a legacy numeric username collides with another user’s numeric ID, accounting for those users on that node is deferred and a warning is recorded until the ambiguity is resolved; neither account is charged by guessing.
 - Warnings from 80% of quota, caught at the tick that detects them.
 - Device limits enforced on the node, from 1 (a new connection takes over) through N (the N+1th is rejected) to 0 (unlimited).
 
@@ -114,7 +115,9 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.1.8/install.sh)
 ```
 
-The installer fetches the bare release binary for this platform (plus its SHA-256 sidecar, verified before install), puts it in `/opt/ovmanager`, writes a systemd service and a daily backup timer, starts the panel and health-checks the result. There is nothing to prompt for; `-y` is accepted for compatibility and the script never asks questions mid-run. `bash install.sh --help` prints the full surface.
+The installer defaults to Docker; use `--native` to install the verified release binary as a systemd service with a daily backup timer. Both paths start and health-check the panel. Use `interactive` or `--interactive` to configure it and optionally install OVNode on the same server; `-y` skips prompts. The panel URL and claim key are shown after the optional node installer and before following logs. `bash install.sh --help` prints the full surface.
+
+If a previous failed OVNode attempt left `/opt/ovnode` behind, the node installer may treat that directory as an existing installation. Inspect it before retrying; do not remove it if it contains an existing node's configuration or data.
 
 The command above pulls `install.sh` from the tagged release (v2.1.2, matching the binary's version constant), not from `main`, so a `main` change cannot silently change what root executes. The binary's SHA-256 is verified at install time against the sidecar shipped with that release; the installer script itself is not separately checksum-verified — there is no published sidecar for it, so only the binary's integrity is checked.
 
