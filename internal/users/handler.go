@@ -7,6 +7,7 @@ package users
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -587,41 +588,76 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		userNotFound(w)
 		return
 	}
-	var count int64
-	if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
-		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
-		return
-	}
-	if count <= 1 {
-		auth.WriteDetail(w, http.StatusConflict, "You must keep at least one user — create another before deleting this one")
+	if _, err := h.deleteRow(row, false); err != nil {
+		if errors.Is(err, errKeepLastUser) {
+			auth.WriteDetail(w, http.StatusConflict, "You must keep at least one user — create another before deleting this one")
+		} else if errors.Is(err, errUserAlreadyDeleted) {
+			userNotFound(w)
+		} else {
+			auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
+		}
 		return
 	}
 	_ = h.remember(row)
-	if err := h.deleteRow(row); err != nil {
-		auth.WriteDetail(w, http.StatusInternalServerError, "Could not delete user")
-		return
-	}
 	audit.Record(h.Svc.DB(), h.actor(r), "user.delete", "warning",
 		"User deleted.", map[string]any{"target": row.Name})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
 }
 
-// deleteRow is the one shared user-delete path: traffic rows, users row, then
-// the node fan-out. A node we cannot reach must not fail the panel-side
-// delete: the row is already gone, so log and move on rather than leaving the
-// request stuck (no partial-failure state).
-func (h *Handler) deleteRow(row userRow) error {
-	if _, err := h.Svc.DB().Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
-		return err
+var (
+	errKeepLastUser       = errors.New("must keep at least one user")
+	errUserAlreadyDeleted = errors.New("user already deleted")
+)
+
+// deleteRow atomically enforces the keep-one rule and removes traffic history.
+// The guarded DELETE is itself a write, so SQLite serializes competing deletes
+// before evaluating the count. Node calls only happen after the commit.
+func (h *Handler) deleteRow(row userRow, kick bool) ([]string, error) {
+	db := h.Svc.DB()
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
 	}
-	if _, err := h.Svc.DB().Exec(`DELETE FROM users WHERE id = ?`, row.ID); err != nil {
-		return err
+	defer tx.Rollback()
+	// Delete dependent history first for databases with foreign keys. The
+	// transaction acquires the write lock here and rolls this back if the
+	// subsequent keep-one check rejects the user deletion.
+	if _, err := tx.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, row.ID); err != nil {
+		return nil, err
 	}
-	if failures, _ := node.DeleteUserOnAllNodes(row.ID, h.Svc.DB())["failed"].([]string); len(failures) > 0 {
-		log.Printf("users: user %s deleted panel-side; node fan-out failed on %v", row.Name, failures)
+	res, err := tx.Exec(`DELETE FROM users WHERE id = ? AND uuid = ? AND (SELECT COUNT(*) FROM users) > 1`, row.ID, row.UUID)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		var exists int
+		err := tx.QueryRow(`SELECT 1 FROM users WHERE id = ? AND uuid = ?`, row.ID, row.UUID).Scan(&exists)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errUserAlreadyDeleted
+		}
+		if err != nil {
+			return nil, err
+		}
+		return nil, errKeepLastUser
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	var failures []string
+	if kick {
+		_, failures = h.kickUserNodes(row)
+	}
+	if failed, _ := node.DeleteUserOnAllNodes(row.ID, db)["failed"].([]string); len(failed) > 0 {
+		log.Printf("users: user %s deleted panel-side; node fan-out failed on %v", row.Name, failed)
+		failures = append(failures, failed...)
+	}
+	return failures, nil
 }
 
 // remember stores a deleted user snapshot for undo.

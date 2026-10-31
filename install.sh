@@ -604,29 +604,78 @@ uninstall_completion() {
     fi
 }
 
+# OVNode's installer currently bootstraps its helpers into APP_DIR before it
+# checks whether APP_DIR exists. Preserve the pre-bootstrap state when this
+# exact upstream ordering is present; do not remove or overwrite existing nodes.
+run_node_installer() {
+    local script before='    load_helpers' check='    # install
+    if [[ -d "$APP_DIR" ]]; then'
+    local snapshot='    local ovm_node_dir_existed=0
+    [[ -d "$APP_DIR" ]] && ovm_node_dir_existed=1
+    load_helpers'
+    local fixed_check='    # install
+    if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
+    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" || [[ -z "$script" ]]; then
+        _warn "Could not download the OVNode installer."
+        return 1
+    fi
+    # Match both the call and the later install check, not similarly named
+    # helpers in a future installer. If upstream fixes this, leave it alone.
+    if [[ "$script" == *"$before"*"$check"* && "$script" == *'load_helpers() {'* ]]; then
+        script="${script/"$before"/"$snapshot"}"
+        script="${script/"$check"/"$fixed_check"}"
+    fi
+    if [[ "$EUID" -eq 0 ]]; then
+        bash -c "$script"
+    else
+        sudo bash -c "$script"
+    fi
+}
+
+# Print after the node installer (which clears the terminal), and before any
+# unbounded log follow. Never read an old claim key merely to display it.
+show_install_summary() {
+    local port="$1" urlpath="$2" key="$3" display_path host_ip scheme=http
+    display_path="${urlpath#/}"; display_path="${display_path%/}"
+    [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
+    if curl -fsSk --max-time 3 "https://127.0.0.1:${port}/health" >/dev/null 2>&1; then
+        scheme=https
+    fi
+    colorized_echo blue "Installation complete"
+    _ok "URL     ${scheme}://127.0.0.1:$port$display_path"
+    if [[ -n "$key" ]]; then
+        _ok "Key     $key   (shown once — save it)"
+    elif [[ -f "$DATA_DIR/owner-claim.key" ]]; then
+        _note "existing claim key kept at $DATA_DIR/owner-claim.key"
+    else
+        _note "No new claim key was created (the panel may already be claimed)."
+    fi
+    host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
+    _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
+    _note "Open the URL through the SSH tunnel to access the panel."
+    [[ -n "$key" ]] && _note "Paste the key to claim the panel and set your password."
+    return 0
+}
+
 offer_node_and_logs() {
-    local mode="${1:-native}"
-    local choice
+    local mode="${1:-native}" port="$2" urlpath="$3" key="${4:-}" choice=""
     if [[ "$INTERACTIVE" -ne 1 || "$YES" -eq 1 || ! -t 0 ]]; then
         _note "Skipping optional OVNode/logs prompts (non-interactive)."
+        show_install_summary "$port" "$urlpath" "$key"
         return 0
     fi
     echo
-    colorized_echo blue "=============================="
     colorized_echo yellow "OVManager installed."
-    echo
-    read -p "Do you want to install OVNode on the same server? (y/n) " choice || true
+    read -r -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
-        if [ "$(id -u)" = "0" ]; then
-            bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" || _warn "OVNode installation failed."
-        else
-            sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" || _warn "OVNode installation failed."
-        fi
+        run_node_installer || _warn "OVNode installation failed; the panel remains installed."
     else
         _note "Skipping OVNode installation."
     fi
+    show_install_summary "$port" "$urlpath" "$key"
     echo
-    read -p "Follow service logs? (y/n) " choice || true
+    choice=""
+    read -r -p "Follow service logs? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         if [[ "$mode" == "docker" ]]; then
             docker logs -f ovmanager
@@ -789,14 +838,26 @@ write_compose_file() {
 setup_docker() {
     ensure_docker; write_compose_file
     mkdir -p "$DATA_DIR"
-    local c_user
-    c_user="$(docker inspect -f '{{.Config.User}}' "${IMAGE_REPO}:${VERSION}" 2>/dev/null || echo "")"
-    if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" ]]; then
-        chown -R "$c_user" "$DATA_DIR" 2>/dev/null || chown -R 65532:65532 "$DATA_DIR" 2>/dev/null || true
-    fi
-    chmod 700 "$DATA_DIR" 2>/dev/null || true
     _note "pulling ${IMAGE_REPO}:${VERSION}"
     docker pull "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1 || _warn "pull failed; continuing with cached image"
+    local c_user
+    c_user="$(docker inspect -f '{{.Config.User}}' "${IMAGE_REPO}:${VERSION}" 2>/dev/null || echo "")"
+    # The published distroless image declares USER nonroot, which need not
+    # exist in the host's passwd database. Its numeric uid/gid are 65532.
+    [[ "$c_user" == "nonroot" ]] && c_user="65532:65532"
+    if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" && "$c_user" != "0:0" ]]; then
+        chown -R "$c_user" "$DATA_DIR" || die "Could not grant the container access to $DATA_DIR"
+    fi
+    chmod 700 "$DATA_DIR" 2>/dev/null || true
+    # Mint only on a fresh database; never replace an existing panel identity.
+    DOCKER_CLAIM_KEY=""
+    if [[ ! -e "$DATA_DIR/ovmanager.db" && ! -e "$DATA_DIR/owner-claim.key" ]]; then
+        DOCKER_CLAIM_KEY="$(openssl rand -hex 16)" || die "Could not create claim key"
+        ( umask 077; printf '%s\n' "$DOCKER_CLAIM_KEY" > "$DATA_DIR/owner-claim.key" )
+        if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" && "$c_user" != "0:0" ]]; then
+            chown "$c_user" "$DATA_DIR/owner-claim.key" || die "Could not grant the container access to the claim key"
+        fi
+    fi
     _note "starting container"
     docker compose -f "$(compose_file)" up -d
     _ok "container started"
@@ -828,6 +889,7 @@ do_install() {
     fi
     if [[ "$DOCKER" -eq 1 ]]; then
         check_root
+        check_deps
         colorized_echo blue "Configuration"
         prompt_interactive; setup_ssl_wizard
         if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
@@ -837,7 +899,7 @@ do_install() {
         colorized_echo blue "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
         _ok "installed v$VERSION via Docker (port $PORT_VAL)"
-        offer_node_and_logs docker
+        offer_node_and_logs docker "$PORT_VAL" "$URLPATH_VAL" "$DOCKER_CLAIM_KEY"
         return 0
     fi
     local dest="${DEST:-$INSTALL_DIR}"
@@ -933,26 +995,7 @@ do_install() {
     verify_health "$port" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
     [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && verify_acme "$DATA_DIR"
-    local display_path="${urlpath#/}"; display_path="${display_path%/}"
-    [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
-    if [[ -n "$key" ]]; then
-        colorized_echo blue "Installation complete"
-        if [[ "$SSL_MODE" == "none" ]]; then
-            _ok "URL     http://127.0.0.1:$port$display_path"
-        else
-            _ok "URL     https://127.0.0.1:$port$display_path"
-        fi
-        _ok "Key     $key   (shown once — save it)"
-        local host_ip; host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
-        _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
-        _note "Next steps:"
-        _note "  - open the URL above and paste the key to claim the panel"
-        _note "  - run 'ovmanager tls' to issue or manage a TLS certificate"
-        _note "  - run 'ovmanager status' to check the service"
-    else
-        _note "existing claim key kept at $DATA_DIR/owner-claim.key"
-    fi
-    offer_node_and_logs native
+    offer_node_and_logs native "$port" "$urlpath" "$key"
 }
 
 do_update() {
@@ -1089,7 +1132,8 @@ parse_args() {
             edit-env) ACTION="edit-env"; ACTION_GIVEN=1; shift ;;
             install-script) ACTION="install-script"; ACTION_GIVEN=1; shift ;;
             install-node) ACTION="install-node"; ACTION_GIVEN=1; shift ;;
-            install|interactive) shift ;;
+            install) shift ;;
+            interactive) INTERACTIVE=1; shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
     done
@@ -1140,13 +1184,7 @@ install_node_command() {
     colorized_echo magenta "   Install OVNode   "
     colorized_echo blue "=============================="
     echo
-    if [ "$(id -u)" = "0" ]; then
-        colorized_echo blue "Running node installation as root..."
-        bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install
-    else
-        colorized_echo blue "Running node installation with sudo..."
-        sudo bash -c "$(curl -sL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)" @ install
-    fi
+    run_node_installer
 }
 
 main() {

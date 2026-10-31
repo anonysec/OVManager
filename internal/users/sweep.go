@@ -8,6 +8,7 @@
 package users
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,8 +67,14 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := make([]userRow, 0, len(req.UserIDs))
+	seen := map[string]bool{}
 	for _, uuidStr := range req.UserIDs {
-		if row, ok := h.byUUID(strings.TrimSpace(uuidStr)); ok {
+		uuidStr = strings.TrimSpace(uuidStr)
+		if seen[uuidStr] {
+			continue
+		}
+		seen[uuidStr] = true
+		if row, ok := h.byUUID(uuidStr); ok {
 			rows = append(rows, row)
 		}
 	}
@@ -77,18 +84,24 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deleted := 0
+	failedUsers := 0
+	keepLast := false
 	skipped := map[string]bool{}
 	for _, row := range rows {
-		// Revoke the user's sessions first, then remove panel-side; a dead
-		// node only lands in the skipped count, mirroring the single delete.
-		_, failed := h.kickUserNodes(row)
+		failed, err := h.deleteRow(row, true)
+		if err != nil {
+			failedUsers++
+			keepLast = keepLast || errors.Is(err, errKeepLastUser)
+			continue
+		}
 		for _, name := range failed {
 			skipped[name] = true
 		}
-		if err := h.deleteRow(row); err != nil {
-			continue
-		}
 		deleted++
+	}
+	if deleted == 0 && keepLast {
+		auth.WriteDetail(w, http.StatusConflict, "You must keep at least one user — create another before deleting this one")
+		return
 	}
 	if deleted > 0 {
 		telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
@@ -97,10 +110,14 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 	for name := range skipped {
 		list = append(list, name)
 	}
+	message := "Users purged successfully"
+	if failedUsers > 0 {
+		message = "Some users could not be purged"
+	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
-		Msg:     "Users purged successfully",
-		Data:    map[string]any{"deleted": deleted, "nodes_skipped": list},
+		Msg:     message,
+		Data:    map[string]any{"deleted": deleted, "failed": failedUsers, "nodes_skipped": list},
 	})
 }
 

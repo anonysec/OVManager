@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/anonysec/OVManager/go/internal/billing"
 )
@@ -24,6 +25,10 @@ type TrafficResult struct {
 	// SyncTraffic), but the collision is reported so a node whose keying has
 	// drifted is visible instead of silent.
 	AliasCollisions []string
+	// AmbiguousKeys identifies usage keys that could refer to two different
+	// users (a numeric ID and a legacy username). They are not billed until
+	// the ambiguity is resolved, rather than charging the wrong account.
+	AmbiguousKeys []string
 }
 
 // trafficFanoutDeadline bounds one usage pass. A var so tests need not wait the
@@ -41,8 +46,15 @@ type trafficUser struct {
 	state string // raw node_usage JSON
 }
 
+// Serialize the entire snapshot and apply operation, not just the writes: an
+// older in-flight snapshot applied after a newer one looks like a reset and
+// would bill the same bytes again. This covers manual and background passes.
+var trafficSyncLock sync.Mutex
+
 // SyncTraffic bills every user's cumulative node-total delta in one pass.
 func SyncTraffic(db *sql.DB) TrafficResult {
+	trafficSyncLock.Lock()
+	defer trafficSyncLock.Unlock()
 	res := TrafficResult{}
 	nodes := getActiveNodes(db)
 	users, byName := loadTrafficUsers(db)
@@ -66,6 +78,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	raw := GatherNodes(calls, trafficFanoutDeadline)
 
 	contribs := map[int64]map[string]int64{}
+	ambiguous := map[int64]map[string]bool{}
 	// aliasKeys remembers the first reported key per (user, node) so a
 	// collision can name both keys.
 	aliasKeys := map[int64]map[string]string{}
@@ -93,19 +106,29 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		res.NodesPolled++
 		nodeKey := strconv.FormatInt(n.ID, 10)
 		for reported, rawTotal := range totals {
-			resolved := reported
-			if mapped, ok := idToName[reported]; ok {
-				resolved = mapped
-			} else {
-				suffix := "-" + n.Name
-				if strings.HasSuffix(reported, suffix) {
-					base := reported[:len(reported)-len(suffix)]
-					if mapped, ok := idToName[base]; ok {
-						resolved = mapped + suffix
-					}
-				}
+			// Older nodes report names, newer ones report numeric IDs. A
+			// numeric name may also be another user's ID; the payload has no
+			// way to disambiguate it, so do not guess and charge either user.
+			name := billing.ExtractUsername(reported, n.Name, known)
+			idKey := reported
+			if _, ok := idToName[idKey]; !ok {
+				idKey = strings.TrimSuffix(reported, "-"+n.Name)
 			}
-			u, ok := byName[billing.ExtractUsername(resolved, n.Name, known)]
+			if mapped, ok := idToName[idKey]; ok {
+				if known[name] && name != mapped {
+					res.AmbiguousKeys = append(res.AmbiguousKeys,
+						fmt.Sprintf("node=%s key=%s users=%s,%s", n.Name, reported, name, mapped))
+					for _, u := range []trafficUser{byName[name], byName[mapped]} {
+						if ambiguous[u.id] == nil {
+							ambiguous[u.id] = map[string]bool{}
+						}
+						ambiguous[u.id][nodeKey] = true
+					}
+					continue
+				}
+				name = mapped
+			}
+			u, ok := byName[name]
 			if !ok {
 				continue
 			}
@@ -140,6 +163,11 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 
 	for _, u := range users {
 		c := contribs[u.id]
+		// Skip the entire node contribution for both affected users, even
+		// if another alias was also reported, to keep their baselines intact.
+		for key := range ambiguous[u.id] {
+			delete(c, key)
+		}
 		if len(c) == 0 {
 			continue
 		}
@@ -178,6 +206,14 @@ func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64) (bil
 		}
 		_, reseed := data[ReseedMarkerKey]
 		if reseed {
+			// Invalidate *all* old baselines, including nodes that did not
+			// answer this pass. Each node will seed independently when it
+			// next reports, rather than billing its pre-reset traffic.
+			for key := range data {
+				if !IsReservedUsageKey(key) {
+					delete(data, key)
+				}
+			}
 			delete(data, ReseedMarkerKey)
 		}
 
