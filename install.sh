@@ -615,7 +615,7 @@ run_node_installer() {
     load_helpers'
     local fixed_check='    # install
     if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
-    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.5/install.sh)" || [[ -z "$script" ]]; then
+    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.6/install.sh)" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
     fi
