@@ -30,7 +30,7 @@ ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
 YES=0
 FROM_SOURCE=0
-DOCKER=0
+DOCKER="${OVM_DOCKER:-1}"
 SRC=""
 DEST=""
 ACTION="install"
@@ -958,13 +958,14 @@ OPTIONS
   --acme DOMAIN              Let's Encrypt certificate for DOMAIN
   --build [DIR]              Dev install from a working tree
   --dest DIR                 with --build: destination
-  --docker                   Install/run via Docker
+  --docker                   Install/run via Docker (default)
+  --native                   Install native binary (systemd) instead of Docker
   --ssl MODE                 SSL mode: domain|ip|custom|selfsigned|none
   -h, --help                 Show this help
 
 ENVIRONMENT
   OVM_PORT, OVM_URLPATH, OVM_ACME_DOMAIN, OVM_SSL_MODE
-  OVM_PANEL_USER, OVM_BIN_DIR, OVM_REPO
+  OVM_PANEL_USER, OVM_BIN_DIR, OVM_REPO, OVM_DOCKER
 EOF
     exit 0
 }
@@ -989,6 +990,7 @@ parse_args() {
             --ssl)  [[ $# -ge 2 ]] || die "--ssl needs a mode"; SSL_MODE="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
             --docker) DOCKER=1; shift ;;
+            --native) DOCKER=0; shift ;;
             -y|--yes) YES=1; shift ;;
             -h|--help) usage ;;
             help) usage ;;
