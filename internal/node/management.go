@@ -852,14 +852,14 @@ func (h *Handler) nodeByID(r *http.Request) *Node {
 	return GetNodeByID(h.svc.DB(), id)
 }
 
-func decodeBody(r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(nil, r.Body, 1024*1024)
+func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	return json.NewDecoder(r.Body).Decode(v) == nil
 }
 
 func (h *Handler) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	var req nodeCreate
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
@@ -889,7 +889,7 @@ func (h *Handler) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 	var req nodeCreate
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
@@ -925,7 +925,7 @@ func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	var req nodeCreate
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
@@ -990,7 +990,7 @@ func (h *Handler) handleNodeDNS(w http.ResponseWriter, r *http.Request) {
 		DNS1 *string `json:"dns1"`
 		DNS2 *string `json:"dns2"`
 	}
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
@@ -1017,7 +1017,7 @@ func (h *Handler) handleNodeIPv6(w http.ResponseWriter, r *http.Request) {
 		EnableIPv6 *bool   `json:"enable_ipv6"`
 		IPv6Prefix *string `json:"ipv6_prefix"`
 	}
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
@@ -1043,7 +1043,7 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ExtraPorts *string `json:"extra_ports"`
 	}
-	if !decodeBody(r, &req) {
+	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
 		return
 	}
