@@ -438,16 +438,16 @@ func (w *Worker) sendOnce(p Settings, key, text, day string) bool {
 // SummaryText is the daily usage report: users by state, the expiring-in-3-days
 // batch (the alert_days_left window), and nothing else — concise on purpose.
 func SummaryText(db *sql.DB, now time.Time) string {
-	rows, err := db.Query(`SELECT name, COALESCE(total,0), COALESCE(used,0), COALESCE(expiry_date,''), COALESCE(is_active,1) FROM users`)
-	if err != nil {
-		return ""
-	}
-	defer rows.Close()
 	today := now.Format("2006-01-02")
 	var daysLeft = 3
 	if v := alertDaysLeft(db); v > 0 {
 		daysLeft = v
 	}
+	rows, err := db.Query(`SELECT name, COALESCE(total,0), COALESCE(used,0), COALESCE(expiry_date,''), COALESCE(is_active,1) FROM users`)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
 	total, active, disabled, expired, quota := 0, 0, 0, 0, 0
 	expiring := []string{}
 	for rows.Next() {

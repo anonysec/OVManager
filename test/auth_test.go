@@ -335,7 +335,7 @@ func TestOwnerClaimNoKey(t *testing.T) {
 	res, body := doJSON(t, http.MethodPost, srv.URL+"/api/owner-claim", "",
 		map[string]any{"claim_key": "x", "password": "supersecret1"})
 	res.Body.Close()
-	if res.StatusCode != 400 || body["detail"] != "No claim key on this host. Run: ovm auth key" {
+	if res.StatusCode != 400 || body["detail"] != "No claim key on this host. Run: ovmanager auth key" {
 		t.Fatalf("no key = %d %v", res.StatusCode, body)
 	}
 }

@@ -1,5 +1,5 @@
 // TLS E2E: the TLS card is gone from panel Settings (cert management lives in
-// the `ovm tls` CLI now), and an authenticated session renders the app
+// the `ovmanager tls` CLI now), and an authenticated session renders the app
 // against the live panel.
 import { test, expect } from '@playwright/test';
 

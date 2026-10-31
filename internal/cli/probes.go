@@ -3,14 +3,17 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -54,9 +57,8 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 			if pinnedDER == nil {
 				pinnedDER = cert.Raw
 			}
-			pool.AppendCertsFromPEM(block.Bytes)
+			pool.AddCert(cert)
 		}
-		break
 	}
 	if pinnedDER == nil {
 		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
@@ -66,17 +68,8 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 		SessionTicketsDisabled: true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			for _, der := range rawCerts {
-				if len(der) == len(pinnedDER) {
-					match := true
-					for i := range der {
-						if der[i] != pinnedDER[i] {
-							match = false
-							break
-						}
-					}
-					if match {
-						return nil
-					}
+				if bytes.Equal(der, pinnedDER) {
+					return nil
 				}
 			}
 			// Fallback: accept if any presented cert chains to the pinned pool.
@@ -89,7 +82,7 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 					return nil
 				}
 			}
-			return &tls.CertificateVerificationError{}
+			return errors.New("tls: certificate verification failed (pinned leaf and chain mismatch)")
 		},
 	}
 }
@@ -183,4 +176,49 @@ func containsWord(haystack, word string) bool {
 		}
 	}
 	return false
+}
+
+// healthURLs returns candidate health URLs for an install, trying the declared
+// scheme first and the other scheme as a fallback so a stale/incorrect TLS
+// detection cannot by itself fail a probe.
+func healthURLs(inst Install) []string {
+	urls := []string{inst.HealthURL()}
+	other := "http"
+	if inst.Scheme() == "http" {
+		other = "https"
+	}
+	alt := other + "://127.0.0.1:" + strconv.Itoa(inst.Port) + "/health"
+	if alt != urls[0] {
+		urls = append(urls, alt)
+	}
+	return urls
+}
+
+func fetchHealthAny(urls []string, timeout time.Duration, cafile string) (bool, string) {
+	for _, u := range urls {
+		if reachable, reported := FetchHealth(u, timeout, cafile); reachable {
+			return true, reported
+		}
+	}
+	return false, "?"
+}
+
+func probeTimeout() time.Duration {
+	if v := os.Getenv("OVM_PROBE_TIMEOUT"); v != "" {
+		if sec, err := strconv.Atoi(v); err == nil && sec > 0 {
+			return time.Duration(sec) * time.Second
+		}
+	}
+	return 2 * time.Second
+}
+
+func waitHealthAny(urls []string, tries int, cafile string) (bool, string) {
+	timeout := probeTimeout()
+	for i := 0; i < tries; i++ {
+		if reachable, reported := fetchHealthAny(urls, timeout, cafile); reachable {
+			return true, reported
+		}
+		time.Sleep(time.Second)
+	}
+	return false, "?"
 }

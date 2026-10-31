@@ -1,4 +1,4 @@
-// CLI reuse API (Phase 5). The ovm subcommands reuse the panel's own backup,
+// CLI reuse API (Phase 5). The ovmanager subcommands reuse the panel's own backup,
 // restore and urlpath transactions rather than re-implementing them, so there
 // is exactly one implementation of each (cli).
 //

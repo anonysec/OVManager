@@ -164,7 +164,7 @@ ovmanager logs</code></pre>
           </tr>
           <tr>
             <td>3</td>
-            <td><strong>API key.</strong> An exact copy with no extra spaces. Run <code>sudo ovn credentials</code> on the node to reprint the name, the key and the panel bundle rather than retyping them.</td>
+            <td><strong>API key.</strong> An exact copy with no extra spaces. Run <code>sudo ovnode credentials</code> on the node to reprint the name, the key and the panel bundle rather than retyping them.</td>
           </tr>
           <tr>
             <td>4</td>
@@ -172,7 +172,7 @@ ovmanager logs</code></pre>
           </tr>
           <tr>
             <td>5</td>
-            <td><strong>Name.</strong> The panel's node name must equal the node's <code>--name</code> exactly. <code>ovn credentials</code> prints it.</td>
+            <td><strong>Name.</strong> The panel's node name must equal the node's <code>--name</code> exactly. <code>ovnode credentials</code> prints it.</td>
           </tr>
           <tr>
             <td>6</td>
@@ -254,7 +254,7 @@ ovmanager logs</code></pre>
     </p>
     <figure class="cmd">
       <figcaption>On the VPN server</figcaption>
-      <pre><code>ovn status                                   # summary + health
+      <pre><code>ovnode status                                   # summary + health
 curl -sk https://127.0.0.1:2083/sync/health  # expect {"status":"ok"}
 journalctl -u ovnode -f                      # host logs
 docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
@@ -270,12 +270,12 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
         mounts it; on unusual kernels run <code>modprobe tun</code> on the host.
       </li>
       <li>
-        After changing ports or TLS, run <code>ovn update</code>, or reinstall
+        After changing ports or TLS, run <code>ovnode update</code>, or reinstall
         with the same <code>OVN_NAME</code> &mdash; the data in
         <code>/etc/openvpn</code> and <code>/var/lib/ovnode</code> is kept.
       </li>
       <li>
-        <code>ovn doctor --fix</code> checks the agent, OpenVPN, disk space, the
+        <code>ovnode doctor --fix</code> checks the agent, OpenVPN, disk space, the
         certificate and recent backups, and applies the safe repairs.
       </li>
     </ul>
@@ -289,7 +289,7 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
       </li>
       <li>
         The Let's Encrypt <strong>IP</strong> mode issues a short-lived
-        certificate by design. Check the expiry in <code>ovn status</code>, and
+        certificate by design. Check the expiry in <code>ovnode status</code>, and
         use a domain for a long-lived one.
       </li>
     </ul>

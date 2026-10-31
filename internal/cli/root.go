@@ -1,4 +1,4 @@
-// `ovm` cobra root: one binary that is both the panel and the operator CLI
+// `ovmanager` cobra root: one binary that is both the panel and the operator CLI
 // (Phase 5). Global flags are accepted before or after the subcommand.
 package cli
 
@@ -64,7 +64,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf := root.PersistentFlags()
 	pf.StringVar(&a.installDir, "install-dir", "", "override install dir (default: $OVM_APP_DIR or /opt/ovmanager)")
 	pf.StringVar(&a.dataDir, "data-dir", "", "override data dir")
-	pf.BoolVar(&a.inContainer, "in-container", false, "running inside the panel container (set by ovm)")
+	pf.BoolVar(&a.inContainer, "in-container", false, "running inside the panel container (set by ovmanager)")
 	pf.StringVar(&a.serviceState, "service-state", "", "service state reported by the host (running/stopped/unknown)")
 	pf.StringVar(&a.publicIP, "public-ip", "", "the host's primary IP")
 	pf.BoolVarP(&a.showAll, "all", "a", false, "show all fields")

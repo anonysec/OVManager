@@ -14,7 +14,7 @@ DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
 DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="${OVM_VERSION:-2.2.1}"
+VERSION="${OVM_VERSION:-2.3.0}"
 IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
@@ -787,7 +787,11 @@ write_compose_file() {
 setup_docker() {
     ensure_docker; write_compose_file
     mkdir -p "$DATA_DIR"
-    chown -R 65532:65532 "$DATA_DIR" 2>/dev/null || true
+    local c_user
+    c_user="$(docker inspect -f '{{.Config.User}}' "${IMAGE_REPO}:${VERSION}" 2>/dev/null || echo "")"
+    if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" ]]; then
+        chown -R "$c_user" "$DATA_DIR" 2>/dev/null || chown -R 65532:65532 "$DATA_DIR" 2>/dev/null || true
+    fi
     chmod 700 "$DATA_DIR" 2>/dev/null || true
     _note "pulling ${IMAGE_REPO}:${VERSION}"
     docker pull "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1 || _warn "pull failed; continuing with cached image"

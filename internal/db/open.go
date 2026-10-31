@@ -7,6 +7,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 
 	_ "modernc.org/sqlite" // pure-Go driver, no cgo
 )
@@ -36,5 +37,6 @@ func Open(path string) (*sql.DB, error) {
 		_ = conn.Close()
 		return nil, fmt.Errorf("ping sqlite %s: %w", path, err)
 	}
+	_ = os.Chmod(path, 0o600)
 	return conn, nil
 }

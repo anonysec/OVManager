@@ -1,4 +1,4 @@
-// `ovm update` — the staged update transaction, ported from install.sh
+// `ovmanager update` — the staged update transaction, ported from install.sh
 // do_update (Phase 5). backup → stage → maintenance → activate → verify
 // (systemd restart + health check against the URL from .env) → commit, with
 // automatic failover on a failed candidate.
@@ -24,7 +24,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -356,7 +355,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 	if reachable, _ := waitHealthAny(healthURLs(install), 60, install.Cafile()); !reachable {
 		_ = os.WriteFile(updateMarkerPath(install), nil, 0o600)
 		writeUpdateState(install, "recovery_required", from, target, safety)
-		fmt.Fprint(out, block([]string{failedLine("Candidate passed verification but failed its final restart. Writes are blocked; run: ovm update")}))
+		fmt.Fprint(out, block([]string{failedLine("Candidate passed verification but failed its final restart. Writes are blocked; run: ovmanager update")}))
 		return 1
 	}
 	writeUpdateState(install, "committed", from, target, safety)
@@ -438,7 +437,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		stripped := stripEnvKey(string(env), "BACKUP_ENCRYPT_KEY")
 		envPath := filepath.Join(stage, ".env")
 		_ = os.WriteFile(envPath, []byte(stripped), 0o600) // #nosec G302 // intentional group-readable .env
-		_ = os.Chmod(envPath, 0o640)                      // #nosec G302 // intentional group-readable .env
+		_ = os.Chmod(envPath, 0o640)                       // #nosec G302 // intentional group-readable .env
 		if u := unitUser(); u != "" {
 			if _, err := user.Lookup(u); err == nil {
 				if gid := groupGID(u); gid >= 0 {
@@ -510,52 +509,6 @@ func verifyChecksum(path, checksumBody string) error {
 		return fmt.Errorf("Release checksum mismatch")
 	}
 	return nil
-}
-
-// waitHealth polls the URL until it answers, returning the reported version.
-func waitHealth(url string, tries int, cafile string) (bool, string) {
-	for i := 0; i < tries; i++ {
-		if reachable, reported := FetchHealth(url, 3*time.Second, cafile); reachable {
-			return true, reported
-		}
-		time.Sleep(time.Second)
-	}
-	return false, "?"
-}
-
-// healthURLs returns candidate health URLs for an install, trying the declared
-// scheme first and the other scheme as a fallback so a stale/incorrect TLS
-// detection cannot by itself fail an update.
-func healthURLs(inst Install) []string {
-	urls := []string{inst.HealthURL()}
-	other := "http"
-	if inst.Scheme() == "http" {
-		other = "https"
-	}
-	alt := other + "://127.0.0.1:" + strconv.Itoa(inst.Port) + "/health"
-	if alt != urls[0] {
-		urls = append(urls, alt)
-	}
-	return urls
-}
-
-func fetchHealthAny(urls []string, timeout time.Duration, cafile string) (bool, string) {
-	for _, u := range urls {
-		if reachable, reported := FetchHealth(u, timeout, cafile); reachable {
-			return true, reported
-		}
-	}
-	return false, "?"
-}
-
-func waitHealthAny(urls []string, tries int, cafile string) (bool, string) {
-	for i := 0; i < tries; i++ {
-		if reachable, reported := fetchHealthAny(urls, 2*time.Second, cafile); reachable {
-			return true, reported
-		}
-		time.Sleep(time.Second)
-	}
-	return false, "?"
 }
 
 func serviceRestart(install Install) bool {

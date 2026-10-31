@@ -1,7 +1,7 @@
 // The owner-claim setup key commands.
 //
-// The panel tells the operator "Run: ovm auth key" when it cannot read the
-// setup key, and "ovm auth reset" when the key is lost. Those commands must
+// The panel tells the operator "Run: ovmanager auth key" when it cannot read the
+// setup key, and "ovmanager auth reset" when the key is lost. Those commands must
 // exist, or the panel's own recovery instructions are a dead end — which is
 // exactly the case for a container install, where install.sh never ran and no
 // key file was ever created.
@@ -47,7 +47,7 @@ func (a *app) authKeyCmd() *cobra.Command {
 			}
 			lines := []string{okLine("owner setup key: " + key)}
 			if !created {
-				lines = append(lines, "The key already existed and was kept; run 'ovm auth reset' for a fresh one.")
+				lines = append(lines, "The key already existed and was kept; run 'ovmanager auth reset' for a fresh one.")
 			}
 			lines = append(lines, "Open the panel and claim it with this key.")
 			a.emit(block(lines), 0)

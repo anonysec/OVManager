@@ -1,4 +1,4 @@
-// `ovm status` (cli): same rows as manager.sh do_status.
+// `ovmanager status` (cli): same rows as manager.sh do_status.
 package cli
 
 import (
@@ -29,7 +29,7 @@ func collectStatus(install Install, service, publicIP string) statusData {
 	if service == "" {
 		service = detected
 	}
-	reachable, version := FetchHealth(install.HealthURL(), 5*time.Second, install.Cafile())
+	reachable, version := fetchHealthAny(healthURLs(install), 5*time.Second, install.Cafile())
 	health := "unreachable (check logs)"
 	if reachable {
 		health = "ok"

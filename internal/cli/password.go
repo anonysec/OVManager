@@ -1,4 +1,4 @@
-// `ovm reset-password` (cli): rewrite the owner credential in the
+// `ovmanager reset-password` (cli): rewrite the owner credential in the
 // database. Never echoes the value.
 package cli
 

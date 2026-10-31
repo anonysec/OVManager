@@ -1,4 +1,4 @@
-// `ovm tls` (cli): terminal-side HTTPS certificate management.
+// `ovmanager tls` (cli): terminal-side HTTPS certificate management.
 // Issuance and installation happen here; the panel process only reads the
 // resulting files at startup to decide bind mode. The target pair is the
 // DECLARED pair — SSL_CERTFILE/SSL_KEYFILE from the install .env (or the
@@ -81,7 +81,7 @@ func runTLSRemove(inst Install) (string, int) {
 	if len(removed) == 0 {
 		summary = "nothing to remove"
 	}
-	return block([]string{heading("HTTPS certificate"), summary, "fix            ovm service restart"}), 0
+	return block([]string{heading("HTTPS certificate"), summary, "fix            ovmanager service restart"}), 0
 }
 
 func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
@@ -111,7 +111,7 @@ func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 	}
 	_ = fixTLSOwnership(certPath, 0o644)
 	_ = fixTLSOwnership(keyPath, 0o600)
-	return block([]string{heading("HTTPS certificate"), "installed — restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
+	return block([]string{heading("HTTPS certificate"), "installed — restart panel to serve HTTPS on 0.0.0.0", "fix            ovmanager service restart"}), 0
 }
 
 func runTLSSelfSigned(inst Install, domain string) (string, int) {
@@ -165,7 +165,7 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	}
 	_ = fixTLSOwnership(certPath, 0o644)
 	_ = fixTLSOwnership(keyPath, 0o600)
-	return block([]string{heading("HTTPS certificate"), "self-signed cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
+	return block([]string{heading("HTTPS certificate"), "self-signed cert issued for " + domain, "restart panel to serve HTTPS on 0.0.0.0", "fix            ovmanager service restart"}), 0
 }
 
 func runTLSRenew(inst Install) (string, int) {
@@ -357,7 +357,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		_ = fixTLSOwnership(acctPath, 0o600)
 	}
 	_ = email
-	return block([]string{heading("HTTPS certificate"), fmt.Sprintf("Let's Encrypt cert issued for %s", domain), "restart panel to serve HTTPS on 0.0.0.0", "fix            ovm service restart"}), 0
+	return block([]string{heading("HTTPS certificate"), fmt.Sprintf("Let's Encrypt cert issued for %s", domain), "restart panel to serve HTTPS on 0.0.0.0", "fix            ovmanager service restart"}), 0
 }
 
 func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {

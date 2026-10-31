@@ -74,7 +74,7 @@ func cliFixture(t *testing.T) (installDir, dataDir string) {
 	return installDir, dataDir
 }
 
-// TestCLIStatus golden-compares `ovm status` against manager.sh's rows.
+// TestCLIStatus golden-compares `ovmanager status` against manager.sh's rows.
 func TestCLIStatus(t *testing.T) {
 	installDir, dataDir := cliFixture(t)
 	var out bytes.Buffer
@@ -94,7 +94,7 @@ func TestCLIStatus(t *testing.T) {
 	}
 }
 
-// TestCLIDoctor golden-compares `ovm doctor` against a fixture with two known
+// TestCLIDoctor golden-compares `ovmanager doctor` against a fixture with two known
 // failures (no backup yet, worker not started) and everything else passing.
 func TestCLIDoctor(t *testing.T) {
 	installDir, dataDir := cliFixture(t)
@@ -107,9 +107,9 @@ func TestCLIDoctor(t *testing.T) {
 		"  XX 1 problems",
 		"",
 		"   Backup         none yet",
-		"   fix            ovm backup",
+		"   fix            ovmanager backup",
 		"",
-		"    11 other checks passed — detail: ovm doctor --all",
+		"    11 other checks passed — detail: ovmanager doctor --all",
 		"",
 	}, "\n")
 	if out.String() != want {
@@ -140,7 +140,7 @@ func TestCLIUpdateDryRun(t *testing.T) {
 	}
 }
 
-// TestCLIHealthHTTPS: ovm health reports healthy against an HTTPS-only local
+// TestCLIHealthHTTPS: ovmanager health reports healthy against an HTTPS-only local
 // server (plain probe fails, HTTPS retry with InsecureSkipVerify succeeds).
 func TestCLIHealthHTTPS(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,8 +216,8 @@ func TestCLIResetPasswordRevokesActualOwner(t *testing.T) {
 	}
 }
 
-// The panel tells the operator "Run: ovm auth key" when it cannot read the
-// setup key, and "ovm auth reset" when the key is lost. Those commands must
+// The panel tells the operator "Run: ovmanager auth key" when it cannot read the
+// setup key, and "ovmanager auth reset" when the key is lost. Those commands must
 // exist, or the panel's own recovery instructions are a dead end.
 func TestCLIAuthKeyCreatesAndKeepsTheKey(t *testing.T) {
 	installDir, dataDir := cliFixture(t)
@@ -226,7 +226,7 @@ func TestCLIAuthKeyCreatesAndKeepsTheKey(t *testing.T) {
 	var out bytes.Buffer
 	code := cli.Run([]string{"auth", "key", "--install-dir", installDir, "--data-dir", dataDir}, &out)
 	if code != 0 {
-		t.Fatalf("ovm auth key: exit %d, output %s", code, out.String())
+		t.Fatalf("ovmanager auth key: exit %d, output %s", code, out.String())
 	}
 	raw, err := os.ReadFile(keyPath)
 	if err != nil {
@@ -243,7 +243,7 @@ func TestCLIAuthKeyCreatesAndKeepsTheKey(t *testing.T) {
 	// A rerun must not invalidate a key the panel is still holding.
 	out.Reset()
 	if code := cli.Run([]string{"auth", "key", "--install-dir", installDir, "--data-dir", dataDir}, &out); code != 0 {
-		t.Fatalf("ovm auth key (rerun): exit %d", code)
+		t.Fatalf("ovmanager auth key (rerun): exit %d", code)
 	}
 	raw, _ = os.ReadFile(keyPath)
 	if got := strings.TrimSpace(string(raw)); got != first {
@@ -253,10 +253,10 @@ func TestCLIAuthKeyCreatesAndKeepsTheKey(t *testing.T) {
 	// A reset is the lost-key case: a fresh key, and the old one stops working.
 	out.Reset()
 	if code := cli.Run([]string{"auth", "reset", "--install-dir", installDir, "--data-dir", dataDir}, &out); code != 0 {
-		t.Fatalf("ovm auth reset: exit %d", code)
+		t.Fatalf("ovmanager auth reset: exit %d", code)
 	}
 	raw, _ = os.ReadFile(keyPath)
 	if got := strings.TrimSpace(string(raw)); got == first {
-		t.Error("ovm auth reset kept the old key")
+		t.Error("ovmanager auth reset kept the old key")
 	}
 }

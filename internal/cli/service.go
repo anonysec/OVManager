@@ -1,4 +1,4 @@
-// `ovm service <start|stop|restart|enable|disable>` — host-gated service
+// `ovmanager service <start|stop|restart|enable|disable>` — host-gated service
 // control (manager.sh service_action). Stubs over systemctl/docker.
 package cli
 

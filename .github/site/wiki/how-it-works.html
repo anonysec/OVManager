@@ -273,7 +273,7 @@
       is available as <code>sudo ovmanager rollback</code>.
     </p>
     <p>
-      On a node, <code>ovn update</code> takes a verified snapshot of the identity
+      On a node, <code>ovnode update</code> takes a verified snapshot of the identity
       file, the node data directory, <code>/etc/openvpn</code> and the API TLS
       files before it swaps in a release, and restores the snapshot if the new
       release does not come up healthy.
@@ -283,7 +283,7 @@
     <p>
       <code>ovmanager backup</code> writes a plain <code>.db</code> snapshot of the
       panel database &mdash; an online-backup-API copy, <code>0600</code>, with
-      older copies pruned by the keep count; <code>ovn backup</code> archives
+      older copies pruned by the keep count; <code>ovnode backup</code> archives
       the node's data and PKI.
       Both keep the newest 14 by default and both have a daily systemd timer.
       Restoring an upload refuses writes with HTTP 503 until the swap finishes,
@@ -306,7 +306,7 @@
       <li><strong><code>runtime</code></strong> ships the virtualenv, the sources and the frontend build. No compiler, no build tooling.</li>
     </ol>
     <p>
-      It runs as a non-root <code>appuser</code> in the <code>ovpanel</code>
+      It runs as a non-root <code>appuser</code> in the <code>ovmanager</code>
       group, which is what lets the container read the config bind-mounted at
       <code>/app/.env</code>. The installer refuses a group id that already has
       members on the host, because sharing that file by group would hand the

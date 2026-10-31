@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package maintenance owns the backup, restore and urlpath transactions that
-// both the panel (HTTP) and the CLI (ovm) share. It is the one implementation
+// both the panel (HTTP) and the CLI (ovmanager) share. It is the one implementation
 // of each; callers go through here instead of internal/panel.
 package maintenance
 

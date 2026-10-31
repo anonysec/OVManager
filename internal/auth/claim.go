@@ -120,11 +120,11 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 
 	key, err := s.readClaimKey()
 	if err != nil {
-		writeDetail(w, http.StatusInternalServerError, "Cannot read the claim key file — re-run on the host: ovm auth key")
+		writeDetail(w, http.StatusInternalServerError, "Cannot read the claim key file — re-run on the host: ovmanager auth key")
 		return
 	}
 	if key == "" {
-		writeDetail(w, http.StatusBadRequest, "No claim key on this host. Run: ovm auth key")
+		writeDetail(w, http.StatusBadRequest, "No claim key on this host. Run: ovmanager auth key")
 		return
 	}
 	if !hmac.Equal([]byte(key), []byte(strings.TrimSpace(req.ClaimKey))) {
@@ -167,16 +167,16 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 	s.IssueSession(w, r, chosen, "owner")
 }
 
-// recoverOwner resets owner credentials with a fresh setup key (ovm auth
+// recoverOwner resets owner credentials with a fresh setup key (ovmanager auth
 // reset); same key validation as a first claim.
 func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claimRequest) {
 	key, err := s.readClaimKey()
 	if err != nil {
-		writeDetail(w, http.StatusInternalServerError, "Cannot read the claim key file — re-run on the host: ovm auth key")
+		writeDetail(w, http.StatusInternalServerError, "Cannot read the claim key file — re-run on the host: ovmanager auth key")
 		return
 	}
 	if key == "" {
-		writeDetail(w, http.StatusBadRequest, "No claim key on this host. Run: ovm auth reset")
+		writeDetail(w, http.StatusBadRequest, "No claim key on this host. Run: ovmanager auth reset")
 		return
 	}
 	if !hmac.Equal([]byte(key), []byte(strings.TrimSpace(req.ClaimKey))) {

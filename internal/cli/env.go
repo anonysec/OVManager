@@ -109,8 +109,12 @@ func (i Install) HealthURL() string {
 	return i.Scheme() + "://127.0.0.1:" + strconv.Itoa(i.Port) + "/health"
 }
 
-// Cafile is the installed certificate, for pinning the local health probe.
-func (i Install) Cafile() string { return i.Env["SSL_CERTFILE"] }
+func (i Install) Cafile() string {
+	if c := strings.TrimSpace(i.Env["SSL_CERTFILE"]); c != "" {
+		return c
+	}
+	return filepath.Join(i.DataDir, "tls", "fullchain.pem")
+}
 
 // LivePathPrefix is the prefix the panel is SERVING, which is not always .env's
 // (URLPATH in .env is only the seed). Falls back to the seed when the database

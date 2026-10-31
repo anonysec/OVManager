@@ -1,5 +1,5 @@
 // Password policy reuse for the CLI (cli/password.py validate), so the browser
-// claim and `ovm reset-password` cannot drift.
+// claim and `ovmanager reset-password` cannot drift.
 package auth
 
 // PasswordProblem returns a human reason when password violates panel policy,

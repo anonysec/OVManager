@@ -1,6 +1,6 @@
 // Command ovmanager is the OVManager panel binary and operator CLI (Phase 5).
 // Run bare (or via systemd) it serves the panel; with a subcommand it acts as
-// the `ovm` operator CLI.
+// the `ovmanager` operator CLI.
 package main
 
 import (

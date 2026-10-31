@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLI reference — OVManager wiki</title>
-<meta name="description" content="Every ovmanager command, the installer's three flags, the OVM_* settings and the ovn commands on each VPN node.">
+<meta name="description" content="Every ovmanager command, the installer's three flags, the OVM_* settings and the ovnode commands on each VPN node.">
 <link rel="stylesheet" href="../assets/style.css">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -214,7 +214,7 @@ ovmanager backup --keep 30</code></pre>
 
     <h2 id="node-cli">On each VPN node</h2>
     <p>
-      The node agent installs its own CLI, <code>ovn</code> (alias
+      The node agent installs its own CLI, <code>ovnode</code> (alias
       <code>ovnode</code>). With no argument it opens a numbered menu; every menu
       item is also a plain command with a stable exit code, so it is scriptable.
     </p>
@@ -225,26 +225,26 @@ ovmanager backup --keep 30</code></pre>
           <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>ovn status</code></td><td>Agent, health, version and VPN state. <code>--all</code> also shows node, mode, port and TLS.</td></tr>
-          <tr><td><code>ovn credentials</code></td><td>Node name, API key and the panel bundle. Read-only.</td></tr>
-          <tr><td><code>ovn start | stop | restart</code></td><td>Control the node agent service.</td></tr>
-          <tr><td><code>ovn restart-vpn</code></td><td>Restart or reload OpenVPN.</td></tr>
-          <tr><td><code>ovn logs [N|-f]</code></td><td>The last N log lines (default 100), or follow live.</td></tr>
-          <tr><td><code>ovn backup [--keep N]</code></td><td>Archive the node data and PKI now. <code>--keep</code> sets retention; default 14.</td></tr>
-          <tr><td><code>ovn auto-backup on | off | status</code></td><td>Daily backup through a host timer, at <code>03:30</code>.</td></tr>
-          <tr><td><code>ovn restore [name]</code></td><td>List the archives, or restore one by name.</td></tr>
-          <tr><td><code>ovn tls</code></td><td>Show or replace the node's certificate.</td></tr>
-          <tr><td><code>ovn doctor [--fix]</code></td><td>Health check across agent, VPN, disk, certificate and backups. <code>--fix</code> applies the safe repairs.</td></tr>
-          <tr><td><code>ovn update</code></td><td>Staged update with a verified safety snapshot first.</td></tr>
-          <tr><td><code>ovn rollback</code></td><td>Restore the newest pre-update code snapshot.</td></tr>
-          <tr><td><code>ovn recover-update</code></td><td>Recover an interrupted update transaction.</td></tr>
-          <tr><td><code>ovn completion</code></td><td>Install bash completion for <code>ovn</code>.</td></tr>
-          <tr><td><code>ovn uninstall [--purge]</code></td><td>Remove OVNode. Data is kept unless <code>--purge</code>.</td></tr>
+          <tr><td><code>ovnode status</code></td><td>Agent, health, version and VPN state. <code>--all</code> also shows node, mode, port and TLS.</td></tr>
+          <tr><td><code>ovnode credentials</code></td><td>Node name, API key and the panel bundle. Read-only.</td></tr>
+          <tr><td><code>ovnode start | stop | restart</code></td><td>Control the node agent service.</td></tr>
+          <tr><td><code>ovnode restart-vpn</code></td><td>Restart or reload OpenVPN.</td></tr>
+          <tr><td><code>ovnode logs [N|-f]</code></td><td>The last N log lines (default 100), or follow live.</td></tr>
+          <tr><td><code>ovnode backup [--keep N]</code></td><td>Archive the node data and PKI now. <code>--keep</code> sets retention; default 14.</td></tr>
+          <tr><td><code>ovnode auto-backup on | off | status</code></td><td>Daily backup through a host timer, at <code>03:30</code>.</td></tr>
+          <tr><td><code>ovnode restore [name]</code></td><td>List the archives, or restore one by name.</td></tr>
+          <tr><td><code>ovnode tls</code></td><td>Show or replace the node's certificate.</td></tr>
+          <tr><td><code>ovnode doctor [--fix]</code></td><td>Health check across agent, VPN, disk, certificate and backups. <code>--fix</code> applies the safe repairs.</td></tr>
+          <tr><td><code>ovnode update</code></td><td>Staged update with a verified safety snapshot first.</td></tr>
+          <tr><td><code>ovnode rollback</code></td><td>Restore the newest pre-update code snapshot.</td></tr>
+          <tr><td><code>ovnode recover-update</code></td><td>Recover an interrupted update transaction.</td></tr>
+          <tr><td><code>ovnode completion</code></td><td>Install bash completion for <code>ovnode</code>.</td></tr>
+          <tr><td><code>ovnode uninstall [--purge]</code></td><td>Remove OVNode. Data is kept unless <code>--purge</code>.</td></tr>
         </tbody>
       </table>
     </div>
     <p>
-      <code>ovn update</code> and <code>ovn uninstall</code> are implemented in
+      <code>ovnode update</code> and <code>ovnode uninstall</code> are implemented in
       the node's installer, so each exists in exactly one place. The installer
       itself takes three flags &mdash; <code>-y/--yes</code>,
       <code>--docker</code> and <code>-h/--help</code> &mdash; and everything

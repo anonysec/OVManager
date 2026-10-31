@@ -1,4 +1,4 @@
-// Parity tests for `ovm tls`: the terminal-side self-signed issuance writes a
+// Parity tests for `ovmanager tls`: the terminal-side self-signed issuance writes a
 // parseable pair into the DATA_DIR, and a bad input path fails without
 // touching anything.
 package tests

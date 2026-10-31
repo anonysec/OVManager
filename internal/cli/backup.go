@@ -1,4 +1,4 @@
-// `ovm backup` (cli/backup.py backup_now + manager.sh backup_now).
+// `ovmanager backup` (cli/backup.py backup_now + manager.sh backup_now).
 package cli
 
 import (
@@ -77,7 +77,7 @@ func runRestore(install Install, name string) (string, int) {
 	if name == "" || containsSlash(name) || len(name) > 0 && name[0] == '.' {
 		return block([]string{failedLine("Invalid backup name: " + name)}), 1
 	}
-	success, msg, data := maintenance.RestoreStored(name, "ovm-cli", install.DataDir)
+	success, msg, data := maintenance.RestoreStored(name, "ovmanager-cli", install.DataDir)
 	if !success {
 		lines := []string{failedLine(msg)}
 		if safety, _ := data["safety_backup"].(string); safety != "" {
@@ -95,7 +95,7 @@ func runRestore(install Install, name string) (string, int) {
 func listBackups(install Install) (string, int) {
 	backups, dir := maintenance.ListStoredBackups(install.DataDir)
 	if len(backups) == 0 {
-		return block([]string{heading("data backups in " + dir), hint("none — create one with: ovm backup")}), 1
+		return block([]string{heading("data backups in " + dir), hint("none — create one with: ovmanager backup")}), 1
 	}
 	width := 0
 	for _, b := range backups {
@@ -108,7 +108,7 @@ func listBackups(install Install) (string, int) {
 		when := timeFormat(b.Mtime)
 		lines = append(lines, fmt.Sprintf("  %s  %s  %s", pad(b.Name, width), when, humanSize(b.Size)))
 	}
-	lines = append(lines, "", hint("restore one with: ovm restore <name>"))
+	lines = append(lines, "", hint("restore one with: ovmanager restore <name>"))
 	return block(lines), 0
 }
 

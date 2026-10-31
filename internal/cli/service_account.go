@@ -1,4 +1,4 @@
-// `ovm doctor --fix` service-account migration (cli/doctor.py fix_service_account).
+// `ovmanager doctor --fix` service-account migration (cli/doctor.py fix_service_account).
 package cli
 
 import (
@@ -56,7 +56,7 @@ func fixServiceAccount(install Install, check Check) Check {
 	}
 	newBody := regexp.MustCompile(`(?m)^User=.*$`).ReplaceAllString(body, "User="+account+"\nGroup="+account)
 
-	snapshot := unit + ".ovm-backup"
+	snapshot := unit + ".ovmanager-backup"
 	if err := copyFilePerm(unit, snapshot, 0o644); err != nil {
 		return Check{check.Name, false, "could not snapshot " + unit, "inspect " + snapshot}
 	}
@@ -87,7 +87,7 @@ func fixServiceAccount(install Install, check Check) Check {
 	}
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
-		if reachable, _ := FetchHealth(install.HealthURL(), 3*time.Second, install.Cafile()); reachable {
+		if reachable, _ := fetchHealthAny(healthURLs(install), 3*time.Second, install.Cafile()); reachable {
 			return checkServiceAccount(install, false)
 		}
 		time.Sleep(1 * time.Second)

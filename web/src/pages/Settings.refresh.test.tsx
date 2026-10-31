@@ -68,8 +68,8 @@ describe('Settings live refresh', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change panel URL path' }));
     const input = container.querySelector('#general-urlpath') as HTMLInputElement;
     expect(input).toBeTruthy();
-    fireEvent.change(input, { target: { value: '/ovm' } });
-    expect(input.value).toBe('/ovm');
+    fireEvent.change(input, { target: { value: '/ovmanager' } });
+    expect(input.value).toBe('/ovmanager');
 
     // A full resynchronization tick may reload shared settings while editing.
     refreshTick += 1;
@@ -83,7 +83,7 @@ describe('Settings live refresh', () => {
     // The editor must still be open, with the operator's value intact — the
     // card must not have been replaced by a loading skeleton.
     await waitFor(() => expect(container.querySelector('#general-urlpath')).toBeTruthy());
-    expect((container.querySelector('#general-urlpath') as HTMLInputElement).value).toBe('/ovm');
+    expect((container.querySelector('#general-urlpath') as HTMLInputElement).value).toBe('/ovmanager');
     expect(screen.queryByText('Loading…')).toBeNull();
   });
 });

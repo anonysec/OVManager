@@ -139,11 +139,8 @@ OVN_NAME=eu-1 OVN_VPN_PORTS=1194,443 OVN_IPV6=1 bash install.sh -y</code></pre>
 
     <h2 id="register">2. Register it in the panel</h2>
     <p>
-      Go to <strong>Nodes &rarr; Add Node</strong> and fill the form, or paste
-      the <code>ovnode://</code> bundle the node installer printed &mdash; the
-      bundle fills every field at once. It looks like:
+      Go to <strong>Nodes &rarr; Add Node</strong> and fill the form with the values the node installer printed:
     </p>
-    <pre><code>ovnode://eu-1@203.0.113.10:2083?key=...&amp;tls=1</code></pre>
     <div class="table-scroll">
       <table>
         <thead>
@@ -209,14 +206,14 @@ OVN_NAME=eu-1 OVN_VPN_PORTS=1194,443 OVN_IPV6=1 bash install.sh -y</code></pre>
     <p>On the node itself:</p>
     <figure class="cmd">
       <figcaption>On the VPN server</figcaption>
-      <pre><code>ovn status       # agent, health, version, VPN state, certificate expiry
-ovn doctor       # health check; --fix applies the safe repairs
-ovn logs -f      # last 100 lines, or follow
-ovn credentials  # node name, API key and the panel bundle, any time
-ovn update       # staged update, backs up data first</code></pre>
+      <pre><code>ovnode status       # agent, health, version, VPN state, certificate expiry
+ovnode doctor       # health check; --fix applies the safe repairs
+ovnode logs -f      # last 100 lines, or follow
+ovnode credentials  # node name, API key and the panel bundle, any time
+ovnode update       # staged update, backs up data first</code></pre>
     </figure>
     <p>
-      <code>ovn credentials</code> is the one to reach for when the panel entry
+      <code>ovnode credentials</code> is the one to reach for when the panel entry
       and the node disagree: it reprints the exact name and key the panel needs,
       so you can compare rather than retype. The full command list is in the
       <a href="cli.html#node-cli">CLI reference</a>.
@@ -228,11 +225,11 @@ ovn update       # staged update, backs up data first</code></pre>
 /etc/openvpn/ovnode/     users/&lt;cn&gt;/{name,state,client.ovpn}, sessions/, usage/, scripts/
 /var/lib/ovnode/&lt;name&gt;/  agent data</code></pre>
     <p>
-      <code>ovn backup</code> archives <code>/var/lib/ovnode</code> and the
+      <code>ovnode backup</code> archives <code>/var/lib/ovnode</code> and the
       OpenVPN PKI into root-only tarballs in <code>/var/backups</code>, keeping
       the newest 14 unless you pass <code>--keep N</code>.
-      <code>ovn auto-backup on</code> adds a daily timer for it.
-      <code>ovn restore</code> lists those archives and, given a name, unpacks
+      <code>ovnode auto-backup on</code> adds a daily timer for it.
+      <code>ovnode restore</code> lists those archives and, given a name, unpacks
       one after taking a safety copy of the current state &mdash; and it refuses
       to continue if that copy cannot be made.
     </p>
@@ -241,8 +238,8 @@ ovn update       # staged update, backs up data first</code></pre>
         <strong>Reinstall and rename.</strong> Node data survives a reinstall
         <em>only</em> if you keep the same <code>--name</code>: a different name
         reads a different, empty data folder and orphans the old one on disk.
-        <code>ovn uninstall</code> keeps the data;
-        <code>ovn uninstall --purge</code> deletes it. Both ask first and the
+        <code>ovnode uninstall</code> keeps the data;
+        <code>ovnode uninstall --purge</code> deletes it. Both ask first and the
         prompt defaults to No.
       </p>
     </div>

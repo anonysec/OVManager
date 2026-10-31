@@ -1,4 +1,4 @@
-// `ovm doctor` checks and auto-fixes (cli).
+// `ovmanager doctor` checks and auto-fixes (cli).
 package cli
 
 import (
@@ -41,7 +41,7 @@ func checkService(install Install, service string) Check {
 	ok := state == "running" || state == "running (docker)" || state == "active"
 	fix := ""
 	if !ok {
-		fix = "ovm restart"
+		fix = "ovmanager service restart"
 	}
 	return Check{"Service", ok, state + " (" + mode + ")", fix}
 }
@@ -52,7 +52,7 @@ func checkAutostart(install Install) Check {
 	}
 	enabled := SystemctlEnabled(systemdService)
 	detail := "disabled"
-	fix := "ovm enable"
+	fix := "ovmanager service enable"
 	if enabled {
 		detail, fix = "enabled", ""
 	}
@@ -82,26 +82,26 @@ func checkCertificate(install Install) Check {
 	}
 	cert := install.Cafile()
 	if cert == "" || !fileExists(cert) {
-		return Check{"Certificate", false, "not found", "ovm https"}
+		return Check{"Certificate", false, "not found", "ovmanager tls"}
 	}
 	expiry, ok := certEnddate(cert)
 	if !ok {
-		return Check{"Certificate", false, "could not read expiry", "ovm https"}
+		return Check{"Certificate", false, "could not read expiry", "ovmanager tls"}
 	}
 	daysLeft := int(expiry.Sub(time.Now().UTC()).Seconds() / 86400)
 	switch {
 	case daysLeft > 30:
 		return Check{"Certificate", true, fmt.Sprintf("expires in %dd", daysLeft), ""}
 	case daysLeft > 0:
-		return Check{"Certificate", false, fmt.Sprintf("expires in %dd", daysLeft), "ovm https"}
+		return Check{"Certificate", false, fmt.Sprintf("expires in %dd", daysLeft), "ovmanager tls"}
 	default:
-		return Check{"Certificate", false, "expired", "ovm https"}
+		return Check{"Certificate", false, "expired", "ovmanager tls"}
 	}
 }
 
 func checkUpdateJournal(install Install) Check {
 	if fileExists(filepath.Join(install.DataDir, "update-maintenance")) {
-		return Check{"Update", false, "recovery required", "ovm update"}
+		return Check{"Update", false, "recovery required", "ovmanager update"}
 	}
 	state := filepath.Join(install.DataDir, "update-state.json")
 	if fileExists(state) {
@@ -113,7 +113,7 @@ func checkUpdateJournal(install Install) Check {
 			}
 		}
 		if phase != "committed" && phase != "failed_over" {
-			return Check{"Update", false, "recovery required", "ovm update"}
+			return Check{"Update", false, "recovery required", "ovmanager update"}
 		}
 	}
 	return Check{"Update", true, "no interrupted transaction", ""}
@@ -149,7 +149,7 @@ func checkBackupAge(install Install, maximumDays int) Check {
 		if fileExists(BackupTimerUnit(install)) {
 			return Check{"Backup", true, "scheduled (daily timer)", ""}
 		}
-		return Check{"Backup", false, "none yet", "ovm backup"}
+		return Check{"Backup", false, "none yet", "ovmanager backup"}
 	}
 	newest := candidates[0]
 	var newestMod time.Time
@@ -163,7 +163,7 @@ func checkBackupAge(install Install, maximumDays int) Check {
 	ok := ageDays <= maximumDays
 	fix := ""
 	if !ok {
-		fix = "ovm backup"
+		fix = "ovmanager backup"
 	}
 	return Check{"Backup", ok, fmt.Sprintf("%dd old", ageDays), fix}
 }
@@ -189,7 +189,7 @@ func checkPrivatePermissions(install Install) Check {
 	if len(loose) == 0 {
 		return Check{"Permissions", true, "private", ""}
 	}
-	return Check{"Permissions", false, "loose (" + strings.Join(loose, ", ") + ")", "ovm doctor --fix"}
+	return Check{"Permissions", false, "loose (" + strings.Join(loose, ", ") + ")", "ovmanager doctor --fix"}
 }
 
 func isMode(path string, mode os.FileMode) bool {
@@ -254,7 +254,7 @@ func checkEnvSharedWithContainer(path string) Check {
 		return Check{"Config perms", true, fmt.Sprintf("shared with the container (%s, gid %d)", octal(mode), gid), ""}
 	}
 	return Check{"Config perms", false, fmt.Sprintf("unreadable by the container (mode %s, gid %d)", octal(mode), gid),
-		"sudo ovm update, or chgrp <image ovpanel gid> .env && chmod 640 .env"}
+		"sudo ovmanager update, or chgrp <image ovmanager gid> .env && chmod 640 .env"}
 }
 
 func checkTLSKeyPerms(install Install, inContainer bool) Check {
@@ -267,7 +267,7 @@ func checkTLSKeyPerms(install Install, inContainer bool) Check {
 	}
 	info, err := os.Stat(key)
 	if err != nil {
-		return Check{"TLS key", false, key + " is missing", "ovm https --self"}
+		return Check{"TLS key", false, key + " is missing", "ovmanager tls"}
 	}
 	mode := info.Mode().Perm()
 	service := unitUser()
@@ -297,11 +297,11 @@ func checkDataDir(install Install) Check {
 }
 
 func checkHealth(install Install) Check {
-	reachable, version := FetchHealth(install.HealthURL(), 5*time.Second, install.Cafile())
+	reachable, version := fetchHealthAny(healthURLs(install), 5*time.Second, install.Cafile())
 	if reachable {
 		return Check{"Panel health", true, "ok (v" + version + ")", ""}
 	}
-	return Check{"Panel health", false, "unreachable", "ovm logs"}
+	return Check{"Panel health", false, "unreachable", "ovmanager logs"}
 }
 
 func checkServiceAccount(install Install, inContainer bool) Check {
@@ -321,7 +321,7 @@ func checkServiceAccount(install Install, inContainer bool) Check {
 	}
 	if userName == "root" {
 		return Check{"Service account", false, "the panel runs as root",
-			fmt.Sprintf("ovm doctor --fix   # moves it onto the %s account", panelUser())}
+			fmt.Sprintf("ovmanager doctor --fix   # moves it onto the %s account", panelUser())}
 	}
 	return Check{"Service account", true, "panel runs as " + userName, ""}
 }
@@ -442,7 +442,7 @@ func renderDoctor(checks []Check, showAll bool) string {
 	}
 	passed := len(checks) - len(failed)
 	if len(failed) == 0 {
-		return block([]string{okLine(fmt.Sprintf("no problems — %d checks passed", passed)), hint("detail: ovm doctor --all")})
+		return block([]string{okLine(fmt.Sprintf("no problems — %d checks passed", passed)), hint("detail: ovmanager doctor --all")})
 	}
 	lines := []string{failedLine(fmt.Sprintf("%d problems", len(failed))), ""}
 	for _, c := range failed {
@@ -462,7 +462,7 @@ func renderDoctor(checks []Check, showAll bool) string {
 			lines = append(lines, fmt.Sprintf("  %s  %s  %s", pad(c.Name, width), mark, c.Detail))
 		}
 	} else {
-		lines = append(lines, "", hint(fmt.Sprintf("%d other checks passed — detail: ovm doctor --all", passed)))
+		lines = append(lines, "", hint(fmt.Sprintf("%d other checks passed — detail: ovmanager doctor --all", passed)))
 	}
 	return block(lines)
 }

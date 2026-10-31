@@ -1,4 +1,4 @@
-// `ovm logs` (cli): docker logs or journalctl, same selection rules.
+// `ovmanager logs` (cli): docker logs or journalctl, same selection rules.
 package cli
 
 import (

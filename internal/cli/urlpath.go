@@ -1,4 +1,4 @@
-// `ovm urlpath` (cli): read, set or clear the panel URL prefix. The
+// `ovmanager urlpath` (cli): read, set or clear the panel URL prefix. The
 // value lives in the settings row, not .env.
 package cli
 

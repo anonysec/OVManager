@@ -118,13 +118,13 @@ ovmanager tls-status                              # what is installed, and when 
     <p>
       The node's own OpenVPN server certificate is a separate thing again, and
       the panel can ask a node to renew it and reports the new expiry. Nodes
-      also show their certificate expiry in <code>ovn status</code>.
+      also show their certificate expiry in <code>ovnode status</code>.
     </p>
 
     <h2 id="expiry">Watching for expiry</h2>
     <ul>
       <li><code>ovmanager tls-status</code> on the panel &mdash; read-only, no restart.</li>
-      <li><code>ovn status</code> on each VPN server &mdash; health plus certificate expiry.</li>
+      <li><code>ovnode status</code> on each VPN server &mdash; health plus certificate expiry.</li>
       <li><strong>Settings &rarr; TLS</strong> in the panel &mdash; the same panel information with the renewal buttons next to it.</li>
     </ul>
 

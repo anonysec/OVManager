@@ -1,9 +1,19 @@
-## Unreleased — 2026-10-21
+## 2.3.0 — 2026-10-31
+
+- Fix(cli): robust HTTPS health probes and update verification for TLS installs.
+- Fix(tls): pin exact leaf certificate DER with certificate chain validation fallback in `pinnedTLSConfig`.
+- Fix(env): `Install.Cafile()` properly resolves default path `$DATA_DIR/tls/fullchain.pem` when unset in `.env`.
+- Fix(cli): eliminate legacy `ovm` command names across doctor checks, auth helpers, and system tools in favor of `ovmanager`.
+- Fix(db): enforce 0600 file permissions upon SQLite database creation to guarantee strict private access.
+- Fix(installer): verify target container user dynamically for Docker installs.
+- Chore: purge legacy `ovpanel` and `ovnode://` bundle references.
+
+## 2.2.1 — 2026-10-21
 
 - Feature: per-user traffic accounting across nodes (cumulative deltas, OCC-guarded writes, reseed markers, reset/purge routes).
 - Feature: live snapshot collector feeding active_connections/online and SSE-driven refresh.
 - Feature: the audit trail names the actor — user, settings, node, sign-in and claim operations are recorded with the real username instead of "system".
-- Feature: `ovm auth key` / `ovm auth reset` mint and replace the owner-claim setup key, so the panel's own recovery instructions work (a container install had no way to claim the panel).
+- Feature: `ovmanager auth key` / `ovmanager auth reset` mint and replace the owner-claim setup key, so the panel's own recovery instructions work (a container install had no way to claim the panel).
 - Feature: the offsite backup copy is implemented: the newest backup is pushed to the configured `[user@]host:/path` with rsync (or scp), `BatchMode=yes`, and the outcome goes to the audit log.
 - Fix: the SPA asked for `/nodes/{id}/status/` with a trailing slash, which Go's ServeMux matched to the node LIST route — the dashboard reported every node as unreachable and billed no traffic.
 - Fix: the SPA no longer keeps the session token in `localStorage`; the session is the server's `HttpOnly` cookie, so a script on the origin cannot read it.
@@ -12,12 +22,12 @@
 - Fix: fresh and upgraded databases now converge on the same schema — an upgraded database could end up with no `sessions` table, and nobody could log in.
 - Fix: `TRUSTED_PROXY` is read (from the environment and the .env), so a login brute-force behind a proxy no longer locks out every user and the session cookie is `Secure` there.
 - Fix: a bad node record is rejected before it is written instead of panicking a goroutine and taking the panel down; a database restore replaces the live file atomically instead of truncating it under a serving pool.
-- Fix: `ovm reset-password` revokes the owner's real sessions; `ovm doctor` can pass; `ovm update` recovers an interrupted swap and builds the tree it stages; `install.sh --build` no longer runs the panel as root.
+- Fix: `ovmanager reset-password` revokes the owner's real sessions; `ovmanager doctor` can pass; `ovmanager update` recovers an interrupted swap and builds the tree it stages; `install.sh --build` no longer runs the panel as root.
 - Fix: the node-status traffic, session and diagnostic fan-outs bound each call to a fair share of the deadline, so N unresponsive nodes no longer starve the healthy ones behind them.
 - Fix: deleting a node strips its traffic baseline and login-limit push hash, so the next node (SQLite reuses the id) is neither under-billed nor skipped by the limits sweep.
 - Fix: node traffic counters that resolve to the same user are summed, not reduced to the largest one.
 - Fix: uploads are size-capped, the HTTP server has read and idle timeouts, the SSE stream sets a write deadline, and the audit log is pruned and no longer scanned in full.
-- Fix: `TRUSTED_PROXY`, the 0 = unlimited device default, the panel URL prefix text, the installer's claim URL and the `ovm reset-password` recipes in `.env.example` all tell the truth.
+- Fix: `TRUSTED_PROXY`, the 0 = unlimited device default, the panel URL prefix text, the installer's claim URL and the `ovmanager reset-password` recipes in `.env.example` all tell the truth.
 - Fix: guard nodeState/checkState maps with mutex; stop mutating shared Client.headers across goroutines.
 - Fix: CollectMetrics/CollectLiveSnapshot type asserts guarded against malformed node payloads.
 - Fix: Origin/CSRF guard on mutating routes via RequireUser.
@@ -51,18 +61,18 @@ coverage gate (44%), embedded SPA security header mount.
 ## 2.0.2 — 2026-10-17
 
 Re-cut of 2.0.1 so the release carrying the in-tree data-dir fix is what
-`ovm update` resolves as latest and installs from. `internal/cli/update.go`
+`ovmanager update` resolves as latest and installs from. `internal/cli/update.go`
 is unchanged since 2.0.1 — this release exists to exercise the fixed update
 path on a live host end to end.
 
 ## 2.0.1 — 2026-10-17
 
-Fix `ovm update` orphaning an in-tree data dir. A from-source install keeps
+Fix `ovmanager update` orphaning an in-tree data dir. A from-source install keeps
 `DATA_DIR` at `<install>/data`; the update transaction moved the old tree to
 `.ovmanager.previous` and extracted a fresh tree with an empty `data/`, so the
 panel came back up with a blank database and a new claim key.
 
-`ovm update` now resolves the data dir before the swap (installed `.env`, then
+`ovmanager update` now resolves the data dir before the swap (installed `.env`, then
 ambient `DATA_DIR`, then the resolved default) and, after extraction, carries
 it into the new tree — but only when the candidate has no data of its own, so a
 release layout that ships its own `data/` is never clobbered. The copy (not
@@ -71,7 +81,7 @@ decision is written to the update log.
 
 ## 2.0.0 — 2026-10-17
 
-Go cutover. The panel and the `ovm` operator CLI are now one Go binary:
+Go cutover. The panel and the `ovmanager` operator CLI are now one Go binary:
 `main.go` serves the panel when invoked bare and routes subcommands to cobra.
 No Python in the runtime — `main.py`, `cli/`, `manager.sh`, `pyproject.toml`,
 `scripts/`, `tests/`, `uv.lock` and `Dockerfile` are gone, and CI builds and
@@ -81,7 +91,7 @@ tests Go only.
 plus prebuilt `frontend/dist`), extract flat into `$INSTALL_DIR`, write the
 systemd unit, restart, then verify `/health` reports the release version. The
 version match is the v1.6.0 dev-layout gap fix — a stale process answering the
-probe fails the install instead of passing as healthy. `ovm update` is the Go
+probe fails the install instead of passing as healthy. `ovmanager update` is the Go
 staged transaction (backup → stage → verify → failover) with the restart made
 explicit and the probe derived from the installed `.env`.
 
@@ -142,7 +152,7 @@ deleted. Single-panel pairing: `settings.panel_id` UUID (migration v21)
 Admin rename by owner incl. self: cascade `users.owner`, revoke sessions,
 409 on conflict (`is_owner` flag, migration v22, survives renames).
 Claim accepts username; `POST /owner-claim/verify`; claimed panel +
-fresh key = recovery (reset credentials, key spent). `ovm auth reset`
+fresh key = recovery (reset credentials, key spent). `ovmanager auth reset`
 mints a fresh setup key (password path removed from shell).
 Health page deleted (`/health` → `/`); nav is Manage (Users, Nodes,
 Admins) / System (Settings, Logs); logout confirms.
@@ -283,7 +293,7 @@ table (cols `ssl_cert_file`, `ssl_key_file`, `acme_domain`, `acme_email`,
 showing effective value + "Override via .env" badge + disabled input when
 overridden + Save + Renew now buttons, "Temporary Certificate" UI removed,
 cert pin shown per-node (colored chip — green/red/grey) with Re-pin button,
-`ovm tls` CLI extended with `get/renew/replace`, ACME weekly systemd timer +
+`ovmanager tls` CLI extended with `get/renew/replace`, ACME weekly systemd timer +
 logrotate; (A8) Telegram owner welcome wizard — 4-step setup on first
 `/start` (panel URL → ACME yes/no → domain → email), persisted to Settings
 via migration v17. i18n parity across all locales + bot locales.
@@ -356,7 +366,7 @@ the version-dir manager path; `test_the_renderer_matches_the_nodes`
 and `_transfer_row` continue to pass with helpers in render.sh.
 ## 1.0.62 — 2026-10-05
 
-`ovm update` resolved `INSTALLER` against the legacy flat layout
+`ovmanager update` resolved `INSTALLER` against the legacy flat layout
 (`${INSTALL_DIR}/install.sh`), which no longer exists. It now
 prefers `${INSTALL_DIR}/ovmanager-${VERSION}/install.sh` and falls
 back to the flat path.
@@ -372,13 +382,13 @@ becomes an environment variable) before invoking `python -m cli.main`.
 Manager CLI: `_cli_py` and `_cli_py_soft` looked for the venv at
 `${INSTALL_DIR}/.venv` (legacy flat layout). Now they resolve the
 venv under `${INSTALL_DIR}/ovmanager-${VERSION}/.venv` and `cd` to
-that version dir before invoking `python -m cli.main`, so `ovm`
+that version dir before invoking `python -m cli.main`, so `ovmanager`
 works on the versioned install.
 ## 1.0.62 — 2026-10-05
 
 Installer: 1.0.56 installed cleanly and the panel came up, but
 `install_cli()` read `${INSTALL_DIR}/manager.sh` (which no longer
-exists) so `ovm` was never copied into `/usr/local/bin`. Now it
+exists) so `ovmanager` was never copied into `/usr/local/bin`. Now it
 prefers `${INSTALL_DIR}/ovmanager-${VERSION}/manager.sh`.
 ## 1.0.62 — 2026-10-05
 
@@ -489,7 +499,7 @@ sorts ahead of the public one. The installer had been fixed for exactly this and
 the panel's toggle was missed. It now skips the private, loopback and link-local
 ranges and IPv6.
 
-`ovm restart` reported success over a service that had not restarted.
+`ovmanager restart` reported success over a service that had not restarted.
 `service_action` ended every branch on a message that returns 0, so the warning
 beneath it could never fire. The same shape as the `pkg_install` bug fixed in
 1.0.44, in the sibling file.
@@ -541,7 +551,7 @@ no address in its key.
 gate read the direct peer, which behind nginx is always loopback, so "is this
 local?" was true for everyone.
 
-`ovm auth reset` changed the password and left every existing session valid.
+`ovmanager auth reset` changed the password and left every existing session valid.
 An operator resetting a compromised account kept the intruder — the token is
 still in the sessions table and the sliding idle timeout refreshes it on every
 request, so it never expires. The panel's own reset already revoked; the two
@@ -556,16 +566,16 @@ so the second node read counters from before the first wrote, rebuilt its
 per-node map from that stale copy, and had its conditional write rejected
 outright. A two-node panel billed 1000 bytes for 6000 real ones.
 
-`ovm url reset` reverted on the next boot. The settings seeder ran on every
+`ovmanager url reset` reverted on the next boot. The settings seeder ran on every
 migration rather than only on a fresh install and treated a blank prefix as
 unset, so it restored `.env`'s `URLPATH` over the operator's reset. An empty
 prefix is a value — it means "serve at the root" — and this is the documented
-way out of a forgotten prefix, so `ovm restart` put you straight back in.
+way out of a forgotten prefix, so `ovmanager restart` put you straight back in.
 
-`ovm status` printed the `.env` seed rather than the prefix being served, so
+`ovmanager status` printed the `.env` seed rather than the prefix being served, so
 the URL it told you to open returned a blank 404 the moment the prefix changed.
 
-`ovm url set /` was the one command that could not do what its own error
+`ovmanager url set /` was the one command that could not do what its own error
 promised. Serving at the root is deliberate and the error names `/` as the way
 to ask, but the slashes were stripped before the character check, so `/` became
 the empty string and the length requirement rejected it. The panel's own reset
@@ -613,13 +623,13 @@ The installer works offline, and a restore no longer bricks the panel.
 
 **Fixed**
 
-`ovm restore` left the panel crash-looping on `sqlite3.OperationalError:
+`ovmanager restore` left the panel crash-looping on `sqlite3.OperationalError:
 unable to open database file`, and the one-line chown that recovers it hides
 how much the restore path had been silently corrupting.
 
 The cause is ownership, not the restore. The candidate that gets activated
 comes from `mkstemp`, so it belongs to whoever ran the command — root, for
-`ovm restore` — and `os.replace` keeps the *candidate's* owner rather than the
+`ovmanager restore` — and `os.replace` keeps the *candidate's* owner rather than the
 live file's. Install-time `chown` put the database on the service account, so
 that is the owner the panel needs; the restore threw it away. The file came
 back `root:root 0600` while the panel runs as an unprivileged account, and a
@@ -771,9 +781,9 @@ One renderer for every character, and a CLI that matches it.
 
 **Output**
 
-- `ovm doctor` is one line when clean and a failure-first list when not, with each
+- `ovmanager doctor` is one line when clean and a failure-first list when not, with each
   fix in its label's own column. It was fifteen lines of `ok`.
-- A clean `ovm` is 27 lines, down from 64. `Service account` — fifteen characters,
+- A clean `ovmanager` is 27 lines, down from 64. `Service account` — fifteen characters,
   and the label on the check most likely to fail — lines up because the column is
   computed from the labels actually present.
 - The installer and the CLI share one renderer. `scripts/lib/render.sh` is
@@ -791,9 +801,9 @@ is still reported as bad input, not as a complaint about the terminal.
 
 - A successful install exited non-zero: the Ready card interpolated a function as
   a variable, fatal under `set -u` on its last line, after the panel was serving.
-- `ovm backup` wrote nothing — an unguarded `$1` after `shift`.
-- `ovm backup schedule` did nothing and exited 0 — `shift 2` on one argument.
-- `ovm doctor --all` changed nothing: the flag parsed and was dropped.
+- `ovmanager backup` wrote nothing — an unguarded `$1` after `shift`.
+- `ovmanager backup schedule` did nothing and exited 0 — `shift 2` on one argument.
+- `ovmanager doctor --all` changed nothing: the flag parsed and was dropped.
 - Eleven places told an operator to run a name the tool no longer advertises.
 
 **Suite**
@@ -829,7 +839,7 @@ First public release.
   open the printed URL and choose the password in the browser.
 - The password is stored as a bcrypt hash in the panel database, never in `.env`.
 - The key is single-use and rate-limited. Lost it before claiming?
-  `ovm owner-claim` prints a new one.
+  `ovmanager owner-claim` prints a new one.
 
 **The panel**
 
@@ -848,11 +858,11 @@ First public release.
 
 **Managing it**
 
-- `ovm status`, `ovm doctor [--fix]`, `ovm start|stop|restart`, `ovm logs`,
-  `ovm backup`, `ovm restore`, `ovm https`, `ovm tls-status`, `ovm recovery`,
-  `ovm update`, `ovm rollback`, `ovm recover-update`, `ovm reset-password`,
-  `ovm reset-urlpath`, `ovm owner-claim`, `ovm completion`, `ovm version-script`,
-  `ovm uninstall [--purge]`.
+- `ovmanager status`, `ovmanager doctor [--fix]`, `ovmanager start|stop|restart`, `ovmanager logs`,
+  `ovmanager backup`, `ovmanager restore`, `ovmanager https`, `ovmanager tls-status`, `ovmanager recovery`,
+  `ovmanager update`, `ovmanager rollback`, `ovmanager recover-update`, `ovmanager reset-password`,
+  `ovmanager reset-urlpath`, `ovmanager owner-claim`, `ovmanager completion`, `ovmanager version-script`,
+  `ovmanager uninstall [--purge]`.
 - Updates download and verify the release, stage it, and roll back automatically
   if the new version does not come up. The database migrates on the next start.
 - Uninstall keeps your data. `--purge` takes a snapshot first, then deletes it.

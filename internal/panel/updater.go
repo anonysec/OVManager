@@ -33,7 +33,7 @@ const (
 
 	hostComposeCmd      = "docker compose up -d --build"
 	hostRestartCmd      = "docker restart ovmanager"
-	hostNativeUpdateCmd = "sudo ovm update"
+	hostNativeUpdateCmd = "sudo ovmanager update"
 )
 
 // updateCache is updater.py's module-level _cache (1h TTL, process-wide).

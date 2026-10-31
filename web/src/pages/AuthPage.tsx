@@ -147,7 +147,7 @@ const AuthPage = () => {
           </form>
         ) : step === 'verify' ? (
           <form className="login-form" onSubmit={handleVerify}>
-            <Field label={t('claimKey', 'Setup key')} hint={t('claimKeyHint', 'Printed at the end of the install; regenerate it with: ovm owner-claim')}>
+            <Field label={t('claimKey', 'Setup key')} hint={t('claimKeyHint', 'Printed at the end of the install; regenerate it with: ovmanager auth key')}>
               <input type="text" value={setupKey} onChange={(e) => { setSetupKey(e.target.value); clearError(); }} autoComplete="off" spellCheck={false} required />
             </Field>
             <Button type="submit" variant="primary" size="lg" block loading={loading}>{t('verifyButton', 'Verify')}</Button>

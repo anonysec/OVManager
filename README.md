@@ -206,7 +206,7 @@ Full documentation is published at **<https://anonysec.github.io/OVManager/>**.
 | [TLS certificates](https://anonysec.github.io/OVManager/wiki/tls.html) | Self-signed vs Let's Encrypt, renewing, and the node-side certificate story. |
 | [Backups & restore](https://anonysec.github.io/OVManager/wiki/backup.html) | Backup bundles, the daily timer, offsite copies, and restoring without taking the panel down. |
 | [Troubleshooting](https://anonysec.github.io/OVManager/wiki/troubleshooting.html) | The symptoms people actually hit, in the order worth checking. |
-| [CLI reference](https://anonysec.github.io/OVManager/wiki/cli.html) | Every `ovmanager` and `ovn` command, the installer's flags, and the `OVM_*` settings. |
+| [CLI reference](https://anonysec.github.io/OVManager/wiki/cli.html) | Every `ovmanager` and `ovnode` command, the installer's flags, and the `OVM_*` settings. |
 
 Elsewhere in this repository:
 
