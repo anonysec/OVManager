@@ -42,19 +42,56 @@ type Config struct {
 //   DATABASE_URL / SQLALCHEMY_DATABASE_URL / DB_URL   connection URL
 //   DATA_DIR                                         SQLite directory fallback
 //   DB_PATH                                          explicit SQLite file
+// envOrFileDB reads a key from process env, falling back to the panel .env
+// file (which wins for forcing values, per PasarGuard precedence override).
+func envOrFileDB(key string) string {
+	// .env wins
+	if raw, err := os.ReadFile(".env"); err == nil {
+		for _, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+				continue
+			}
+			k, v, _ := strings.Cut(line, "=")
+			if strings.TrimSpace(k) == key {
+				return strings.Trim(strings.TrimSpace(v), `"'`)
+			}
+		}
+	}
+	// also check OVM_APP_DIR/.env
+	if d := os.Getenv("OVM_APP_DIR"); d != "" {
+		if raw, err := os.ReadFile(filepath.Join(d, ".env")); err == nil {
+			for _, line := range strings.Split(string(raw), "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+					continue
+				}
+				k, v, _ := strings.Cut(line, "=")
+				if strings.TrimSpace(k) == key {
+					return strings.Trim(strings.TrimSpace(v), `"'`)
+				}
+			}
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return ""
+}
+
 func ConfigFromEnv() Config {
 	cfg := Config{PoolSize: 5}
 	for _, key := range []string{"DATABASE_URL", "SQLALCHEMY_DATABASE_URL", "DB_URL"} {
-		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if v := envOrFileDB(key); v != "" {
 			cfg.URL = v
 			return cfg
 		}
 	}
-	if p := strings.TrimSpace(os.Getenv("DB_PATH")); p != "" {
+	if p := envOrFileDB("DB_PATH"); p != "" {
 		cfg.Path = p
 		return cfg
 	}
-	dir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+	dir := envOrFileDB("DATA_DIR")
 	if dir == "" {
 		dir = "data"
 	}

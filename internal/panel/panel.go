@@ -221,10 +221,15 @@ func TrustedProxyEnabled() bool {
 }
 
 func envOrFile(key string) string {
+	// .env wins so a user can force an option by editing the file, even when
+	// the process environment carries a different value (PasarGuard-style).
+	if v := strings.TrimSpace(envFileValues()[key]); v != "" {
+		return v
+	}
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
-	return envFileValues()[key]
+	return ""
 }
 
 // sslKeyPath / sslCertPath are tls_paths.key_path / cert_path.
