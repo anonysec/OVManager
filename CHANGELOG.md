@@ -1,3 +1,13 @@
+## 2.4.0 — 2026-11-01
+
+- Feat(db): DB config abstraction with PasarGuard-style env aliases and migration scaffolding.
+- Feat(db): wire postgres (pgx) and mysql drivers; pool tuning via POOL_SIZE/DB_POOL_SIZE.
+- Feat(env): `.env` wins over process env (force option).
+- Feat(cli): typed confirmation on `ovmanager update` (`--yes` to skip); remove `doctor` command.
+- Feat(installer): idempotent install upgrades; atomic shared-lib bootstrap; interactive menu on no-args.
+- Feat(users): surface last login IP in user detail modal.
+- Feat(telemetry): configurable metrics interval via OVM_METRICS_INTERVAL_SECONDS.
+
 ## 2.3.0 — 2026-10-31
 
 - Fix(cli): robust HTTPS health probes and update verification for TLS installs.
