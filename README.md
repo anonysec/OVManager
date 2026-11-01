@@ -250,3 +250,6 @@ MIT. Free for personal and commercial use: no license server, no paid feature ga
 **You operate the VPN.** Abuse complaints (spam, scanning, copyright) come to you, not to this project. Enforce per-user quotas and expiry, watch the connection events in the audit log, disable abusers promptly, and respect your provider's terms of service and local law.
 
 See [Privacy](.github/docs/legal/PRIVACY.md), [Acceptable use](.github/docs/legal/ACCEPTABLE_USE.md), [Trademarks](.github/docs/legal/TRADEMARKS.md) and [third-party licensing](.github/docs/legal/THIRD_PARTY_LICENSES.md).
+
+## Dev builds
+Install a rolling dev build: `OVM_VERSION=dev bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)`. Dev versions look like `dev-YYYYMMDD.N-<sha>`.
