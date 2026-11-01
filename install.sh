@@ -14,7 +14,7 @@ DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
 DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="${OVM_VERSION:-2.4.4}"
+VERSION="${OVM_VERSION:-2.4.5}"
 IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
@@ -316,35 +316,6 @@ WantedBy=timers.target
 UNIT
     chmod 644 /etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.service /etc/systemd/system/${SYSTEMD_SERVICE%.service}-backup.timer
 }
-write_acme_renew_units() {
-    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.service" <<UNIT
-[Unit]
-Description=OVManager ACME certificate renewal check
-After=${SYSTEMD_SERVICE}
-
-[Service]
-Type=oneshot
-EnvironmentFile=$INSTALL_DIR/.env
-ExecStart=$INSTALL_DIR/$APP_SLUG tls renew
-UNIT
-    cat > "/etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.timer" <<UNIT
-[Unit]
-Description=Run the OVManager ACME renewal check weekly
-
-[Timer]
-OnCalendar=weekly
-RandomizedDelaySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-UNIT
-    chmod 644 /etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.service /etc/systemd/system/${SYSTEMD_SERVICE%.service}-acme-renew.timer
-}
-enable_acme_renew_timer() {
-    systemctl daemon-reload
-    systemctl enable --now "${SYSTEMD_SERVICE%.service}-acme-renew.timer" >/dev/null 2>&1 || _warn "Could not enable the ACME renew timer"
-}
 enable_backup_timer() {
     systemctl daemon-reload
     systemctl enable --now "${SYSTEMD_SERVICE%.service}-backup.timer" >/dev/null 2>&1 || _warn "Could not enable the backup timer"
@@ -393,7 +364,7 @@ run_node_installer() {
     load_helpers'
     local fixed_check='    # install
     if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
-    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.17/install.sh)" || [[ -z "$script" ]]; then
+    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.18/install.sh)" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
     fi
@@ -745,7 +716,6 @@ do_install() {
         systemctl enable --now "$SYSTEMD_SERVICE" >/dev/null 2>&1 || die "Could not start $SYSTEMD_SERVICE"
     fi
     enable_backup_timer
-    [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && { write_acme_renew_units; enable_acme_renew_timer; }
     _ok "service $SYSTEMD_SERVICE started"
     if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
         colorized_echo blue "TLS (self-signed)"
@@ -820,7 +790,7 @@ do_uninstall() {
     fi
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl stop "$SYSTEMD_SERVICE"; _ok "stopped $SYSTEMD_SERVICE"; fi
     if systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl disable "$SYSTEMD_SERVICE"; _ok "disabled $SYSTEMD_SERVICE"; fi
-    for unit in "$SYSTEMD_SERVICE" "${SYSTEMD_SERVICE%.service}-backup.service" "${SYSTEMD_SERVICE%.service}-backup.timer" "${SYSTEMD_SERVICE%.service}-acme-renew.service" "${SYSTEMD_SERVICE%.service}-acme-renew.timer"; do
+    for unit in "$SYSTEMD_SERVICE" "${SYSTEMD_SERVICE%.service}-backup.service" "${SYSTEMD_SERVICE%.service}-backup.timer"; do
         [[ -f "/etc/systemd/system/$unit" ]] && { rm -f "/etc/systemd/system/$unit"; _ok "removed /etc/systemd/system/$unit"; }
     done
     systemctl daemon-reload 2>/dev/null || true

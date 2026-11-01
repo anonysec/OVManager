@@ -8,4 +8,4 @@
 package version
 
 // Version is the OVManager release version.
-const Version = "2.4.4"
+const Version = "2.4.5"

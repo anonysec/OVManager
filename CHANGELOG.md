@@ -1,3 +1,7 @@
+## 2.4.5 — 2026-11-01
+
+- Chore(services): drop ACME-renew systemd units (internal worker handles renewal).
+
 ## 2.4.4 — 2026-11-01
 
 - Fix(installer): pin OVNode installer to v1.4.17.
