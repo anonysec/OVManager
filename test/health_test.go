@@ -25,11 +25,11 @@ func releaseVersion(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("read internal/version/version.go: %v", err)
 	}
-	m := regexp.MustCompile(`(?m)^\s*const Version = "([^"]+)"`).FindSubmatch(raw)
+	m := regexp.MustCompile(`(?m)^\s*(const|var) Version = "([^"]+)"`).FindSubmatch(raw)
 	if m == nil {
 		t.Fatalf("no Version constant in internal/version/version.go")
 	}
-	return string(m[1])
+	return string(m[2])
 }
 
 // TestHealthMatches mirrors backend/app.py /health: {"status":"ok"} plus
