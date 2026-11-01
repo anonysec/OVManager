@@ -14,10 +14,17 @@ DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
 DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="${OVM_VERSION:-2.4.6}"
+VERSION="${OVM_VERSION:-latest}"
 IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
-    VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
+    VERSION=$(grep -E '^(const|var) Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
+fi
+# Resolve "latest" to the newest published release tag.
+if [[ "$VERSION" == "latest" ]]; then
+    if ! VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n1)"; then
+        VERSION=""
+    fi
+    [[ -n "$VERSION" ]] || { echo "Could not resolve latest release for $REPO" >&2; exit 1; }
 fi
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"
