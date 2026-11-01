@@ -8,6 +8,9 @@ name: Release assets
 # install.sh (the default release path) can install without git, npm or a Go
 # toolchain.
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types: [published]
   workflow_dispatch:
@@ -68,6 +71,14 @@ jobs:
             GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath -o "${out}" ./cmd
             sha256sum "${out}" > "${out}.sha256"
           done
+
+      - name: Ensure release exists
+        if: startsWith(github.ref_name, 'v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "${TAG}" --generate-notes
 
       - name: Upload assets
         env:
