@@ -49,12 +49,12 @@ jobs:
       - name: Verify tag matches version constant
         if: startsWith(github.ref_name, 'v')
         run: |
-          [ "$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)" = "${GITHUB_REF_NAME#v}" ] || { echo "tag does not match internal/version/version.go"; exit 1; }
+          [ "$(grep -m1 -E '(const|var) Version' internal/version/version.go | cut -d'"' -f2)" = "${GITHUB_REF_NAME#v}" ] || { echo "tag does not match internal/version/version.go"; exit 1; }
 
       - name: Read version
         id: ver
         run: |
-          VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
+          VER="$(grep -m1 -E '(const|var) Version' internal/version/version.go | cut -d'"' -f2)"
           echo "VER=${VER}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
