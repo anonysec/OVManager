@@ -332,22 +332,16 @@ uninstall_completion() {
 # checks whether APP_DIR exists. Preserve the pre-bootstrap state when this
 # exact upstream ordering is present; do not remove or overwrite existing nodes.
 run_node_installer() {
-    local script before='    load_helpers' check='    # install
-    if [[ -d "$APP_DIR" ]]; then'
-    local snapshot='    local ovm_node_dir_existed=0
-    [[ -d "$APP_DIR" ]] && ovm_node_dir_existed=1
-    load_helpers'
-    local fixed_check='    # install
-    if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
+    # If a node is already present, do not re-run the installer (it would
+    # either no-op or refuse). Point the operator at update instead.
+    if [[ -d /opt/ovnode ]] || command -v ovnode >/dev/null 2>&1; then
+        _note "OVNode already installed; use 'ovnode update' to refresh."
+        return 0
+    fi
+    local script
     if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v2.0.0/install.sh)" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
-    fi
-    # Match both the call and the later install check, not similarly named
-    # helpers in a future installer. If upstream fixes this, leave it alone.
-    if [[ "$script" == *"$before"*"$check"* && "$script" == *'load_helpers() {'* ]]; then
-        script="${script/"$before"/"$snapshot"}"
-        script="${script/"$check"/"$fixed_check"}"
     fi
     if [[ "$EUID" -eq 0 ]]; then
         bash -c "$script"
@@ -392,7 +386,9 @@ offer_node_and_logs() {
     colorized_echo yellow "OVManager installed."
     read -r -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
-        run_node_installer || _warn "OVNode installation failed; the panel remains installed."
+        _note "Install OVNode manually with:"
+        _note "  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)"
+        _note "(or: ovmanager install-node)"
     else
         _note "Skipping OVNode installation."
     fi
