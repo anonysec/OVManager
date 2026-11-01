@@ -343,13 +343,19 @@ run_node_installer() {
         _warn "Could not download the OVNode installer."
         return 1
     fi
-    # Run non-interactively with defaults (PasarGuard-style): OVN_YES=1 keeps
-    # the node installer from prompting; the node keeps its own defaults.
+    # `bash -c "$script"` does not run main(): BASH_SOURCE[0] is empty under
+    # -c, so the installer's entry-point guard never fires. Write to a temp
+    # file and execute it like a normal script (PasarGuard-style, no prompts).
+    local tmp
+    tmp="$(mktemp)"
+    printf '%s\n' "$script" > "$tmp"
+    chmod +x "$tmp"
     if [[ "$EUID" -eq 0 ]]; then
-        OVN_YES=1 bash -c "$script"
+        OVN_YES=1 bash "$tmp"
     else
-        sudo OVN_YES=1 bash -c "$script"
+        sudo OVN_YES=1 bash "$tmp"
     fi
+    rm -f "$tmp"
 }
 
 # Print after the node installer (which clears the terminal), and before any
