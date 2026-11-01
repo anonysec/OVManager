@@ -343,10 +343,12 @@ run_node_installer() {
         _warn "Could not download the OVNode installer."
         return 1
     fi
+    # Run non-interactively with defaults (PasarGuard-style): OVN_YES=1 keeps
+    # the node installer from prompting; the node keeps its own defaults.
     if [[ "$EUID" -eq 0 ]]; then
-        bash -c "$script"
+        OVN_YES=1 bash -c "$script"
     else
-        sudo bash -c "$script"
+        sudo OVN_YES=1 bash -c "$script"
     fi
 }
 
@@ -386,9 +388,7 @@ offer_node_and_logs() {
     colorized_echo yellow "OVManager installed."
     read -r -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
-        _note "Install OVNode manually with:"
-        _note "  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)"
-        _note "(or: ovmanager install-node)"
+        OVN_YES=1 run_node_installer || _warn "OVNode installation failed; the panel remains installed."
     else
         _note "Skipping OVNode installation."
     fi
