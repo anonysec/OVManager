@@ -869,13 +869,28 @@ do_uninstall() {
             *) die "Unknown option for uninstall: $1" ;;
         esac
     done
+    # Check if installed (PasarGuard style)
+    if [[ ! -d "$INSTALL_DIR" && ! -d "$DATA_DIR" ]]; then
+        colorized_echo red "OVManager is not installed!"
+        exit 1
+    fi
+    # Show what will be removed
+    echo
+    colorized_echo blue "=============================="
+    colorized_echo yellow "The following will be removed:"
+    [[ -d "$INSTALL_DIR" ]] && colorized_echo yellow "  - $INSTALL_DIR"
+    [[ -d "$DATA_DIR" ]] && colorized_echo yellow "  - $DATA_DIR"
+    colorized_echo blue "=============================="
+    echo
     # Interactive confirmation (PasarGuard style)
     if [[ -t 0 && "$YES" -eq 0 && $# -eq 0 ]]; then
         local confirm purge_confirm
-        confirm="$(ask "really uninstall OVManager?" "n")"
+        confirm="$(ask "Do you really want to uninstall OVManager?" "n")"
         [[ "$confirm" =~ ^[Yy]$ ]] || { render_warn "Aborted."; return 0; }
-        purge_confirm="$(ask "remove data files too ($DATA_DIR)?" "n")"
-        [[ "$purge_confirm" =~ ^[Yy]$ ]] && purge=1
+        if [[ -d "$DATA_DIR" ]]; then
+            purge_confirm="$(ask "remove data files too ($DATA_DIR)?" "n")"
+            [[ "$purge_confirm" =~ ^[Yy]$ ]] && purge=1
+        fi
     fi
     check_root
     if command -v docker >/dev/null 2>&1; then
@@ -897,7 +912,7 @@ do_uninstall() {
     else
         _note "data preserved at $DATA_DIR (use --purge to remove)"
     fi
-    _ok "OVManager uninstalled"
+    colorized_echo green "OVManager uninstalled successfully"
 }
 
 usage() {
