@@ -1,3 +1,7 @@
+## 2.4.1 — 2026-11-01
+
+- Fix(installer): pin OVNode installer to v1.4.14.
+
 ## 2.4.0 — 2026-11-01
 
 - Feat(db): DB config abstraction with PasarGuard-style env aliases and migration scaffolding.
