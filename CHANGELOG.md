@@ -1,3 +1,7 @@
+## 2.4.2 — 2026-11-01
+
+- Fix(installer): pin OVNode installer to v1.4.15 (agent binary renamed).
+
 ## 2.4.1 — 2026-11-01
 
 - Fix(installer): pin OVNode installer to v1.4.14.
