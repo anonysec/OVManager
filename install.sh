@@ -434,7 +434,8 @@ verify_health() {
         fi
         if [[ -n "$body" ]]; then
             got="$(printf '%s' "$body" | grep -o '"version":"[^"]*"' | cut -d'"' -f4)"
-            if [[ "$got" == "$want" ]]; then _ok "health  v$got on port $port"; return 0; fi
+            # Dev builds report "dev-YYYYMMDD.N-sha"; accept any dev-* when want=dev.
+            if [[ "$want" == "dev" && "$got" == dev-* ]] || [[ "$got" == "$want" ]]; then _ok "health  v$got on port $port"; return 0; fi
             [[ -n "$got" ]] && _warn "health reports '$got', expected '$want'"
         fi
         printf '.' >&2; sleep 1
