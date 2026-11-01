@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-2.4.4-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-2.4.6-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
@@ -140,7 +140,7 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - Port `2095` free.
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.4.4/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.4.6/install.sh)
 ```
 
 The installer defaults to Docker; use `--native` to install the verified release binary as a systemd service with a daily backup timer. Both paths start and health-check the panel. Use `interactive` or `--interactive` to configure it and optionally install OVNode on the same server; `-y` skips prompts. The panel URL and claim key are shown after the optional node installer and before following logs. `bash install.sh --help` prints the full surface.
