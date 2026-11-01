@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -81,6 +82,16 @@ func envOrFileDB(key string) string {
 
 func ConfigFromEnv() Config {
 	cfg := Config{PoolSize: 5}
+	if v := envOrFileDB("POOL_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.PoolSize = n
+		}
+	}
+	if v := envOrFileDB("DB_POOL_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.PoolSize = n
+		}
+	}
 	for _, key := range []string{"DATABASE_URL", "SQLALCHEMY_DATABASE_URL", "DB_URL"} {
 		if v := envOrFileDB(key); v != "" {
 			cfg.URL = v
@@ -128,7 +139,15 @@ func OpenConfig(cfg Config) (*sql.DB, error) {
 		if path == "" {
 			path = DefaultPath
 		}
-		return Open(path)
+		conn, err := Open(path)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.PoolSize > 0 {
+			conn.SetMaxOpenConns(cfg.PoolSize)
+			conn.SetMaxIdleConns(cfg.PoolSize)
+		}
+		return conn, nil
 	default:
 		return nil, fmt.Errorf("database backend %q not implemented yet (SQLite only). "+
 			"Set DATABASE_URL to a sqlite:/// URL or leave unset for the default SQLite file", cfg.Backend())
