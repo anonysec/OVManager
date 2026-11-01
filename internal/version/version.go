@@ -8,4 +8,4 @@
 package version
 
 // Version is the OVManager release version.
-var Version = "2.4.6"
+var Version = "2.0.0"
