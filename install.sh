@@ -385,7 +385,9 @@ show_install_summary() {
 
 offer_node_and_logs() {
     local mode="${1:-native}" port="$2" urlpath="$3" key="${4:-}" choice=""
-    if [[ "$INTERACTIVE" -ne 1 || "$YES" -eq 1 || ! -t 0 ]]; then
+    # PasarGuard-style: prompt even on a normal (non -i) install when a tty
+    # is present; never block a piped/non-interactive run.
+    if [[ "$YES" -eq 1 || ! -t 0 ]]; then
         _note "Skipping optional OVNode/logs prompts (non-interactive)."
         show_install_summary "$port" "$urlpath" "$key"
         return 0
