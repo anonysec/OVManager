@@ -757,7 +757,7 @@ do_uninstall() {
     fi
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl stop "$SYSTEMD_SERVICE"; _ok "stopped $SYSTEMD_SERVICE"; fi
     if systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl disable "$SYSTEMD_SERVICE"; _ok "disabled $SYSTEMD_SERVICE"; fi
-    for unit in "$SYSTEMD_SERVICE"; do
+    for unit in $SYSTEMD_SERVICE; do
         [[ -f "/etc/systemd/system/$unit" ]] && { rm -f "/etc/systemd/system/$unit"; _ok "removed /etc/systemd/system/$unit"; }
     done
     systemctl daemon-reload 2>/dev/null || true

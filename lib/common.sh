@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 SSL_KEY_SRC=""
 SSL_IP=""
 INSTALL_IP_SSL=0
