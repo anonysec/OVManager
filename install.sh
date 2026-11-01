@@ -112,7 +112,7 @@ prompt_interactive() {
         if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else render_warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
     fi
     local db_choice
-    db_choice="$(ask "database (sqlite/postgres/mysql)" "$DB_TYPE")"
+    db_choice="$(ask "database type (sqlite/postgres/mysql)" "$DB_TYPE")"
     case "${db_choice:-sqlite}" in
         sqlite|postgres|mysql|mariadb) DB_TYPE="$db_choice" ;;
         *) render_warn "Unknown database '$db_choice', using sqlite" ; DB_TYPE="sqlite" ;;
@@ -441,7 +441,13 @@ offer_node_and_logs() {
         return 0
     fi
     echo
-    colorized_echo yellow "OVManager installed."
+    colorized_echo blue "=============================="
+    colorized_echo yellow "OVManager doesn't have any OpenVPN core by default."
+    colorized_echo yellow "You need at least one node for VPN connections."
+    echo
+    colorized_echo cyan "Want to install OVNode on the same server?"
+    colorized_echo red "(Not recommended for commercial/production use)"
+    echo
     read -r -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         OVN_YES=1 run_node_installer || _warn "OVNode installation failed; the panel remains installed."
