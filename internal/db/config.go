@@ -16,6 +16,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Backend identifies a supported database engine.
@@ -148,9 +151,44 @@ func OpenConfig(cfg Config) (*sql.DB, error) {
 			conn.SetMaxIdleConns(cfg.PoolSize)
 		}
 		return conn, nil
+	case BackendPostgres:
+		dsn := cfg.URL
+		if dsn == "" {
+			return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
+		}
+		conn, err := sql.Open("pgx", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("open postgres: %w", err)
+		}
+		if err := conn.Ping(); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("ping postgres: %w", err)
+		}
+		if cfg.PoolSize > 0 {
+			conn.SetMaxOpenConns(cfg.PoolSize)
+			conn.SetMaxIdleConns(cfg.PoolSize)
+		}
+		return conn, nil
+	case BackendMySQL:
+		dsn := cfg.URL
+		if dsn == "" {
+			return nil, fmt.Errorf("mysql backend requires DATABASE_URL")
+		}
+		conn, err := sql.Open("mysql", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("open mysql: %w", err)
+		}
+		if err := conn.Ping(); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("ping mysql: %w", err)
+		}
+		if cfg.PoolSize > 0 {
+			conn.SetMaxOpenConns(cfg.PoolSize)
+			conn.SetMaxIdleConns(cfg.PoolSize)
+		}
+		return conn, nil
 	default:
-		return nil, fmt.Errorf("database backend %q not implemented yet (SQLite only). "+
-			"Set DATABASE_URL to a sqlite:/// URL or leave unset for the default SQLite file", cfg.Backend())
+		return nil, fmt.Errorf("database backend %q not supported", cfg.Backend())
 	}
 }
 

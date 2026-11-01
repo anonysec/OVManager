@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer conn.Close()
-	if _, err := db.Migrate(conn); err != nil {
+	if _, err := db.MigrateWithBackend(conn, cfg.Backend()); err != nil {
 		log.Fatalf("migrate database: %v", err)
 	}
 
