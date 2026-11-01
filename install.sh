@@ -32,6 +32,8 @@ CLI_NAME="ovmanager"
 
 PORT_VAL="${OVM_PORT:-$DEFAULT_PORT}"
 URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
+DB_TYPE="${OVM_DB_TYPE:-sqlite}"
+DB_URL="${OVM_DATABASE_URL:-}"
 HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
 ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
@@ -108,6 +110,15 @@ prompt_interactive() {
     in_path="${in_path// /}"; in_path="${in_path#/}"; in_path="${in_path%/}"
     if [[ -n "$in_path" ]]; then
         if validate_urlpath "$in_path"; then URLPATH_VAL="$in_path"; else render_warn "Invalid URL path '$in_path', using default $URLPATH_VAL"; fi
+    fi
+    local db_choice
+    db_choice="$(ask "database (sqlite/postgres/mysql)" "$DB_TYPE")"
+    case "${db_choice:-sqlite}" in
+        sqlite|postgres|mysql|mariadb) DB_TYPE="$db_choice" ;;
+        *) render_warn "Unknown database '$db_choice', using sqlite" ; DB_TYPE="sqlite" ;;
+    esac
+    if [[ "$DB_TYPE" != "sqlite" && -z "$DB_URL" ]]; then
+        DB_URL="$(ask "database URL (e.g. postgresql://user:pass@host:5432/ovmanager)" "")"
     fi
 }
 
@@ -215,6 +226,9 @@ write_env() {
         printf 'URLPATH=%s\n' "$URLPATH_VAL"
         printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"
         printf 'DATA_DIR=%s\n' "$data_dir"
+        if [[ "$DB_TYPE" != "sqlite" && -n "$DB_URL" ]]; then
+            printf 'DATABASE_URL=%s\n' "$DB_URL"
+        fi
         if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
             printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
             printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
@@ -582,6 +596,9 @@ write_compose_file() {
         printf '      HOST: 0.0.0.0\n'; printf '      PORT: %s\n' "$PORT_VAL"
         printf '      URLPATH: %s\n' "$URLPATH_VAL"; printf '      ADMIN_USERNAME: %s\n' "$DEFAULT_USER"
         printf '      DATA_DIR: /app/data\n'
+        if [[ "$DB_TYPE" != "sqlite" && -n "$DB_URL" ]]; then
+            printf '      DATABASE_URL: %s\n' "$DB_URL"
+        fi
         if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
             printf '      OVM_ACME_DOMAIN: %s\n' "$SSL_DOMAIN"
             printf '      SSL_CERTFILE: /app/data/tls/fullchain.pem\n'; printf '      SSL_KEYFILE: /app/data/tls/privkey.pem\n'
@@ -912,10 +929,11 @@ OPTIONS
   --version V                Override installer version (default from source tree)
   --native                   Install native binary (systemd) instead of Docker
   --ssl MODE                 SSL mode: domain|ip|custom|selfsigned|none
+  --database TYPE            Database: sqlite|postgres|mysql (default sqlite)
   -h, --help                 Show this help
 
 ENVIRONMENT
-  OVM_PORT, OVM_URLPATH, OVM_ACME_DOMAIN, OVM_SSL_MODE
+  OVM_PORT, OVM_URLPATH, OVM_ACME_DOMAIN, OVM_SSL_MODE, OVM_DB_TYPE, OVM_DATABASE_URL
   OVM_PANEL_USER, OVM_BIN_DIR, OVM_REPO, OVM_DOCKER
 EOF
     exit 0
@@ -939,6 +957,7 @@ parse_args() {
             --acme) [[ $# -ge 2 ]] || die "--acme needs a domain"; SSL_DOMAIN="$2"; SSL_MODE="domain"; shift 2 ;;
             --version) [[ $# -ge 2 ]] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
             --ssl)  [[ $# -ge 2 ]] || die "--ssl needs a mode"; SSL_MODE="$2"; shift 2 ;;
+            --database) [[ $# -ge 2 ]] || die "--database needs a type"; DB_TYPE="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
             --docker) DOCKER=1; DOCKER_EXPLICIT=1; shift ;;
             --native) DOCKER=0; shift ;;
