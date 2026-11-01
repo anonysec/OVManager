@@ -130,14 +130,14 @@ func scanUser(row interface{ Scan(...any) error }) (userRow, error) {
 // base renders the Users response model (backend).
 func (u userRow) base() map[string]any {
 	return map[string]any{
-		"id":          u.ID,
-		"name":        u.Name,
-		"is_active":   u.IsActive != 0,
-		"total":       u.Total,
-		"used":        u.Used,
-		"max_logins":  u.MaxLogins,
-		"expiry_date": u.date(),
-		"uuid":        u.UUID,
+		"id":            u.ID,
+		"name":          u.Name,
+		"is_active":     u.IsActive != 0,
+		"total":         u.Total,
+		"used":          u.Used,
+		"max_logins":    u.MaxLogins,
+		"expiry_date":   u.date(),
+		"uuid":          u.UUID,
 		"last_online":   u.lastOnline(),
 		"last_login_ip": u.lastLoginIP(),
 		"tag":           u.tag(),

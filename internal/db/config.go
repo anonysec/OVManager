@@ -25,9 +25,9 @@ import (
 type Backend string
 
 const (
-	BackendSQLite     Backend = "sqlite"
-	BackendPostgres   Backend = "postgres"
-	BackendMySQL      Backend = "mysql"
+	BackendSQLite   Backend = "sqlite"
+	BackendPostgres Backend = "postgres"
+	BackendMySQL    Backend = "mysql"
 )
 
 // Config describes how to open a database. URL uses PasarGuard-style schemes
@@ -43,9 +43,10 @@ type Config struct {
 // PasarGuard precedence: process env wins over .env (handled by callers via
 // envOrFile where available). Recognised variables, in priority order:
 //
-//   DATABASE_URL / SQLALCHEMY_DATABASE_URL / DB_URL   connection URL
-//   DATA_DIR                                         SQLite directory fallback
-//   DB_PATH                                          explicit SQLite file
+//	DATABASE_URL / SQLALCHEMY_DATABASE_URL / DB_URL   connection URL
+//	DATA_DIR                                         SQLite directory fallback
+//	DB_PATH                                          explicit SQLite file
+//
 // envOrFileDB reads a key from process env, falling back to the panel .env
 // file (which wins for forcing values, per PasarGuard precedence override).
 func envOrFileDB(key string) string {

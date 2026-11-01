@@ -3,13 +3,13 @@ package cli
 import (
 	"os"
 	"os/exec"
-	"regexp"
-	"strings"
-	"time"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
+	"time"
 )
 
 func certEnddate(cert string) (time.Time, bool) {
@@ -91,4 +91,3 @@ func statGID(info os.FileInfo) int {
 	}
 	return -1
 }
-

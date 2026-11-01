@@ -153,7 +153,6 @@ func (a *app) logsCmd() *cobra.Command {
 	}
 }
 
-
 func (a *app) backupCmd() *cobra.Command {
 	var keep string
 	cmd := &cobra.Command{
