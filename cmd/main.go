@@ -30,7 +30,11 @@ func main() {
 		os.Exit(cli.Run(os.Args[1:], os.Stdout))
 	}
 	dataDir := env("DATA_DIR", node.DataDir)
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	cfg := db.ConfigFromEnv()
+	if cfg.Path == "" && cfg.URL == "" {
+		cfg.Path = filepath.Join(dataDir, "ovmanager.db")
+	}
+	conn, err := db.OpenConfig(cfg)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
 	}
@@ -39,7 +43,7 @@ func main() {
 		log.Fatalf("migrate database: %v", err)
 	}
 
-	port := env("PORT", "2095")
+	port := env("PORT", env("UVICORN_PORT", "2095"))
 	migrateLegacyTLS(dataDir)
 	certFile := panel.SSLCertPath()
 	keyFile := panel.SSLKeyPath()
@@ -278,7 +282,7 @@ func serveMode(tlsEnabled bool, port string) (string, bool) {
 	host := "127.0.0.1"
 	if tlsEnabled {
 		host = "0.0.0.0"
-	} else if h := strings.TrimSpace(env("HOST", "")); h != "" {
+	} else if h := strings.TrimSpace(env("HOST", env("UVICORN_HOST", ""))); h != "" {
 		host = h
 	}
 	return net.JoinHostPort(host, port), tlsEnabled

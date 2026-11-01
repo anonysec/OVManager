@@ -255,16 +255,20 @@ func subscriptionPath() string {
 }
 
 func serverHost() string {
-	if v := envOrFile("HOST"); v != "" {
-		return v
+	for _, k := range []string{"HOST", "UVICORN_HOST"} {
+		if v := envOrFile(k); v != "" {
+			return v
+		}
 	}
 	return "0.0.0.0"
 }
 
 func serverPort() int {
-	if v := envOrFile("PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
+	for _, k := range []string{"PORT", "UVICORN_PORT"} {
+		if v := envOrFile(k); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				return n
+			}
 		}
 	}
 	return 2095

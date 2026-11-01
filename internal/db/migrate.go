@@ -945,3 +945,60 @@ func envDefault(key, fallback string) string {
 	}
 	return fallback
 }
+
+// --- backend-aware version store (scaffolding for multi-backend support) ---
+//
+// SQLite keeps using PRAGMA user_version for backward compatibility with
+// existing databases. Any other backend uses a _schema_version table. When a
+// new driver is wired in internal/db/config.go, add its case to
+// versionGet/versionSet and implement the table store below (already generic).
+
+// versionGet reads the current schema version for backend.
+func versionGet(conn *sql.DB, backend Backend) (int, error) {
+	switch backend {
+	case BackendSQLite, "":
+		return userVersion(conn)
+	default:
+		return tableVersion(conn)
+	}
+}
+
+// versionSet writes the schema version for backend.
+func versionSet(x execer, backend Backend, v int) error {
+	switch backend {
+	case BackendSQLite, "":
+		return stamp(x, v)
+	default:
+		return stampTable(x, v)
+	}
+}
+
+// tableVersion reads _schema_version (creates it if missing).
+func tableVersion(conn *sql.DB) (int, error) {
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER NOT NULL)`); err != nil {
+		return 0, err
+	}
+	var v int
+	row := conn.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM _schema_version`)
+	if err := row.Scan(&v); err != nil {
+		return 0, err
+	}
+	return v, nil
+}
+
+// stampTable writes a new version row.
+func stampTable(x execer, v int) error {
+	if _, err := x.Exec(`INSERT INTO _schema_version (version) VALUES (?)`, v); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MigrateWithBackend is the backend-aware entry point. SQLite delegates to
+// Migrate (PRAGMA path); other backends are not yet implemented.
+func MigrateWithBackend(conn *sql.DB, backend Backend) (int, error) {
+	if backend == BackendSQLite || backend == "" {
+		return Migrate(conn)
+	}
+	return 0, fmt.Errorf("migrations for backend %q not implemented yet", backend)
+}

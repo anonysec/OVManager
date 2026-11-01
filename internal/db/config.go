@@ -1,0 +1,137 @@
+// Copyright (c) 2026 anonysec
+// SPDX-License-Identifier: MIT
+//
+// Database configuration. Mirrors PasarGuard's DatabaseSettings: a single
+// URL selects the backend, with SQLite as the default for the single-process
+// deployment. Postgres/MySQL drivers are intentionally NOT imported yet —
+// adding them is a matter of wiring a new case in OpenConfig and adding the
+// driver to go.mod. Nothing else in the codebase should hardcode a backend.
+
+package db
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Backend identifies a supported database engine.
+type Backend string
+
+const (
+	BackendSQLite     Backend = "sqlite"
+	BackendPostgres   Backend = "postgres"
+	BackendMySQL      Backend = "mysql"
+)
+
+// Config describes how to open a database. URL uses PasarGuard-style schemes
+// (sqlite:///path, postgresql://..., mysql://...); an empty URL means "use
+// Path as a SQLite file", preserving the legacy behaviour.
+type Config struct {
+	URL      string // PasarGuard-style connection URL (SQLALCHEMY_DATABASE_URL)
+	Path     string // SQLite file path used when URL is empty
+	PoolSize int
+}
+
+// ConfigFromEnv builds a Config from environment variables, following
+// PasarGuard precedence: process env wins over .env (handled by callers via
+// envOrFile where available). Recognised variables, in priority order:
+//
+//   DATABASE_URL / SQLALCHEMY_DATABASE_URL / DB_URL   connection URL
+//   DATA_DIR                                         SQLite directory fallback
+//   DB_PATH                                          explicit SQLite file
+func ConfigFromEnv() Config {
+	cfg := Config{PoolSize: 5}
+	for _, key := range []string{"DATABASE_URL", "SQLALCHEMY_DATABASE_URL", "DB_URL"} {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			cfg.URL = v
+			return cfg
+		}
+	}
+	if p := strings.TrimSpace(os.Getenv("DB_PATH")); p != "" {
+		cfg.Path = p
+		return cfg
+	}
+	dir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+	if dir == "" {
+		dir = "data"
+	}
+	cfg.Path = filepath.Join(dir, "ovmanager.db")
+	return cfg
+}
+
+// Backend returns the engine implied by cfg.
+func (c Config) Backend() Backend {
+	u := strings.ToLower(strings.TrimSpace(c.URL))
+	switch {
+	case u == "":
+		return BackendSQLite
+	case strings.HasPrefix(u, "sqlite"):
+		return BackendSQLite
+	case strings.HasPrefix(u, "postgres"), strings.HasPrefix(u, "postgresql"):
+		return BackendPostgres
+	case strings.HasPrefix(u, "mysql"), strings.HasPrefix(u, "mariadb"):
+		return BackendMySQL
+	}
+	return BackendSQLite
+}
+
+// OpenConfig opens a database from cfg. Only SQLite is implemented today;
+// Postgres/MySQL return a clear error so callers fail loudly rather than
+// silently. Add a case here (and the driver to go.mod) to enable a backend.
+func OpenConfig(cfg Config) (*sql.DB, error) {
+	switch cfg.Backend() {
+	case BackendSQLite:
+		path := cfg.Path
+		if path == "" {
+			path = sqlitePathFromURL(cfg.URL)
+		}
+		if path == "" {
+			path = DefaultPath
+		}
+		return Open(path)
+	default:
+		return nil, fmt.Errorf("database backend %q not implemented yet (SQLite only). "+
+			"Set DATABASE_URL to a sqlite:/// URL or leave unset for the default SQLite file", cfg.Backend())
+	}
+}
+
+// sqlitePathFromURL extracts a filesystem path from a sqlite:/// URL,
+// mirroring SQLAlchemy's handling (sqlite:///relative, sqlite:////absolute).
+func sqlitePathFromURL(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return ""
+	}
+	u = strings.TrimPrefix(u, "sqlite+aiosqlite:///")
+	u = strings.TrimPrefix(u, "sqlite:///")
+	u = strings.TrimPrefix(u, "sqlite://")
+	if u == "" {
+		return ""
+	}
+	// sqlite:////abs -> /abs (already has leading slash after trim of 3)
+	if !filepath.IsAbs(u) && strings.HasPrefix(u, "/") {
+		return u
+	}
+	return u
+}
+
+// Open keeps the legacy signature (SQLite file path) so existing callers
+// keep working while the codebase migrates to OpenConfig.
+func Open(path string) (*sql.DB, error) {
+	if path == "" {
+		path = DefaultPath
+	}
+	conn, err := sql.Open("sqlite", "file:"+path+dsnPragmas)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite %s: %w", path, err)
+	}
+	if err := conn.Ping(); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("ping sqlite %s: %w", path, err)
+	}
+	_ = os.Chmod(path, 0o600)
+	return conn, err
+}
