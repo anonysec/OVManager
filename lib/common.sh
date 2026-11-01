@@ -122,6 +122,20 @@ get_public_ipv4() {
     return 1
 }
 
+# All globally routable IPv4 addresses on this host (PasarGuard-style hint).
+public_ips() {
+    local ip out=""
+    for ip in $(hostname -I 2>/dev/null); do
+        case "$ip" in
+            *:*) continue ;;
+            127.*|10.*|192.168.*|169.254.*) continue ;;
+            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
+            *) out+="$ip " ;;
+        esac
+    done
+    printf '%s' "${out% }"
+}
+
 detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64) printf 'amd64' ;;

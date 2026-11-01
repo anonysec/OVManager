@@ -124,6 +124,9 @@ setup_ssl_wizard() {
     case "$choice" in
     1)
         SSL_MODE="domain"
+        local recommended_ips
+        recommended_ips="$(public_ips)"
+        [[ -n "$recommended_ips" ]] && _note "this box answers on ${recommended_ips// /, }"
         while [[ -z "$SSL_DOMAIN" ]]; do
             SSL_DOMAIN="$(ask "domain for SSL certificate" "")"
             SSL_DOMAIN="${SSL_DOMAIN// /}"
@@ -133,8 +136,10 @@ setup_ssl_wizard() {
         ;;
     2)
         SSL_MODE="ip"
-        local detected_ip input_ip
+        local detected_ip input_ip recommended_ips
         detected_ip="$(get_public_ipv4 || true)"
+        recommended_ips="$(public_ips)"
+        [[ -n "$recommended_ips" ]] && _note "this box answers on ${recommended_ips// /, }"
         if [[ -n "$detected_ip" ]]; then
             input_ip="$(ask "IPv4 for SSL certificate" "$detected_ip")"
         else
@@ -361,14 +366,34 @@ run_node_installer() {
 # Print after the node installer (which clears the terminal), and before any
 # unbounded log follow. Never read an old claim key merely to display it.
 show_install_summary() {
-    local port="$1" urlpath="$2" key="$3" display_path host_ip scheme=http
+    local port="$1" urlpath="$2" key="$3" display_path host_ip scheme=http public_ip=""
     display_path="${urlpath#/}"; display_path="${display_path%/}"
     [[ -n "$display_path" ]] && display_path="/${display_path}/" || display_path="/"
     if curl -fsSk --max-time 3 "https://127.0.0.1:${port}/health" >/dev/null 2>&1; then
         scheme=https
     fi
+    # Prefer a publicly routable address for HTTPS (no tunnel needed); fall
+    # back to the first local address when offline.
+    if [[ "$scheme" == "https" ]]; then
+        public_ip="$(get_public_ipv4 || true)"
+        if [[ -z "$public_ip" ]]; then
+            for ip in $(hostname -I 2>/dev/null); do
+                case "$ip" in
+                    *:*) continue ;;
+                    127.*|10.*|192.168.*|169.254.*) continue ;;
+                    172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
+                    *) public_ip="$ip"; break ;;
+                esac
+            done
+        fi
+        public_ip="${public_ip:-<host>}"
+    fi
     colorized_echo blue "Installation complete"
-    _ok "URL     ${scheme}://127.0.0.1:$port$display_path"
+    if [[ "$scheme" == "https" ]]; then
+        _ok "URL     ${scheme}://${public_ip}:$port$display_path"
+    else
+        _ok "URL     ${scheme}://127.0.0.1:$port$display_path"
+    fi
     if [[ -n "$key" ]]; then
         _ok "Key     $key   (shown once — save it)"
     elif [[ -f "$DATA_DIR/owner-claim.key" ]]; then
@@ -376,9 +401,13 @@ show_install_summary() {
     else
         _note "No new claim key was created (the panel may already be claimed)."
     fi
-    host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
-    _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
-    _note "Open the URL through the SSH tunnel to access the panel."
+    if [[ "$scheme" != "https" ]]; then
+        host_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; host_ip="${host_ip:-<host>}"
+        _ok "SSH     ssh -L $port:127.0.0.1:$port $host_ip"
+        _note "Open the URL through the SSH tunnel to access the panel."
+    else
+        _note "Open the URL in your browser (TLS is on)."
+    fi
     [[ -n "$key" ]] && _note "Paste the key to claim the panel and set your password."
     return 0
 }
