@@ -2,7 +2,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 #
-# OVManager installer — bootstraps the Go binary (PasarGuard-style).
+# OVManager installer, bootstraps the Go binary (PasarGuard-style).
 #
 set -Eeuo pipefail
 
@@ -414,7 +414,7 @@ show_install_summary() {
         _ok "URL     ${scheme}://127.0.0.1:$port$display_path"
     fi
     if [[ -n "$key" ]]; then
-        _ok "Key     $key   (shown once — save it)"
+        _ok "Key     $key   (shown once, save it)"
     elif [[ -f "$DATA_DIR/owner-claim.key" ]]; then
         _note "existing claim key kept at $DATA_DIR/owner-claim.key"
     else
@@ -479,7 +479,7 @@ verify_acme() {
         fi
         sleep 3
     done
-    _warn "no Let's Encrypt certificate after 3 minutes — panel continues on plain HTTP"
+    _warn "no Let's Encrypt certificate after 3 minutes, panel continues on plain HTTP"
     return 0
 }
 
@@ -506,11 +506,11 @@ do_from_source() {
     local src="${SRC:-$PWD}" dest="${DEST:-$INSTALL_DIR}" service unit port key health
     [[ -d "$src" ]] || die "no source directory: $src"
     [[ -f "$src/cmd/main.go" ]] || die "no Go source tree in $src (cmd/main.go missing)"
-    [[ -d "$src/web/dist" ]] || die "web/dist missing in $src — run: cd web && npm run build"
+    [[ -d "$src/web/dist" ]] || die "web/dist missing in $src, run: cd web && npm run build"
     check_root; ensure_panel_user
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     command -v rsync >/dev/null || die "rsync not found"
-    command -v go >/dev/null || die "go not found — install Go 1.27+"
+    command -v go >/dev/null || die "go not found, install Go 1.27+"
     dest="${dest%/}"
     if [[ "$dest" == "$INSTALL_DIR" ]]; then
         if [[ -e "$INSTALL_DIR/$APP_SLUG" || -e "/etc/systemd/system/$SYSTEMD_SERVICE" ]]; then
@@ -570,7 +570,7 @@ UNIT
         curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1 && { health=1; break; }
         sleep 1
     done
-    [[ -n "$health" ]] || _warn "no /health on port $port yet — check: systemctl status $service"
+    [[ -n "$health" ]] || _warn "no /health on port $port yet, check: systemctl status $service"
     _ok "installed $dest (service $service, port $port)"
 }
 
@@ -772,7 +772,7 @@ do_install() {
             render_warn "Aborted installation"; return 0
         fi
     fi
-    has_systemd || die "systemd not found — a native install needs it"
+    has_systemd || die "systemd not found, a native install needs it"
     check_deps
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     colorized_echo blue "Configuration"
@@ -849,7 +849,7 @@ do_install() {
 }
 
 do_update() {
-    [[ -x "$INSTALL_DIR/$APP_SLUG" ]] || die "not installed at $INSTALL_DIR — run the installer first"
+    [[ -x "$INSTALL_DIR/$APP_SLUG" ]] || die "not installed at $INSTALL_DIR, run the installer first"
     exec "$INSTALL_DIR/$APP_SLUG" update "$@"
 }
 do_status() {

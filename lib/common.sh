@@ -242,7 +242,7 @@ render_next() { printf '  %bnext%b  %s · uninstall: %s\n' "$GY" "$NC" "$1" "$2"
 render_ask() { printf '  %b%s%b %b[%s]%b: ' "$GY" "$1" "$NC" "$B" "$2" "$NC" >&2; }
 render_ask_note() { _render_out "$(_render_paint "$GY" "$1")"; }
 
-# is_tty — OVNode-compatible: terminal on both ends.
+# is_tty, OVNode-compatible: terminal on both ends.
 is_tty() { [[ -t 0 && -t 2 ]]; }
 ask() {
     local label="$1" default="$2" hidden="${3:-}" val=""
