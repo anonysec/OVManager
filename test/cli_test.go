@@ -1,5 +1,5 @@
 // Parity tests for Phase 5: the cobra CLI must print byte-identical golden
-// screens for status/doctor against a fixture DATA_DIR, and the update
+// screens for status against a fixture DATA_DIR, and the update
 // orchestrator must have a dry-run that touches nothing.
 package tests
 
@@ -49,16 +49,10 @@ func cliFixture(t *testing.T) (installDir, dataDir string) {
 	// Inject every probe the two screens consult.
 	oldHealth, oldState, oldIP := cli.FetchHealth, cli.ServiceState, cli.PrimaryIP
 	oldEnabled, oldUnit, oldDisk := cli.SystemctlEnabled, cli.UnitPath, cli.DiskFreeMB
-	oldLegacy := cli.LegacyBackupDir
-	oldTimer := cli.BackupTimerUnit
 	t.Cleanup(func() {
 		cli.FetchHealth, cli.ServiceState, cli.PrimaryIP = oldHealth, oldState, oldIP
 		cli.SystemctlEnabled, cli.UnitPath, cli.DiskFreeMB = oldEnabled, oldUnit, oldDisk
-		cli.LegacyBackupDir = oldLegacy
-		cli.BackupTimerUnit = oldTimer
 	})
-	cli.LegacyBackupDir = filepath.Join(root, "var-backups")
-	cli.BackupTimerUnit = func(install cli.Install) string { return filepath.Join(root, "no-backup.timer") }
 	cli.FetchHealth = func(url string, timeout time.Duration, cafile string) (bool, string) {
 		return true, "1.6.0"
 	}
@@ -91,29 +85,6 @@ func TestCLIStatus(t *testing.T) {
 	}, "\n")
 	if out.String() != want {
 		t.Errorf("status output:\n got %q\nwant %q", out.String(), want)
-	}
-}
-
-// TestCLIDoctor golden-compares `ovmanager doctor` against a fixture with two known
-// failures (no backup yet, worker not started) and everything else passing.
-func TestCLIDoctor(t *testing.T) {
-	installDir, dataDir := cliFixture(t)
-	var out bytes.Buffer
-	code := cli.Run([]string{"doctor", "--install-dir", installDir, "--data-dir", dataDir}, &out)
-	if code != 1 {
-		t.Fatalf("exit = %d, want 1 (failing checks)\n%s", code, out.String())
-	}
-	want := strings.Join([]string{
-		"  XX 1 problems",
-		"",
-		"   Backup         none yet",
-		"   fix            ovmanager backup",
-		"",
-		"    11 other checks passed — detail: ovmanager doctor --all",
-		"",
-	}, "\n")
-	if out.String() != want {
-		t.Errorf("doctor output:\n got %q\nwant %q", out.String(), want)
 	}
 }
 

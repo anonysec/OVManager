@@ -126,7 +126,6 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - Staged updates and every manual-verifying step are fully scripted.
 
 ### 🔧 Operations
-- `ovmanager doctor` runs the health checks over the service, autostart, file modes, data directory, disk space, worker, HTTP health and backup age and certificate.
 - Staged updates with automatic failover; an update interrupted by a reboot is recovered on the next `ovmanager update` run.
 - Verified `.db` backups, listed and restored by name (`ovmanager backup --keep N`, `ovmanager restore`).
 - A bare `ovmanager` run prints the available screens and exits; every command has `--help`.
@@ -192,7 +191,6 @@ user           admin — change it any time in Settings
 | What | How |
 | --- | --- |
 | Status, health, version, URL | `sudo ovmanager status [--all]` |
-| Health checks | `sudo ovmanager doctor` |
 | Service control | `sudo ovmanager service start \| stop \| restart \| enable \| disable` |
 | Server logs | `sudo ovmanager logs [N\|-f]` |
 | Backup now (verified, pruned) | `sudo ovmanager backup [--keep N]` — default 14 |
@@ -211,7 +209,6 @@ Every `ovmanager` command needs root, because each one reads the panel's `.env` 
 | Command | What it does |
 | --- | --- |
 | `sudo ovmanager status` | Service, health, version and panel URL. `--all` adds mode, port, data and install paths. |
-| `sudo ovmanager doctor` | Run the health checks (service, autostart, modes, data dir, disk, worker, HTTP health, backup age, certificate). |
 | `sudo ovmanager logs [N\|-f]` | Last N log lines (default 100), or follow live. |
 | `sudo ovmanager service start \| stop \| restart` | Service control. `enable` / `disable` set automatic start. |
 | `sudo ovmanager backup [--keep N]` | Write a verified backup now. `--keep` is 1–500, default 14. The installer's daily timer pins `--keep 7`. |

@@ -70,7 +70,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.BoolVarP(&a.showAll, "all", "a", false, "show all fields")
 
 	root.AddCommand(
-		a.statusCmd(), a.logsCmd(), a.doctorCmd(), a.backupCmd(), a.restoreCmd(),
+		a.statusCmd(), a.logsCmd(), a.backupCmd(), a.restoreCmd(),
 		a.tlsCmd(), a.urlpathCmd(), a.resetPasswordCmd(), a.updateCmd(), a.serviceCmd(),
 		a.healthCmd(), a.authCmd(),
 	)
@@ -153,30 +153,6 @@ func (a *app) logsCmd() *cobra.Command {
 	}
 }
 
-func (a *app) doctorCmd() *cobra.Command {
-	var fix bool
-	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "read-only health checks",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			inst := a.install()
-			checks := collectDoctor(inst, a.serviceState, a.inContainer)
-			if fix {
-				checks = fixAll(inst, a.serviceState, a.inContainer)
-			}
-			code := 0
-			for _, c := range checks {
-				if !c.OK {
-					code = 1
-				}
-			}
-			a.emit(renderDoctor(checks, a.showAll), code)
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&fix, "fix", false, "auto-fix service/autostart/perms")
-	return cmd
-}
 
 func (a *app) backupCmd() *cobra.Command {
 	var keep string
