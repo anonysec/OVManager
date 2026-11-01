@@ -54,8 +54,10 @@ SSL_CERT_SRC=""
 # All files are staged first and only swapped in if EVERY download succeeds, so
 # a partial/failed refresh never leaves a half-updated set.
 SHARED_LIB_DIR=""
+running_from_checkout=false
 if [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh" ]]; then
     SHARED_LIB_DIR="$(dirname "${BASH_SOURCE[0]}")/lib"
+    running_from_checkout=true
 else
     SHARED_LIB_DIR="/usr/local/lib/ovmanager-scripts/lib"
 fi
@@ -79,6 +81,9 @@ bootstrap_shared_libs() {
 }
 
 # For an installed copy, refresh shared libs best-effort (PasarGuard style).
+if [[ "$running_from_checkout" == false ]]; then
+    bootstrap_shared_libs || true
+fi
 if [[ ! -f "$SHARED_LIB_DIR/common.sh" ]]; then
     bootstrap_shared_libs || true
 fi
@@ -677,6 +682,40 @@ do_install() {
         if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
         [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
         _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
+        if [[ -d "$DATA_DIR" ]]; then
+            local override="n"
+            if [[ "${YES:-0}" -eq 1 || ! -t 0 ]]; then
+                override="y"
+            else
+                override="$(ask "OVManager already installed at $DATA_DIR. Override previous installation?" "n")"
+            fi
+            if [[ ! "$override" =~ ^[Yy]$ ]]; then
+                _note "Aborted installation"; return 0
+            fi
+        fi
+        if is_port_in_use "$PORT_VAL"; then
+            _warn "Port $PORT_VAL is already in use."
+            if [[ "$INTERACTIVE" -eq 1 ]]; then
+                local new_port
+                while true; do
+                    new_port="$(ask "different port (1-65535) or q to abort" "")"
+                    new_port="${new_port// /}"
+                    [[ "$new_port" == "q" ]] && die "Installation aborted due to port conflict"
+                    if validate_port "$new_port"; then
+                        if is_port_in_use "$new_port"; then _warn "Port $new_port is also in use."; else PORT_VAL="$new_port"; break; fi
+                    else
+                        _warn "Invalid port: $new_port"
+                    fi
+                done
+            else
+                die "Port $PORT_VAL is already in use"
+            fi
+        fi
+        case "$SSL_MODE" in
+            domain) [[ -n "$SSL_DOMAIN" ]] && _ok "SSL enabled for https://${SSL_DOMAIN}:${PORT_VAL}${URLPATH_VAL}" ;;
+            ip) [[ -n "$SSL_IP" ]] && _ok "SSL enabled for https://${SSL_IP}:${PORT_VAL}${URLPATH_VAL}" ;;
+            selfsigned) _ok "SSL enabled for https://$(get_public_ipv4 2>/dev/null || hostname -I | awk '{print $1}'):${PORT_VAL}${URLPATH_VAL}" ;;
+        esac
         colorized_echo blue "Docker"; setup_docker
         colorized_echo blue "Verification"
         verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
