@@ -1,3 +1,7 @@
+## 2.4.4 — 2026-11-01
+
+- Fix(installer): pin OVNode installer to v1.4.17.
+
 ## 2.4.3 — 2026-11-01
 
 - Fix(installer): pin OVNode installer to v1.4.16 (paths refactor).
