@@ -43,12 +43,12 @@ jobs:
       - name: Verify tag matches version constant
         if: startsWith(github.ref_name, 'v')
         run: |
-          VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
+          VER="$(grep -m1 -E '(const|var) Version' internal/version/version.go | cut -d'"' -f2)"
           [ "${VER}" = "${GITHUB_REF_NAME#v}" ] || { echo "tag does not match internal/version/version.go"; exit 1; }
 
       - name: Read version
         run: |
-          VER="$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2)"
+          VER="$(grep -m1 -E '(const|var) Version' internal/version/version.go | cut -d'"' -f2)"
           echo "VER=${VER}" >> "$GITHUB_ENV"
 
       - name: Sync web version from internal/version
