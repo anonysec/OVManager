@@ -130,7 +130,8 @@ detect_arch() {
     esac
 }
 release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
-release_url() { printf 'https://github.com/%s/releases/download/v%s/%s' "$REPO" "$VERSION" "$(release_asset)"; }
+release_tag() { case "$VERSION" in dev|dev-*) printf 'dev' ;; *) printf 'v%s' "$VERSION" ;; esac; }
+release_url() { printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$(release_tag)" "$(release_asset)"; }
 release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
 
 fetch_release() {

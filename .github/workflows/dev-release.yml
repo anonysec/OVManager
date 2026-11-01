@@ -1,0 +1,49 @@
+name: Dev release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sync web version
+        run: make version
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Build
+        run: |
+          SHA="$(git rev-parse --short HEAD)"
+          VER="dev-${SHA}"
+          echo "VER=${VER}" >> "$GITHUB_ENV"
+          mkdir -p internal/webfs/dist
+          cp -a web/dist/. internal/webfs/dist/
+          for arch in amd64 arm64; do
+            out="ovmanager-linux-${arch}"
+            GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-s -w -X github.com/anonysec/OVManager/go/internal/version.Version=${VER}" \
+              -o "${out}" ./cmd
+            sha256sum "${out}" > "${out}.sha256"
+          done
+      - name: Publish dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view dev >/dev/null 2>&1 || gh release create dev --title "dev" --prerelease --notes "Rolling dev build from main."
+          gh release upload dev ovmanager-linux-amd64 ovmanager-linux-amd64.sha256 ovmanager-linux-arm64 ovmanager-linux-arm64.sha256 --clobber
