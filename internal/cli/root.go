@@ -348,6 +348,7 @@ func (a *app) updateCmd() *cobra.Command {
 	f.StringVar(&deprecatedSrc, "from-source", "", "deprecated alias of --build")
 	_ = f.MarkHidden("from-source")
 	f.StringVarP(&pin, "version", "v", "", "pin a release, e.g. -v v1.0.15")
+	f.BoolVar(&opts.yes, "yes", false, "skip the typed confirmation prompt")
 	return cmd
 }
 

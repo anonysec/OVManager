@@ -117,6 +117,7 @@ func copyTree(src, dst string) error {
 
 type updateOptions struct {
 	dryRun bool
+	yes    bool
 	build  string
 	pin    string
 }
@@ -212,6 +213,16 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		lines = append(lines, "", hint("dry run — nothing was changed"))
 		fmt.Fprint(out, block(lines))
 		return 0
+	}
+
+	if !opt.yes {
+		fmt.Fprintf(out, "About to update OVManager from %s to %s. Type 'update' to confirm: ", from, orValue(target, "latest"))
+		var answer string
+		_, _ = fmt.Fscanln(os.Stdin, &answer)
+		if strings.TrimSpace(answer) != "update" {
+			fmt.Fprint(out, block([]string{failedLine("Aborted by user")}))
+			return 1
+		}
 	}
 
 	if target == "" {
