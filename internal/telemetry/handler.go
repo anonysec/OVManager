@@ -316,10 +316,18 @@ func history(db *sql.DB, hours int) map[string]any {
 	return map[string]any{"traffic": traffic, "security": security, "nodes": nodes}
 }
 
-// metricsEvery is the collector's own cadence. shortcut: 5 min bounds the node
+// metricsEvery is the collector's own cadence. Configurable via
+// OVM_METRICS_INTERVAL_SECONDS (default 300). shortcut: 5 min bounds the node
 // probes and the history tables (288 samples/day); a node-down alert lands up
 // to 5 min late. Drop to 1 min when alert latency matters more than probe load.
-const metricsEvery = 5 * time.Minute
+func metricsEvery() time.Duration {
+	if v := envOrFileTelemetry("OVM_METRICS_INTERVAL_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 5 * time.Minute
+}
 
 var (
 	metricsLastMu sync.Mutex
@@ -330,7 +338,7 @@ var (
 func metricsDue(now time.Time) bool {
 	metricsLastMu.Lock()
 	defer metricsLastMu.Unlock()
-	if metricsLastTS.IsZero() || now.Sub(metricsLastTS) >= metricsEvery {
+	if metricsLastTS.IsZero() || now.Sub(metricsLastTS) >= metricsEvery() {
 		metricsLastTS = now
 		return true
 	}

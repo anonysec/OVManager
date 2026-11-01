@@ -21,7 +21,7 @@ func TestMetricsDue(t *testing.T) {
 	if metricsDue(base.Add(time.Minute)) {
 		t.Fatal("a call inside the window must be skipped")
 	}
-	if !metricsDue(base.Add(metricsEvery)) {
+	if !metricsDue(base.Add(metricsEvery())) {
 		t.Fatal("a call at the window edge must run")
 	}
 }
