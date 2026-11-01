@@ -114,15 +114,16 @@ type userRow struct {
 	ExpiryDate    sql.NullString
 	IsActive      int64
 	LastOnline    sql.NullString
+	LastLoginIP   sql.NullString
 	Tag           sql.NullString
 }
 
-const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag`
+const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, (SELECT ip FROM sessions WHERE username = users.name ORDER BY created_at DESC LIMIT 1) AS last_login_ip`
 
 func scanUser(row interface{ Scan(...any) error }) (userRow, error) {
 	var u userRow
 	err := row.Scan(&u.ID, &u.UUID, &u.Name, &u.Total, &u.Used, &u.LastNodeUsage, &u.NodeUsage,
-		&u.MaxLogins, &u.ExpiryDate, &u.IsActive, &u.LastOnline, &u.Tag)
+		&u.MaxLogins, &u.ExpiryDate, &u.IsActive, &u.LastOnline, &u.Tag, &u.LastLoginIP)
 	return u, err
 }
 
@@ -137,8 +138,9 @@ func (u userRow) base() map[string]any {
 		"max_logins":  u.MaxLogins,
 		"expiry_date": u.date(),
 		"uuid":        u.UUID,
-		"last_online": u.lastOnline(),
-		"tag":         u.tag(),
+		"last_online":   u.lastOnline(),
+		"last_login_ip": u.lastLoginIP(),
+		"tag":           u.tag(),
 	}
 }
 
@@ -164,6 +166,13 @@ func (u userRow) lastOnline() any {
 		return nil
 	}
 	return strings.Replace(u.LastOnline.String, " ", "T", 1)
+}
+
+func (u userRow) lastLoginIP() any {
+	if !u.LastLoginIP.Valid || u.LastLoginIP.String == "" {
+		return nil
+	}
+	return u.LastLoginIP.String
 }
 
 func (u userRow) tag() any {
