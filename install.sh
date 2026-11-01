@@ -619,6 +619,30 @@ setup_docker() {
     _note "starting container"
     docker compose -f "$(compose_file)" up -d
     _ok "container started"
+    # Docker has no host-side cert helper, so issue TLS inside the container
+    # (same subcommands the native path uses) and restart to pick it up.
+    if [[ "$SSL_MODE" == "selfsigned" ]]; then
+        if docker exec ovmanager /app/ovmanager tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
+            _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
+        else
+            _warn "self-signed cert issuance failed"
+        fi
+        docker restart ovmanager >/dev/null 2>&1 || true
+    elif [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
+        if docker exec ovmanager /app/ovmanager tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
+            _ok "certificate issued for $SSL_DOMAIN"
+        else
+            _warn "domain certificate issuance failed - run 'ovmanager tls acme $SSL_DOMAIN' later"
+        fi
+        docker restart ovmanager >/dev/null 2>&1 || true
+    elif [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
+        if docker exec ovmanager /app/ovmanager tls acme "$SSL_IP" >/dev/null 2>&1; then
+            _ok "IP certificate step done for $SSL_IP"
+        else
+            _warn "IP certificate issuance failed - run 'ovmanager tls acme $SSL_IP' later"
+        fi
+        docker restart ovmanager >/dev/null 2>&1 || true
+    fi
 }
 
 do_install() {
