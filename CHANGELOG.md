@@ -1,3 +1,7 @@
+## 2.4.6 — 2026-11-01
+
+- Feat(backup): daily DB backup moved into panel worker; drop ovmanager-backup unit.
+
 ## 2.4.5 — 2026-11-01
 
 - Chore(services): drop ACME-renew systemd units (internal worker handles renewal).

@@ -132,6 +132,9 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// threshold sweeps through telemetry.CollectMetrics). No-op while the bot
 	// is disabled or unconfigured.
 	h.startTelegramWorker()
+
+	// Daily DB backup (replaces the ovmanager-backup timer).
+	h.startBackupWorker()
 }
 
 // MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside
