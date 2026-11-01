@@ -974,6 +974,19 @@ install_node_command() {
 }
 
 main() {
+    if [[ $# -eq 0 && -t 0 && "${YES:-0}" -eq 0 ]]; then
+        render_banner "OVManager" "$VERSION"
+        local choice
+        choice="$(render_menu "" \
+            install "Install OVManager" \
+            update "Update OVManager" \
+            status "Show status" \
+            uninstall "Uninstall OVManager" \
+            logs "Tail logs" \
+            quit "Quit")"
+        [[ "$choice" == "quit" ]] && return 0
+        set -- "$choice"
+    fi
     parse_args "$@"
     case "$ACTION" in
         version-script) print_version_script; return 0 ;;
