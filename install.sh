@@ -14,7 +14,7 @@ DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
 DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
-VERSION="${OVM_VERSION:-2.4.2}"
+VERSION="${OVM_VERSION:-2.4.3}"
 IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^const Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
@@ -393,7 +393,7 @@ run_node_installer() {
     load_helpers'
     local fixed_check='    # install
     if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
-    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.15/install.sh)" || [[ -z "$script" ]]; then
+    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v1.4.16/install.sh)" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
     fi
