@@ -906,11 +906,19 @@ do_install() {
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
     check_root
     if [[ -e "$dest" ]]; then
-        local override
-        override="$(ask "OVManager already installed at $dest. Override previous installation?" "n")"
+        # Idempotent: a second run upgrades instead of failing. With -y (or no
+        # tty) we upgrade in place without prompting; interactive runs still ask.
+        local override="n"
+        if [[ "${YES:-0}" -eq 1 ]] || ! is_tty; then
+            override="y"
+        else
+            override="$(ask "OVManager already installed at $dest. Override previous installation?" "n")"
+        fi
         if [[ "$override" =~ ^[Yy]$ ]]; then
-            local purge
-            purge="$(ask "Purge existing data at $DATA_DIR too?" "n")"
+            local purge="n"
+            if [[ "${YES:-0}" -eq 0 ]] && is_tty; then
+                purge="$(ask "Purge existing data at $DATA_DIR too?" "n")"
+            fi
             if [[ "$purge" =~ ^[Yy]$ ]]; then
                 rm -rf "$DATA_DIR"; _ok "purged $DATA_DIR"
             fi
