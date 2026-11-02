@@ -61,7 +61,7 @@ func (h *Handler) telegramBackupPayload() (string, []byte) {
 		return "", nil
 	}
 	maintenanceLock.Lock()
-	path, err := h.createPanelBackup(0, "backup")
+	path, err := h.createPanelBackup(0, "telegram")
 	maintenanceLock.Unlock()
 	if err != nil || path == "" {
 		if err != nil {
