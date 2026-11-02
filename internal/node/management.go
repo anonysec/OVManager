@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"regexp"
@@ -179,6 +180,33 @@ func compareParts(a, b []int) int {
 
 // --- cert pin payload (management._cert_pin_payload) ---
 
+// CertFingerprint returns the uppercase colon-separated SHA-256 fingerprint of a PEM certificate.
+func CertFingerprint(pemStr string) string {
+	if !isPEM(pemStr) {
+		return ""
+	}
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(cert.Raw)
+	hexParts := make([]string, len(sum))
+	for i, b := range sum {
+		hexParts[i] = strings.ToUpper(hex.EncodeToString([]byte{b}))
+	}
+	return strings.Join(hexParts, ":")
+}
+
+func normalizeFingerprint(fp string) string {
+	fp = strings.ReplaceAll(fp, ":", "")
+	fp = strings.ReplaceAll(fp, " ", "")
+	return strings.ToUpper(strings.TrimSpace(fp))
+}
+
 func certPinPayload(n *Node) map[string]any {
 	out := map[string]any{"pinned": false, "fingerprint": nil, "expiry": nil, "issuer": nil, "match": nil}
 	pinned := n.ServerCA.String
@@ -193,13 +221,8 @@ func certPinPayload(n *Node) map[string]any {
 	if err != nil {
 		return out
 	}
-	sum := sha256.Sum256(cert.Raw)
-	hexParts := make([]string, len(sum))
-	for i, b := range sum {
-		hexParts[i] = strings.ToUpper(hex.EncodeToString([]byte{b}))
-	}
 	out["pinned"] = true
-	out["fingerprint"] = strings.Join(hexParts, ":")
+	out["fingerprint"] = CertFingerprint(pinned)
 	out["expiry"] = cert.NotAfter.UTC().Format(time.RFC3339)
 	out["issuer"] = cert.Issuer.String()
 	return out
@@ -320,16 +343,18 @@ func orEmpty(m map[string]any) map[string]any {
 // --- handlers request bodies ---
 
 type nodeCreate struct {
-	Name          string  `json:"name"`
-	Address       string  `json:"address"`
-	TunnelAddress *string `json:"tunnel_address"`
-	Protocol      string  `json:"protocol"`
-	OVPNPort      int     `json:"ovpn_port"`
-	Port          int     `json:"port"`
-	Key           *string `json:"key"`
-	Cert          *string `json:"cert"`
-	Status        *bool   `json:"status"`
-	CountryCode   *string `json:"country_code"`
+	Name                string  `json:"name"`
+	Address             string  `json:"address"`
+	TunnelAddress       *string `json:"tunnel_address"`
+	Protocol            string  `json:"protocol"`
+	OVPNPort            int     `json:"ovpn_port"`
+	Port                int     `json:"port"`
+	Key                 *string `json:"key"`
+	Cert                *string `json:"cert"`
+	ExpectedFingerprint *string `json:"expected_fingerprint"`
+	ConfirmFingerprint  *bool   `json:"confirm_fingerprint"`
+	Status              *bool   `json:"status"`
+	CountryCode         *string `json:"country_code"`
 }
 
 func (r nodeCreate) key() string {
@@ -381,8 +406,24 @@ func (r nodeCreate) status() bool {
 // phase): country_code comes from the manual override only.
 func AddNodeHandler(req nodeCreate, db *sql.DB) (bool, string) {
 	serverCA := ""
-	if req.Cert != nil {
-		serverCA = *req.Cert
+	if req.Cert != nil && strings.TrimSpace(*req.Cert) != "" {
+		serverCA = strings.TrimSpace(*req.Cert)
+	} else {
+		serverCA = FetchServerCert(req.Address, req.port(), 5*time.Second)
+		if serverCA == "" {
+			return false, "Could not fetch certificate from node."
+		}
+		fp := CertFingerprint(serverCA)
+		expectedFP := ""
+		if req.ExpectedFingerprint != nil {
+			expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
+		}
+		if expectedFP == "" && (req.ConfirmFingerprint == nil || !*req.ConfirmFingerprint) {
+			return false, fmt.Sprintf("Certificate fingerprint confirmation required before adding node (fingerprint: %s)", fp)
+		}
+		if expectedFP != "" && normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
+			return false, fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp)
+		}
 	}
 	nr, err := NewClient(req.Address, req.port(), req.key(), serverCA, PanelIDFor(db), 0)
 	if err != nil {
@@ -902,6 +943,35 @@ func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 		serverCA = strings.TrimSpace(*req.Cert)
 	} else {
 		serverCA = FetchServerCert(req.Address, req.port(), 5*time.Second)
+		if serverCA == "" {
+			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Could not fetch certificate from node."})
+			return
+		}
+		// TOFU protection: do not transmit the API key unless the caller has confirmed the certificate fingerprint
+		fp := CertFingerprint(serverCA)
+		expectedFP := ""
+		if req.ExpectedFingerprint != nil {
+			expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
+		}
+		if expectedFP == "" && (req.ConfirmFingerprint == nil || !*req.ConfirmFingerprint) {
+			auth.WriteJSON(w, http.StatusOK, auth.Response{
+				Success: false,
+				Msg:     "Certificate fetched for TOFU pinning. Please verify and confirm fingerprint before sending API key.",
+				Data: map[string]any{
+					"confirmation_required": true,
+					"cert":                  serverCA,
+					"fingerprint":           fp,
+				},
+			})
+			return
+		}
+		if expectedFP != "" && normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
+			auth.WriteJSON(w, http.StatusOK, auth.Response{
+				Success: false,
+				Msg:     fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp),
+			})
+			return
+		}
 	}
 	c, err := NewClient(req.Address, req.port(), req.key(), serverCA, PanelIDFor(h.svc.DB()), 0)
 	if err != nil {
@@ -954,20 +1024,90 @@ func (h *Handler) handleNodeStatus(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node status retrieved successfully", Data: GetNodeStatus(h.svc.DB(), n.ID)})
 }
 
+type repinRequest struct {
+	ExpectedFingerprint *string `json:"expected_fingerprint"`
+	Confirm             *bool   `json:"confirm"`
+}
+
 func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 	n := h.nodeByID(r)
 	if n == nil {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
+	var req repinRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req)
+	}
+
 	host, port, _ := parseAddress(n.Address, n.Port)
-	pem := FetchServerCert(host, port, 0)
-	if pem == "" {
+	newPEM := FetchServerCert(host, port, 5*time.Second)
+	if newPEM == "" {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Could not fetch the node's certificate."})
 		return
 	}
-	_, _ = h.svc.DB().Exec(`UPDATE nodes SET server_ca = ? WHERE id = ?`, pem, n.ID)
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Certificate pin updated.", Data: map[string]any{"repinned": true}})
+
+	oldFP := CertFingerprint(n.ServerCA.String)
+	newFP := CertFingerprint(newPEM)
+
+	expectedFP := ""
+	if req.ExpectedFingerprint != nil {
+		expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
+	}
+
+	if expectedFP == "" && (req.Confirm == nil || !*req.Confirm) {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{
+			Success: false,
+			Msg:     "Certificate re-pin requires explicit confirmation. Please verify the new certificate fingerprint.",
+			Data: map[string]any{
+				"confirmation_required": true,
+				"old_fingerprint":       oldFP,
+				"new_fingerprint":       newFP,
+				"prompt":                "Submit expected_fingerprint matching the new certificate to confirm re-pin",
+			},
+		})
+		return
+	}
+
+	if expectedFP != "" && normalizeFingerprint(expectedFP) != normalizeFingerprint(newFP) {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{
+			Success: false,
+			Msg:     fmt.Sprintf("Fingerprint mismatch: expected %s, got %s", expectedFP, newFP),
+			Data: map[string]any{
+				"old_fingerprint": oldFP,
+				"new_fingerprint": newFP,
+			},
+		})
+		return
+	}
+
+	_, _ = h.svc.DB().Exec(`UPDATE nodes SET server_ca = ? WHERE id = ?`, newPEM, n.ID)
+
+	actor := "owner"
+	if h.svc != nil {
+		if u, ok := h.svc.CurrentUser(r); ok && u.Username != "" {
+			actor = u.Username
+		}
+	}
+	audit.Record(h.svc.DB(), actor, "node.repin", "warning",
+		fmt.Sprintf("Node %s (ID %d) certificate repinned by %s. Old fingerprint: %s, New fingerprint: %s", n.Name, n.ID, actor, oldFP, newFP),
+		map[string]any{
+			"node_id":         n.ID,
+			"node_name":       n.Name,
+			"old_fingerprint": oldFP,
+			"new_fingerprint": newFP,
+			"actor":           actor,
+		})
+
+	auth.WriteJSON(w, http.StatusOK, auth.Response{
+		Success: true,
+		Msg:     "Certificate pin updated.",
+		Data: map[string]any{
+			"repinned":        true,
+			"old_fingerprint": oldFP,
+			"new_fingerprint": newFP,
+		},
+	})
 }
 
 func (h *Handler) handleNodeLogs(w http.ResponseWriter, r *http.Request) {
