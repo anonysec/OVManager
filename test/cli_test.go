@@ -56,7 +56,7 @@ func cliFixture(t *testing.T) (installDir, dataDir string) {
 	cli.FetchHealth = func(url string, timeout time.Duration, cafile string) (bool, string) {
 		return true, "1.6.0"
 	}
-	cli.ServiceState = func(composeFile string) (string, string) { return "native", "running" }
+	cli.ServiceState = func() (string, string) { return "native", "running" }
 	cli.PrimaryIP = func() string { return "203.0.113.9" }
 	cli.SystemctlEnabled = func(unit string) bool { return true }
 	unit := filepath.Join(root, "ovmanager.service")

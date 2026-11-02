@@ -118,37 +118,3 @@ offer_node_and_logs docker 443 /custom/ new-key
         self.assertIn("https://127.0.0.1:443/custom/", result.stderr)
         self.assertIn("new-key", result.stderr)
 
-    def test_docker_mints_key_only_for_fresh_data(self):
-        with tempfile.TemporaryDirectory() as d:
-            code = '''
-DATA_DIR="$TEST_DATA"
-ensure_docker() { :; }
-write_compose_file() { :; }
-chown() { :; }
-docker() {
-    case "$1" in inspect) echo nonroot ;; esac
-    return 0
-}
-setup_docker
-printf 'KEY=%s\\n' "$DOCKER_CLAIM_KEY"
-'''
-            env = {"TEST_DATA": d}
-            first = self.run_bash(code, env)
-            self.assertEqual(first.returncode, 0, first.stderr)
-            key = pathlib.Path(d, "owner-claim.key").read_text().strip()
-            self.assertEqual(len(key), 32)
-            self.assertIn("KEY=" + key, first.stdout)
-            self.assertEqual(pathlib.Path(d, "owner-claim.key").stat().st_mode & 0o777, 0o600)
-            second = self.run_bash(code, env)
-            self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertIn("KEY=\n", second.stdout)
-            self.assertEqual(pathlib.Path(d, "owner-claim.key").read_text().strip(), key)
-            pathlib.Path(d, "owner-claim.key").unlink()
-            pathlib.Path(d, "ovmanager.db").touch()
-            third = self.run_bash(code, env)
-            self.assertEqual(third.returncode, 0, third.stderr)
-            self.assertFalse(pathlib.Path(d, "owner-claim.key").exists())
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -5,8 +5,8 @@
 //
 // v1.6.0 gap this fixes: verification of a dev-layout/native install did not
 // restart the service before probing, and probed a URL that was not the one the
-// panel serves. Here the restart is explicit (systemctl restart / docker
-// restart) and the probe is install.HealthURL(), derived from the installed
+// panel serves. Here the restart is explicit (systemctl restart)
+// and the probe is install.HealthURL(), derived from the installed
 // .env (scheme from TLS mode, port from PORT), and the reported version must
 // match the release being installed.
 package cli
@@ -523,17 +523,10 @@ func verifyChecksum(path, checksumBody string) error {
 }
 
 func serviceRestart(install Install) bool {
-	if fileExists(install.ComposeFile()) {
-		return runFix("docker", "compose", "-f", install.ComposeFile(), "up", "-d")
-	}
 	return runFix("systemctl", "restart", systemdService)
 }
 
 func serviceStop(install Install) {
-	if fileExists(install.ComposeFile()) {
-		_ = runFix("docker", "compose", "-f", install.ComposeFile(), "down")
-		return
-	}
 	_ = runFix("systemctl", "stop", systemdService)
 }
 

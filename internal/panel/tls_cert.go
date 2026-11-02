@@ -25,7 +25,7 @@ import (
 const (
 	maxTLSFileSize = 1024 * 1024
 	restartHint    = "Restart the panel to use the new certificate: " +
-		"'systemctl restart ovmanager' on a native install, or 'docker restart ovmanager' for Docker."
+		"'systemctl restart ovmanager'."
 )
 
 // validation.py's domain rule (a single label is legal) and email rule.

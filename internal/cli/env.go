@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	defaultPort     = 2095
-	systemdService  = "ovmanager.service"
-	composeFileName = "ovmanager-compose.yml"
+	defaultPort    = 2095
+	systemdService = "ovmanager.service"
 )
 
 // Install is the resolved install layout. It never touches the network or
@@ -92,10 +91,6 @@ func DetectInstall(installDir, dataDir string) Install {
 		inst.TLSMode = "self"
 	}
 	return inst
-}
-
-func (i Install) ComposeFile() string {
-	return filepath.Join(i.DataDir, composeFileName)
 }
 
 func (i Install) Scheme() string {

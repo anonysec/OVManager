@@ -182,7 +182,7 @@
   "nodeRenewCertExpiry": "new expiry",
   "nodeRestarting": "正在重启...",
   "nodeUpdateTitle": "更新节点软件",
-  "nodeUpdateHint": "让节点自行更新。Docker 节点需要在主机上更新。",
+  "nodeUpdateHint": "让节点自行更新。",
   "nodeUpdateButton": "更新节点",
   "nodeUpdating": "正在更新...",
   "nodeDownloadTitle": "下载全部配置",

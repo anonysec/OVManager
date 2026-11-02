@@ -25,7 +25,7 @@ func collectStatus(install Install, service, publicIP string) statusData {
 	if info, err := os.Stat(install.InstallDir); err != nil || !info.IsDir() {
 		return statusData{err: "Not installed (" + install.InstallDir + " missing)"}
 	}
-	mode, detected := ServiceState(install.ComposeFile())
+	mode, detected := ServiceState()
 	if service == "" {
 		service = detected
 	}

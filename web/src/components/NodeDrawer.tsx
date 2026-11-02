@@ -525,7 +525,7 @@ const NodeDrawer = ({
               <section className="nd-action">
                 <div className="nd-action-text">
                   <h3>{t('nodeUpdateTitle', 'Update node software')}</h3>
-                  <p>{t('nodeUpdateHint', 'Asks the node to update itself. Docker nodes must be updated from the host instead.')}</p>
+                  <p>{t('nodeUpdateHint', 'Asks the node to update itself.')}</p>
                 </div>
                 <Button
                   size="sm" variant="secondary" loading={busy === 'update'}

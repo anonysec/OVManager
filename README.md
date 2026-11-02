@@ -11,7 +11,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
   [![React](https://img.shields.io/badge/react-19-087ea4?logo=react&logoColor=white)](web/package.json)
-  [![Runtime](https://img.shields.io/badge/runtime-systemd%20%7C%20docker-555555)](#-install)
+  [![Runtime](https://img.shields.io/badge/runtime-systemd-555555)](#-install)
 </div>
 
 > Full documentation: https://anonysec.github.io/OVManager/
@@ -154,7 +154,7 @@ To terminate TLS or proxy requests through Nginx, Caddy, or Cloudflare:
 bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.4.6/install.sh)
 ```
 
-The installer defaults to Docker; use `--native` to install the verified release binary as a systemd service with a daily backup timer. Both paths start and health-check the panel. Use `interactive` or `--interactive` to configure it and optionally install OVNode on the same server; `-y` skips prompts. The panel URL and claim key are shown after the optional node installer and before following logs. `bash install.sh --help` prints the full surface.
+The installer installs the verified release binary as a systemd service with a daily backup timer. It starts and health-checks the panel. Use `interactive` or `--interactive` to configure it and optionally install OVNode on the same server; `-y` skips prompts. The panel URL and claim key are shown after the optional node installer and before following logs. `bash install.sh --help` prints the full surface.
 
 If a previous failed OVNode attempt left `/opt/ovnode` behind, the node installer may treat that directory as an existing installation. Inspect it before retrying; do not remove it if it contains an existing node's configuration or data.
 
@@ -164,13 +164,6 @@ The command above pulls `install.sh` from the tagged release (v2.3.0, matching t
 
 ```bash
 bash install.sh --build [SRC] [--dest DIR]
-```
-
-**Docker instead of systemd:** the pre-built image publishes on every release:
-
-```bash
-docker run -d --name ovmanager -p 2095:2095 -v ovmanager-data:/data \
-  ghcr.io/anonysec/ovmanager
 ```
 
 ## 🏁 After it finishes

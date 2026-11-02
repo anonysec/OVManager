@@ -20,8 +20,7 @@ import (
 // The panel never downloads or installs anything: /status only reads GitHub's
 // public release API (fail-soft, so an unreachable GitHub never turns the
 // health page into an error), and /run hands the work to the installer that
-// already owns it. Docker installs have no installer inside the container, so
-// /run answers with the exact host-side command instead.
+// already owns it. /run hands the work to the installer.
 
 const (
 	updaterDefaultAppDir = "/opt/ovmanager"
@@ -31,8 +30,6 @@ const (
 	updaterCacheTTL    = 3600.0
 	updateLogName      = "update.log"
 
-	hostComposeCmd      = "docker compose up -d --build"
-	hostRestartCmd      = "docker restart ovmanager"
 	hostNativeUpdateCmd = "sudo ovmanager update"
 )
 
@@ -68,8 +65,6 @@ func updaterRepo() string {
 	}
 	return updaterDefaultRepo
 }
-
-func inContainer() bool { return fileExists("/.dockerenv") }
 
 func hasSystemctl() bool {
 	_, err := exec.LookPath("systemctl")
@@ -248,16 +243,13 @@ func (h *Handler) updateOperation(w http.ResponseWriter, r *http.Request) {
 // explain the host-side command.
 func (h *Handler) runUpdate(w http.ResponseWriter, r *http.Request) {
 	installSh := filepath.Join(updaterAppDir(), "install.sh")
-	container := inContainer()
-	if !container && os.Geteuid() == 0 && fileExists(installSh) && hasSystemctl() {
+	if os.Geteuid() == 0 && fileExists(installSh) && hasSystemctl() {
 		h.startNativeUpdate(w, installSh)
 		return
 	}
 
 	var reason string
 	switch {
-	case container:
-		reason = "The panel is running inside a container, so it cannot update itself."
 	case os.Geteuid() != 0:
 		reason = "The panel runs as an unprivileged service account, so it cannot replace itself."
 	case !fileExists(installSh):
@@ -267,13 +259,8 @@ func (h *Handler) runUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	mode, command, msg := "manual", hostNativeUpdateCmd,
 		reason+" From the host, run: "+hostNativeUpdateCmd+"."
-	if container {
-		mode = "docker"
-		command = hostComposeCmd
-		msg = reason + " From the host, run: " + hostComposeCmd + " (or " + hostRestartCmd + ")."
-	}
 	envelope(w, false, msg, map[string]any{
-		"mode": mode, "command": command, "restart_command": hostRestartCmd,
+		"mode": mode, "command": command, "restart_command": hostNativeUpdateCmd,
 	})
 }
 

@@ -8,6 +8,7 @@ set -Eeuo pipefail
 
 REPO="${OVM_REPO:-anonysec/OVManager}"
 APP_SLUG="ovmanager"
+SERVER_BIN="ovmanager-server"
 INSTALL_DIR="${OVM_INSTALL_DIR:-/opt/ovmanager}"
 DATA_DIR="${OVM_DATA_DIR:-/var/lib/ovmanager}"
 DEFAULT_PORT="${OVM_DEFAULT_PORT:-2095}"
@@ -39,8 +40,6 @@ ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
 YES=0
 FROM_SOURCE=0
-DOCKER="${OVM_DOCKER:-1}"
-DOCKER_EXPLICIT=0
 SRC=""
 DEST=""
 ACTION="install"
@@ -50,51 +49,287 @@ UPDATE_ARGS=()
 SSL_MODE="${OVM_SSL_MODE:-}"
 SSL_DOMAIN="${OVM_ACME_DOMAIN:-}"
 SSL_CERT_SRC=""
-# ── Atomic shared-lib bootstrap (PasarGuard style) ───────────────────
-# Shared helpers live in lib/common.sh. For a checkout they sit beside this
-# script; for an installed copy they live under /usr/local/lib/ovmanager-scripts/lib.
-# All files are staged first and only swapped in if EVERY download succeeds, so
-# a partial/failed refresh never leaves a half-updated set.
-SHARED_LIB_DIR=""
-running_from_checkout=false
-if [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh" ]]; then
-    SHARED_LIB_DIR="$(dirname "${BASH_SOURCE[0]}")/lib"
-    running_from_checkout=true
-else
-    SHARED_LIB_DIR="/usr/local/lib/ovmanager-scripts/lib"
-fi
+# shellcheck shell=bash
+SSL_KEY_SRC=""
+SSL_IP=""
+INSTALL_IP_SSL=0
+INSTALL_SELF_SIGNED=0
+SELF_SIGNED_TARGET=""
 
-REQUIRED_SHARED_LIBS="common.sh"
-bootstrap_shared_libs() {
-    local fetch_repo="anonysec/OVManager"
-    local bootstrap_dir="/usr/local/lib/ovmanager-scripts/lib"
-    local tmp_dir=""
-    tmp_dir=$(mktemp -d) || return 1
-    if ! curl -fsSL --connect-timeout 5 "https://github.com/${fetch_repo}/raw/main/lib/common.sh" -o "$tmp_dir/common.sh"; then
-        rm -rf "$tmp_dir"; return 1
+# ── Capability detection (OVNode-compatible) ────────────────────────
+if [[ -t 2 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
+    RENDER_COLOR=1
+else
+    RENDER_COLOR=0
+fi
+if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]* ]]; then
+    RENDER_SPINNER_UNICODE=1
+else
+    RENDER_SPINNER_UNICODE=0
+fi
+NC=$'\033[0m'; B=$'\033[1m'; D=$'\033[2m'
+WH=$'\033[97m'; GR=$'\033[32m'; RD=$'\033[31m'
+YL=$'\033[33m'; CY=$'\033[36m'; GY=$'\033[90m'
+OR=$'\033[38;5;208m'
+[[ "$RENDER_COLOR" -eq 1 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+if [[ "$RENDER_SPINNER_UNICODE" -eq 1 ]]; then
+    RENDER_OK='✓'; RENDER_BAD='✗'; RENDER_RULE='──────────────────────────────────────────────'
+else
+    RENDER_OK='ok'; RENDER_BAD='XX'; RENDER_RULE='----------------------------------------------'
+fi
+[[ -t 2 ]] || { NC=''; B=''; D=''; WH=''; GR=''; RD=''; YL=''; CY=''; GY=''; OR=''; }
+
+_render_paint() { if [[ "$RENDER_COLOR" -eq 1 ]]; then printf '%b%s%b' "$1" "$2" "${NC:-}"; else printf '%s' "$2"; fi; }
+_render_out() { printf '  %b\n' "$*" >&2; }
+
+# Legacy aliases (kept for existing call sites)
+_GREEN="$GR"; _YELLOW="$YL"; _BLUE="$CY"; _RED="$RD"; _CYAN="$CY"
+_BOLD="$B"; _DIM="$D"; _RESET="$NC"
+colorized_echo() {
+    local color="$1"; shift
+    case "$color" in
+        green)  printf '%s%s%s\n' "$GR" "$*" "$NC" >&2 ;;
+        yellow) printf '%s%s%s\n' "$YL" "$*" "$NC" >&2 ;;
+        red)    printf '%s%s%s\n' "$RD" "$*" "$NC" >&2 ;;
+        blue)   printf '%s%s%s\n' "$CY" "$*" "$NC" >&2 ;;
+        cyan)   printf '%s%s%s\n' "$CY" "$*" "$NC" >&2 ;;
+        *)      printf '%s\n' "$*" >&2 ;;
+    esac
+}
+_ok()    { render_ok "$*"; }
+_warn()  { render_warn "$*"; }
+_err()   { render_fail "$*" "error"; }
+_note()  { render_ask_note "$*"; }
+
+section() { render_stage "$*"; }
+step() { printf '%s[%s/%s]%s %s\n' "$D" "$1" "$2" "$NC" "$3" >&2; }
+
+die()    { printf '\n  %sError:%s %s\n\n' "$RD" "$NC" "$*" >&2; exit 1; }
+
+has_systemd() { command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; }
+check_root()  { [[ "$EUID" -eq 0 ]] || die "Must run as root (sudo)."; }
+install_packages() {
+    local pkgs=("$@")
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1 || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    elif command -v apk >/dev/null 2>&1; then
+        apk add --no-cache "${pkgs[@]}" >/dev/null 2>&1 || return 1
+    else
+        return 1
     fi
-    mkdir -p "$bootstrap_dir" || { rm -rf "$tmp_dir"; return 1; }
-    if ! install -m 644 "$tmp_dir/common.sh" "$bootstrap_dir/common.sh"; then
-        rm -rf "$tmp_dir"; return 1
-    fi
-    rm -rf "$tmp_dir"
-    SHARED_LIB_DIR="$bootstrap_dir"
     return 0
 }
 
-# For an installed copy, refresh shared libs best-effort (PasarGuard style).
-if [[ "$running_from_checkout" == false ]]; then
-    bootstrap_shared_libs || true
-fi
-if [[ ! -f "$SHARED_LIB_DIR/common.sh" ]]; then
-    bootstrap_shared_libs || true
-fi
-if [[ ! -f "$SHARED_LIB_DIR/common.sh" ]]; then
-    echo "Missing shared library: $SHARED_LIB_DIR/common.sh" >&2
-    exit 1
-fi
-# shellcheck source=lib/common.sh
-source "$SHARED_LIB_DIR/common.sh"
+check_deps() {
+    local missing_pkgs=()
+    command -v curl >/dev/null 2>&1 || missing_pkgs+=("curl")
+    command -v openssl >/dev/null 2>&1 || missing_pkgs+=("openssl")
+    if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+        _note "installing missing dependencies: ${missing_pkgs[*]}"
+        install_packages "${missing_pkgs[@]}" || die "Could not install: ${missing_pkgs[*]}"
+    fi
+    for cmd in curl install sha256sum openssl; do
+        command -v "$cmd" >/dev/null 2>&1 || die "Missing required tool: $cmd"
+    done
+}
+
+is_domain() { [[ "$1" =~ ^([A-Za-z0-9](-*[A-Za-z0-9])*\.)+(xn--[a-z0-9]{2,}|[A-Za-z]{2,})$ ]]; }
+is_ipv4() {
+    local ip="$1" IFS='.' octets=()
+    [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+    read -r -a octets <<<"$ip"
+    [[ ${#octets[@]} -eq 4 ]] || return 1
+    for octet in "${octets[@]}"; do (( octet >= 0 && octet <= 255 )) || return 1; done
+    return 0
+}
+is_ipv6() { [[ "$1" =~ : ]]; }
+is_port_in_use() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn 2>/dev/null | awk -v p=":${port}$" '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
+        return
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -lnt 2>/dev/null | awk -v p=":${port} " '$4 ~ p {found=1; exit} END {exit found ? 0 : 1}'
+        return
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+get_public_ipv4() {
+    local urls=("https://api4.ipify.org" "https://ipv4.icanhazip.com" "https://v4.ident.me")
+    local server_ip url
+    for url in "${urls[@]}"; do
+        server_ip=$(curl -4 -fsS --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]' || true)
+        if is_ipv4 "$server_ip"; then printf '%s' "$server_ip"; return 0; fi
+    done
+    return 1
+}
+
+# All globally routable IPv4 addresses on this host (PasarGuard-style hint).
+public_ips() {
+    local ip out=""
+    for ip in $(hostname -I 2>/dev/null); do
+        case "$ip" in
+            *:*) continue ;;
+            127.*|10.*|192.168.*|169.254.*) continue ;;
+            172.1[6-9].*|172.2[0-9].*|172.3[01].*) continue ;;
+            *) out+="$ip " ;;
+        esac
+    done
+    printf '%s' "${out% }"
+}
+
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) printf 'amd64' ;;
+        aarch64|arm64) printf 'arm64' ;;
+        *) die "Unsupported architecture: $(uname -m)" ;;
+    esac
+}
+release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
+release_tag() { case "$VERSION" in dev|dev-*) printf 'dev' ;; *) printf 'v%s' "$VERSION" ;; esac; }
+release_url() { printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$(release_tag)" "$(release_asset)"; }
+release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
+
+fetch_release() {
+    local dest="$1" work asset retries=0
+    asset="$(release_asset)"
+    work="$(mktemp -d)"
+    _note "fetching v$VERSION ($asset)"
+    while true; do
+        if curl -fsSL --max-time 300 --retry 3 --retry-delay 2 --retry-max-time 600 -o "$work/$asset" "$(release_url)" 2>/dev/null; then
+            break
+        fi
+        retries=$((retries + 1))
+        if [[ $retries -ge 3 ]]; then rm -rf "$work"; die "No release file for v$VERSION"; fi
+        sleep $((2 ** retries))
+    done
+    if ! curl -fsSL --max-time 120 --retry 2 -o "$work/$asset.sha256" "$(release_checksum_url)" 2>/dev/null; then
+        rm -rf "$work"; die "Release checksum file is missing for v$VERSION"
+    fi
+    if ! ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null 2>&1 ); then
+        rm -rf "$work"; die "Release checksum mismatch for v$VERSION"
+    fi
+    mkdir -p "$dest"
+    install -m 0755 "$work/$asset" "$dest/$SERVER_BIN"
+    chown root:root "$dest/$SERVER_BIN"
+    ln -sf "$SERVER_BIN" "$dest/$APP_SLUG"
+    rm -rf "$work"
+    _ok "installed v$VERSION to $dest"
+}
+
+validate_port() { local p="$1"; [[ "$p" =~ ^[0-9]+$ ]] && [[ "$p" -ge 1 && "$p" -le 65535 ]]; }
+validate_urlpath() {
+    local p="$1"
+    [[ "$p" != "api" && "$p" != "assets" && "$p" != "health" && "$p" != "static" && "$p" != "doc" && "$p" != "openapi.json" ]] || return 1
+    [[ "$p" =~ ^[A-Za-z0-9_-]+$ ]]
+}
+
+# ── Interactive menu ────────────────────────────────────────────────────
+# The install wizard is a sequence of small numbered menus over a shared
+# frame: a blue rule, aligned numbered rows, and one prompt line at the end.
+# Everything prints to stderr so `curl | bash` stays clean.
+
+# ── OVNode render helpers (verbatim port) ────────────────────────────
+RENDER_LABEL_W=14
+_render_paint() { if [[ "$RENDER_COLOR" -eq 1 ]]; then printf '%b%s%b' "$1" "$2" "${NC:-}"; else printf '%s' "$2"; fi; }
+_render_out() { printf '  %b\n' "$*" >&2; }
+
+render_banner() {  # render_banner <name> <version>
+    local name="$1" version="$2"
+    _render_out "$(_render_paint "$B" "$name")  $version  $(_render_paint "$GY" "· anonysec")"
+    render_rule
+}
+
+render_rule() { _render_out "$(_render_paint "$GY" "$RENDER_RULE")"; }
+
+render_screen() {
+    [[ -t 2 ]] || return 0
+    clear 2>/dev/null || printf '\033[H\033[2J\033[3J' >&2 || true
+    return 0
+}
+
+render_menu() {
+    shift    # title is the caller's; the banner already said what this is
+    local -a tags=() labels=()
+    while [[ $# -ge 2 ]]; do tags+=("$1"); labels+=("$2"); shift 2; done
+    local count=${#tags[@]}
+    [[ "$count" -gt 0 ]] || return 1
+    local i=0
+    while (( i < count )); do
+        printf '  %b%d%b  %s\n' "$B" "$(( i + 1 ))" "$NC" "${labels[$i]}" >&2
+        i=$(( i + 1 ))
+    done
+    local n
+    n="$(ask "choice" "1")"
+    [[ "$n" =~ ^[0-9]+$ ]] || n=1
+    printf '%s' "${tags[$(( ((10#$n - 1) + count) % count ))]}"
+    return 0
+}
+
+RENDER_STEP_LABEL=""
+render_begin() { RENDER_STEP_LABEL="$1"; printf '  %b..%b    %s\n' "$GY" "$NC" "$1" >&2; return 0; }
+render_stage() { printf '\n  ============================== %s ==============================\n' "$1" >&2; return 0; }
+render_done() { RENDER_STEP_LABEL=""; printf '  %b%s%b  %s\n' "$GR" "$RENDER_OK" "$NC" "${1:-}" >&2; return 0; }
+render_end() { RENDER_STEP_LABEL=""; return 0; }
+render_note() { printf '  %b..%b    %s\n' "$GY" "$NC" "$1" >&2; return 0; }
+render_line() { _render_out "$*"; }
+render_blank() { printf '\n' >&2; }
+render_ok() { printf '  %b%s%b  %s\n' "$GR" "$RENDER_OK" "$NC" "$1" >&2; }
+render_warn() { printf '  %b%s%b\n' "$YL" "$1" "$NC" >&2; }
+render_kv() { printf '   %b%-*s%b %s\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$2" >&2; }
+render_kv_w() { printf '   %b%-*s%b %s\n' "$GY" "$1" "$2" "$NC" "$3" >&2; }
+render_key() { printf '   %b%-*s%b %b%s%b\n' "$GY" "$RENDER_LABEL_W" "$1" "$NC" "$B" "$2" "$NC" >&2; }
+render_url() { render_kv "$1" "$(_render_paint "$B" "$2")"; }
+render_fail() { RENDER_STEP_LABEL=""; printf '  %b%s%b %b%s%b  %s\n' "$RD" "$RENDER_BAD" "$NC" "$B" "$1" "$NC" "$2" >&2; return 0; }
+render_next() { printf '  %bnext%b  %s · uninstall: %s\n' "$GY" "$NC" "$1" "$2" >&2; }
+render_ask() { printf '  %b%s%b %b[%s]%b: ' "$GY" "$1" "$NC" "$B" "$2" "$NC" >&2; }
+render_ask_note() { _render_out "$(_render_paint "$GY" "$1")"; }
+
+# is_tty, OVNode-compatible: terminal on both ends.
+is_tty() { [[ -t 0 && -t 2 ]]; }
+ask() {
+    local label="$1" default="$2" hidden="${3:-}" val=""
+    if is_tty && [[ "${YES:-0}" -eq 0 ]]; then
+        render_ask "$label" "$default"
+        if [[ "$hidden" == "h" ]]; then
+            local buf="" ch
+            while IFS= read -rsn1 ch; do
+                case "$ch" in
+                    ""|$'\n'|$'\r') break ;;
+                    $'\x7f'|$'\b') if [[ -n "$buf" ]]; then buf="${buf%?}"; printf '\b \b' >&2; fi ;;
+                    *) buf+="$ch"; printf '*' >&2 ;;
+                esac
+            done
+            printf '\n' >&2
+            val="$buf"
+        else
+            read -r val
+        fi
+    fi
+    echo "${val:-$default}"
+}
+
+# Legacy aliases kept for existing call sites.
+ui_rule() { render_rule; }
+ui_banner() { render_banner "$1" "$2"; }
+ui_menu() { render_menu "" "$@"; }
+_ok() { render_ok "$*"; }
+_warn() { render_warn "$*"; }
+_err() { render_fail "$*" "error"; }
+_note() { render_ask_note "$*"; }
+section() { render_stage "$*"; }
+step() { printf '%s[%s/%s]%s %s\n' "$D" "$1" "$2" "$NC" "$3" >&2; }
+
+
 
 prompt_interactive() {
     [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 ]] || return 0
@@ -326,7 +561,7 @@ Environment="OVM_APP_DIR=$dest"
 User=$PANEL_USER
 Group=$PANEL_USER
 SupplementaryGroups=systemd-journal
-ExecStart=$dest/$APP_SLUG
+ExecStart=$dest/$SERVER_BIN
 Restart=on-failure
 RestartSec=3
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -339,14 +574,24 @@ UNIT
 }
 grant_panel_access() {
     local dest="${1:-$INSTALL_DIR}"
-    chmod 755 "$dest"; chmod 755 "$dest/$APP_SLUG"
+    chmod 755 "$dest"; chmod 755 "$dest/$SERVER_BIN" 2>/dev/null || true
     mkdir -p "$DATA_DIR"; chown -R "$PANEL_USER:$PANEL_USER" "$DATA_DIR"; chmod 700 "$DATA_DIR"
     chown "root:$PANEL_USER" "$dest/.env"; chmod 640 "$dest/.env"
 }
 install_cli() {
     local dest="${1:-$INSTALL_DIR}"
+    local src_cli="$(dirname "${BASH_SOURCE[0]}")/ovmanager.sh"
+    if [[ -f "$src_cli" ]]; then
+        install -m 0755 "$src_cli" "$dest/ovmanager.sh"
+    fi
     mkdir -p "$BIN_DIR" 2>/dev/null || { _warn "Could not create $BIN_DIR"; return 0; }
-    ln -sf "$dest/$APP_SLUG" "$BIN_DIR/$CLI_NAME"
+    if [[ -f "$dest/ovmanager.sh" ]]; then
+        ln -sf "$dest/ovmanager.sh" "$BIN_DIR/$CLI_NAME"
+    else
+        local target="$dest/$SERVER_BIN"
+        [[ -x "$target" ]] || target="$dest/$APP_SLUG"
+        ln -sf "$target" "$BIN_DIR/$CLI_NAME"
+    fi
     _ok "command  $BIN_DIR/$CLI_NAME"
 }
 
@@ -477,11 +722,7 @@ offer_node_and_logs() {
     choice=""
     read -r -p "Follow service logs? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
-        if [[ "$mode" == "docker" ]]; then
-            docker logs -f ovmanager
-        else
-            journalctl -u "$SYSTEMD_SERVICE" -f
-        fi
+        journalctl -u "$SYSTEMD_SERVICE" -f
     fi
 }
 
@@ -539,7 +780,8 @@ do_from_source() {
     rsync -a --delete --exclude .git --exclude .venv --exclude __pycache__ --exclude node_modules --exclude .pytest_cache --exclude .slim --exclude .env --exclude /data "$src/" "$dest/"
     mkdir -p "$dest/internal/webfs/dist"
     cp -a "$dest/web/dist/." "$dest/internal/webfs/dist/"
-    ( cd "$dest" && go build -o "$APP_SLUG" ./cmd )
+    ( cd "$dest" && go build -o "$SERVER_BIN" ./cmd )
+    ln -sf "$SERVER_BIN" "$dest/$APP_SLUG"
     mkdir -p "$dest/data"; chown -R "$PANEL_USER:$PANEL_USER" "$dest/data"; chmod 700 "$dest/data"
     if [[ ! -f "$dest/.env" ]]; then
         cat > "$dest/.env" <<EOF
@@ -571,7 +813,7 @@ Environment="OVM_APP_DIR=$dest"
 User=$PANEL_USER
 Group=$PANEL_USER
 SupplementaryGroups=systemd-journal
-ExecStart=$dest/$APP_SLUG
+ExecStart=$dest/$SERVER_BIN
 Restart=on-failure
 RestartSec=3
 $(unit_hardening "$dest" "$dest/data")
@@ -592,105 +834,6 @@ UNIT
     _ok "installed $dest (service $service, port $port)"
 }
 
-ensure_docker() {
-    if ! command -v docker >/dev/null 2>&1; then
-        _note "installing Docker Engine..."
-        if command -v apt-get >/dev/null 2>&1; then
-            apt-get update -qq >/dev/null 2>&1 || true
-            apt-get install -y -qq docker.io docker-compose-plugin >/dev/null 2>&1 || apt-get install -y -qq docker-ce docker-compose-plugin >/dev/null 2>&1 || die "Could not install Docker via apt"
-        elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y docker docker-compose-plugin >/dev/null 2>&1 || die "Could not install Docker via dnf"
-        else
-            die "Docker not found. Install manually: https://docs.docker.com/engine/install/"
-        fi
-    fi
-    command -v docker >/dev/null 2>&1 || die "Docker binary not found"
-    docker compose version >/dev/null 2>&1 || docker-compose version >/dev/null 2>&1 || die "Docker Compose v2 is required"
-    _ok "Docker present"
-}
-compose_file() { printf '%s/docker-compose.yml' "$DATA_DIR"; }
-write_compose_file() {
-    local compose; compose="$(compose_file)"
-    mkdir -p "$DATA_DIR"
-    {
-        printf 'services:\n'; printf '  ovmanager:\n'
-        printf '    image: %s:%s\n' "$IMAGE_REPO" "$VERSION"
-        printf '    container_name: ovmanager\n'; printf '    restart: unless-stopped\n'
-        printf '    network_mode: host\n'; printf '    environment:\n'
-        printf '      HOST: 0.0.0.0\n'; printf '      PORT: %s\n' "$PORT_VAL"
-        printf '      URLPATH: %s\n' "$URLPATH_VAL"; printf '      ADMIN_USERNAME: %s\n' "$DEFAULT_USER"
-        printf '      DATA_DIR: /app/data\n'
-        if [[ "$DB_TYPE" != "sqlite" && -n "$DB_URL" ]]; then
-            printf '      DATABASE_URL: %s\n' "$DB_URL"
-        fi
-        if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
-            printf '      OVM_ACME_DOMAIN: %s\n' "$SSL_DOMAIN"
-            printf '      SSL_CERTFILE: /app/data/tls/fullchain.pem\n'; printf '      SSL_KEYFILE: /app/data/tls/privkey.pem\n'
-        fi
-        if [[ "$SSL_MODE" == "custom" ]]; then
-            printf '      SSL_CERTFILE: %s\n' "$SSL_CERT_SRC"; printf '      SSL_KEYFILE: %s\n' "$SSL_KEY_SRC"
-        fi
-        if [[ "$SSL_MODE" == "ip" || "$SSL_MODE" == "selfsigned" ]]; then
-            printf '      SSL_CERTFILE: /app/data/tls/fullchain.pem\n'; printf '      SSL_KEYFILE: /app/data/tls/privkey.pem\n'
-        fi
-        printf '    volumes:\n'; printf '      - %s:/app/data\n' "$DATA_DIR"
-        printf '    logging:\n'; printf '      options:\n'
-        printf '        max-size: "5m"\n'; printf '        max-file: "3"\n'
-    } > "$compose"
-    chmod 600 "$compose"; _ok "Compose file written: $compose"
-}
-setup_docker() {
-    ensure_docker; write_compose_file
-    mkdir -p "$DATA_DIR"
-    _note "pulling ${IMAGE_REPO}:${VERSION}"
-    docker pull "${IMAGE_REPO}:${VERSION}" >/dev/null 2>&1 || _warn "pull failed; continuing with cached image"
-    local c_user
-    c_user="$(docker inspect -f '{{.Config.User}}' "${IMAGE_REPO}:${VERSION}" 2>/dev/null || echo "")"
-    # The published distroless image declares USER nonroot, which need not
-    # exist in the host's passwd database. Its numeric uid/gid are 65532.
-    [[ "$c_user" == "nonroot" ]] && c_user="65532:65532"
-    if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" && "$c_user" != "0:0" ]]; then
-        chown -R "$c_user" "$DATA_DIR" || die "Could not grant the container access to $DATA_DIR"
-    fi
-    chmod 700 "$DATA_DIR" 2>/dev/null || true
-    # Mint only on a fresh database; never replace an existing panel identity.
-    DOCKER_CLAIM_KEY=""
-    if [[ ! -e "$DATA_DIR/ovmanager.db" && ! -e "$DATA_DIR/owner-claim.key" ]]; then
-        DOCKER_CLAIM_KEY="$(openssl rand -hex 16)" || die "Could not create claim key"
-        ( umask 077; printf '%s\n' "$DOCKER_CLAIM_KEY" > "$DATA_DIR/owner-claim.key" )
-        if [[ -n "$c_user" && "$c_user" != "root" && "$c_user" != "0" && "$c_user" != "0:0" ]]; then
-            chown "$c_user" "$DATA_DIR/owner-claim.key" || die "Could not grant the container access to the claim key"
-        fi
-    fi
-    _note "starting container"
-    docker compose -f "$(compose_file)" up -d
-    _ok "container started"
-    # Docker has no host-side cert helper, so issue TLS inside the container
-    # (same subcommands the native path uses) and restart to pick it up.
-    if [[ "$SSL_MODE" == "selfsigned" ]]; then
-        if docker exec ovmanager /app/ovmanager tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
-            _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
-        else
-            _warn "self-signed cert issuance failed"
-        fi
-        docker restart ovmanager >/dev/null 2>&1 || true
-    elif [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
-        if docker exec ovmanager /app/ovmanager tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
-            _ok "certificate issued for $SSL_DOMAIN"
-        else
-            _warn "domain certificate issuance failed - run 'ovmanager tls acme $SSL_DOMAIN' later"
-        fi
-        docker restart ovmanager >/dev/null 2>&1 || true
-    elif [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
-        if docker exec ovmanager /app/ovmanager tls acme "$SSL_IP" >/dev/null 2>&1; then
-            _ok "IP certificate step done for $SSL_IP"
-        else
-            _warn "IP certificate issuance failed - run 'ovmanager tls acme $SSL_IP' later"
-        fi
-        docker restart ovmanager >/dev/null 2>&1 || true
-    fi
-}
-
 do_install() {
     render_banner "OVManager" "$VERSION"
     render_kv "repository" "${REPO}"
@@ -700,69 +843,6 @@ do_install() {
     if [[ "$SSL_MODE" == "selfsigned" && "$INSTALL_SELF_SIGNED" -eq 0 ]]; then
         INSTALL_SELF_SIGNED=1
         [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
-    fi
-    if [[ "$INTERACTIVE" -eq 1 && "$YES" -eq 0 && "$DOCKER_EXPLICIT" -eq 0 && -t 0 ]]; then
-        render_stage "Installation method"
-        colorized_echo green "  1) Docker (default)"
-        colorized_echo green "  2) Native (systemd)"
-        local method_choice
-        read -p "Select install method [1-2] (default: 1): " method_choice
-        method_choice="${method_choice// /}"
-        [ -z "$method_choice" ] && method_choice="1"
-        case "$method_choice" in
-            1) DOCKER=1 ;;
-            2) DOCKER=0 ;;
-            *) render_warn "Invalid choice '$method_choice', using Docker"; DOCKER=1 ;;
-        esac
-    fi
-    if [[ "$DOCKER" -eq 1 ]]; then
-        check_root
-        check_deps
-        colorized_echo blue "Configuration"
-        prompt_interactive; setup_ssl_wizard
-        if [[ "$SSL_MODE" == "domain" && -z "$SSL_DOMAIN" ]]; then _warn "no domain given - SSL disabled"; SSL_MODE="none"; fi
-        [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
-        _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
-        if [[ -d "$DATA_DIR" ]]; then
-            local override="n"
-            if [[ "${YES:-0}" -eq 1 || ! -t 0 ]]; then
-                override="y"
-            else
-                override="$(ask "OVManager already installed at $DATA_DIR. Override previous installation?" "n")"
-            fi
-            if [[ ! "$override" =~ ^[Yy]$ ]]; then
-                _note "Aborted installation"; return 0
-            fi
-        fi
-        if is_port_in_use "$PORT_VAL"; then
-            _warn "Port $PORT_VAL is already in use."
-            if [[ "$INTERACTIVE" -eq 1 ]]; then
-                local new_port
-                while true; do
-                    new_port="$(ask "different port (1-65535) or q to abort" "")"
-                    new_port="${new_port// /}"
-                    [[ "$new_port" == "q" ]] && die "Installation aborted due to port conflict"
-                    if validate_port "$new_port"; then
-                        if is_port_in_use "$new_port"; then _warn "Port $new_port is also in use."; else PORT_VAL="$new_port"; break; fi
-                    else
-                        _warn "Invalid port: $new_port"
-                    fi
-                done
-            else
-                die "Port $PORT_VAL is already in use"
-            fi
-        fi
-        case "$SSL_MODE" in
-            domain) [[ -n "$SSL_DOMAIN" ]] && _ok "SSL enabled for https://${SSL_DOMAIN}:${PORT_VAL}${URLPATH_VAL}" ;;
-            ip) [[ -n "$SSL_IP" ]] && _ok "SSL enabled for https://${SSL_IP}:${PORT_VAL}${URLPATH_VAL}" ;;
-            selfsigned) _ok "SSL enabled for https://$(get_public_ipv4 2>/dev/null || hostname -I | awk '{print $1}'):${PORT_VAL}${URLPATH_VAL}" ;;
-        esac
-        colorized_echo blue "Docker"; setup_docker
-        colorized_echo blue "Verification"
-        verify_health "$PORT_VAL" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s - docker logs ovmanager"
-        _ok "installed v$VERSION via Docker (port $PORT_VAL)"
-        offer_node_and_logs docker "$PORT_VAL" "$URLPATH_VAL" "$DOCKER_CLAIM_KEY"
-        return 0
     fi
     local dest="${DEST:-$INSTALL_DIR}"
     [[ -n "$dest" && "$dest" != "/" ]] || die "refusing to operate on '$dest'"
@@ -831,7 +911,7 @@ do_install() {
     _ok "service $SYSTEMD_SERVICE started"
     if [[ "$INSTALL_SELF_SIGNED" -eq 1 ]]; then
         colorized_echo blue "TLS (self-signed)"
-        if "$dest/$APP_SLUG" tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
+        if "$dest/$SERVER_BIN" tls selfsigned "${SELF_SIGNED_TARGET:-localhost}" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "self-signed certificate issued for ${SELF_SIGNED_TARGET:-localhost}"
         else
@@ -841,7 +921,7 @@ do_install() {
     [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
     if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
         colorized_echo blue "TLS (Let's Encrypt domain)"
-        if "$dest/$APP_SLUG" tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
+        if "$dest/$SERVER_BIN" tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "certificate issued for $SSL_DOMAIN"
         else
@@ -850,7 +930,7 @@ do_install() {
     fi
     if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
         colorized_echo blue "TLS (Let's Encrypt IP)"
-        if "$dest/$APP_SLUG" tls acme "$SSL_IP" >/dev/null 2>&1; then
+        if "$dest/$SERVER_BIN" tls acme "$SSL_IP" >/dev/null 2>&1; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
             _ok "IP certificate step done for $SSL_IP"
         else
@@ -867,8 +947,10 @@ do_install() {
 }
 
 do_update() {
-    [[ -x "$INSTALL_DIR/$APP_SLUG" ]] || die "not installed at $INSTALL_DIR, run the installer first"
-    exec "$INSTALL_DIR/$APP_SLUG" update "$@"
+        local bin="$INSTALL_DIR/$SERVER_BIN"
+    [[ -x "$bin" ]] || bin="$INSTALL_DIR/$APP_SLUG"
+    [[ -x "$bin" ]] || die "not installed at $INSTALL_DIR, run the installer first"
+    exec "$bin" update "$@"
 }
 do_status() {
     if [[ ! -d "$INSTALL_DIR" ]]; then render_fail "status" "Not Installed"; return 1; fi
@@ -911,10 +993,6 @@ do_uninstall() {
         fi
     fi
     check_root
-    if command -v docker >/dev/null 2>&1; then
-        docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ovmanager' && { docker rm -f ovmanager >/dev/null 2>&1 && _ok "removed container ovmanager" || true; }
-        rm -f "$(compose_file)" 2>/dev/null || true
-    fi
     if systemctl is-active --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl stop "$SYSTEMD_SERVICE"; _ok "stopped $SYSTEMD_SERVICE"; fi
     if systemctl is-enabled --quiet "$SYSTEMD_SERVICE" 2>/dev/null; then systemctl disable "$SYSTEMD_SERVICE"; _ok "disabled $SYSTEMD_SERVICE"; fi
     for unit in $SYSTEMD_SERVICE; do
@@ -964,16 +1042,14 @@ OPTIONS
   --acme DOMAIN              Let's Encrypt certificate for DOMAIN
   --build [DIR]              Dev install from a working tree
   --dest DIR                 with --build: destination
-  --docker                   Install/run via Docker (default)
   --version V                Override installer version (default from source tree)
-  --native                   Install native binary (systemd) instead of Docker
   --ssl MODE                 SSL mode: domain|ip|custom|selfsigned|none
   --database TYPE            Database: sqlite|postgres|mysql (default sqlite)
   -h, --help                 Show this help
 
 ENVIRONMENT
   OVM_PORT, OVM_URLPATH, OVM_ACME_DOMAIN, OVM_SSL_MODE, OVM_DB_TYPE, OVM_DATABASE_URL
-  OVM_PANEL_USER, OVM_BIN_DIR, OVM_REPO, OVM_DOCKER
+  OVM_PANEL_USER, OVM_BIN_DIR, OVM_REPO
 EOF
     exit 0
 }
@@ -998,8 +1074,6 @@ parse_args() {
             --ssl)  [[ $# -ge 2 ]] || die "--ssl needs a mode"; SSL_MODE="$2"; shift 2 ;;
             --database) [[ $# -ge 2 ]] || die "--database needs a type"; DB_TYPE="$2"; shift 2 ;;
             -i|--interactive) INTERACTIVE=1; shift ;;
-            --docker) DOCKER=1; DOCKER_EXPLICIT=1; shift ;;
-            --native) DOCKER=0; shift ;;
             -y|--yes) YES=1; shift ;;
             -h|--help) usage ;;
             help) usage ;;
@@ -1024,39 +1098,21 @@ parse_args() {
     done
 }
 
-is_docker_install() { docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'ovmanager'; }
-
 up_command() {
-    if is_docker_install; then
-        docker compose -f "$(compose_file)" up -d
-    else
-        "$INSTALL_DIR/$APP_SLUG" service start
-    fi
+    "$INSTALL_DIR/$SERVER_BIN" service start
 }
 down_command() {
-    if is_docker_install; then
-        docker compose -f "$(compose_file)" down
-    else
-        "$INSTALL_DIR/$APP_SLUG" service stop
-    fi
+    "$INSTALL_DIR/$SERVER_BIN" service stop
 }
 restart_command() {
-    if is_docker_install; then
-        docker compose -f "$(compose_file)" restart
-    else
-        "$INSTALL_DIR/$APP_SLUG" service restart
-    fi
+    "$INSTALL_DIR/$SERVER_BIN" service restart
 }
 logs_command() {
-    if is_docker_install; then
-        docker logs -f ovmanager
-    else
-        "$INSTALL_DIR/$APP_SLUG" logs
-    fi
+    "$INSTALL_DIR/$SERVER_BIN" logs
 }
-cli_command() { exec "$INSTALL_DIR/$APP_SLUG" "$@"; }
-backup_command() { "$INSTALL_DIR/$APP_SLUG" backup "$@"; }
-restore_command() { "$INSTALL_DIR/$APP_SLUG" restore "$@"; }
+cli_command() { local b="$INSTALL_DIR/$SERVER_BIN"; [[ -x "$b" ]] || b="$INSTALL_DIR/$APP_SLUG"; exec "$b" "$@"; }
+backup_command() { local b="$INSTALL_DIR/$SERVER_BIN"; [[ -x "$b" ]] || b="$INSTALL_DIR/$APP_SLUG"; "$b" backup "$@"; }
+restore_command() { local b="$INSTALL_DIR/$SERVER_BIN"; [[ -x "$b" ]] || b="$INSTALL_DIR/$APP_SLUG"; "$b" restore "$@"; }
 edit_env_command() {
     local editor="${EDITOR:-nano}"
     command -v "$editor" >/dev/null 2>&1 || editor="vi"

@@ -182,7 +182,7 @@
   "nodeRenewCertExpiry": "new expiry",
   "nodeRestarting": "در حال راه‌اندازی مجدد...",
   "nodeUpdateTitle": "به‌روزرسانی نرم‌افزار نود",
-  "nodeUpdateHint": "از نود می‌خواهد خودش را به‌روزرسانی کند. نودهای Docker باید از میزبان به‌روزرسانی شوند.",
+  "nodeUpdateHint": "از نود می‌خواهد خودش را به‌روزرسانی کند.",
   "nodeUpdateButton": "به‌روزرسانی نود",
   "nodeUpdating": "در حال به‌روزرسانی...",
   "nodeDownloadTitle": "دانلود همه کانفیگ‌ها",

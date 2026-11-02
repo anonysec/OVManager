@@ -603,16 +603,12 @@ func (h *Handler) cleanStale(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) restartPanel(w http.ResponseWriter, r *http.Request) {
 	var command []string
-	switch {
-	case systemdUnitExists("ovmanager"):
+	if systemdUnitExists("ovmanager") {
 		command = []string{"systemctl", "restart", "ovmanager"}
-	case dockerContainerRunning("ovmanager"):
-		command = []string{"docker", "restart", "ovmanager"}
 	}
 	if command == nil {
 		envelope(w, false,
-			"Could not restart the panel automatically. Run 'systemctl restart ovmanager' on a native "+
-				"install, or 'docker restart ovmanager' for Docker.",
+			"Could not restart the panel automatically. Run 'systemctl restart ovmanager'.",
 			map[string]any{"restarted": false})
 		return
 	}

@@ -20,7 +20,6 @@ type app struct {
 	exit         int
 	installDir   string
 	dataDir      string
-	inContainer  bool
 	serviceState string
 	publicIP     string
 	showAll      bool
@@ -64,7 +63,6 @@ func (a *app) rootCmd() *cobra.Command {
 	pf := root.PersistentFlags()
 	pf.StringVar(&a.installDir, "install-dir", "", "override install dir (default: $OVM_APP_DIR or /opt/ovmanager)")
 	pf.StringVar(&a.dataDir, "data-dir", "", "override data dir")
-	pf.BoolVar(&a.inContainer, "in-container", false, "running inside the panel container (set by ovmanager)")
 	pf.StringVar(&a.serviceState, "service-state", "", "service state reported by the host (running/stopped/unknown)")
 	pf.StringVar(&a.publicIP, "public-ip", "", "the host's primary IP")
 	pf.BoolVarP(&a.showAll, "all", "a", false, "show all fields")
@@ -147,7 +145,7 @@ func (a *app) logsCmd() *cobra.Command {
 			if len(args) == 1 && args[0] != "" {
 				arg = args[0]
 			}
-			a.exit = runLogs(buildLogsCommand(a.install().ComposeFile(), arg))
+			a.exit = runLogs(buildLogsCommand(arg))
 			return nil
 		},
 	}
@@ -352,7 +350,7 @@ func (a *app) updateCmd() *cobra.Command {
 }
 
 func (a *app) serviceCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "service", Short: "service control (systemd/docker)"}
+	cmd := &cobra.Command{Use: "service", Short: "service control (systemd)"}
 	for _, action := range []string{"start", "stop", "restart", "enable", "disable"} {
 		act := action
 		cmd.AddCommand(&cobra.Command{

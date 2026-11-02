@@ -1,4 +1,4 @@
-// `ovmanager logs` (cli): docker logs or journalctl, same selection rules.
+// `ovmanager logs` (cli): journalctl.
 package cli
 
 import (
@@ -6,13 +6,7 @@ import (
 	"os/exec"
 )
 
-func buildLogsCommand(composeFile, arg string) []string {
-	if fileExists(composeFile) {
-		if arg == "-f" {
-			return []string{"docker", "logs", "-f", "--tail", "100", "ovmanager"}
-		}
-		return []string{"docker", "logs", "--tail", arg, "ovmanager"}
-	}
+func buildLogsCommand(arg string) []string {
 	if arg == "-f" {
 		return []string{"journalctl", "-u", systemdService, "-n", "100", "-f"}
 	}

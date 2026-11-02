@@ -1,7 +1,7 @@
 // Package version holds the panel version.
 //
 // This file is THE single version source: the panel (/health, /api/settings),
-// the node agent handshake, the `ovmanager` CLI and the release/docker workflows all
+// the node agent handshake, the `ovmanager` CLI and the release workflows all
 // read it. install.sh carries a guarded copy (VERSION, must match this const)
 // because it runs before any Go toolchain exists; `make version` regenerates
 // web/src/version.ts and web/package.json from here before every web build.

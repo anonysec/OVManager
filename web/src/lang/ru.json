@@ -182,7 +182,7 @@
   "nodeRenewCertExpiry": "new expiry",
   "nodeRestarting": "Перезапуск...",
   "nodeUpdateTitle": "Обновить ПО узла",
-  "nodeUpdateHint": "Просит узел обновиться самостоятельно. Docker-узлы обновляются с хоста.",
+  "nodeUpdateHint": "Просит узел обновиться самостоятельно.",
   "nodeUpdateButton": "Обновить узел",
   "nodeUpdating": "Обновление...",
   "nodeDownloadTitle": "Скачать все конфиги",

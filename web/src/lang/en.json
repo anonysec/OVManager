@@ -182,7 +182,7 @@
   "nodeRenewCertExpiry": "new expiry",
   "nodeRestarting": "Restarting...",
   "nodeUpdateTitle": "Update node software",
-  "nodeUpdateHint": "Asks the node to update itself. Docker nodes must be updated from the host instead.",
+  "nodeUpdateHint": "Asks the node to update itself.",
   "nodeUpdateButton": "Update node",
   "nodeUpdating": "Updating...",
   "nodeDownloadTitle": "Download all configs",

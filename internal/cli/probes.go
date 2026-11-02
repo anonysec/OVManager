@@ -1,4 +1,4 @@
-// Probe helpers: HTTP health, systemd/docker state (cli). Every probe
+// Probe helpers: HTTP health, systemd state (cli). Every probe
 // used by a golden screen is a package var so tests can inject deterministically.
 package cli
 
@@ -109,17 +109,7 @@ func fetchHealthImpl(url string, timeout time.Duration, cafile string) (bool, st
 	return true, version
 }
 
-func serviceStateImpl(composeFile string) (string, string) {
-	if fileExists(composeFile) {
-		out, err := exec.Command("docker", "ps", "--format", "{{.Names}}").Output()
-		if err != nil {
-			return "docker", "unknown"
-		}
-		if containsWord(string(out), "ovmanager") {
-			return "docker", "running"
-		}
-		return "docker", "stopped"
-	}
+func serviceStateImpl() (string, string) {
 	out, err := exec.Command("systemctl", "is-active", systemdService).Output()
 	if err != nil {
 		return "native", "unknown"
