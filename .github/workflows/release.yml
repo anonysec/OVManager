@@ -4,9 +4,8 @@
 name: Release assets
 
 # Builds bare per-platform binaries with the SPA embedded (internal/webfs) and
-# attaches them + a .sha256 sidecar each to the published GitHub Release, so
-# install.sh (the default release path) can install without git, npm or a Go
-# toolchain.
+# attaches them, .sha256 sidecars, and cryptographic signatures to the published
+# GitHub Release, so install.sh and update can verify release authenticity.
 on:
   push:
     tags:
@@ -16,27 +15,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  # The Go suite runs in ci.yml (push/PR gates). This workflow no longer
-  # repeats it; the release is cut from a commit that passed CI.
+  verify-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Go
+        uses: actions/setup-go@f111f330738fe338886e8a9d52a77686134b9906 # v5.3.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Setup Node.js
+        uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
+        with:
+          node-version: 22
+      - name: Check version parity
+        run: make check-version
+      - name: Lint
+        run: make lint
+      - name: Test
+        run: go test ./...
+      - name: Frontend verification
+        run: cd web && npm ci && npm run verify
+      - name: Installer tests
+        run: |
+          bash -n install.sh
+          python3 -m unittest discover -s test/installer -v
+
   assets:
+    needs: [verify-ci]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@f111f330738fe338886e8a9d52a77686134b9906 # v5.3.0
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
         with:
           node-version: 22
 
@@ -72,6 +99,22 @@ jobs:
             sha256sum "${out}" > "${out}.sha256"
           done
 
+      - name: Sign binaries and generate signatures
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -n "${RELEASE_SIGNING_KEY}" ]; then
+            for arch in amd64 arm64; do
+              out="ovmanager-linux-${arch}"
+              openssl pkeyutl -sign -inkey <(printf '%s\n' "${RELEASE_SIGNING_KEY}") -rawin -in "${out}" -out "${out}.sig"
+            done
+          fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@c074443f1a5fb4aee83904b712464907e1401d1f # v2.2.3
+        with:
+          subject-path: 'ovmanager-linux-*'
+
       - name: Ensure release exists
         if: startsWith(github.ref_name, 'v')
         env:
@@ -85,5 +128,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "v${VER}" \
-            ovmanager-linux-amd64 ovmanager-linux-amd64.sha256 \
-            ovmanager-linux-arm64 ovmanager-linux-arm64.sha256 --clobber
+            ovmanager-linux-amd64 ovmanager-linux-amd64.sha256 ovmanager-linux-amd64.sig \
+            ovmanager-linux-arm64 ovmanager-linux-arm64.sha256 ovmanager-linux-arm64.sig

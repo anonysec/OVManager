@@ -111,10 +111,54 @@ offer_node_and_logs docker 2095 panel secret-key
 parse_args interactive
 [[ "$INTERACTIVE" == 1 ]]
 YES=1
+OVM_HOST_IP=127.0.0.1
 curl() { return 0; }
 offer_node_and_logs docker 443 /custom/ new-key
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("https://127.0.0.1:443/custom/", result.stderr)
         self.assertIn("new-key", result.stderr)
+
+    def test_tampered_release_rejected_by_signature(self):
+        # When an attacker tampers with the binary and regenerates the .sha256 file
+        # to match the tampered binary, sha256sum passes but cryptographic
+        # signature verification must fail.
+        code = '''
+mock_dir="$(mktemp -d)"
+asset="$(release_asset)"
+echo "tampered binary" > "$mock_dir/$asset"
+(cd "$mock_dir" && sha256sum "$asset" > "$asset.sha256")
+echo "invalid-signature" > "$mock_dir/$asset.sig"
+
+curl() {
+    local outfile=""
+    local url=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-o" ]]; then
+            outfile="$2"
+            shift 2
+            continue
+        fi
+        url="$1"
+        shift
+    done
+    if [[ -n "$outfile" ]]; then
+        if [[ "$url" == *.sha256 ]]; then
+            cat "$mock_dir/$asset.sha256" > "$outfile"
+        elif [[ "$url" == *.sig ]]; then
+            cat "$mock_dir/$asset.sig" > "$outfile"
+        else
+            cat "$mock_dir/$asset" > "$outfile"
+        fi
+        return 0
+    fi
+    return 1
+}
+dest="$(mktemp -d)"
+fetch_release "$dest"
+'''
+        result = self.run_bash(code)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("signature verification failed", result.stderr)
+
 

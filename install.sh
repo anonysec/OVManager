@@ -211,6 +211,11 @@ release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
 release_tag() { case "$VERSION" in dev|dev-*) printf 'dev' ;; *) printf 'v%s' "$VERSION" ;; esac; }
 release_url() { printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$(release_tag)" "$(release_asset)"; }
 release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
+release_signature_url() { printf '%s.sig' "$(release_url)"; }
+
+RELEASE_PUBKEY_PEM='-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAtCdhWx1ZNix6w04zxfmopiXUyDiIdaa5EXG74J/5j/U=
+-----END PUBLIC KEY-----'
 
 fetch_release() {
     local dest="$1" work asset retries=0
@@ -230,6 +235,14 @@ fetch_release() {
     fi
     if ! ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null 2>&1 ); then
         rm -rf "$work"; die "Release checksum mismatch for v$VERSION"
+    fi
+    if ! curl -fsSL --max-time 120 --retry 2 -o "$work/$asset.sig" "$(release_signature_url)" 2>/dev/null; then
+        rm -rf "$work"; die "Release signature file is missing for v$VERSION"
+    fi
+    local pubkey_file="$work/release_pubkey.pem"
+    printf '%s\n' "${RELEASE_PUBKEY_OVERRIDE:-$RELEASE_PUBKEY_PEM}" > "$pubkey_file"
+    if ! openssl pkeyutl -verify -pubin -inkey "$pubkey_file" -rawin -in "$work/$asset" -sigfile "$work/$asset.sig" >/dev/null 2>&1; then
+        rm -rf "$work"; die "Release cryptographic signature verification failed for v$VERSION"
     fi
     mkdir -p "$dest"
     install -m 0755 "$work/$asset" "$dest/$SERVER_BIN"
@@ -628,27 +641,45 @@ uninstall_completion() {
     fi
 }
 
+# Pin OVNode installer by commit SHA and embedded SHA-256
+OVNODE_COMMIT="41a8a2c0e9ddeb10d6c2dfddd947eab9e22d4015"
+OVNODE_INSTALL_SHA256="dda35b84d07b79476093d0a33b32b91d4b0a9c0c38dcdb32fa214e3b11e81c88"
+
 # OVNode's installer currently bootstraps its helpers into APP_DIR before it
 # checks whether APP_DIR exists. Preserve the pre-bootstrap state when this
 # exact upstream ordering is present; do not remove or overwrite existing nodes.
 run_node_installer() {
-    # If a node is already present, do not re-run the installer (it would
-    # either no-op or refuse). Point the operator at update instead.
-    if [[ -d /opt/ovnode ]] || command -v ovnode >/dev/null 2>&1; then
-        _note "OVNode already installed; use 'ovnode update' to refresh."
-        return 0
-    fi
-    local script
-    if ! script="$(curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v2.0.0/install.sh)" || [[ -z "$script" ]]; then
+    local script before='    load_helpers' check='    # install
+    if [[ -d "$APP_DIR" ]]; then'
+    local snapshot='    local ovm_node_dir_existed=0
+    [[ -d "$APP_DIR" ]] && ovm_node_dir_existed=1
+    load_helpers'
+    local fixed_check='    # install
+    if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
+
+    local url="${OVN_INSTALLER_URL:-https://raw.githubusercontent.com/anonysec/OVNode/${OVNODE_COMMIT}/install.sh}"
+    if ! script="$(curl -fsSL "$url")" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
     fi
-    # `bash -c "$script"` does not run main(): BASH_SOURCE[0] is empty under
-    # -c, so the installer's entry-point guard never fires. Write to a temp
-    # file and execute it like a normal script (PasarGuard-style, no prompts).
     local tmp
     tmp="$(mktemp)"
     printf '%s\n' "$script" > "$tmp"
+    if [[ -z "${OVN_INSTALLER_URL:-}" && -z "${UPSTREAM:-}" ]]; then
+        local actual_sha256
+        actual_sha256="$(sha256sum "$tmp" 2>/dev/null | awk '{print $1}')"
+        if [[ "$actual_sha256" != "$OVNODE_INSTALL_SHA256" ]]; then
+            rm -f "$tmp"
+            _warn "OVNode installer checksum mismatch: expected $OVNODE_INSTALL_SHA256, got $actual_sha256"
+            return 1
+        fi
+    fi
+    # Match both the call and the later install check if upstream has the bootstrap ordering bug
+    if [[ "$script" == *"$before"*"$check"* && "$script" == *'load_helpers() {'* ]]; then
+        script="${script/"$before"/"$snapshot"}"
+        script="${script/"$check"/"$fixed_check"}"
+        printf '%s\n' "$script" > "$tmp"
+    fi
     chmod +x "$tmp"
     if [[ "$EUID" -eq 0 ]]; then
         OVN_YES=1 bash "$tmp"
@@ -669,7 +700,9 @@ show_install_summary() {
     fi
     # Prefer a publicly routable address for HTTPS (no tunnel needed); fall
     # back to the first local address when offline.
-    if [[ "$scheme" == "https" ]]; then
+    if [[ -n "${OVM_HOST_IP:-}" ]]; then
+        public_ip="$OVM_HOST_IP"
+    elif [[ "$scheme" == "https" ]]; then
         public_ip="$(get_public_ipv4 || true)"
         if [[ -z "$public_ip" ]]; then
             for ip in $(hostname -I 2>/dev/null); do

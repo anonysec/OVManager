@@ -12,10 +12,13 @@
 package cli
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +34,12 @@ import (
 	"github.com/anonysec/OVManager/go/internal/maintenance"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
+
+// ReleasePublicKeyPEM is the embedded Ed25519 public key used to verify
+// official release binary signatures.
+const ReleasePublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAtCdhWx1ZNix6w04zxfmopiXUyDiIdaa5EXG74J/5j/U=
+-----END PUBLIC KEY-----`
 
 const (
 	appSlug        = "ovmanager"
@@ -139,7 +148,8 @@ func releaseAsset() string {
 func releaseURL(v string) string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s", repoSlug(), v, releaseAsset())
 }
-func releaseChecksumURL(v string) string { return releaseURL(v) + ".sha256" }
+func releaseChecksumURL(v string) string  { return releaseURL(v) + ".sha256" }
+func releaseSignatureURL(v string) string { return releaseURL(v) + ".sig" }
 
 func updateStatePath(install Install) string {
 	return filepath.Join(install.DataDir, "update-state.json")
@@ -445,6 +455,13 @@ func stageRelease(stage, target, src string, install Install) error {
 		if err := verifyChecksum(bin, string(checksum)); err != nil {
 			return err
 		}
+		sigBytes, err := downloadBytes(releaseSignatureURL(target))
+		if err != nil {
+			return fmt.Errorf("Release signature file is missing for v%s", target)
+		}
+		if err := verifySignature(bin, sigBytes); err != nil {
+			return err
+		}
 		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // triaged intentional
 			return err
 		}
@@ -525,6 +542,33 @@ func verifyChecksum(path, checksumBody string) error {
 	got := hex.EncodeToString(h.Sum(nil))
 	if !strings.EqualFold(got, want[0]) {
 		return fmt.Errorf("Release checksum mismatch")
+	}
+	return nil
+}
+
+func verifySignature(path string, sigBytes []byte) error {
+	return verifySignatureWithKey(path, sigBytes, ReleasePublicKeyPEM)
+}
+
+func verifySignatureWithKey(path string, sigBytes []byte, pubKeyPEM string) error {
+	binBytes, err := os.ReadFile(path) // #nosec G304 // triaged intentional
+	if err != nil {
+		return fmt.Errorf("reading file for signature verification: %w", err)
+	}
+	block, _ := pem.Decode([]byte(pubKeyPEM))
+	if block == nil {
+		return fmt.Errorf("invalid release public key PEM format")
+	}
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("parsing release public key: %w", err)
+	}
+	edPub, ok := pub.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("release public key is not Ed25519")
+	}
+	if !ed25519.Verify(edPub, binBytes, sigBytes) {
+		return fmt.Errorf("cryptographic release signature verification failed")
 	}
 	return nil
 }
