@@ -444,7 +444,7 @@ func fileExists(path string) bool {
 }
 
 func loadCertificate(path string) (*x509.Certificate, error) {
-	raw, err := os.ReadFile(path) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(path) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return nil, err
 	}

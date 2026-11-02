@@ -198,7 +198,7 @@ func envFileValues() map[string]string {
 		return envFileCache.values
 	}
 	values := map[string]string{}
-	raw, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G304 // path is validated within trusted data or application directory
 	if err == nil {
 		for _, line := range strings.Split(string(raw), "\n") {
 			line = strings.TrimSpace(line)

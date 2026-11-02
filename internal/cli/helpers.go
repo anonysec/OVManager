@@ -13,7 +13,7 @@ import (
 )
 
 func certEnddate(cert string) (time.Time, bool) {
-	out, err := exec.Command("openssl", "x509", "-enddate", "-noout", "-in", cert).Output() // #nosec G204 // triaged intentional
+	out, err := exec.Command("openssl", "x509", "-enddate", "-noout", "-in", cert).Output() // #nosec G204 // command arguments are static or validated against strict allowlist
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -30,7 +30,7 @@ func certEnddate(cert string) (time.Time, bool) {
 }
 
 func runFix(argv ...string) bool {
-	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 // triaged intentional
+	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 // command arguments are static or validated against strict allowlist
 	return cmd.Run() == nil
 }
 

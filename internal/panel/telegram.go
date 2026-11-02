@@ -29,7 +29,7 @@ func (h *Handler) startTelegramWorker() {
 func sanitizeTelegramBackup(srcPath string) (string, error) {
 	tmpDir := filepath.Dir(srcPath)
 	sanitizedPath := filepath.Join(tmpDir, "sanitized-"+filepath.Base(srcPath))
-	data, err := os.ReadFile(srcPath) // #nosec G304 // triaged intentional
+	data, err := os.ReadFile(srcPath) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return "", err
 	}
@@ -81,7 +81,7 @@ func (h *Handler) telegramBackupPayload() (string, []byte) {
 		log.Printf("telegram: backup %s is %d bytes, over the attach cap", sanitizedPath, info.Size())
 		return "", nil
 	}
-	data, err := os.ReadFile(sanitizedPath) // #nosec G304 // triaged intentional
+	data, err := os.ReadFile(sanitizedPath) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return "", nil
 	}

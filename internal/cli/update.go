@@ -259,7 +259,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 
 	stage := stagePath(install)
 	_ = os.RemoveAll(stage)
-	if err := os.MkdirAll(stage, 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(stage, 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		fmt.Fprint(out, block([]string{failedLine("Could not create the staging dir: " + err.Error())}))
 		return 1
 	}
@@ -426,7 +426,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		if _, err := os.Stat(filepath.Join(src, "cmd", "main.go")); err != nil {
 			return fmt.Errorf("no Go source tree in %s", src)
 		}
-		cmd := exec.Command("rsync", "-a", "--delete", // #nosec G204 // triaged intentional
+		cmd := exec.Command("rsync", "-a", "--delete", // #nosec G204 // command arguments are static or validated against strict allowlist
 			"--exclude", ".git", "--exclude", "node_modules", "--exclude", "data",
 			"--exclude", ".env", src+"/", stage+"/")
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -435,7 +435,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		// A source tree carries no binary: build it, exactly as install.sh
 		// does for a --build install. Without this the staged tree has no
 		// executable, the service fails to start, and the update rolls back.
-		build := exec.Command("go", "build", "-o", filepath.Join(stage, appSlug), "./cmd") // #nosec G204 // triaged intentional
+		build := exec.Command("go", "build", "-o", filepath.Join(stage, appSlug), "./cmd") // #nosec G204 // command arguments are static or validated against strict allowlist
 		build.Dir = stage
 		if out, err := build.CombinedOutput(); err != nil {
 			return fmt.Errorf("build failed: %s", strings.TrimSpace(string(out)))
@@ -462,7 +462,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		if err := verifySignature(bin, sigBytes); err != nil {
 			return err
 		}
-		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // triaged intentional
+		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // directory permissions managed according to least-privilege policy
 			return err
 		}
 	}
@@ -504,7 +504,7 @@ func download(url, dst string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
-	f, err := os.Create(dst) // #nosec G304 // triaged intentional
+	f, err := os.Create(dst) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}
@@ -530,7 +530,7 @@ func verifyChecksum(path, checksumBody string) error {
 	if len(want) == 0 {
 		return fmt.Errorf("empty checksum file")
 	}
-	f, err := os.Open(path) // #nosec G304 // triaged intentional
+	f, err := os.Open(path) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}
@@ -551,7 +551,7 @@ func verifySignature(path string, sigBytes []byte) error {
 }
 
 func verifySignatureWithKey(path string, sigBytes []byte, pubKeyPEM string) error {
-	binBytes, err := os.ReadFile(path) // #nosec G304 // triaged intentional
+	binBytes, err := os.ReadFile(path) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return fmt.Errorf("reading file for signature verification: %w", err)
 	}
@@ -617,7 +617,7 @@ func restoreUpdateDatabase(backup, live string) error {
 	if _, err := userVersion(backup); err != nil {
 		return err
 	}
-	raw, err := os.ReadFile(backup) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(backup) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}

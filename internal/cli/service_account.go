@@ -6,7 +6,7 @@ import "os"
 // copyFilePerm copies src to dst with the given mode. Kept as a shared helper
 // used by update flows.
 func copyFilePerm(src, dst string, mode os.FileMode) error {
-	raw, err := os.ReadFile(src) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(src) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}

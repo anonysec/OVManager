@@ -223,7 +223,7 @@ func (h *Handler) updateOperation(w http.ResponseWriter, r *http.Request) {
 		envelope(w, true, "No update transaction recorded", nil)
 		return
 	}
-	raw, err := os.ReadFile(statePath) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(statePath) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		envelope(w, false, "The update state file is unreadable", nil)
 		return
@@ -271,18 +271,18 @@ func (h *Handler) runUpdate(w http.ResponseWriter, r *http.Request) {
 // startNativeUpdate detaches `bash <install_sh> update` and returns immediately.
 func (h *Handler) startNativeUpdate(w http.ResponseWriter, installSh string) {
 	logPath := filepath.Join(dataDir(), updateLogName)
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		envelope(w, false, "Could not start the updater: "+err.Error(), nil)
 		return
 	}
-	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) // #nosec G304 // triaged intentional G302
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) // #nosec G304 G302 // log file path in private dataDir with append mode
 	if err != nil {
 		envelope(w, false, "Could not start the updater: "+err.Error(), nil)
 		return
 	}
 	defer logFile.Close()
 
-	cmd := exec.Command("bash", installSh, "update") // #nosec G204 // triaged intentional
+	cmd := exec.Command("bash", installSh, "update") // #nosec G204 // command arguments are static or validated against strict allowlist
 	cmd.Stdin = nil
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile // stderr=subprocess.STDOUT

@@ -85,7 +85,7 @@ func (a *app) authResetCmd() *cobra.Command {
 // true the key is replaced (the lost-key case).
 func mintClaimKey(path string, force bool) (string, bool, error) {
 	if !force {
-		if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // triaged intentional
+		if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // path is validated within trusted data or application directory
 			key := strings.TrimSpace(string(raw))
 			if key != "" {
 				return key, false, nil

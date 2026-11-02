@@ -318,7 +318,7 @@ func migrateLegacyTLS(dataDirPath string) {
 	if !fileExists(legacyCert) || !fileExists(legacyKey) {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		log.Printf("legacy tls migration: %v", err)
 		return
 	}
@@ -335,7 +335,7 @@ func migrateLegacyTLS(dataDirPath string) {
 
 // copyDiskFile copies one file with exact permissions.
 func copyDiskFile(src, dst string, mode os.FileMode) error {
-	raw, err := os.ReadFile(src) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(src) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}

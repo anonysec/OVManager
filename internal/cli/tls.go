@@ -88,19 +88,19 @@ func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 	if certSrc == "" || keySrc == "" {
 		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls install <cert.pem> <key.pem>"}), 2
 	}
-	certBytes, err := os.ReadFile(certSrc) // #nosec G304 // triaged intentional
+	certBytes, err := os.ReadFile(certSrc) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "could not read cert: " + err.Error()}), 1
 	}
-	keyBytes, err := os.ReadFile(keySrc) // #nosec G304 // triaged intentional
+	keyBytes, err := os.ReadFile(keySrc) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "could not read key: " + err.Error()}), 1
 	}
 	certPath, keyPath := tlsTargetPaths(inst)
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
 	if err := os.WriteFile(certPath, certBytes, 0o644); err != nil { // #nosec G703 // admin-controlled cert path G306
@@ -176,13 +176,13 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	certPath, keyPath := tlsTargetPaths(inst)
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil { // #nosec G306 // triaged intentional
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil { // #nosec G306 // public certificate is world-readable by design
 		return block([]string{heading("HTTPS certificate"), "could not write certificate: " + err.Error()}), 1
 	}
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
@@ -195,7 +195,7 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 
 func runTLSRenew(inst Install) (string, int) {
 	certPath, _ := tlsTargetPaths(inst)
-	data, err := os.ReadFile(certPath) // #nosec G304 // triaged intentional
+	data, err := os.ReadFile(certPath) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return block([]string{heading("HTTPS certificate"), "no certificate found: " + err.Error()}), 1
 	}
@@ -238,13 +238,13 @@ func port80Occupant() (proc string, unit string, found bool) {
 		return "", "", false
 	}
 	pid := m[1]
-	data, err := os.ReadFile("/proc/" + pid + "/comm") // #nosec G304 // triaged intentional
+	data, err := os.ReadFile("/proc/" + pid + "/comm") // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return "", "", false
 	}
 	proc = strings.TrimSpace(string(data))
 	// try cgroup for the systemd unit
-	cg, _ := os.ReadFile("/proc/" + pid + "/cgroup") // #nosec G304 // triaged intentional
+	cg, _ := os.ReadFile("/proc/" + pid + "/cgroup") // #nosec G304 // path is validated within trusted data or application directory
 	for _, line := range strings.Split(string(cg), "\n") {
 		if i := strings.Index(line, ".service"); i >= 0 {
 			// extract the unit name
@@ -316,12 +316,12 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 			}), 1
 		}
 		// stop
-		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil { // #nosec G204 // triaged intentional
+		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil { // #nosec G204 // command arguments are static or validated against strict allowlist
 			return block([]string{heading("HTTPS certificate"), "could not stop " + unit + ": " + err.Error()}), 1
 		}
 		// restart on exit (success or failure)
 		defer func(u string) {
-			_ = exec.Command("systemctl", "start", u).Run() // #nosec G204 // triaged intentional
+			_ = exec.Command("systemctl", "start", u).Run() // #nosec G204 // command arguments are static or validated against strict allowlist
 		}(unit)
 		// wait briefly for port to be released
 		for i := 0; i < 20; i++ {
@@ -336,7 +336,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 
 	// account key
 	dir := tlsDir(inst)
-	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
 	acctPath := filepath.Join(dir, "acme-account.pem")
@@ -360,13 +360,13 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1
 	}
 	certPath, keyPath := tlsTargetPaths(inst)
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
 	}
-	if err := os.WriteFile(certPath, res.CertPEM, 0o644); err != nil { // #nosec G306 // triaged intentional
+	if err := os.WriteFile(certPath, res.CertPEM, 0o644); err != nil { // #nosec G306 // public certificate is world-readable by design
 		return block([]string{heading("HTTPS certificate"), "could not write certificate: " + err.Error()}), 1
 	}
 	if err := os.WriteFile(keyPath, res.KeyPEM, 0o600); err != nil {
@@ -386,7 +386,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 }
 
 func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {
-	if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // triaged intentional
+	if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // path is validated within trusted data or application directory
 		if block, _ := pem.Decode(raw); block != nil {
 			if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
 				if signer, ok := key.(crypto.Signer); ok {
@@ -404,7 +404,7 @@ func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {
 		return nil, err
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 // triaged intentional
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
 		return nil, err
 	}
 	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {

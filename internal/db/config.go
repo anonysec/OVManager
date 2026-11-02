@@ -59,7 +59,7 @@ func envOrFileDB(key string) string {
 	}
 	// also check OVM_APP_DIR/.env
 	if d := os.Getenv("OVM_APP_DIR"); d != "" {
-		if raw, err := os.ReadFile(filepath.Join(d, ".env")); err == nil { // #nosec G304 G703 // triaged intentional env file read
+		if raw, err := os.ReadFile(filepath.Join(d, ".env")); err == nil { // #nosec G304 G703 // reading .env file from trusted app directory
 			for _, line := range strings.Split(string(raw), "\n") {
 				line = strings.TrimSpace(line)
 				if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {

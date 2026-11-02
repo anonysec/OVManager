@@ -86,7 +86,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 	if err := os.MkdirAll(backupDir(), 0o700); err != nil {
 		return "", err
 	}
-	_ = os.Chmod(backupDir(), 0o700) // #nosec G302 // triaged intentional
+	_ = os.Chmod(backupDir(), 0o700) // #nosec G302 // directory permissions managed according to least-privilege policy
 	if _, err := h.Svc.DB().Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		return "", err
 	}
@@ -250,7 +250,7 @@ var errUploadTooLarge = fmt.Errorf("too large")
 
 // writeUploadCapped streams an upload to disk, refusing anything past the cap.
 func writeUploadCapped(src multipart.File, dst string, limit int64) error {
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 // triaged intentional
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return err
 	}

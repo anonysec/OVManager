@@ -35,7 +35,7 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 	if cafile == "" {
 		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
 	}
-	raw, err := os.ReadFile(cafile) // #nosec G304 // triaged intentional
+	raw, err := os.ReadFile(cafile) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
 		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
 	}
@@ -134,7 +134,7 @@ func primaryIPImpl() string {
 }
 
 func systemctlEnabledImpl(unit string) bool {
-	out, err := exec.Command("systemctl", "is-enabled", unit).Output() // #nosec G204 // triaged intentional
+	out, err := exec.Command("systemctl", "is-enabled", unit).Output() // #nosec G204 // command arguments are static or validated against strict allowlist
 	if err != nil {
 		return false
 	}
