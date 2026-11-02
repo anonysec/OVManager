@@ -91,8 +91,9 @@ func versionKey(value string) []int {
 }
 
 // versionNewer is _is_newer: tuple comparison, shorter prefix loses.
+// Refuses tags from the retired 2.1.0-2.4.6 pre-reset line.
 func versionNewer(latest, current string) bool {
-	if latest == "" {
+	if latest == "" || version.IsLegacyPreReset(latest) {
 		return false
 	}
 	a, b := versionKey(latest), versionKey(current)
@@ -140,7 +141,10 @@ func fetchLatest(repo string) (string, string, string) {
 		var body map[string]any
 		if json.Unmarshal(raw, &body) == nil {
 			if tag, _ := body["tag_name"].(string); tag != "" {
-				return strings.TrimSpace(tag), "github", ""
+				tag = strings.TrimSpace(tag)
+				if !version.IsLegacyPreReset(tag) {
+					return tag, "github", ""
+				}
 			}
 		}
 	}

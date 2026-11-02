@@ -73,6 +73,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Check version parity
+        run: make check-version
       - name: Lint
         run: make lint
       - name: Build

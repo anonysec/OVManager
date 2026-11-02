@@ -21,11 +21,24 @@ if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^(const|var) Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 fi
 # Resolve "latest" to the newest published release tag.
+is_legacy_prereset() {
+    local v="${1#v}"
+    if [[ "$v" =~ ^2\.[1-4]\. ]]; then
+        return 0
+    fi
+    return 1
+}
+
 if [[ "$VERSION" == "latest" ]]; then
     if ! VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n1)"; then
         VERSION=""
     fi
     [[ -n "$VERSION" ]] || { echo "Could not resolve latest release for $REPO" >&2; exit 1; }
+fi
+
+if is_legacy_prereset "$VERSION"; then
+    echo "Refusing legacy pre-reset release v$VERSION (current line is >= 2.0.0)" >&2
+    exit 1
 fi
 BIN_DIR="${OVM_BIN_DIR:-/usr/local/bin}"
 PANEL_USER="${OVM_PANEL_USER:-ovmanager}"

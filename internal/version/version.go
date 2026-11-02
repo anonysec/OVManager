@@ -7,5 +7,23 @@
 // web/src/version.ts and web/package.json from here before every web build.
 package version
 
+import (
+	"strconv"
+	"strings"
+)
+
 // Version is the OVManager release version.
 var Version = "2.0.0"
+
+// IsLegacyPreReset reports whether tag or version string belongs to the retired
+// 2.1.0–2.4.6 pre-reset line.
+func IsLegacyPreReset(v string) bool {
+	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
+	parts := strings.Split(v, ".")
+	if len(parts) >= 2 && parts[0] == "2" {
+		if minor, err := strconv.Atoi(parts[1]); err == nil && minor >= 1 && minor <= 4 {
+			return true
+		}
+	}
+	return false
+}

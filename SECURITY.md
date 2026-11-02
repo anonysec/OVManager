@@ -4,11 +4,12 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 2.x     | yes       |
-| < 2.0   | no        |
+| 2.0.x (post-reset) | yes |
+| < 2.0.0 | no        |
+| 2.1.x–2.4.x (pre-reset) | no |
 
-Only the latest `2.x` release of OVManager + OVNode is supported.
-Always upgrade both together: panel `2.x` pairs with node `>= 1.x` (current node line 1.3).
+Only the post-reset `2.0.x` line of OVManager is supported. Pre-reset releases (`2.1.0` through `2.4.6`) are legacy/archived and unsupported.
+Always upgrade both together: panel `2.0.x` pairs with node `>= 2.0.0`.
 
 ## Reporting a vulnerability
 

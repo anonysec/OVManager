@@ -1,19 +1,29 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-.PHONY: setup build test lint verify clean version
+.PHONY: setup build test lint verify clean version check-version
 
 setup:
 	go mod download
 	cd web && npm ci
 
 # Single version source: internal/version/version.go. Regenerates the SPA's
-# build-time constant (web/src/version.ts) and package.json so the binary, the
-# installer tag and the frontend never drift. Run before any web build.
+# build-time constant (web/src/version.ts), package.json, and README pins so
+# the binary, the installer tag, the badge and the frontend never drift.
 version:
 	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
 	sed -i -E "s/^  \"version\": \".*\"/  \"version\": \"$$v\"/" web/package.json; \
+	sed -i -E "s|badge/version-[0-9.]*-blue|badge/version-$$v-blue|" README.md; \
+	sed -i -E "s|anonysec/OVManager/v[0-9.]+/install.sh|anonysec/OVManager/v$$v/install.sh|" README.md; \
+	sed -i -E "s|\(v[0-9.]+, matching the binary's version constant\)|\(v$$v, matching the binary's version constant\)|" README.md; \
 	echo "version -> $$v"
+
+check-version:
+	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
+	grep -q "badge/version-$$v-blue" README.md || { echo "README badge mismatch with version.go ($$v)"; exit 1; }; \
+	grep -q "anonysec/OVManager/v$$v/install.sh" README.md || { echo "README install pin mismatch with version.go ($$v)"; exit 1; }; \
+	grep -q "(v$$v, matching the binary's version constant)" README.md || { echo "README prose version mismatch with version.go ($$v)"; exit 1; }; \
+	echo "version parity OK: $$v"
 
 # One binary = the panel (bare invocation) + the `ovmanager` operator CLI. The SPA is
 # embedded (internal/webfs/dist), so the build stages web/dist into the package
@@ -43,7 +53,7 @@ lint:
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
 
-verify: test version
+verify: test version check-version
 	cd web && npm run verify
 
 clean:

@@ -1,3 +1,18 @@
+## 2.0.0 — 2026-11-02 (Version Line Reset)
+
+**Notice: Version line reset to 2.0.0.**
+The version numbering has been deliberately reset to 2.0.0 to establish a clean, unified baseline. The 2.1.x–2.4.x entries below represent the pre-reset historical line and are archived. All future releases proceed sequentially from 2.0.0.
+
+- Native systemd service architecture (`ovmanager-server`) with dedicated hybrid operator CLI (`ovmanager`).
+- Removed Docker deployment dependencies and runtime containers.
+- Standalone self-contained single-file installer (`install.sh`) with inlined runtime libraries.
+- Refactored update pipeline with cryptographic validation and rollback capabilities.
+- Owner-only administrative model.
+
+---
+### Pre-Reset Historical Releases (Archived)
+---
+
 ## 2.4.6 — 2026-11-01
 
 - Feat(backup): daily DB backup moved into panel worker; drop ovmanager-backup unit.

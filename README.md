@@ -151,14 +151,14 @@ To terminate TLS or proxy requests through Nginx, Caddy, or Cloudflare:
 - Port `2095` free.
 
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.4.6/install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.0.0/install.sh)
 ```
 
 The installer installs the verified release binary as a systemd service with a daily backup timer. It starts and health-checks the panel. Use `interactive` or `--interactive` to configure it and optionally install OVNode on the same server; `-y` skips prompts. The panel URL and claim key are shown after the optional node installer and before following logs. `bash install.sh --help` prints the full surface.
 
 If a previous failed OVNode attempt left `/opt/ovnode` behind, the node installer may treat that directory as an existing installation. Inspect it before retrying; do not remove it if it contains an existing node's configuration or data.
 
-The command above pulls `install.sh` from the tagged release (v2.3.0, matching the binary's version constant), not from `main`, so a `main` change cannot silently change what root executes. The binary's SHA-256 is verified at install time against the sidecar shipped with that release; the installer script itself is not separately checksum-verified — there is no published sidecar for it, so only the binary's integrity is checked.
+The command above pulls `install.sh` from the tagged release (v2.0.0, matching the binary's version constant), not from `main`, so a `main` change cannot silently change what root executes. The binary's SHA-256 is verified at install time against the sidecar shipped with that release; the installer script itself is not separately checksum-verified — there is no published sidecar for it, so only the binary's integrity is checked.
 
 **From source** (development): point the installer at a working tree — it builds the SPA and the binary in place:
 

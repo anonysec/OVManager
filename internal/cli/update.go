@@ -232,6 +232,9 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 			return 1
 		}
 		target = latest
+	} else if version.IsLegacyPreReset(target) {
+		fmt.Fprint(out, block([]string{failedLine(fmt.Sprintf("Refusing legacy pre-reset release %s (current line >= 2.0.0)", target))}))
+		return 1
 	}
 
 	writeUpdateState(install, "preflight", from, target, "")
@@ -397,7 +400,11 @@ func fetchLatestRelease() (string, error) {
 	if err := json.Unmarshal(raw, &decoded); err != nil || decoded.TagName == "" {
 		return "", fmt.Errorf("GitHub did not report a release")
 	}
-	return strings.TrimPrefix(strings.TrimSpace(decoded.TagName), "v"), nil
+	tag := strings.TrimPrefix(strings.TrimSpace(decoded.TagName), "v")
+	if version.IsLegacyPreReset(tag) {
+		return "", fmt.Errorf("refusing legacy pre-reset release %s (current line >= 2.0.0)", tag)
+	}
+	return tag, nil
 }
 
 // stageRelease fills stage with the release to install, verifying the checksum.
