@@ -340,8 +340,11 @@ func (s *Service) ipKey(ip string) string { return Sha16(ip) }
 
 func (s *Service) clearBucket(key string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	delete(s.attempts, key)
+	s.mu.Unlock()
+	if db := s.DB(); db != nil {
+		_, _ = db.Exec(`DELETE FROM login_attempts WHERE key_hash = ?`, key)
+	}
 }
 
 // checkBucket reports whether a bucket is at or over its limit, without modifying it.
@@ -349,8 +352,19 @@ func (s *Service) checkBucket(key string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
-	fresh := make([]float64, 0, len(s.attempts[key]))
-	for _, t := range s.attempts[key] {
+	var times []float64
+
+	if len(s.attempts[key]) == 0 && s.DB() != nil {
+		var rawAttempts string
+		if err := s.DB().QueryRow(`SELECT attempts FROM login_attempts WHERE key_hash = ?`, key).Scan(&rawAttempts); err == nil && rawAttempts != "" {
+			_ = json.Unmarshal([]byte(rawAttempts), &times)
+		}
+	} else {
+		times = s.attempts[key]
+	}
+
+	fresh := make([]float64, 0, len(times))
+	for _, t := range times {
 		if now-t < lockoutSeconds {
 			fresh = append(fresh, t)
 		}
@@ -368,8 +382,16 @@ func (s *Service) incrementBucket(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
-	fresh := s.attempts[key][:0]
-	for _, t := range s.attempts[key] {
+	times := s.attempts[key]
+	if len(times) == 0 && s.DB() != nil {
+		var rawAttempts string
+		if err := s.DB().QueryRow(`SELECT attempts FROM login_attempts WHERE key_hash = ?`, key).Scan(&rawAttempts); err == nil && rawAttempts != "" {
+			_ = json.Unmarshal([]byte(rawAttempts), &times)
+		}
+	}
+
+	fresh := make([]float64, 0, len(times)+1)
+	for _, t := range times {
 		if now-t < lockoutSeconds {
 			fresh = append(fresh, t)
 		}
@@ -382,6 +404,15 @@ func (s *Service) incrementBucket(key string) {
 			if overflow--; overflow == 0 {
 				break
 			}
+		}
+	}
+
+	if db := s.DB(); db != nil {
+		if payload, err := json.Marshal(fresh); err == nil {
+			_, _ = db.Exec(`INSERT INTO login_attempts (key_hash, attempts, updated)
+				VALUES (?, ?, ?)
+				ON CONFLICT(key_hash) DO UPDATE SET attempts = excluded.attempts, updated = excluded.updated`,
+				key, string(payload), now)
 		}
 	}
 }
