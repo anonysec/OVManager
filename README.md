@@ -113,6 +113,7 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - The panel UI is served under a random secret URL prefix; unrelated paths show a decoy 404. `/api/` and `/health` remain fixed routes; protected operations still require authentication.
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
 - Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` opens the interactive TLS menu (status, issue, renew, remove, self-signed, custom install).
+- Behind a reverse proxy (nginx, Caddy, Cloudflare), set `TRUSTED_PROXY=true` in `.env`. The panel resolves client IPs from `CF-Connecting-IP`, `X-Real-IP`, or the rightmost `X-Forwarded-For` entry, and secures cookies when `X-Forwarded-Proto: https` is forwarded.
 - Built-in Let's Encrypt issues over HTTP-01. Port 80 must be reachable for ~60 seconds while the certificate is issued; if something else (nginx/apache/caddy) is bound to port 80, `ovmanager tls issue <domain>` offers to stop it temporarily (with confirmation) and restart it afterwards. Renewals happen automatically (T-30 days) via the `ovmanager-acme-renew.timer`. Issuance never needs an API key or DNS provider.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.
@@ -129,6 +130,16 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - Staged updates with automatic failover; an update interrupted by a reboot is recovered on the next `ovmanager update` run.
 - Verified `.db` backups, listed and restored by name (`ovmanager backup --keep N`, `ovmanager restore`).
 - A bare `ovmanager` run prints the available screens and exits; every command has `--help`.
+
+### 🌐 Reverse Proxy (Nginx, Caddy, Cloudflare)
+To terminate TLS or proxy requests through Nginx, Caddy, or Cloudflare:
+1. Set `TRUSTED_PROXY=true` in `/opt/ovmanager/.env`.
+2. For plain HTTP behind local proxy, the panel binds to `127.0.0.1:2095` by default (`HOST=127.0.0.1`).
+3. Pass required headers:
+   - `Host $host`
+   - `X-Forwarded-Proto $scheme` (ensures cookies use `Secure`)
+   - `X-Forwarded-For $proxy_add_x_forwarded_for` or `X-Real-IP $remote_addr` (Cloudflare passes `CF-Connecting-IP` automatically)
+4. Disable proxy buffering for live telemetry SSE (`proxy_buffering off;`).
 
 ## 🚀 Install
 

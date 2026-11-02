@@ -14,9 +14,15 @@ import (
 // auth.Service and panel.Handler.
 func ClientIP(trustedProxy bool, r *http.Request) string {
 	if trustedProxy {
+		if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
+			return cf
+		}
+		if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
+			return xri
+		}
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			parts := strings.Split(xff, ",")
-			if v := strings.TrimSpace(parts[0]); v != "" {
+			if v := strings.TrimSpace(parts[len(parts)-1]); v != "" {
 				return v
 			}
 		}

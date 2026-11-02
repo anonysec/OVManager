@@ -696,7 +696,7 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	candidates := h.cleanupCandidates(payload)
 	sample := []string{}
-		for i, c := range candidates {
+	for i, c := range candidates {
 		if i >= cleanupSampleSize {
 			break
 		}

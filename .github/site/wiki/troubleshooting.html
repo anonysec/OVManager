@@ -239,6 +239,24 @@ ovmanager logs</code></pre>
       <strong>Settings &rarr; Subscription Link</strong>, then restart the panel.
     </p>
 
+    <h2 id="proxy-issues">Reverse proxy issues: rate limiting or live telemetry freezing</h2>
+    <ul>
+      <li>
+        <strong>All users rate-limited together:</strong> If you run behind Nginx,
+        Caddy, or Cloudflare, ensure <code>TRUSTED_PROXY=true</code> is set in
+        <code>/opt/ovmanager/.env</code>. Without this flag, the panel sees the
+        proxy IP as the client address and shares login failure counters across
+        all users.
+      </li>
+      <li>
+        <strong>Live stats not updating:</strong> The live dashboard uses
+        Server-Sent Events (SSE). If your reverse proxy buffers responses, the
+        stream will stall. In Nginx, add <code>proxy_buffering off;</code> and
+        <code>proxy_read_timeout 300s;</code> inside the panel's
+        <code>location /</code> block.
+      </li>
+    </ul>
+
     <h2 id="no-internet">VPN connects but there is no internet</h2>
     <p>This is a node-side problem: IP forwarding and NAT.</p>
     <ul>

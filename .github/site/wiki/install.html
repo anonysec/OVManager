@@ -54,21 +54,13 @@
       <li>Nothing else. The installer brings its own runtime and needs no <code>git</code> or <code>npm</code> on the server.</li>
     </ul>
 
-    <h2 id="status">Read this first: release artifacts</h2>
+    <h2 id="status">Verified releases</h2>
     <div class="note">
-      <h3>Nothing is published on GitHub Releases yet</h3>
       <p>
-        v1.0.0 is the first release and no release archive or tag exists yet.
-        The installer does not build from source: it downloads a
-        <strong>verified</strong> release archive and its mandatory SHA-256
-        sidecar, and refuses to continue if the download is not a real archive
-        or the checksum does not match. That is deliberate &mdash; it will not
-        install an unverified tree &mdash; but it means the published one-liner
-        cannot complete until those artifacts exist.
-      </p>
-      <p>
-        Use <a href="#from-source">install from source</a> below if you want to
-        run the panel today.
+        The installer downloads a <strong>verified release binary</strong> with a
+        mandatory SHA-256 sidecar checksum from GitHub Releases, and verifies integrity
+        before installing. Plain HTTP is disabled by default; the installer configures
+        TLS or allows sitting behind a trusted reverse proxy.
       </p>
     </div>
 
@@ -90,8 +82,8 @@
     <h3>Native or Docker</h3>
     <ul>
       <li>
-        <strong>Native</strong> (the default) installs a systemd unit and a
-        virtualenv on the host. Simplest on a normal VPS.
+        <strong>Native</strong> (the default) installs the self-contained Go binary as
+        a systemd service on the host. Simplest and most performant on a normal VPS.
       </li>
       <li>
         <strong>Docker</strong> runs the panel as a container. Pick it if you
