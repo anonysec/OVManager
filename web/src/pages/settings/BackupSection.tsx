@@ -285,6 +285,10 @@ const BackupSection = () => {
           />
         </Field>
 
+        <p className="sp-hint sp-mt-12">
+          {t('backupSecurityNotice', 'Security Notice: Backups sent via Telegram automatically have all active sessions, bot tokens, and node API keys redacted. Offsite copies are encrypted with AES-256-GCM before transmission.')}
+        </p>
+
         <Field
           label={t('telegramBackup', 'Telegram copy')}
           hint={telegramBackupAvailable

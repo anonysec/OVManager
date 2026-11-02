@@ -31,6 +31,12 @@ Telegram bot token handling.
 Out of scope: DDoS/volumetric abuse, OpenVPN or EasyRSA upstream CVEs
 (update those packages), social engineering, physical access.
 
+## Threat model & secret storage
+
+- **Secrets at rest**: Sensitive columns (`nodes.key` and `settings.bot_token`) are encrypted at rest with AES-256-GCM. The encryption key (`secret.key`) is stored in the data directory with strict `0600` permissions (read/write only by the service user/root), isolated from the SQLite database file.
+- **Telegram backups**: Automatically redact all active session tokens, the Telegram bot token, and node API keys (`DELETE FROM sessions`, redacted keys). Even if a Telegram backup document is intercepted, it contains no usable secrets or credentials.
+- **Offsite backups**: Encrypted with AES-256-GCM prior to transfer (`.db.enc`) so plaintext databases never transit or rest on remote storage unprotected.
+
 ## Self-signed node TLS fallback (known risk)
 
 The panel first verifies a node's TLS certificate strictly. If verification

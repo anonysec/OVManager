@@ -59,7 +59,10 @@ func setupNodeTestDB(t *testing.T) *sql.DB {
 			key TEXT NOT NULL,
 			server_ca TEXT,
 			status INTEGER DEFAULT 1,
-			country_code TEXT
+			country_code TEXT,
+			latitude REAL,
+			longitude REAL,
+			extra_ports TEXT
 		);
 		CREATE TABLE audit_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

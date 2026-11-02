@@ -805,6 +805,7 @@
   "offsiteTarget": "مقصد کپی برون‌سپاری",
   "offsiteTargetHint": "اختیاری. بعد از هر پشتیبان خودکار، تازه‌ترین فایل با rsync (یا scp) به این مقصد کپی می‌شود. قالب: user@server:/path — پوشه مقصد باید از قبل موجود باشد و ورود با کلید SSH کار کند.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
+  "backupSecurityNotice": "نکته امنیتی: نسخه‌های پشتیبان ارسالی به تلگرام به طور خودکار فاقد نشست‌های فعال، توکن ربات و کلیدهای نود خواهند بود. رونوشت‌های برون‌سپاری قبل از ارسال با AES-256-GCM رمزگذاری می‌شوند.",
   "toggleTheme": "تغییر تم",
   "selectLanguage": "انتخاب زبان: {name}",
   "activeMax": "Active / Max",

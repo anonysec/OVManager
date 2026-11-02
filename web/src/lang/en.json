@@ -805,6 +805,7 @@
   "offsiteTarget": "Offsite copy target",
   "offsiteTargetHint": "Optional. After each automatic backup, the newest file is copied here with rsync (or scp). Format: user@server:/path — the target folder must already exist and SSH key login must work.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
+  "backupSecurityNotice": "Security Notice: Backups sent via Telegram automatically have all active sessions, bot tokens, and node API keys redacted. Offsite copies are encrypted with AES-256-GCM before transmission.",
   "toggleTheme": "Toggle theme",
   "selectLanguage": "Select language: {name}",
   "activeMax": "Active / Max",

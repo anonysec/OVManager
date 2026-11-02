@@ -805,6 +805,7 @@
   "offsiteTarget": "异地备份目标",
   "offsiteTargetHint": "可选。每次自动备份后，最新的文件会通过 rsync（或 scp）复制到这里。格式：user@server:/path — 目标文件夹必须已存在，且 SSH 密钥登录可用。",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
+  "backupSecurityNotice": "安全提示：通过 Telegram 发送的备份会自动清除活跃会话、Bot 令牌与节点密钥。异地备份在传输前均使用 AES-256-GCM 加密。",
   "toggleTheme": "切换主题",
   "selectLanguage": "选择语言: {name}",
   "activeMax": "Active / Max",

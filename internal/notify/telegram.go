@@ -29,6 +29,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/anonysec/OVManager/go/internal/crypto"
 )
 
 // APIBase is the Telegram Bot API root; tests point it at a local stub.
@@ -194,6 +196,11 @@ func LoadSettings(db *sql.DB) Settings {
 	s.Enabled = enabled.Int64 != 0
 	s.Configured = token.Valid && token.String != ""
 	s.Token = token.String
+	if s.Token != "" {
+		if plain, err := crypto.DecryptSecret(s.Token, ""); err == nil {
+			s.Token = plain
+		}
+	}
 	if chat.Valid {
 		s.ChatID = strconv.FormatInt(chat.Int64, 10)
 	}

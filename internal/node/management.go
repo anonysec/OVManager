@@ -22,6 +22,7 @@ import (
 
 	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
 
@@ -64,6 +65,11 @@ func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 		&n.Port, &n.Key, &n.Status, &n.ServerCA, &n.CountryCode, &n.Latitude, &n.Longitude, &n.ExtraPorts)
 	if err != nil {
 		return nil, err
+	}
+	if n.Key != "" {
+		if plain, err := crypto.DecryptSecret(n.Key, DataDir); err == nil {
+			n.Key = plain
+		}
 	}
 	return n, nil
 }
@@ -538,11 +544,15 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 		lat = lLat
 		lon = lLon
 	}
+	storedKey := req.key()
+	if enc, err := crypto.EncryptSecret(storedKey, DataDir); err == nil {
+		storedKey = enc
+	}
 	res, err := db.Exec(
 		`INSERT INTO nodes (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(),
-		req.key(), req.status(), nullIfEmpty(serverCA), cc, lat, lon,
+		storedKey, req.status(), nullIfEmpty(serverCA), cc, lat, lon,
 	)
 	if err != nil {
 		return 0, err
@@ -555,8 +565,12 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 	if req.CountryCode != nil {
 		manual = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
 	}
+	storedKey := apiKey
+	if enc, err := crypto.EncryptSecret(storedKey, DataDir); err == nil {
+		storedKey = enc
+	}
 	set := `name=?, address=?, tunnel_address=?, protocol=?, ovpn_port=?, port=?, status=?, key=?`
-	args := []any{req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(), req.status(), apiKey}
+	args := []any{req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(), req.status(), storedKey}
 	if manual != "" {
 		set += `, country_code=?, latitude=NULL, longitude=NULL`
 		args = append(args, manual)

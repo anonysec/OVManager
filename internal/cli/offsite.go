@@ -13,10 +13,12 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/maintenance"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
@@ -33,19 +35,32 @@ func offsiteCopy(target, path string) (string, error) {
 	if user != "" {
 		dest = user + "@" + host
 	}
-	remote := dest + ":" + strings.TrimSuffix(dir, "/") + "/" + filepath.Base(path)
+
+	// Encrypt the backup with AES-GCM before shipping off-host
+	dataDir := filepath.Dir(filepath.Dir(path))
+	key, keyErr := crypto.GetOrCreateSecretKey(dataDir)
+	uploadPath := path
+	if keyErr == nil && len(key) == 32 {
+		encPath := path + ".enc"
+		if encErr := crypto.EncryptFile(path, encPath, key); encErr == nil {
+			uploadPath = encPath
+			defer os.Remove(encPath) // #nosec G304 // intentional cleanup
+		}
+	}
+
+	remote := dest + ":" + strings.TrimSuffix(dir, "/") + "/" + filepath.Base(uploadPath)
 
 	// The destination is the only user input and the parser restricts it to
 	// a safe character set; -e is a constant, so nothing user-supplied
 	// reaches a shell.
 	if _, lookErr := exec.LookPath("rsync"); lookErr == nil {
-		cmd := exec.Command("rsync", "-a", "-e", "ssh -o BatchMode=yes", path, remote) // #nosec G204 // triaged intentional
+		cmd := exec.Command("rsync", "-a", "-e", "ssh -o BatchMode=yes", uploadPath, remote) // #nosec G204 // triaged intentional
 		if out, runErr := cmd.CombinedOutput(); runErr != nil {
 			return "rsync", fmt.Errorf("rsync failed: %s", strings.TrimSpace(string(out)))
 		}
 		return "rsync", nil
 	}
-	cmd := exec.Command("scp", "-o", "BatchMode=yes", path, remote) // #nosec G204 // triaged intentional
+	cmd := exec.Command("scp", "-o", "BatchMode=yes", uploadPath, remote) // #nosec G204 // triaged intentional
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		return "scp", fmt.Errorf("scp failed: %s", strings.TrimSpace(string(out)))
 	}

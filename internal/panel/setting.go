@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/version"
@@ -304,6 +305,9 @@ var botConfigColumns = []struct {
 			return nil, false
 		}
 		if v := strings.TrimSpace(*p.BotToken); v != "" {
+			if enc, err := crypto.EncryptSecret(v, dataDir()); err == nil {
+				return enc, true
+			}
 			return v, true
 		}
 		return nil, true // an empty token clears the column

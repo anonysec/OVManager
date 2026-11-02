@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
 )
 
@@ -299,6 +300,11 @@ func (s settings) str(key, def string) string {
 // strOr is the raw DB value ("" for NULL).
 func (s settings) strOr(key string) string {
 	v, _ := s[key].(string)
+	if key == "bot_token" && v != "" {
+		if plain, err := crypto.DecryptSecret(v, dataDir()); err == nil {
+			return plain
+		}
+	}
 	return v
 }
 

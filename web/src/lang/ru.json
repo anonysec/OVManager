@@ -805,6 +805,7 @@
   "offsiteTarget": "Цель внешней копии",
   "offsiteTargetHint": "Необязательно. После каждого автоматического резервного копирования новейший файл копируется сюда с помощью rsync (или scp). Формат: user@server:/path — папка должна существовать, вход по SSH-ключу должен работать.",
   "offsiteTargetPlaceholder": "backup@server:/backups/panel",
+  "backupSecurityNotice": "Примечание по безопасности: из резервных копий Telegram автоматически удаляются активные сессии, токен бота и ключи узлов. Внешние копии шифруются с помощью AES-256-GCM перед передачей.",
   "toggleTheme": "Переключить тему",
   "selectLanguage": "Выбрать язык: {name}",
   "activeMax": "Active / Max",
