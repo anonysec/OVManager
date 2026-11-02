@@ -115,7 +115,7 @@ func runTLSInstall(inst Install, certSrc, keySrc string) (string, int) {
 }
 
 func runTLSSelfSigned(inst Install, domain string) (string, int) {
-	if domain == "" {
+	if strings.TrimSpace(domain) == "" {
 		domain = "localhost"
 	}
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -125,14 +125,39 @@ func runTLSSelfSigned(inst Install, domain string) (string, int) {
 	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	dnsNames := []string{}
 	var ipAddrs []net.IP
-	if ip := net.ParseIP(domain); ip != nil {
-		ipAddrs = append(ipAddrs, ip)
-	} else if domain != "" {
-		dnsNames = append(dnsNames, domain)
+	seenDNS := map[string]bool{}
+	seenIP := map[string]bool{}
+	cn := ""
+	for _, part := range strings.Split(domain, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if cn == "" {
+			cn = part
+		}
+		if ip := net.ParseIP(part); ip != nil {
+			s := ip.String()
+			if !seenIP[s] {
+				seenIP[s] = true
+				ipAddrs = append(ipAddrs, ip)
+			}
+			continue
+		}
+		if !seenDNS[part] {
+			seenDNS[part] = true
+			dnsNames = append(dnsNames, part)
+		}
+	}
+	if cn == "" {
+		cn = "localhost"
+	}
+	if len(dnsNames) == 0 && len(ipAddrs) == 0 {
+		dnsNames = append(dnsNames, "localhost")
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: domain},
+		Subject:      pkix.Name{CommonName: cn},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,

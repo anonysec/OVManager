@@ -183,12 +183,25 @@ setup_ssl_wizard() {
         ;;
     4)
         SSL_MODE="selfsigned"
-        local recommended_ips default_target
-        recommended_ips="$(public_ips)"
-        [[ -n "$recommended_ips" ]] && _note "this box answers on ${recommended_ips// /, }"
-        default_target="${recommended_ips%% *}"
+        local recommended_ips default_target ip
+        recommended_ips=""
+        # Suggest every address this box actually answers on, so the
+        # self-signed certificate carries matching SAN entries (local,
+        # public and loopback) instead of a single hostname.
+        for ip in 127.0.0.1 $(hostname -I 2>/dev/null); do
+            case "$ip" in *:*) continue ;; esac
+            case " $recommended_ips " in *" $ip "*) continue ;; esac
+            recommended_ips+="$ip "
+        done
+        for ip in $(public_ips); do
+            case " $recommended_ips " in *" $ip "*) continue ;; esac
+            recommended_ips+="$ip "
+        done
+        recommended_ips="${recommended_ips% }"
+        [[ -n "$recommended_ips" ]] && _note "recommended (local/public/loopback): ${recommended_ips// /, }"
+        default_target="${recommended_ips// /,}"
         [[ -z "$default_target" ]] && default_target="localhost"
-        SELF_SIGNED_TARGET="$(ask "domain or IP for self-signed cert" "$default_target")"
+        SELF_SIGNED_TARGET="$(ask "domain or IP(s) for self-signed cert" "$default_target")"
         SELF_SIGNED_TARGET="${SELF_SIGNED_TARGET// /}"
         [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="$default_target"
         INSTALL_SELF_SIGNED=1
