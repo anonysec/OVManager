@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("migrate database: %v", err)
 	}
 
-	port := env("PORT", env("UVICORN_PORT", "2095"))
+	port := env("PORT", "2095")
 	migrateLegacyTLS(dataDir)
 	certFile := panel.SSLCertPath()
 	keyFile := panel.SSLKeyPath()
@@ -266,7 +266,7 @@ func serveMode(tlsEnabled bool, port string) (string, bool) {
 	host := "127.0.0.1"
 	if tlsEnabled {
 		host = "0.0.0.0"
-	} else if h := strings.TrimSpace(env("HOST", env("UVICORN_HOST", ""))); h != "" {
+	} else if h := strings.TrimSpace(env("HOST", "")); h != "" {
 		host = h
 	}
 	return net.JoinHostPort(host, port), tlsEnabled

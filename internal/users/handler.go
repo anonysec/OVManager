@@ -510,7 +510,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	audit.Record(h.Svc.DB(), h.actor(r), "user.update", "info",
 		updateMsg, map[string]any{"target": row.Name, "active": row.IsActive != 0, "changes": diffs})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "update"})
-	// ponytail: node status/limit fan-out lands with Phase 2; with zero nodes
+	// note: node status/limit fan-out lands with Phase 2; with zero nodes
 	// the node helpers return true, so success matches.
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated successfully"})
 }

@@ -13,7 +13,7 @@ const DefaultPath = "data/ovmanager.db"
 
 // dsnPragmas keeps the engine's PRAGMAs. cache_size -32768 = 32MiB.
 //
-// ponytail: perf.low_resource (8MiB cache on 1GB boxes) not wired — pass a
+// note: perf.low_resource (8MiB cache on 1GB boxes) not wired — pass a
 // variant DSN when the setting gains a reader here.
 const dsnPragmas = "?_pragma=journal_mode(WAL)" +
 	"&_pragma=synchronous(NORMAL)" +

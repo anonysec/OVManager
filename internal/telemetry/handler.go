@@ -569,7 +569,7 @@ func PollSeconds() float64 {
 			return f
 		}
 	}
-	return lowResourcePollSeconds // ponytail: low_resource flag not re-read here
+	return lowResourcePollSeconds // note: low_resource flag not re-read here
 }
 
 // pollDue reports whether enough time has passed since the last poll to run

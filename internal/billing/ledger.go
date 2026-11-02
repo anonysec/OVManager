@@ -140,7 +140,7 @@ func PruneLedger(db *sql.DB, keepDays, batch int) int {
 
 // Canon renders the canonical node_usage text both sides of an OCC compare speak.
 //
-// ponytail: only handles the shapes daily.py stores (object or its JSON text);
+// note: only handles the shapes daily.py stores (object or its JSON text);
 // default-str fallback for exotic types is not reproduced.
 func Canon(state any) string {
 	if s, ok := state.(string); ok {

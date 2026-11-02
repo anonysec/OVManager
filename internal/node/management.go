@@ -285,7 +285,7 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 		infoC := NodeClient(n, pid)
 		sessC := NodeClient(n, pid)
 		infoCh := make(chan map[string]any, 1)
-		// ponytail: sessions use LongTimeout like management.get_node_status.
+		// note: sessions use LongTimeout like management.get_node_status.
 		sessCh := make(chan map[string]any, 1)
 		go func() { infoCh <- infoC.GetNodeInfo() }()
 		go func() { sessCh <- sessC.GetSessions("", 8, 0) }()
@@ -480,7 +480,7 @@ func UpdateNodeHandler(nodeID int64, req nodeCreate, db *sql.DB) (bool, string) 
 		return false, err.Error()
 	}
 	if structural {
-		// ponytail: restart-debounce worker (operations/restart_debounce.py) is
+		// note: restart-debounce worker (operations/restart_debounce.py) is
 		// out of this phase; the flag is not queued.
 		_ = structural
 	}

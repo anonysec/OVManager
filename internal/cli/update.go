@@ -101,7 +101,7 @@ func dirHasEntries(path string) bool {
 }
 
 // copyTree recursively copies src into dst, preserving permission bits.
-// ponytail: regular files and dirs only — the data dir holds no symlinks; add
+// note: regular files and dirs only — the data dir holds no symlinks; add
 // link handling if a release ever ships one.
 func copyTree(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {

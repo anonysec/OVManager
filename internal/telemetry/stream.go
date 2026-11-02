@@ -327,7 +327,7 @@ func pyFallback(v any) string {
 
 // formatFloat matches repr for the magnitudes a unix ts takes.
 //
-// ponytail: fixed shortest form; switches to exponent form below 1e-4
+// note: fixed shortest form; switches to exponent form below 1e-4
 // or at/above 1e16. SSE floats are unix seconds, so that range never occurs.
 func formatFloat(f float64) string {
 	s := strconv.FormatFloat(f, 'f', -1, 64)
