@@ -200,8 +200,7 @@ func (s *Service) PurgeExpired() int {
 	return int(n)
 }
 
-// roleIsCurrent re-checks the session role against the admins table
-// (auth role_is_current).
+// roleIsCurrent re-checks the session role against the admins table.
 func (s *Service) roleIsCurrent(username, role string) bool {
 	var isOwner int64
 	err := s.DB().QueryRow(`SELECT is_owner FROM admins WHERE username = ?`, username).Scan(&isOwner)
@@ -211,7 +210,7 @@ func (s *Service) roleIsCurrent(username, role string) bool {
 	if role == "owner" {
 		return isOwner != 0
 	}
-	return role == "admin"
+	return role == "admin" && isOwner == 0
 }
 
 // Authenticate checks the single owner credential row. Only the is_owner row
