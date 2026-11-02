@@ -30,6 +30,13 @@ const PRECACHE_URLS = [
 // urlpath prefix): settings can rename the subscription route, and the SW has
 // no build-time access to that value. Add the new path here when it changes.
 const BYPASS_PREFIXES = ['/api', '/sub', '/health'];
+const UUID_PATH_RE = /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function isBypassUrl(url) {
+  if (BYPASS_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return true;
+  if (UUID_PATH_RE.test(url.pathname)) return true;
+  return false;
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -90,7 +97,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // never cache cross-origin
-  if (BYPASS_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return;
+  if (isBypassUrl(url)) return;
   if (request.headers.get('range')) return;
 
   event.respondWith(request.mode === 'navigate' ? networkFirst(request) : cacheFirst(request));
