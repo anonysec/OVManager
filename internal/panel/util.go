@@ -110,9 +110,8 @@ func ParseOffsiteTarget(target string) (user, host, path string, err error) {
 // detachSysProcAttr detaches a spawned restart from this process (setsid).
 func detachSysProcAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
 
-// Offsite backup copies are not implemented: the SSH/rsync copy that this
-// setting used to advertise was never wired up. Re-adding the control
-// requires a real implementation; do not re-add the dead helper here.
+// Offsite backup copies are implemented in internal/cli/offsite.go: the newest
+// backup is pushed to the configured offsite target with rsync/scp over SSH.
 
 // safeFilename is maintenance._safe_filename: basename + ASCII allowlist.
 func safeFilename(name string) string {

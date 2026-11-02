@@ -19,9 +19,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
 
 ## Project Status
 
-> **Early Development / Proof of Concept**
->
-> This repository is currently an early-stage proof of concept. It is not production-ready, APIs and configuration formats may change, and operational guarantees are limited. Use in test environments only.
+OVManager 2.0.0 is the official release line featuring a native systemd architecture, embedded React 19 SPA, and cryptographic release verification.
 
 ## Tech Stack
 
@@ -90,7 +88,7 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - Free-text tags up to 64 characters for grouping, search and filtering.
 - Handoff straight after creation: download a `.ovpn` profile for a chosen node, or copy a subscription link. Both stay available from the user's row.
 - Subscription UUID URLs act as bearer links outside the secret panel path, so they can be shared — with a QR code for phone clients.
-- Additional admin accounts alongside the owner, each of which can be enabled or disabled, with their own sessions listed and revocable.
+- Owner-only administrative model with secure session management, token-based authentication, and instant revocation.
 
 ### 📊 Traffic accounting
 - Usage collected every five minutes from every node, counted as the increase over the last reading — short sessions, disconnects and restarts cannot double-count, and a total that shrinks bills zero.
@@ -231,8 +229,8 @@ Full documentation is published at **<https://anonysec.github.io/OVManager/>**.
 
 | Guide | What is in it |
 | --- | --- |
-| [Install & first login](https://anonysec.github.io/OVManager/wiki/install.html) | Requirements, the one-line installer, native vs Docker, the claim-key flow, update and uninstall, from-source install. |
-| [How it works](https://anonysec.github.io/OVManager/wiki/how-it-works.html) | Process model, where the data lives, the security model, updates and the container image. |
+| [Install & first login](https://anonysec.github.io/OVManager/wiki/install.html) | Requirements, the one-line installer, systemd service, the claim-key flow, update and uninstall, from-source install. |
+| [How it works](https://anonysec.github.io/OVManager/wiki/how-it-works.html) | Process model, where the data lives, the security model, and updates. |
 | [Adding nodes](https://anonysec.github.io/OVManager/wiki/nodes.html) | Install the OVNode agent, register it in the panel, and get the firewall right. |
 | [Users & subscriptions](https://anonysec.github.io/OVManager/wiki/users.html) | Create a user, choose quota and expiry, hand out a `.ovpn` or a subscription link. |
 | [Traffic limits](https://anonysec.github.io/OVManager/wiki/traffic.html) | How usage is measured every five minutes, why it never double-counts, and what enforcement does. |
@@ -253,7 +251,7 @@ MIT. Free for personal and commercial use: no license server, no paid feature ga
 
 **You operate the VPN.** Abuse complaints (spam, scanning, copyright) come to you, not to this project. Enforce per-user quotas and expiry, watch the connection events in the audit log, disable abusers promptly, and respect your provider's terms of service and local law.
 
-See [Privacy](.github/docs/legal/PRIVACY.md), [Acceptable use](.github/docs/legal/ACCEPTABLE_USE.md), [Trademarks](.github/docs/legal/TRADEMARKS.md) and [third-party licensing](.github/docs/legal/THIRD_PARTY_LICENSES.md).
+See [Privacy](.github/site/legal/PRIVACY.md), [Acceptable use](.github/site/legal/ACCEPTABLE_USE.md), [Trademarks](.github/site/legal/TRADEMARKS.md) and [third-party licensing](.github/site/legal/THIRD_PARTY_LICENSES.md).
 
 ## Dev builds
 Install a rolling dev build: `OVM_VERSION=dev bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)`. Dev versions look like `dev-YYYYMMDD.N-<sha>`.

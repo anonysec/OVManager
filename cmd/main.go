@@ -261,9 +261,7 @@ func env(key, fallback string) string {
 // interfaces.
 //
 // A native install writes HOST=127.0.0.1 (install.sh), so it stays on
-// loopback. The container image sets HOST=0.0.0.0, because a published port
-// forwards to the container's own address — a loopback bind inside the
-// container is unreachable from outside.
+// loopback behind a reverse proxy.
 func serveMode(tlsEnabled bool, port string) (string, bool) {
 	host := "127.0.0.1"
 	if tlsEnabled {

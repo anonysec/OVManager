@@ -37,31 +37,22 @@ Out of scope: DDoS/volumetric abuse, OpenVPN or EasyRSA upstream CVEs
 - **Telegram backups**: Automatically redact all active session tokens, the Telegram bot token, and node API keys (`DELETE FROM sessions`, redacted keys). Even if a Telegram backup document is intercepted, it contains no usable secrets or credentials.
 - **Offsite backups**: Encrypted with AES-256-GCM prior to transfer (`.db.enc`) so plaintext databases never transit or rest on remote storage unprotected.
 
-## Self-signed node TLS fallback (known risk)
+## Node TLS verification & fallback
 
-The panel first verifies a node's TLS certificate strictly. If verification
-fails — normal for a node using a self-signed certificate, which is the
-installer default — it retries the request once with verification disabled.
-A `node.tls_unverified` audit event is written the first time this happens
-per node.
+The panel strictly verifies each node's TLS certificate against its pinned certificate (`server_ca`). If verification fails, requests fail closed by default.
 
-The risk: an active network attacker who can intercept the connection to the
-node can impersonate it and capture the node's API key, which is sent with
-every request. The fallback is deliberate, so self-signed nodes keep working.
+Only when `NODE_TLS_INSECURE_FALLBACK=true` is explicitly set in `.env` does the panel fall back to unverified TLS for self-signed nodes. Whenever this fallback is exercised, a prominent `CRITICAL` audit event (`node.tls_unverified`) is logged.
 
 Mitigations:
 
-- Use a Let's Encrypt certificate on nodes so strict verification passes.
-- Watch the node's TLS chip in the UI; "unverified (self-signed)" means
-  requests to that node are not protected against impersonation.
+- Use valid certificates with matching SANs on nodes so strict verification passes.
+- Do not enable `NODE_TLS_INSECURE_FALLBACK` in production environments.
 - Check the audit log for `node.tls_unverified` events and investigate.
 
 ## Hardening checklist (production)
 
-- Install with random secrets (`ADMIN_PASSWORD`, `BOT_ENCRYPT_KEY`,
-  `NODE_ENCRYPT_KEY`, per-node `API_KEY`); never reuse across hosts.
-- Keep a random `URLPATH` prefix; serve behind TLS (self-signed minimum,
-  Let's Encrypt preferred); leave `TRUSTED_PROXY=false` unless behind a
-  proxy you control.
-- `DOC=false` in production; back up `/opt/ovmanager/data` and
-  `/etc/openvpn` regularly and test restores.
+- Keep the owner claim key and node API keys private; never reuse keys across hosts.
+- Maintain a non-empty `URLPATH` prefix (e.g. `/dashboard/` or custom secret path).
+- Serve behind TLS with Let's Encrypt or validated certificates.
+- Set `TRUSTED_PROXY=true` only when running behind a dedicated reverse proxy on loopback/private CIDR, and configure `TRUSTED_PROXY_CIDRS`.
+- Regularly back up `/var/lib/ovmanager` (database and `secret.key`) and verify restores.
