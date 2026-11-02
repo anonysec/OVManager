@@ -57,6 +57,9 @@ func main() {
 	handler := panelRouter(svc)
 
 	addr, useTLS := serveMode(tlsEnabled, port)
+	if svc.TrustedProxy && (strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, ":")) {
+		log.Printf("SECURITY WARNING: TRUSTED_PROXY is enabled while binding to public address %s. Direct connections could spoof headers unless behind a firewall/proxy!", addr)
+	}
 	srv := newServer(addr, handler)
 	if useTLS {
 		log.Printf("ovmanager-go %s listening on https://%s (TLS)", version.Version, addr)
