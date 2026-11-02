@@ -183,9 +183,14 @@ setup_ssl_wizard() {
         ;;
     4)
         SSL_MODE="selfsigned"
-        SELF_SIGNED_TARGET="$(ask "domain or IP for self-signed cert" "localhost")"
+        local recommended_ips default_target
+        recommended_ips="$(public_ips)"
+        [[ -n "$recommended_ips" ]] && _note "this box answers on ${recommended_ips// /, }"
+        default_target="${recommended_ips%% *}"
+        [[ -z "$default_target" ]] && default_target="localhost"
+        SELF_SIGNED_TARGET="$(ask "domain or IP for self-signed cert" "$default_target")"
         SELF_SIGNED_TARGET="${SELF_SIGNED_TARGET// /}"
-        [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="localhost"
+        [[ -z "$SELF_SIGNED_TARGET" ]] && SELF_SIGNED_TARGET="$default_target"
         INSTALL_SELF_SIGNED=1
         ;;
     5|*) SSL_MODE="none" ;;
