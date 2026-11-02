@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/config"
 	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
 )
@@ -197,18 +198,7 @@ func envFileValues() map[string]string {
 		time.Since(envFileCache.at) < 5*time.Second {
 		return envFileCache.values
 	}
-	values := map[string]string{}
-	raw, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G304 // path is validated within trusted data or application directory
-	if err == nil {
-		for _, line := range strings.Split(string(raw), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-				continue
-			}
-			key, value, _ := strings.Cut(line, "=")
-			values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), "'\"")
-		}
-	}
+	values := config.ReadEnvFile(filepath.Join(dir, ".env"))
 	envFileCache.dir, envFileCache.at, envFileCache.values = dir, time.Now(), values
 	return values
 }

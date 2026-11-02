@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/anonysec/OVManager/go/internal/config"
 	"github.com/anonysec/OVManager/go/internal/maintenance"
 )
 
@@ -32,20 +33,7 @@ var envKeys = []string{
 }
 
 func readEnvFile(path string) map[string]string {
-	values := map[string]string{}
-	raw, err := os.ReadFile(path) // #nosec G703 // admin-provided env file path G304
-	if err != nil {
-		return values
-	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		line = strings.TrimRight(strings.TrimSpace(line), "\r")
-		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
-		}
-		key, val, _ := strings.Cut(line, "=")
-		values[strings.TrimSpace(key)] = strings.TrimSpace(val)
-	}
-	return values
+	return config.ReadEnvFile(path)
 }
 
 // readInstallEnv backfills the installed .env from the environment where it is

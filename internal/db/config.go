@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/anonysec/OVManager/go/internal/config"
 )
 
 // Backend identifies a supported database engine.
@@ -43,67 +45,29 @@ type Config struct {
 //
 // envOrFileDB reads a key from process env, falling back to the panel .env
 // file (which wins for forcing values, per PasarGuard precedence override).
-func envOrFileDB(key string) string {
-	// .env wins
-	if raw, err := os.ReadFile(".env"); err == nil {
-		for _, line := range strings.Split(string(raw), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-				continue
-			}
-			k, v, _ := strings.Cut(line, "=")
-			if strings.TrimSpace(k) == key {
-				return strings.Trim(strings.TrimSpace(v), `"'`)
-			}
-		}
-	}
-	// also check OVM_APP_DIR/.env
-	if d := os.Getenv("OVM_APP_DIR"); d != "" {
-		if raw, err := os.ReadFile(filepath.Join(d, ".env")); err == nil { // #nosec G304 G703 // reading .env file from trusted app directory
-			for _, line := range strings.Split(string(raw), "\n") {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-					continue
-				}
-				k, v, _ := strings.Cut(line, "=")
-				if strings.TrimSpace(k) == key {
-					return strings.Trim(strings.TrimSpace(v), `"'`)
-				}
-			}
-		}
-	}
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
-	}
-	return ""
-}
-
 func ConfigFromEnv() Config {
 	cfg := Config{PoolSize: 5}
-	if v := envOrFileDB("POOL_SIZE"); v != "" {
+	if v := config.EnvOrFile("POOL_SIZE", ""); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.PoolSize = n
 		}
 	}
-	if v := envOrFileDB("DB_POOL_SIZE"); v != "" {
+	if v := config.EnvOrFile("DB_POOL_SIZE", ""); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.PoolSize = n
 		}
 	}
 	for _, key := range []string{"DATABASE_URL", "SQLALCHEMY_DATABASE_URL", "DB_URL"} {
-		if v := envOrFileDB(key); v != "" {
+		if v := config.EnvOrFile(key, ""); v != "" {
 			cfg.URL = v
 			return cfg
 		}
 	}
-	if p := envOrFileDB("DB_PATH"); p != "" {
+	if p := config.EnvOrFile("DB_PATH", ""); p != "" {
 		cfg.Path = p
 		return cfg
 	}
-	dir := envOrFileDB("DATA_DIR")
-	if dir == "" {
-		dir = "data"
-	}
+	dir := config.EnvOrFile("DATA_DIR", "data")
 	cfg.Path = filepath.Join(dir, "ovmanager.db")
 	return cfg
 }

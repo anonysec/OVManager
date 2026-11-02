@@ -9,8 +9,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +18,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/go/internal/config"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
 )
@@ -1237,30 +1236,7 @@ func envFloat(key string, def float64, _ ...bool) float64 {
 }
 
 func envOrFileTelemetry(key string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	dir := os.Getenv("OVM_APP_DIR")
-	if dir == "" {
-		if wd, err := os.Getwd(); err == nil {
-			dir = wd
-		}
-	}
-	// reuse panel-style .env parse minimally
-	data, err := os.ReadFile(filepath.Join(dir, ".env")) // #nosec G703 // OVM_APP_DIR/.env G304
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == key {
-			return strings.Trim(strings.TrimSpace(v), `"'`)
-		}
-	}
-	return ""
+	return config.EnvOrFile(key, "")
 }
 
 func newEventKey() string {
