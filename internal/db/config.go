@@ -1,11 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 //
-// Database configuration. Mirrors PasarGuard's DatabaseSettings: a single
-// URL selects the backend, with SQLite as the default for the single-process
-// deployment. Postgres/MySQL drivers are intentionally NOT imported yet —
-// adding them is a matter of wiring a new case in OpenConfig and adding the
-// driver to go.mod. Nothing else in the codebase should hardcode a backend.
+// Database configuration. SQLite is the dedicated database engine for
+// the single-process deployment.
 
 package db
 
@@ -16,9 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Backend identifies a supported database engine.
@@ -130,67 +124,29 @@ func (c Config) Backend() Backend {
 	return BackendSQLite
 }
 
-// OpenConfig opens a database from cfg. Only SQLite is implemented today;
-// Postgres/MySQL return a clear error so callers fail loudly rather than
-// silently. Add a case here (and the driver to go.mod) to enable a backend.
+// OpenConfig opens a database from cfg. Only SQLite is supported;
+// Postgres and MySQL configurations return a clear error.
 func OpenConfig(cfg Config) (*sql.DB, error) {
-	switch cfg.Backend() {
-	case BackendSQLite:
-		path := cfg.Path
-		if path == "" {
-			path = sqlitePathFromURL(cfg.URL)
-		}
-		if path == "" {
-			path = DefaultPath
-		}
-		conn, err := Open(path)
-		if err != nil {
-			return nil, err
-		}
-		if cfg.PoolSize > 0 {
-			conn.SetMaxOpenConns(cfg.PoolSize)
-			conn.SetMaxIdleConns(cfg.PoolSize)
-		}
-		return conn, nil
-	case BackendPostgres:
-		dsn := cfg.URL
-		if dsn == "" {
-			return nil, fmt.Errorf("postgres backend requires DATABASE_URL")
-		}
-		conn, err := sql.Open("pgx", dsn)
-		if err != nil {
-			return nil, fmt.Errorf("open postgres: %w", err)
-		}
-		if err := conn.Ping(); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("ping postgres: %w", err)
-		}
-		if cfg.PoolSize > 0 {
-			conn.SetMaxOpenConns(cfg.PoolSize)
-			conn.SetMaxIdleConns(cfg.PoolSize)
-		}
-		return conn, nil
-	case BackendMySQL:
-		dsn := cfg.URL
-		if dsn == "" {
-			return nil, fmt.Errorf("mysql backend requires DATABASE_URL")
-		}
-		conn, err := sql.Open("mysql", dsn)
-		if err != nil {
-			return nil, fmt.Errorf("open mysql: %w", err)
-		}
-		if err := conn.Ping(); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("ping mysql: %w", err)
-		}
-		if cfg.PoolSize > 0 {
-			conn.SetMaxOpenConns(cfg.PoolSize)
-			conn.SetMaxIdleConns(cfg.PoolSize)
-		}
-		return conn, nil
-	default:
-		return nil, fmt.Errorf("database backend %q not supported", cfg.Backend())
+	b := cfg.Backend()
+	if b != BackendSQLite {
+		return nil, fmt.Errorf("database engine %q is not supported: OVManager is SQLite-only", b)
 	}
+	path := cfg.Path
+	if path == "" {
+		path = sqlitePathFromURL(cfg.URL)
+	}
+	if path == "" {
+		path = DefaultPath
+	}
+	conn, err := Open(path)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.PoolSize > 0 {
+		conn.SetMaxOpenConns(cfg.PoolSize)
+		conn.SetMaxIdleConns(cfg.PoolSize)
+	}
+	return conn, nil
 }
 
 // sqlitePathFromURL extracts a filesystem path from a sqlite:/// URL,
