@@ -4,6 +4,7 @@
 package main
 
 import (
+	"html"
 	"io/fs"
 	"log"
 	"net"
@@ -193,17 +194,21 @@ func spaHandler(h *panel.Handler) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		html := string(index)
+		htmlContent := string(index)
 		bp := basePath
 		if !strings.HasSuffix(bp, "/") {
 			bp += "/"
 		}
-		if !strings.Contains(html, "<base") {
-			html = strings.Replace(html, "<head>", "<head><base href=\""+bp+"\">", 1)
+		if !strings.Contains(htmlContent, "<base") {
+			htmlContent = strings.Replace(htmlContent, "<head>", "<head><base href=\""+html.EscapeString(bp)+"\">", 1)
+		}
+		if nonce := panel.NonceFromContext(r.Context()); nonce != "" {
+			htmlContent = strings.ReplaceAll(htmlContent, "<script>", `<script nonce="`+nonce+`">`)
+			htmlContent = strings.ReplaceAll(htmlContent, "<script type=\"module\"", `<script nonce="`+nonce+`" type="module"`)
 		}
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(html))
+		_, _ = w.Write([]byte(htmlContent))
 	})
 }
 
@@ -214,7 +219,6 @@ func decoyHandler() http.Handler {
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;background:#0B0B10;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#F8FAFC}
-canvas{position:fixed;inset:0;z-index:0;opacity:.35}
 .scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12) 0px,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 4px)}
 .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_55%,rgba(0,0,0,0.9)_100%)}
 .overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
@@ -227,32 +231,11 @@ canvas{position:fixed;inset:0;z-index:0;opacity:.35}
 @keyframes scan{0%,100%{opacity:1}50%{opacity:.7}}
 @media (prefers-reduced-motion:reduce){.glitch{animation:none}}
 </style></head><body>
-<canvas id="c"></canvas>
 <div class="scanlines"></div>
 <div class="vignette"></div>
 <div class="overlay"><div class="hud"><div class="code">ERR::NOT_FOUND</div><div class="glitch">404</div><div class="sub">resource<span>//</span>missing</div></div></div>
 <div class="ticker"><span>SYS.STATUS: ONLINE</span><span>SEC.LEVEL: MAX</span><span>UPTIME: 99.99%</span></div>
-<script>
-const c=document.getElementById('c'),ctx=c.getContext('2d');
-function resize(){c.width=innerWidth;c.height=innerHeight}
-resize();addEventListener('resize',resize);
-const chars='01ABCDEF<>{}[]|/\\';
-const fs=14,cols=Math.floor(c.width/fs),drops=Array(cols).fill(1);
-const pal=['#3B82F6','#60A5FA','#94A3B8','#F8FAFC'];
-function draw(){
-  ctx.fillStyle='rgba(11,11,16,0.08)';ctx.fillRect(0,0,c.width,c.height);
-  ctx.font=fs+'px monospace';
-  for(let i=0;i<drops.length;i++){
-    ctx.fillStyle=pal[Math.floor(Math.random()*pal.length)];
-    ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
-    const t=chars[Math.floor(Math.random()*chars.length)];
-    ctx.fillText(t,i*fs,drops[i]*fs);
-    if(drops[i]*fs>c.height&&Math.random()>.98) drops[i]=0;
-    drops[i]++;
-  }
-}
-setInterval(draw,50);
-</script></body></html>`
+</body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
