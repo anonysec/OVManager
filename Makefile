@@ -11,7 +11,7 @@ setup:
 # build-time constant (web/src/version.ts) and package.json so the binary, the
 # installer tag and the frontend never drift. Run before any web build.
 version:
-	@v=$$(grep -m1 'const Version' internal/version/version.go | cut -d'"' -f2); \
+	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
 	sed -i -E "s/^  \"version\": \".*\"/  \"version\": \"$$v\"/" web/package.json; \
 	echo "version -> $$v"
 

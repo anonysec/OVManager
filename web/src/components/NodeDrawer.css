@@ -189,7 +189,6 @@
   inset: 0;
   z-index: var(--z-drawer);
   background: rgba(0, 0, 0, .45);
-  backdrop-filter: blur(2px);
   animation: fadeIn .15s ease both;
 }
 .node-drawer {

@@ -35,7 +35,7 @@ func releaseVersion(t *testing.T) string {
 // TestHealthMatches mirrors backend/app.py /health: {"status":"ok"} plus
 // "version" for loopback clients (httptest is loopback, as is the panel itself).
 func TestHealthMatches(t *testing.T) {
-	srv := httptest.NewServer(health.Router())
+	srv := httptest.NewServer(health.Router(true))
 	defer srv.Close()
 
 	res, err := http.Get(srv.URL + "/health")
@@ -96,7 +96,7 @@ func TestOpenAppliesPragmas(t *testing.T) {
 
 // TestHealthNonGet mirrors app.py's 405 shape for non-GET on /health.
 func TestHealthNonGet(t *testing.T) {
-	srv := httptest.NewServer(health.Router())
+	srv := httptest.NewServer(health.Router(true))
 	defer srv.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/health", nil)

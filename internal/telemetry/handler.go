@@ -1257,7 +1257,7 @@ func envOrFileTelemetry(key string) string {
 			continue
 		}
 		if k, v, ok := strings.Cut(line, "="); ok && strings.TrimSpace(k) == key {
-			return strings.TrimSpace(v)
+			return strings.Trim(strings.TrimSpace(v), `"'`)
 		}
 	}
 	return ""

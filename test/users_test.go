@@ -56,7 +56,7 @@ func TestUsersCreateAndList(t *testing.T) {
 	if data["is_active"] != true || data["max_logins"] != float64(1) {
 		t.Errorf("defaults = %v", data)
 	}
-	if data["total"] != nil || data["used"] != nil || data["last_online"] != nil {
+	if data["total"] != float64(100*1024*1024*1024) || data["used"] != nil || data["last_online"] != nil {
 		t.Errorf("null fields = %v", data)
 	}
 	if uuid, _ := data["uuid"].(string); len(uuid) != 36 {
@@ -181,7 +181,7 @@ func TestUsersExtend(t *testing.T) {
 		t.Fatalf("extend = %d %v", res.StatusCode, got)
 	}
 	data := got["data"].(map[string]any)
-	if data["expiry_date"] != "2030-01-11" || data["total"] != float64(1024) {
+	if data["expiry_date"] != "2030-01-11" || data["total"] != float64(100*1024*1024*1024+1024) {
 		t.Errorf("extended = %v", data)
 	}
 }

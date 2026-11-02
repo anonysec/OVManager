@@ -165,12 +165,13 @@
   margin-top: 2px;
 }
 
+
 .stat-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 8px 3px 6px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   font-size: var(--font-size-xs);

@@ -381,6 +381,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	if req.MaxLogins != nil {
 		maxLogins = int(*req.MaxLogins)
 	}
+	if req.Total == nil && defaults.trafficGB > 0 {
+		v := int64(defaults.trafficGB) * 1024 * 1024 * 1024
+		req.Total = &v
+	}
 	var tag any
 	if req.Tag != nil {
 		if t := strings.TrimSpace(*req.Tag); t != "" {

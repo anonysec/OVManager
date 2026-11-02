@@ -349,11 +349,16 @@ func (s *Service) checkBucket(key string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
-	fresh := s.attempts[key][:0]
+	fresh := make([]float64, 0, len(s.attempts[key]))
 	for _, t := range s.attempts[key] {
 		if now-t < lockoutSeconds {
 			fresh = append(fresh, t)
 		}
+	}
+	if len(fresh) == 0 {
+		delete(s.attempts, key)
+	} else {
+		s.attempts[key] = fresh
 	}
 	return len(fresh) >= limit
 }

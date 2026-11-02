@@ -34,7 +34,7 @@
   gap: 5px;
   pointer-events: none;
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-2);
   color: var(--text-secondary);
   border: 1px solid var(--border);

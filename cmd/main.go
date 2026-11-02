@@ -89,7 +89,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	h.MountLogs(api)
 
 	root := http.NewServeMux()
-	root.Handle("/health", health.Router())
+	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	h.MountSub(root)
 

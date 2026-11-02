@@ -21,7 +21,6 @@
     border-top: 1px solid var(--border);
     background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
     box-shadow: 0 -12px 30px rgba(0, 0, 0, .18);
-    backdrop-filter: blur(18px);
   }
 
   .mobile-nav-link {
@@ -124,7 +123,7 @@ html[data-theme="light"] .mobile-nav {
 
 .ops-alert-center.has-alerts {
   border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border));
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-color) 7%, var(--surface-1)), var(--surface-1));
+  background: var(--surface-1);
 }
 
 .ops-alert-center.is-clear {

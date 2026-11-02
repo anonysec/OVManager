@@ -7,9 +7,7 @@ body {
   overflow: auto;
   background: var(--bg);
   color: var(--text);
-  background-image:
-    radial-gradient(1100px 600px at 12% -8%, var(--accent-soft), transparent 60%),
-    radial-gradient(900px 600px at 100% 0%, rgba(23,200,235,.08), transparent 55%);
+  background-image: none;
   background-size: cover;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }

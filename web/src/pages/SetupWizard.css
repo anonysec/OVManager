@@ -232,7 +232,7 @@
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--accent-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(90deg, var(--accent-soft), transparent 70%), var(--surface-1);
+  background: var(--surface-1);
   box-shadow: var(--shadow-xs);
 }
 

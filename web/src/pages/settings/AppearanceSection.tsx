@@ -38,11 +38,8 @@ const AppearanceSection = () => {
 
   const ACCENTS = [
     { hex: '#ff6a1a', name: 'Orange' },
-    { hex: '#2fd276', name: 'Emerald' },
-    { hex: '#6366f1', name: 'Indigo' },
-    { hex: '#ec4899', name: 'Rose' },
-    { hex: '#19d3e9', name: 'Cyan' },
-    { hex: '#eab308', name: 'Amber' },
+    { hex: '#2563eb', name: 'Blue' },
+    { hex: '#2fd276', name: 'Green' },
   ];
   const [accent, setAccent] = useState<string>(() => getUiPref('accent', '') ?? '');
   const chooseAccent = (hex: string) => {

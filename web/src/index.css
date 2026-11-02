@@ -34,7 +34,7 @@
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, var(--bg) 0%, var(--surface-1) 50%, var(--surface-2) 100%);
+  background: var(--bg);
 }
 
 /* Skip link - hidden by default, visible on focus */
@@ -255,7 +255,6 @@
   gap: 12px;
   padding: 8px 16px;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -440,7 +439,6 @@
 .toast {
   background: var(--background-secondary);
   border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
-  border-inline-start: 5px solid var(--accent-color);
   padding: 16px 20px;
   border-radius: 8px;
   box-shadow: var(--shadow);
@@ -470,7 +468,6 @@
 .toast.toast-error {
   background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
-  border-inline-start: 5px solid var(--danger-color);
 }
 .toast.toast-error strong {
   color: var(--danger-color);
@@ -479,7 +476,6 @@
 .toast.toast-warning {
   background: color-mix(in srgb, var(--accent-color) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
-  border-inline-start: 5px solid var(--accent-color);
 }
 .toast.toast-warning strong {
   color: var(--accent-color);
@@ -488,7 +484,6 @@
 .toast.toast-success {
   background: color-mix(in srgb, var(--success-color, #2fd276) 14%, var(--background-secondary));
   border-color: color-mix(in srgb, var(--success-color, #2fd276) 50%, transparent);
-  border-inline-start: 5px solid var(--success-color, #2fd276);
 }
 .toast.toast-success strong {
   color: var(--success-color, #2fd276);
@@ -564,7 +559,6 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 18vh;
-  backdrop-filter: blur(4px);
 }
 
 .palette {
@@ -1132,8 +1126,8 @@ html[dir="rtl"] .ops-sidebar--mobile {
 .list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-inline-start: 4px; color: var(--orange); }
 .list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
 .list-table tr.selected { background: rgba(255,122,30,.08); }
-.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: linear-gradient(135deg, var(--orange), #ffb466); color: #15110a; font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
-html[data-theme="light"] .list-table .avatar-sm { background: linear-gradient(135deg, #ff7e2e, #ffb466); color: var(--accent-contrast); }
+.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: var(--accent-color, var(--orange)); color: #15110a; font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
+html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color, var(--orange)); color: var(--accent-contrast); }
 /* Status pills: success / info / warning / danger / muted, each as a soft
    fill plus its matching read-safe text tone.
    The idle mapping used --surface-3 + --text-secondary, which scored 4.45:1
@@ -1298,18 +1292,20 @@ html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--red);
-  border-inline-start: 5px solid var(--red);
   border-radius: 10px;
   padding: 12px;
   box-shadow: 0 18px 40px rgba(0,0,0,.35);
 }
 .toast strong { display: block; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
-.toast.error, .toast.Error { border-color: var(--red); border-inline-start: 5px solid var(--red); }
+.toast.error, .toast.Error { border-color: var(--red);
+ }
 .toast.error strong, .toast.Error strong { color: var(--red); }
 .toast span { color: var(--text); font-size: var(--font-size-sm); opacity: 0.9; }
-.toast.success { border-color: var(--green); border-inline-start: 5px solid var(--green); }
+.toast.success { border-color: var(--green);
+ }
 .toast.success strong { color: var(--green); }
-.toast.warning { border-color: var(--orange); border-inline-start: 5px solid var(--orange); background: color-mix(in srgb, var(--orange) 10%, var(--panel)); }
+.toast.warning { border-color: var(--orange);
+  }
 .toast.warning strong { color: var(--orange); }
 .settings-list.small p { font-size: 12px; color: var(--muted); line-height: 1.35; }
 .health-table-wrap .list-table { min-width: 720px; }
@@ -1760,9 +1756,7 @@ html[data-theme="light"] .search-field { background: #f4f6f9; border-color: #dfe
 
 /* ===== Light mode enhancements ===== */
 html[data-theme="light"] body {
-  background-image:
-    radial-gradient(1100px 600px at 12% -8%, rgba(255,122,30,.10), transparent 60%),
-    radial-gradient(900px 600px at 100% 0%, rgba(23,200,235,.08), transparent 55%);
+  background-image: none;
 }
 html[data-theme="light"] .ops-panel { background: var(--surface-1); box-shadow: 0 18px 34px rgba(20,30,50,.10); }
 

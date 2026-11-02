@@ -7,9 +7,7 @@
   min-height: 100vh;
   min-height: 100dvh;
   padding: var(--space-6);
-  background:
-    radial-gradient(circle at 50% 0%, var(--accent-soft), transparent 55%),
-    var(--bg);
+  background: var(--bg);
 }
 
 .login-card {

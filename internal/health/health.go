@@ -9,36 +9,31 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
 
 // Router returns the health endpoint as an http.Handler.
-func Router() http.Handler {
+func Router(trustedProxy bool) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", handle)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { handle(w, r, trustedProxy) })
 	return mux
 }
 
-func handle(w http.ResponseWriter, r *http.Request) {
+func handle(w http.ResponseWriter, r *http.Request, trustedProxy bool) {
 	if r.Method != http.MethodGet {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "Method Not Allowed"})
 		return
 	}
 	data := map[string]string{"status": "ok"}
-	if isLoopback(r.RemoteAddr) {
+	if isLoopbackClient(trustedProxy, r) {
 		data["version"] = version.Version
 	}
 	writeJSON(w, http.StatusOK, data)
 }
 
-// isLoopback mirrors app.py's client_ip check: 127.0.0.1 / ::1 only.
-// ponytail: X-Forwarded-For (backend.client_ip) not honoured yet — add when the
-// panel sits behind the panel's own reverse proxy.
-func isLoopback(remoteAddr string) bool {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		host = remoteAddr
-	}
+func isLoopbackClient(trustedProxy bool, r *http.Request) bool {
+	host := auth.ClientIP(trustedProxy, r)
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
 }

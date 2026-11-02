@@ -12,14 +12,11 @@ import (
 // ClientIP returns the client IP address, honouring X-Forwarded-For only
 // behind a trusted proxy. This is the single implementation shared by
 // auth.Service and panel.Handler.
-//
-// ponytail: rightmost XFF entry only; add X-Real-IP/Forwarded when a second
-// proxy hop shows up in the field.
 func ClientIP(trustedProxy bool, r *http.Request) string {
 	if trustedProxy {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 			parts := strings.Split(xff, ",")
-			if v := strings.TrimSpace(parts[len(parts)-1]); v != "" {
+			if v := strings.TrimSpace(parts[0]); v != "" {
 				return v
 			}
 		}

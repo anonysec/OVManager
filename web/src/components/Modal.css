@@ -6,7 +6,6 @@
   position: fixed;
   inset: 0;
   background: rgba(6, 8, 12, 0.72);
-  backdrop-filter: blur(6px);
   display: grid;
   place-items: center;
   padding: 24px;

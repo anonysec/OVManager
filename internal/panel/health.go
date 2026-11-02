@@ -115,7 +115,6 @@ func (h *Handler) healthOverview(w http.ResponseWriter, r *http.Request) {
 		details[c.ID] = c.Detail
 		h.recordCheckTransition(c)
 	}
-	telemetry.PromoteEvents(h.Svc.DB(), func(msg string) bool { return telemetry.SendTelegram(h.Svc.DB(), msg) })
 	plain(w, map[string]any{"checks": checks, "details": details})
 }
 

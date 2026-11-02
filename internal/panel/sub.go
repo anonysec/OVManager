@@ -117,8 +117,16 @@ func (h *Handler) subRateLimited(r *http.Request) bool {
 	if now-subLastCleanup >= subWindow {
 		subLastCleanup = now
 		for k, hits := range subAttempts {
-			if len(hits) == 0 || now-hits[len(hits)-1] >= subWindow {
+			fresh := make([]float64, 0, len(hits))
+			for _, t := range hits {
+				if now-t < subWindow {
+					fresh = append(fresh, t)
+				}
+			}
+			if len(fresh) == 0 {
 				delete(subAttempts, k)
+			} else {
+				subAttempts[k] = fresh
 			}
 		}
 	}

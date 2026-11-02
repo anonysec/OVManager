@@ -291,6 +291,9 @@ func envelopeFromModel(w http.ResponseWriter, res restoreResult) {
 
 // restoreStoredBackup restores a backup already in BACKUP_DIR, by name.
 func (h *Handler) restoreStoredBackup(name, actor string) restoreResult {
+	if !strings.HasSuffix(name, ".db") {
+		return restoreResult{false, "Backup file must be a .db file", nil}
+	}
 	src := filepath.Join(backupDir(), name)
 	if resolved, err := filepath.EvalSymlinks(src); err == nil {
 		src = resolved
@@ -301,9 +304,6 @@ func (h *Handler) restoreStoredBackup(name, actor string) restoreResult {
 	}
 	if !fileExists(src) {
 		return restoreResult{false, fmt.Sprintf("Backup file '%s' not found", name), nil}
-	}
-	if !strings.HasSuffix(name, ".db") {
-		return restoreResult{false, "Backup file must be a .db file", nil}
 	}
 	return h.atomicDBRestore(src, actor, "Restored from server backup: "+name)
 }
@@ -696,11 +696,15 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	candidates := h.cleanupCandidates(payload)
 	sample := []string{}
-	for i, c := range candidates {
+		for i, c := range candidates {
 		if i >= cleanupSampleSize {
 			break
 		}
-		sample = append(sample, c["name"].(string))
+		name, _ := c["name"].(string)
+		if name == "" {
+			continue
+		}
+		sample = append(sample, name)
 	}
 	var total int
 	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total)
