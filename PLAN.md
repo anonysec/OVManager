@@ -1,36 +1,39 @@
-# OVManager improvement plan (audit)
+# OVManager Architecture & Roadmap
 
-> Progress: Phase 1 mostly done (README TLS section, installer `tls=` summary, glyph cleanup). Phase 2 done (tls help string, expanded root menu, /dev/tty consistency). Phase 3 partial (renamed tls_legacy→tls_migrate, export.go→password_policy.go, gitignored cover.out); `node`/`nodeclient` rename deferred. Phase 4 (squash releases) deferred.
+**Status:** Updated for the 2.0.0 baseline release line.
 
-## Phase 1 — Docs & text (low risk, high user impact)
-- Update README TLS section and command table: `ovmanager tls` opens an interactive menu (not read-only); subcommands `issue`, `selfsigned`, `install`, `renew`, `remove`, `status`; installer flags `--ssl`, `--domain`, `--ip`, `--port`, `--path`, `--yes`, `--docker`, `--purge`, `--dest`.
-- Standardize user-facing term to `tls` (installer summary `tls=…` instead of `ssl=…`; keep `ssl` only as a `tls` alias).
-- Non-interactive summary prints `tls=none (run 'ovmanager tls' to enable)` when no SSL.
-- Standardize log prefixes: keep `colorized_echo` levels only, drop mixed `✓/⚠/…/.` glyphs in installer output.
-- Update CHANGELOG.md for 2.1.x.
+## Architecture Baseline (2.0.0)
 
-## Phase 2 — CLI UX
-- Make `ovmanager tls` help advertise subcommands (`Use: "tls [status|issue|selfsigned|install|remove|renew]"`) while still opening the menu on bare TTY invocation.
-- Read input from `/dev/tty` in both root and TLS menus (consistency).
-- Expand the root interactive menu to include backup/update/doctor/logs, or remove it and rely on `--help`. Decide per question below.
-- Keep `--help` as the non-TTY default for `ovmanager` (no change).
+- **Systemd Service Architecture**: Runs natively as `ovmanager.service` via `ovmanager-server` binary on Linux hosts.
+- **Single-Binary Assembly**: Go 1.27 embedding modernc SQLite and the React 19 SPA (`internal/webfs/dist`).
+- **Hybrid Operator CLI**: `ovmanager` CLI provides direct subcommands with arguments (`ovmanager restart`, `ovmanager status`, `ovmanager logs -f`) and an interactive TUI menu when invoked bare on a terminal.
+- **Standalone Installer**: Self-contained `install.sh` with inlined system helpers, cryptographic Ed25519 binary signature verification, and commit-pinned OVNode installation.
+- **Cryptographic Security**:
+  - Ed25519 signature verification on all binary releases and updates.
+  - AES-256-GCM encryption of secrets at rest (`secret.key` at mode 0600).
+  - Explicit confirmation and SHA-256 fingerprint verification on node TLS certificates (TOFU and re-pin).
+  - Sanitized Telegram daily backups (active sessions, bot tokens, and node keys redacted).
+  - AES-256-GCM encrypted offsite backups.
+  - Hardened Content-Security-Policy with per-request cryptographic nonces.
 
-## Phase 3 — Naming cleanup (refactor, higher churn)
-- Rename `internal/node` → `internal/nodehub` and `internal/nodeclient` → `internal/nodeagent` (or merge) to disambiguate server-side node management from the agent client.
-- Consolidate `internal/panel/tls_*.go` into `tls.go` + `tls_acme.go`; document or remove `tls_legacy.go`.
-- Rename `internal/auth/export.go` to reflect its content; fold `internal/cli/util.go` helpers into their callers.
-- Gitignore the `ovmanager` binary and `cover.out` build artifacts; remove tracked copies.
-- Document the `test/` vs co-located `*_test.go` split in README/CONTRIBUTING.
+## Test Suite Architecture
 
-## Phase 4 — Release hygiene
-- Squash 2.1.3→2.1.8 into a single 2.2.0 release with one CHANGELOG entry; avoid point-release churn.
+OVManager tests are divided into three complementary suites:
 
-## Open questions
-1. Root interactive menu scope: expand it (backup/update/doctor/logs) or drop it and rely solely on `--help`/subcommands?
-2. `node`/`nodeclient` rename: worth the churn now, or defer? Any external importers (OVNode?) reference these package paths?
-3. `tls_legacy.go`: still needed for migration from pre-2.0 installs, or deletable? Who is the oldest supported install?
-4. Term `tls` vs `ssl`: drop the `ssl` alias entirely, or keep as alias for muscle memory? (Recommend keep alias, standardize text only.)
-5. Installer `--ssl` flag values: keep `domain|ip|custom|selfsigned|none`, or rename `selfsigned` → `self-signed` for readability (breaks existing scripts)?
-6. Should the installer auto-free port 80 (with confirmation) like the binary now does, instead of warning-and-skipping? Or keep installer conservative and let users run `ovmanager tls` post-install?
-7. Gitignored build artifacts: is `ovmanager` (root binary) intentionally committed for `go:embed`/release convenience, or accidental?
-8. CHANGELOG ownership: who updates it — release workflow or manual? Should the workflow fail if CHANGELOG lacks the version?
+1. **Co-located Unit Tests (`internal/*_test.go` and `cmd/*_test.go`)**:
+   - Fast, isolated unit tests co-located directly with the code under test.
+   - Covers core internal logic: cryptography, session verification, client IP / trusted CIDRs, certificate fingerprints, rate limiting, and config parsing.
+   - Run via `go test ./internal/... ./cmd/...`.
+
+2. **Integration & API Parity Tests (`test/*.go`)**:
+   - High-level full server integration tests verifying complete HTTP request/response lifecycles, database schema migrations, and route authentication gates across the entire assembled panel.
+   - Run via `go test ./test/...`.
+
+3. **Installer Regression Tests (`test/installer/test_install.py`)**:
+   - Python unittest suite testing `install.sh` in isolation with mock environments.
+   - Covers non-interactive flags, prompt handling, node installer execution, and cryptographic signature rejection of tampered binaries.
+   - Run via `python3 -m unittest discover -s test/installer -v`.
+
+4. **Frontend Verification (`web/`)**:
+   - Full vitest suite (104+ tests), TypeScript compilation check (`tsc --noEmit`), token accessibility check (`check:tokens`), i18n completeness (`check:i18n`), and RTL stylesheet guards (`check:rtl`).
+   - Run via `cd web && npm run verify`.
