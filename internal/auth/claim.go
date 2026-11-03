@@ -215,6 +215,15 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 	s.IssueSession(w, r, chosen, "owner")
 }
 
+// Claim rate limiting is intentionally in-memory: claim attempts are rare, and
+// a process restart clearing the small per-IP failure window is an acceptable
+// trade-off versus adding a second persisted limiter table.
+// Claim rate limiting is intentionally in-memory: claim attempts are rare, and
+// a process restart clearing the small per-IP failure window is an acceptable
+// trade-off versus adding a second persisted limiter table.
+// Claim rate limiting is intentionally in-memory: claim attempts are rare, and
+// a process restart clearing the small per-IP failure window is an acceptable
+// trade-off versus adding a second persisted limiter table.
 // claimRateLimited reproduces owner_claim.py's per-IP failure window.
 func (s *Service) claimRateLimited(r *http.Request) bool {
 	key := Sha16(s.clientIP(r))

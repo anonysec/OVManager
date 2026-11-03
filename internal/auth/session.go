@@ -186,18 +186,44 @@ func (s *Service) RevokeUserSessions(username string) int {
 	return int(n)
 }
 
-// PurgeExpired deletes dead sessions (absolute cap OR idle timeout).
+// PurgeExpired deletes dead sessions (absolute cap OR idle timeout) and
+// expired login-attempt rows, then caps the login_attempts table. Returns the
+// total number of rows removed.
 func (s *Service) PurgeExpired() int {
+	total := 0
 	now := nowSecs()
-	res, err := s.DB().Exec(
+	if res, err := s.DB().Exec(
 		`DELETE FROM sessions WHERE expires_at <= ? OR (? - last_seen_at) > ?`,
 		now, now, s.IdleSeconds,
-	)
-	if err != nil {
-		return 0
+	); err == nil {
+		if n, _ := res.RowsAffected(); n > 0 {
+			total += int(n)
+		}
 	}
-	n, _ := res.RowsAffected()
-	return int(n)
+	// Drop buckets whose whole window has elapsed.
+	if res, err := s.DB().Exec(
+		`DELETE FROM login_attempts WHERE updated <= ?`,
+		now-float64(lockoutSeconds),
+	); err == nil {
+		if n, _ := res.RowsAffected(); n > 0 {
+			total += int(n)
+		}
+	}
+	// Defensible table cap: keep the newest rows, drop the rest.
+	const maxLoginAttemptRows = 10000
+	var count int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM login_attempts`).Scan(&count); err == nil && count > maxLoginAttemptRows {
+		if res, err := s.DB().Exec(
+			`DELETE FROM login_attempts WHERE key_hash IN (
+				SELECT key_hash FROM login_attempts ORDER BY updated ASC LIMIT ?)`,
+			count-maxLoginAttemptRows,
+		); err == nil {
+			if n, _ := res.RowsAffected(); n > 0 {
+				total += int(n)
+			}
+		}
+	}
+	return total
 }
 
 // roleIsCurrent re-checks the session role against the admins table.
