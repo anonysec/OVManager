@@ -33,12 +33,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   border-radius: var(--radius-md);
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  /* Neutral on purpose: accent is reserved for state (active nav item,
+     selected option, primary action), not for decorating every heading. */
+  background: var(--surface-2);
+  color: var(--text-secondary);
 }
 
 .sp-section-header h2 {
@@ -344,15 +346,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   line-height: var(--line-height-snug);
   color: var(--text-secondary);
 }
-
-/* Jump-nav focus target: programmatic and keyboard focus display the indicator. */
-.sp-section:focus,
-.sp-section:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 6px;
-  border-radius: var(--radius-sm);
-}
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SETTINGS — definitions for sp-* classes rendered by Settings.jsx that
@@ -810,21 +803,9 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-mt-18 { margin-top: 18px; }
 .sp-mt-20 { margin-top: 20px; }
 
-/* Sticky jumpnav: stays under the fixed topbar, scrolls horizontally
-   on phones instead of wrapping into 4 rows. */
-.sp-jumpnav {
-  position: sticky;
-  top: var(--topbar-h);
-  z-index: 5;
-}
-
-.sp-jumpnav-link[aria-current="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-}
-
-/* Deep-link target offset (fixed topbar + sticky jumpnav) + focus. */
+/* Deep-link target offset (fixed topbar + the sticky nav strip on narrow
+   screens). Programmatic focus after a nav click is silent; only keyboard
+   focus draws the ring. */
 .sp-section {
   scroll-margin-top: calc(var(--topbar-h) + 64px);
   outline: none;
@@ -945,14 +926,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   .sp-two-col {
     grid-template-columns: 1fr;
   }
-  .sp-jumpnav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .sp-jumpnav-link {
-    flex: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -961,48 +934,103 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   }
 }
 
-/* ── Grouped settings layout (replaces bento grid) ─────────────── */
-.settings-groups {
+/* ── Settings layout: section strip + one document ─────────────────────────
+   The app already has a sidebar, so Settings adds no second one: a sticky,
+   horizontally scrolling strip jumps between sections, and the sections
+   themselves are separated by hairlines, not boxed into cards. */
+.sp-layout {
+  display: block;
+}
+
+.sp-content {
+  min-width: 0;
+  max-width: 760px;
+}
+
+.sp-block {
+  padding-block: var(--space-6);
+}
+
+.sp-block:first-child { padding-block-start: 0; }
+.sp-block:last-child { padding-block-end: 0; }
+
+.sp-block + .sp-block {
+  border-top: 1px solid var(--border);
+}
+
+/* Sticky strip under the topbar. */
+.sp-nav {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: var(--z-nav);
   display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  padding-block: var(--space-2);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.settings-group-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 var(--space-2);
+.sp-nav::-webkit-scrollbar { display: none; }
+
+.sp-nav-group,
+.sp-nav-list,
+.sp-nav-list > li {
+  display: contents;
 }
 
-.settings-group-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px;
-  align-items: stretch;
+.sp-nav-group-title {
+  display: none;
 }
 
-.settings-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  box-shadow: none;
-}
-
-.settings-card--bare {
+.sp-nav-list {
+  list-style: none;
+  margin: 0;
   padding: 0;
-  border: none;
-  background: transparent;
 }
 
-@media (max-width: 719.98px) {
-  .settings-group-grid {
-    grid-template-columns: 1fr;
-  }
+.sp-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  min-height: var(--control-h-md);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sp-nav-link svg {
+  flex: none;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.sp-nav-link:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.sp-nav-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Current section: tinted fill and accent text. Never a coloured stripe. */
+.sp-nav-link[aria-current="location"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sp-nav-link[aria-current="location"] svg {
+  color: var(--accent-text);
 }

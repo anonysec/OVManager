@@ -1,7 +1,8 @@
 // Copyright (c) 2026 anonysec
 // SPDX-License-Identifier: MIT
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import type { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
@@ -40,10 +41,56 @@ const SECTIONS = [
   { id: 'system',     group: 'system', icon: FiServer,     labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
 ];
 
-const GROUP_LABELS = {
-  general: 'General',
-  operations: 'Operations',
-  system: 'System',
+const GROUPS = [
+  { id: 'general',    labelKey: 'settingsGroupGeneral',    label: 'General' },
+  { id: 'operations', labelKey: 'settingsGroupOperations', label: 'Operations' },
+  { id: 'system',     labelKey: 'settingsGroupSystem',     label: 'System' },
+] as const;
+
+const sectionDomId = (id: string) => `sp-section-${id}`;
+
+/** Which section is currently under the reading line. Drives the nav highlight. */
+const useActiveSection = (ids: string[]) => {
+  const [active, setActive] = useState<string>(ids[0] ?? '');
+  // After a nav click the page scrolls past every section in between; without
+  // this the highlight would flicker through each of them on the way.
+  const pausedUntil = useRef(0);
+  const key = ids.join('|');
+
+  useEffect(() => {
+    setActive((cur) => (ids.includes(cur) ? cur : ids[0] ?? ''));
+    // jsdom and very old browsers have no IntersectionObserver; the nav then
+    // simply keeps its first/last-clicked item highlighted.
+    if (typeof IntersectionObserver === 'undefined') return;
+    const visible = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (performance.now() < pausedUntil.current) return;
+        for (const e of entries) {
+          const id = e.target.id.replace(/^sp-section-/, '');
+          if (e.isIntersecting) visible.add(id); else visible.delete(id);
+        }
+        const first = ids.find((id) => visible.has(id));
+        if (first) setActive(first);
+      },
+      // A thin band near the top of the viewport: the section crossing it is
+      // the one being read.
+      { rootMargin: '-15% 0px -70% 0px' },
+    );
+    for (const id of ids) {
+      const el = document.getElementById(sectionDomId(id));
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const select = useCallback((id: string) => {
+    pausedUntil.current = performance.now() + 900;
+    setActive(id);
+  }, []);
+
+  return [active, select] as const;
 };
 
 const Settings = () => {
@@ -77,6 +124,20 @@ const Settings = () => {
     [isOwner],
   );
 
+  const [activeId, setActiveId] = useActiveSection(activeSections.map((s) => s.id));
+
+  const jumpTo = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault();
+    const el = document.getElementById(sectionDomId(id));
+    if (!el) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    // Move focus with the scroll so keyboard and screen-reader users land in
+    // the section they chose, not back on the nav link.
+    el.focus({ preventScroll: true });
+    setActiveId(id);
+  };
+
   return (
     <div className="sp-page">
       <PageHeader
@@ -85,41 +146,63 @@ const Settings = () => {
         subtitle={t('settingsSubtitle', 'All panel settings in one place.')}
       />
 
-      <div className="settings-groups" role="region" aria-label={t('settingsNavigation', 'Settings sections')}>
-        {(['general', 'operations', 'system'] as const).map((group) => {
-          const items = activeSections.filter((s) => s.group === group);
-          if (items.length === 0) return null;
-          return (
-            <section key={group} className="settings-group">
-              <h2 className="settings-group-title">{GROUP_LABELS[group]}</h2>
-              <div className="settings-group-grid">
-                {items.map((s) => (
-                  <section
-                    key={s.id}
-                    className={`settings-card${s.bare ? ' settings-card--bare' : ''}`}
-                    id={`sp-section-${s.id}`}
-                    aria-labelledby={s.bare ? undefined : `sp-heading-${s.id}`}
-                    aria-label={t(s.labelKey, s.label)}
-                  >
-                    {s.bare ? (
-                      <s.Component />
-                    ) : (
-                      <>
-                        <SectionHeader
-                          headingId={`sp-heading-${s.id}`}
-                          icon={s.icon}
-                          label={t(s.labelKey, s.label)}
-                          description={t(s.descKey, s.desc)}
-                        />
-                        <s.Component {...(s.shared ? { shared: sharedWithReload, onEditingChange: setEditing } : {})} />
-                      </>
-                    )}
-                  </section>
-                ))}
+      <div className="sp-layout">
+        <nav className="sp-nav" aria-label={t('settingsNavigation', 'Settings sections')}>
+          {GROUPS.map((group) => {
+            const items = activeSections.filter((s) => s.group === group.id);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.id} className="sp-nav-group">
+                <p className="sp-nav-group-title">{t(group.labelKey, group.label)}</p>
+                <ul className="sp-nav-list">
+                  {items.map((s) => {
+                    const Icon = s.icon;
+                    return (
+                      <li key={s.id}>
+                        <a
+                          href={`#${sectionDomId(s.id)}`}
+                          className="sp-nav-link"
+                          aria-current={activeId === s.id ? 'location' : undefined}
+                          onClick={(e) => jumpTo(e, s.id)}
+                        >
+                          <Icon aria-hidden="true" />
+                          <span>{t(s.labelKey, s.label)}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
+            );
+          })}
+        </nav>
+
+        <div className="sp-content">
+          {GROUPS.flatMap((group) => activeSections.filter((s) => s.group === group.id)).map((s) => (
+            <section
+              key={s.id}
+              id={sectionDomId(s.id)}
+              className="sp-section sp-block"
+              tabIndex={-1}
+              aria-labelledby={s.bare ? undefined : `sp-heading-${s.id}`}
+              aria-label={s.bare ? t(s.labelKey, s.label) : undefined}
+            >
+              {s.bare ? (
+                <s.Component />
+              ) : (
+                <>
+                  <SectionHeader
+                    headingId={`sp-heading-${s.id}`}
+                    icon={s.icon}
+                    label={t(s.labelKey, s.label)}
+                    description={t(s.descKey, s.desc)}
+                  />
+                  <s.Component {...(s.shared ? { shared: sharedWithReload, onEditingChange: setEditing } : {})} />
+                </>
+              )}
             </section>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
