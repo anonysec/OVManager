@@ -67,13 +67,13 @@ func TestAuthLoginSuccess(t *testing.T) {
 	if v, ok := got["refresh_token"]; !ok || v != nil {
 		t.Errorf("refresh_token = %v, want null present", v)
 	}
-	token, _ := got["access_token"].(string)
-	if len(token) != 43 { // token_urlsafe(32) → 43 chars
-		t.Errorf("token len = %d (%q), want 43", len(token), token)
+	// access_token is no longer returned; session lives in the HttpOnly cookie.
+	if v, ok := got["access_token"]; ok && v != nil {
+		t.Errorf("access_token = %v, want absent", v)
 	}
-	// Exactly the five login keys.
-	if len(got) != 5 {
-		t.Errorf("keys = %v, want 5", got)
+	// Exactly the four login keys.
+	if len(got) != 4 {
+		t.Errorf("keys = %v, want 4", got)
 	}
 	cookie := res.Header.Get("ovm_session")
 	_ = cookie
@@ -86,7 +86,8 @@ func TestAuthLoginSuccess(t *testing.T) {
 	if found == nil {
 		t.Fatalf("no ovm_session cookie")
 	}
-	if found.Value != token || !found.HttpOnly || found.Path != "/" ||
+	token := found.Value
+	if !found.HttpOnly || found.Path != "/" ||
 		found.SameSite != http.SameSiteLaxMode || found.MaxAge != 604800 {
 		t.Errorf("cookie = %+v", found)
 	}
@@ -227,8 +228,18 @@ func TestAuthLogoutRevokes(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
-	got := login(t, srv.URL, "admin", knownPassword)
-	token := got["access_token"].(string)
+	res0 := postForm(t, srv.URL, "/api/login", url.Values{"username": {"admin"}, "password": {knownPassword}})
+	defer res0.Body.Close()
+	var cookieToken string
+	for _, c := range res0.Cookies() {
+		if c.Name == "ovm_session" {
+			cookieToken = c.Value
+		}
+	}
+	if cookieToken == "" {
+		t.Fatal("no session cookie")
+	}
+	token := cookieToken
 
 	res, _ := doJSON(t, http.MethodPost, srv.URL+"/api/logout", token, nil)
 	defer res.Body.Close()
@@ -268,8 +279,8 @@ func TestAuthRequireOwner403(t *testing.T) {
 	}
 	res, _ = doJSON(t, http.MethodGet, srv+"/api/_owner", token, nil)
 	res.Body.Close()
-	if res.StatusCode != http.StatusForbidden {
-		t.Fatalf("stale admin role = %d, want 403", res.StatusCode)
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("stale admin role = %d, want 401", res.StatusCode)
 	}
 }
 

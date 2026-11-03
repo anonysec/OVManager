@@ -387,3 +387,12 @@ func encryptStoredSecrets(x execer) error {
 	}
 	return nil
 }
+
+// deleteNonOwnerSessions removes sessions whose role is not owner.
+func deleteNonOwnerSessions(x execer) error {
+	if !tableNames(x)["sessions"] {
+		return nil
+	}
+	_, err := x.Exec("DELETE FROM sessions WHERE role IS NULL OR role <> 'owner'")
+	return err
+}

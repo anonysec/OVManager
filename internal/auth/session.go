@@ -210,7 +210,7 @@ func (s *Service) roleIsCurrent(username, role string) bool {
 	if role == "owner" {
 		return isOwner != 0
 	}
-	return role == "admin" && isOwner == 0
+	return false
 }
 
 // Authenticate checks the single owner credential row. Only the is_owner row

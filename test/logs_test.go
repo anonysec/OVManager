@@ -77,9 +77,9 @@ func logsEnvFor(t *testing.T, stub string) logsEnv {
 	srv := httptest.NewServer(root)
 	t.Cleanup(srv.Close)
 
-	token, _ := login(t, srv.URL, "owner", knownPassword)["access_token"].(string)
+	token := loginToken(t, srv.URL, "owner", knownPassword)
 	if token == "" {
-		t.Fatal("login returned no access_token")
+		t.Fatal("login returned no session token")
 	}
 	return logsEnv{srv: srv, token: token, sqlite: conn, svc: svc}
 }
@@ -184,12 +184,17 @@ func TestLogsGate(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &issued); err != nil {
 		t.Fatalf("decode issued session: %v", err)
 	}
-	token, _ := issued["access_token"].(string)
+	var token string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "ovm_session" {
+			token = c.Value
+		}
+	}
 	if token == "" {
-		t.Fatal("IssueSession returned no access_token")
+		t.Fatal("IssueSession returned no session cookie")
 	}
 	res, raw := rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", token, nil, "")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("admin status = %d, want 200 (%s)", res.StatusCode, raw)
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("admin status = %d, want 401 (%s)", res.StatusCode, raw)
 	}
 }

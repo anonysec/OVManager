@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 27
+const SchemaVersion = 28
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -702,6 +702,7 @@ var steps = []step{
 	{25, "add traffic ledger and settings kv", createTrafficLedgerAndKV},
 	{26, "unique owner index (admins.is_owner)", addAdminsOwnerUnique},
 	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
+	{28, "delete non-owner sessions", deleteNonOwnerSessions},
 }
 
 // MigrateWithBackend is the backend-aware entry point. SQLite delegates to

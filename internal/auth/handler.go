@@ -153,7 +153,7 @@ func (s *Service) CurrentUser(r *http.Request) (Identity, bool) {
 	if !ok {
 		return Identity{}, false
 	}
-	if ident.Type != "admin" && ident.Type != "owner" {
+	if ident.Type != "owner" {
 		return Identity{}, false
 	}
 	if !s.roleIsCurrent(ident.Username, ident.Type) {
