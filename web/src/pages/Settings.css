@@ -18,27 +18,11 @@
   flex-direction: column;
 }
 
-.sp-section {
-  margin: 0;
-}
-
 .sp-section-header {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
-}
-
-.sp-section-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-  background: var(--accent-soft);
-  color: var(--accent-text);
 }
 
 .sp-section-header h2 {
@@ -344,15 +328,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   line-height: var(--line-height-snug);
   color: var(--text-secondary);
 }
-
-/* Jump-nav focus target: programmatic and keyboard focus display the indicator. */
-.sp-section:focus,
-.sp-section:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 6px;
-  border-radius: var(--radius-sm);
-}
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SETTINGS — definitions for sp-* classes rendered by Settings.jsx that
@@ -810,32 +785,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-mt-18 { margin-top: 18px; }
 .sp-mt-20 { margin-top: 20px; }
 
-/* Sticky jumpnav: stays under the fixed topbar, scrolls horizontally
-   on phones instead of wrapping into 4 rows. */
-.sp-jumpnav {
-  position: sticky;
-  top: var(--topbar-h);
-  z-index: 5;
-}
-
-.sp-jumpnav-link[aria-current="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-  color: var(--accent-text);
-}
-
-/* Deep-link target offset (fixed topbar + sticky jumpnav) + focus. */
-.sp-section {
-  scroll-margin-top: calc(var(--topbar-h) + 64px);
-  outline: none;
-}
-
-.sp-section:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 4px;
-  border-radius: var(--radius-md);
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    SIDEBAR RAIL — labels stay mounted and collapse via max-width/opacity, so
    the width tween looks continuous. Scoped higher than the legacy
@@ -945,14 +894,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   .sp-two-col {
     grid-template-columns: 1fr;
   }
-  .sp-jumpnav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .sp-jumpnav-link {
-    flex: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -961,48 +902,57 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   }
 }
 
-/* ── Grouped settings layout (replaces bento grid) ─────────────── */
-.settings-groups {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+/* ── Settings layout: tabs + one reading column ───────────────────────────
+   The app already has a sidebar, so Settings adds no second one. Four tabs
+   split the options by how often they are used; inside a tab, sections are
+   separated by hairlines rather than boxed into cards. */
+.sp-tabs {
+  margin-bottom: var(--space-5);
 }
 
-.settings-group-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 var(--space-2);
+.sp-content {
+  min-width: 0;
+  max-width: 760px;
 }
 
-.settings-group-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px;
-  align-items: stretch;
+.sp-block {
+  padding-block: var(--space-6);
 }
 
-.settings-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  box-shadow: none;
+.sp-block:first-child { padding-block-start: 0; }
+.sp-block:last-child { padding-block-end: 0; }
+
+.sp-block + .sp-block {
+  border-top: 1px solid var(--border);
 }
 
-.settings-card--bare {
-  padding: 0;
+/* Inside a tab the sections' cards lose their boxes: a small subheading and
+   the controls beneath it, grouped by whitespace. Boxes within boxes, each
+   with a tinted header bar and icon, made every group look like a widget. */
+.sp-content .sp-card {
   border: none;
+  border-radius: 0;
   background: transparent;
+  overflow: visible;
 }
 
-@media (max-width: 719.98px) {
-  .settings-group-grid {
-    grid-template-columns: 1fr;
-  }
+.sp-content .sp-card + .sp-card {
+  margin-top: var(--space-6);
+}
+
+.sp-content .sp-card-head {
+  padding: 0 0 var(--space-2);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.sp-content .sp-card-head svg {
+  display: none;
+}
+
+.sp-content .sp-card-body {
+  padding: 0;
 }

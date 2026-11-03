@@ -8,11 +8,8 @@ import { useAuth } from '../context/AuthContext';
 
 import apiClient from '../services/api';
 import { setDisplayTimezone } from '../utils/displayTimezone';
-import {
-  FiServer, FiShield, FiArchive, FiSend, FiLink, FiUserPlus,
-  FiClock, FiMonitor, FiBell, FiSettings, FiActivity,
-} from 'react-icons/fi';
-import { PageHeader } from '../components/ui';
+import { FiSettings } from 'react-icons/fi';
+import { PageHeader, Tabs } from '../components/ui';
 import { SectionHeader } from './settings/shared';
 import DefaultsSection from './settings/DefaultsSection';
 import DisplaySection from './settings/DisplaySection';
@@ -27,24 +24,32 @@ import MyActivitySection from './settings/MyActivitySection';
 import './Settings.css';
 import './SettingsPage.css';
 
+/* Four tabs, ordered by how often a VPN admin reaches for them:
+   1. Panel          — how the panel and subscriptions are reached, and what a
+                       new user gets by default. The options you set once and
+                       come back to when onboarding.
+   2. Notifications  — Telegram bot and which alerts fire.
+   3. Backup & system — backups, updates, maintenance, connection errors.
+   4. Interface      — theme, language, your own activity (per-person, not panel). */
 const SECTIONS = [
-  { id: 'general',    group: 'general', icon: FiLink,      labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
-  { id: 'appearance', group: 'general', icon: FiMonitor,   labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection },
-  { id: 'display',    group: 'general', icon: FiClock,     labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
-  { id: 'defaults',   group: 'general', icon: FiUserPlus,  labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, shared: true },
-  { id: 'alerts',     group: 'operations', icon: FiBell,    labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },
-  { id: 'telegram',   group: 'operations', icon: FiSend,    labelKey: 'settingsTelegram',   label: 'Telegram',   descKey: 'settingsTelegramDesc',   desc: 'Daily usage summary, user events and test message', Component: TelegramSection, shared: true },
-  { id: 'activity',   group: 'operations', icon: FiActivity, labelKey: 'activityCard',      label: 'My activity', descKey: 'activityDesc',          desc: 'Your latest actions on this panel.', Component: MyActivitySection, bare: true },
-  { id: 'security',   group: 'system', icon: FiShield,     labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
-  { id: 'backup',     group: 'system', icon: FiArchive,    labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection },
-  { id: 'system',     group: 'system', icon: FiServer,     labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
+  { id: 'general',    tab: 'panel',         labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
+  { id: 'defaults',   tab: 'panel',         labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, shared: true },
+  { id: 'display',    tab: 'panel',         labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
+  { id: 'telegram',   tab: 'notifications', labelKey: 'settingsTelegram',   label: 'Telegram',   descKey: 'settingsTelegramDesc',   desc: 'Daily usage summary, user events and test message', Component: TelegramSection, shared: true },
+  { id: 'alerts',     tab: 'notifications', labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },
+  { id: 'backup',     tab: 'maintenance',   labelKey: 'settingsBackup',     label: 'Backup',     descKey: 'settingsBackupDesc',     desc: 'Create, download and restore the database', Component: BackupSection },
+  { id: 'system',     tab: 'maintenance',   labelKey: 'settingsSystem',     label: 'System',     descKey: 'settingsSystemDesc',     desc: 'Server info and maintenance actions', Component: SystemSection },
+  { id: 'security',   tab: 'maintenance',   labelKey: 'settingsSecurity',   label: 'Security',   descKey: 'settingsSecurityDesc',   desc: 'Authentication errors and session signals', Component: SecuritySection },
+  { id: 'appearance', tab: 'interface',     labelKey: 'settingsAppearance', label: 'Appearance', descKey: 'settingsAppearanceDesc', desc: 'Theme and interface language', Component: AppearanceSection },
+  { id: 'activity',   tab: 'interface',     labelKey: 'activityCard',       label: 'My activity', descKey: 'activityDesc',          desc: 'Your latest actions on this panel.', Component: MyActivitySection, bare: true },
 ];
 
-const GROUP_LABELS = {
-  general: 'General',
-  operations: 'Operations',
-  system: 'System',
-};
+const TABS = [
+  { id: 'panel',         labelKey: 'settingsTabPanel',         label: 'Panel' },
+  { id: 'notifications', labelKey: 'settingsTabNotifications', label: 'Notifications' },
+  { id: 'maintenance',   labelKey: 'settingsTabMaintenance',   label: 'Backup & system' },
+  { id: 'interface',     labelKey: 'settingsTabInterface',     label: 'Interface' },
+] as const;
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -77,6 +82,16 @@ const Settings = () => {
     [isOwner],
   );
 
+  // Operators without owner rights only have a couple of sections, so tabs
+  // that would be empty for them are not shown at all.
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => activeSections.some((s) => s.tab === tab.id)),
+    [activeSections],
+  );
+  const [tabId, setTabId] = useState<string>(TABS[0].id);
+  const currentTab = visibleTabs.find((tab) => tab.id === tabId) ?? visibleTabs[0];
+  const sections = activeSections.filter((s) => s.tab === currentTab?.id);
+
   return (
     <div className="sp-page">
       <PageHeader
@@ -85,41 +100,41 @@ const Settings = () => {
         subtitle={t('settingsSubtitle', 'All panel settings in one place.')}
       />
 
-      <div className="settings-groups" role="region" aria-label={t('settingsNavigation', 'Settings sections')}>
-        {(['general', 'operations', 'system'] as const).map((group) => {
-          const items = activeSections.filter((s) => s.group === group);
-          if (items.length === 0) return null;
-          return (
-            <section key={group} className="settings-group">
-              <h2 className="settings-group-title">{GROUP_LABELS[group]}</h2>
-              <div className="settings-group-grid">
-                {items.map((s) => (
-                  <section
-                    key={s.id}
-                    className={`settings-card${s.bare ? ' settings-card--bare' : ''}`}
-                    id={`sp-section-${s.id}`}
-                    aria-labelledby={s.bare ? undefined : `sp-heading-${s.id}`}
-                    aria-label={t(s.labelKey, s.label)}
-                  >
-                    {s.bare ? (
-                      <s.Component />
-                    ) : (
-                      <>
-                        <SectionHeader
-                          headingId={`sp-heading-${s.id}`}
-                          icon={s.icon}
-                          label={t(s.labelKey, s.label)}
-                          description={t(s.descKey, s.desc)}
-                        />
-                        <s.Component {...(s.shared ? { shared: sharedWithReload, onEditingChange: setEditing } : {})} />
-                      </>
-                    )}
-                  </section>
-                ))}
-              </div>
-            </section>
-          );
-        })}
+      <Tabs
+        className="sp-tabs"
+        ariaLabel={t('settingsNavigation', 'Settings sections')}
+        value={currentTab?.id}
+        onChange={setTabId}
+        tabs={visibleTabs.map((tab) => ({ id: tab.id, label: t(tab.labelKey, tab.label) }))}
+      />
+
+      <div
+        className="sp-content"
+        role="tabpanel"
+        aria-labelledby={currentTab ? `tab-${currentTab.id}` : undefined}
+      >
+        {sections.map((s) => (
+          <section
+            key={s.id}
+            id={`sp-section-${s.id}`}
+            className="sp-block"
+            aria-labelledby={s.bare ? undefined : `sp-heading-${s.id}`}
+            aria-label={s.bare ? t(s.labelKey, s.label) : undefined}
+          >
+            {s.bare ? (
+              <s.Component />
+            ) : (
+              <>
+                <SectionHeader
+                  headingId={`sp-heading-${s.id}`}
+                  label={t(s.labelKey, s.label)}
+                  description={t(s.descKey, s.desc)}
+                />
+                <s.Component {...(s.shared ? { shared: sharedWithReload, onEditingChange: setEditing } : {})} />
+              </>
+            )}
+          </section>
+        ))}
       </div>
     </div>
   );

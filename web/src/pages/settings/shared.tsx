@@ -3,9 +3,10 @@
 
 import { useTranslation } from 'react-i18next';
 
-const SectionHeader = ({ headingId, icon: Icon, label, description }: any) => (
+// Plain heading + one-line description. No icon chip: the tab already says
+// where you are, and a badge on every heading was decoration.
+const SectionHeader = ({ headingId, label, description }: any) => (
   <div className="sp-section-header">
-    <span className="sp-section-icon">{Icon ? <Icon aria-hidden="true" /> : null}</span>
     <div>
       <h2 id={headingId}>{label}</h2>
       {description && <p>{description}</p>}
