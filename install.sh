@@ -240,7 +240,10 @@ fetch_release() {
         rm -rf "$work"; die "Release signature file is missing for v$VERSION"
     fi
     local pubkey_file="$work/release_pubkey.pem"
-    printf '%s\n' "${RELEASE_PUBKEY_OVERRIDE:-$RELEASE_PUBKEY_PEM}" > "$pubkey_file"
+    # Production verification uses only the trusted embedded key. There is no
+    # public-key override: an override would let anyone with a different key
+    # bypass release signature verification.
+    printf '%s\n' "$RELEASE_PUBKEY_PEM" > "$pubkey_file"
     if ! openssl pkeyutl -verify -pubin -inkey "$pubkey_file" -rawin -in "$work/$asset" -sigfile "$work/$asset.sig" >/dev/null 2>&1; then
         rm -rf "$work"; die "Release cryptographic signature verification failed for v$VERSION"
     fi

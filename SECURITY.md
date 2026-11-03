@@ -59,3 +59,10 @@ Mitigations:
 - Serve behind TLS with Let's Encrypt or validated certificates.
 - Set `TRUSTED_PROXY=true` only when running behind a dedicated reverse proxy on loopback/private CIDR, and configure `TRUSTED_PROXY_CIDRS`.
 - Regularly back up the database and `secret.key`, but store `secret.key` separately from encrypted backups (`.db.enc`); a backup alone must not be decryptable. Verify restores.
+
+## Release signing trust model
+
+- OVManager release binaries are signed with an Ed25519 key held as the `RELEASE_SIGNING_KEY` GitHub Actions secret. The matching public key is embedded in both `install.sh` (`RELEASE_PUBKEY_PEM`) and `internal/cli/update.go` (`ReleasePublicKeyPEM`); production verification uses only that trusted embedded key.
+- **Key rotation**: to rotate, generate a new Ed25519 keypair, update `RELEASE_PUBKEY_PEM` in `install.sh` and `ReleasePublicKeyPEM` in `internal/cli/update.go`, commit both, and replace the `RELEASE_SIGNING_KEY` secret. Clients on older binaries keep the previous key until they upgrade through a signed release; there is no remote key distribution channel.
+- **Anyone who obtains the CI signing secret can sign releases** that pass verification on existing clients. Protect the secret accordingly (least-privilege access, environment protection rules, required reviewers).
+- **Provenance attestation** is published via `actions/attest-build-provenance` in `release.yml`, but install.sh and `ovmanager update` do not yet verify it; only the Ed25519 signature is checked today.

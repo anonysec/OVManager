@@ -103,12 +103,14 @@ jobs:
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
-          if [ -n "${RELEASE_SIGNING_KEY}" ]; then
-            for arch in amd64 arm64; do
-              out="ovmanager-linux-${arch}"
-              openssl pkeyutl -sign -inkey <(printf '%s\n' "${RELEASE_SIGNING_KEY}") -rawin -in "${out}" -out "${out}.sig"
-            done
+          if [ -z "${RELEASE_SIGNING_KEY}" ]; then
+            echo "RELEASE_SIGNING_KEY is empty; refusing to publish unsigned release" >&2
+            exit 1
           fi
+          for arch in amd64 arm64; do
+            out="ovmanager-linux-${arch}"
+            openssl pkeyutl -sign -inkey <(printf '%s\n' "${RELEASE_SIGNING_KEY}") -rawin -in "${out}" -out "${out}.sig"
+          done
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@c074443f1a5fb4aee83904b712464907e1401d1f # v2.2.3
