@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/webfs"
@@ -440,7 +441,11 @@ func scanNodeRow(row scanner) *node.Node {
 	n.Protocol = protocol.String
 	n.OVPNPort = int(ovpnPort.Int64)
 	n.Port = int(port.Int64)
-	n.Key = key.String
+	decrypted, err := crypto.DecryptSecret(key.String, dataDir())
+	if err != nil {
+		return nil
+	}
+	n.Key = decrypted
 	n.Status = status.Int64 != 0
 	n.ServerCA = serverCA
 	n.CountryCode = country
