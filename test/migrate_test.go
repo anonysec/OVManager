@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/db"
 )
 
@@ -227,6 +228,8 @@ INSERT INTO nodes (id, key) VALUES (1, 'enc:` + fernetToken + `');
 // TestMigrateDecryptsStoredSecrets proves a Go-built DB reads the Fernet
 // rows at v14 (stdlib crypto, no new dependency).
 func TestMigrateDecryptsStoredSecrets(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("DATA_DIR", dir)
 	t.Setenv("ADMIN_USERNAME", "")
 	t.Setenv("BOT_ENCRYPT_KEY", fernetKey)
 	t.Setenv("NODE_ENCRYPT_KEY", "")
@@ -247,8 +250,19 @@ func TestMigrateDecryptsStoredSecrets(t *testing.T) {
 	if err := conn.QueryRow("SELECT key FROM nodes WHERE id = 1").Scan(&key); err != nil {
 		t.Fatalf("read node key: %v", err)
 	}
-	if bot != "my-secret-bot-token" || key != "my-secret-bot-token" {
-		t.Fatalf("decrypted bot=%q key=%q, want my-secret-bot-token", bot, key)
+	if !strings.HasPrefix(bot, crypto.EncPrefix) || !strings.HasPrefix(key, crypto.EncPrefix) {
+		t.Fatalf("migrated bot=%q key=%q, want enc:v2:", bot, key)
+	}
+	decBot, err := crypto.DecryptSecret(bot, dir)
+	if err != nil {
+		t.Fatalf("decrypt bot: %v", err)
+	}
+	decKey, err := crypto.DecryptSecret(key, dir)
+	if err != nil {
+		t.Fatalf("decrypt key: %v", err)
+	}
+	if decBot != "my-secret-bot-token" || decKey != "my-secret-bot-token" {
+		t.Fatalf("decrypted bot=%q key=%q, want my-secret-bot-token", decBot, decKey)
 	}
 }
 

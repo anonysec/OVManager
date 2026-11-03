@@ -330,7 +330,7 @@ func encryptStoredSecrets(x execer) error {
 				return err
 			}
 			if value.Valid && strings.TrimSpace(value.String) != "" &&
-				!strings.HasPrefix(value.String, ovcrypto.EncPrefix) {
+				!strings.HasPrefix(value.String, "enc:") {
 				todo = append(todo, row{rowid: rowid, value: value.String})
 			}
 		}
@@ -367,7 +367,7 @@ func encryptStoredSecrets(x execer) error {
 				return err
 			}
 			if value.Valid && strings.TrimSpace(value.String) != "" &&
-				!strings.HasPrefix(value.String, ovcrypto.EncPrefix) {
+				!strings.HasPrefix(value.String, "enc:") {
 				todo = append(todo, row{rowid: rowid, value: value.String})
 			}
 		}
