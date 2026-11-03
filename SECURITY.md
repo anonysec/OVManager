@@ -33,6 +33,7 @@ Out of scope: DDoS/volumetric abuse, OpenVPN or EasyRSA upstream CVEs
 
 ## Threat model & secret storage
 
+- **Owner-claim status**: Unauthenticated `GET /api/owner-claim` intentionally reveals whether the panel is claimable or recoverable (setup state). It exposes no credentials.
 - **Secrets at rest**: Sensitive columns (`nodes.key` and `settings.bot_token`) are encrypted at rest with AES-256-GCM. The encryption key (`secret.key`) is stored in the data directory with strict `0600` permissions (read/write only by the service user/root), isolated from the SQLite database file.
 - **Telegram backups**: Automatically redact all active session tokens, the Telegram bot token, and node API keys (`DELETE FROM sessions`, redacted keys). Even if a Telegram backup document is intercepted, it contains no usable secrets or credentials.
 - **Offsite backups**: Encrypted with AES-256-GCM prior to transfer (`.db.enc`) so plaintext databases never transit or rest on remote storage unprotected.
