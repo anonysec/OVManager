@@ -7,7 +7,7 @@
 // the cutover plan prescribes: the version lives in PRAGMA user_version instead
 // of the schema_version table (no table survives, nothing to inspect).
 //
-// SCHEMA_VERSION stays 26 (Phase 6.2).
+// SCHEMA_VERSION is 27 (Phase 6.2 + secrets-at-rest migration).
 package db
 
 import (
@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 26
+const SchemaVersion = 27
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -701,6 +701,7 @@ var steps = []step{
 	{24, "single-admin cut (drop multi-admin columns)", singleAdminSchema},
 	{25, "add traffic ledger and settings kv", createTrafficLedgerAndKV},
 	{26, "unique owner index (admins.is_owner)", addAdminsOwnerUnique},
+	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
 }
 
 // MigrateWithBackend is the backend-aware entry point. SQLite delegates to

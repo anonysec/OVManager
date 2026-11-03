@@ -1,6 +1,6 @@
 // Parity tests for Phase 6 Task 3: the Go migration runner against the deleted
 // legacy package backend/db/migrations (runner/schema/seeds/steps,
-// last version at 07204ee^). SCHEMA_VERSION stays 26; the cutover plan moves the
+// last version at 07204ee^). SCHEMA_VERSION stays 27; the cutover plan moves the
 // version into PRAGMA user_version.
 package tests
 
@@ -83,8 +83,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 26 || userVersion(t, conn) != 26 {
-		t.Fatalf("version = %d, user_version = %d, want 26", v, userVersion(t, conn))
+	if v != 27 || userVersion(t, conn) != 27 {
+		t.Fatalf("version = %d, user_version = %d, want 27", v, userVersion(t, conn))
 	}
 
 	for _, table := range []string{
@@ -120,8 +120,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v2 != 26 || userVersion(t, conn) != 26 {
-		t.Fatalf("second run version = %d/%d, want 26", v2, userVersion(t, conn))
+	if v2 != 27 || userVersion(t, conn) != 27 {
+		t.Fatalf("second run version = %d/%d, want 27", v2, userVersion(t, conn))
 	}
 	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
 		t.Fatalf("second run duplicated settings rows: %d", n)
@@ -168,8 +168,8 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 26 || userVersion(t, conn) != 26 {
-		t.Fatalf("version = %d/%d, want 26", v, userVersion(t, conn))
+	if v != 27 || userVersion(t, conn) != 27 {
+		t.Fatalf("version = %d/%d, want 27", v, userVersion(t, conn))
 	}
 	if !hasColumn(t, conn, "users", "tag") {
 		t.Fatalf("v8 did not add users.tag")
@@ -446,8 +446,8 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v != 26 {
-		t.Fatalf("version = %d, want 26", v)
+	if v != 27 {
+		t.Fatalf("version = %d, want 27", v)
 	}
 	var second int
 	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
@@ -459,7 +459,7 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 }
 
 // An older database can hold more than one is_owner row: step 22 flags the
-// owner active, and the legacy import path can add another. Step 26 is what
+// owner active, and the legacy import path can add another. Step 27 is what
 // dedupes them, and the UNIQUE index it creates must come AFTER that dedupe
 // — creating the index first makes such an upgrade fail outright.
 func TestMigrateDeduplicatesOwnersBeforeTheUniqueIndex(t *testing.T) {

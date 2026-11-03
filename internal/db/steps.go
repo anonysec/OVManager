@@ -15,6 +15,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/anonysec/OVManager/go/internal/config"
+	ovcrypto "github.com/anonysec/OVManager/go/internal/crypto"
 )
 
 func noopStep(execer) error { return nil }
@@ -299,6 +302,88 @@ func tableVersion(conn *sql.DB) (int, error) {
 func stampTable(x execer, v int) error {
 	if _, err := x.Exec(`INSERT INTO _schema_version (version) VALUES (?)`, v); err != nil {
 		return err
+	}
+	return nil
+}
+
+// encryptStoredSecrets encrypts plaintext nodes.key and settings.bot_token values
+// that are not already enc:v2:. Idempotent and transactional: any failure
+// aborts the migration so no partial state is stamped.
+func encryptStoredSecrets(x execer) error {
+	dataDir := config.EnvOrFile("DATA_DIR", "data")
+
+	if tableNames(x)["settings"] && columnNames(x, "settings")["bot_token"] {
+		rows, err := x.Query("SELECT rowid, bot_token FROM settings")
+		if err != nil {
+			return err
+		}
+		type row struct {
+			rowid int64
+			value string
+		}
+		var todo []row
+		for rows.Next() {
+			var rowid int64
+			var value sql.NullString
+			if err := rows.Scan(&rowid, &value); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			if value.Valid && strings.TrimSpace(value.String) != "" &&
+				!strings.HasPrefix(value.String, ovcrypto.EncPrefix) {
+				todo = append(todo, row{rowid: rowid, value: value.String})
+			}
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, r := range todo {
+			enc, err := ovcrypto.EncryptSecret(r.value, dataDir)
+			if err != nil {
+				return err
+			}
+			if _, err := x.Exec("UPDATE settings SET bot_token = ? WHERE rowid = ?", enc, r.rowid); err != nil {
+				return err
+			}
+		}
+	}
+
+	if tableNames(x)["nodes"] && columnNames(x, "nodes")["key"] {
+		rows, err := x.Query("SELECT rowid, key FROM nodes")
+		if err != nil {
+			return err
+		}
+		type row struct {
+			rowid int64
+			value string
+		}
+		var todo []row
+		for rows.Next() {
+			var rowid int64
+			var value sql.NullString
+			if err := rows.Scan(&rowid, &value); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			if value.Valid && strings.TrimSpace(value.String) != "" &&
+				!strings.HasPrefix(value.String, ovcrypto.EncPrefix) {
+				todo = append(todo, row{rowid: rowid, value: value.String})
+			}
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, r := range todo {
+			enc, err := ovcrypto.EncryptSecret(r.value, dataDir)
+			if err != nil {
+				return err
+			}
+			if _, err := x.Exec("UPDATE nodes SET key = ? WHERE rowid = ?", enc, r.rowid); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
