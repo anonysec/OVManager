@@ -39,14 +39,19 @@ func offsiteCopy(target, path string) (string, error) {
 	// Encrypt the backup with AES-GCM before shipping off-host
 	dataDir := filepath.Dir(filepath.Dir(path))
 	key, keyErr := crypto.GetOrCreateSecretKey(dataDir)
-	uploadPath := path
-	if keyErr == nil && len(key) == 32 {
-		encPath := path + ".enc"
-		if encErr := crypto.EncryptFile(path, encPath, key); encErr == nil {
-			uploadPath = encPath
-			defer os.Remove(encPath) // #nosec G304 // intentional cleanup
-		}
+	if keyErr != nil {
+		return "", keyErr
 	}
+	if len(key) != 32 {
+		return "", fmt.Errorf("invalid secret key length: %d", len(key))
+	}
+	uploadPath := path
+	encPath := path + ".enc"
+	if err := crypto.EncryptFile(path, encPath, key); err != nil {
+		return "", err
+	}
+	uploadPath = encPath
+	defer os.Remove(encPath) // #nosec G304 // intentional cleanup
 
 	remote := dest + ":" + strings.TrimSuffix(dir, "/") + "/" + filepath.Base(uploadPath)
 

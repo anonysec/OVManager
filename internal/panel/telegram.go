@@ -26,6 +26,12 @@ func (h *Handler) startTelegramWorker() {
 	notify.StartWorker(h.Svc.DB(), h.telegramBackupPayload, telemetry.CollectMetrics)
 }
 
+func tableExists(db *sql.DB, name string) bool {
+	var n int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&n)
+	return err == nil && n > 0
+}
+
 func sanitizeTelegramBackup(srcPath string) (string, error) {
 	tmpDir := filepath.Dir(srcPath)
 	sanitizedPath := filepath.Join(tmpDir, "sanitized-"+filepath.Base(srcPath))
@@ -43,11 +49,44 @@ func sanitizeTelegramBackup(srcPath string) (string, error) {
 	}
 	defer db.Close()
 
-	// Redact active sessions, telegram bot token, and node API keys
-	_, _ = db.Exec("DELETE FROM sessions;")
-	_, _ = db.Exec("UPDATE settings SET bot_token = '' WHERE bot_token IS NOT NULL;")
-	_, _ = db.Exec("UPDATE nodes SET key = '[REDACTED]';")
-	_, _ = db.Exec("VACUUM;")
+	// Redact active sessions, telegram bot token, and node API keys. Every
+	// statement is checked; a failure aborts the sanitization so no
+	// unredacted copy is ever attached.
+	if tableExists(db, "sessions") {
+		if _, err := db.Exec("DELETE FROM sessions;"); err != nil {
+			return "", err
+		}
+	}
+	if tableExists(db, "settings") {
+		if _, err := db.Exec("UPDATE settings SET bot_token = '' WHERE bot_token IS NOT NULL;"); err != nil {
+			return "", err
+		}
+	}
+	if tableExists(db, "nodes") {
+		if _, err := db.Exec("UPDATE nodes SET key = '[REDACTED]';"); err != nil {
+			return "", err
+		}
+	}
+	if tableExists(db, "users") {
+		if _, err := db.Exec("UPDATE users SET uuid = NULL;"); err != nil {
+			return "", err
+		}
+	}
+	if tableExists(db, "admins") {
+		if _, err := db.Exec("UPDATE admins SET password = '';"); err != nil {
+			return "", err
+		}
+	}
+	for _, table := range []string{"audit_logs", "delivered", "deleted_users"} {
+		if tableExists(db, table) {
+			if _, err := db.Exec("DELETE FROM " + table + ";"); err != nil {
+				return "", err
+			}
+		}
+	}
+	if _, err := db.Exec("VACUUM;"); err != nil {
+		return "", err
+	}
 	_ = db.Close()
 
 	return sanitizedPath, nil

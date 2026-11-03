@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -55,6 +56,18 @@ func getKV(db *sql.DB, key string) string {
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
 	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'')`
 
+// dataDir resolves DATA_DIR per call so tests and callers swapping the
+// environment stay fresh, falling back to the package default.
+func dataDir() string {
+	if d := strings.TrimSpace(os.Getenv("DATA_DIR")); d != "" {
+		return d
+	}
+	if DataDir != "" {
+		return DataDir
+	}
+	return "data"
+}
+
 func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 	n := &Node{}
 	err := row.Scan(&n.ID, &n.Name, &n.Address, &n.TunnelAddress, &n.Protocol, &n.OVPNPort,
@@ -63,9 +76,11 @@ func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 		return nil, err
 	}
 	if n.Key != "" {
-		if plain, err := crypto.DecryptSecret(n.Key, DataDir); err == nil {
-			n.Key = plain
+		plain, err := crypto.DecryptSecret(n.Key, dataDir())
+		if err != nil {
+			return nil, err
 		}
+		n.Key = plain
 	}
 	return n, nil
 }
@@ -541,7 +556,7 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 		lon = lLon
 	}
 	storedKey := req.key()
-	if enc, err := crypto.EncryptSecret(storedKey, DataDir); err == nil {
+	if enc, err := crypto.EncryptSecret(storedKey, dataDir()); err == nil {
 		storedKey = enc
 	}
 	res, err := db.Exec(
@@ -562,7 +577,7 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 		manual = strings.ToUpper(strings.TrimSpace(*req.CountryCode))
 	}
 	storedKey := apiKey
-	if enc, err := crypto.EncryptSecret(storedKey, DataDir); err == nil {
+	if enc, err := crypto.EncryptSecret(storedKey, dataDir()); err == nil {
 		storedKey = enc
 	}
 	set := `name=?, address=?, tunnel_address=?, protocol=?, ovpn_port=?, port=?, status=?, key=?`

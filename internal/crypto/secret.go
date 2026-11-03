@@ -7,6 +7,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -15,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 const (
@@ -23,40 +23,19 @@ const (
 	keyFile   = "secret.key"
 )
 
-var (
-	keyMu     sync.RWMutex
-	cachedKey []byte
-)
-
 // GetOrCreateSecretKey loads or creates a 256-bit AES key outside the database.
 // Stored in $DATA_DIR/secret.key with 0600 permissions.
+//
+// A missing or corrupt key is never replaced when the database already holds
+// enc:v2: values: doing so would make every stored secret undecryptable.
+// Callers must restore secret.key (or set OVM_SECRET_KEY) in that case.
 func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
-	keyMu.RLock()
-	if len(cachedKey) == 32 {
-		k := make([]byte, 32)
-		copy(k, cachedKey)
-		keyMu.RUnlock()
-		return k, nil
-	}
-	keyMu.RUnlock()
-
-	keyMu.Lock()
-	defer keyMu.Unlock()
-
-	if len(cachedKey) == 32 {
-		k := make([]byte, 32)
-		copy(k, cachedKey)
-		return k, nil
-	}
-
 	if envKey := strings.TrimSpace(os.Getenv("OVM_SECRET_KEY")); envKey != "" {
 		if k, err := hex.DecodeString(envKey); err == nil && len(k) == 32 {
-			cachedKey = k
 			return k, nil
 		}
 		if len(envKey) == 32 {
-			cachedKey = []byte(envKey)
-			return cachedKey, nil
+			return []byte(envKey), nil
 		}
 	}
 
@@ -66,19 +45,28 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 	_ = os.MkdirAll(dataDir, 0o700)
 	target := filepath.Join(dataDir, keyFile)
 
+	// Load an existing, well-formed key.
 	if data, err := os.ReadFile(target); err == nil {
 		trimmed := strings.TrimSpace(string(data))
 		if k, err := hex.DecodeString(trimmed); err == nil && len(k) == 32 {
-			cachedKey = k
 			return k, nil
 		}
 		if len(data) == 32 {
-			cachedKey = data
-			return cachedKey, nil
+			return data, nil
 		}
+		// File exists but is corrupt. Refuse to overwrite when encrypted
+		// database values depend on it.
+		if databaseHasEncryptedSecrets(dataDir) {
+			return nil, fmt.Errorf("secret key at %s is corrupt and the database contains encrypted secrets; restore secret.key before continuing", target)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("reading secret key %s: %w", target, err)
+	} else if databaseHasEncryptedSecrets(dataDir) {
+		return nil, fmt.Errorf("secret key %s is missing but the database contains encrypted secrets; restore secret.key before continuing", target)
 	}
 
-	// Generate a new 32-byte key
+	// Generate a new 32-byte key. Only reached when no encrypted database
+	// values depend on a (possibly missing) key.
 	newKey := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, newKey); err != nil {
 		return nil, fmt.Errorf("generating secret key: %w", err)
@@ -88,9 +76,34 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 	if err := os.WriteFile(target, []byte(encoded+"\n"), 0o600); err != nil {
 		return nil, fmt.Errorf("writing secret key to %s: %w", target, err)
 	}
-
-	cachedKey = newKey
 	return newKey, nil
+}
+
+// databaseHasEncryptedSecrets reports whether the SQLite database in dataDir
+// contains any enc:v2: secret values.
+func databaseHasEncryptedSecrets(dataDir string) bool {
+	dbPath := filepath.Join(dataDir, "ovmanager.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		return false
+	}
+	conn, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro")
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+	if err := conn.Ping(); err != nil {
+		return false
+	}
+	for _, q := range []string{
+		"SELECT 1 FROM settings WHERE bot_token LIKE 'enc:v2:%' LIMIT 1",
+		"SELECT 1 FROM nodes WHERE key LIKE 'enc:v2:%' LIMIT 1",
+	} {
+		var one int
+		if err := conn.QueryRow(q).Scan(&one); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // EncryptSecret encrypts plaintext using AES-256-GCM and returns enc:v2:<base64>.

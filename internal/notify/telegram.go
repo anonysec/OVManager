@@ -24,6 +24,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // APIBase is the Telegram Bot API root; tests point it at a local stub.
@@ -197,7 +199,7 @@ func LoadSettings(db *sql.DB) Settings {
 	s.Configured = token.Valid && token.String != ""
 	s.Token = token.String
 	if s.Token != "" {
-		if plain, err := crypto.DecryptSecret(s.Token, ""); err == nil {
+		if plain, err := crypto.DecryptSecret(s.Token, resolvedDataDir()); err == nil {
 			s.Token = plain
 		}
 	}
@@ -219,6 +221,19 @@ func LoadSettings(db *sql.DB) Settings {
 // carry both credentials.
 func (s Settings) ready() bool {
 	return s.Enabled && s.Configured && s.ChatID != ""
+}
+
+// resolvedDataDir mirrors panel.dataDir without importing the panel package.
+func resolvedDataDir() string {
+	if d := strings.TrimSpace(os.Getenv("DATA_DIR")); d != "" {
+		return d
+	}
+	// node owns the default data dir; avoid an import cycle by reading it
+	// through the environment fallback only.
+	if node.DataDir != "" {
+		return node.DataDir
+	}
+	return "/var/lib/ovmanager"
 }
 
 func validHHMM(v string) bool {
