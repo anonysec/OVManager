@@ -15,6 +15,8 @@ import (
 	"net/http"
 )
 
+var randReader io.Reader = rand.Reader
+
 type contextKey string
 
 const NonceContextKey contextKey = "csp-nonce"
@@ -30,17 +32,21 @@ func NonceFromContext(ctx context.Context) string {
 	return ""
 }
 
-func generateNonce() string {
+func generateNonce() (string, error) {
 	b := make([]byte, 16)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "static-csp-nonce"
+	if _, err := io.ReadFull(randReader, b); err != nil {
+		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(b)
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nonce := generateNonce()
+		nonce, err := generateNonce()
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 		ctx := context.WithValue(r.Context(), NonceContextKey, nonce)
 		r = r.WithContext(ctx)
 

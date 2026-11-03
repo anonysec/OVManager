@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"net/http"
 	"testing"
 	"time"
@@ -59,4 +60,76 @@ func TestNewServerTimeouts(t *testing.T) {
 	if srv.WriteTimeout != 0 {
 		t.Errorf("WriteTimeout = %v, want 0", srv.WriteTimeout)
 	}
+}
+
+func TestDecoyHandlerNoUnnoncedScripts(t *testing.T) {
+	h := decoyHandler()
+	w := &responseRecorder{header: http.Header{}}
+	req := &http.Request{Method: http.MethodGet, URL: nil}
+	// build a minimal request
+	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	h.ServeHTTP(w, r)
+	if w.code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.code)
+	}
+	body := w.body.String()
+	if containsUnnoncedScript(body) {
+		t.Fatalf("decoy page contains an inline script without a nonce")
+	}
+	if containsSubstring(body, "static-csp-nonce") {
+		t.Fatalf("decoy page leaks static-csp-nonce")
+	}
+	_ = req
+}
+
+// responseRecorder is a minimal http.ResponseWriter for tests.
+type responseRecorder struct {
+	header http.Header
+	code   int
+	body   bytes.Buffer
+}
+
+func (r *responseRecorder) Header() http.Header { return r.header }
+func (r *responseRecorder) Write(b []byte) (int, error) {
+	if r.code == 0 {
+		r.code = http.StatusOK
+	}
+	return r.body.Write(b)
+}
+func (r *responseRecorder) WriteHeader(code int) { r.code = code }
+
+func containsUnnoncedScript(s string) bool {
+	i := 0
+	for {
+		idx := indexOf(s, "<script", i)
+		if idx < 0 {
+			return false
+		}
+		// find end of tag
+		end := indexOf(s, ">", idx)
+		if end < 0 {
+			return true
+		}
+		tag := s[idx:end]
+		if !containsSubstring(tag, "nonce=") {
+			return true
+		}
+		i = end + 1
+	}
+}
+
+func containsSubstring(s, sub string) bool {
+	return indexOf(s, sub, 0) >= 0
+}
+
+func indexOf(s, sub string, start int) int {
+	if start > len(s) {
+		start = len(s)
+	}
+	for i := start; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }
