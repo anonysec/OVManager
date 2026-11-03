@@ -152,3 +152,21 @@ func login(t *testing.T, base, username, password string) map[string]any {
 	}
 	return got
 }
+
+// loginToken posts credentials and returns the raw session token from the
+// HttpOnly cookie (access_token is no longer in the JSON body).
+func loginToken(t *testing.T, base, username, password string) string {
+	t.Helper()
+	res := postForm(t, base, "/api/login", url.Values{"username": {username}, "password": {password}})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("login status = %d, want 200", res.StatusCode)
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == "ovm_session" {
+			return c.Value
+		}
+	}
+	t.Fatal("no ovm_session cookie")
+	return ""
+}

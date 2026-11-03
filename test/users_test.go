@@ -18,7 +18,7 @@ func authedServer(t *testing.T) (*sql.DB, string, string) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
-	token := login(t, srv.URL, "admin", knownPassword)["access_token"].(string)
+	token := loginToken(t, srv.URL, "admin", knownPassword)
 	return conn, srv.URL, token
 }
 

@@ -111,7 +111,6 @@ func (s *Service) IssueSession(w http.ResponseWriter, r *http.Request, username,
 		SameSite: http.SameSiteLaxMode,
 	}) // #nosec // Secure set dynamically; HTTP deployments cannot use Secure
 	writeJSON(w, http.StatusOK, map[string]any{
-		"access_token":  raw,
 		"refresh_token": nil,
 		"token_type":    "bearer",
 		"username":      username,

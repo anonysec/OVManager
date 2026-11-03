@@ -159,9 +159,9 @@ func newPanelEnv(t *testing.T) *panelEnv {
 
 	srv := httptest.NewServer(panel.SecurityHeaders(root))
 	t.Cleanup(srv.Close)
-	token, _ := login(t, srv.URL, "owner", knownPassword)["access_token"].(string)
+	token := loginToken(t, srv.URL, "owner", knownPassword)
 	if token == "" {
-		t.Fatal("login returned no access_token")
+		t.Fatal("login returned no session token")
 	}
 	return &panelEnv{srv: srv, token: token, conn: conn, dataDir: dataDir, appDir: appDir}
 }
