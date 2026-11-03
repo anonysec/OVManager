@@ -112,6 +112,8 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 - Strict security headers on every response (CSP, `X-Frame-Options: DENY`, nosniff), with HSTS added when the connection is TLS.
 - Terminate HTTPS at a fronting proxy (nginx/Caddy) or set `SSL_CERTFILE`/`SSL_KEYFILE` in `.env`; `ovmanager tls` opens the interactive TLS menu (status, issue, renew, remove, self-signed, custom install).
 - Behind a reverse proxy (nginx, Caddy, Cloudflare), set `TRUSTED_PROXY=true` in `.env`. The panel resolves client IPs from `CF-Connecting-IP`, `X-Real-IP`, or the rightmost `X-Forwarded-For` entry, and secures cookies when `X-Forwarded-Proto: https` is forwarded.
+
+  Default trusted proxy CIDRs include all RFC1918 ranges plus loopback/ULA. When behind Cloudflare + nginx, the default header order buckets by Cloudflare edge IP; set `TRUSTED_PROXY_HEADER=CF-Connecting-IP` to recover the real visitor IP.
 - Built-in Let's Encrypt issues over HTTP-01. Port 80 must be reachable for ~60 seconds while the certificate is issued; if something else (nginx/apache/caddy) is bound to port 80, `ovmanager tls issue <domain>` offers to stop it temporarily (with confirmation) and restart it afterwards. Renewals happen automatically (T-30 days) via the `ovmanager-acme-renew.timer`. Issuance never needs an API key or DNS provider.
 - Node connections verify TLS strictly first and warn once per node when a self-signed certificate forces a fallback.
 - Secrets live in the database, not in `.env`; the data directory is `0700` and the database and every backup bundle are `0600`.

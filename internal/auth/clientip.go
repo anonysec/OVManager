@@ -4,9 +4,9 @@
 package auth
 
 import (
+	"github.com/anonysec/OVManager/go/internal/config"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 )
@@ -14,7 +14,7 @@ import (
 var (
 	// TrustedHeader specifies an explicit header to trust behind a trusted proxy
 	// (e.g. "CF-Connecting-IP", "X-Real-IP", or "X-Forwarded-For").
-	TrustedHeader = os.Getenv("TRUSTED_PROXY_HEADER")
+	TrustedHeader = config.EnvOrFile("TRUSTED_PROXY_HEADER", "")
 
 	cidrMu       sync.RWMutex
 	trustedCIDRs []*net.IPNet
@@ -36,9 +36,9 @@ func defaultTrustedCIDRStrings() []string {
 }
 
 func initTrustedCIDRs() {
-	raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	raw := strings.TrimSpace(config.EnvOrFile("TRUSTED_PROXY_CIDRS", ""))
 	if raw == "" {
-		raw = strings.TrimSpace(os.Getenv("TRUSTED_PROXIES"))
+		raw = strings.TrimSpace(config.EnvOrFile("TRUSTED_PROXIES", ""))
 	}
 	var cidrList []string
 	if raw != "" {
@@ -124,7 +124,7 @@ func ClientIP(trustedProxy bool, r *http.Request) string {
 
 	headerToUse := strings.TrimSpace(TrustedHeader)
 	if headerToUse == "" {
-		headerToUse = strings.TrimSpace(os.Getenv("TRUSTED_PROXY_HEADER"))
+		headerToUse = strings.TrimSpace(config.EnvOrFile("TRUSTED_PROXY_HEADER", ""))
 	}
 
 	if headerToUse != "" {
