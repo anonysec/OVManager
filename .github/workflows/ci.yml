@@ -12,7 +12,7 @@ jobs:
   installer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: bash -n install.sh
       - run: python3 -m unittest discover -s test/installer -v
 
@@ -22,7 +22,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
         with:
           node-version: 22
@@ -41,7 +41,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
         with:
           node-version: 22
@@ -58,7 +58,7 @@ jobs:
       ADMIN_USERNAME: test_admin
       TZ: UTC
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: frontend-dist
