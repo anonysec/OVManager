@@ -15,7 +15,7 @@ React SPA for the OVManager panel: user/node management, server stats, audit log
 ```bash
 npm ci
 npm run dev        # dev server on http://localhost:5173
-npm run lint       # eslint
+npm run lint       # oxlint
 npm test           # vitest
 npm run build      # production build -> dist/
 ```

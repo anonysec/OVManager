@@ -1,0 +1,13 @@
+{
+  "plugins": ["typescript", "react", "import"],
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": "error",
+    "no-unused-vars": "error",
+    "typescript/ban-ts-comment": "error"
+  }
+}
