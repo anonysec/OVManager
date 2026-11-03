@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/maintenance"
 )
 
@@ -77,6 +79,51 @@ func runRestore(install Install, name string) (string, int) {
 	if name == "" || containsSlash(name) || len(name) > 0 && name[0] == '.' {
 		return block([]string{failedLine("Invalid backup name: " + name)}), 1
 	}
+
+	if strings.HasSuffix(name, ".db.enc") {
+		backupDir := filepath.Join(install.DataDir, "backups")
+		src := filepath.Join(backupDir, name)
+		if resolved, err := filepath.EvalSymlinks(src); err == nil {
+			src = resolved
+		}
+		base, _ := filepath.Abs(backupDir)
+		absSrc, _ := filepath.Abs(src)
+		if !strings.HasPrefix(absSrc, base+string(os.PathSeparator)) {
+			return block([]string{failedLine("Invalid backup path")}), 1
+		}
+		if _, err := os.Stat(src); err != nil {
+			return block([]string{failedLine("Backup file not found: " + name)}), 1
+		}
+		key, err := crypto.GetOrCreateSecretKey(install.DataDir)
+		if err != nil {
+			return block([]string{failedLine("Restore failed: " + err.Error())}), 1
+		}
+		tmpFile, err := os.CreateTemp(backupDir, "restore-decrypted-*.db")
+		if err != nil {
+			return block([]string{failedLine("Restore failed: " + err.Error())}), 1
+		}
+		tmpName := tmpFile.Name()
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpName)
+		defer func() { _ = os.Remove(tmpName) }()
+		if err := crypto.DecryptFile(src, tmpName, key); err != nil {
+			return block([]string{failedLine("Restore failed: invalid or wrong-key backup: " + err.Error())}), 1
+		}
+		success, msg, data := maintenance.RestoreStored(filepath.Base(tmpName), "ovmanager-cli", install.DataDir)
+		if !success {
+			lines := []string{failedLine(msg)}
+			if safety, _ := data["safety_backup"].(string); safety != "" {
+				lines = append(lines, kv("Safety copy", safety))
+			}
+			return block(lines), 1
+		}
+		items := [][2]string{{"Restored", name}}
+		if safety, _ := data["safety_backup"].(string); safety != "" {
+			items = append(items, [2]string{"Safety copy", safety})
+		}
+		return block(append([]string{okLine("restored")}, renderRows(items)...)), 0
+	}
+
 	success, msg, data := maintenance.RestoreStored(name, "ovmanager-cli", install.DataDir)
 	if !success {
 		lines := []string{failedLine(msg)}

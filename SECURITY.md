@@ -51,8 +51,10 @@ Mitigations:
 
 ## Hardening checklist (production)
 
+- Keep `secret.key` out of offsite/Telegram backup destinations; encrypted backups are useless without it, and storing it beside them defeats encryption.
+
 - Keep the owner claim key and node API keys private; never reuse keys across hosts.
 - Maintain a non-empty `URLPATH` prefix (e.g. `/dashboard/` or custom secret path).
 - Serve behind TLS with Let's Encrypt or validated certificates.
 - Set `TRUSTED_PROXY=true` only when running behind a dedicated reverse proxy on loopback/private CIDR, and configure `TRUSTED_PROXY_CIDRS`.
-- Regularly back up `/var/lib/ovmanager` (database and `secret.key`) and verify restores.
+- Regularly back up the database and `secret.key`, but store `secret.key` separately from encrypted backups (`.db.enc`); a backup alone must not be decryptable. Verify restores.
