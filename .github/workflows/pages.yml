@@ -38,7 +38,7 @@ jobs:
       # the site turns itself on; without it, enable Pages once by hand under
       # Settings -> Pages -> Source: GitHub Actions.
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           token: ${{ github.token }}
           enablement: false
