@@ -18,29 +18,11 @@
   flex-direction: column;
 }
 
-.sp-section {
-  margin: 0;
-}
-
 .sp-section-header {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
-}
-
-.sp-section-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: var(--radius-md);
-  /* Neutral on purpose: accent is reserved for state (active nav item,
-     selected option, primary action), not for decorating every heading. */
-  background: var(--surface-2);
-  color: var(--text-secondary);
 }
 
 .sp-section-header h2 {
@@ -803,20 +785,6 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .sp-mt-18 { margin-top: 18px; }
 .sp-mt-20 { margin-top: 20px; }
 
-/* Deep-link target offset (fixed topbar + the sticky nav strip on narrow
-   screens). Programmatic focus after a nav click is silent; only keyboard
-   focus draws the ring. */
-.sp-section {
-  scroll-margin-top: calc(var(--topbar-h) + 64px);
-  outline: none;
-}
-
-.sp-section:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 4px;
-  border-radius: var(--radius-md);
-}
-
 /* ═══════════════════════════════════════════════════════════════════════════
    SIDEBAR RAIL — labels stay mounted and collapse via max-width/opacity, so
    the width tween looks continuous. Scoped higher than the legacy
@@ -934,12 +902,12 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   }
 }
 
-/* ── Settings layout: section strip + one document ─────────────────────────
-   The app already has a sidebar, so Settings adds no second one: a sticky,
-   horizontally scrolling strip jumps between sections, and the sections
-   themselves are separated by hairlines, not boxed into cards. */
-.sp-layout {
-  display: block;
+/* ── Settings layout: tabs + one reading column ───────────────────────────
+   The app already has a sidebar, so Settings adds no second one. Four tabs
+   split the options by how often they are used; inside a tab, sections are
+   separated by hairlines rather than boxed into cards. */
+.sp-tabs {
+  margin-bottom: var(--space-5);
 }
 
 .sp-content {
@@ -958,79 +926,33 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   border-top: 1px solid var(--border);
 }
 
-/* Sticky strip under the topbar. */
-.sp-nav {
-  position: sticky;
-  top: var(--topbar-h);
-  z-index: var(--z-nav);
-  display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-  padding-block: var(--space-2);
-  background: var(--bg);
+/* Inside a tab the sections' cards lose their boxes: a small subheading and
+   the controls beneath it, grouped by whitespace. Boxes within boxes, each
+   with a tinted header bar and icon, made every group look like a widget. */
+.sp-content .sp-card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.sp-content .sp-card + .sp-card {
+  margin-top: var(--space-6);
+}
+
+.sp-content .sp-card-head {
+  padding: 0 0 var(--space-2);
+  margin-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.sp-nav::-webkit-scrollbar { display: none; }
-
-.sp-nav-group,
-.sp-nav-list,
-.sp-nav-list > li {
-  display: contents;
-}
-
-.sp-nav-group-title {
-  display: none;
-}
-
-.sp-nav-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.sp-nav-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-  min-height: var(--control-h-md);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  background: transparent;
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.sp-nav-link svg {
-  flex: none;
-  color: var(--text-muted);
-  transition: color var(--transition-fast);
-}
-
-.sp-nav-link:hover {
-  background: var(--surface-2);
   color: var(--text-primary);
 }
 
-.sp-nav-link:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+.sp-content .sp-card-head svg {
+  display: none;
 }
 
-/* Current section: tinted fill and accent text. Never a coloured stripe. */
-.sp-nav-link[aria-current="location"] {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-weight: var(--font-weight-semibold);
-}
-
-.sp-nav-link[aria-current="location"] svg {
-  color: var(--accent-text);
+.sp-content .sp-card-body {
+  padding: 0;
 }
