@@ -11,72 +11,8 @@
   padding-bottom: var(--space-6);
 }
 
-/* ── Bento grid ─────────────────────────────────────────────── */
-.bento-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-  align-items: stretch;
-}
-
-.bento-tile {
-  grid-column: span 6;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-1);
-  box-shadow: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
-  /* top-aligned contents */
-  justify-content: flex-start;
-}
-
-.bento-tile:focus-visible {
-  outline: none;
-  border-color: var(--focus-ring);
-  box-shadow: var(--focus-ring-shadow);
-}
-
-.bento-tile:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
-
-/* deliberate mosaic spans */
-
-@media (max-width: 1179px) {
-  .bento-tile { grid-column: span 6; }
-  }
-
-@media (max-width: 719px) {
-  .bento-grid { grid-template-columns: 1fr; }
-  .bento-tile { grid-column: 1 / -1; }
-}
-
-/* entrance */
-.bento-grid { animation: bentoFadeUp 320ms ease both; }
-@keyframes bentoFadeUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bento-grid { animation: none; }
-  .bento-tile { transition: none; }
-}
-
 /* ── Sections ─────────────────────────────── */
 /* Sections are beats in one document, not a stack of boxes. */
-.sp-sections {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Sections ─────────────────────────────── */
-/* Sections are beats in one document, not a stack of boxes: a hairline
-   does the separating, so the page stops looking like nested cards. */
 .sp-sections {
   display: flex;
   flex-direction: column;
@@ -1029,33 +965,33 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
 .settings-groups {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-5);
 }
 
 .settings-group-title {
   font-size: var(--font-size-sm);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 
 .settings-group-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 12px;
   align-items: stretch;
 }
 
 .settings-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface-1);
-  padding: 15px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   box-shadow: none;
 }
 
@@ -1065,7 +1001,7 @@ html[dir="rtl"] .sp-toggle input:checked ~ .sp-toggle-track .sp-toggle-thumb { t
   background: transparent;
 }
 
-@media (max-width: 639.98px) {
+@media (max-width: 719.98px) {
   .settings-group-grid {
     grid-template-columns: 1fr;
   }
