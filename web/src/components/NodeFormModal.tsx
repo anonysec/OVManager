@@ -31,6 +31,8 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
   const [isLoading, setIsLoading] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null); // {ok, msg}
+  const [fingerprintPrompt, setFingerprintPrompt] = useState<any>(null); // {fingerprint, cert}
+  const [confirmedFingerprint, setConfirmedFingerprint] = useState('');
 
   useEffect(() => {
     if (isEdit && node) {
@@ -46,6 +48,8 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     setError('');
     setFieldErrors({});
     setTestResult(null);
+    setFingerprintPrompt(null);
+    setConfirmedFingerprint('');
   }, [node, isOpen, isEdit]);
 
   const handleChange = (event: any) => {
@@ -85,10 +89,11 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
       if (!payload.key || payload.key.trim() === '') delete payload.key;
       if (!payload.cert || payload.cert.trim() === '') delete payload.cert;
     }
+    if (confirmedFingerprint) payload.expected_fingerprint = confirmedFingerprint;
     return payload;
   };
 
-  const handleTest = async () => {
+  const runTest = async (expectedFingerprint?: string) => {
     const errors = validate();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -98,13 +103,32 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     setTestResult(null);
     setIsTesting(true);
     try {
-      const response = await apiClient.post('/nodes/test', buildPayload());
-      setTestResult({ ok: !!response.data.success, msg: response.data.msg || '' });
+      const payload = buildPayload();
+      const fp = expectedFingerprint || confirmedFingerprint;
+      if (fp) payload.expected_fingerprint = fp;
+      const response = await apiClient.post('/nodes/test', payload);
+      const data = response.data || {};
+      const inner = data.data || {};
+      if (inner.confirmation_required) {
+        setFingerprintPrompt({ fingerprint: inner.fingerprint, cert: inner.cert });
+        setTestResult(null);
+      } else {
+        setFingerprintPrompt(null);
+        if (fp) setConfirmedFingerprint(fp);
+        setTestResult({ ok: !!data.success, msg: data.msg || '' });
+      }
     } catch (err: any) {
       setTestResult({ ok: false, msg: errorText(err, t('nodeTestFailed')) });
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const handleTest = () => runTest();
+
+  const confirmFingerprint = () => {
+    if (!fingerprintPrompt?.fingerprint) return;
+    runTest(fingerprintPrompt.fingerprint);
   };
 
   const handleSubmit = async (event: any) => {
@@ -222,6 +246,15 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
           )}
         </fieldset>
 
+        {fingerprintPrompt && (
+          <div className="nf-result is-error" role="status">
+            <p>{t('nodeFingerprintPrompt', 'Verify the node certificate fingerprint before proceeding:')}</p>
+            <code>{fingerprintPrompt.fingerprint}</code>
+            <Button variant="secondary" loading={isTesting} onClick={confirmFingerprint}>
+              {t('nodeConfirmFingerprint', 'I verified this fingerprint')}
+            </Button>
+          </div>
+        )}
         {testResult && (
           <p className={`nf-result${testResult.ok ? ' is-ok' : ' is-error'}`} role="status">{testResult.msg}</p>
         )}

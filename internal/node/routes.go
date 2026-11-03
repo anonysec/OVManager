@@ -148,31 +148,30 @@ func (h *Handler) handleTestNode(w http.ResponseWriter, r *http.Request) {
 			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Could not fetch certificate from node."})
 			return
 		}
-		// TOFU protection: do not transmit the API key unless the caller has confirmed the certificate fingerprint
-		fp := CertFingerprint(serverCA)
-		expectedFP := ""
-		if req.ExpectedFingerprint != nil {
-			expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
-		}
-		if expectedFP == "" && (req.ConfirmFingerprint == nil || !*req.ConfirmFingerprint) {
-			auth.WriteJSON(w, http.StatusOK, auth.Response{
-				Success: false,
-				Msg:     "Certificate fetched for TOFU pinning. Please verify and confirm fingerprint before sending API key.",
-				Data: map[string]any{
-					"confirmation_required": true,
-					"cert":                  serverCA,
-					"fingerprint":           fp,
-				},
-			})
-			return
-		}
-		if expectedFP != "" && normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
-			auth.WriteJSON(w, http.StatusOK, auth.Response{
-				Success: false,
-				Msg:     fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp),
-			})
-			return
-		}
+	}
+	fp := CertFingerprint(serverCA)
+	expectedFP := ""
+	if req.ExpectedFingerprint != nil {
+		expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
+	}
+	if expectedFP == "" {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{
+			Success: false,
+			Msg:     "Certificate fetched for TOFU pinning. Please verify and confirm fingerprint before sending API key.",
+			Data: map[string]any{
+				"confirmation_required": true,
+				"cert":                  serverCA,
+				"fingerprint":           fp,
+			},
+		})
+		return
+	}
+	if normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{
+			Success: false,
+			Msg:     fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp),
+		})
+		return
 	}
 	c, err := NewClient(req.Address, req.port(), req.key(), serverCA, PanelIDFor(h.svc.DB()), 0)
 	if err != nil {
@@ -256,7 +255,7 @@ func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 		expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
 	}
 
-	if expectedFP == "" && (req.Confirm == nil || !*req.Confirm) {
+	if expectedFP == "" {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{
 			Success: false,
 			Msg:     "Certificate re-pin requires explicit confirmation. Please verify the new certificate fingerprint.",

@@ -68,6 +68,7 @@ const NodeDrawer = ({
   const [ipv6On, setIpv6On] = useState(false);
   const [ipv6Prefix, setIpv6Prefix] = useState('');
   const [extraPorts, setExtraPorts] = useState(node?.extra_ports || '');
+  const [repinPrompt, setRepinPrompt] = useState<any>(null);
 
   useEffect(() => {
     if (node) {
@@ -233,12 +234,25 @@ const NodeDrawer = ({
     onChanged?.();
   });
 
-  const repinCert = () => run('repin', async () => {
-    const res = await apiClient.post(`/nodes/${node.id}/repin`);
+  const repinCert = (expectedFingerprint?: string) => run('repin', async () => {
+    const body = expectedFingerprint ? { expected_fingerprint: expectedFingerprint } : {};
+    const res = await apiClient.post(`/nodes/${node.id}/repin`, body);
     const data = res.data || {};
+    const inner = data.data || {};
+    if (inner.confirmation_required) {
+      setRepinPrompt({ old: inner.old_fingerprint, new: inner.new_fingerprint });
+      setResult('repin', false, data.msg || t('nodeRequestFailed', 'The panel could not reach the node.'));
+      return;
+    }
+    setRepinPrompt(null);
     setResult('repin', Boolean(data.success), data.msg || t('nodeRequestFailed', 'The panel could not reach the node.'));
     if (data.success) { loadStatus(); onChanged?.(); }
   });
+
+  const confirmRepinFingerprint = () => {
+    if (!repinPrompt?.new) return;
+    repinCert(repinPrompt.new);
+  };
 
   const updateSoftware = () => run('update', async () => {
     const res = await apiClient.post(`/nodes/${node.id}/update`);
@@ -346,7 +360,7 @@ const NodeDrawer = ({
               </div>
 
               <TlsChip status={status} t={t} />
-              <CertPinSection pin={status?.cert_pin} onRepin={repinCert} busy={busy} result={results.repin} />
+              <CertPinSection pin={status?.cert_pin} onRepin={repinCert} onConfirmRepin={confirmRepinFingerprint} repinPrompt={repinPrompt} busy={busy} result={results.repin} />
               {certExpiry && <CertExpiryChip expiry={certExpiry} />}
               {statusState === 'error' && <p className="nd-note">{t('nodeNoStatus', 'No live status yet — check the node.')}</p>}
 
@@ -695,7 +709,7 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
   );
 };
 
-const CertPinSection = ({ pin, onRepin, busy, result }: { pin?: any; onRepin?: any; busy?: any; result?: any }) => {
+const CertPinSection = ({ pin, onRepin, onConfirmRepin, repinPrompt, busy, result }: { pin?: any; onRepin?: any; onConfirmRepin?: any; repinPrompt?: any; busy?: any; result?: any }) => {
   const { t } = useTranslation();
   if (!pin?.pinned) return null;
 
@@ -719,6 +733,18 @@ const CertPinSection = ({ pin, onRepin, busy, result }: { pin?: any; onRepin?: a
           {t('nodeRepinButton', 'Re-pin from current cert')}
         </Button>
       </div>
+      {repinPrompt && (
+        <div className="nd-pin-prompt" role="status">
+          <p>{t('nodeRepinFingerprintPrompt', 'Compare the old and new certificate fingerprints, then confirm:')}</p>
+          <dl className="nd-pin-meta">
+            <div><dt>{t('nodeRepinOldFingerprint', 'Old')}</dt><dd><code>{repinPrompt.old}</code></dd></div>
+            <div><dt>{t('nodeRepinNewFingerprint', 'New')}</dt><dd><code>{repinPrompt.new}</code></dd></div>
+          </dl>
+          <Button size="sm" variant="secondary" loading={busy === 'repin'} onClick={onConfirmRepin}>
+            {t('nodeConfirmRepinFingerprint', 'I verified these fingerprints')}
+          </Button>
+        </div>
+      )}
       <ResultLine result={result} />
     </section>
   );

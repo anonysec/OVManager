@@ -430,17 +430,17 @@ func AddNodeHandler(req nodeCreate, db *sql.DB) (bool, string) {
 		if serverCA == "" {
 			return false, "Could not fetch certificate from node."
 		}
-		fp := CertFingerprint(serverCA)
-		expectedFP := ""
-		if req.ExpectedFingerprint != nil {
-			expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
-		}
-		if expectedFP == "" && (req.ConfirmFingerprint == nil || !*req.ConfirmFingerprint) {
-			return false, fmt.Sprintf("Certificate fingerprint confirmation required before adding node (fingerprint: %s)", fp)
-		}
-		if expectedFP != "" && normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
-			return false, fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp)
-		}
+	}
+	fp := CertFingerprint(serverCA)
+	expectedFP := ""
+	if req.ExpectedFingerprint != nil {
+		expectedFP = strings.TrimSpace(*req.ExpectedFingerprint)
+	}
+	if expectedFP == "" {
+		return false, fmt.Sprintf("Certificate fingerprint confirmation required before adding node (fingerprint: %s)", fp)
+	}
+	if normalizeFingerprint(expectedFP) != normalizeFingerprint(fp) {
+		return false, fmt.Sprintf("Certificate fingerprint mismatch: expected %s, got %s", expectedFP, fp)
 	}
 	nr, err := NewClient(req.Address, req.port(), req.key(), serverCA, PanelIDFor(db), 0)
 	if err != nil {
