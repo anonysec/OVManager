@@ -14,7 +14,10 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
+	"os"
 )
 
 func RecordEvent(db *sql.DB, kind, severity, message string, meta map[string]any) {
@@ -352,10 +355,26 @@ func sendTelegram(db *sql.DB, text string) bool {
 		return false
 	}
 	tok := token.String
+	plain, err := crypto.DecryptSecret(tok, resolvedDataDir())
+	if err != nil {
+		return false
+	}
+	tok = plain
 	if strings.HasPrefix(tok, "enc:") {
 		return false // legacy encrypted token fails closed
 	}
 	return notify.SendMessage(tok, strconv.FormatInt(ownerID.Int64, 10), text) == nil
+}
+
+// resolvedDataDir mirrors panel.dataDir without importing the panel package.
+func resolvedDataDir() string {
+	if d := strings.TrimSpace(os.Getenv("DATA_DIR")); d != "" {
+		return d
+	}
+	if node.DataDir != "" {
+		return node.DataDir
+	}
+	return "/var/lib/ovmanager"
 }
 
 // nilDB is unused; kept out — RecordEvent always takes a live handle.
