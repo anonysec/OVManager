@@ -1,3 +1,8 @@
+## 2.0.1 — 2026-11-05
+
+- Remove checksum/signature verification from installer, release workflows, and update CLI; releases ship bare binaries.
+- Installer and docs fetch install.sh from `main` (latest).
+
 ## 2.0.0 — 2026-11-02 (Version Line Reset)
 
 **Notice: Version line reset to 2.0.0.**
