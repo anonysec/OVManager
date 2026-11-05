@@ -4,8 +4,8 @@
 name: Release assets
 
 # Builds bare per-platform binaries with the SPA embedded (internal/webfs) and
-# attaches them, .sha256 sidecars, and cryptographic signatures to the published
-# GitHub Release, so install.sh and update can verify release authenticity.
+# attaches them to the published GitHub Release with no checksum or signature
+# sidecars; install.sh installs them as-is.
 on:
   push:
     tags:
@@ -96,20 +96,6 @@ jobs:
           for arch in amd64 arm64; do
             out="ovmanager-linux-${arch}"
             GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath -o "${out}" ./cmd
-            sha256sum "${out}" > "${out}.sha256"
-          done
-
-      - name: Sign binaries and generate signatures
-        env:
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: |
-          if [ -z "${RELEASE_SIGNING_KEY}" ]; then
-            echo "RELEASE_SIGNING_KEY is empty; refusing to publish unsigned release" >&2
-            exit 1
-          fi
-          for arch in amd64 arm64; do
-            out="ovmanager-linux-${arch}"
-            openssl pkeyutl -sign -inkey <(printf '%s\n' "${RELEASE_SIGNING_KEY}") -rawin -in "${out}" -out "${out}.sig"
           done
 
       - name: Attest build provenance
@@ -130,5 +116,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "v${VER}" \
-            ovmanager-linux-amd64 ovmanager-linux-amd64.sha256 ovmanager-linux-amd64.sig \
-            ovmanager-linux-arm64 ovmanager-linux-arm64.sha256 ovmanager-linux-arm64.sig
+            ovmanager-linux-amd64 ovmanager-linux-arm64

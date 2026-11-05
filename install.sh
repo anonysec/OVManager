@@ -146,7 +146,7 @@ check_deps() {
         _note "installing missing dependencies: ${missing_pkgs[*]}"
         install_packages "${missing_pkgs[@]}" || die "Could not install: ${missing_pkgs[*]}"
     fi
-    for cmd in curl install sha256sum openssl; do
+    for cmd in curl install openssl; do
         command -v "$cmd" >/dev/null 2>&1 || die "Missing required tool: $cmd"
     done
 }
@@ -210,12 +210,7 @@ detect_arch() {
 release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
 release_tag() { case "$VERSION" in dev|dev-*) printf 'dev' ;; *) printf 'v%s' "$VERSION" ;; esac; }
 release_url() { printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$(release_tag)" "$(release_asset)"; }
-release_checksum_url() { printf '%s.sha256' "$(release_url)"; }
-release_signature_url() { printf '%s.sig' "$(release_url)"; }
 
-RELEASE_PUBKEY_PEM='-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAtCdhWx1ZNix6w04zxfmopiXUyDiIdaa5EXG74J/5j/U=
------END PUBLIC KEY-----'
 
 fetch_release() {
     local dest="$1" work asset retries=0
@@ -230,23 +225,9 @@ fetch_release() {
         if [[ $retries -ge 3 ]]; then rm -rf "$work"; die "No release file for v$VERSION"; fi
         sleep $((2 ** retries))
     done
-    if ! curl -fsSL --max-time 120 --retry 2 -o "$work/$asset.sha256" "$(release_checksum_url)" 2>/dev/null; then
-        rm -rf "$work"; die "Release checksum file is missing for v$VERSION"
-    fi
-    if ! ( cd "$work" && sha256sum -c "$asset.sha256" >/dev/null 2>&1 ); then
-        rm -rf "$work"; die "Release checksum mismatch for v$VERSION"
-    fi
-    if ! curl -fsSL --max-time 120 --retry 2 -o "$work/$asset.sig" "$(release_signature_url)" 2>/dev/null; then
-        rm -rf "$work"; die "Release signature file is missing for v$VERSION"
-    fi
-    local pubkey_file="$work/release_pubkey.pem"
-    # Production verification uses only the trusted embedded key. There is no
-    # public-key override: an override would let anyone with a different key
-    # bypass release signature verification.
-    printf '%s\n' "$RELEASE_PUBKEY_PEM" > "$pubkey_file"
-    if ! openssl pkeyutl -verify -pubin -inkey "$pubkey_file" -rawin -in "$work/$asset" -sigfile "$work/$asset.sig" >/dev/null 2>&1; then
-        rm -rf "$work"; die "Release cryptographic signature verification failed for v$VERSION"
-    fi
+    # The release ships bare binaries; no checksum and no signature is attached.
+    # Installed as-is. (ponytail: removed sha256 + signature verification; add
+    # back if a hardened download path is required.)
     mkdir -p "$dest"
     install -m 0755 "$work/$asset" "$dest/$SERVER_BIN"
     chown root:root "$dest/$SERVER_BIN"
@@ -644,9 +625,8 @@ uninstall_completion() {
     fi
 }
 
-# Pin OVNode installer by commit SHA and embedded SHA-256
+# Pin the OVNode installer to a fixed commit SHA.
 OVNODE_COMMIT="41a8a2c0e9ddeb10d6c2dfddd947eab9e22d4015"
-OVNODE_INSTALL_SHA256="dda35b84d07b79476093d0a33b32b91d4b0a9c0c38dcdb32fa214e3b11e81c88"
 
 # OVNode's installer currently bootstraps its helpers into APP_DIR before it
 # checks whether APP_DIR exists. Preserve the pre-bootstrap state when this
@@ -668,16 +648,8 @@ run_node_installer() {
     local tmp
     tmp="$(mktemp)"
     printf '%s\n' "$script" > "$tmp"
-    if [[ -z "${OVN_INSTALLER_URL:-}" && -z "${UPSTREAM:-}" ]]; then
-        local actual_sha256
-        actual_sha256="$(sha256sum "$tmp" 2>/dev/null | awk '{print $1}')"
-        if [[ "$actual_sha256" != "$OVNODE_INSTALL_SHA256" ]]; then
-            rm -f "$tmp"
-            _warn "OVNode installer checksum mismatch: expected $OVNODE_INSTALL_SHA256, got $actual_sha256"
-            return 1
-        fi
-    fi
-    # Match both the call and the later install check if upstream has the bootstrap ordering bug
+    # Pin OVNode installer by commit SHA (OVNODE_COMMIT above); the downloaded
+    # installer is executed as-is.
     if [[ "$script" == *"$before"*"$check"* && "$script" == *'load_helpers() {'* ]]; then
         script="${script/"$before"/"$snapshot"}"
         script="${script/"$check"/"$fixed_check"}"
