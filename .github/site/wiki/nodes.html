@@ -70,7 +70,7 @@
     <p>On the VPN server (not the panel server, unless you are doing the all-in-one setup):</p>
     <figure class="cmd">
       <figcaption>Install it with the v2.0.0 installer</figcaption>
-      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/v2.0.0/install.sh)</code></pre>
+      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh)</code></pre>
     </figure>
     <p class="section-note">
       OVNode is a separate project:
@@ -82,13 +82,13 @@
       every setting, run <code>interactive</code> for the full wizard:
     </p>
     <figure class="cmd">
-      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/v2.0.0/install.sh) interactive</code></pre>
+      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh) interactive</code></pre>
     </figure>
     <p>
       With no terminal the installer cannot ask, so it needs <code>-y</code>:
     </p>
     <figure class="cmd">
-      <pre><code>curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/v2.0.0/install.sh -o install.sh
+      <pre><code>curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/main/install.sh -o install.sh
 OVN_NAME=eu-1 OVN_VPN_PORTS=1194,443 OVN_IPV6=1 bash install.sh -y</code></pre>
     </figure>
     <p>
