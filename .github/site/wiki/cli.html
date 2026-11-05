@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLI reference — OVManager wiki</title>
-<meta name="description" content="Every ovmanager command, the installer's three flags, the OVM_* settings and the ovnode commands on each VPN node.">
+<meta name="description" content="Every ovmanager command, the installer's flags, and the ovnode agent commands on each VPN server.">
 <link rel="stylesheet" href="../assets/style.css">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -42,57 +42,44 @@
 
     <h1>CLI reference</h1>
     <p class="lede">
-      <code>ovmanager</code> (alias <code>ovmanager</code>) is installed with the panel
-      and refreshed on every update. Run it with no arguments for the same list
-      you find here.
+      <code>ovmanager</code> is the operator CLI for the panel. It is installed
+      with the panel, lives next to it in <code>/opt/ovmanager</code>, and is
+      refreshed on every update. Run it with no arguments for the same list you
+      find here.
     </p>
 
-    <h2 id="root">Everything needs root</h2>
+    <h2 id="root">Everything needs root on the panel server</h2>
     <p>
-      Every <code>ovmanager</code> command &mdash; including the read-only ones &mdash;
-      reads <code>.env</code>, which holds the secret panel URL path and the
-      install configuration. So run <code>sudo ovmanager &lt;command&gt;</code>. The
-      only exceptions are <code>ovmanager</code>, <code>ovmanager help</code> and
-      <code>ovmanager --help</code>, which print usage without loading anything.
-    </p>
-    <p>
-      The panel itself needs no root: any account can log in to the web UI.
+      Every <code>ovmanager</code> command &mdash; including the read-only ones
+      &mdash; reads <code>/opt/ovmanager/.env</code>, which holds the secret panel
+      URL path, the bind address and the data directory. Run
+      <code>sudo ovmanager &lt;command&gt;</code>. The only exceptions are
+      <code>ovmanager</code>, <code>ovmanager help</code> and
+      <code>ovmanager --help</code>, which print usage without touching the
+      config. The panel itself needs no root: any account can log in to the web
+      UI.
     </p>
 
-    <h2 id="commands">Commands</h2>
+    <h2 id="commands">Commands (panel server)</h2>
     <div class="table-scroll">
       <table>
-        <caption>On the panel server.</caption>
+        <caption>Compiled from <code>make build</code> and <code>ovmanager --help</code>.</caption>
         <thead>
           <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>ovmanager</code></td><td>Print the command list.</td></tr>
-          <tr><td><code>ovmanager status</code></td><td>Service, health, version and the panel URL. <code>--all</code> also shows mode, port, data and install paths.</td></tr>
-          <tr><td><code>ovmanager start | stop | restart</code></td><td>Service control.</td></tr>
-          <tr><td><code>ovmanager enable | disable</code></td><td>Enable or disable automatic start.</td></tr>
+          <tr><td><code>ovmanager</code></td><td>Print the command list and exit.</td></tr>
+          <tr><td><code>ovmanager status [--all]</code></td><td>Service, health, version and the panel URL. <code>--all</code> also shows mode, port, data and install paths.</td></tr>
+          <tr><td><code>ovmanager service start | stop | restart</code></td><td>Service control.</td></tr>
+          <tr><td><code>ovmanager service enable | disable</code></td><td>Automatic start at boot.</td></tr>
           <tr><td><code>ovmanager logs [N|-f]</code></td><td>The last N log lines (default 100), or follow live.</td></tr>
-          <tr><td><code>ovmanager doctor [--fix]</code></td><td>Health check across the known checks. <code>--fix</code> applies the safe ones: service, autostart, file modes.</td></tr>
-          <tr><td><code>ovmanager doctor-fix</code></td><td>Same as <code>doctor --fix</code>.</td></tr>
-          <tr><td><code>ovmanager tls-status</code></td><td>The installed certificate and its expiry. Read-only.</td></tr>
-          <tr><td><code>ovmanager https --self</code></td><td>Generate a new self-signed certificate.</td></tr>
-          <tr><td><code>ovmanager https --domain NAME</code></td><td>Let's Encrypt for a domain. Needs port 80.</td></tr>
-          <tr><td><code>ovmanager https --ip</code></td><td>Let's Encrypt for this host's IP.</td></tr>
-          <tr><td><code>ovmanager https --key F --cert F</code></td><td>Install your own key and certificate.</td></tr>
-          <tr><td><code>ovmanager backup [--keep N]</code></td><td>Write a data backup now. <code>--keep</code> sets retention, 1&ndash;500, default 14.</td></tr>
-          <tr><td><code>ovmanager auto-backup [on|off]</code></td><td>Daily backup through a systemd timer. <code>--time HH:MM</code> and <code>--keep N</code> shape it.</td></tr>
+          <tr><td><code>ovmanager backup [--keep N]</code></td><td>Write a verified database backup now. <code>--keep</code> sets retention, 1&ndash;500, default 14 (the installer's daily timer pins 7).</td></tr>
           <tr><td><code>ovmanager restore [NAME]</code></td><td>List the available backups, or restore one by name.</td></tr>
-          <tr><td><code>ovmanager recovery</code></td><td>Show the panel URL and login name. Read-only.</td></tr>
-          <tr><td><code>ovmanager owner-claim</code></td><td>Print a fresh one-time claim key, before the panel has been claimed. The browser sets the password.</td></tr>
+          <tr><td><code>ovmanager urlpath</code></td><td>Print the secret URL prefix the panel is served under.</td></tr>
+          <tr><td><code>ovmanager tls</code></td><td>Interactive TLS menu: status, issue (Let's Encrypt), renew, remove, self-signed, custom install.</td></tr>
+          <tr><td><code>ovmanager update</code></td><td>Staged update with automatic failover. Recovers an update interrupted by a reboot or power loss before starting a new one.</td></tr>
           <tr><td><code>ovmanager reset-password</code></td><td>Set a new owner password, then restart the panel.</td></tr>
-          <tr><td><code>ovmanager reset-urlpath</code></td><td>Clear the secret panel URL prefix.</td></tr>
-          <tr><td><code>ovmanager update</code></td><td>Staged update with automatic failover.</td></tr>
-          <tr><td><code>ovmanager rollback</code></td><td>Restore the newest pre-update code snapshot.</td></tr>
-          <tr><td><code>ovmanager recover-update</code></td><td>Recover an interrupted update transaction.</td></tr>
-          <tr><td><code>ovmanager uninstall [--purge]</code></td><td>Remove the app. Data is kept unless <code>--purge</code>.</td></tr>
-          <tr><td><code>ovmanager completion</code></td><td>Install bash completion, and print the line to source.</td></tr>
-          <tr><td><code>ovmanager version-script</code></td><td>The installer's own version and commit.</td></tr>
-          <tr><td><code>ovmanager help</code></td><td>Usage.</td></tr>
+          <tr><td><code>ovmanager completion bash | zsh | fish</code></td><td>Install shell completion and print the line to source.</td></tr>
         </tbody>
       </table>
     </div>
@@ -104,158 +91,77 @@
           <tr><th scope="col">Option</th><th scope="col">Applies to</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>-p, --pass PASS</code></td><td><code>reset-password</code> &mdash; the new owner password. Minimum 8 characters, and not a common word or placeholder.</td></tr>
           <tr><td><code>-y, --yes</code></td><td>Never prompt.</td></tr>
-          <tr><td><code>--fix</code></td><td><code>doctor</code> &mdash; apply the safe automatic fixes.</td></tr>
           <tr><td><code>-a, --all</code></td><td><code>status</code> &mdash; include paths and mode.</td></tr>
-          <tr><td><code>--keep N</code></td><td><code>backup</code> &mdash; how many backups to keep (1&ndash;500).</td></tr>
-          <tr><td><code>--time HH:MM</code></td><td><code>auto-backup</code> &mdash; the daily run time.</td></tr>
+          <tr><td><code>--keep N</code></td><td><code>backup</code> &mdash; how many backups to keep (1&ndash;500, default 14).</td></tr>
           <tr><td><code>--purge</code></td><td><code>uninstall</code> &mdash; also delete data and certificates.</td></tr>
-          <tr><td><code>-v, --version V</code></td><td><code>update</code> &mdash; pin a release, e.g. <code>-v v1.0.15</code>.</td></tr>
+          <tr><td><code>-v, --version V</code></td><td><code>update</code> &mdash; pin a release, e.g. <code>-v v2.0.0</code>.</td></tr>
           <tr><td><code>-h, --help</code></td><td>Help.</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h2 id="env">Environment</h2>
+    <h2 id="config">Configuration</h2>
+    <p>
+      The panel reads <code>/opt/ovmanager/.env</code>. The installer writes a
+      minimal file (HOST, PORT, URLPATH, ADMIN_USERNAME, DATA_DIR) and sets no
+      secrets there &mdash; the owner password is a bcrypt hash in the database,
+      never in <code>.env</code>. The documented variables are:
+    </p>
     <div class="table-scroll">
       <table>
         <thead>
           <tr><th scope="col">Variable</th><th scope="col">Effect</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>OVM_APP_DIR</code></td><td>Installed tree. Default <code>/opt/ovmanager</code>.</td></tr>
-          <tr><td><code>OVM_DATA_DIR</code></td><td>Data directory. Default <code>/var/lib/ovmanager</code>.</td></tr>
-          <tr><td><code>OVM_PASS</code></td><td>Same as <code>--pass</code> for <code>reset-password</code>.</td></tr>
-          <tr><td><code>CI=true</code></td><td>Implies <code>-y</code>.</td></tr>
+          <tr><td><code>HOST</code></td><td>Bind address the panel listens on (default <code>127.0.0.1</code>).</td></tr>
+          <tr><td><code>PORT</code></td><td>Listen port (default <code>2095</code>).</td></tr>
+          <tr><td><code>URLPATH</code></td><td>Secret URL prefix (default <code>dashboard</code>); leave empty for the default.</td></tr>
+          <tr><td><code>ADMIN_USERNAME</code></td><td>Which database row is the owner (default <code>admin</code>).</td></tr>
+          <tr><td><code>DATA_DIR</code></td><td>Database, backups and node material (default <code>/var/lib/ovmanager</code>, mode <code>0700</code>).</td></tr>
+          <tr><td><code>OVMANAGER_LIVE_POLL_SECONDS</code></td><td>Live poll interval for the dashboard collector.</td></tr>
+          <tr><td><code>OVM_TRAFFIC_POLL_SECONDS</code></td><td>Traffic polling interval.</td></tr>
+          <tr><td><code>OVM_METRICS_INTERVAL_SECONDS</code></td><td>Metrics collection interval.</td></tr>
+          <tr><td><code>TRUSTED_PROXY</code></td><td>Read real client IPs from <code>X-Forwarded-For</code> when behind your own nginx/Caddy/Cloudflare.</td></tr>
+          <tr><td><code>OVM_REPO</code></td><td>Release source for <code>ovmanager update</code> (fork, e.g. <code>myorg/OVManager</code>).</td></tr>
+          <tr><td><code>OVM_ACME_DOMAIN</code></td><td>Domain for the built-in Let's Encrypt issuance.</td></tr>
         </tbody>
       </table>
     </div>
 
-    <h2 id="installer">The installer</h2>
+    <h2 id="installer">The installer (install.sh)</h2>
     <p>
-      <code>install.sh</code> answers to subcommands and to three flags. The
-      flags are deliberately few: everything that shapes an install is an
-      <code>OVM_*</code> variable, and the same variable is the interactive
-      wizard's default, so a scripted run and a wizard run cannot disagree.
+      <code>install.sh</code> answers to subcommands and to a small flag set.
+      Everything that shapes an install is an <code>OVM_*</code> variable with the
+      same value in interactive and scripted runs, so the two cannot disagree.
     </p>
     <figure class="cmd">
       <figcaption>Subcommands and flags</figcaption>
       <pre><code>install.sh                  # install (default)
-install.sh interactive      # the wizard, asking everything
-install.sh update           # update an existing install
+install.sh interactive        # the wizard, asking everything
+install.sh update             # update an existing install
 install.sh uninstall [--purge]
 
-install.sh --yes            # never prompt
-install.sh --docker         # Docker instead of native
-install.sh --help</code></pre>
-    </figure>
-    <div class="table-scroll">
-      <table>
-        <caption>Env vars the installer reads.</caption>
-        <thead>
-          <tr><th scope="col">Variable</th><th scope="col">Values</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><code>OVM_MODE</code></td><td><code>native</code> or <code>docker</code></td></tr>
-          <tr><td><code>OVM_PORT</code></td><td>The panel port</td></tr>
-          <tr><td><code>OVM_PATH</code></td><td>The URL prefix, or <code>root</code></td></tr>
-          <tr><td><code>OVM_ADMIN_USER</code></td><td>The admin login name</td></tr>
-          <tr><td><code>OVM_TLS</code></td><td><code>self</code>, <code>le</code>, <code>le-ip</code> or <code>custom</code></td></tr>
-          <tr><td><code>OVM_TLS_DOMAIN</code></td><td>The domain for Let's Encrypt</td></tr>
-          <tr><td><code>OVM_TLS_KEY</code> / <code>OVM_TLS_CERT</code></td><td>Paths for a custom certificate</td></tr>
-          <tr><td><code>OVM_PUBLIC_URL</code></td><td>Pins the host used in subscription links</td></tr>
-          <tr><td><code>OVM_VERSION</code></td><td>Pins a release version</td></tr>
-          <tr><td><code>OVM_REPO</code></td><td>Point source downloads and update pulls at a fork, e.g. <code>myorg/OVManager</code></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>
-      Deprecated but still accepted, each printing what replaces it:
-      <code>-p</code>/<code>--pass</code>, <code>--mode</code>,
-      <code>--tls 1|2|3|4</code>, <code>--tls-domain</code>,
-      <code>--tls-key</code>, <code>--tls-cert</code> and <code>-i</code>.
-    </p>
-    <p>Exit codes are stable for scripts:</p>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><code>0</code></td><td>OK</td></tr>
-          <tr><td><code>1</code></td><td>Error</td></tr>
-          <tr><td><code>2</code></td><td>Already installed, or cancelled</td></tr>
-          <tr><td><code>130</code></td><td>Interrupted</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <h2 id="python">The Python CLI underneath</h2>
-    <p>
-      Status, doctor, tls-status, backups and restore are implemented in
-      <code>cli/</code> and reused on Docker installs too. If you are working
-      from a checkout rather than an installed tree, call it directly:
-    </p>
-    <figure class="cmd">
-      <figcaption>From the install tree</figcaption>
-      <pre><code>ovmanager status
-ovmanager reset-password --admin-pass 'a-strong-password'
-ovmanager backup --keep 30</code></pre>
+install.sh -y                 # never prompt
+install.sh -h                 # help</code></pre>
     </figure>
     <p>
-      It also takes <code>--install-dir</code> and <code>--data-dir</code>, and
-      reads <code>OVM_ADMIN_PASS</code> for the password. Some commands stay
-      host-side by necessity &mdash; logs, <code>reset-password</code> and
-      <code>reset-urlpath</code> need a journal and a host <code>.env</code>
-      that a container does not have, as do update, uninstall, rollback,
-      recovery and certificate issuance.
+      The installer downloads a verified release binary for the platform, checks
+      its SHA-256 against the published sidecar, and refuses to continue on
+      mismatch. It installs the binary as a systemd service with a daily backup
+      timer, starts the panel and health-checks it. The panel URL and claim key
+      are shown after the optional node installer and before following logs.
+      There is no Docker mode: the installer is native systemd only.
     </p>
 
     <h2 id="node-cli">On each VPN node</h2>
     <p>
-      The node agent installs its own CLI, <code>ovnode</code> (alias
-      <code>ovnode</code>). With no argument it opens a numbered menu; every menu
-      item is also a plain command with a stable exit code, so it is scriptable.
-    </p>
-    <div class="table-scroll">
-      <table>
-        <caption>On the VPN server.</caption>
-        <thead>
-          <tr><th scope="col">Command</th><th scope="col">What it does</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><code>ovnode status</code></td><td>Agent, health, version and VPN state. <code>--all</code> also shows node, mode, port and TLS.</td></tr>
-          <tr><td><code>ovnode credentials</code></td><td>Node name, API key and the panel bundle. Read-only.</td></tr>
-          <tr><td><code>ovnode start | stop | restart</code></td><td>Control the node agent service.</td></tr>
-          <tr><td><code>ovnode restart-vpn</code></td><td>Restart or reload OpenVPN.</td></tr>
-          <tr><td><code>ovnode logs [N|-f]</code></td><td>The last N log lines (default 100), or follow live.</td></tr>
-          <tr><td><code>ovnode backup [--keep N]</code></td><td>Archive the node data and PKI now. <code>--keep</code> sets retention; default 14.</td></tr>
-          <tr><td><code>ovnode auto-backup on | off | status</code></td><td>Daily backup through a host timer, at <code>03:30</code>.</td></tr>
-          <tr><td><code>ovnode restore [name]</code></td><td>List the archives, or restore one by name.</td></tr>
-          <tr><td><code>ovnode tls</code></td><td>Show or replace the node's certificate.</td></tr>
-          <tr><td><code>ovnode doctor [--fix]</code></td><td>Health check across agent, VPN, disk, certificate and backups. <code>--fix</code> applies the safe repairs.</td></tr>
-          <tr><td><code>ovnode update</code></td><td>Staged update with a verified safety snapshot first.</td></tr>
-          <tr><td><code>ovnode rollback</code></td><td>Restore the newest pre-update code snapshot.</td></tr>
-          <tr><td><code>ovnode recover-update</code></td><td>Recover an interrupted update transaction.</td></tr>
-          <tr><td><code>ovnode completion</code></td><td>Install bash completion for <code>ovnode</code>.</td></tr>
-          <tr><td><code>ovnode uninstall [--purge]</code></td><td>Remove OVNode. Data is kept unless <code>--purge</code>.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>
-      <code>ovnode update</code> and <code>ovnode uninstall</code> are implemented in
-      the node's installer, so each exists in exactly one place. The installer
-      itself takes three flags &mdash; <code>-y/--yes</code>,
-      <code>--docker</code> and <code>-h/--help</code> &mdash; and everything
-      else is an <code>OVN_*</code> variable; older flag spellings still work but
-      print what replaces them. A run with <code>-y</code> reports its outcome as an exit
-      code: <code>0</code> ok, <code>1</code> error, <code>2</code> usage error,
-      <code>3</code> already installed, <code>4</code> not installed.
-    </p>
-    <p>
-      See the <a href="https://github.com/anonysec/OVNode">OVNode repository</a>
-      for the full <code>OVN_*</code> list and the node's runtime settings.
+      The node agent installs its own CLI, <code>ovnode</code>. The full command
+      list lives in the <a href="https://github.com/anonysec/OVNode">OVNode
+      repository</a> (<code>ovnode help --all</code> on the node). The panel's
+      operator view is kept here; the node side is kept in the OVNode project.
+      Deprecated node names are listed in <code>ovnode help --all</code> with a
+      deprecation note.
     </p>
 
     <h2 id="next">Next</h2>

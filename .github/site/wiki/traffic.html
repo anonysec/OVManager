@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width=1">
 <title>Traffic limits — OVManager wiki</title>
 <meta name="description" content="How OVManager measures OpenVPN usage every five minutes, why it never double-counts, and what happens when a user reaches their quota.">
 <link rel="stylesheet" href="../assets/style.css">
@@ -66,9 +66,10 @@
 
     <h2 id="collect">How usage is collected</h2>
     <p>
-      Every five minutes the panel asks each node for <code>/sync/usage</code>.
-      The node answers with a <strong>lifetime total per user</strong>: bytes
-      banked when sessions ended, plus bytes still flowing in live sessions.
+      Every five minutes the panel asks each node for
+      <code>/sync/usage</code>. The node answers with a <strong>lifetime total
+      per user</strong>: bytes banked when sessions ended, plus bytes still
+      flowing in live sessions.
     </p>
     <p>
       The panel remembers the last number it saw per node and adds only the
@@ -106,8 +107,8 @@
             <td>Caught by a separate ten-minute sweep, which covers the expiry-only case.</td>
           </tr>
           <tr>
-            <td>80% of quota or more</td>
-            <td>Shows as a warning, and feeds the owner's Telegram summary if that notification is on.</td>
+            <td>Around 80% of quota</td>
+            <td>Shows as a warning on the user's row.</td>
           </tr>
           <tr>
             <td>Over quota</td>
@@ -136,23 +137,11 @@
     <h2 id="live">The live view, and why it does not hammer your nodes</h2>
     <p>
       The dashboard has a live view. A background collector polls the nodes
-      every 10 seconds <em>while a browser has the stream open</em>, and backs
-      off to every 5 minutes when nobody is watching. Request handlers read that
-      in-memory snapshot rather than fanning out to every node per request, so
-      one dead node can never stall the user list.
-    </p>
-    <p>
-      Traffic history is charted over the last 14 days, which is a good place to
-      spot the user who is about to hit their quota.
-    </p>
-
-    <h2 id="alerts">Notifications</h2>
-    <p>
-      With the Telegram bot configured, the owner gets a daily summary covering
-      users expiring within three days and users out of traffic, plus quota
-      warnings from 80% up. Each of those is a separate toggle under
-      <strong>Settings &rarr; Alerts</strong>, so you can keep the quota warnings
-      and drop the rest.
+      while a browser has the stream open, and backs off to every 5 minutes when
+      nobody is watching. Request handlers read that in-memory snapshot rather
+      than fanning out to every node per request, so one dead node can never
+      stall the user list. Traffic history is charted over the last 14 days, a
+      good place to spot the user who is about to hit their quota.
     </p>
 
     <h2 id="next">Next</h2>

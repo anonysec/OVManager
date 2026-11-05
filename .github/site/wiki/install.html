@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width=1">
 <title>Install &amp; first login — OVManager wiki</title>
-<meta name="description" content="Install OVManager on a VPS, claim the owner account with the one-time claim key, and manage updates and uninstalls.">
+<meta name="description" content="Install OVManager on a Debian/Ubuntu VPS with systemd, claim the owner account with the one-time claim key, and manage updates and uninstalls.">
 <link rel="stylesheet" href="../assets/style.css">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -42,244 +42,166 @@
 
     <h1>Install &amp; first login</h1>
     <p class="lede">
-      A fresh Linux VPS, about five minutes, and no Docker knowledge required.
-      The default install asks you nothing.
+      A fresh Debian or Ubuntu VPS, about five minutes. Root or sudo, a systemd
+      host, port <code>2095</code> free. The default install asks you nothing.
     </p>
 
     <h2 id="requirements">What you need</h2>
     <ul>
-      <li>A Linux VPS &mdash; Debian or Ubuntu recommended.</li>
+      <li>A Linux VPS — Debian or Ubuntu recommended.</li>
       <li>Root, or an account with <code>sudo</code>.</li>
-      <li>For the native install: a systemd host. On WSL or inside a container without systemd, use Docker instead.</li>
-      <li>Nothing else. The installer brings its own runtime and needs no <code>git</code> or <code>npm</code> on the server.</li>
+      <li>A host with systemd (a VM or a bare-metal server).</li>
+      <li>Port <code>2095</code> free.</li>
     </ul>
 
     <h2 id="status">Verified releases</h2>
     <div class="note">
       <p>
         The installer downloads a <strong>verified release binary</strong> with a
-        mandatory SHA-256 sidecar checksum from GitHub Releases, and verifies integrity
-        before installing. Plain HTTP is disabled by default; the installer configures
-        TLS or allows sitting behind a trusted reverse proxy.
+        mandatory SHA-256 sidecar checksum from GitHub Releases, and refuses to
+        continue if the checksum does not match. The panel and its CLI ship from
+        the same single binary, so there is no compile step, no <code>git</code>,
+        no <code>npm</code>, no runtime packages on the box.
       </p>
     </div>
 
     <h2 id="one-liner">Install</h2>
     <figure class="cmd">
-      <figcaption>On the server</figcaption>
-      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh)</code></pre>
+      <figcaption>On the server (pinned to the release tag)</figcaption>
+      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.0.0/install.sh)</code></pre>
     </figure>
     <p>
-      A bare interactive run offers <strong>Install</strong> (recommended) or
-      <strong>Install with Docker</strong>. Install uses the safe defaults and
-      asks nothing else. To be walked through every setting instead:
+      The installer is the entry point and it is what your customers execute.
+      Pinning the tag means a <code>main</code> change can never silently change
+      what root runs. <code>bash install.sh --help</code> prints the full surface.
     </p>
-    <figure class="cmd">
-      <figcaption>Custom wizard</figcaption>
-      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) interactive</code></pre>
-    </figure>
+    <p>
+      To walk through every setting instead of using the defaults, run
+      <code>interactive</code> or <code>--interactive</code>. Setting
+      <code>OVM_REPO=myorg/OVManager</code> points source downloads and update
+      pulls at your own repository (for example a fork). <code>-y</code> skips
+      the prompts.
+    </p>
 
-    <h3>Native or Docker</h3>
-    <ul>
-      <li>
-        <strong>Native</strong> (the default) installs the self-contained Go binary as
-        a systemd service on the host. Simplest and most performant on a normal VPS.
-      </li>
-      <li>
-        <strong>Docker</strong> runs the panel as a container. Pick it if you
-        already use Docker, or if the host has no systemd.
-      </li>
-    </ul>
-
-    <h3>What the defaults are</h3>
+    <h2 id="defaults">Defaults</h2>
     <div class="table-scroll">
       <table>
         <thead>
           <tr><th scope="col">Setting</th><th scope="col">Default</th></tr>
         </thead>
         <tbody>
-          <tr><td>Install mode</td><td>native</td></tr>
+          <tr><td>Install mode</td><td>native (systemd single binary)</td></tr>
           <tr><td>Port</td><td><code>2095</code></td></tr>
-          <tr><td>URL path</td><td>random, e.g. <code>/a1b2c3d4/</code></td></tr>
+          <tr><td>URL path</td><td>random, e.g. <code>/dashboard/</code></td></tr>
           <tr><td>Admin user</td><td><code>admin</code></td></tr>
-          <tr><td>Owner password</td><td>none &mdash; a claim key is printed instead</td></tr>
+          <tr><td>Owner password</td><td>none &mdash; a one-time claim key is printed instead</td></tr>
           <tr><td>TLS</td><td>self-signed (encrypted; the browser warns once)</td></tr>
         </tbody>
       </table>
     </div>
     <p>
       Every question has a default, so pressing Enter all the way through is a
-      valid install. The flags and the <code>OVM_*</code> settings behind those
-      questions are listed in the
-      <a href="cli.html">CLI reference</a>, and
-      <code>bash install.sh --help</code> prints them too.
-      Two answers are worth getting right on the first try:
+      valid install. The installer writes <code>/opt/ovmanager/.env</code> with
+      HOST, PORT, URLPATH, ADMIN_USERNAME and DATA_DIR, and starts the panel
+      afterwards, which health-checks the first boot.
     </p>
-    <ul>
-      <li>
-        <strong>URL path</strong>: keep <code>random</code>. The panel is then
-        served at a prefix nobody can guess, and requests outside it get an
-        empty 404. <strong>Save the full URL the installer prints.</strong>
-      </li>
-      <li>
-        <strong>TLS</strong>: pick self-signed for a first install. Switch to
-        Let's Encrypt once you have a domain pointed at the server. Plain HTTP
-        is not offered.
-      </li>
-    </ul>
+    <p>
+      The public address for shared subscription links is optional. Set
+      <code>PUBLIC_URL=https://panel.example.com</code> in
+      <code>.env</code> (or pass <code>OVM_ADMIN_PASS</code> to
+      <code>ovmanager reset-password</code> for a manual install) so subscription
+      links work for users on any network.
+    </p>
 
     <h2 id="claim">First login: the claim flow</h2>
     <p>
-      The installer <strong>never creates an owner password</strong>. It mints a
-      one-time claim key and prints it. The owner account does not exist until a
-      browser posts that key, so there is no plaintext credential sitting in
-      your terminal scrollback or in any file.
+      The installer <strong>never creates an owner password</strong> and never
+      writes one to disk. It prints a one-time claim key. The owner account does
+      not exist until a browser posts that key and chooses a password &mdash;
+      there is no plaintext credential in your terminal scrollback or in any
+      file. The key is spent the moment it works and the file holding it is
+      deleted.
     </p>
     <p>The Ready card at the end of the install shows something like:</p>
-    <pre><code>Open      https://YOUR-SERVER-IP:2095/a1b2c3d4/claim
-Claim key (one-time, spent when you claim)
-Login     admin</code></pre>
+    <pre><code>Open    https://YOUR-SERVER-IP:2095/a1b2c3d4/claim
+Claim key (one-time)  paste it in the browser
+User    admin         set the password on first login</code></pre>
     <ol class="steps">
       <li>
         <h3>Open the URL</h3>
-        <p>It ends in <code>/claim</code>. With the self-signed certificate, the browser warns once &mdash; click Advanced, then Proceed.</p>
+        <p>It ends in <code>/claim</code>. With the self-signed certificate the
+        browser warns once &mdash; click Advanced, then Proceed.</p>
       </li>
       <li>
         <h3>Paste the claim key</h3>
-        <p>Choose the owner password in the same form. It obeys the same policy as every other password in the panel: at least 8 characters, not a common word or placeholder.</p>
+        <p>Choose the owner password in the same form. At least 8 characters,
+        and not a placeholder like <code>change-me</code>.</p>
       </li>
       <li>
         <h3>You are signed in</h3>
-        <p>
-          The key is spent the moment it works &mdash; the file holding it is
-          deleted &mdash; so a copy that leaks later cannot claim anything. The
-          password is stored as a hash in the <code>admins</code> table, never
-          in <code>.env</code>.
-        </p>
+        <p>The password is stored as a bcrypt hash in the panel database, never
+        in <code>.env</code>. Lost the key before claiming? Run
+        <code>sudo ovmanager owner-claim</code> to mint a fresh one.</p>
       </li>
     </ol>
-    <p>
-      Repeated wrong keys from one address are rate-limited: five failures in
-      five minutes and the endpoint answers <code>429</code> with a
-      <code>Retry-After</code>. The key is 128 bits of randomness, so this limit
-      is not there to protect the key &mdash; it stops the endpoint being used
-      as a free password-hashing oracle.
-    </p>
 
-    <h3>Lost the claim key?</h3>
-    <p>Print a fresh one on the server, as long as the panel has not been claimed yet:</p>
+    <h2 id="update">Update and uninstall</h2>
+    <p>These live in <code>ovmanager</code>, which the installer adds and
+    refreshes on every update &mdash; you do not re-download anything.</p>
     <figure class="cmd">
       <figcaption>On the server</figcaption>
-      <pre><code>sudo ovmanager owner-claim</code></pre>
+      <pre><code>sudo ovmanager update              # staged update with automatic failover
+sudo ovmanager status              # service, health, version, panel URL
+sudo ovmanager restore [NAME]      # restore a verified backup
+sudo ovmanager uninstall           # remove the app, keep data
+sudo ovmanager uninstall --purge   # also remove data and certificates</code></pre>
     </figure>
     <p>
-      The panel reads the key file per attempt, so a reprint needs no restart.
-      If the panel already has an owner, this is the wrong tool &mdash; see
-      <a href="troubleshooting.html#password">forgot the owner password</a>.
+      Updates stage the new tree, health-check it and roll back automatically if
+      the new version does not come up. An update interrupted by a reboot is
+      recovered on the next <code>ovmanager update</code> run. The database
+      migrates itself on the next start.
     </p>
 
     <h2 id="no-terminal">Install with no terminal</h2>
     <p>
-      A run with no terminal has nobody to answer, so it needs
-      <code>--yes</code> to say that is intended; without it the installer stops
-      and says so rather than choosing for you. There are only three flags, and
-      everything else is an <code>OVM_*</code> variable which is also the
-      wizard&rsquo;s default &mdash; so a scripted run and an interactive one
-      cannot disagree.
+      A run without a terminal cannot ask, so it needs <code>-y</code> to say
+      that is intended; without it the installer stops and says so. There is no
+      menu on a non-tty.
     </p>
     <figure class="cmd">
-      <figcaption>Native, no prompts</figcaption>
-      <pre><code>curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- --yes</code></pre>
+      <figcaption>Native, non-interactive</figcaption>
+      <pre><code>curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.0.0/install.sh \
+  | sudo bash -s -- -y</code></pre>
     </figure>
-    <figure class="cmd">
-      <figcaption>Docker, no prompts</figcaption>
-      <pre><code>curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh \
-  | sudo bash -s -- --docker --yes</code></pre>
-    </figure>
-    <p>
-      <code>CI=true</code> implies <code>--yes</code>. Settings such as
-      <code>OVM_PORT</code>, <code>OVM_PATH</code>, <code>OVM_TLS</code>,
-      <code>OVM_TLS_DOMAIN</code> and <code>OVM_ADMIN_USER</code> are listed by
-      <code>bash install.sh --help</code> and in the
-      <a href="cli.html#env">CLI reference</a>.
-    </p>
-    <p>
-      The private URL path is always generated for a fresh recommended install.
-      The owner password is never an install input.
-    </p>
-    <p>
-      Installing from a fork: <code>OVM_REPO=myorg/OVManager</code> points source
-      downloads and update pulls at your own repository. Use your fork's raw
-      <code>install.sh</code> URL to bootstrap from it.
-    </p>
 
-    <h2 id="from-source">Install from source (developers)</h2>
+    <h2 id="dev">From source (developers)</h2>
     <p>
-      This path uses the repository directly and does not go through the
-      installer, so it does not need a published release archive. It needs
-      <code>git</code>, Python and Node on the machine.
+      This path builds the SPA and the binary in place; it does not consume a
+      published release archive, so it is a development path rather than a
+      deployment path. It needs <code>git</code>, <code>go</code> and Node on the
+      machine.
     </p>
     <figure class="cmd">
       <figcaption>From a checkout</figcaption>
       <pre><code>git clone https://github.com/anonysec/OVManager.git /opt/ovmanager
 cd /opt/ovmanager
 cp .env.example .env   # set PUBLIC_URL
-go mod download
-cd frontend &amp;&amp; npm ci &amp;&amp; npm run build
-cd .. &amp;&amp; go build -o ovmanager ./cmd &amp;&amp; sudo ./ovmanager</code></pre>
+make build
+sudo ./ovmanager</code></pre>
     </figure>
     <p>
-      The first run creates the schema and the owner row. There is no claim key
-      on this path, so set the owner password with the CLI:
+      Set the owner password with:
     </p>
     <figure class="cmd">
-      <figcaption>Set the owner password</figcaption>
-      <pre><code>ovmanager reset-password --admin-pass 'a-strong-password'</code></pre>
+      <pre><code>sudo ovmanager reset-password --admin-pass 'a-strong-password'</code></pre>
     </figure>
-    <p>
-      The repository's
-      <a href="https://github.com/anonysec/OVManager/blob/main/README.md">README</a>
-      also documents the <code>make</code> targets used for development, and the
-      three-stage <code>Dockerfile</code> if you would rather build an image
-      yourself.
-    </p>
-
-    <h2 id="update">Update and uninstall</h2>
-    <p>
-      These live in <code>ovmanager</code>, which the installer adds and refreshes on
-      every update &mdash; you do not need to re-download <code>install.sh</code>.
-    </p>
-    <figure class="cmd">
-      <figcaption>On the server</figcaption>
-      <pre><code>sudo ovmanager update              # staged update with automatic failover
-ovmanager status                   # service, health, version, panel URL
-sudo ovmanager rollback            # restore the newest pre-update code snapshot
-sudo ovmanager uninstall           # remove the app, keep data
-sudo ovmanager uninstall --purge   # also delete data</code></pre>
-    </figure>
-    <p>
-      Updates are staged and verified, and roll back automatically if the new
-      version does not come up. The database migrates itself on the next start;
-      a database written by an earlier release is adopted in place rather than
-      needing a dump and restore.
-    </p>
-    <p>
-      The same operations exist in the terminal menu: run <code>ovmanager</code>
-      (alias <code>ovmanager</code>) with no arguments and pick from
-      <strong>Status · Start/Stop/Restart · Logs · Backup · Auto backup · Update · TLS · Recovery · Uninstall</strong>.
-      Recovery shows the panel URL and login name, and can reset the owner
-      password or clear the secret URL path.
-    </p>
-    <p>
-      Purging keeps a safety net: uninstalling with <code>--purge</code> first
-      writes a snapshot to <code>/var/backups/panel-pre-purge-*.tar.gz</code>.
-    </p>
 
     <h2 id="next">Next</h2>
     <p>
-      The panel does nothing until a node is attached.
-      Continue with <a href="nodes.html">adding nodes</a>.
+      The panel manages accounts; it does not carry VPN traffic. Install OVNode
+      on the machine your users will connect to and register it under
+      <a href="nodes.html">Adding nodes</a>.
     </p>
 
   </div>

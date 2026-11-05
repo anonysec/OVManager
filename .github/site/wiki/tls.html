@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width=1">
 <title>TLS certificates — OVManager wiki</title>
-<meta name="description" content="Self-signed and Let's Encrypt certificates for the OVManager panel, renewing them, and the separate certificate story on the node side.">
+<meta name="description" content="Self-signed and Let's Encrypt certificates for the panel, renewing them, and the separate certificate story on the node side.">
 <link rel="stylesheet" href="../assets/style.css">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -51,108 +51,64 @@
     <p>
       A fresh install uses a <strong>self-signed</strong> certificate. The
       connection is genuinely encrypted; the browser just cannot tell who issued
-      the certificate, so it warns once. Click Advanced, then Proceed. There is
-      no plain-HTTP option to fall back to.
+      the certificate, so it warns once. Click Advanced, then Proceed. The
+      installer's certificate carries the server's public IP as its common name
+      and has no subject alternative names &mdash; that is deliberate, and the
+      panel's health probe pins the file it reads rather than checking the
+      hostname.
     </p>
     <p>
-      The installer's certificate carries the server's public IP as its common
-      name and has no subject alternative names. That is deliberate &mdash; it
-      is the reason the panel's own health check pins the certificate file
-      rather than checking the hostname, and the reason a healthy panel is never
-      reported as unreachable.
+      The panel serves HTTPS from the pair in <code>.env</code>, or from
+      <code>DATA_DIR/tls</code> when no override is set. The matching command is
+      the interactive <code>ovmanager tls</code> menu (status, issue, renew,
+      remove, self-signed, custom install), not <code>https</code>.
     </p>
 
     <h2 id="switch">Switch to Let's Encrypt</h2>
     <p>
-      Once a domain points at the server, issuance needs port 80 free for the
-      challenge. Two ways to do it:
+      Once a domain points at the server, issuance uses Let's Encrypt over HTTP-01
+      in the <code>ovmanager tls</code> menu: status, issue (get a certificate),
+      renew, remove, self-signed, or install a custom key and certificate. The
+      ACME challenge needs port 80 free for about 60 seconds; the daily
+      renewal timer (<code>ovmanager-acme-renew.timer</code>) renews the
+      certificate automatically 30 days before expiry.
     </p>
-    <figure class="cmd">
-      <figcaption>From the server</figcaption>
-      <pre><code>sudo ovmanager https --domain panel.example.com   # Let's Encrypt for a domain
-sudo ovmanager https --ip                         # Let's Encrypt for this host's IP
-sudo ovmanager https --self                       # new self-signed certificate
-sudo ovmanager https --key F --cert F             # use your own key and certificate
-ovmanager tls-status                              # what is installed, and when it expires</code></pre>
-    </figure>
-    <p>
-      Or from the panel: <strong>Settings &rarr; TLS</strong> shows the current
-      mode, the source, who issued it and how long it has left, and offers the
-      same options &mdash; upload a key and certificate, generate a temporary
-      self-signed one, or request a renewal for a domain. A certificate change
-      needs a restart, and the panel offers to restart itself and reconnect the
-      page.
-    </p>
-    <div class="note">
-      <p>
-        Let's Encrypt issuance runs through <code>acme.sh</code> and needs port
-        80 reachable for the standalone challenge. If something else is already
-        listening on 80, stop it or stay on a self-signed certificate for now.
-      </p>
-    </div>
 
     <h2 id="node-cert">The node's certificate</h2>
     <p>
-      Each node serves its sync API over TLS too. The node installer never
-      offers plain HTTP, because the API key travels in a header on every
-      request &mdash; in cleartext that would be handing out the node.
+      The node's sync API also serves TLS. The installer never offers plain
+      HTTP &mdash; the API key travels in a header on every request. The panel
+      verifies that certificate strictly first, and warns once per node when a
+      self-signed fallback is forced.
     </p>
-    <p>What the panel does about it:</p>
-    <ul>
-      <li>
-        TLS is verified <strong>strictly first</strong>. A node using a
-        self-signed certificate fails that check.
-      </li>
-      <li>
-        On that failure the panel retries once <em>without</em> verification and
-        warns loudly &mdash; once per node, not once per request &mdash; as a
-        standing reminder to move that node to Let's Encrypt.
-      </li>
-      <li>
-        The <strong>TLS</strong> switch on the node entry in the panel must
-        match what the node is actually doing. A mismatch produces a silent
-        connection failure, which is one of the usual causes of a
-        <a href="troubleshooting.html#node-red">node that stays red</a>.
-      </li>
-    </ul>
     <p>
-      The node's own OpenVPN server certificate is a separate thing again, and
-      the panel can ask a node to renew it and reports the new expiry. Nodes
-      also show their certificate expiry in <code>ovnode status</code>.
+      The node's <strong>OpenVPN server certificate is a separate thing</strong>.
+      The node generates and manages it; <code>ovnode tls</code> on the node shows
+      and replaces it, and the panel reports its expiry through the sync API.
     </p>
 
     <h2 id="expiry">Watching for expiry</h2>
-    <ul>
-      <li><code>ovmanager tls-status</code> on the panel &mdash; read-only, no restart.</li>
-      <li><code>ovnode status</code> on each VPN server &mdash; health plus certificate expiry.</li>
-      <li><strong>Settings &rarr; TLS</strong> in the panel &mdash; the same panel information with the renewal buttons next to it.</li>
-    </ul>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Where</th><th scope="col">What to look at</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Panel, via <code>ovmanager tls</code></td><td>Installed certificate, source and expiry, with issue/renew/remove actions</td></tr>
+          <tr><td>Node, via <code>ovnode tls status</code></td><td>Node sync API certificate (self-signed or Let's Encrypt) and remaining validity</td></tr>
+          <tr><td>Node, via <code>ovnode status</code></td><td>OpenVPN server certificate expiry, refreshed per probe</td></tr>
+        </tbody>
+      </table>
+    </div>
 
     <h2 id="reverse-proxy">Running behind a reverse proxy (Nginx, Caddy, Cloudflare)</h2>
     <p>
-      If you terminate HTTPS at a fronting web server or CDN (such as Nginx,
-      Caddy, or Cloudflare) rather than directly in the panel:
+      If you terminate HTTPS at a fronting server or CDN:
     </p>
     <ol>
-      <li>
-        <strong>Enable proxy trust:</strong> set <code>TRUSTED_PROXY=true</code>
-        in <code>/opt/ovmanager/.env</code>. This ensures login rate limits track
-        the actual client IP and that session cookies set the <code>Secure</code>
-        flag when forwarded over HTTPS.
-      </li>
-      <li>
-        <strong>Forward client headers:</strong> ensure your proxy forwards
-        <code>Host</code>, <code>X-Forwarded-Proto</code>, and client IP headers.
-        OVManager resolves client IPs from <code>CF-Connecting-IP</code>,
-        <code>X-Real-IP</code>, or the rightmost <code>X-Forwarded-For</code>
-        entry.
-      </li>
-      <li>
-        <strong>Disable buffering for SSE:</strong> the live telemetry stream
-        (<code>/api/live/stream</code>) uses Server-Sent Events. Set
-        <code>proxy_buffering off;</code> in Nginx so updates are pushed
-        in real time.
-      </li>
+      <li>Set <code>TRUSTED_PROXY=true</code> in <code>/opt/ovmanager/.env</code> so the panel reads client IP from <code>X-Forwarded-For</code> and issues <code>Secure</code> cookies on <code>X-Forwarded-Proto: https</code>.</li>
+      <li>Forward the headers: <code>Host</code>, <code>X-Forwarded-Proto</code> and <code>X-Forwarded-For</code> (or <code>X-Real-IP</code>, or <code>CF-Connecting-IP</code> from Cloudflare).</li>
+      <li>Disable buffering for the live stream: <code>proxy_buffering off;</code> in the panel's <code>location /</code> block, so the SSE telemetry is not starved.</li>
     </ol>
     <figure class="cmd">
       <figcaption>Example Nginx configuration</figcaption>

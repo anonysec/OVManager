@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width=1">
 <title>Troubleshooting — OVManager wiki</title>
-<meta name="description" content="The OVManager problems people actually hit: lost panel URL, forgotten password, red nodes, missing alerts, and a tunnel with no internet.">
+<meta name="description" content="The OVManager problems people actually hit: lost panel URL, forgotten password, red nodes, and a tunnel with no internet.">
 <link rel="stylesheet" href="../assets/style.css">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -42,77 +42,53 @@
 
     <h1>Troubleshooting</h1>
     <p class="lede">
-      The symptoms people actually hit, each in the order worth checking. All of
-      it runs from a shell on the panel server, so none of it depends on the
-      panel being reachable.
+      The symptoms people actually hit, each in the order worth checking.
+      Everything below runs from a shell on the panel server, so none of it
+      depends on the panel being reachable.
     </p>
 
     <h2 id="urlpath">I lost the panel URL (the <code>/random-path/</code> part)</h2>
     <p>
-      The panel hides behind a secret path, and requests without it get an empty
-      404 page. That is normal behaviour, not a crash.
+      The panel hides behind a random URL path; requests without it get an empty
+      404 page. That is normal behaviour, not a crash. The panel URL and the
+      secret prefix are printed by:
     </p>
     <figure class="cmd">
-      <figcaption>On the server</figcaption>
-      <pre><code>sudo ovmanager reset-urlpath</code></pre>
+      <pre><code>sudo ovmanager urlpath
+sudo ovmanager status --all</code></pre>
     </figure>
     <p>
-      The panel is served at <code>/</code> again. Set a new random path in
-      <strong>Settings &rarr; General &rarr; Panel URL Path</strong>; tick
-      "I saved the new URL" and the page redirects you to it. Prefixes that
-      collide with real routes &mdash; <code>api</code>, <code>assets</code>,
-      <code>health</code>, the subscription path &mdash; are rejected
-      automatically.
-    </p>
-    <p>
-      From a native install, the equivalent is
-      <code>cd /opt/ovmanager &amp;&amp; sudo ./ovmanager --reset-urlpath</code>.
-      On Docker, run the same command inside the container, or check
-      <code>ovmanager status</code>.
-    </p>
-    <p>
-      If <code>ovmanager recovery</code> still shows a URL you cannot reach, remember
-      that <code>/sub/...</code> and <code>/health</code> are intentionally
-      served <em>without</em> the prefix &mdash; subscription links have to be
-      shareable and health checks have to keep working.
+      The secret path is generated for you at install time and shown again on
+      the Ready card. If you need a new one, set it in the panel under
+      <strong>Settings &rarr; General &rarr; Panel URL Path</strong> and tick
+      "I saved the new URL".
     </p>
 
     <h2 id="password">I forgot the owner password</h2>
     <p>
-      The owner credential is a row in the panel's database, not a
+      The owner credential is a row in the panel's database, never a
       <code>.env</code> value. Reset it from the server; user data is untouched.
     </p>
     <figure class="cmd">
-      <figcaption>On the server</figcaption>
       <pre><code>sudo ovmanager reset-password
-sudo ovmanager reset-password -p 'new-long-password'
-OVM_PASS='new-long-password' sudo ovmanager reset-password</code></pre>
+sudo ovmanager reset-password -p 'new-long-password'</code></pre>
     </figure>
     <p>
-      The interactive form asks for the new password twice, with hidden input.
-      Both script forms restart the panel afterwards and wait for
-      <code>/health</code>. The value is never echoed and never logged &mdash;
-      it rides in the environment rather than in <code>argv</code>, because a
-      command-line argument is visible in <code>ps</code> to every user on the
-      box.
-    </p>
-    <p>
-      Placeholder-looking passwords (<code>change-me</code>,
-      <code>changeme</code>, <code>password123</code>, <code>admin123</code>)
-      are refused, exactly as the panel refuses them. The same reset is entry 2
-      of the <code>sudo ovmanager recovery</code> menu. Docker installs work the same
-      way &mdash; <code>ovmanager</code> finds and restarts the container.
+      Both script forms restart the panel afterwards and wait for <code>/health</code>.
+      The value is never echoed and never logged &mdash; it rides in the
+      environment rather than in <code>argv</code>. Placeholder-looking passwords
+      are refused, exactly as the panel refuses them.
     </p>
 
     <h2 id="login">Login fails with "username or password is incorrect"</h2>
     <ul>
-      <li>Caps lock, or a trailing space. Passwords are case-sensitive.</li>
+      <li>Caps lock, or a trailing space &mdash; passwords are case-sensitive.</li>
       <li>
-        Five wrong tries in five minutes locks that username for five minutes,
-        with both a per-IP and a per-user limit. Wait and retry &mdash;
-        <strong>restarting the panel does not clear the lockout</strong>.
+        Logins are rate-limited per username and per address, with a
+        <code>Retry-After</code> on the response. Restarting the panel does not
+        clear the counters.
       </li>
-      <li>Still locked out with shell access? Use <code>reset-password</code> above.</li>
+      <li>Still locked out? Use <code>sudo ovmanager reset-password</code> above.</li>
     </ul>
 
     <h2 id="cert-warning">The browser warns about the certificate</h2>
@@ -122,28 +98,23 @@ OVM_PASS='new-long-password' sudo ovmanager reset-password</code></pre>
       Click Advanced, then Proceed. The warning disappears once you switch to
       Let's Encrypt with a real domain &mdash; see
       <a href="tls.html#switch">TLS certificates</a> and
-      <code>ovmanager tls-status</code>.
+      <code>sudo ovmanager tls</code>.
     </p>
 
-    <h2 id="health-probe"><code>ovmanager status</code> or <code>ovmanager doctor</code> call the panel unreachable</h2>
+    <h2 id="health-probe"><code>ovmanager status</code> or <code>ovmanager logs</code> report the panel unreachable</h2>
     <p>
-      Rarely a certificate problem. The health probe deliberately pins the
-      certificate recorded in <code>.env</code> (<code>SSL_CERTFILE</code>) and
-      only falls back to unverified behaviour when it cannot read that file, so
-      a healthy self-signed panel reads as healthy. The hostname is not checked
-      on purpose: the installer's certificate carries the public IP as its
-      common name and has no SANs, while the probe dials <code>127.0.0.1</code>,
-      so a name check would fail on a perfectly good panel.
-    </p>
-    <p>
-      What <em>does</em> fail the probe is the panel serving a different
-      certificate from the one in <code>.env</code> &mdash; typically right after
-      replacing it. Compare what is on disk with what is being served:
+      Rarely a certificate problem. The panel's health probe pins the certificate
+      file declared in <code>.env</code> (<code>SSL_CERTFILE</code>) and only
+      falls back to unverified behaviour when it cannot read that file, so a
+      healthy self-signed panel reads as healthy. The hostname is not checked on
+      purpose: the installer's certificate carries the public IP and has no SANs.
+      What <em>does</em> fail the probe is a certificate on disk that does not
+      match what the panel is actually serving &mdash; typically right after you
+      replace it:
     </p>
     <figure class="cmd">
-      <figcaption>On the server</figcaption>
-      <pre><code>ovmanager tls-status
-ovmanager logs</code></pre>
+      <pre><code>sudo ovmanager tls
+sudo ovmanager logs</code></pre>
     </figure>
 
     <h2 id="node-red">Node stays red</h2>
@@ -156,15 +127,15 @@ ovmanager logs</code></pre>
         <tbody>
           <tr>
             <td>1</td>
-            <td><strong>Address.</strong> Public IP or hostname of the node, not a <code>10.x</code>/<code>192.168.x</code> address &mdash; unless panel and node share a private network.</td>
+            <td><strong>Address.</strong> Public IP or hostname of the node, not a <code>10.x</code>/<code>192.168.x</code> address.</td>
           </tr>
           <tr>
             <td>2</td>
-            <td><strong>Port.</strong> The service port (<code>2083</code> by default), not the VPN port (<code>1194</code>).</td>
+            <td><strong>Port.</strong> The sync API port (<code>2083</code> by default), not the VPN port (<code>1194</code>).</td>
           </tr>
           <tr>
             <td>3</td>
-            <td><strong>API key.</strong> An exact copy with no extra spaces. Run <code>sudo ovnode credentials</code> on the node to reprint the name, the key and the panel bundle rather than retyping them.</td>
+            <td><strong>API key.</strong> An exact copy with no extra spaces. <code>sudo ovnode auth key</code> reprints the name and key the panel needs.</td>
           </tr>
           <tr>
             <td>4</td>
@@ -172,7 +143,7 @@ ovmanager logs</code></pre>
           </tr>
           <tr>
             <td>5</td>
-            <td><strong>Name.</strong> The panel's node name must equal the node's <code>--name</code> exactly. <code>ovnode credentials</code> prints it.</td>
+            <td><strong>Name.</strong> The panel's node name must equal the node's <code>OVN_NAME</code> exactly.</td>
           </tr>
           <tr>
             <td>6</td>
@@ -181,101 +152,55 @@ ovmanager logs</code></pre>
         </tbody>
       </table>
     </div>
-    <p>From the node itself, this should answer:</p>
+    <p>
+      From the node itself, this answers:
+    </p>
     <figure class="cmd">
-      <figcaption>On the VPN server</figcaption>
-      <pre><code>curl -sk https://127.0.0.1:2083/sync/health</code></pre>
+      <pre><code>sudo ovnode status
+curl -sk https://127.0.0.1:2083/sync/health</code></pre>
     </figure>
-    <p>
-      The panel's Health page collects the same causes in one place, and the
-      node row has a <strong>Test connection</strong> button if you want the
-      answer before saving.
-    </p>
-
-    <h2 id="node-alert">No node-down Telegram alert</h2>
-    <ol>
-      <li>
-        <strong>Bot set up.</strong> Token and owner ID saved in
-        <strong>Settings &rarr; Bot</strong>, and <em>Start</em> tapped in the
-        bot once &mdash; Telegram refuses messages from users who never started
-        the chat.
-      </li>
-      <li>
-        <strong>Toggle on.</strong>
-        <strong>Settings &rarr; Alerts &rarr; "Node goes down or comes back"</strong>.
-      </li>
-      <li>
-        <strong>Wait a probe.</strong> Detection is transition-based on the
-        five-minute collector, so allow up to about five minutes after the node
-        actually went down.
-      </li>
-      <li>
-        <strong>One message per outage.</strong> A still-down node is not
-        re-alerted every five minutes: you get the down message once and a
-        "back online" message on recovery.
-      </li>
-      <li>
-        <strong>Deleted and re-added the node?</strong> Alerts key off the panel
-        node entry, so re-adding it resets the "already alerted" state. That is
-        expected.
-      </li>
-    </ol>
-    <p>
-      If the bot itself was broken during the outage, a failed send is retried
-      on the next tick &mdash; the alert arrives late, not never.
-    </p>
 
     <h2 id="subscription">Subscription link shows <code>localhost</code>, or will not download</h2>
     <p>
       Subscription and download links are built from the address you opened the
-      panel with. Always log in through the public URL. Opening the panel as
-      <code>http://localhost:2095/...</code> through an SSH tunnel is the usual
-      cause, and the links you copy then carry <code>localhost</code>.
-    </p>
-    <p>
-      Behind a proxy where the request host is wrong, pin it explicitly: set
-      <code>PUBLIC_URL=https://panel.example.com</code> in <code>.env</code>, or
-      pass <code>OVM_PUBLIC_URL</code> at install time, or set the base URL under
-      <strong>Settings &rarr; Subscription Link</strong>, then restart the panel.
+      panel with. Always log in through the public URL. Behind a proxy where the
+      request host is wrong, pin it: set
+      <code>PUBLIC_URL=https://panel.example.com</code> in
+      <code>/opt/ovmanager/.env</code> (or pass <code>OVM_PUBLIC_URL</code> at
+      install time, or the base URL under <strong>Settings &rarr; Subscription
+      Link</strong>), then restart the panel.
     </p>
 
     <h2 id="proxy-issues">Reverse proxy issues: rate limiting or live telemetry freezing</h2>
     <ul>
       <li>
-        <strong>All users rate-limited together:</strong> If you run behind Nginx,
-        Caddy, or Cloudflare, ensure <code>TRUSTED_PROXY=true</code> is set in
-        <code>/opt/ovmanager/.env</code>. Without this flag, the panel sees the
-        proxy IP as the client address and shares login failure counters across
-        all users.
+        <strong>All users rate-limited together:</strong> with Nginx, Caddy or
+        Cloudflare in front, ensure <code>TRUSTED_PROXY=true</code> is set in
+        <code>/opt/ovmanager/.env</code>. Without it, the panel sees the proxy IP
+        as the client and shares login-failure counters across all users.
       </li>
       <li>
-        <strong>Live stats not updating:</strong> The live dashboard uses
-        Server-Sent Events (SSE). If your reverse proxy buffers responses, the
-        stream will stall. In Nginx, add <code>proxy_buffering off;</code> and
-        <code>proxy_read_timeout 300s;</code> inside the panel's
-        <code>location /</code> block.
+        <strong>Live stats not updating:</strong> the live dashboard uses Server
+        -Sent Events (SSE). If your reverse proxy buffers, the stream stalls.
+        Disable buffering in the panel's <code>location /</code> block:
+        <code>proxy_buffering off;</code> and <code>proxy_read_timeout 300s;</code>.
       </li>
     </ul>
 
     <h2 id="no-internet">VPN connects but there is no internet</h2>
     <p>This is a node-side problem: IP forwarding and NAT.</p>
     <ul>
-      <li>Native installs handle it through the <code>ovnode-nat</code> service &mdash; check <code>systemctl status ovnode-nat</code>.</li>
-      <li>Docker handles it in the container entrypoint, which needs <code>CAP_NET_ADMIN</code> and <code>/dev/net/tun</code> mounted.</li>
-      <li>Verify <code>sysctl net.ipv4.ip_forward</code> is <code>1</code>, and that no other firewall (nftables, a cloud security group) is blocking forwarding.</li>
+      <li>Verify <code>sysctl net.ipv4.ip_forward</code> is <code>1</code>.</li>
+      <li>Make sure no firewall is blocking forwarding (nftables, cloud security group).</li>
+      <li>The node applies the forwarding rules itself on install; if ports changed, run <code>sudo ovnode update</code>.</li>
     </ul>
 
     <h2 id="node-unhealthy">On the node itself: unhealthy, or unreachable locally</h2>
-    <p>
-      When the panel cannot reach a node, the next question is whether the node
-      is answering at all. From a shell on the VPN server:
-    </p>
+    <p>From a shell on the VPN server:</p>
     <figure class="cmd">
-      <figcaption>On the VPN server</figcaption>
-      <pre><code>ovnode status                                   # summary + health
-curl -sk https://127.0.0.1:2083/sync/health  # expect {"status":"ok"}
-journalctl -u ovnode -f                      # host logs
-docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
+      <pre><code>sudo ovnode status                     # summary + health
+sudo curl -sk https://127.0.0.1:2083/sync/health   # expect an ok response
+sudo systemctl status ovnode         # host service logs</code></pre>
     </figure>
     <ul>
       <li>
@@ -284,31 +209,9 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
         security groups are the usual cause.
       </li>
       <li>
-        <code>/dev/net/tun</code> missing in Docker: the shipped compose file
-        mounts it; on unusual kernels run <code>modprobe tun</code> on the host.
-      </li>
-      <li>
-        After changing ports or TLS, run <code>ovnode update</code>, or reinstall
-        with the same <code>OVN_NAME</code> &mdash; the data in
+        After changing ports or TLS, run <code>sudo ovnode update</code>, or
+        reinstall with the same <code>OVN_NAME</code> &mdash; the data in
         <code>/etc/openvpn</code> and <code>/var/lib/ovnode</code> is kept.
-      </li>
-      <li>
-        <code>ovnode doctor --fix</code> checks the agent, OpenVPN, disk space, the
-        certificate and recent backups, and applies the safe repairs.
-      </li>
-    </ul>
-
-    <h3>Let's Encrypt on a node</h3>
-    <ul>
-      <li>
-        Port <code>80</code> must be free and the domain must resolve to that
-        server, or issuance fails with a port or DNS error. Use the self-signed
-        default to get going and switch later.
-      </li>
-      <li>
-        The Let's Encrypt <strong>IP</strong> mode issues a short-lived
-        certificate by design. Check the expiry in <code>ovnode status</code>, and
-        use a domain for a long-lived one.
       </li>
     </ul>
 
@@ -325,31 +228,16 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
           </tr>
           <tr>
             <td><code>systemd not found — native install needs it</code></td>
-            <td>Use Docker mode (WSL, containers), or a full VM.</td>
+            <td>Use a full VM or a systemd-enabled server.</td>
           </tr>
           <tr>
             <td><code>Port 80 is busy — Let's Encrypt standalone needs it</code></td>
-            <td>Stop whatever listens on 80, or install with a self-signed certificate for now.</td>
-          </tr>
-          <tr>
-            <td><code>docker compose startup failed</code></td>
-            <td><code>docker logs ovmanager</code> &mdash; usually a busy port or no disk space.</td>
-          </tr>
-          <tr>
-            <td><code>No answer on /health</code></td>
-            <td><code>journalctl -u ovmanager -f</code> natively, or <code>docker logs -f ovmanager</code>; then <code>ovmanager status</code>.</td>
+            <td>Stop whatever listens on 80, or keep the self-signed certificate for now.</td>
           </tr>
           <tr>
             <td><code>No verified release file is available</code>, or a checksum error</td>
-            <td>
-              The installer only accepts a verified release archive and its
-              SHA-256 sidecar &mdash; that download is the only thing it makes.
-              If those artifacts are not published yet, nothing is wrong with
-              your server &mdash; use a
-              <a href="install.html#from-source">from-source install</a>. On an
-              older install that is stuck on a download error, re-bootstrap with
-              the current raw one-liner and then run <code>ovmanager update</code>.
-            </td>
+            <td>The installer only accepts a verified release archive plus its SHA-256 sidecar. If those artifacts are not published yet, nothing is wrong with your server &mdash; use a
+              <a href="install.html#dev">from-source install</a> and upgrade later.</td>
           </tr>
         </tbody>
       </table>
@@ -357,17 +245,14 @@ docker logs -f ovnode-&lt;node name&gt;            # Docker logs</code></pre>
 
     <h2 id="starting-over">Starting over</h2>
     <p>
-      The panel keeps its data on uninstall unless you purge, and a purge first
-      takes a snapshot at <code>/var/backups/panel-pre-purge-*.tar.gz</code>. Node
-      data in <code>/var/lib/ovnode</code> and <code>/etc/openvpn</code>
-      likewise survives a reinstall &mdash; rename-safe only if you keep the
-      same <code>--name</code>.
+      The panel keeps its data on uninstall &mdash; there is no uninstall command
+      in this line. Stop the service and remove the trees:
     </p>
     <figure class="cmd">
-      <figcaption>On the server</figcaption>
-      <pre><code>sudo ovmanager uninstall
-sudo ovmanager uninstall --purge</code></pre>
+      <pre><code>sudo ovmanager service stop
+sudo rm -rf /opt/ovmanager /var/lib/ovmanager</code></pre>
     </figure>
+    <p>Data in <code>/etc/openvpn</code> and <code>/var/lib/ovnode</code> belongs to the nodes and survives independently; rename-safe only if a node keeps the same <code>OVN_NAME</code>.</p>
 
     <h2 id="next">Next</h2>
     <p><a href="cli.html">CLI reference</a> &mdash; every command in one place.</p>
