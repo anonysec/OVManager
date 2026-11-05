@@ -27,9 +27,9 @@
 
     <section class="hero">
       <ul class="badges">
-        <li class="badge">v1.0.0</li>
+        <li class="badge">2.0.0</li>
         <li class="badge">MIT</li>
-        <li class="badge">FastAPI · React · SQLite</li>
+        <li class="badge">Go · React 19 · SQLite</li>
       </ul>
       <h1>Your own OpenVPN panel.</h1>
       <p class="lede">
@@ -60,25 +60,21 @@
     </figure>
 
     <div class="note">
-      <h3>Honest status: no release artifacts published yet</h3>
+      <h3>Current release: v2.0.0</h3>
       <p>
-        v1.0.0 is the first release and nothing is on GitHub Releases or tagged
-        yet. The command above is the project's real entry point, but the
-        installer downloads a <strong>verified</strong> release archive and
-        checks its SHA-256 before it extracts anything &mdash; it fails closed
-        rather than installing an unverified tree. Until those artifacts are
-        published, the download step cannot succeed, and the working path today
-        is a from-source install (see
-        <a href="wiki/install.html#from-source">install from source</a>).
+        Published 2026-11-02 for the single-binary, native systemd panel. Assets:
+        <code>ovmanager-linux-amd64</code> /
+        <code>ovmanager-linux-arm64</code> with SHA-256 sidecars, built from the
+        <code>v2.0.0</code> tag. Install (pinned to the tag, not <code>main</code>):
+        <code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/v2.0.0/install.sh)</code>
       </p>
     </div>
 
     <p>
-      Choose <strong>Install</strong> (native, systemd + a virtualenv) or
-      <strong>Install with Docker</strong>. Defaults are safe and ask nothing:
-      port <code>2095</code>, admin user <code>admin</code>, self-signed TLS,
-      random URL path. Full walkthrough, the no-terminal flags and the first-login
-      flow: <a href="wiki/install.html">Install &amp; first login</a>.
+      Choose <strong>Install</strong> (native, systemd, as root or with sudo).
+      Defaults are safe and ask nothing: port <code>2095</code>, admin user
+      <code>admin</code>, self-signed TLS, random URL path. Full walkthrough, the
+      no-terminal flags and the first-login flow: <a href="wiki/install.html">Install &amp; first login</a>.
     </p>
 
     <h2>What you get</h2>
@@ -118,7 +114,7 @@
         <p>
           Self-signed by default, so the first start is encrypted with no
           domain. Switch to Let's Encrypt from the panel or with
-          <code>ovmanager https --domain</code>.
+          <code>ovmanager tls</code>.
         </p>
       </li>
       <li class="card">
@@ -129,19 +125,13 @@
           copy offsite over SSH.
         </p>
       </li>
-      <li class="card">
-        <h3>Telegram alerts</h3>
-        <p>
-          Optional bot that messages the owner about users near or over quota,
-          and once per node outage &mdash; then once more when the node is back.
-        </p>
-      </li>
+
       <li class="card">
         <h3>One operator CLI</h3>
         <p>
-          <code>ovmanager status</code>, <code>doctor</code>, <code>logs</code>,
-          <code>backup</code>, <code>restore</code>, <code>update</code>,
-          <code>rollback</code> and a recovery menu, all with stable exit codes.
+          <code>ovmanager status</code>, <code>service</code>, <code>logs</code>,
+          <code>backup</code>, <code>restore</code>, <code>urlpath</code>,
+          <code>tls</code> and <code>update</code> — all with stable exit codes.
         </p>
       </li>
     </ul>
@@ -186,8 +176,8 @@
 
     <h2>Wiki</h2>
     <ul class="grid">
-      <li class="card"><h3><a href="wiki/install.html">Install &amp; first login</a></h3><p>Native or Docker, the claim-key flow, update and uninstall, and the from-source path.</p></li>
-      <li class="card"><h3><a href="wiki/how-it-works.html">How it works</a></h3><p>The process model, where the data lives, the security model and the container image.</p></li>
+      <li class="card"><h3><a href="wiki/install.html">Install &amp; first login</a></h3><p>Native systemd install, the claim-key flow, update and uninstall, and the from-source path.</p></li>
+      <li class="card"><h3><a href="wiki/how-it-works.html">How it works</a></h3><p>The process model, where the data lives, and the security model behind a single-binary panel and its OVNode agents.</p></li>
       <li class="card"><h3><a href="wiki/nodes.html">Adding nodes</a></h3><p>Install OVNode, register it in the panel, and open the right ports.</p></li>
       <li class="card"><h3><a href="wiki/users.html">Users &amp; subscriptions</a></h3><p>Create users, hand out configs, understand subscription links.</p></li>
       <li class="card"><h3><a href="wiki/traffic.html">Traffic limits</a></h3><p>How usage is collected, counted and enforced, and what happens at the quota.</p></li>
