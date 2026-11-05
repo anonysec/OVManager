@@ -19,14 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v4
       - name: Setup Go
-        uses: actions/setup-go@f111f330738fe338886e8a9d52a77686134b9906 # v5.3.0
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
       - name: Setup Node.js
-        uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
+        uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Check version parity
@@ -52,18 +52,18 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@f111f330738fe338886e8a9d52a77686134b9906 # v5.3.0
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
@@ -99,7 +99,7 @@ jobs:
           done
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@c074443f1a5fb4aee83904b712464907e1401d1f # v2.2.3
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'ovmanager-linux-*'
 
