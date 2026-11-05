@@ -44,3 +44,4 @@ plan/
 docs/
 .review/
 cover.out
+__pycache__/
