@@ -659,7 +659,7 @@ run_node_installer() {
     if [[ "$EUID" -eq 0 ]]; then
         OVN_YES=1 bash "$tmp"
     else
-        sudo OVN_YES=1 bash "$tmp"
+        sudo env OVN_YES=1 bash "$tmp"
     fi
     rm -f "$tmp"
 }
