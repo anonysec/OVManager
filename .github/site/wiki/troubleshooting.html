@@ -235,8 +235,8 @@ sudo systemctl status ovnode         # host service logs</code></pre>
             <td>Stop whatever listens on 80, or keep the self-signed certificate for now.</td>
           </tr>
           <tr>
-            <td><code>No verified release file is available</code>, or a checksum error</td>
-            <td>The installer only accepts a verified release archive plus its SHA-256 sidecar. If those artifacts are not published yet, nothing is wrong with your server &mdash; use a
+            <td><code>No verified release file is available</code></td>
+            <td>The installer downloads a release binary from GitHub Releases. If that artifact is not published yet, nothing is wrong with your server &mdash; use a
               <a href="install.html#dev">from-source install</a> and upgrade later.</td>
           </tr>
         </tbody>

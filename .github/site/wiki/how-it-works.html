@@ -210,10 +210,10 @@
 
     <h2 id="updates">Updates</h2>
     <p>
-      The installer does not build from source. It downloads a verified release
-      binary and its mandatory SHA-256 sidecar, and refuses to continue on a
-      checksum mismatch. <code>sudo ovmanager update</code> stages the new tree,
-      health-checks it and rolls back automatically if it does not come up.
+      The installer does not build from source. It downloads a release binary
+      straight from GitHub Releases. <code>sudo ovmanager update</code> stages
+      the new tree, health-checks it and rolls back automatically if it does
+      not come up.
       An update interrupted by a reboot or power loss is recovered on the next
       update run. The database migrates itself on the next start. The previous
       tree is kept for inspection; the panel's data is restored with

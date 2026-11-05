@@ -432,7 +432,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		// no extract, no checksum/signature sidecar (releases ship bare).
 		bin := filepath.Join(stage, appSlug)
 		if err := download(releaseURL(target), bin); err != nil {
-			return fmt.Errorf("No verified release file is available for v%s", target)
+			return fmt.Errorf("No release file is available for v%s", target)
 		}
 		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // directory permissions managed according to least-privilege policy
 			return err

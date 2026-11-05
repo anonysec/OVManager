@@ -146,12 +146,11 @@ install.sh -y                 # never prompt
 install.sh -h                 # help</code></pre>
     </figure>
     <p>
-      The installer downloads a verified release binary for the platform, checks
-      its SHA-256 against the published sidecar, and refuses to continue on
-      mismatch. It installs the binary as a systemd service with a daily backup
-      timer, starts the panel and health-checks it. The panel URL and claim key
-      are shown after the optional node installer and before following logs.
-      There is no Docker mode: the installer is native systemd only.
+      The installer downloads a release binary for the platform and installs it
+      as a systemd service with a daily backup timer, starts the panel and
+      health-checks it. The panel URL and claim key are shown after the
+      optional node installer and before following logs. There is no Docker
+      mode: the installer is native systemd only.
     </p>
 
     <h2 id="node-cli">On each VPN node</h2>

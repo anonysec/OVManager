@@ -65,11 +65,11 @@ The project is preparing for a major architectural refactor. Advanced AI-assiste
 ## 💡 Why this one?
 
 - **A first login with nothing to leak.** The installer never creates an owner password and never writes one to disk. It prints a one-time claim key; the owner account does not exist until a browser posts that key and chooses a password. A copy of the server's config file is worth nothing to an attacker.
-- **Nothing is compiled on your server.** The installer downloads a bare release binary for this platform plus its mandatory SHA-256 sidecar and refuses to continue if the checksum does not match. The dashboard ships inside the binary; no compiler, no `git`, no `npm`, no runtime packages on the box.
+- **Nothing is compiled on your server.** The installer downloads a bare release binary for this platform. The dashboard ships inside the binary; no compiler, no `git`, no `npm`, no runtime packages on the box.
 - **The VPN servers are independent of the panel.** Nodes never call the panel and do not store its address, so the panel can be moved, rebuilt or replaced without touching a single VPN server. Re-attach them with the same address, name and key.
 - **Limits that hold while the panel is down.** The device limit is pushed to each node and enforced there at connect time. The panel is not asked permission, and its absence changes nothing.
 - **Accounting that cannot double-bill.** Each node reports a lifetime byte total per user; the panel remembers the last number it saw and bills only the increase. A dropped session, a restart or a rebuilt node cannot over-count.
-- **Updates that undo themselves.** `sudo ovmanager update` downloads a verified release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up.
+- **Updates that undo themselves.** `sudo ovmanager update` downloads a release, stages it, health-checks the new version, and automatically restores the previous code if the panel does not come up.
 - **A real API underneath.** The dashboard is a client of the panel's own JSON API and speaks the same login session.
 
 ## ✨ Features
