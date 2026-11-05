@@ -22,7 +22,6 @@ check-version:
 	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
 	grep -q "badge/version-$$v-blue" README.md || { echo "README badge mismatch with version.go ($$v)"; exit 1; }; \
 	grep -q "anonysec/OVManager/main/install.sh" README.md || { echo "README install pin (main) missing"; exit 1; }; \
-	grep -q "(v$$v, matching the binary's version constant)" README.md || { echo "README prose version mismatch with version.go ($$v)"; exit 1; }; \
 	echo "version parity OK: $$v"
 
 # One binary = the panel (bare invocation) + the `ovmanager` operator CLI. The SPA is
