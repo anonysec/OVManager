@@ -4,9 +4,11 @@
 package telemetry
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -337,10 +339,59 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 // health-overview promoter.
 func SendTelegram(db *sql.DB, text string) bool { return sendTelegram(db, text) }
 
-// sendTelegram is a no-op: telegram notification dispatch was removed with
-// internal/notify. Alert callers keep their call sites for telemetry.
+// telegramAPIBase is the Bot API root; tests point it at a stub server.
+var telegramAPIBase = "https://api.telegram.org"
+
+// sendTelegram posts one message to the owner's Telegram chat via the Bot API.
+// It is a one-way ops channel: a Telegram failure or a disabled bot is never
+// an error for the caller, it just returns false.
 func sendTelegram(db *sql.DB, text string) bool {
-	return false
+	if db == nil || text == "" {
+		return false
+	}
+	var token string
+	var enabled sql.NullInt64
+	var chatID sql.NullInt64
+	err := db.QueryRow(`SELECT bot_token, bot_enabled, owner_telegram_id FROM settings LIMIT 1`).
+		Scan(&token, &enabled, &chatID)
+	if err != nil {
+		return false
+	}
+	token = strings.TrimSpace(token)
+	if token == "" || !chatID.Valid || chatID.Int64 == 0 {
+		return false
+	}
+	if enabled.Valid && enabled.Int64 == 0 {
+		return false
+	}
+	if !enabled.Valid {
+		return false
+	}
+	body, err := json.Marshal(map[string]any{"chat_id": chatID.Int64, "text": text})
+	if err != nil {
+		return false
+	}
+	req, err := http.NewRequest(http.MethodPost, telegramAPIBase+"/bot"+token+"/sendMessage", bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var out struct {
+		Ok bool `json:"ok"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false
+	}
+	return out.Ok
 }
 
 // resolvedDataDir mirrors panel.dataDir without importing the panel package.

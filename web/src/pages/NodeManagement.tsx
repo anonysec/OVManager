@@ -51,6 +51,7 @@ const NodeManagement = () => {
   const [addOpen, setAddOpen] = useState(false);
   type NodeConfirm = { open: boolean; title: string; message: string; onConfirm: (() => void | Promise<void>) | null };
   const [confirm, setConfirm] = useState<NodeConfirm>({ open: false, title: '', message: '', onConfirm: null });
+  const [lastDeleted, setLastDeleted] = useState<{ id: number; name: string } | null>(null);
 
   const openConfirm = (title: string, message: string, onConfirm: () => void | Promise<void>) => setConfirm({ open: true, title, message, onConfirm });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
@@ -203,13 +204,22 @@ const NodeManagement = () => {
     }
   }, [addToast, fetchNodes, t]);
 
+  useEffect(() => {
+    if (!lastDeleted) return undefined;
+    const id = setTimeout(() => setLastDeleted(null), 25000);
+    return () => clearTimeout(id);
+  }, [lastDeleted]);
+
   const handleDelete = useCallback((node: any) => {
     openConfirm(
       t('deleteNode', 'Delete node'),
-      t('nodeConfirmDelete', 'Delete "{{name}}"? Its users and configs are removed too. This cannot be undone.', { name: node.name }),
+      t('nodeConfirmDelete', 'Delete "{{name}}"? Its users and configs are removed too. You can undo within 25 seconds.', { name: node.name }),
       async () => {
         try {
           const res = await apiClient.delete(`/nodes/${node.id}`);
+          if (res.data?.success) {
+            setLastDeleted({ id: node.id, name: node.name });
+          }
           addToast(res.data?.success ? t('nodeDeletedSuccess', 'Node deleted successfully.') : (res.data?.msg || t('error', 'Error')), res.data?.success ? 'success' : 'error');
           fetchNodes({ background: true });
         } catch (e) {
@@ -218,6 +228,22 @@ const NodeManagement = () => {
       },
     );
   }, [addToast, fetchNodes, t]);
+
+  const handleUndoDelete = useCallback(async () => {
+    if (!lastDeleted) return;
+    try {
+      const res = await apiClient.post(`/nodes/${lastDeleted.id}/restore`);
+      if (res.data?.success) {
+        addToast(t('nodeRestored', 'Node {{name}} restored.', { name: lastDeleted.name }), 'success');
+        setLastDeleted(null);
+        fetchNodes({ background: true });
+      } else {
+        addToast(res.data?.msg || t('undoFailed', 'Undo failed — node could not be restored.'), 'error');
+      }
+    } catch (e) {
+      addToast(errorMessageOf(e, t('undoFailed', 'Undo failed — node could not be restored.')), 'error');
+    }
+  }, [lastDeleted, addToast, fetchNodes, t]);
 
   const handleNodeCreated = (msg: any) => {
     setAddOpen(false);
@@ -250,6 +276,14 @@ const NodeManagement = () => {
         <StatCard label={t('nodesActive')} value={nodeStats.active} tone="success" icon={<FiCheckCircle aria-hidden="true" />} />
         <StatCard label={t('nodesInactive')} value={nodeStats.inactive} tone="danger" icon={<FiXCircle aria-hidden="true" />} />
       </div>
+
+      {lastDeleted && (
+        <div className="nm-bulkbar" role="status" aria-live="polite">
+          <span>{t('nodeDeletedUndo', 'Node {{name}} deleted', { name: lastDeleted.name })}</span>
+          <Button size="sm" onClick={handleUndoDelete}>{t('undo', 'Undo')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setLastDeleted(null)} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
+        </div>
+      )}
 
       <div className="nm-toolbar">
         <label className="nm-search">

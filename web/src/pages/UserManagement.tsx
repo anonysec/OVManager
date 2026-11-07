@@ -170,7 +170,7 @@ const UserManagement = () => {
 
   useEffect(() => {
     if (!lastDeleted) return undefined;
-    const id = setTimeout(() => setLastDeleted(null), 120000);
+    const id = setTimeout(() => setLastDeleted(null), 25000);
     return () => clearTimeout(id);
   }, [lastDeleted]);
 

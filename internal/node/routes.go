@@ -60,6 +60,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	h.register(mux, "GET /nodes/ovpn/id/{user_id}/{node_id}", user(h.handleDownloadOVPN))
 	h.register(mux, "GET /nodes/ovpn-all/{node_id}", owner(h.handleDownloadAllOVPN))
 	h.register(mux, "GET /nodes/{first}/{second}", owner(h.handleNodeSubresource))
+	h.register(mux, "POST /nodes/{node_id}/restore", owner(h.handleRestoreNode))
 	h.register(mux, "DELETE /nodes/{node_id}", owner(h.handleDeleteNode))
 }
 
@@ -474,6 +475,20 @@ func (h *Handler) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 		h.notifyChange("delete")
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
+}
+
+// handleRestoreNode restores a node deleted within the undo window.
+func (h *Handler) handleRestoreNode(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePositiveRouteID(r.PathValue("node_id"))
+	if !ok {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Invalid node id"})
+		return
+	}
+	ok2, msg := RestoreNodeHandler(id, h.svc.DB())
+	if ok2 {
+		h.notifyChange("restore")
+	}
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok2, Msg: msg})
 }
 
 func parsePositiveRouteID(raw string) (int64, bool) {

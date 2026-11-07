@@ -84,8 +84,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 30 || userVersion(t, conn) != 30 {
-		t.Fatalf("version = %d, user_version = %d, want 30", v, userVersion(t, conn))
+	if v != 31 || userVersion(t, conn) != 31 {
+		t.Fatalf("version = %d, user_version = %d, want 31", v, userVersion(t, conn))
 	}
 
 	for _, table := range []string{
@@ -122,8 +122,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v2 != 30 || userVersion(t, conn) != 30 {
-		t.Fatalf("second run version = %d/%d, want 30", v2, userVersion(t, conn))
+	if v2 != 31 || userVersion(t, conn) != 31 {
+		t.Fatalf("second run version = %d/%d, want 31", v2, userVersion(t, conn))
 	}
 	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
 		t.Fatalf("second run duplicated settings rows: %d", n)
@@ -170,8 +170,8 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 30 || userVersion(t, conn) != 30 {
-		t.Fatalf("version = %d/%d, want 30", v, userVersion(t, conn))
+	if v != 31 || userVersion(t, conn) != 31 {
+		t.Fatalf("version = %d/%d, want 31", v, userVersion(t, conn))
 	}
 	if !hasColumn(t, conn, "users", "tag") {
 		t.Fatalf("v8 did not add users.tag")
@@ -461,8 +461,8 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v != 30 {
-		t.Fatalf("version = %d, want 30", v)
+	if v != 31 {
+		t.Fatalf("version = %d, want 31", v)
 	}
 	var second int
 	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
@@ -645,8 +645,8 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 30 {
-		t.Fatalf("version = %d, want 30", v)
+	if v != 31 {
+		t.Fatalf("version = %d, want 31", v)
 	}
 	// user preserved
 	var id int64

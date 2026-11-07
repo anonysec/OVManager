@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 30
+const SchemaVersion = 31
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -403,6 +403,8 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at)`,
+	`CREATE TABLE IF NOT EXISTS deleted_nodes (id INTEGER PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS idx_deleted_nodes_expires ON deleted_nodes(expires_at)`,
 	`CREATE TABLE IF NOT EXISTS pending_user_revocations (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
 }
 
@@ -718,6 +720,13 @@ var steps = []step{
 			return nil
 		}
 		return addColumn(x, "nodes", "node_contract_version", "INTEGER DEFAULT 0 NOT NULL")
+	}},
+	{31, "deleted_nodes undo snapshot", func(x execer) error {
+		if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS deleted_nodes (id INTEGER PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`); err != nil {
+			return err
+		}
+		_, err := x.Exec(`CREATE INDEX IF NOT EXISTS idx_deleted_nodes_expires ON deleted_nodes(expires_at)`)
+		return err
 	}},
 }
 
