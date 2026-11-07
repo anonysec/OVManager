@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
@@ -473,12 +474,9 @@ func latestNodeCPU(db *sql.DB) []nodeCPU {
 	return out
 }
 
-func kvValue(db *sql.DB, key string) string {
-	var v sql.NullString
-	if db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, key).Scan(&v) != nil {
-		return ""
-	}
-	return v.String
+func kvValue(conn *sql.DB, key db.SettingsKey) string {
+	return db.ReadSetting(conn, key)
 }
 
 // bankerRound is banker's rounding, which Go's math.Round is not.
+

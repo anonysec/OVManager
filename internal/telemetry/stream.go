@@ -10,6 +10,7 @@
 package telemetry
 
 import (
+	"github.com/anonysec/OVManager/go/internal/db"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,7 +102,7 @@ func (b *Bus) Publish(topic string, data ...KV) {
 const SnapshotMaxNodes = 50
 
 // SnapshotMaxNodesKey is the settings_kv key overriding the cap.
-const SnapshotMaxNodesKey = "telemetry.snapshot_max_nodes"
+const SnapshotMaxNodesKey = db.SnapshotMaxNodesKey
 
 var procStart = time.Now()
 
@@ -417,3 +418,6 @@ func sameBools(a, b map[string]bool) bool {
 	}
 	return true
 }
+
+// SettingsKeyAlias mirrors db.SettingsKey for the snapshot_max_nodes override.
+type SettingsKeyAlias = db.SettingsKey

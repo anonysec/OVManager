@@ -358,6 +358,12 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 	latency := float64(time.Since(started).Microseconds()) / 1000.0
 	latency = float64(int(latency*10+0.5)) / 10
 
+	// Persist the advertised wire contract so "needs update" is one SQL
+	// query instead of a live probe per node.
+	if cv, ok := res.info["contract_version"].(float64); ok {
+		_, _ = db.Exec(`UPDATE nodes SET node_contract_version = ? WHERE id = ?`, int64(cv), n.ID)
+	}
+
 	return map[string]any{
 		"node": map[string]any{
 			"id":          n.ID,

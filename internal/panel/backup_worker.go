@@ -66,8 +66,7 @@ func (h *Handler) backupTickAt(now time.Time) {
 	}
 	day := localNow.Format("2006-01-02")
 
-	var last string
-	_ = db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, "backup.last_success_day").Scan(&last)
+	last := readSetting(db, settingKeyBackupLastSuccessDay)
 	if last == day {
 		return
 	}
@@ -105,12 +104,7 @@ func (h *Handler) backupTickAt(now time.Time) {
 		}
 	}
 
-	_, _ = db.Exec(
-		`INSERT INTO settings_kv (key, value, updated_at) VALUES (?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
-		"backup.last_success_day", day, now.Unix(),
-		day, now.Unix(),
-	)
+	_ = writeSetting(db, settingKeyBackupLastSuccessDay, day, now.Unix())
 	log.Printf("backup worker: created %s", path)
 }
 
@@ -128,4 +122,23 @@ func recordOffsiteResult(db *sql.DB, target, tool string, copyErr error) {
 		meta["detail"] = detail
 	}
 	telemetry.RecordEvent(db, "backup_offsite", severity, message, meta)
+}
+
+// settingKeyBackupLastSuccessDay is the settings_kv key read/written below.
+const settingKeyBackupLastSuccessDay = "backup.last_success_day"
+
+// readSetting reads one settings_kv row without failing the tick.
+func readSetting(db *sql.DB, key string) string {
+	var v string
+	_ = db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, key).Scan(&v)
+	return v
+}
+
+// writeSetting persists one settings_kv row atomically.
+func writeSetting(db *sql.DB, key, value string, nowUnix int64) error {
+	_, err := db.Exec(
+		`INSERT INTO settings_kv (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
+		key, value, nowUnix, value, nowUnix)
+	return err
 }
