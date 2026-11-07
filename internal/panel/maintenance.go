@@ -19,7 +19,6 @@ import (
 	"github.com/anonysec/OVManager/go/internal/billing"
 	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/users"
 )
@@ -493,9 +492,6 @@ func (h *Handler) activateDatabase(stage func(dst string) (string, error)) (dist
 		// service keeps serving instead of a closed pool.
 		if fresh, oerr := openLive(live); oerr == nil {
 			_ = h.Svc.DBSwap(fresh)
-			if w := notify.Running(); w != nil {
-				w.SwapDB(fresh)
-			}
 			return false, err
 		}
 		// The pool could not be reopened: the panel is down and only the
@@ -511,9 +507,6 @@ func (h *Handler) activateDatabase(stage func(dst string) (string, error)) (dist
 	// DBSwap publishes the new pool; `old` is already closed, do not close
 	// it again.
 	_ = h.Svc.DBSwap(fresh)
-	if w := notify.Running(); w != nil {
-		w.SwapDB(fresh)
-	}
 	return true, nil
 }
 

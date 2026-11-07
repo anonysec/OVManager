@@ -8,16 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/notify"
 	"os"
 )
 
@@ -340,31 +337,10 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 // health-overview promoter.
 func SendTelegram(db *sql.DB, text string) bool { return sendTelegram(db, text) }
 
-// sendTelegram sends one message through the notify package (the shared
-// stdlib transport); false when the bot is unconfigured or the transport
-// fails (notifier.send_telegram). Plain text — no HTML parse mode.
+// sendTelegram is a no-op: telegram notification dispatch was removed with
+// internal/notify. Alert callers keep their call sites for telemetry.
 func sendTelegram(db *sql.DB, text string) bool {
-	if db == nil {
-		return false
-	}
-	var enabled sql.NullInt64
-	var ownerID sql.NullInt64
-	var token sql.NullString
-	err := db.QueryRow(`SELECT bot_enabled, owner_telegram_id, bot_token FROM settings LIMIT 1`).
-		Scan(&enabled, &ownerID, &token)
-	if err != nil || !enabled.Valid || enabled.Int64 == 0 || !ownerID.Valid || !token.Valid || token.String == "" {
-		return false
-	}
-	tok := token.String
-	plain, err := crypto.DecryptSecret(tok, resolvedDataDir())
-	if err != nil {
-		return false
-	}
-	tok = plain
-	if strings.HasPrefix(tok, "enc:") {
-		return false // legacy encrypted token fails closed
-	}
-	return notify.SendMessage(tok, strconv.FormatInt(ownerID.Int64, 10), text) == nil
+	return false
 }
 
 // resolvedDataDir mirrors panel.dataDir without importing the panel package.
@@ -479,4 +455,3 @@ func kvValue(conn *sql.DB, key db.SettingsKey) string {
 }
 
 // bankerRound is banker's rounding, which Go's math.Round is not.
-

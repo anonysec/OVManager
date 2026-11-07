@@ -187,10 +187,10 @@ func nodeVersionCompat(agentVersion any) map[string]any {
 	agent, okA := versionParts(agentVersion)
 	panel, okP := versionParts(version.Version)
 	out := map[string]any{
-		"agent_version":       agentVersion,
-		"panel_version":       version.Version,
-		"contract_version":    ContractVersion,
-		"contract_supported":  true,
+		"agent_version":      agentVersion,
+		"panel_version":      version.Version,
+		"contract_version":   ContractVersion,
+		"contract_supported": true,
 	}
 	if !okA || !okP {
 		out["verdict"] = "unknown"
@@ -585,10 +585,6 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 	var lon any
 	if manual != "" {
 		cc = manual
-	} else if code, lLat, lLon, ok := Geolocate(req.Address); ok {
-		cc = code
-		lat = lLat
-		lon = lLon
 	}
 	storedKey := req.key()
 	if enc, err := crypto.EncryptSecret(storedKey, dataDir()); err == nil {
@@ -620,9 +616,6 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 	if manual != "" {
 		set += `, country_code=?, latitude=NULL, longitude=NULL`
 		args = append(args, manual)
-	} else if code, lat, lon, ok := Geolocate(req.Address); ok {
-		set += `, country_code=?, latitude=?, longitude=?`
-		args = append(args, code, lat, lon)
 	}
 	if cert != "" {
 		set += `, server_ca=?`

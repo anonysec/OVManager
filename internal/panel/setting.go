@@ -13,7 +13,6 @@ import (
 
 	"github.com/anonysec/OVManager/go/internal/audit"
 	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
 	"github.com/anonysec/OVManager/go/internal/version"
 )
@@ -128,7 +127,7 @@ func maskedBotToken(s settings) any {
 	if s.strOr("bot_token") == "" {
 		return nil
 	}
-	return notify.MaskToken(s.strOr("bot_token"))
+	return s.strOr("bot_token")
 }
 
 // publicURLOr is (config.PUBLIC_URL or str(request.base_url)).

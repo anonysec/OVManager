@@ -38,8 +38,6 @@ type Handler struct {
 	urlValue string
 	urlAt    float64
 
-	// issuance (bundle: the whole ACME flow owns the certificate state for
-	// its duration) is serialized separately from the short file writes.
 	acmeMu sync.Mutex
 
 	// activeReq tracks in-flight requests so a database restore can wait for
@@ -121,9 +119,9 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /updater/operation", owner(h.updateOperation))
 	mux.HandleFunc("POST /updater/run", owner(h.runUpdate))
 
-	// Daily ACME renewal (T-30d) + boot issuance when the installer wired
-	// OVM_ACME_DOMAIN. No-op without an enrolled domain.
-	h.startACMEWorker()
+	// No in-process ACME (removed). Certificates arrive externally via
+	// `ovmanager tls install <cert.pem> <key.pem>`; the panel only reads them
+	// at startup.
 
 	// Per-user traffic accounting: one goroutine polling active nodes and
 	// billing their cumulative-total deltas. Runs regardless of the Telegram
@@ -134,12 +132,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// snapshot the subscription page, health checklist and SSE events read.
 	// Idle cadence is enforced by the collector's own pollDue gate.
 	h.startLiveWorker()
-
-	// Telegram ops channel: one worker goroutine (daily summary at
-	// telegram_summary_time, immediate expired/over-quota events, node/CPU
-	// threshold sweeps through telemetry.CollectMetrics). No-op while the bot
-	// is disabled or unconfigured.
-	h.startTelegramWorker()
 
 	// Daily DB backup (replaces the ovmanager-backup timer).
 	h.startBackupWorker()

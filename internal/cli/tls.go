@@ -8,16 +8,11 @@
 package cli
 
 import (
-	"context"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -26,8 +21,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/anonysec/OVManager/go/internal/acme"
 )
 
 func tlsDir(inst Install) string { return filepath.Join(inst.DataDir, "tls") }
@@ -221,7 +214,7 @@ func runTLSRenew(inst Install) (string, int) {
 	if domain == "" {
 		return block([]string{heading("HTTPS certificate"), "could not determine domain from certificate"}), 1
 	}
-	text, code := runTLSAcme(inst, domain, "")
+	text, code := runTLSIssue(inst, domain, "")
 	return text, code
 }
 
@@ -272,143 +265,6 @@ func port80Occupant() (proc string, unit string, found bool) {
 	return proc, unit, true
 }
 
-func runTLSAcme(inst Install, domain, email string) (string, int) {
-	if domain == "" {
-		return block([]string{heading("HTTPS certificate"), "usage: ovmanager tls acme <domain> [email]"}), 2
-	}
-
-	// If port 80 is busy, offer to free it temporarily (with confirmation).
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:80", 2*time.Second)
-	if err == nil {
-		_ = conn.Close()
-		proc, unit, found := port80Occupant()
-		msg := "port 80 is in use"
-		if found && proc != "" {
-			msg = "port 80 is in use by " + proc
-		}
-		// determine TTY
-		isTTY := false
-		if fi, _ := os.Stdin.Stat(); fi != nil && (fi.Mode()&os.ModeCharDevice) != 0 {
-			isTTY = true
-		}
-		if !isTTY {
-			return block([]string{
-				heading("HTTPS certificate"),
-				msg,
-				"free port 80 and retry, or run interactively to confirm auto-stop.",
-			}), 1
-		}
-		if unit == "" {
-			return block([]string{
-				heading("HTTPS certificate"),
-				msg,
-				"could not map it to a systemd service; free port 80 manually and retry.",
-			}), 1
-		}
-		fmt.Fprintf(os.Stderr, "%s\nStop %s temporarily to free port 80? [y/N]: ", msg, unit)
-		var answer string
-		_, _ = fmt.Scanln(&answer)
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "y" && answer != "yes" {
-			return block([]string{
-				heading("HTTPS certificate"),
-				"aborted - port 80 left untouched.",
-			}), 1
-		}
-		// stop
-		if err := exec.Command("systemctl", "stop", unit).Run(); err != nil { // #nosec G204 // command arguments are static or validated against strict allowlist
-			return block([]string{heading("HTTPS certificate"), "could not stop " + unit + ": " + err.Error()}), 1
-		}
-		// restart on exit (success or failure)
-		defer func(u string) {
-			_ = exec.Command("systemctl", "start", u).Run() // #nosec G204 // command arguments are static or validated against strict allowlist
-		}(unit)
-		// wait briefly for port to be released
-		for i := 0; i < 20; i++ {
-			c, err := net.DialTimeout("tcp", "127.0.0.1:80", 500*time.Millisecond)
-			if err != nil {
-				break
-			}
-			_ = c.Close()
-			time.Sleep(250 * time.Millisecond)
-		}
-	}
-
-	// account key
-	dir := tlsDir(inst)
-	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
-		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
-	}
-	acctPath := filepath.Join(dir, "acme-account.pem")
-	key, err := loadOrCreateAccountKeyCLI(acctPath)
-	if err != nil {
-		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	profile := ""
-	if net.ParseIP(domain) != nil {
-		profile = "shortlived"
-	}
-	res, err := acme.Issue(ctx, acme.Options{
-		Domains:    []string{domain},
-		AccountKey: key,
-		HTTPPort:   80,
-		Profile:    profile,
-	})
-	if err != nil {
-		return block([]string{heading("HTTPS certificate"), "acme failed: " + err.Error()}), 1
-	}
-	certPath, keyPath := tlsTargetPaths(inst)
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
-		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
-		return block([]string{heading("HTTPS certificate"), err.Error()}), 1
-	}
-	if err := os.WriteFile(certPath, res.CertPEM, 0o644); err != nil { // #nosec G306 // public certificate is world-readable by design
-		return block([]string{heading("HTTPS certificate"), "could not write certificate: " + err.Error()}), 1
-	}
-	if err := os.WriteFile(keyPath, res.KeyPEM, 0o600); err != nil {
-		return block([]string{heading("HTTPS certificate"), "could not write key: " + err.Error()}), 1
-	}
-	_ = fixTLSOwnership(certPath, 0o644)
-	_ = fixTLSOwnership(keyPath, 0o600)
-	// persist account key if returned
-	if len(res.AccountKeyPEM) > 0 {
-		if err := os.WriteFile(acctPath, res.AccountKeyPEM, 0o600); err != nil {
-			return block([]string{heading("HTTPS certificate"), "could not persist the ACME account key: " + err.Error()}), 1
-		}
-		_ = fixTLSOwnership(acctPath, 0o600)
-	}
-	_ = email
-	return block([]string{heading("HTTPS certificate"), fmt.Sprintf("Let's Encrypt cert issued for %s", domain), "restart panel to serve HTTPS on 0.0.0.0", "fix            ovmanager service restart"}), 0
-}
-
-func loadOrCreateAccountKeyCLI(path string) (crypto.Signer, error) {
-	if raw, err := os.ReadFile(path); err == nil { // #nosec G304 // path is validated within trusted data or application directory
-		if block, _ := pem.Decode(raw); block != nil {
-			if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-				if signer, ok := key.(crypto.Signer); ok {
-					return signer, nil
-				}
-			}
-		}
-	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return nil, err
-	}
-	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
-		return nil, err
-	}
-	if err := os.WriteFile(path, pemBytes, 0o600); err != nil {
-		return nil, err
-	}
-	return key, nil
+func runTLSIssue(inst Install, domain, email string) (string, int) {
+	return block([]string{"HTTPS certificate", "in-process issuance removed; install your own cert instead:", "  ovmanager tls install <cert.pem> <key.pem>", "acme.sh or any CA client serve as external source"}), 1
 }
