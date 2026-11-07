@@ -34,7 +34,7 @@ func NewHandler(svc *auth.Service) *Handler {
 }
 
 // deletedUserKey is the prefix for deleted_users table keys.
-const deletedTTLSeconds = 120
+const deletedTTLSeconds = 86400
 
 // Mount registers the users routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
