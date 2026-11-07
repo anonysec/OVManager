@@ -38,7 +38,6 @@ type Handler struct {
 	urlValue string
 	urlAt    float64
 
-
 	// activeReq tracks in-flight requests so a database restore can wait for
 	// them to complete before swapping the live pool.
 	activeReq sync.WaitGroup
