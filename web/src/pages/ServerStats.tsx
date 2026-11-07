@@ -39,6 +39,15 @@ const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesRea
       if (!reachable) {
         out.push({ id: `node-${n.id}`, level: 'danger', link: '/nodes', title: t('notifNodeUnreachable', 'Node {{name}} unreachable', { name: n.name }) });
       }
+      // Contract negotiation lives in the node status payload (wire
+      // contract v3). A mismatch is an actionable notice, never silence.
+      const vc: any = st?.version_compat || {};
+      if (vc.contract_verdict && vc.contract_verdict !== 'compatible' && vc.contract_notice) {
+        out.push({
+          id: `contract-${n.id}`, level: vc.contract_supported === false ? 'danger' : 'warning',
+          link: '/nodes', title: vc.contract_notice,
+        });
+      }
     });
   }
   (serverNotifs || []).forEach((s: any) => {
