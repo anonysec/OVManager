@@ -34,10 +34,11 @@ func TestDownloadAllPushesPolicyBeforeProfiles(t *testing.T) {
 	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
 	seedTrafficNode(t, conn, 1, "node-a", srv)
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, max_logins, is_active) VALUES (7, 'u7', 'alice', 3, 0)`); err != nil {
+	// Two users: alice (still active) and bob (disabled). Policy is pushed
+	// for both, but only alice's profile lands in the ZIP.
+	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, max_logins, is_active) VALUES (7, 'u7', 'alice', 3, 1), (8, 'u8', 'bob', 3, 0)`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
-	// User is manually disabled (is_active=0): policy must deactivate on node.
 	out := DownloadAllOVPNClients(1, conn)
 	if out == nil {
 		t.Fatalf("DownloadAllOVPNClients = nil")
@@ -52,7 +53,7 @@ func TestDownloadAllPushesPolicyBeforeProfiles(t *testing.T) {
 		names = append(names, f.Name)
 	}
 	if len(names) != 1 || names[0] != "alice.ovpn" {
-		t.Fatalf("zip contents = %v, want [alice.ovpn]", names)
+		t.Fatalf("zip contents = %v, want [alice.ovpn] only (disabled bob omitted)", names)
 	}
 	mu.Lock()
 	defer mu.Unlock()

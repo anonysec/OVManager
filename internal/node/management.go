@@ -842,6 +842,11 @@ func DownloadAllOVPNClients(nodeID int64, db *sql.DB) []byte {
 		// Policy first, as for single downloads: a bulk profile must not
 		// outlive a deactivation the node has not yet acknowledged.
 		pushDesiredPolicy(db, n, pid, u.id)
+		// Skip anyone whose effective access is not granted: a bulk profile
+		// must not include disabled, expired, or out-of-traffic users.
+		if !userEffectivelyActive(db, u.id) {
+			continue
+		}
 		raw := c.DownloadOVPNBytes(strconv.FormatInt(u.id, 10))
 		if raw == nil {
 			continue
@@ -860,6 +865,31 @@ func DownloadAllOVPNClients(nodeID int64, db *sql.DB) []byte {
 type userRef struct {
 	id   int64
 	name string
+}
+
+// userEffectivelyActive applies the same predicate the policy loop uses:
+// manual flag AND not (expired OR over quota).
+func userEffectivelyActive(db *sql.DB, id int64) bool {
+	var isActive int64
+	var expiry sql.NullString
+	var total, used sql.NullInt64
+	err := db.QueryRow(`SELECT is_active, expiry_date, total, used FROM users WHERE id = ?`, id).
+		Scan(&isActive, &expiry, &total, &used)
+	if err != nil {
+		return false
+	}
+	if isActive == 0 {
+		return false
+	}
+	var totalPtr *int64
+	if total.Valid {
+		totalPtr = &total.Int64
+	}
+	var usedVal int64
+	if used.Valid {
+		usedVal = used.Int64
+	}
+	return AccessBlocked(expiry.String, totalPtr, usedVal, time.Now()) == ""
 }
 
 func allUsers(db *sql.DB) []userRef {
