@@ -16,9 +16,7 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -216,53 +214,6 @@ func runTLSRenew(inst Install) (string, int) {
 	}
 	text, code := runTLSIssue(inst, domain, "")
 	return text, code
-}
-
-// port80Occupant returns the process name and (best-effort) systemd unit
-// holding port 80, plus whether one was found.
-func port80Occupant() (proc string, unit string, found bool) {
-	out, err := exec.Command("ss", "-tlnp", "sport = :80").Output()
-	if err != nil {
-		return "", "", false
-	}
-	re := regexp.MustCompile(`pid=(\d+)`)
-	m := re.FindStringSubmatch(string(out))
-	if m == nil {
-		return "", "", false
-	}
-	pid := m[1]
-	data, err := os.ReadFile("/proc/" + pid + "/comm") // #nosec G304 // path is validated within trusted data or application directory
-	if err != nil {
-		return "", "", false
-	}
-	proc = strings.TrimSpace(string(data))
-	// try cgroup for the systemd unit
-	cg, _ := os.ReadFile("/proc/" + pid + "/cgroup") // #nosec G304 // path is validated within trusted data or application directory
-	for _, line := range strings.Split(string(cg), "\n") {
-		if i := strings.Index(line, ".service"); i >= 0 {
-			// extract the unit name
-			start := strings.LastIndex(line[:i], "/")
-			if start < 0 {
-				start = strings.LastIndex(line[:i], ":")
-			}
-			if start >= 0 {
-				unit = line[start+1 : i+len(".service")]
-				break
-			}
-		}
-	}
-	if unit == "" {
-		// fallback mapping by process name
-		switch proc {
-		case "nginx":
-			unit = "nginx"
-		case "apache2", "httpd":
-			unit = proc
-		case "caddy":
-			unit = "caddy"
-		}
-	}
-	return proc, unit, true
 }
 
 func runTLSIssue(inst Install, domain, email string) (string, int) {
