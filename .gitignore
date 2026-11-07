@@ -42,6 +42,8 @@ plan/
 .worktrees/
 .pre-commit-cache/
 docs/
+!.github/docs/
+!.github/docs/**
 .review/
 cover.out
 __pycache__/

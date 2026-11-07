@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ — OVManager docs</title>
+<meta name="description" content="OVManager frequently asked questions: install, login, nodes, TLS, backups, and the Telegram bot.">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap">
+<a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+<nav class="site-nav" aria-label="Primary"><a href="../index.html">Home</a><a href="index.html" aria-current="page">Wiki</a><a href="https://github.com/anonysec/OVManager">GitHub</a></nav>
+</div></header>
+<main id="main"><div class="wrap">
+<nav class="wikinav" aria-label="Wiki topics"><ul>
+<li><a href="index.html">Overview</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="install.html">Install &amp; first login</a></li>
+<li><a href="nodes.html">Adding nodes</a></li><li><a href="users.html">Users &amp; subscriptions</a></li><li><a href="traffic.html">Traffic limits</a></li>
+<li><a href="tls.html">TLS certificates</a></li><li><a href="backup.html">Backups &amp; restore</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="cli.html">CLI reference</a></li><li><a href="config.html">Configuration</a></li><li><a href="api.html">API &amp; contract</a></li>
+<li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="faq.html" aria-current="page">FAQ</a></li>
+</ul></nav>
+<h1>FAQ</h1>
+<p class="lede">The questions that recur, answered from the code and docs.</p>
+<h2>Do users need to install anything to activate the Telegram bot?</h2>
+<p>No. The owner creates the user in the panel and hands over the activation link (<code>t.me/&lt;bot&gt;?start=&lt;user-uuid&gt;</code>). The user taps Start once; the chat bound to that account thereafter shows <code>/me</code> and <code>/ovpn</code>. Users cannot extend or disable themselves.</p>
+<h2>Can a user extend their quota from Telegram?</h2>
+<p>No. Extend is owner-side by design: panel actions or the owner's <code>/extend &lt;user&gt; &lt;days&gt; [gb]</code> command. The user bot is read-only.</p>
+<h2>What happens when I delete a user or a node by accident?</h2>
+<p>You have <strong>25 seconds</strong> to press Undo in the banner. After that the snapshot expires (<code>410 Gone</code> for users, <code>Undo window expired</code> for nodes). There is no undo after 25 seconds by design.</p>
+<h2>Why does the panel use a random URL path?</h2>
+<p>It hides the panel identity from internet scanners. It is not authentication; the owner login (bcrypt hash in the database) is the gate. <code>ovmanager urlpath</code> prints the path.</p>
+<h2>What if I forget the owner password?</h2>
+<p>Reset it from the server; user data is untouched: <code>sudo ovmanager reset-password</code>. The value is never logged.</p>
+<h2>Node says red in the panel?</h2>
+<p>Check, in order: address (public IP), sync port (2083, not 1194), API key (exact, no spaces), TLS switch matching the node, name equality with <code>OVN_NAME</code>, and firewall <code>2083/tcp</code>. Full table: <a href="troubleshooting.html#node-red">Troubleshooting → Node stays red</a>.</p>
+<h2>Where is my data?</h2>
+<p>Panel: <code>/var/lib/ovmanager/ovmanager.db</code> (SQLite). Node PKI and OpenVPN config: <code>/etc/openvpn</code>. Node agent data: <code>/var/lib/ovnode</code>.</p>
+<h2>How do I back up and restore?</h2>
+<p><code>ovmanager backup</code> writes a verified bundle; the daily timer keeps it fresh. Test one restore before you need it — <a href="backup.html">Backups &amp; restore</a>.</p>
+</div></main>
+<footer class="site-foot"><div class="wrap">
+<p>OVManager is MIT-licensed. Pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>.</p>
+<p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+</div></footer>
+<script src="../assets/site.js"></script>
+</body></html>

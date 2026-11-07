@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decisions — OVManager docs</title>
+<meta name="description" content="OVManager design decisions: two repos, TLS policy, versioning, and the safety features.">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap">
+<a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+<nav class="site-nav" aria-label="Primary"><a href="../index.html">Home</a><a href="index.html" aria-current="page">Wiki</a><a href="https://github.com/anonysec/OVManager">GitHub</a></nav>
+</div></header>
+<main id="main"><div class="wrap">
+<nav class="wikinav" aria-label="Wiki topics"><ul>
+<li><a href="index.html">Overview</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="install.html">Install &amp; first login</a></li>
+<li><a href="nodes.html">Adding nodes</a></li><li><a href="users.html">Users &amp; subscriptions</a></li><li><a href="traffic.html">Traffic limits</a></li>
+<li><a href="tls.html">TLS certificates</a></li><li><a href="backup.html">Backups &amp; restore</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="cli.html">CLI reference</a></li><li><a href="config.html">Configuration</a></li><li><a href="api.html">API &amp; contract</a></li>
+<li><a href="decisions.html" aria-current="page">Decisions</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
+</ul></nav>
+<h1>Decisions</h1>
+<p class="lede">Settled choices. Items marked LOCKED do not change without a version bump.</p>
+<h2 id="topology">Topology (LOCKED)</h2>
+<ul>
+<li>Two repos: <code>anonysec/OVManager</code> (panel) and <code>anonysec/OVNode</code> (node agent), independently tagged. Wire contract v3 couples them.</li>
+<li>One panel drives many nodes over TLS with pinned node certs. Ports are defaults only: panel 2095, node 2083, OpenVPN 1194.</li>
+<li>Installers fetch from <code>main</code>; versions pin via <code>OVM_VERSION</code> / <code>OVN_VERSION</code>. <code>--build</code> is clone-and-build only, panel only.</li>
+<li>Node ships bare-metal only. Docker is a non-goal.</li>
+</ul>
+<h2 id="tls-policy">TLS policy (LOCKED)</h2>
+<div class="table-scroll"><table><caption>Public TLS identity by component.</caption><thead><tr><th scope="col">Component</th><th scope="col">Public TLS</th><th scope="col">Why</th></tr></thead><tbody>
+<tr><td>Panel</td><td>ACME (Let's Encrypt) or own cert via <code>ovmanager tls install</code></td><td>Operators need browser-trusted HTTPS; self-signed is a warning footgun.</td></tr>
+<tr><td>Node</td><td>Self-signed + pinned fingerprint</td><td>Control plane; one panel owns it; ACME never serves the node.</td></tr>
+<tr><td>nginx</td><td>Not a product dependency</td><td>Operators may front the panel with nginx externally, but the panel serves HTTPS natively.</td></tr>
+</tbody></table></div>
+<h2 id="versioning">Versioning</h2>
+<ul>
+<li>Wire contract v3 couples panel and node. Both carry <code>ContractVersion = 3</code>.</li>
+<li>Panel product version line reset to <code>2.0.0</code> (2026-11-02). Installers fetch from <code>main</code>.</li>
+</ul>
+<h2 id="safety">Safety features (LOCKED)</h2>
+<ul>
+<li><strong>25-second undo.</strong> User and node deletes are restorable within 25 seconds via the banner (Undo + ✕). After that the snapshot expires (<code>410 Gone</code>). Node restore re-inserts the node row only.</li>
+<li><strong>Keep-last-user.</strong> The final account cannot be deleted (catastrophic-misconfig protection).</li>
+<li><strong>Restore = verify → swap → rollback.</strong> <code>PRAGMA user_version</code> is stamped into the restored file; too-new pools refuse with a typed error.</li>
+</ul>
+<h2 id="db">Database &amp; migrations</h2>
+<ul>
+<li>Fresh install and migrated schema must match (<code>PRAGMA table_info</code> diff = ∅), guarded by <code>TestFreshSchemaMatchesMigratedSchema</code>.</li>
+<li><code>settings_kv</code> keys are registry-validated; unknown keys are rejected.</li>
+<li>Reserved <code>node_usage</code> keys are exactly <code>{push_hash, __epochs, __reseed}</code> in one file.</li>
+</ul>
+</div></main>
+<footer class="site-foot"><div class="wrap">
+<p>OVManager is MIT-licensed. Pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>.</p>
+<p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+</div></footer>
+<script src="../assets/site.js"></script>
+</body></html>

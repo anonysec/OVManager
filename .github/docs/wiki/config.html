@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration — OVManager docs</title>
+<meta name="description" content="OVManager configuration: panel port, URL path, TLS, the 25-second undo window, and the Telegram management bot.">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+<main id="main"><div class="wrap">
+<nav class="wikinav" aria-label="Wiki topics"><ul>
+<li><a href="index.html">Overview</a></li><li><a href="how-it-works.html">How it works</a></li>
+<li><a href="install.html">Install &amp; first login</a></li><li><a href="nodes.html">Adding nodes</a></li>
+<li><a href="users.html">Users &amp; subscriptions</a></li><li><a href="traffic.html">Traffic limits</a></li>
+<li><a href="tls.html">TLS certificates</a></li><li><a href="backup.html">Backups &amp; restore</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li><li><a href="cli.html">CLI reference</a></li>
+<li><a href="config.html" aria-current="page">Configuration</a></li><li><a href="api.html">API &amp; contract</a></li>
+<li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html">Changelog</a></li>
+<li><a href="faq.html">FAQ</a></li>
+</ul></nav>
+<h1>Configuration</h1>
+<p class="lede">Panel defaults, the undo window, and the Telegram bot.</p>
+<h2 id="defaults">Defaults a fresh install uses</h2>
+<div class="table-scroll"><table><caption>What a fresh install uses unless you say otherwise.</caption><thead><tr><th scope="col">What</th><th scope="col">Default</th></tr></thead><tbody>
+<tr><td>Panel port</td><td><code>2095</code></td></tr>
+<tr><td>Node sync port</td><td><code>2083</code></td></tr>
+<tr><td>OpenVPN port</td><td><code>1194</code></td></tr>
+<tr><td>Admin user</td><td><code>admin</code></td></tr>
+<tr><td>TLS</td><td>self-signed (switch to Let's Encrypt in the panel)</td></tr>
+<tr><td>Data directory</td><td><code>/var/lib/ovmanager</code></td></tr>
+<tr><td>Install directory</td><td><code>/opt/ovmanager</code></td></tr>
+<tr><td>New-user defaults</td><td>30 days, 100 GB, 1 device</td></tr>
+</tbody></table></div>
+<h2 id="undo">Undo window (25 seconds)</h2>
+<p>Deleting a user or a node is undoable for <strong>25 seconds</strong>. The banner shows the Undo button and a ✕ dismiss button; both clear after 25 seconds. After that the snapshot expires and the restore API returns <code>410 Gone</code>. Node restore re-inserts the node row only; per-user <code>node_usage</code> baselines are not resurrected and re-baseline on the next poll.</p>
+<h2 id="telegram">Telegram management bot</h2>
+<p>The bot is in-panel (long-poll from the panel, no external service) and inactive until Settings → Telegram holds a bot token and an owner chat ID. The token is stored encrypted and masked as <code>••last4</code>.</p>
+<ul>
+<li><strong>User activation:</strong> owner creates a user in the panel and hands over an activation link of the form <code>t.me/&lt;bot&gt;?start=&lt;user-uuid&gt;</code>. A user taps Start to bind their chat to that account. Unbound chats see only the prompt to ask their operator for a link.</li>
+<li><strong>User commands (read-only):</strong> <code>/me</code> (status, used/limit, expiry), <code>/ovpn</code> (points to the panel subscription page). Users cannot extend, disable, or delete themselves.</li>
+<li><strong>Owner commands:</strong> <code>/list</code>, <code>/extend &lt;uuid|name&gt; &lt;days&gt; [gb]</code> (Stacks onto a future expiry, or counts from today). Owner is the chat in Settings → Telegram → Chat ID.</li>
+<li><strong>One-way alerts:</strong> node down/up, threshold alerts, and the daily summary use the same sender. Any Telegram failure returns <code>false</code> and never blocks panel work.</li>
+</ul>
+</div></main>
+<footer class="site-foot"><div class="wrap">
+<p>OVManager is MIT-licensed. Pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>.</p>
+<p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+</div></footer>
+<script src="../assets/site.js"></script>
+</body></html>

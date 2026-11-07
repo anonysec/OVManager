@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog — OVManager docs</title>
+<meta name="description" content="OVManager releases: 2.0.2, 2.0.1, 2.0.0 and the archived pre-reset line.">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap">
+<a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+<nav class="site-nav" aria-label="Primary"><a href="../index.html">Home</a><a href="index.html" aria-current="page">Wiki</a><a href="https://github.com/anonysec/OVManager">GitHub</a></nav>
+</div></header>
+<main id="main"><div class="wrap">
+<nav class="wikinav" aria-label="Wiki topics"><ul>
+<li><a href="index.html">Overview</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="install.html">Install &amp; first login</a></li>
+<li><a href="nodes.html">Adding nodes</a></li><li><a href="users.html">Users &amp; subscriptions</a></li><li><a href="traffic.html">Traffic limits</a></li>
+<li><a href="tls.html">TLS certificates</a></li><li><a href="backup.html">Backups &amp; restore</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="cli.html">CLI reference</a></li><li><a href="config.html">Configuration</a></li><li><a href="api.html">API &amp; contract</a></li>
+<li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
+</ul></nav>
+<h1>Changelog</h1>
+<p class="lede">The version line was reset to 2.0.0 on 2026-11-02. Everything below that is archived history.</p>
+<h2>2.0.2</h2>
+<ul>
+<li>Wire-contract v3 negotiation and panel compat banner.</li>
+<li>Undo TTL raised and tested; restore stamps <code>user_version</code>; newer-schema rejection.</li>
+<li>ZIP bulk download skips disabled users (policy-first push kept).</li>
+<li>Feature cuts: ACME worker, geolocation, Telegram daemon (later restored as in-panel bot).</li>
+<li>Single systemd unit for the node; Go dedup; contract generation in CI.</li>
+</ul>
+<h2>2.0.1 — 2026-11-05</h2>
+<ul>
+<li>Checksum/signature verification removed from installer, release workflows, and update CLI; releases ship bare binaries.</li>
+<li>Installer and docs fetch <code>install.sh</code> from <code>main</code> (latest).</li>
+</ul>
+<h2>2.0.0 — 2026-11-02 (Version Line Reset)</h2>
+<ul>
+<li>Native systemd service architecture (<code>ovmanager-server</code>) with hybrid operator CLI (<code>ovmanager</code>).</li>
+<li>Docker deployment removed.</li>
+<li>Standalone single-file installer (<code>install.sh</code>) with inlined runtime libraries.</li>
+<li>Refactored update pipeline with validation and rollback.</li>
+<li>Owner-only administrative model.</li>
+</ul>
+<h2>Pre-reset (archived)</h2>
+<p>2.1.x–2.4.x entries are the historical pre-reset line and are not part of the current release train.</p>
+</div></main>
+<footer class="site-foot"><div class="wrap">
+<p>OVManager is MIT-licensed. Pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>.</p>
+<p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+</div></footer>
+<script src="../assets/site.js"></script>
+</body></html>

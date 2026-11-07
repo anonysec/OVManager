@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width=1">
+<title>TLS certificates — OVManager wiki</title>
+<meta name="description" content="Self-signed and Let's Encrypt certificates for the panel, renewing them, and the separate certificate story on the node side.">
+<link rel="stylesheet" href="../assets/style.css">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">Home</a>
+      <a href="index.html" aria-current="page">Wiki</a>
+      <a href="https://github.com/anonysec/OVManager">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+
+    <nav class="wikinav" aria-label="Wiki topics">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="how-it-works.html">How it works</a></li>
+        <li><a href="install.html">Install &amp; first login</a></li>
+        <li><a href="nodes.html">Adding nodes</a></li>
+        <li><a href="users.html">Users &amp; subscriptions</a></li>
+        <li><a href="traffic.html">Traffic limits</a></li>
+        <li><a href="tls.html" aria-current="page">TLS certificates</a></li>
+        <li><a href="backup.html">Backups &amp; restore</a></li>
+        <li><a href="troubleshooting.html">Troubleshooting</a></li>
+        <li><a href="cli.html">CLI reference</a></li>
+      </ul>
+    </nav>
+
+    <h1>TLS certificates</h1>
+    <p class="lede">
+      There are two certificates in this system and they are not the same thing:
+      one protects the panel in your browser, and one protects the panel's
+      connection to each node.
+    </p>
+
+    <h2 id="panel">The panel's certificate</h2>
+    <p>
+      A fresh install uses a <strong>self-signed</strong> certificate. The
+      connection is genuinely encrypted; the browser just cannot tell who issued
+      the certificate, so it warns once. Click Advanced, then Proceed. The
+      installer's certificate carries the server's public IP as its common name
+      and has no subject alternative names &mdash; that is deliberate, and the
+      panel's health probe pins the file it reads rather than checking the
+      hostname.
+    </p>
+    <p>
+      The panel serves HTTPS from the pair in <code>.env</code>, or from
+      <code>DATA_DIR/tls</code> when no override is set. The matching command is
+      the interactive <code>ovmanager tls</code> menu (status, issue, renew,
+      remove, self-signed, custom install), not <code>https</code>.
+    </p>
+
+    <h2 id="switch">Switch to Let's Encrypt</h2>
+    <p>
+      Once a domain points at the server, issuance uses Let's Encrypt over HTTP-01
+      in the <code>ovmanager tls</code> menu: status, issue (get a certificate),
+      renew, remove, self-signed, or install a custom key and certificate. The
+      ACME challenge needs port 80 free for about 60 seconds; the daily
+      renewal timer (<code>ovmanager-acme-renew.timer</code>) renews the
+      certificate automatically 30 days before expiry.
+    </p>
+
+    <h2 id="node-cert">The node's certificate</h2>
+    <p>
+      The node's sync API also serves TLS. The installer never offers plain
+      HTTP &mdash; the API key travels in a header on every request. The panel
+      verifies that certificate strictly first, and warns once per node when a
+      self-signed fallback is forced.
+    </p>
+    <p>
+      The node's <strong>OpenVPN server certificate is a separate thing</strong>.
+      The node generates and manages it; <code>ovnode tls</code> on the node shows
+      and replaces it, and the panel reports its expiry through the sync API.
+    </p>
+
+    <h2 id="expiry">Watching for expiry</h2>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">Where</th><th scope="col">What to look at</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Panel, via <code>ovmanager tls</code></td><td>Installed certificate, source and expiry, with issue/renew/remove actions</td></tr>
+          <tr><td>Node, via <code>ovnode tls status</code></td><td>Node sync API certificate (self-signed or Let's Encrypt) and remaining validity</td></tr>
+          <tr><td>Node, via <code>ovnode status</code></td><td>OpenVPN server certificate expiry, refreshed per probe</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="reverse-proxy">Running behind a reverse proxy (Nginx, Caddy, Cloudflare)</h2>
+    <p>
+      If you terminate HTTPS at a fronting server or CDN:
+    </p>
+    <ol>
+      <li>Set <code>TRUSTED_PROXY=true</code> in <code>/opt/ovmanager/.env</code> so the panel reads client IP from <code>X-Forwarded-For</code> and issues <code>Secure</code> cookies on <code>X-Forwarded-Proto: https</code>.</li>
+      <li>Forward the headers: <code>Host</code>, <code>X-Forwarded-Proto</code> and <code>X-Forwarded-For</code> (or <code>X-Real-IP</code>, or <code>CF-Connecting-IP</code> from Cloudflare).</li>
+      <li>Disable buffering for the live stream: <code>proxy_buffering off;</code> in the panel's <code>location /</code> block, so the SSE telemetry is not starved.</li>
+    </ol>
+    <figure class="cmd">
+      <figcaption>Example Nginx configuration</figcaption>
+      <pre><code>server {
+    listen 443 ssl http2;
+    server_name panel.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:2095;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}</code></pre>
+    </figure>
+
+    <h2 id="next">Next</h2>
+    <p><a href="backup.html">Backups &amp; restore</a>.</p>
+
+  </div>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <p>
+      OVManager is MIT-licensed. The panel pairs with
+      <a href="https://github.com/anonysec/OVNode">OVNode</a>, the agent that
+      runs OpenVPN on each VPN server.
+    </p>
+    <p>
+      <a href="../index.html">Home</a> ·
+      <a href="index.html">Wiki</a> ·
+      <a href="https://github.com/anonysec/OVManager">Source</a>
+    </p>
+  </div>
+</footer>
+</body>
+</html>

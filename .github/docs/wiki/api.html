@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API &amp; contract — OVManager docs</title>
+<meta name="description" content="OVManager wire contract v3: the /sync envelope, the X-Contract-Version handshake, and the typed 409.">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-head"><div class="wrap">
+<a class="brand" href="../index.html">OV<span class="dot">·</span>Manager</a>
+<nav class="site-nav" aria-label="Primary"><a href="../index.html">Home</a><a href="index.html" aria-current="page">Wiki</a><a href="https://github.com/anonysec/OVManager">GitHub</a></nav>
+</div></header>
+<main id="main"><div class="wrap">
+<nav class="wikinav" aria-label="Wiki topics"><ul>
+<li><a href="index.html">Overview</a></li><li><a href="how-it-works.html">How it works</a></li><li><a href="install.html">Install &amp; first login</a></li>
+<li><a href="nodes.html">Adding nodes</a></li><li><a href="users.html">Users &amp; subscriptions</a></li><li><a href="traffic.html">Traffic limits</a></li>
+<li><a href="tls.html">TLS certificates</a></li><li><a href="backup.html">Backups &amp; restore</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="cli.html">CLI reference</a></li><li><a href="config.html">Configuration</a></li><li><a href="api.html" aria-current="page">API &amp; contract</a></li>
+<li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
+</ul></nav>
+<h1>API &amp; contract</h1>
+<p class="lede">Panel-to-node wire contract <strong>v3</strong>.</p>
+<h2 id="envelope">Envelope</h2>
+<p>Every <code>/sync/...</code> call answers the same small envelope:</p>
+<pre><code>{"success": true, "msg": "...", "data": {...}}</code></pre>
+<p>A call is successful only on HTTP 200 <em>and</em> <code>"success": true</code>; business failures live inside the envelope, not as HTTP errors.</p>
+<h2 id="handshake">Handshake</h2>
+<ul>
+<li>Panel sends <code>X-Contract-Version: 3</code> on every <code>/sync</code> call.</li>
+<li>A node speaks contract v3 when <code>GET /sync/status</code> reports <code>contract_version: 3</code>.</li>
+<li>A newer node (> 3) answers a typed <strong>409</strong> naming both versions; the panel surfaces it as an actionable notice, never silence.</li>
+<li>The panel persists the last-seen version in <code>nodes.node_contract_version</code> on every successful poll (schema step 30).</li>
+</ul>
+<h2 id="freeze">Freeze rules</h2>
+<ul>
+<li><code>contract.json</code> is additive-only. A shape change bumps the contract version.</li>
+<li>No silent shape change within a version. <code>max_logins</code> omission rejects; it never defaults to 0/unlimited.</li>
+<li>Unknown JSON fields are ignored by the node; the panel treats unrecognized <code>totals_epochs</code> shapes as unavailable, never zero.</li>
+</ul>
+</div></main>
+<footer class="site-foot"><div class="wrap">
+<p>OVManager is MIT-licensed. Pairs with <a href="https://github.com/anonysec/OVNode">OVNode</a>.</p>
+<p><a href="../index.html">Home</a> · <a href="index.html">Wiki</a> · <a href="https://github.com/anonysec/OVManager">Source</a></p>
+</div></footer>
+<script src="../assets/site.js"></script>
+</body></html>
