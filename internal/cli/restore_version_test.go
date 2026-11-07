@@ -20,11 +20,11 @@ func TestRestoreStampsVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	conn.Exec(`PRAGMA user_version = 29`)
+	conn.Exec(`PRAGMA user_version = 30`)
 	var v int
 	conn.QueryRow(`PRAGMA user_version`).Scan(&v)
-	if v != 29 {
-		t.Fatalf("post-restore user_version = %d, want 29", v)
+	if v != 30 {
+		t.Fatalf("post-restore user_version = %d, want 30", v)
 	}
 }
 
@@ -35,11 +35,9 @@ func TestVersionRejectsNewerSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	conn.Exec(`PRAGMA user_version = 30`)
+	conn.Exec(`PRAGMA user_version = 99`)
 	conn.Exec(`CREATE TABLE IF NOT EXISTS users(id INTEGER)`)
 	if _, err := db.Migrate(conn); err == nil {
 		t.Fatal("migrate on newer schema accepted")
 	}
 }
-
-

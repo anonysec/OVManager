@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 29
+const SchemaVersion = 30
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -278,6 +278,7 @@ var mappedColumns = map[string][]mcolumn{
 		{"latitude", "FLOAT"},
 		{"longitude", "FLOAT"},
 		{"extra_ports", "VARCHAR DEFAULT '' NOT NULL"},
+		{"node_contract_version", "INTEGER DEFAULT 0 NOT NULL"},
 	},
 	"settings": {
 		{"id", "INTEGER"},
@@ -712,6 +713,12 @@ var steps = []step{
 	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
 	{28, "delete non-owner sessions", deleteNonOwnerSessions},
 	{29, "pending user revocations and monotonic users.id", rebuildUsersWithAutoincrement},
+	{30, "nodes.node_contract_version", func(x execer) error {
+		if !tableNames(x)["nodes"] {
+			return nil
+		}
+		return addColumn(x, "nodes", "node_contract_version", "INTEGER DEFAULT 0 NOT NULL")
+	}},
 }
 
 // MigrateWithBackend is the backend-aware entry point. SQLite delegates to
