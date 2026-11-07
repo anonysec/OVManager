@@ -111,12 +111,16 @@ func fetchHealthImpl(url string, timeout time.Duration, cafile string) (bool, st
 
 func serviceStateImpl() (string, string) {
 	out, err := exec.Command("systemctl", "is-active", systemdService).Output()
-	if err != nil {
-		return "native", "unknown"
-	}
 	state := strings.TrimSpace(string(out))
-	if state == "" {
-		state = "unknown"
+	// is-active exits non-zero for inactive/failed too, so the exit code must
+	// not decide the mode: only an unusable systemctl or an unknown unit
+	// means the panel is not demonstrably served by the owned unit.
+	switch state {
+	case "active", "inactive", "failed", "activating", "deactivating", "reloading":
+		return "native", state
+	}
+	if err != nil || state == "" {
+		return "manual", "unknown"
 	}
 	return "native", state
 }
@@ -159,15 +163,6 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func containsWord(haystack, word string) bool {
-	for _, f := range strings.Fields(haystack) {
-		if f == word {
-			return true
-		}
-	}
-	return false
-}
-
 // healthURLs returns candidate health URLs for an install, trying the declared
 // scheme first and the other scheme as a fallback so a stale/incorrect TLS
 // detection cannot by itself fail a probe.
@@ -202,7 +197,10 @@ func probeTimeout() time.Duration {
 	return 2 * time.Second
 }
 
-func waitHealthAny(urls []string, tries int, cafile string) (bool, string) {
+// waitHealthAny is a seam so restore tests can stub health verification.
+var waitHealthAny = waitHealthAnyImpl
+
+func waitHealthAnyImpl(urls []string, tries int, cafile string) (bool, string) {
 	timeout := probeTimeout()
 	for i := 0; i < tries; i++ {
 		if reachable, reported := fetchHealthAny(urls, timeout, cafile); reachable {

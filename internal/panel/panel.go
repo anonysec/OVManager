@@ -53,6 +53,12 @@ type Handler struct {
 // connection and don't hit "database is closed".
 func (h *Handler) TrackActive(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The restore handler itself drains in-flight requests; counting it
+		// would make the drain wait on itself for the full timeout.
+		if strings.HasSuffix(r.URL.Path, "/maintenance/backup/restore") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		h.activeReq.Add(1)
 		defer h.activeReq.Done()
 		next.ServeHTTP(w, r)

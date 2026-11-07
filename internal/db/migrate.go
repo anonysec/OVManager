@@ -7,7 +7,7 @@
 // the cutover plan prescribes: the version lives in PRAGMA user_version instead
 // of the schema_version table (no table survives, nothing to inspect).
 //
-// SCHEMA_VERSION is 27 (Phase 6.2 + secrets-at-rest migration).
+// SCHEMA_VERSION is 29 (pending revocations + monotonic users.id).
 package db
 
 import (
@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 28
+const SchemaVersion = 29
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -362,9 +362,16 @@ func createTableSQL(table string) string {
 	cols := mappedColumns[table]
 	parts := make([]string, 0, len(cols)+len(mappedUniques[table])+1)
 	for _, c := range cols {
-		parts = append(parts, c.name+" "+c.add)
+		def := c.name + " " + c.add
+		// users.id must be AUTOINCREMENT so deleted highest IDs are not reused.
+		if table == "users" && c.name == "id" {
+			def = "id INTEGER PRIMARY KEY AUTOINCREMENT"
+		}
+		parts = append(parts, def)
 	}
-	parts = append(parts, "PRIMARY KEY (id)")
+	if table != "users" {
+		parts = append(parts, "PRIMARY KEY (id)")
+	}
 	for _, u := range mappedUniques[table] {
 		parts = append(parts, "UNIQUE ("+u+")")
 	}
@@ -395,6 +402,7 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at)`,
+	`CREATE TABLE IF NOT EXISTS pending_user_revocations (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
 }
 
 func createExtraTables(x execer) error {
@@ -703,6 +711,7 @@ var steps = []step{
 	{26, "unique owner index (admins.is_owner)", addAdminsOwnerUnique},
 	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
 	{28, "delete non-owner sessions", deleteNonOwnerSessions},
+	{29, "pending user revocations and monotonic users.id", rebuildUsersWithAutoincrement},
 }
 
 // MigrateWithBackend is the backend-aware entry point. SQLite delegates to

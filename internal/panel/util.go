@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
+	backuppkg "github.com/anonysec/OVManager/go/internal/backup"
 )
 
 // cryptoRead fills b with random bytes (used by the audit event key).
@@ -63,10 +63,6 @@ func writeValidationError(w http.ResponseWriter, kind, field, msg string) {
 	})
 }
 
-// offsiteTargetRe is the accepted shape of an offsite backup target:
-// [user@]host:/absolute/path
-var offsiteTargetRe = regexp.MustCompile(`^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]+):(/[\w./-]+)$`)
-
 // removeMultipartTemps deletes the files the multipart parser spooled to the
 // system temp dir: a file part larger than the in-memory limit is written
 // there, and the request never removes it on its own. Without this every
@@ -87,24 +83,7 @@ func removeMultipartTemps(r *http.Request) {
 // rsync and scp hand the host to ssh, which would read "-oProxyCommand=..."
 // as an option rather than a host.
 func ParseOffsiteTarget(target string) (user, host, path string, err error) {
-	trimmed := strings.TrimSpace(target)
-	if trimmed == "" {
-		return "", "", "", errors.New("Offsite backup target is empty")
-	}
-	match := offsiteTargetRe.FindStringSubmatch(trimmed)
-	if match == nil {
-		return "", "", "", errors.New(
-			"Offsite backup target must look like user@server:/path/to/backups (absolute path, no special characters)")
-	}
-	for _, segment := range strings.Split(match[3], "/") {
-		if segment == ".." {
-			return "", "", "", errors.New("Offsite backup target must not contain '..'")
-		}
-	}
-	if strings.HasPrefix(match[2], "-") || strings.HasPrefix(match[1], "-") {
-		return "", "", "", errors.New("Offsite backup target must not start with '-'")
-	}
-	return strings.TrimSuffix(match[1], "@"), match[2], match[3], nil
+	return backuppkg.ParseOffsiteTarget(target)
 }
 
 // detachSysProcAttr detaches a spawned restart from this process (setsid).

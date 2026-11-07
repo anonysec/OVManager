@@ -255,6 +255,7 @@ type reqOpts struct {
 	timeout   time.Duration
 	allowFail bool // require_success=false: return envelope even on success:false
 	rawHeader map[string]string
+	useNumber bool
 }
 
 // TLSVerified reports whether the last request verified (nil = never connected).
@@ -426,7 +427,13 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[stri
 		return nil, fmt.Errorf("node response body exceeds %d bytes", maxNodeBodyJSON)
 	}
 	var data map[string]any
-	if err := json.Unmarshal(raw, &data); err != nil {
+	if o.useNumber {
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&data); err != nil {
+			return nil, nil
+		}
+	} else if err := json.Unmarshal(raw, &data); err != nil {
 		return nil, nil
 	}
 	if ok, _ := data["success"].(bool); !ok && !o.allowFail {
@@ -577,7 +584,7 @@ func (c *Client) GetUsage(timeout time.Duration) map[string]any {
 	if timeout == 0 {
 		timeout = LongTimeout
 	}
-	return dataOf(c.request(http.MethodGet, "/sync/usage", reqOpts{timeout: timeout}))
+	return dataOf(c.request(http.MethodGet, "/sync/usage", reqOpts{timeout: timeout, useNumber: true}))
 }
 
 // UpdateConfigParams carries the optional per-node endpoint settings.

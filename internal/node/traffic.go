@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,6 +79,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	raw := GatherNodes(calls, trafficFanoutDeadline)
 
 	contribs := map[int64]map[string]int64{}
+	contribEpochs := map[int64]map[string]string{}
 	ambiguous := map[int64]map[string]bool{}
 	// aliasKeys remembers the first reported key per (user, node) so a
 	// collision can name both keys.
@@ -103,9 +105,16 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			res.NodesFailed++
 			continue
 		}
+		var totalsEpochs map[string]any
+		if te, ok := data["totals_epochs"].(map[string]any); ok {
+			totalsEpochs = te
+		}
 		res.NodesPolled++
 		nodeKey := strconv.FormatInt(n.ID, 10)
 		for reported, rawTotal := range totals {
+			// Reserved keys (push_hash, __epochs) exist only inside stored
+			// node_usage bookkeeping. A reported username that happens to
+			// be "push_hash" is a real user and must be billed.
 			// Older nodes report names, newer ones report numeric IDs. A
 			// numeric name may also be another user's ID; the payload has no
 			// way to disambiguate it, so do not guess and charge either user.
@@ -133,11 +142,20 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 				continue
 			}
 			cur, ok := toInt64(rawTotal)
-			if !ok {
+			if !ok || cur < 0 {
 				continue
+			}
+			reportedEpoch := ""
+			if totalsEpochs != nil {
+				if v, ok := totalsEpochs[reported]; ok {
+					reportedEpoch = toStringValue(v)
+				}
 			}
 			if contribs[u.id] == nil {
 				contribs[u.id] = map[string]int64{}
+			}
+			if contribEpochs[u.id] == nil {
+				contribEpochs[u.id] = map[string]string{}
 			}
 			// The node's /sync/usage merges alias CNs ADDITIVELY
 			// (OVNode get_users_usage: users[key] = users.get(key, 0) +
@@ -147,10 +165,12 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			// from user_traffic_daily and from the baseline, for good.
 			if prev, seen := contribs[u.id][nodeKey]; seen {
 				contribs[u.id][nodeKey] = prev + cur
+				contribEpochs[u.id][nodeKey] = aggregateEpoch(contribEpochs[u.id][nodeKey], reportedEpoch)
 				res.AliasCollisions = append(res.AliasCollisions,
 					fmt.Sprintf("user=%s node=%s keys=%s,%s", u.name, nodeKey, aliasKeys[u.id][nodeKey], reported))
 			} else {
 				contribs[u.id][nodeKey] = cur
+				contribEpochs[u.id][nodeKey] = reportedEpoch
 			}
 			if aliasKeys[u.id] == nil {
 				aliasKeys[u.id] = map[string]string{}
@@ -171,7 +191,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		if len(c) == 0 {
 			continue
 		}
-		billed, seeded, bytes := applyTrafficUser(db, u, c)
+		billed, seeded, bytes := applyTrafficUser(db, u, c, contribEpochs[u.id])
 		if billed {
 			res.UsersUpdated++
 		}
@@ -186,7 +206,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 // applyTrafficUser computes one user's deltas and persists them under the OCC
 // guard, retrying up to 3 attempts; a reseed marker (or an absent baseline)
 // seeds all nodes with delta 0.
-func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64) (billed, seeded bool, bytes int64) {
+func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64, epochs map[string]string) (billed, seeded bool, bytes int64) {
 	used, state := u.used, u.state
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
@@ -200,10 +220,7 @@ func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64) (bil
 			trafficTestHook()
 		}
 
-		data := map[string]any{}
-		if json.Unmarshal([]byte(state), &data) != nil {
-			data = map[string]any{}
-		}
+		data := decodeUsageState(state)
 		_, reseed := data[ReseedMarkerKey]
 		if reseed {
 			// Invalidate *all* old baselines, including nodes that did not
@@ -214,25 +231,88 @@ func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64) (bil
 					delete(data, key)
 				}
 			}
+			// Invalidate offline-node epochs as well: drop epoch entries for
+			// nodes that are not in this pass.
+			if em, ok := data[EpochsKey].(map[string]any); ok {
+				for key := range em {
+					if _, present := contribs[key]; !present {
+						delete(em, key)
+					}
+				}
+				if len(em) == 0 {
+					delete(data, EpochsKey)
+				} else {
+					data[EpochsKey] = em
+				}
+			}
 			delete(data, ReseedMarkerKey)
+		}
+
+		// stored epochs
+		storedEpochs := map[string]any{}
+		if em, ok := data[EpochsKey].(map[string]any); ok {
+			for k, v := range em {
+				storedEpochs[k] = v
+			}
 		}
 
 		newUsed := used
 		var delta int64
 		didSeed := false
+		epochChanged := false
 		for key, cur := range contribs {
-			prev, present := toInt64(data[key])
-			if reseed || !present {
-				data[key] = cur
-				didSeed = true
+			if cur < 0 {
 				continue
 			}
-			d, _ := billing.ComputeSessionDelta(nil, prev, float64(cur))
-			delta += int64(d)
-			newUsed += int64(d)
-			data[key] = cur
+			reportedEpoch := ""
+			if epochs != nil {
+				reportedEpoch = epochs[key]
+			}
+			prev, present := toInt64(data[key])
+			prevEpoch := toStringValue(storedEpochs[key])
+
+			if reseed || !present {
+				// seed
+				data[key] = cur
+				didSeed = true
+				if reportedEpoch != "" && toStringValue(storedEpochs[key]) != reportedEpoch {
+					epochChanged = true
+				}
+				if reportedEpoch != "" {
+					storedEpochs[key] = reportedEpoch
+				}
+				continue
+			}
+
+			explicitReset := false
+			if reportedEpoch != "" && prevEpoch != "" && reportedEpoch != prevEpoch {
+				explicitReset = true
+			}
+			// first epoch adoption: adopt without reset (explicitReset stays false)
+
+			d, newBaseline := billing.ComputeTotalDelta(cur, prev, explicitReset)
+			delta += d
+			newUsed += d
+			data[key] = newBaseline
+			if explicitReset {
+				didSeed = true
+			}
+			if reportedEpoch != "" && prevEpoch != reportedEpoch {
+				epochChanged = true
+			}
+			if reportedEpoch != "" {
+				storedEpochs[key] = reportedEpoch
+			}
 		}
-		if !reseed && !didSeed && delta == 0 {
+
+		// persist epochs map if non-empty
+		if len(storedEpochs) > 0 {
+			data[EpochsKey] = storedEpochs
+		} else {
+			delete(data, EpochsKey)
+		}
+
+		if !reseed && !didSeed && delta == 0 && !epochChanged {
 			return false, false, 0
 		}
 
@@ -269,6 +349,9 @@ func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 		out = append(out, u)
 		byName[u.name] = u
 	}
+	if err := rows.Err(); err != nil {
+		return nil, nil
+	}
 	return out, byName
 }
 
@@ -277,6 +360,10 @@ func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 func toInt64(v any) (int64, bool) {
 	switch n := v.(type) {
 	case float64:
+		// Reject fractional and out-of-range floats instead of truncating.
+		if n != float64(int64(n)) {
+			return 0, false
+		}
 		return int64(n), true
 	case int64:
 		return n, true
@@ -287,4 +374,63 @@ func toInt64(v any) (int64, bool) {
 		return i, err == nil
 	}
 	return 0, false
+}
+
+// decodeUsageState decodes a node_usage JSON string without float conversion.
+func decodeUsageState(s string) map[string]any {
+	if s == "" {
+		return map[string]any{}
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	var data map[string]any
+	if err := dec.Decode(&data); err != nil {
+		return map[string]any{}
+	}
+	return data
+}
+
+func toStringValue(v any) string {
+	switch n := v.(type) {
+	case string:
+		return n
+	case json.Number:
+		return n.String()
+	case float64:
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	case int64:
+		return strconv.FormatInt(n, 10)
+	case int:
+		return strconv.Itoa(n)
+	case nil:
+		return ""
+	default:
+		b, _ := json.Marshal(n)
+		return string(b)
+	}
+}
+
+// aggregateEpoch merges two epoch descriptors symmetrically: both sides may
+// be a single epoch or a comma-joined set of "cn=epoch" pairs, so the result
+// does not depend on argument or map order.
+func aggregateEpoch(existing, next string) string {
+	set := map[string]bool{}
+	for _, s := range []string{existing, next} {
+		if s == "" {
+			continue
+		}
+		for _, part := range strings.Split(s, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				set[part] = true
+			}
+		}
+	}
+	parts := make([]string, 0, len(set))
+	for p := range set {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
 }

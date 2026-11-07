@@ -12,13 +12,10 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/go/internal/backup"
 	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/maintenance"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
@@ -27,49 +24,8 @@ import (
 // offsiteCopy pushes one backup file to the offsite target. It returns the
 // tool it used ("rsync" or "scp") and the error, if any.
 func offsiteCopy(target, path string) (string, error) {
-	user, host, dir, err := maintenance.ParseOffsiteTarget(target)
-	if err != nil {
-		return "", err
-	}
-	dest := host
-	if user != "" {
-		dest = user + "@" + host
-	}
-
-	// Encrypt the backup with AES-GCM before shipping off-host
 	dataDir := filepath.Dir(filepath.Dir(path))
-	key, keyErr := crypto.GetOrCreateSecretKey(dataDir)
-	if keyErr != nil {
-		return "", keyErr
-	}
-	if len(key) != 32 {
-		return "", fmt.Errorf("invalid secret key length: %d", len(key))
-	}
-	uploadPath := path
-	encPath := path + ".enc"
-	if err := crypto.EncryptFile(path, encPath, key); err != nil {
-		return "", err
-	}
-	uploadPath = encPath
-	defer os.Remove(encPath) // #nosec G304 // intentional cleanup
-
-	remote := dest + ":" + strings.TrimSuffix(dir, "/") + "/" + filepath.Base(uploadPath)
-
-	// The destination is the only user input and the parser restricts it to
-	// a safe character set; -e is a constant, so nothing user-supplied
-	// reaches a shell.
-	if _, lookErr := exec.LookPath("rsync"); lookErr == nil {
-		cmd := exec.Command("rsync", "-a", "-e", "ssh -o BatchMode=yes", uploadPath, remote) // #nosec G204 // command arguments are static or validated against strict allowlist
-		if out, runErr := cmd.CombinedOutput(); runErr != nil {
-			return "rsync", fmt.Errorf("rsync failed: %s", strings.TrimSpace(string(out)))
-		}
-		return "rsync", nil
-	}
-	cmd := exec.Command("scp", "-o", "BatchMode=yes", uploadPath, remote) // #nosec G204 // command arguments are static or validated against strict allowlist
-	if out, runErr := cmd.CombinedOutput(); runErr != nil {
-		return "scp", fmt.Errorf("scp failed: %s", strings.TrimSpace(string(out)))
-	}
-	return "scp", nil
+	return backup.CopyOffsite(dataDir, path, target)
 }
 
 // copyOffsiteAfterBackup copies the newest backup to the configured target

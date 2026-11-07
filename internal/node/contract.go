@@ -68,7 +68,7 @@ var Contract = []ContractRow{
 		Method:    http.MethodGet,
 		Path:      "/sync/usage",
 		RequestAt: "internal/node/client.go:GetUsage",
-		Response:  []string{"totals"},
+		Response:  []string{"totals", "totals_epochs"},
 		ResponseAt: []string{
 			"internal/node/traffic.go:data", // totals (traffic.go:82)
 		},
@@ -163,6 +163,14 @@ var Contract = []ContractRow{
 		Path:      "/sync/user/{uid}",
 		RequestAt: "internal/node/client.go:DeleteUser",
 		Note:      "no data key is read: the client only checks the envelope",
+	},
+	{
+		// Desired account policy delivery (client.go:ApplyUserPolicy).
+		Method:    http.MethodPut,
+		Path:      "/sync/user",
+		Request:   []string{"id", "name", "max_logins", "status"},
+		RequestAt: "internal/node/user_policy.go:ApplyUserPolicy",
+		Note:      "the panel reads the envelope only (success, msg)",
 	},
 	{
 		// Drop a user's sessions (client.go:641).

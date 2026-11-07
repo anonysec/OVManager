@@ -34,7 +34,6 @@ func NewHandler(svc *auth.Service) *Handler {
 }
 
 // deletedUserKey is the prefix for deleted_users table keys.
-const deletedUserKeyPrefix = "deleted_user_"
 const deletedTTLSeconds = 120
 
 // Mount registers the users routes relative to the caller's prefix.
@@ -269,6 +268,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	audit.Record(h.Svc.DB(), h.actor(r), "user.create", "info",
 		"User created.", map[string]any{"target": name, "max_logins": maxLogins})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "create"})
+	node.SyncUserPolicy(h.Svc.DB(), id, time.Now())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "User created successfully. VPN config will be generated on first download.",
@@ -309,7 +309,14 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	if sent("total") && string(raw["total"]) != "null" {
 		var v int64
-		_ = json.Unmarshal(raw["total"], &v)
+		if err := json.Unmarshal(raw["total"], &v); err != nil {
+			auth.WriteValidation(w, "total", "Input should be a valid integer")
+			return
+		}
+		if v < 0 {
+			auth.WriteValidation(w, "total", "Input should be greater than or equal to 0")
+			return
+		}
 		newGB := v / (1024 * 1024 * 1024)
 		if row.Total == nil || oldTotalGB != newGB {
 			diffs = append(diffs, fmt.Sprintf("quota %dGB -> %dGB", oldTotalGB, newGB))
@@ -324,7 +331,14 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	if sent("max_logins") && string(raw["max_logins"]) != "null" {
 		var v int64
-		_ = json.Unmarshal(raw["max_logins"], &v)
+		if err := json.Unmarshal(raw["max_logins"], &v); err != nil {
+			auth.WriteValidation(w, "max_logins", "Input should be a valid integer")
+			return
+		}
+		if v < 0 || v > 1000 {
+			auth.WriteValidation(w, "max_logins", "Input should be between 0 and 1000")
+			return
+		}
 		if oldMaxLogins != v {
 			diffs = append(diffs, fmt.Sprintf("max logins %d -> %d", oldMaxLogins, v))
 		}
@@ -332,7 +346,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 	if sent("tag") {
 		var s string
-		_ = json.Unmarshal(raw["tag"], &s)
+		if err := json.Unmarshal(raw["tag"], &s); err != nil {
+			auth.WriteValidation(w, "tag", "Input should be a valid string")
+			return
+		}
 		if t := strings.TrimSpace(s); t != "" {
 			row.Tag = sql.NullString{String: t, Valid: true}
 		} else {
@@ -351,7 +368,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	requestedStatus := row.IsActive != 0
 	if sent("status") && string(raw["status"]) != "null" {
 		var b bool
-		_ = json.Unmarshal(raw["status"], &b)
+		if err := json.Unmarshal(raw["status"], &b); err != nil {
+			auth.WriteValidation(w, "status", "Input should be a valid boolean")
+			return
+		}
 		requestedStatus = b
 	}
 	row.IsActive = 0
@@ -373,8 +393,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	audit.Record(h.Svc.DB(), h.actor(r), "user.update", "info",
 		updateMsg, map[string]any{"target": row.Name, "active": row.IsActive != 0, "changes": diffs})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "update"})
-	// note: node status/limit fan-out lands with Phase 2; with zero nodes
-	// the node helpers return true, so success matches.
+	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated successfully"})
 }
 
@@ -415,6 +434,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	audit.Record(h.Svc.DB(), h.actor(r), "user.status", "info",
 		"User enabled or disabled.", map[string]any{"target": row.Name, "active": *req.Status})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "status"})
+	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Changed user status successfully"})
 }
 
@@ -451,6 +471,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 			audit.Record(h.Svc.DB(), h.actor(r), "user.reset_usage", "info",
 				"User usage reset.", map[string]any{"target": row.Name})
 			telemetry.Publish("users", telemetry.KV{Key: "op", Val: "reset-usage"})
+			node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
 			auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User usage reset successfully"})
 			return
 		}
@@ -474,7 +495,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	_ = h.remember(row)
+	// Undo snapshot written inside DeleteAccount's transaction.
 	audit.Record(h.Svc.DB(), h.actor(r), "user.delete", "warning",
 		"User deleted.", map[string]any{"target": row.Name})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
@@ -513,10 +534,10 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.Svc.DB().Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snap.UUID, snap.Name, snap.Total, snap.Used, snap.LastNodeUsage, nonEmpty(snap.NodeUsage, "{}"),
-		snap.MaxLogins, snap.ExpiryDate.String, snap.IsActive,
+		snap.MaxLogins, snap.ExpiryDate.String, snap.IsActive, snap.Tag.String,
 	); err != nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Restore failed. Check the panel logs for details."})
 		return
@@ -526,6 +547,7 @@ func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
 	audit.Record(h.Svc.DB(), h.actor(r), "user.restore", "info",
 		"User restored.", map[string]any{"target": snap.Name})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "restore"})
+	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User restored successfully", Data: row.base()})
 }
 
@@ -537,7 +559,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	if req.Days == 0 && req.Bytes == 0 {
+	if req.Days == 0 && req.Bytes == 0 || req.Days < 0 || req.Bytes < 0 {
 		auth.WriteDetail(w, http.StatusUnprocessableEntity, "days or bytes must be greater than 0")
 		return
 	}
@@ -549,7 +571,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 	if req.Days != 0 {
 		base := time.Now().UTC()
 		if row.ExpiryDate.Valid && row.ExpiryDate.String != "" {
-			if t, err := time.Parse("2006-01-02", row.ExpiryDate.String[:10]); err == nil {
+			if t, err := time.Parse("2006-01-02", row.date()); err == nil {
 				base = t
 			}
 		}
@@ -570,6 +592,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 	}
 	row, _ = h.byUUID(row.UUID)
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "extend"})
+	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User updated", Data: row.base()})
 }
 
@@ -653,7 +676,7 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 // out-of-traffic account must never be active.
 func activationBlocked(u userRow) string {
 	if u.ExpiryDate.Valid && u.ExpiryDate.String != "" {
-		if u.ExpiryDate.String[:10] < time.Now().UTC().Format("2006-01-02") {
+		if u.date() < time.Now().UTC().Format("2006-01-02") {
 			return "expired"
 		}
 	}

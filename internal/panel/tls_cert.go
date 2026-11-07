@@ -32,7 +32,6 @@ const (
 var (
 	acmeDomainRe = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?` +
 		`(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`)
-	emailRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 )
 
 func validateDomain(value string) bool {
@@ -293,10 +292,3 @@ func isoFormat(t time.Time) string {
 }
 
 // --- upload / generate / renew / rollback ---
-
-// renewRequest is POST /tls/renew's body.
-type renewRequest struct {
-	Domain *string `json:"domain"`
-	Email  *string `json:"email"`
-	UseIP  bool    `json:"use_ip"`
-}

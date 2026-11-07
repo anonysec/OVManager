@@ -232,7 +232,7 @@ func fernetDecrypt(keyB64, tokenB64 string) (string, error) {
 	mac := hmac.New(sha256.New, rawKey[:16])
 	mac.Write(tok[:len(tok)-32])
 	if !hmac.Equal(mac.Sum(nil), tok[len(tok)-32:]) {
-		return "", fmt.Errorf("Fernet HMAC mismatch")
+		return "", fmt.Errorf("fernet HMAC mismatch")
 	}
 	block, err := aes.NewCipher(rawKey[16:])
 	if err != nil {
@@ -256,54 +256,6 @@ func envDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-// --- backend-aware version store (scaffolding for multi-backend support) ---
-//
-// SQLite keeps using PRAGMA user_version for backward compatibility with
-// existing databases. Any other backend uses a _schema_version table. When a
-// new driver is wired in internal/db/config.go, add its case to
-// versionGet/versionSet and implement the table store below (already generic).
-
-// versionGet reads the current schema version for backend.
-func versionGet(conn *sql.DB, backend Backend) (int, error) {
-	switch backend {
-	case BackendSQLite, "":
-		return userVersion(conn)
-	default:
-		return tableVersion(conn)
-	}
-}
-
-// versionSet writes the schema version for backend.
-func versionSet(x execer, backend Backend, v int) error {
-	switch backend {
-	case BackendSQLite, "":
-		return stamp(x, v)
-	default:
-		return stampTable(x, v)
-	}
-}
-
-// tableVersion reads _schema_version (creates it if missing).
-func tableVersion(conn *sql.DB) (int, error) {
-	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER NOT NULL)`); err != nil {
-		return 0, err
-	}
-	var v int
-	row := conn.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM _schema_version`)
-	if err := row.Scan(&v); err != nil {
-		return 0, err
-	}
-	return v, nil
-}
-
-// stampTable writes a new version row.
-func stampTable(x execer, v int) error {
-	if _, err := x.Exec(`INSERT INTO _schema_version (version) VALUES (?)`, v); err != nil {
-		return err
-	}
-	return nil
 }
 
 // encryptStoredSecrets encrypts plaintext nodes.key and settings.bot_token values
@@ -395,4 +347,73 @@ func deleteNonOwnerSessions(x execer) error {
 	}
 	_, err := x.Exec("DELETE FROM sessions WHERE role IS NULL OR role <> 'owner'")
 	return err
+}
+
+// rebuildUsersWithAutoincrement creates pending_user_revocations and rebuilds
+// the users table as INTEGER PRIMARY KEY AUTOINCREMENT, preserving all rows,
+// columns, constraints and indexes. Seeds sqlite_sequence from MAX(id).
+func rebuildUsersWithAutoincrement(x execer) error {
+	if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS pending_user_revocations (
+		node_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		user_uuid TEXT NOT NULL,
+		user_name TEXT NOT NULL,
+		created_at REAL NOT NULL,
+		last_error TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (node_id, user_id)
+	)`); err != nil {
+		return err
+	}
+	if !tableNames(x)["users"] {
+		return nil
+	}
+
+	// Build a fresh users table with AUTOINCREMENT.
+	if _, err := x.Exec("DROP TABLE IF EXISTS users_new"); err != nil {
+		return err
+	}
+	ddl := strings.Replace(createTableSQL("users"), "CREATE TABLE IF NOT EXISTS users", "CREATE TABLE users_new", 1)
+	if _, err := x.Exec(ddl); err != nil {
+		return err
+	}
+
+	// Copy all existing rows/columns.
+	cols := make([]string, 0, len(mappedColumns["users"]))
+	for _, c := range mappedColumns["users"] {
+		cols = append(cols, c.name)
+	}
+	colList := strings.Join(cols, ", ")
+	copySQL := fmt.Sprintf("INSERT INTO users_new (%s) SELECT %s FROM users", colList, colList)
+	if _, err := x.Exec(copySQL); err != nil {
+		_, _ = x.Exec("DROP TABLE IF EXISTS users_new")
+		return err
+	}
+
+	if _, err := x.Exec("DROP TABLE users"); err != nil {
+		_, _ = x.Exec("DROP TABLE IF EXISTS users_new")
+		return err
+	}
+	if _, err := x.Exec("ALTER TABLE users_new RENAME TO users"); err != nil {
+		return err
+	}
+
+	// Seed the AUTOINCREMENT sequence so deleted highest IDs are not reused.
+	// sqlite_sequence is created automatically by SQLite for AUTOINCREMENT tables.
+	// Deleted-user undo snapshots may hold IDs above every live row; seeding
+	// only from live MAX(id) would reissue that ID, and stale node CNs keyed
+	// by numeric ID would then resolve to the new account.
+	if _, err := x.Exec("DELETE FROM sqlite_sequence WHERE name = 'users'"); err != nil {
+		return err
+	}
+	if _, err := x.Exec("INSERT INTO sqlite_sequence (name, seq) SELECT 'users', COALESCE(MAX(id), 0) FROM users"); err != nil {
+		return err
+	}
+	if tableNames(x)["deleted_users"] {
+		// Unrecoverable snapshots (malformed JSON) are skipped, not fatal:
+		// json_extract raises on them, so only valid JSON seeds the sequence.
+		if _, err := x.Exec(`UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT MAX(MAX(COALESCE(CAST(json_extract(snap_json, '$.ID') AS INTEGER), 0), COALESCE(CAST(json_extract(snap_json, '$.id') AS INTEGER), 0))) FROM deleted_users WHERE json_valid(snap_json)), 0)) WHERE name = 'users'`); err != nil {
+			return err
+		}
+	}
+	return nil
 }

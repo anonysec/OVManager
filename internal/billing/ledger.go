@@ -217,13 +217,13 @@ func extractNodeUsageData(state any) map[string]map[string]int64 {
 
 	// Check for versioned format
 	if v, ok := m["version"]; ok {
-		if f, ok := v.(float64); ok && int(f) >= NodeUsageVersion {
+		if int(toI64(v)) >= NodeUsageVersion {
 			if data, ok := m["data"].(map[string]any); ok {
 				result := make(map[string]map[string]int64)
 				for k, v := range data {
 					if sub, ok := v.(map[string]any); ok {
-						if total, ok := sub["total"].(float64); ok {
-							result[k] = map[string]int64{"total": int64(total)}
+						if total, ok := sub["total"]; ok {
+							result[k] = map[string]int64{"total": toI64(total)}
 						}
 					}
 				}
@@ -238,14 +238,14 @@ func extractNodeUsageData(state any) map[string]map[string]int64 {
 			continue
 		}
 		total := int64(0)
-		if num, ok := v.(float64); ok {
-			total = int64(num)
-		} else if sub, ok := v.(map[string]any); ok {
+		if sub, ok := v.(map[string]any); ok {
 			if t, ok := sub["total"]; ok {
-				if n, ok := t.(float64); ok {
-					total = int64(n)
-				}
+				total = toI64(t)
+			} else {
+				total = 0
 			}
+		} else {
+			total = toI64(v)
 		}
 		if total > 0 {
 			result[k] = map[string]int64{"total": total}
@@ -308,6 +308,23 @@ func intMap(m map[string]any) map[string]int64 {
 		out[k] = toI64(v)
 	}
 	return out
+}
+
+// ComputeTotalDelta applies the D5 rule for one node's cumulative counter.
+//
+// current is the node's reported total, previous the held baseline. explicitReset
+// is true when a reseed or an epoch change makes the current value a fresh
+// baseline. It returns the bytes to bill and the baseline to persist: an
+// unexplained decrease holds the previous baseline instead of the lower
+// current value.
+func ComputeTotalDelta(current, previous int64, explicitReset bool) (delta, baseline int64) {
+	if explicitReset {
+		return 0, current
+	}
+	if current >= previous {
+		return current - previous, current
+	}
+	return 0, previous
 }
 
 // ApplyUserTraffic persists one user's traffic only if the row still holds the

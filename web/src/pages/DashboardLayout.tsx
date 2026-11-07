@@ -75,8 +75,8 @@ const SetupBanner = () => {
         <strong>{t('setupBannerTitle', 'Finish setting up OVManager')}</strong>
         <span>
           {isOwner
-            ? t('setupBannerBody', '{{done}} of 3 steps done — add a node, create a user, download a config.', { done: doneCount })
-            : t('setupBannerAdminBody', 'Your account has no users yet — create one to hand out VPN access.')}
+            ? t('setupBannerBody', '{{done}} of 3 steps done. Add a node, create a user, download a config.', { done: doneCount })
+            : t('setupBannerAdminBody', 'Your account has no users yet. Create one to hand out VPN access.')}
         </span>
       </div>
       <Link to="/setup" className="setup-banner-link">
@@ -278,7 +278,7 @@ const DashboardLayout = () => {
         if (quota > 0) {
           const pct = Number(u.used || 0) / quota;
           if (pct >= 1) {
-            out.push({ id: `quota-${u.uuid}`, level: 'danger', title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }), detail: t('notifUserOverQuotaDetail', 'Usage exceeded — will be disabled on next check') });
+            out.push({ id: `quota-${u.uuid}`, level: 'danger', title: t('notifUserOverQuota', 'User {{name}} over quota', { name: u.name }), detail: t('notifUserOverQuotaDetail', 'Usage exceeded. It will be disabled on next check') });
           } else if (pct >= 0.8) {
             out.push({ id: `quota-${u.uuid}`, level: 'warning', title: t('notifUserNearQuota', 'User {{name}} at {{pct}}% of quota', { name: u.name, pct: Math.round(pct * 100) }), detail: t('notifUserNearQuotaDetail', 'Quota almost used up') });
           }

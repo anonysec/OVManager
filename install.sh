@@ -16,7 +16,6 @@ DEFAULT_URLPATH="${OVM_DEFAULT_URLPATH:-dashboard}"
 DEFAULT_USER="admin"
 SYSTEMD_SERVICE="ovmanager.service"
 VERSION="${OVM_VERSION:-latest}"
-IMAGE_REPO="${OVM_IMAGE_REPO:-ghcr.io/anonysec/ovmanager}"
 if [[ -f internal/version/version.go ]]; then
     VERSION=$(grep -E '^(const|var) Version = ' internal/version/version.go | sed -E 's/.*"([^"]+)".*/\1/')
 fi
@@ -590,7 +589,8 @@ grant_panel_access() {
 }
 install_cli() {
     local dest="${1:-$INSTALL_DIR}"
-    local src_cli="$(dirname "${BASH_SOURCE[0]}")/ovmanager.sh"
+    local src_cli
+    src_cli="$(dirname "${BASH_SOURCE[0]}")/ovmanager.sh"
     if [[ -f "$src_cli" ]]; then
         install -m 0755 "$src_cli" "$dest/ovmanager.sh"
     fi
@@ -716,7 +716,10 @@ show_install_summary() {
 }
 
 offer_node_and_logs() {
-    local mode="${1:-native}" port="$2" urlpath="$3" key="${4:-}" choice=""
+    local mode port
+    # mode kept for call-site compatibility (native/docker currently identical)
+    mode="${1:-native}"
+    port="$2" urlpath="$3" key="${4:-}" choice=""
     # PasarGuard-style: prompt even on a normal (non -i) install when a tty
     # is present; never block a piped/non-interactive run.
     if [[ "$YES" -eq 1 || ! -t 0 ]]; then

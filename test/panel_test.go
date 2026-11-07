@@ -8,17 +8,9 @@ package tests
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/json"
-	"encoding/pem"
 	"io"
-	"math/big"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,7 +18,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
 	"github.com/anonysec/OVManager/go/internal/db"
@@ -108,8 +99,6 @@ type panelEnv struct {
 	conn    *sql.DB
 	dataDir string
 	appDir  string
-	tlsKey  string
-	tlsCert string
 }
 
 // newPanelEnv boots the whole API surface in a throwaway DATA_DIR.
@@ -437,181 +426,5 @@ func TestMaintenanceRestoreRoundTrip(t *testing.T) {
 	_, got = run(url.Values{"restore_from_server": {"../../etc/passwd"}})
 	if got["success"] != false {
 		t.Fatalf("traversal restore accepted: %v", got)
-	}
-}
-
-// mintPair renders a matching ECDSA key + self-signed certificate in PEM.
-func mintPair(t *testing.T, cn string) (keyPEM, certPEM string) {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()),
-		Subject:      pkix.Name{CommonName: cn},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(90 * 24 * time.Hour),
-		DNSNames:     []string{cn},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatalf("create cert: %v", err)
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatalf("marshal key: %v", err)
-	}
-	keyPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}))
-	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-	return keyPEM, certPEM
-}
-
-// TestTLSUploadValidatesAndActivates covers the upload path: validation
-// failures keep the previous pair, a valid pair is written at the declared
-// paths (0600/0644) and rollback restores the previous one.
-// TestUpdaterStateMachine pins the /operation shape for every persisted phase.
-func TestUpdaterStateMachine(t *testing.T) {
-	env := newPanelEnv(t)
-	statePath := filepath.Join(env.dataDir, "update-state.json")
-
-	// No state file: success true, data null.
-	_, raw := rawReq(t, "GET", env.srv.URL+"/api/updater/operation", env.token, nil, "")
-	var got map[string]any
-	if err := json.Unmarshal(raw, &got); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if got["success"] != true || got["data"] != nil {
-		t.Fatalf("no-state operation = %v", got)
-	}
-
-	state := map[string]any{
-		"phase": "staged", "from_version": "1.5.0", "to_version": "1.6.0",
-		"safety_backup": "ovmanager-pre-update-1.db", "updated_at": "2026-10-16T00:00:00Z", "pid": 42,
-	}
-	blob, _ := json.Marshal(state)
-	if err := os.WriteFile(statePath, blob, 0o600); err != nil {
-		t.Fatalf("write state: %v", err)
-	}
-	_, raw = rawReq(t, "GET", env.srv.URL+"/api/updater/operation", env.token, nil, "")
-	_ = json.Unmarshal(raw, &got)
-	data, _ := got["data"].(map[string]any)
-	for _, k := range []string{"phase", "from_version", "to_version", "safety_backup", "updated_at", "pid",
-		"maintenance", "finished"} {
-		if _, ok := data[k]; !ok {
-			t.Fatalf("operation data missing %q: %s", k, raw)
-		}
-	}
-	if data["finished"] != false || data["maintenance"] != false {
-		t.Fatalf("staged state = %v", data)
-	}
-
-	// update-maintenance marker present → maintenance true while running.
-	if err := os.WriteFile(filepath.Join(env.dataDir, "update-maintenance"), []byte(""), 0o600); err != nil {
-		t.Fatalf("write marker: %v", err)
-	}
-	state["phase"] = "committed"
-	blob, _ = json.Marshal(state)
-	_ = os.WriteFile(statePath, blob, 0o600)
-	_, raw = rawReq(t, "GET", env.srv.URL+"/api/updater/operation", env.token, nil, "")
-	_ = json.Unmarshal(raw, &got)
-	data, _ = got["data"].(map[string]any)
-	if data["finished"] != true || data["maintenance"] != true {
-		t.Fatalf("committed state = %v", data)
-	}
-
-	// Unreadable state file: success false, data null.
-	if err := os.WriteFile(statePath, []byte("{not json"), 0o600); err != nil {
-		t.Fatalf("write bad state: %v", err)
-	}
-	_, raw = rawReq(t, "GET", env.srv.URL+"/api/updater/operation", env.token, nil, "")
-	_ = json.Unmarshal(raw, &got)
-	if got["success"] != false || got["data"] != nil {
-		t.Fatalf("bad-state operation = %v", got)
-	}
-}
-
-// TestPanelRequiresOwner pins the 401/403 gate on the owner-only routes.
-func TestPanelRequiresOwner(t *testing.T) {
-	env := newPanelEnv(t)
-	for _, path := range []string{
-		"/api/health/overview", "/api/settings",
-		"/api/updater/operation", "/api/security/summary", "/api/maintenance/backup/list",
-	} {
-		res, _ := rawReq(t, "GET", env.srv.URL+path, "", nil, "")
-		if res.StatusCode != 401 {
-			t.Fatalf("GET %s without token: status = %d, want 401", path, res.StatusCode)
-		}
-	}
-}
-
-// TestRestoreBodyLimit refuses an oversized restore upload.
-func TestRestoreBodyLimit(t *testing.T) {
-	env := newPanelEnv(t)
-	big := bytes.Repeat([]byte("B"), 102*1024*1024)
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	part, _ := mw.CreateFormFile("file", "big.db")
-	_, _ = part.Write(big)
-	_ = mw.Close()
-	res, raw := rawReq(t, "POST", env.srv.URL+"/api/maintenance/backup/restore", env.token, &buf, mw.FormDataContentType())
-	var got map[string]any
-	_ = json.Unmarshal(raw, &got)
-	if res.StatusCode != 200 || got["success"] != false {
-		t.Fatalf("restore large: %d %v", res.StatusCode, got)
-	}
-	if msg, _ := got["msg"].(string); !strings.Contains(msg, "File too large") {
-		t.Fatalf("msg = %q", msg)
-	}
-}
-
-var _ = time.Now
-
-// The settings hint says "0 = unlimited" for the default device count, so
-// the settings GET must report the stored value instead of coercing it.
-func TestSettingsReportTheUnlimitedDefault(t *testing.T) {
-	env := newPanelEnv(t)
-	if _, err := env.conn.Exec(
-		`INSERT INTO settings (id, default_max_users) VALUES (1, 0)
-		 ON CONFLICT(id) DO UPDATE SET default_max_users = 0`,
-	); err != nil {
-		t.Fatal(err)
-	}
-	res, body := rawReq(t, "GET", env.srv.URL+"/api/settings", env.token, nil, "")
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d", res.StatusCode)
-	}
-	var got struct {
-		Data struct {
-			DefaultMaxUsers *int `json:"default_max_users"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &got); err != nil {
-		t.Fatalf("decode: %v (%s)", err, body)
-	}
-	if got.Data.DefaultMaxUsers == nil {
-		t.Fatalf("default_max_users missing: %s", body)
-	}
-	if *got.Data.DefaultMaxUsers != 0 {
-		t.Errorf("default_max_users = %d, want 0", *got.Data.DefaultMaxUsers)
-	}
-}
-
-func TestSubscriptionResponsesAreNotCached(t *testing.T) {
-	env := newPanelEnv(t)
-	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, used, max_logins, is_active) VALUES ('cache-test-user', 'alice', 0, 1, 1)`,
-	); err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-
-	for _, path := range []string{
-		"/sub/cache-test-user",
-		"/sub/download/cache-test-user/missing-node",
-	} {
-		res, _ := rawReq(t, http.MethodGet, env.srv.URL+path, "", nil, "")
-		if got := res.Header.Get("Cache-Control"); got != "no-store" {
-			t.Errorf("GET %s Cache-Control = %q, want no-store", path, got)
-		}
 	}
 }

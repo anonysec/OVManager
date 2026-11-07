@@ -138,21 +138,6 @@ func doJSON(t *testing.T, method, url, token string, body any) (*http.Response, 
 	return res, decoded
 }
 
-// login runs a successful login and returns the bearer token.
-func login(t *testing.T, base, username, password string) map[string]any {
-	t.Helper()
-	res := postForm(t, base, "/api/login", url.Values{"username": {username}, "password": {password}})
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("login status = %d, want 200", res.StatusCode)
-	}
-	var got map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
-		t.Fatalf("decode login: %v", err)
-	}
-	return got
-}
-
 // loginToken posts credentials and returns the raw session token from the
 // HttpOnly cookie (access_token is no longer in the JSON body).
 func loginToken(t *testing.T, base, username, password string) string {

@@ -37,13 +37,18 @@ vi.mock('./ConfirmModal', () => ({ default: () => null }));
 beforeEach(() => {
   liveMock.listeners.clear();
   apiMock.get.mockReset().mockResolvedValue({
-    data: { success: true, data: { users: [{ used: 10 }, { used: 20 }] } },
+    data: { success: true, data: { total: 7, users: [{ used: 10 }] } },
   });
 });
 
 afterEach(() => cleanup());
 
 describe('Sidebar live stats invalidation', () => {
+  it('prefers the API total over the page slice length', async () => {
+    const { container } = render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    await waitFor(() => expect(container.textContent).toContain('7'));
+  });
+
   it('does not refetch the user list for connection-only events', async () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>);
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(1));

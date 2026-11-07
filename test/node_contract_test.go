@@ -390,6 +390,7 @@ func TestNodeContractRequests(t *testing.T) {
 		{"RenewServerCert", func(c *node.Client) { c.RenewServerCert() }},
 		{"TriggerUpdate", func(c *node.Client) { c.TriggerUpdate() }},
 		{"DeleteUser", func(c *node.Client) { c.DeleteUser(uid) }},
+		{"ApplyUserPolicy", func(c *node.Client) { c.ApplyUserPolicy(uid, "amy", 2, true) }},
 		{"DisconnectUser", func(c *node.Client) { c.DisconnectUser(uid, true, 0) }},
 		{"GetSessions", func(c *node.Client) { c.GetSessions("amy", 8, 0) }},
 		{"GetLogs", func(c *node.Client) { c.GetLogs("ERROR", 10) }},

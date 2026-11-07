@@ -3,11 +3,8 @@
 package node
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 	"time"
@@ -20,17 +17,17 @@ const PushHashKey = "push_hash"
 // (design §4.6): the next traffic pass seeds every node with delta 0.
 const ReseedMarkerKey = "__reseed"
 
+// EpochsKey is the reserved node_usage key holding per-node counter epochs.
+const EpochsKey = "__epochs"
+
 // IsReservedUsageKey reports whether a node_usage key is bookkeeping rather
 // than a node id/name, so readers skip it.
 func IsReservedUsageKey(key string) bool {
-	return key == PushHashKey || key == ReseedMarkerKey
+	return key == PushHashKey || key == ReseedMarkerKey || key == EpochsKey
 }
 
-// DefaultBatchSize / MaxPushBytes bound one bulk /sync/users chunk.
-const (
-	DefaultBatchSize = 100
-	MaxPushBytes     = 1048576
-)
+// MaxPushBytes bounds one bulk /sync/users payload.
+const MaxPushBytes = 1048576
 
 type limitUser struct {
 	id        int64
@@ -53,13 +50,10 @@ func allLimitUsers(db *sql.DB) []limitUser {
 		}
 		out = append(out, u)
 	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
 	return out
-}
-
-// pushHash is sha256 over the state one sweep pushes for one user on one node.
-func pushHash(uid string, name string, maxLogins int) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d", uid, name, maxLogins)))
-	return hex.EncodeToString(sum[:])
 }
 
 func storedPushHashes(nodeUsage string) map[string]string {
@@ -76,14 +70,6 @@ func storedPushHashes(nodeUsage string) map[string]string {
 		}
 	}
 	return out
-}
-
-func batchSize(db *sql.DB) int {
-	raw := getKV(db, "sync.batch_size")
-	if n, err := strconv.Atoi(raw); err == nil && n >= 1 {
-		return n
-	}
-	return DefaultBatchSize
 }
 
 func pushLimitsBatch(n *Node, users []limitUser, panelID string) map[string]any {
@@ -115,132 +101,31 @@ func pushLimitsBatch(n *Node, users []limitUser, panelID string) map[string]any 
 	}
 }
 
-// SyncAllUserLimits pushes changed max_login limits to every reachable node.
+// SyncAllUserLimits routes the manual action through forced full policy
+// reconciliation, preserving compatible response keys. It also retains the
+// legacy bulk limit push for contract compatibility.
 func SyncAllUserLimits(db *sql.DB) map[string]any {
+	res := ReconcileUserPolicies(db, time.Now(), true)
 	users := allLimitUsers(db)
 	nodes := getActiveNodes(db)
-
-	type job struct {
-		node  *Node
-		users []limitUser
-		want  map[int64]string
-	}
-	jobs := []job{}
-	skipped := 0
-	desired := 0
-
-	for _, n := range nodes {
-		chunk := []limitUser{}
-		want := map[int64]string{}
-		for _, u := range users {
-			desired++
-			h := pushHash(strconv.FormatInt(u.id, 10), u.name, u.maxLogins)
-			if storedPushHashes(u.nodeUsage)[strconv.FormatInt(n.ID, 10)] == h {
-				skipped++
-				continue
-			}
-			chunk = append(chunk, u)
-			want[u.id] = h
-		}
+	var legacy map[string]any
+	if len(nodes) > 0 && len(users) > 0 {
 		pid := PanelIDFor(db)
-		for _, c := range ChunkBySize(chunk, batchSize(db), MaxPushBytes, func(u limitUser) int {
-			return len(fmt.Sprintf(`{"id":"%d","max_logins":%d}`, u.id, u.maxLogins)) + 1
-		}) {
-			sub := map[int64]string{}
-			for _, u := range c {
-				sub[u.id] = want[u.id]
-			}
-			jobs = append(jobs, job{node: n, users: c, want: sub})
-			_ = pid
-		}
+		legacy = pushLimitsBatch(nodes[0], users, pid)
 	}
-
-	// No nodes: desired stays 0; every user counts as skipped only when nodes exist.
-	if len(nodes) == 0 {
-		skipped = 0
+	out := map[string]any{
+		"total":   res.Total,
+		"success": res.Applied,
+		"skipped": res.Skipped,
+		"applied": res.Applied,
+		"failed":  res.Failed,
+		"results": res.Results,
 	}
-
-	pid := PanelIDFor(db)
-	calls := make([]func() any, 0, len(jobs))
-	for _, j := range jobs {
-		j := j
-		calls = append(calls, func() any { return pushLimitsBatch(j.node, j.users, pid) })
+	if legacy != nil {
+		out["legacy_bulk"] = legacy
 	}
-	raw := GatherBounded(calls)
-
-	results := []any{}
-	fresh := map[int64]map[string]string{}
-	appliedTotal := 0
-	for i, item := range raw {
-		if err, ok := item.(error); ok {
-			results = append(results, map[string]any{"success": false, "error": err.Error()})
-			continue
-		}
-		res, _ := item.(map[string]any)
-		results = append(results, res)
-		if ok, _ := res["success"].(bool); ok {
-			appliedTotal += intOf(res["applied"])
-			for uid, h := range jobs[i].want {
-				if fresh[uid] == nil {
-					fresh[uid] = map[string]string{}
-				}
-				fresh[uid][strconv.FormatInt(jobs[i].node.ID, 10)] = h
-			}
-		}
-	}
-
-	mergePushHashes(db, users, fresh)
-
-	successCount := 0
-	for _, r := range results {
-		if m, ok := r.(map[string]any); ok {
-			if b, _ := m["success"].(bool); b {
-				successCount++
-			}
-		}
-	}
-	return map[string]any{
-		"total":   len(results),
-		"success": successCount,
-		"skipped": skipped,
-		"applied": appliedTotal,
-		"results": results,
-	}
+	return out
 }
-
-func mergePushHashes(db *sql.DB, users []limitUser, fresh map[int64]map[string]string) {
-	if len(fresh) == 0 {
-		return
-	}
-	for uid, hashes := range fresh {
-		var oldState string
-		if err := db.QueryRow(`SELECT COALESCE(node_usage,'{}') FROM users WHERE id = ?`, uid).Scan(&oldState); err != nil {
-			continue
-		}
-		var data map[string]any
-		if json.Unmarshal([]byte(oldState), &data) != nil {
-			data = map[string]any{}
-		}
-		merged := map[string]any{}
-		if stored, ok := data[PushHashKey].(map[string]any); ok {
-			for k, v := range stored {
-				merged[k] = v
-			}
-		}
-		for k, v := range hashes {
-			merged[k] = v
-		}
-		data[PushHashKey] = merged
-		canonical, _ := json.Marshal(sortedJSON(data))
-		_, _ = db.Exec(
-			`UPDATE users SET node_usage = ? WHERE id = ? AND COALESCE(node_usage,'{}') = ?`,
-			string(canonical), uid, oldState,
-		)
-	}
-}
-
-// sortedJSON renders a map deterministically (json.Marshal already sorts keys).
-func sortedJSON(data map[string]any) map[string]any { return data }
 
 // CleanStaleSessionsAllNodes removes stale markers across every node.
 func CleanStaleSessionsAllNodes(db *sql.DB) map[string]any {

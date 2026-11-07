@@ -6,7 +6,7 @@ Web panel for a self-hosted VPN service: users, traffic quotas, expiry dates, de
   <img src=".github/assets/banner.svg" alt="OVManager — self-hosted OpenVPN control panel" width="820">
   <br><br>
 
-  [![Version](https://img.shields.io/badge/version-2.0.1-blue)](CHANGELOG.md)
+  [![Version](https://img.shields.io/badge/version-2.0.2-blue)](CHANGELOG.md)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
   [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
   [![Go](https://img.shields.io/badge/go-1.27+-00ADD8?logo=go&logoColor=white)](go.mod)
@@ -246,6 +246,18 @@ Elsewhere in this repository:
 - [CONTRIBUTING.md](.github/CONTRIBUTING.md) — ground rules, manual install, the checks, release freeze.
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
+
+## Operating guarantees (Task 12 corrections)
+
+- **Enforcement timing:** automatic expiry/quota enforcement runs on the existing 60-second traffic cadence even with no browser or bot activity; a full policy replay occurs at least every 10 minutes to recover lost node state.
+- **Device policy delivery:** create/edit/status/extend/reset and first profile download deliver the current effective policy (`max_logins`, active state); `max_logins=0` means unlimited, `1` means takeover, values above 1 reject excess connections.
+- **Pending deletion:** account deletion creates durable pending revocations for every registered node (including disabled nodes); jobs are removed only after a successful node envelope and retry across outages; delayed old-delete cannot affect a newer account because `users.id` is monotonic.
+- **Counter/reset rules:** per-session increments are counted once across polls, disconnects, replay, restart, and reset; reset rotates the epoch and preserves live-session offsets; legacy unsigned counter files are accepted as the starting total. Unexplained decreases hold the previous baseline and bill zero; explicit reset or epoch change seeds current and bills zero. Counters are integer bytes.
+- **Runtime permissions:** dropped-UID hooks can read policy and write accounting/session state, but cannot read private credentials or modify policy; secrets and profiles stay root-only.
+- **NAT enrollment/reboot:** native NAT is applied from the owned systemd unit at boot; `VPN_NAT_ENABLED=0`/`1` in `/etc/default/ovnode-nat` records opt-out; legacy enrolled means enrolled, absent file means not enrolled; opted-out nodes perform no NAT writes.
+- **Offline restore requirements:** CLI restore stops and verifies `ovmanager.service` before replacing the database, preserves ownership and `0600` permissions, and resumes the prior running state; unknown/manual service ownership is refused.
+- **Backup scheduling/retention/offsite:** automatic backups honor enablement, configured local time, timezone, retention, and offsite target; one successful automatic backup per local date is persisted across restarts; manual backups are not pruned by automatic retention. Offsite failure is distinct from local success.
+- **Counter-format migration and safe downgrade:** v2 counter JSON (`version`, `epoch`, `total`, `sessions`) is not readable by older binaries; downgrade uses the verified pre-update state snapshot while traffic is quiesced. Never blindly replace binaries across counter formats. Preserve the panel `secret.key` separately; a database-only backup does not contain it.
 
 ## 📄 License
 

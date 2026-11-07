@@ -269,6 +269,8 @@ func TestDeleteUserFansOutToNodes(t *testing.T) {
 	if left != 0 {
 		t.Errorf("panel user row still present after delete")
 	}
+	// The HTTP delete only enqueues: the revocation worker delivers.
+	node.ProcessPendingRevocations(env.conn, 20)
 	mu.Lock()
 	defer mu.Unlock()
 	if len(deleted) == 0 {

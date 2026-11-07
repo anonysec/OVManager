@@ -23,7 +23,17 @@ type BackupInfo struct {
 
 func cliHandler(dataDir string) (*Handler, func(), error) {
 	_ = os.Setenv("DATA_DIR", dataDir)
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	cfg := db.ConfigFromEnv()
+	path := cfg.Path
+	if path == "" {
+		if p := db.SQLitePathFromURL(cfg.URL); p != "" {
+			path = p
+		}
+	}
+	if path == "" {
+		path = filepath.Join(dataDir, "ovmanager.db")
+	}
+	conn, err := db.Open(path)
 	if err != nil {
 		return nil, nil, err
 	}

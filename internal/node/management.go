@@ -45,14 +45,6 @@ func panelDomainFor(db *sql.DB) string {
 	return strings.TrimSpace(d.String)
 }
 
-func getKV(db *sql.DB, key string) string {
-	var v sql.NullString
-	if err := db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, key).Scan(&v); err != nil {
-		return ""
-	}
-	return v.String
-}
-
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
 	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'')`
 
@@ -522,6 +514,8 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	if n == 0 {
 		return false
 	}
+	// Retire pending revocations for a deliberately removed node.
+	_, _ = db.Exec(`DELETE FROM pending_user_revocations WHERE node_id = ?`, nodeID)
 	Forget(nodeID)
 
 	// Clean up node's traffic baselines and push hashes from all users.
@@ -752,12 +746,44 @@ func isValidPort(p int) bool {
 	return p > 0 && p <= 65535
 }
 
+// pushDesiredPolicy sends the panel's current effective policy for one user
+// to one node so a subsequently fetched profile cannot outlive it.
+func pushDesiredPolicy(db *sql.DB, n *Node, pid string, userID int64) {
+	var name string
+	var maxLogins int
+	var active int64
+	var total sql.NullInt64
+	var used sql.NullInt64
+	var expiry sql.NullString
+	if err := db.QueryRow(`SELECT name, COALESCE(max_logins,0), is_active, total, used, expiry_date FROM users WHERE id = ?`, userID).Scan(&name, &maxLogins, &active, &total, &used, &expiry); err != nil {
+		return
+	}
+	var totalPtr *int64
+	if total.Valid {
+		v := total.Int64
+		totalPtr = &v
+	}
+	usedVal := int64(0)
+	if used.Valid {
+		usedVal = used.Int64
+	}
+	expiryStr := ""
+	if expiry.Valid {
+		expiryStr = expiry.String
+	}
+	effective := active != 0 && AccessBlocked(expiryStr, totalPtr, usedVal, time.Now()) == ""
+	c := NodeClient(n, pid)
+	_ = c.ApplyUserPolicy(strconv.FormatInt(userID, 10), name, maxLogins, effective)
+}
+
 // DownloadOVPNClient returns the rewritten .ovpn bytes for one user, or nil.
 func DownloadOVPNClient(userID, nodeID int64, db *sql.DB) []byte {
 	n := GetNodeByID(db, nodeID)
 	if n == nil {
 		return nil
 	}
+	// Send fresh desired policy before fetching the profile.
+	pushDesiredPolicy(db, n, PanelIDFor(db), userID)
 	domain, port, fallbacks := remotePlan(n, db)
 	c := NodeClient(n, PanelIDFor(db))
 	content := c.DownloadOVPNBytes(strconv.FormatInt(userID, 10))
@@ -774,15 +800,20 @@ func DownloadAllOVPNClients(nodeID int64, db *sql.DB) []byte {
 		return nil
 	}
 	domain, port, fallbacks := remotePlan(n, db)
-	c := NodeClient(n, PanelIDFor(db))
+	pid := PanelIDFor(db)
+	c := NodeClient(n, pid)
 	buf := &bytes.Buffer{}
 	zw := zip.NewWriter(buf)
 	for _, u := range allUsers(db) {
+		// Policy first, as for single downloads: a bulk profile must not
+		// outlive a deactivation the node has not yet acknowledged.
+		pushDesiredPolicy(db, n, pid, u.id)
 		raw := c.DownloadOVPNBytes(strconv.FormatInt(u.id, 10))
 		if raw == nil {
 			continue
 		}
-		w, err := zw.Create(u.name + ".ovpn")
+		entry := strings.NewReplacer("/", "_", `\`, "_", "..", "_").Replace(u.name) + ".ovpn"
+		w, err := zw.Create(entry)
 		if err != nil {
 			continue
 		}

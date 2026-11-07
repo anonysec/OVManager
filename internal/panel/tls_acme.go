@@ -74,12 +74,6 @@ func (h *Handler) acmeDomain() string {
 	return ""
 }
 
-// acmeIssueRequest is POST /api/tls/acme's body.
-type acmeIssueRequest struct {
-	Domain *string `json:"domain"`
-	Email  *string `json:"email"`
-}
-
 type acmeIssueResult struct {
 	parsed      *x509.Certificate
 	expiresDays int

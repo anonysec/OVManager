@@ -150,3 +150,7 @@ func Open(path string) (*sql.DB, error) {
 	_ = os.Chmod(path, 0o600)
 	return conn, err
 }
+
+// SQLitePathFromURL exports sqlitePathFromURL for callers that resolve the
+// effective database file from a connection URL.
+func SQLitePathFromURL(u string) string { return sqlitePathFromURL(u) }

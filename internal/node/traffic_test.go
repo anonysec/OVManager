@@ -426,7 +426,7 @@ func TestReseedInvalidatesOfflineNodeBaselines(t *testing.T) {
 	conn := newTrafficDB(t)
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":500,"2":1000,"push_hash":{"2":"x"},"__reseed":true}`)
 	users, _ := loadTrafficUsers(conn)
-	_, _, billed := applyTrafficUser(conn, users[0], map[string]int64{"1": 600})
+	_, _, billed := applyTrafficUser(conn, users[0], map[string]int64{"1": 600}, nil)
 	if billed != 0 {
 		t.Fatalf("first poll billed %d, want 0", billed)
 	}
@@ -438,7 +438,7 @@ func TestReseedInvalidatesOfflineNodeBaselines(t *testing.T) {
 		t.Fatalf("push hashes lost: %v", state)
 	}
 	users, _ = loadTrafficUsers(conn)
-	_, _, billed = applyTrafficUser(conn, users[0], map[string]int64{"1": 650, "2": 5000})
+	_, _, billed = applyTrafficUser(conn, users[0], map[string]int64{"1": 650, "2": 5000}, nil)
 	if billed != 50 || userUsed(t, conn, 1) != 50 {
 		t.Fatalf("recovered node should seed; billed=%d used=%d", billed, userUsed(t, conn, 1))
 	}

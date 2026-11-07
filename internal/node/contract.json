@@ -23,7 +23,8 @@
     "path": "/sync/usage",
     "request": [],
     "response": [
-      "totals"
+      "totals",
+      "totals_epochs"
     ],
     "response_raw": false,
     "request_at": "internal/node/client.go:GetUsage",
@@ -234,5 +235,19 @@
     "response_at": [
       "internal/node/sync.go:pushLimitsBatch:data"
     ]
+  },
+  {
+    "method": "PUT",
+    "path": "/sync/user",
+    "request": [
+      "id",
+      "name",
+      "max_logins",
+      "status"
+    ],
+    "response": [],
+    "response_raw": false,
+    "request_at": "internal/node/user_policy.go:ApplyUserPolicy",
+    "note": "desired account policy delivery; the panel reads the envelope only"
   }
 ]

@@ -432,7 +432,7 @@ func stageRelease(stage, target, src string, install Install) error {
 		// no extract, no checksum/signature sidecar (releases ship bare).
 		bin := filepath.Join(stage, appSlug)
 		if err := download(releaseURL(target), bin); err != nil {
-			return fmt.Errorf("No release file is available for v%s", target)
+			return fmt.Errorf("no release file is available for v%s", target)
 		}
 		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // directory permissions managed according to least-privilege policy
 			return err
@@ -486,11 +486,11 @@ func download(url, dst string) error {
 }
 
 func serviceRestart(install Install) bool {
-	return runFix("systemctl", "restart", systemdService)
+	return ServiceRestart(install)
 }
 
 func serviceStop(install Install) {
-	_ = runFix("systemctl", "stop", systemdService)
+	ServiceStop(install)
 }
 
 // dbRestoreNeeded compares the schema version of the live database against the

@@ -74,9 +74,11 @@ const Sidebar = () => {
   const fetchStatsWork = useCallback(async () => {
     try {
       const usersRes = await apiClient.get('/users/');
+      const payload = (usersRes.data as any)?.data ?? usersRes.data;
       const users = asList(usersRes.data, 'users');
       const totalUsage = users.reduce((sum: number, u: any) => sum + Number(u.used || 0), 0);
-      setStats({ totalUsers: users.length, totalUsage });
+      const totalUsers = Number(payload?.total ?? users.length);
+      setStats({ totalUsers: Number.isFinite(totalUsers) ? totalUsers : users.length, totalUsage });
     } catch { /* ignore */ }
   }, []);
   const fetchStats = useMemo(() => createQueuedRefresh(fetchStatsWork), [fetchStatsWork]);

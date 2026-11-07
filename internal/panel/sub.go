@@ -201,10 +201,6 @@ func (h *Handler) subPage(w http.ResponseWriter, r *http.Request) {
 	}
 	nodes := h.activeNodes()
 
-	type nodeEntry struct {
-		name string
-		ok   bool
-	}
 	online := map[string]bool{}
 	if telemetry.SnapshotFresh() {
 		online = telemetry.NodeOnline()

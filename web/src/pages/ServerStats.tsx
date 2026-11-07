@@ -521,7 +521,7 @@ const ServerStats = () => {
                 · {t('updatedAt', 'Updated')} {fmtUpdated(lastUpdated)}
               </span>
             ) : null}
-            {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale — refresh failed')}</span>}
+            {refreshStale && <span className="ds-updated-stale"> · {t('staleData', 'Stale data. Refresh failed')}</span>}
           </span>
         )}
         actions={(

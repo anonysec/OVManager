@@ -11,6 +11,13 @@ import (
 )
 
 func TestRestoreEncryptedBackupRoundTrip(t *testing.T) {
+	// Restore requires an owned service arrangement; stub the seams so the
+	// test does not depend on a host systemd unit.
+	oldState, oldStop, oldRestart := ServiceState, ServiceStop, ServiceRestart
+	t.Cleanup(func() { ServiceState, ServiceStop, ServiceRestart = oldState, oldStop, oldRestart })
+	ServiceState = func() (string, string) { return "native", "inactive" }
+	ServiceStop = func(Install) {}
+	ServiceRestart = func(Install) bool { return true }
 	dir := t.TempDir()
 	installDir := filepath.Join(dir, "opt")
 	if err := os.MkdirAll(installDir, 0o755); err != nil {

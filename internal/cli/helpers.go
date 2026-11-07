@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/anonysec/OVManager/go/internal/db"
 )
 
 func certEnddate(cert string) (time.Time, bool) {
@@ -34,22 +36,7 @@ func runFix(argv ...string) bool {
 	return cmd.Run() == nil
 }
 
-func envFile(install Install) map[string]string {
-	return readEnvFile(filepath.Join(install.InstallDir, ".env"))
-}
-
-func tlsPaths(install Install) []string {
-	env := envFile(install)
-	var found []string
-	for _, name := range []string{"SSL_KEYFILE", "SSL_CERTFILE"} {
-		if v := strings.TrimSpace(env[name]); v != "" && fileExists(v) {
-			found = append(found, v)
-		}
-	}
-	return found
-}
-
-func unitUser() string {
+func unitUserImpl() string {
 	raw, err := os.ReadFile(UnitPath())
 	if err != nil {
 		return ""
@@ -65,6 +52,10 @@ func unitUser() string {
 	}
 	return ""
 }
+
+var UnitUser = unitUserImpl
+
+func unitUser() string { return UnitUser() }
 
 func groupGID(name string) int {
 	g, err := user.LookupGroup(name)
@@ -90,4 +81,90 @@ func statGID(info os.FileInfo) int {
 		return int(st.Gid)
 	}
 	return -1
+}
+
+// repairDBOwnership restores the panel service account's ownership and 0600
+// mode on a freshly activated database. Root-run restores otherwise leave
+// the file owned by root and unreadable by ovmanager.
+func repairDBOwnership(path string) {
+	if os.Geteuid() != 0 {
+		return
+	}
+	account := unitUser()
+	if account == "" {
+		return
+	}
+	u, err := user.Lookup(account)
+	if err != nil {
+		return
+	}
+	uid, err := strconv.Atoi(u.Uid)
+	if err != nil {
+		return
+	}
+	gid := groupGID(account)
+	if gid < 0 {
+		return
+	}
+	_ = os.Chown(path, uid, gid)
+	_ = os.Chmod(path, 0o600)
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if info, err := os.Stat(path + suffix); err == nil && !info.IsDir() {
+			_ = os.Chown(path+suffix, uid, gid)
+			_ = os.Chmod(path+suffix, 0o600)
+		}
+	}
+}
+
+func serviceIsRunning() bool {
+	_, state := ServiceState()
+	s := strings.ToLower(strings.TrimSpace(state))
+	return s == "active" || s == "running" || s == "activating" || s == "reloading"
+}
+
+func restoreServiceOwned() bool {
+	mode, _ := ServiceState()
+	return mode == "native"
+}
+
+func waitForServiceStopped() bool {
+	for i := 0; i < 20; i++ {
+		if !serviceIsRunning() {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return !serviceIsRunning()
+}
+
+func restoreDBPath(install Install) string {
+	oldData := os.Getenv("DATA_DIR")
+	oldApp := os.Getenv("OVM_APP_DIR")
+	if install.InstallDir != "" {
+		_ = os.Setenv("OVM_APP_DIR", install.InstallDir)
+	}
+	if install.DataDir != "" {
+		_ = os.Setenv("DATA_DIR", install.DataDir)
+	}
+	cfg := db.ConfigFromEnv()
+	path := cfg.Path
+	if path == "" {
+		if p := db.SQLitePathFromURL(cfg.URL); p != "" {
+			path = p
+		}
+	}
+	if path == "" {
+		path = filepath.Join(install.DataDir, "ovmanager.db")
+	}
+	if oldData == "" {
+		_ = os.Unsetenv("DATA_DIR")
+	} else {
+		_ = os.Setenv("DATA_DIR", oldData)
+	}
+	if oldApp == "" {
+		_ = os.Unsetenv("OVM_APP_DIR")
+	} else {
+		_ = os.Setenv("OVM_APP_DIR", oldApp)
+	}
+	return path
 }

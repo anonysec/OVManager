@@ -21,6 +21,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/node"
 	"github.com/anonysec/OVManager/go/internal/notify"
 	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/go/internal/users"
 )
 
 // Panel maintenance: backups, restore, sync, cleanup and usage levers
@@ -34,8 +35,17 @@ const (
 // maintenanceLock serializes backup/restore (maintenance.py's RLock).
 var maintenanceLock sync.Mutex
 
-func backupDir() string  { return filepath.Join(dataDir(), "backups") }
-func dbFilePath() string { return filepath.Join(dataDir(), "ovmanager.db") }
+func backupDir() string { return filepath.Join(dataDir(), "backups") }
+func dbFilePath() string {
+	cfg := db.ConfigFromEnv()
+	if p := cfg.Path; p != "" {
+		return p
+	}
+	if p := db.SQLitePathFromURL(cfg.URL); p != "" {
+		return p
+	}
+	return filepath.Join(dataDir(), "ovmanager.db")
+}
 
 // backupSortKey is (mtime, name) — newest first, deterministic on ties.
 func backupSortKey(path string) (float64, string) {
@@ -114,6 +124,13 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 		return "", err
 	}
 	_ = os.Chmod(name, 0o600)
+
+	// Verify before publishing: a corrupt candidate must not evict the
+	// oldest good backup during prune-then-check.
+	if err := verifyDatabase(name); err != nil {
+		_ = os.Remove(name)
+		return "", fmt.Errorf("backup verification failed: %w", err)
+	}
 
 	// Prune older backups of this label.
 	matches, _ := filepath.Glob(filepath.Join(backupDir(), "ovmanager-"+label+"-*.db"))
@@ -645,7 +662,6 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 		return nil
 	}
 	cutoffDay := time.Now().UTC().AddDate(0, 0, -p.OlderThanDays).Format("2006-01-02")
-	cutoffTS := float64(time.Now().UTC().AddDate(0, 0, -p.OlderThanDays).UnixNano()) / 1e9
 	expired := `expiry_date IS NOT NULL AND expiry_date < ?`
 	disabled := `is_active = 0 AND (last_online IS NULL OR last_online < ?)`
 	var query string
@@ -653,10 +669,10 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 	switch status {
 	case "disabled":
 		query = `SELECT id, name FROM users WHERE ` + disabled + ` ORDER BY id DESC`
-		args = []any{cutoffTS}
+		args = []any{cutoffDay}
 	case "all":
 		query = `SELECT id, name FROM users WHERE (` + expired + `) OR (` + disabled + `) ORDER BY id DESC`
-		args = []any{cutoffDay, cutoffTS}
+		args = []any{cutoffDay, cutoffDay}
 	default:
 		query = `SELECT id, name FROM users WHERE ` + expired + ` ORDER BY id DESC`
 		args = []any{cutoffDay}
@@ -735,33 +751,16 @@ func (h *Handler) cleanupRun(w http.ResponseWriter, r *http.Request) {
 	for _, c := range candidates {
 		name, _ := c["name"].(string)
 		id, _ := c["id"].(int64)
-		// One transaction per user: traffic rows and the users row go together,
-		// so a cleanup never leaves a user half-deleted.
-		tx, err := h.Svc.DB().Begin()
-		if err != nil {
-			lastTxErr = err
-			break
-		}
-		if _, err := tx.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, id); err == nil {
-			_, err = tx.Exec(`DELETE FROM users WHERE id = ?`, id)
-		}
-		if err != nil {
-			_ = tx.Rollback()
-			lastTxErr = err
+		if _, err := users.DeleteAccount(h.Svc.DB(), id, false); err != nil {
+			if !errors.Is(err, users.ErrUserAlreadyDeleted) {
+				lastTxErr = err
+			}
 			continue
-		}
-		if err := tx.Commit(); err != nil {
-			lastTxErr = err
-			continue
-		}
-		// Same contract as the users DELETE route: the panel-side row is gone,
-		// so unreachable nodes are reported, not rolled back.
-		if failures, _ := node.DeleteUserOnAllNodes(id, h.Svc.DB())["failed"].([]string); len(failures) > 0 {
-			fanoutFailed = append(fanoutFailed, fmt.Sprintf("%s: %s", name, strings.Join(failures, ", ")))
-			log.Printf("maintenance: cleanup deleted user %s; node fan-out failed on %v", name, failures)
 		}
 		names = append(names, name)
 	}
+	rr := node.ProcessPendingRevocations(h.Svc.DB(), 20)
+	fanoutFailed = append(fanoutFailed, rr.FailedNodes...)
 	if lastTxErr != nil && len(names) == 0 {
 		envelope(w, false, "Cleanup failed: "+lastTxErr.Error(), nil)
 		return

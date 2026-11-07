@@ -5,7 +5,6 @@
 package health
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 
@@ -22,24 +21,18 @@ func Router(trustedProxy bool) http.Handler {
 
 func handle(w http.ResponseWriter, r *http.Request, trustedProxy bool) {
 	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "Method Not Allowed"})
+		auth.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "Method Not Allowed"})
 		return
 	}
 	data := map[string]string{"status": "ok"}
 	if isLoopbackClient(trustedProxy, r) {
 		data["version"] = version.Version
 	}
-	writeJSON(w, http.StatusOK, data)
+	auth.WriteJSON(w, http.StatusOK, data)
 }
 
 func isLoopbackClient(trustedProxy bool, r *http.Request) bool {
 	host := auth.ClientIP(trustedProxy, r)
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
 }

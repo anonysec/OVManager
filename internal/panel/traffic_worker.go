@@ -64,6 +64,12 @@ func (h *Handler) startTrafficWorker() {
 	})
 }
 
+// policyReconcileMu guards lastPolicyReconcile.
+var (
+	policyReconcileMu   sync.Mutex
+	lastPolicyReconcile time.Time
+)
+
 // trafficTick runs one accounting pass. SwapDB-safe: h.Svc.DB() is read per
 // tick, not cached.
 func (h *Handler) trafficTick() {
@@ -72,6 +78,21 @@ func (h *Handler) trafficTick() {
 	log.Printf("traffic: polled %d node(s), failed %d, users updated %d, seeded %d, billed %d bytes",
 		res.NodesPolled, res.NodesFailed, res.UsersUpdated, res.UsersSeeded, res.BytesBilled)
 	recordAliasCollisions(db, res)
+
+	now := time.Now()
+	force := false
+	policyReconcileMu.Lock()
+	if lastPolicyReconcile.IsZero() || now.Sub(lastPolicyReconcile) >= 10*time.Minute {
+		force = true
+		lastPolicyReconcile = now
+	}
+	policyReconcileMu.Unlock()
+	node.ReconcileUserPolicies(db, now, force)
+	rr := node.ProcessPendingRevocations(db, 20)
+	if rr.Attempted > 0 {
+		log.Printf("revocations: attempted %d, acknowledged %d, failed %d",
+			rr.Attempted, rr.Acknowledged, rr.Failed)
+	}
 }
 
 // recordAliasCollisions surfaces the (user, node) pairs where a node reported
