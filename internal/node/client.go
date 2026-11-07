@@ -479,6 +479,7 @@ func (c *Client) roundtrip(hc *http.Client, method, path string, o reqOpts, body
 	for k, v := range o.rawHeader {
 		req.Header.Set(k, v)
 	}
+	req.Header.Set("X-Contract-Version", fmt.Sprint(ContractVersion))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

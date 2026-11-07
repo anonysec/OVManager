@@ -2,6 +2,14 @@ package node
 
 import "net/http"
 
+// ContractVersion is the wire-contract version this panel requires.
+//
+// Nodes and the panel upgrade independently; what must agree is this number.
+// Bump only when a request/response shape in Contract changes. The node
+// rejects X-Contract-Version headers above its own ContractVersion with a
+// typed 409 that names both numbers in plain language.
+const ContractVersion = 3
+
 // The panel↔node contract: every node endpoint the panel calls, the request
 // fields it sends and the response keys it reads.
 //
@@ -54,7 +62,7 @@ var Contract = []ContractRow{
 		Method:    http.MethodGet,
 		Path:      "/sync/status",
 		RequestAt: "internal/node/client.go:GetNodeInfo",
-		Response:  []string{"version", "cpu_usage", "memory_usage", "cert_expiry"},
+		Response:  []string{"contract_version", "version", "cpu_usage", "memory_usage", "cert_expiry"},
 		ResponseAt: []string{
 			"internal/node/management.go:info",   // version (management.go:301)
 			"internal/telemetry/handler.go:info", // cpu_usage, memory_usage (handler.go:459)

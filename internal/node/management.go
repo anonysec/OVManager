@@ -154,11 +154,44 @@ func versionParts(v any) ([]int, bool) {
 // minNodeMajor is the lowest node major version this panel supports.
 const minNodeMajor = 1
 
+// nodeVersionCompat2 judges a node's full status payload against this panel.
+// Wraps nodeVersionCompat with the node's contract_version verdict so the
+// SPA can show a plain-language notice on mismatch instead of an empty field.
+func nodeVersionCompat2(info map[string]any) map[string]any {
+	out := nodeVersionCompat(info["version"])
+	out["node_contract_version"] = info["contract_version"]
+	cv, ok := info["contract_version"].(float64)
+	switch {
+	case !ok:
+		out["contract_verdict"] = "unknown"
+		out["contract_notice"] = ""
+	case int(cv) < ContractVersion:
+		out["contract_verdict"] = "incompatible"
+		out["contract_supported"] = false
+		out["contract_notice"] = "This node speaks wire contract " + fmt.Sprint(int(cv)) + "; this panel requires contract " + fmt.Sprint(ContractVersion) + ". Update the node first — the panel will not trust it until the contract matches."
+	case int(cv) > ContractVersion:
+		out["contract_verdict"] = "incompatible"
+		out["contract_supported"] = false
+		out["contract_notice"] = "This node speaks a newer wire contract (" + fmt.Sprint(int(cv)) + ") than this panel (" + fmt.Sprint(ContractVersion) + "). Update the panel first."
+	default:
+		out["contract_verdict"] = "compatible"
+		out["contract_notice"] = ""
+	}
+	return out
+}
+
 // nodeVersionCompat judges a node agent version against this panel.
+// The wire contract, not the product version, must match; the banners
+// below turn mismatch into plain advice an operator can act on.
 func nodeVersionCompat(agentVersion any) map[string]any {
 	agent, okA := versionParts(agentVersion)
 	panel, okP := versionParts(version.Version)
-	out := map[string]any{"agent_version": agentVersion, "panel_version": version.Version}
+	out := map[string]any{
+		"agent_version":       agentVersion,
+		"panel_version":       version.Version,
+		"contract_version":    ContractVersion,
+		"contract_supported":  true,
+	}
 	if !okA || !okP {
 		out["verdict"] = "unknown"
 		return out
@@ -167,10 +200,12 @@ func nodeVersionCompat(agentVersion any) map[string]any {
 	switch {
 	case agent[0] < minNodeMajor:
 		out["verdict"] = "incompatible"
+		out["notice"] = "This node is older than the panel's supported major version. Update the node before relying on it."
 	case cmp > 0:
 		out["verdict"] = "node-newer"
 	default:
 		out["verdict"] = "compatible"
+		out["notice"] = ""
 	}
 	return out
 }
@@ -332,7 +367,7 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 			"extra_ports": n.ExtraPorts,
 		},
 		"node_info":           orEmpty(res.info),
-		"version_compat":      nodeVersionCompat(res.info["version"]),
+		"version_compat":      nodeVersionCompat2(orEmpty(res.info)),
 		"session_diagnostics": orEmpty(res.sessions),
 		"latency_ms":          latency,
 		"reachable":           len(res.info) > 0,
