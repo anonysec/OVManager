@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 31
+const SchemaVersion = 32
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -262,6 +262,7 @@ var mappedColumns = map[string][]mcolumn{
 		{"is_active", "BOOLEAN DEFAULT 1 NOT NULL"},
 		{"last_online", "DATETIME"},
 		{"tag", "VARCHAR"},
+		{"telegram_chat_id", "INTEGER"},
 	},
 	"nodes": {
 		{"id", "INTEGER"},
@@ -727,6 +728,12 @@ var steps = []step{
 		}
 		_, err := x.Exec(`CREATE INDEX IF NOT EXISTS idx_deleted_nodes_expires ON deleted_nodes(expires_at)`)
 		return err
+	}},
+	{32, "users.telegram_chat_id (Telegram management bot binding)", func(x execer) error {
+		if !tableNames(x)["users"] {
+			return nil
+		}
+		return addColumn(x, "users", "telegram_chat_id", "INTEGER")
 	}},
 }
 

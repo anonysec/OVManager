@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/db"
 	"github.com/anonysec/OVManager/go/internal/node"
 	"os"
@@ -357,7 +358,7 @@ func sendTelegram(db *sql.DB, text string) bool {
 	if err != nil {
 		return false
 	}
-	token = strings.TrimSpace(token)
+	token = plainToken(db, token)
 	if token == "" || !chatID.Valid || chatID.Int64 == 0 {
 		return false
 	}
@@ -392,6 +393,18 @@ func sendTelegram(db *sql.DB, text string) bool {
 		return false
 	}
 	return out.Ok
+}
+
+// plainToken decrypts a stored bot token; unencrypted values pass through.
+func plainToken(db *sql.DB, stored string) string {
+	_ = db
+	if stored == "" {
+		return ""
+	}
+	if plain, err := crypto.DecryptSecret(strings.TrimSpace(stored), resolvedDataDir()); err == nil && plain != "" {
+		return strings.TrimSpace(plain)
+	}
+	return strings.TrimSpace(stored)
 }
 
 // resolvedDataDir mirrors panel.dataDir without importing the panel package.

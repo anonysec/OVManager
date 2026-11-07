@@ -24,6 +24,7 @@ import (
 	"github.com/anonysec/OVManager/go/internal/config"
 	"github.com/anonysec/OVManager/go/internal/crypto"
 	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/go/internal/telemetry"
 )
 
 // Handler serves the Phase 4 routes.
@@ -133,6 +134,10 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 
 	// Daily DB backup (replaces the ovmanager-backup timer).
 	h.startBackupWorker()
+
+	// Telegram management bot: long-poll worker; inactive until a bot
+	// token + owner chat are configured (gated inside the poll loop).
+	telemetry.StartTelegramBot(h.Svc.DB())
 }
 
 // MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside

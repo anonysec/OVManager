@@ -24,6 +24,7 @@ const (
 	KeyBackupLastSuccessDay SettingsKey = "backup.last_success_day"
 	KeyTelegramSentDay      SettingsKey = "telegram_sent_day"
 	KeySnapshotMaxNodes     SettingsKey = "telemetry.snapshot_max_nodes"
+	KeyTelegramLastUpdateID SettingsKey = "telegram.last_update_id"
 )
 
 // Bundle: the three registered keys, for callers that pass them unqualified.
@@ -31,6 +32,7 @@ const (
 	BackupLastSuccessDayKey = KeyBackupLastSuccessDay
 	TelegramSentDayKey      = KeyTelegramSentDay
 	SnapshotMaxNodesKey     = KeySnapshotMaxNodes
+	TelegramLastUpdateIDKey = KeyTelegramLastUpdateID
 )
 
 // settingKeys is the registry of known keys. Adding a key here is the only
@@ -39,6 +41,7 @@ var settingKeys = map[SettingsKey]bool{
 	KeyBackupLastSuccessDay: true,
 	KeyTelegramSentDay:      true,
 	KeySnapshotMaxNodes:     true,
+	KeyTelegramLastUpdateID: true,
 }
 
 // ValidateSettingKey rejects keys outside the registry.
