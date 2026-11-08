@@ -42,7 +42,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
         key: '', cert: '', status: node.status === 'active' || node.status === true,
         country_code: node.country_code || '',
       });
-    } else if (!isEdit) {
+    } else if (!isEdit && !isOpen) {
       setFormData(BLANK);
     }
     setError('');
@@ -162,7 +162,6 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      dismissOnBackdropClick={false}
       title={isEdit ? `${t('modal_editNodeTitle', 'Edit Node')} — ${node?.name || ''}` : t('modal_createNodeTitle')}
       size="medium"
     >

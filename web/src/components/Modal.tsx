@@ -26,7 +26,7 @@ const FOCUSABLE = [
 
 let dialogCount = 0;
 
-const Modal = ({ isOpen, onClose, title, children, size = 'medium', dismissOnBackdropClick = true }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large'; dismissOnBackdropClick?: boolean }) => {
+const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large' }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
   const titleId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -104,8 +104,15 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium', dismissOnBac
 
   if (!isOpen) return null;
 
+  // Clicking the backdrop of a form modal is one mis-drag away from losing
+  // the whole draft. Keep the dialog open and return focus to it; explicit
+  // close controls (X, Cancel, Escape) still work.
   const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (dismissOnBackdropClick && e.target === e.currentTarget) onClose?.();
+    if (e.target !== e.currentTarget) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const first = dialog.querySelector('button:not([disabled])');
+    (first as HTMLElement | null)?.focus();
   };
 
   return createPortal(

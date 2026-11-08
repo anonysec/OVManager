@@ -80,7 +80,6 @@ const UserFormModal = ({ user, isOpen, onClose, onSaved, defaults, linkForUser }
   const reset = () => { setName(''); setExpiryDate(defaultExpiryDate(days)); setTotalTraffic(''); setMaxLogins(defaultLogins); setError(''); setCreatedUser(null); setCopied(false); };
 
   const handleClose = () => {
-    if (!isEdit) reset();
     onClose();
   };
 
