@@ -186,6 +186,10 @@ func spaHandler(h *panel.Handler) http.Handler {
 			rel = "index.html"
 		}
 		if rel != "index.html" {
+			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
 				if rel == "sw.js" {
 					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
