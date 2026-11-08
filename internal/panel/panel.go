@@ -510,11 +510,9 @@ func (h *Handler) urlpath() string {
 	if h.urlAt != 0 && now-h.urlAt < urlPathTTL {
 		return h.urlValue
 	}
-	value := "dashboard"
+	value := ""
 	if s := h.settings(); s != nil {
-		if v := strings.Trim(s.strOr("urlpath"), "/"); v != "" {
-			value = v
-		}
+		value = strings.Trim(s.strOr("urlpath"), "/")
 	}
 	h.urlValue = value
 	h.urlAt = now
@@ -525,9 +523,6 @@ func (h *Handler) urlpath() string {
 // no caller can shadow a live panel route.
 func (h *Handler) setURLPath(value string) (string, error) {
 	value = strings.Trim(value, "/")
-	if value == "" {
-		value = "dashboard"
-	}
 	if reservedPrefixes()[strings.ToLower(value)] {
 		return "", errReservedPrefix{value}
 	}
