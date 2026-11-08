@@ -111,7 +111,7 @@ var (
 )
 
 func (h *Handler) subRateLimited(r *http.Request) bool {
-	key := auth.Sha16(h.clientIP(r))
+	key := auth.Sha16(auth.BucketIP(h.clientIP(r)))
 	now := float64(time.Now().UnixNano()) / 1e9
 	subMu.Lock()
 	defer subMu.Unlock()

@@ -205,9 +205,11 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 					}
 				}
 			}
-			if len(recent) == 0 {
-				activateAttempts.Delete(chatID)
+			if len(recent) >= 5 {
+				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
+				return
 			}
+			activateAttempts.Store(chatID, append(recent, now))
 			u, err := userByUUID(db, arg)
 			if err != nil {
 				tgSend(token, chatID, "That link is invalid. Ask your operator for a fresh activation link.")
@@ -323,8 +325,8 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 		var gb float64
 		if len(fields) >= 3 {
 			gb, err = strconv.ParseFloat(fields[2], 64)
-			if err != nil || gb < 0 {
-				tgSend(token, chatID, "GB must be a number.")
+			if err != nil || gb < 0 || gb > 10240 {
+				tgSend(token, chatID, "GB must be a number 0..10240.")
 				return
 			}
 		}
