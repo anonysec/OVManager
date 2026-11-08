@@ -31,7 +31,7 @@ function readStoredSession(): Session | null {
 }
 
 function storeSession(data: any, fallbackName = '') {
-  const payload = data && typeof data === 'object' && !Array.isArray(data) && (data.role || data.username) ? data : data?.data;
+  const payload = data?.data && typeof data.data === 'object' && !Array.isArray(data.data) && (data.data.role || data.data.username) ? data.data : data;
   const role = payload?.role || null;
   const resolvedName = payload?.username || fallbackName || '';
   if (!role) throw new Error('Login response did not include a role');
