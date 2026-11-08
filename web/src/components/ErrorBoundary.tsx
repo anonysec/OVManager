@@ -1,4 +1,4 @@
-import { Component } from 'react';
+export { default } from './ui/SectionBoundary';
 import type { ReactNode } from 'react';
 import i18n from '../i18n';
 
