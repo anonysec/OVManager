@@ -26,7 +26,7 @@ const FOCUSABLE = [
 
 let dialogCount = 0;
 
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large' }) => {
+const Modal = ({ isOpen, onClose, title, children, size = 'medium', dismissOnBackdropClick = true }: { isOpen?: boolean; onClose?: () => void; title?: string; children?: ReactNode; size?: 'small' | 'medium' | 'large'; dismissOnBackdropClick?: boolean }) => {
   const { t } = useTranslation();
   const dialogRef = useRef<any>(null);
   const titleId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -105,7 +105,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose?.();
+    if (dismissOnBackdropClick && e.target === e.currentTarget) onClose?.();
   };
 
   return createPortal(

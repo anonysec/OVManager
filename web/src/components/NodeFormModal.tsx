@@ -162,6 +162,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      dismissOnBackdropClick={false}
       title={isEdit ? `${t('modal_editNodeTitle', 'Edit Node')} — ${node?.name || ''}` : t('modal_createNodeTitle')}
       size="medium"
     >
