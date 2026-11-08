@@ -124,11 +124,7 @@ func (s *Service) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if raw != "" {
 		s.RevokeToken(raw)
 	}
-	secure := r.TLS != nil
-	if s.TrustedProxy && firstProto(r.Header.Get("X-Forwarded-Proto")) == "https" {
-		secure = true
-	}
-	http.SetCookie(w, &http.Cookie{Name: "ovm_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode}) // #nosec // Secure set dynamically; HTTP deployments cannot use Secure
+	http.SetCookie(w, &http.Cookie{Name: "ovm_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
 	writeJSON(w, http.StatusOK, map[string]any{"detail": "Logged out"})
 }
 

@@ -121,8 +121,14 @@ func runRestore(install Install, name string) (string, int) {
 		if !strings.HasPrefix(absSrc, base+string(os.PathSeparator)) {
 			return block([]string{failedLine("Invalid backup path")}), 1
 		}
+		if lstat, err := os.Lstat(src); err != nil || lstat.Mode()&os.ModeSymlink != 0 {
+			return block([]string{failedLine("Backup file not found: " + name)}), 1
+		}
 		if _, err := os.Stat(src); err != nil {
 			return block([]string{failedLine("Backup file not found: " + name)}), 1
+		}
+		if resolved, err := filepath.EvalSymlinks(src); err == nil {
+			src = resolved
 		}
 		key, err := crypto.GetOrCreateSecretKey(install.DataDir)
 		if err != nil {

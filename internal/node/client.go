@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -125,6 +126,7 @@ type Client struct {
 	pinnedTransport   *http.Transport
 	plainTransport    *http.Transport
 	insecureTransport *http.Transport
+	fallbackUsed      bool
 }
 
 // NewClient builds a client for address:port. serverCA is the stored pin PEM
@@ -359,12 +361,14 @@ func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
 		}
 		return nil
 	}
-	if !insecureFallback() {
+	if !insecureFallback() || c.fallbackUsed {
 		if c.TLSVerified() != nil {
 			c.setVerified(false)
 		}
 		return nil
 	}
+	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK); failing closed on next fallback for this node until restart", c.address)
+	c.fallbackUsed = true
 	hc2 := &http.Client{Transport: c.cachedTransport(nil, true), Timeout: o.timeout}
 	r2, err2 := c.send(hc2, method, path, o)
 	if err2 != nil {
@@ -767,12 +771,14 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		c.setVerified(true)
 		return validProfile(buf)
 	}
-	if !isTLSError(err) || !insecureFallback() {
+	if !isTLSError(err) || !insecureFallback() || c.fallbackUsed {
 		if c.TLSVerified() != nil {
 			c.setVerified(false)
 		}
 		return nil, err
 	}
+	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK); failing closed on next fallback for this node until restart", c.address)
+	c.fallbackUsed = true
 	buf, err = do(&tls.Config{InsecureSkipVerify: true}) // #nosec // NODE_TLS_INSECURE_FALLBACK
 	if err != nil {
 		if c.TLSVerified() != nil {

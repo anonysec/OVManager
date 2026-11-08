@@ -24,6 +24,8 @@ import (
 // user management stay owner-side (owner chat only). The poller is long-poll
 // (getUpdates with a 50s server timeout), one goroutine.
 
+var activateAttempts sync.Map // chatID -> []time.Time (sliding 10min window, max 5)
+
 var telegramBotOnce sync.Once
 
 type tgUpdate struct {
@@ -185,6 +187,21 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 	// Activation: /start <uuid> binds the chat to that user.
 	if cmd == "/start" || cmd == "/start@bot" {
 		if arg != "" {
+			now := time.Now()
+			cutoff := now.Add(-10 * time.Minute)
+			var recent []time.Time
+			if v, ok := activateAttempts.Load(chatID); ok {
+				for _, t := range v.([]time.Time) {
+					if t.After(cutoff) {
+						recent = append(recent, t)
+					}
+				}
+			}
+			if len(recent) >= 5 {
+				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
+				return
+			}
+			activateAttempts.Store(chatID, append(recent, now))
 			u, err := userByUUID(db, arg)
 			if err != nil {
 				tgSend(token, chatID, "That link is invalid. Ask your operator for a fresh activation link.")

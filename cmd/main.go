@@ -68,6 +68,9 @@ func main() {
 			log.Fatalf("listen %s: %v", addr, err)
 		}
 	} else {
+		if !svc.TrustedProxy {
+			log.Printf("SECURITY WARNING: panel is serving over HTTP without TLS; session cookies are Secure and will be blocked by browsers - configure TLS or set TRUSTED_PROXY behind an HTTPS proxy")
+		}
 		log.Printf("ovmanager-go %s listening on http://%s (no TLS)", version.Version, addr)
 		if err := srv.ListenAndServe(); err != nil {
 			log.Fatalf("listen %s: %v", addr, err)
