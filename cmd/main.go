@@ -167,7 +167,7 @@ func spaHandler(h *panel.Handler) http.Handler {
 		basePath := "/" + strings.Trim(h.URLPath(), "/")
 		isRoot := basePath == "/" || basePath == "//"
 		if isRoot {
-			basePath = "/dashboard"
+			basePath = "/"
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
 		if path == "doc" || path == "openapi.json" {
