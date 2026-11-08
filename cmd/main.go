@@ -193,7 +193,11 @@ func spaHandler(h *panel.Handler) http.Handler {
 				} else if strings.HasPrefix(rel, "assets/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				}
-				http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
+				if isRoot {
+					fileServer.ServeHTTP(w, r)
+				} else {
+					http.StripPrefix(prefix, fileServer).ServeHTTP(w, r)
+				}
 				return
 			}
 		}
