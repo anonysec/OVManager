@@ -128,11 +128,12 @@ func appDir() string {
 func panelDispatcher(h *panel.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := "/" + strings.Trim(h.URLPath(), "/")
-		if prefix == "/" {
-			prefix = "/dashboard"
-		}
+		isRoot := prefix == "/" || prefix == "//"
 		p := r.URL.Path
-		// Root path shows decoy 404 (never redirects to dashboard)
+		if isRoot {
+			spaHandler(h).ServeHTTP(w, r)
+			return
+		}
 		if p == "/" {
 			decoyHandler().ServeHTTP(w, r)
 			return
