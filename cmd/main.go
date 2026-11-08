@@ -98,7 +98,6 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root := http.NewServeMux()
 	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
 	root.Handle("/api/", http.StripPrefix("/api", api))
-	h.MountSub(root)
 
 	// The panel prefix is resolved per request (5s DB cache) so a URL-path
 	// change in Settings takes effect without a restart.
@@ -146,7 +145,7 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 			spaHandler(h).ServeHTTP(w, r)
 			return
 		}
-		decoyHandler().ServeHTTP(w, r)
+		h.SubHandler().ServeHTTP(w, r)
 	})
 }
 
@@ -227,31 +226,8 @@ func spaHandler(h *panel.Handler) http.Handler {
 // decoyHandler serves a generic placeholder at the site root so the panel is
 // never reachable from "/".
 func decoyHandler() http.Handler {
-	page := `<!doctype html><html><head><meta charset="utf-8"><title>404 Not Found</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{height:100%;background:#0B0B10;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#F8FAFC}
-.scanlines{position:fixed;inset:0;z-index:2;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12) 0px,rgba(0,0,0,0.12) 1px,transparent 1px,transparent 4px)}
-.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(circle,rgba(0,0,0,0)_55%,rgba(0,0,0,0.9)_100%)}
-.overlay{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;pointer-events:none}
-.hud{border:1px solid #1E293B;padding:2.5rem 3.5rem;background:rgba(30,30,35,0.6);backdrop-filter:blur(6px);box-shadow:0 0 24px rgba(59,130,246,0.25)}
-.code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:.8rem;color:#94A3B8;letter-spacing:.15em;margin-bottom:1rem}
-.glitch{font-size:clamp(4rem,12vw,9rem);font-weight:400;color:#F8FAFC;letter-spacing:.1em;text-shadow:0 0 12px #3B82F6,0 0 30px #3B82F6;animation:scan 2s linear infinite}
-.sub{margin-top:1rem;font-size:.85rem;letter-spacing:.25em;color:#94A3B8;text-transform:uppercase}
-.sub span{color:#3B82F6}
-.ticker{position:fixed;bottom:1rem;left:1rem;right:1rem;z-index:3;font-size:.7rem;color:#94A3B8;letter-spacing:.1em;display:flex;justify-content:space-between;pointer-events:none}
-@keyframes scan{0%,100%{opacity:1}50%{opacity:.7}}
-@media (prefers-reduced-motion:reduce){.glitch{animation:none}}
-</style></head><body>
-<div class="scanlines"></div>
-<div class="vignette"></div>
-<div class="overlay"><div class="hud"><div class="code">ERR::NOT_FOUND</div><div class="glitch">404</div><div class="sub">resource<span>//</span>missing</div></div></div>
-<div class="ticker"><span>SYS.STATUS: ONLINE</span><span>SEC.LEVEL: MAX</span><span>UPTIME: 99.99%</span></div>
-</body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(page))
 	})
 }
 

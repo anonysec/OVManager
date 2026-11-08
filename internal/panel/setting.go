@@ -204,9 +204,13 @@ func (h *Handler) updateSubscription(w http.ResponseWriter, r *http.Request) {
 		updates["subscription_url_prefix"] = strings.TrimSpace(*payload.SubscriptionURLPrefix)
 	}
 	if payload.SubscriptionPath != nil {
-		envelope(w, false, "Subscription path changes require a restart and route configuration update",
-			map[string]any{"subscription_path": strings.Trim(subscriptionPath(), "/")})
-		return
+		requested := strings.Trim(*payload.SubscriptionPath, "/")
+		if requested == "" || !validURLPath(requested) || reservedPrefixes()[strings.ToLower(requested)] {
+			envelope(w, false, "Subscription path must be a single reserved-free segment",
+				map[string]any{"subscription_path": strings.Trim(subscriptionPath(), "/")})
+			return
+		}
+		updates["subscription_path"] = requested
 	}
 	if payload.SubProfileTitle != nil {
 		updates["sub_profile_title"] = strings.TrimSpace(*payload.SubProfileTitle)

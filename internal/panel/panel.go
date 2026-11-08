@@ -140,13 +140,33 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	telemetry.StartTelegramBot(h.Svc.DB())
 }
 
-// MountSub registers the subscription page at /<SUBSCRIPTION_PATH>, outside
-// the /api prefix (app includes that router unprefixed).
-func (h *Handler) MountSub(mux *http.ServeMux) {
-	prefix := "/" + subscriptionPath()
-	mux.HandleFunc("GET "+prefix+"/static/subscription.js", h.subStaticJS)
-	mux.HandleFunc("GET "+prefix+"/download/{uuid}/{node_name}", h.subDownload)
-	mux.HandleFunc("GET "+prefix+"/{uuid}", h.subPage)
+// SubHandler routes any request under the current subscription path.
+func (h *Handler) SubHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		prefix := "/" + strings.Trim(subscriptionPath(), "/") + "/"
+		if !strings.HasPrefix(r.URL.Path, prefix) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		rest := strings.TrimPrefix(r.URL.Path, prefix)
+		if rest == "static/subscription.js" {
+			h.subStaticJS(w, r)
+			return
+		}
+		parts := strings.Split(rest, "/")
+		if len(parts) >= 3 && parts[0] == "download" {
+			r.SetPathValue("uuid", parts[1])
+			r.SetPathValue("node_name", parts[2])
+			h.subDownload(w, r)
+			return
+		}
+		if len(parts) >= 1 && parts[0] != "" {
+			r.SetPathValue("uuid", parts[0])
+			h.subPage(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
 }
 
 // --- configuration (backend) ---
