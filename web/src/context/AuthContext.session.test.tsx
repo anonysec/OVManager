@@ -60,4 +60,15 @@ describe('the session stays out of localStorage', () => {
     expect(dumped).not.toContain('SECRET-TOKEN');
     expect(dumped).not.toContain('REFRESH');
   });
+
+  it('accepts the wrapped server envelope', async () => {
+    post.mockResolvedValue({ data: { data: { role: 'owner', username: 'admin' } } });
+    render(
+      <ToastProvider>
+        <AuthProvider><Login /></AuthProvider>
+      </ToastProvider>
+    );
+    fireEvent.click(await screen.findByText('go'));
+    await waitFor(() => expect(store.userRole).toBe('owner'));
+  });
 });

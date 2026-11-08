@@ -31,8 +31,9 @@ function readStoredSession(): Session | null {
 }
 
 function storeSession(data: any, fallbackName = '') {
-  const role = data.role || null;
-  const resolvedName = data.username || fallbackName || '';
+  const payload = data && typeof data === 'object' && !Array.isArray(data) && (data.role || data.username) ? data : data?.data;
+  const role = payload?.role || null;
+  const resolvedName = payload?.username || fallbackName || '';
   if (!role) throw new Error('Login response did not include a role');
 
   // The session token is NOT kept. The server set an HttpOnly cookie, and a
