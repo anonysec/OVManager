@@ -48,7 +48,12 @@
                             a.className = 'download-btn';
                             a.href = item.link;
                             a.setAttribute('download', '');
-                            a.innerHTML = `${nodeIco}<span class="node-meta"><span class="node-name">${item.name}</span><span class="node-sub">OpenVPN · .ovpn</span></span>${dlIco}`;
+                            const nameSpan = document.createElement('span');
+                            nameSpan.className = 'node-name';
+                            nameSpan.textContent = item.name;
+                            a.innerHTML = `${nodeIco}<span class="node-meta"></span>${dlIco}`;
+                            a.querySelector('.node-meta').append(nameSpan);
+                            a.querySelector('.node-meta').insertAdjacentHTML('beforeend', `<span class="node-sub">OpenVPN · .ovpn</span>`);
                             linksList.appendChild(a);
                         });
                     }

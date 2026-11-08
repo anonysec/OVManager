@@ -44,6 +44,7 @@ func readAtMost(r io.Reader, limit int) ([]byte, error) {
 // decodeRawBody decodes a JSON body without writing an error response (the
 // alert-test route treats a missing body as "no payload").
 func decodeRawBody(r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(nil, r.Body, 1024*1024)
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 

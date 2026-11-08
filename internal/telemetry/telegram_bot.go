@@ -189,6 +189,14 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 		if arg != "" {
 			now := time.Now()
 			cutoff := now.Add(-10 * time.Minute)
+			activateAttempts.Range(func(k, v any) bool {
+				if ts, ok := v.([]time.Time); ok {
+					if len(ts) == 0 || ts[len(ts)-1].Before(cutoff) {
+						activateAttempts.Delete(k)
+					}
+				}
+				return true
+			})
 			var recent []time.Time
 			if v, ok := activateAttempts.Load(chatID); ok {
 				for _, t := range v.([]time.Time) {
@@ -197,11 +205,9 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 					}
 				}
 			}
-			if len(recent) >= 5 {
-				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
-				return
+			if len(recent) == 0 {
+				activateAttempts.Delete(chatID)
 			}
-			activateAttempts.Store(chatID, append(recent, now))
 			u, err := userByUUID(db, arg)
 			if err != nil {
 				tgSend(token, chatID, "That link is invalid. Ask your operator for a fresh activation link.")

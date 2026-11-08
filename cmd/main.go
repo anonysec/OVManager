@@ -96,7 +96,7 @@ func (w *blankWriter) WriteHeader(status int) {
 }
 
 func (w *blankWriter) Write(p []byte) (int, error) {
-	isAPI := w.path == "/api" || len(w.path) > 4 && w.path[:4] == "/api"
+	isAPI := w.path == "/api" || len(w.path) > 5 && w.path[:5] == "/api/"
 	if w.status == http.StatusNotFound && !isAPI {
 		return len(p), nil
 	}

@@ -55,6 +55,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusForbidden, "Origin not allowed")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	if err := r.ParseForm(); err != nil {
 		writeDetail(w, http.StatusBadRequest, "Invalid form data")
 		return
@@ -205,11 +206,18 @@ func (s *Service) originRejected(r *http.Request) bool {
 	if c, err := r.Cookie("ovm_session"); err == nil && c.Value != "" {
 		hasCookie = true
 	}
+	hasValidBearer := false
+	if hasBearer {
+		raw := bearerToken(r)
+		if _, ok := s.VerifySession(raw); ok {
+			hasValidBearer = true
+		}
+	}
 	origins := r.Header.Values("Origin")
 	if len(origins) == 0 {
 		// Cookie-authed browsers must send Origin on mutations; API clients
-		// using Bearer tokens remain allowed without it.
-		return hasCookie && !hasBearer
+		// using a *verified* Bearer token remain allowed without it.
+		return hasCookie && !hasValidBearer
 	}
 	if len(origins) != 1 {
 		return true

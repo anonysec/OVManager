@@ -311,7 +311,7 @@ var botConfigColumns = []struct {
 			if enc, err := crypto.EncryptSecret(v, dataDir()); err == nil {
 				return enc, true
 			}
-			return v, true
+			return nil, true // encrypt failure: never persist plaintext
 		}
 		return nil, true // an empty token clears the column
 	}},

@@ -54,6 +54,9 @@ func VerifyPassword(plain, hashed string) bool {
 	if hashed == "" {
 		return false
 	}
+	if len(plain) > maxBytes {
+		return false
+	}
 	return bcrypt.CompareHashAndPassword([]byte(hashed), prepare(plain)) == nil
 }
 
