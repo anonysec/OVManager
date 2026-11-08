@@ -161,11 +161,8 @@ func (s *Service) RequireUser(next http.HandlerFunc) http.HandlerFunc {
 			writeDetail(w, http.StatusUnauthorized, "Could not validate credentials")
 			return
 		}
-		// CSRF guard: a cross-origin mutating request must carry an Origin that
-		// matches the panel's scheme, host and effective port. Missing Origin is
-		// allowed for non-browser clients; a mismatched or malformed Origin is
-		// rejected. SameSite cookies and the browser's Origin header protect the
-		// cookie-authenticated browser flow without breaking API clients.
+		// CSRF guard: cookie-authenticated mutations must carry an Origin
+		// matching scheme/host/port. Bearer API clients may omit Origin.
 		if s.originRejected(r) {
 			writeDetail(w, http.StatusForbidden, "Origin not allowed")
 			return
@@ -202,9 +199,16 @@ func (s *Service) originRejected(r *http.Request) bool {
 	if !isMutatingMethod(r.Method) {
 		return false
 	}
+	hasBearer := strings.HasPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer ")
+	hasCookie := false
+	if c, err := r.Cookie("ovm_session"); err == nil && c.Value != "" {
+		hasCookie = true
+	}
 	origins := r.Header.Values("Origin")
 	if len(origins) == 0 {
-		return false
+		// Cookie-authed browsers must send Origin on mutations; API clients
+		// using Bearer tokens remain allowed without it.
+		return hasCookie && !hasBearer
 	}
 	if len(origins) != 1 {
 		return true

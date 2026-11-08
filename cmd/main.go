@@ -81,12 +81,13 @@ func main() {
 type blankHandler struct{ http.Handler }
 
 func (h blankHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.Handler.ServeHTTP(&blankWriter{ResponseWriter: w}, r)
+	h.Handler.ServeHTTP(&blankWriter{ResponseWriter: w, path: r.URL.Path}, r)
 }
 
 type blankWriter struct {
 	http.ResponseWriter
 	status int
+	path   string
 }
 
 func (w *blankWriter) WriteHeader(status int) {
@@ -95,7 +96,8 @@ func (w *blankWriter) WriteHeader(status int) {
 }
 
 func (w *blankWriter) Write(p []byte) (int, error) {
-	if w.status == http.StatusNotFound {
+	isAPI := w.path == "/api" || len(w.path) > 4 && w.path[:4] == "/api"
+	if w.status == http.StatusNotFound && !isAPI {
 		return len(p), nil
 	}
 	return w.ResponseWriter.Write(p)
@@ -178,7 +180,7 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 }
 
 func isAssetPath(path string) bool {
-	return path == "sw.js" || strings.HasPrefix(path, "assets/") || strings.HasPrefix(path, "icons/") || strings.HasPrefix(path, "fonts/")
+	return path == "sw.js" || path == "favicon.ico" || path == "manifest.webmanifest" || strings.HasPrefix(path, "assets/") || strings.HasPrefix(path, "icons/") || strings.HasPrefix(path, "fonts/")
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request, index []byte, basePath string) {

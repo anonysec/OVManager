@@ -268,10 +268,14 @@ func SSLCertPath() string { return sslCertPath() }
 func SSLKeyPath() string  { return sslKeyPath() }
 
 func subscriptionPath() string {
-	if v := strings.Trim(envOrFile("SUBSCRIPTION_PATH"), "/"); v != "" {
-		return v
+	v := strings.Trim(envOrFile("SUBSCRIPTION_PATH"), "/")
+	if v == "" {
+		v = "sub"
 	}
-	return "sub"
+	if v == "api" || v == "assets" || v == "health" || v == "static" || v == "doc" || v == "openapi.json" {
+		return "sub"
+	}
+	return v
 }
 
 func serverHost() string {

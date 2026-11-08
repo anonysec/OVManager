@@ -34,9 +34,7 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 		if k, err := hex.DecodeString(envKey); err == nil && len(k) == 32 {
 			return k, nil
 		}
-		if len(envKey) == 32 {
-			return []byte(envKey), nil
-		}
+		return nil, fmt.Errorf("OVM_SECRET_KEY must be 64-char hex (32 bytes)")
 	}
 
 	if dataDir == "" {
@@ -51,8 +49,8 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 		if k, err := hex.DecodeString(trimmed); err == nil && len(k) == 32 {
 			return k, nil
 		}
-		if len(data) == 32 {
-			return data, nil
+		if _, err := hex.DecodeString(trimmed); err == nil {
+			return nil, fmt.Errorf("secret key at %s must be 64-char hex", target)
 		}
 		// File exists but is corrupt. Refuse to overwrite when encrypted
 		// database values depend on it.
