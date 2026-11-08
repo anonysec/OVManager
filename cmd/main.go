@@ -204,13 +204,17 @@ func spaHandler(h *panel.Handler) http.Handler {
 		}
 		if rel != "index.html" {
 			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
+				candidate := strings.TrimSuffix(rel, "/")
+				if _, fileErr := fs.Stat(fsys, filepath.ToSlash(candidate)); fileErr != nil {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				rel = candidate
 			}
 			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err == nil {
 				if rel == "sw.js" {
 					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-				} else if strings.HasPrefix(rel, "assets/") {
+				} else if strings.HasPrefix(rel, "assets/") || strings.HasPrefix(rel, "icons/") || strings.HasPrefix(rel, "fonts/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				}
 				if isRoot {
