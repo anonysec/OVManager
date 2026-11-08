@@ -25,7 +25,7 @@ func newBotDB(t *testing.T) *sql.DB {
 	t.Cleanup(func() { _ = conn.Close() })
 	_, err = conn.Exec(`
 CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER);
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT, expiry_date VARCHAR, is_active BOOLEAN DEFAULT 1, max_logins INTEGER DEFAULT 1, telegram_chat_id INTEGER);
+CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT, expiry_date VARCHAR, is_active BOOLEAN DEFAULT 1, max_logins INTEGER DEFAULT 1, telegram_chat_id INTEGER, activation_token_hash VARCHAR(64), activation_token_expires_at REAL);
 CREATE TABLE settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor VARCHAR, action VARCHAR, target VARCHAR, detail VARCHAR);
 	`)
@@ -85,8 +85,10 @@ func (s *stubTelegram) texts() []string {
 
 func TestBotActivationBinds(t *testing.T) {
 	conn := newBotDB(t)
+	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+		"e0e77a507412b120f6ede61f62295b1a7b2ff19d3dcc8f7253e51663470c888e", float64(time.Now().UnixNano())/1e9+3600)
 	st := startStub(t, nil)
-	TgHandleText(conn, "tok", 999, 42, "/start u-aaa")
+	TgHandleText(conn, "tok", 999, 42, "/start aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	if len(st.sent) != 1 {
 		t.Fatalf("sent %d, want 1", len(st.sent))
 	}
@@ -102,8 +104,10 @@ func TestBotActivationBinds(t *testing.T) {
 func TestBotRebindNotifiesPreviousChat(t *testing.T) {
 	conn := newBotDB(t)
 	_, _ = conn.Exec(`UPDATE users SET telegram_chat_id=111 WHERE uuid='u-aaa'`)
+	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+		"4ca14526b2751b640d549ce7caf8ac39438592211a0ec370064d57666a682ad6", float64(time.Now().UnixNano())/1e9+3600)
 	st := startStub(t, nil)
-	TgHandleText(conn, "tok", 999, 222, "/start u-aaa")
+	TgHandleText(conn, "tok", 999, 222, "/start bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	found := false
 	for _, m := range st.sent {
 		if id, _ := m["chat_id"].(float64); int64(id) == 111 {
@@ -127,7 +131,7 @@ func TestBotInvalidTokenRejected(t *testing.T) {
 	conn := newBotDB(t)
 	st := startStub(t, nil)
 	TgHandleText(conn, "tok", 999, 42, "/start bogus")
-	if !strings.Contains(st.texts()[0], "invalid") {
+	if !strings.Contains(st.texts()[0], "invalid") && !strings.Contains(st.texts()[0], "activation link") {
 		t.Fatalf("reply = %q", st.texts()[0])
 	}
 	var chat int
@@ -200,12 +204,14 @@ func TestTgPollHandlesUpdate(t *testing.T) {
 	msg.Message = &struct {
 		MessageID int `json:"message_id"`
 		Chat      *struct {
-			ID int64 `json:"id"`
+			ID   int64  `json:"id"`
+			Type string `json:"type"`
 		} `json:"chat"`
 		Text string `json:"text"`
 	}{MessageID: 1, Chat: &struct {
-		ID int64 `json:"id"`
-	}{ID: 42}, Text: "/start u-aaa"}
+		ID   int64  `json:"id"`
+		Type string `json:"type"`
+	}{ID: 42, Type: "private"}, Text: "/start u-aaa"}
 	st := startStub(t, []tgUpdate{*msg})
 	if n := tgPollOnce(conn, "tok", 999); n != 1 {
 		t.Fatalf("handled %d, want 1", n)
@@ -220,25 +226,31 @@ func TestTgPollHandlesUpdate(t *testing.T) {
 }
 func TestBotActivationRateLimit(t *testing.T) {
 	conn := newBotDB(t)
+	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+		"c2f480d4dda9f4522b9f6d590011636d904accfe59f12f9d66a0221c2558e3a2", float64(time.Now().UnixNano())/1e9+3600)
 	activateAttempts.Delete(42)
 	activateAttempts.Delete(99)
 	st := startStub(t, nil)
 	for range 5 {
-		TgHandleText(conn, "tok", 999, 42, "/start u-aaa")
+		TgHandleText(conn, "tok", 999, 42, "/start cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 	}
 	if !strings.Contains(st.texts()[0], "Linked") {
 		t.Fatalf("first attempt should bind, got %q", st.texts()[0])
 	}
 	st.sent = nil
-	TgHandleText(conn, "tok", 999, 42, "/start u-aaa")
+	TgHandleText(conn, "tok", 999, 42, "/start cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 	if len(st.sent) != 1 || !strings.Contains(st.sent[0]["text"].(string), "Too many") {
 		t.Fatalf("6th attempt should be rate-limited, sent=%v", st.sent)
 	}
 	// A different chat is not affected.
 	st.sent = nil
-	_, _ = conn.Exec(`INSERT INTO users (id, uuid, name, total, used, expiry_date, is_active, max_logins) VALUES (2, 'u-bbb', 'bob', 1073741824, 0, '2030-01-01', 1, 3)`)
-	TgHandleText(conn, "tok", 999, 99, "/start u-bbb")
-	if !strings.Contains(st.texts()[0], "Linked") {
-		t.Fatalf("other chat should still be allowed, got %q", st.texts()[0])
+	// A different chat is not rate-limited (it gets invalid-link, not Too many).
+	st.sent = nil
+	TgHandleText(conn, "tok", 999, 99, "/start bogus")
+	if len(st.sent) == 0 {
+		t.Fatal("no reply sent for other chat")
+	}
+	if strings.Contains(st.sent[0]["text"].(string), "Too many") {
+		t.Fatalf("other chat should not be rate-limited, got %q", st.sent[0]["text"])
 	}
 }

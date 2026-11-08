@@ -20,7 +20,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 32
+const SchemaVersion = 33
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -263,6 +263,8 @@ var mappedColumns = map[string][]mcolumn{
 		{"last_online", "DATETIME"},
 		{"tag", "VARCHAR"},
 		{"telegram_chat_id", "INTEGER"},
+		{"activation_token_hash", "VARCHAR(64)"},
+		{"activation_token_expires_at", "REAL"},
 	},
 	"nodes": {
 		{"id", "INTEGER"},
@@ -337,6 +339,7 @@ var mappedUniques = map[string][]string{
 var mappedIndices = []string{
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON admins (is_owner) WHERE is_owner = 1",
 	"CREATE INDEX IF NOT EXISTS ix_sessions_username ON sessions (username)",
+	"CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON users (activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''",
 	"CREATE INDEX IF NOT EXISTS idx_users_expiry ON users(expiry_date)",
 	"CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)",
 	"CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name)",
@@ -734,6 +737,19 @@ var steps = []step{
 			return nil
 		}
 		return addColumn(x, "users", "telegram_chat_id", "INTEGER")
+	}},
+	{33, "users.activation_token_hash + activation_token_expires_at (Telegram activation token)", func(x execer) error {
+		if !tableNames(x)["users"] {
+			return nil
+		}
+		if err := addColumn(x, "users", "activation_token_hash", "VARCHAR(64)"); err != nil {
+			return err
+		}
+		if err := addColumn(x, "users", "activation_token_expires_at", "REAL"); err != nil {
+			return err
+		}
+		_, err := x.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON users(activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''`)
+		return err
 	}},
 }
 

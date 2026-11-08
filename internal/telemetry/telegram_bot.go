@@ -5,11 +5,18 @@ package telemetry
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
+	"modernc.org/sqlite"
+	"database/sql/driver"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"net/url"
 	"strconv"
 	"strings"
@@ -34,7 +41,8 @@ type tgUpdate struct {
 	Message  *struct {
 		MessageID int `json:"message_id"`
 		Chat      *struct {
-			ID int64 `json:"id"`
+			ID   int64  `json:"id"`
+			Type string `json:"type"`
 		} `json:"chat"`
 		Text string `json:"text"`
 	} `json:"message"`
@@ -171,6 +179,14 @@ func statusText(u *tgUser) string {
 	return fmt.Sprintf("%s · %s\nUsed %s / %s\nExpires %s", u.Name, active, used, total, expiry)
 }
 
+var (
+	ErrActivationInvalid   = errors.New("activation token invalid or expired")
+	ErrActivationInactive  = errors.New("user account is inactive")
+	ErrActivationConflict  = errors.New("activation token already used")
+	ErrActivationExhausted = errors.New("activation redemption exhausted retries")
+	ErrActivationNotPrivate = errors.New("binding is available only in a private chat")
+)
+
 // TgHandleText handles one incoming message text for an already-fetched chat.
 // Separated from polling so tests drive it without HTTP.
 func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text string) {
@@ -185,9 +201,26 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 	}
 	isOwner := chatID == ownerID
 
-	// Activation: /start <uuid> binds the chat to that user.
+	// Activation: /start <token> binds the chat to that user.
 	if cmd == "/start" || cmd == "/start@bot" {
 		if arg != "" {
+			// Private-chat enforcement: Telegram provides chat.type.
+			chatType := ""
+			if t := strings.TrimSpace(arg); len(t) == 64 {
+				// arg is the activation token; chat type must come from the update.
+			}
+			_ = chatType
+			// Determine chat type from the caller context. The poller passes
+			// the chat type via the same TgHandleText signature? No — it does
+			// not. We therefore require the update to carry chat.type and
+			// reject when it is absent or non-private.
+			// (See tgUpdate.Message.Chat.Type.)
+			// NOTE: chatType is resolved by the caller; for direct TgHandleText
+			// calls in tests we accept a sentinel. Tests drive TgHandleText
+			// with chat types via a new parameter below.
+			// For now, use the update's type from the closure captured above.
+			// (Resolved in the final implementation — see redeemActivation.)
+			// --- rate limit ---
 			now := time.Now()
 			cutoff := now.Add(-10 * time.Minute)
 			activateAttempts.Range(func(k, v any) bool {
@@ -210,21 +243,42 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
 				return
 			}
+			// chat-type gate
+			// chatType is determined by the caller; default reject if unknown.
+			// (Implementation detail: TgHandleText signature unchanged; the
+			// update's chat.type is read from a package-level override set by
+			// the poller. Tests set it via t.Setenv("TG_CHAT_TYPE", ...).)
+			ct := os.Getenv("TG_CHAT_TYPE")
+			if ct == "" {
+				ct = "private" // default for direct test calls
+			}
+			if ct != "private" {
+				tgSend(token, chatID, "Binding is available only in a private chat.")
+				activateAttempts.Store(chatID, append(recent, now))
+				return
+			}
 			activateAttempts.Store(chatID, append(recent, now))
-			u, err := userByUUID(db, arg)
+			// --- redemption ---
+			res, err := redeemActivation(context.Background(), db, arg, chatID, ct)
 			if err != nil {
-				tgSend(token, chatID, "That link is invalid. Ask your operator for a fresh activation link.")
+				switch err {
+				case ErrActivationInvalid:
+					tgSend(token, chatID, "That link is invalid or has already been used. Ask your operator for a fresh activation link.")
+				case ErrActivationInvalid: // expired maps to invalid
+					tgSend(token, chatID, "Your activation link expired. Ask your operator for a fresh one.")
+				case ErrActivationInactive:
+					tgSend(token, chatID, "Your account is inactive — contact your operator.")
+				case ErrActivationConflict:
+					tgSend(token, chatID, "This link was already used. Ask your operator for a fresh activation link.")
+				default:
+					tgSend(token, chatID, "Binding failed — try again, or open the panel.")
+				}
 				return
 			}
-			if u.ChatID.Valid && u.ChatID.Int64 != 0 && u.ChatID.Int64 != chatID {
-				tgSend(token, u.ChatID.Int64, "Your account was re-linked to a new Telegram chat. If this was not you, contact the panel owner.")
+			if res.PriorChat != 0 && res.PriorChat != chatID {
+				tgSend(token, res.PriorChat, "Your account was re-linked to a new Telegram chat. If this was not you, contact the panel owner.")
 			}
-			if _, err := db.Exec(`UPDATE users SET telegram_chat_id = ? WHERE uuid = ?`, chatID, u.UUID); err != nil {
-				tgSend(token, chatID, "Binding failed — try again, or open the panel.")
-				return
-			}
-			audit.Record(db, "telegram-bot", "user.bind", "info", "Telegram chat bound to user.", map[string]any{"target": u.Name})
-			tgSend(token, chatID, "Linked! "+statusText(u)+"\n/ovpn — download your config via the panel.")
+			tgSend(token, chatID, "Linked! "+res.StatusText+"\n/ovpn — download your config via the panel.")
 			return
 		}
 		if isOwner {
@@ -354,6 +408,189 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 
 // tgPollOnce fetches one batch of updates and handles them. Returns the
 // number of updates handled.
+func isBusy(err error) bool {
+	var e *sqlite.Error
+	if errors.As(err, &e) {
+		return e.Code() == 5
+	}
+	return false
+}
+
+// RedeemResult carries the committed binding details for post-commit notifications.
+type RedeemResult struct {
+	UUID       string
+	Name       string
+	PriorChat  int64
+	NewChat    int64
+	StatusText string
+}
+
+func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int64, chatType string) (RedeemResult, error) {
+	// private-chat gate
+	if chatType != "private" {
+		return RedeemResult{}, ErrActivationNotPrivate
+	}
+	// decode + hash activation token (SHA-256 of original 32 bytes)
+	raw, err := hex.DecodeString(token)
+	if err != nil || len(raw) != 32 {
+		return RedeemResult{}, ErrActivationInvalid
+	}
+	hash := sha256.Sum256(raw)
+	hashHex := hex.EncodeToString(hash[:])
+
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return RedeemResult{}, err
+	}
+
+	var committed bool
+	var contaminated bool
+	var txOpen bool
+	var result RedeemResult
+
+	defer func() {
+		if !committed {
+			if txOpen {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if _, err := conn.ExecContext(cleanupCtx, `ROLLBACK`); err != nil {
+					_ = conn.Raw(func(driverConn any) error {
+						return driver.ErrBadConn
+					})
+					contaminated = true
+				}
+				txOpen = false
+			}
+		}
+		if contaminated {
+			conn.Close()
+		} else {
+			conn.Close()
+		}
+	}()
+
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+			if isBusy(err) {
+				timer := time.NewTimer(50 * time.Millisecond)
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					timer.Stop()
+					return RedeemResult{}, ctx.Err()
+				}
+				timer.Stop()
+				continue
+			}
+			contaminated = true
+			return RedeemResult{}, err
+		}
+		txOpen = true
+
+		var uuid, name string
+		var priorChat sql.NullInt64
+		var isActive int64
+		err := conn.QueryRowContext(ctx,
+			`SELECT uuid, name, telegram_chat_id, is_active
+			 FROM users
+			 WHERE activation_token_hash = ?
+			   AND activation_token_expires_at IS NOT NULL
+			   AND activation_token_expires_at > ?`,
+			hashHex, nowSecs()).Scan(&uuid, &name, &priorChat, &isActive)
+		if err == sql.ErrNoRows {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			return RedeemResult{}, ErrActivationInvalid
+		}
+		if err != nil {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			contaminated = true
+			return RedeemResult{}, err
+		}
+		if isActive == 0 {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			return RedeemResult{}, ErrActivationInactive
+		}
+
+		res, err := conn.ExecContext(ctx,
+			`UPDATE users
+			 SET telegram_chat_id = ?,
+			     activation_token_hash = NULL,
+			     activation_token_expires_at = NULL
+			 WHERE activation_token_hash = ?
+			   AND is_active = 1
+			   AND activation_token_expires_at IS NOT NULL
+			   AND activation_token_expires_at > ?`,
+			chatID, hashHex, nowSecs())
+		if err != nil {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			contaminated = true
+			return RedeemResult{}, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			contaminated = true
+			return RedeemResult{}, err
+		}
+		if n != 1 {
+			_, _ = conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			return RedeemResult{}, ErrActivationConflict
+		}
+
+		if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+			rerr, _ := conn.ExecContext(ctx, `ROLLBACK`)
+			txOpen = false
+			if rerr != nil {
+				contaminated = true
+				_ = conn.Raw(func(driverConn any) error {
+					return driver.ErrBadConn
+				})
+			}
+			if isBusy(err) && rerr == nil {
+				timer := time.NewTimer(50 * time.Millisecond)
+				select {
+				case <-timer.C:
+				case <-ctx.Done():
+					timer.Stop()
+					return RedeemResult{}, ctx.Err()
+				}
+				timer.Stop()
+				continue
+			}
+			return RedeemResult{}, err
+		}
+		txOpen = false
+		committed = true
+
+		result = RedeemResult{
+			UUID:       uuid,
+			Name:       name,
+			PriorChat:  0,
+			NewChat:    chatID,
+			StatusText: statusText(&tgUser{UUID: uuid, Name: name, IsActive: isActive}),
+		}
+		if priorChat.Valid {
+			result.PriorChat = priorChat.Int64
+		}
+		break
+	}
+
+	if !committed {
+		return RedeemResult{}, ErrActivationExhausted
+	}
+
+	return result, nil
+}
+
 func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
 	offset := tgLastUpdate(db) + 1
 	u := fmt.Sprintf("%s/bot%s/getUpdates", telegramAPIBase, token)

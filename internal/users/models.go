@@ -27,8 +27,10 @@ type userRow struct {
 	ExpiryDate    sql.NullString
 	IsActive      int64
 	LastOnline    sql.NullString
-	LastLoginIP   sql.NullString
-	Tag           sql.NullString
+	LastLoginIP           sql.NullString
+	Tag                   sql.NullString
+	ActivationTokenHash    sql.NullString
+	ActivationTokenExpires sql.NullFloat64
 }
 
 const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, (SELECT ip FROM sessions WHERE username = users.name ORDER BY created_at DESC LIMIT 1) AS last_login_ip`

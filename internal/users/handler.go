@@ -5,7 +5,10 @@
 package users
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,6 +50,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users/expired", guard(h.expiredHandler))
 	mux.HandleFunc("GET /users/{$}", guard(h.list))
 	mux.HandleFunc("POST /users/{$}", guard(h.create))
+	mux.HandleFunc("POST /users/{uuid}/activation", guard(h.issueActivationToken))
 	mux.HandleFunc("POST /users/purge", guard(h.purge))
 	mux.HandleFunc("POST /users/{uuid}/reset-usage", guard(h.resetUsage))
 	mux.HandleFunc("PUT /users/{uuid}", guard(h.update))
@@ -194,6 +198,57 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 			"total":     total,
 			"page":      respPage,
 			"page_size": respSize,
+		},
+	})
+}
+
+func (h *Handler) issueActivationToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ExpiresDays *int `json:"expires_days"`
+	}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	days := 7
+	if req.ExpiresDays != nil {
+		d := *req.ExpiresDays
+		if d < 1 || d > 30 {
+			auth.WriteValidation(w, "expires_days", "Input should be between 1 and 30")
+			return
+		}
+		days = d
+	}
+	uuidStr := r.PathValue("uuid")
+	var userID int64
+	if err := h.Svc.DB().QueryRow(`SELECT id FROM users WHERE uuid = ?`, uuidStr).Scan(&userID); err != nil {
+		userNotFound(w)
+		return
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		auth.WriteDetail(w, http.StatusInternalServerError, "could not generate token")
+		return
+	}
+	tokenHex := hex.EncodeToString(raw)
+	hash := sha256.Sum256(raw)
+	hashHex := hex.EncodeToString(hash[:])
+	expiresAt := float64(time.Now().UnixNano()) / 1e9 + float64(days*24*60*60)
+	if _, err := h.Svc.DB().Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE id = ?`,
+		hashHex, expiresAt, userID); err != nil {
+		auth.WriteDetail(w, http.StatusInternalServerError, "could not persist token")
+		return
+	}
+	audit.Record(h.Svc.DB(), h.actor(r), "user.activation_issue", "info",
+		"Activation token issued.", map[string]any{"target": uuidStr, "days": days})
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	auth.WriteJSON(w, http.StatusOK, auth.Response{
+		Success: true,
+		Msg:     "Activation token issued. Show it once; it will not be displayed again.",
+		Data: map[string]any{
+			"token":      tokenHex,
+			"expires_at": time.Unix(int64(expiresAt), 0).UTC().Format(time.RFC3339),
 		},
 	})
 }
