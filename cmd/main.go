@@ -164,7 +164,8 @@ func spaHandler(h *panel.Handler) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		basePath := "/" + strings.Trim(h.URLPath(), "/")
-		if basePath == "/" {
+		isRoot := basePath == "/" || basePath == "//"
+		if isRoot {
 			basePath = "/dashboard"
 		}
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -178,6 +179,9 @@ func spaHandler(h *panel.Handler) http.Handler {
 		}
 		prefix := basePath + "/"
 		rel := strings.TrimPrefix(r.URL.Path, prefix)
+		if isRoot {
+			rel = strings.TrimPrefix(r.URL.Path, "/")
+		}
 		if rel == "" || rel == basePath {
 			rel = "index.html"
 		}
