@@ -57,7 +57,7 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
     if (!s || synced.current) return;
     synced.current = true;
     setUrlPath(s.urlpath || '');
-    setSubPrefix(s.subscription_url_prefix || '');
+    setSubPrefix(s.subscription_path || 'sub');
     setProfile({
       title: s.sub_profile_title ?? '',
       support: s.sub_support_url ?? '',
@@ -86,11 +86,16 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
   };
 
   const saveSubPrefix = async () => {
+    const v = subPrefixValue.trim().replace(/^\/+|\/+$/g, '');
+    if (!v || !/^[A-Za-z0-9_-]+$/.test(v)) {
+      addToast(t('urlPathInvalid', 'Only letters, numbers, dashes and underscores.'), 'error');
+      return;
+    }
     setSubPrefixSaving(true);
     try {
-      const res = await apiClient.put('/settings/subscription', { subscription_url_prefix: subPrefixValue.trim() });
+      const res = await apiClient.put('/settings/subscription', { subscription_path: v });
       if (res?.data?.success === false) throw new Error(res.data.msg || 'save failed');
-      setSubPrefix(subPrefixValue.trim()); setSubPrefixEditing(false);
+      setSubPrefix(v); setSubPrefixEditing(false);
       addToast(t('saved', 'Saved.'), 'success');
     } catch (e) { addToast((e as GeneralApiError).response?.data?.msg || t('error', 'Error'), 'error'); }
     finally { setSubPrefixSaving(false); }
@@ -182,26 +187,26 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
         <p className="sp-hint">{urlPath ? t('urlpathActive', 'Panel served at /{path}/. Clear to serve at root.', { path: urlPath }) : t('urlpathRoot', 'Panel served at root (/).')}</p>
       </Card>
 
-      <Card title={t('subscriptionLinkCard', 'Subscription URL Prefix')} icon={FiLink}>
+      <Card title={t('subscriptionLinkCard', 'Subscription Path')} icon={FiLink}>
         <div className="sp-url-row">
           <code className="sp-code sp-code--muted">{subPrefix || t('notSet', '(uses panel origin)')}</code>
           {!subPrefixEditing && (
-            <button ref={subTriggerRef} className="sp-icon-btn" onClick={() => { setSubPrefixValue(subPrefix); setSubPrefixEditing(true); }} aria-label={t('changeSubPrefix', 'Change subscription URL prefix')}>
+            <button ref={subTriggerRef} className="sp-icon-btn" onClick={() => { setSubPrefixValue(subPrefix); setSubPrefixEditing(true); }} aria-label={t('changeSubPrefix', 'Change subscription path')}>
               <FiEdit2 size={14} aria-hidden="true" />
             </button>
           )}
         </div>
         {subPrefixEditing && (
           <div className="sp-inline-edit">
-            <label className="sr-only" htmlFor="general-subprefix">{t('subscriptionLinkCard', 'Subscription URL Prefix')}</label>
-            <input id="general-subprefix" ref={subInputRef} type="text" value={subPrefixValue} placeholder="https://panel.example.com" onChange={e => setSubPrefixValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveSubPrefix(); if (e.key === 'Escape') setSubPrefixEditing(false); }} className="sp-input" />
+            <label className="sr-only" htmlFor="general-subprefix">{t('subscriptionLinkCard', 'Subscription Path')}</label>
+            <input id="general-subprefix" ref={subInputRef} type="text" value={subPrefixValue} placeholder="sub" onChange={e => setSubPrefixValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveSubPrefix(); if (e.key === 'Escape') setSubPrefixEditing(false); }} className="sp-input" />
             <div className="sp-row-btns">
               <LoadingButton className="btn btn-sm" isLoading={subPrefixSaving} onClick={saveSubPrefix}><FiCheck size={12} /> {t('save', 'Save')}</LoadingButton>
               <button className="btn btn-sm btn-secondary" onClick={() => setSubPrefixEditing(false)}><FiX size={12} /> {t('cancel', 'Cancel')}</button>
             </div>
           </div>
         )}
-        <p className="sp-hint">{t('subscriptionLinkDesc', 'Override the base URL used in user subscription links. Leave empty to use the panel origin.')}</p>
+        <p className="sp-hint">{t('subscriptionLinkDesc', 'Path segment used in user subscription links. Cannot be empty — root serves the panel.')}</p>
       </Card>
 
       <Card title={t('subProfileCard', 'Subscription Page')} icon={FiInfo}>
