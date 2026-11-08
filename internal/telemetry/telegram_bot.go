@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -325,7 +326,7 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 		var gb float64
 		if len(fields) >= 3 {
 			gb, err = strconv.ParseFloat(fields[2], 64)
-			if err != nil || gb < 0 || gb > 10240 {
+			if err != nil || math.IsNaN(gb) || math.IsInf(gb, 0) || gb < 0 || gb > 10240 {
 				tgSend(token, chatID, "GB must be a number 0..10240.")
 				return
 			}

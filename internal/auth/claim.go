@@ -226,7 +226,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 // trade-off versus adding a second persisted limiter table.
 // claimRateLimited reproduces owner_claim.py's per-IP failure window.
 func (s *Service) claimRateLimited(r *http.Request) bool {
-	key := Sha16(s.clientIP(r))
+	key := Sha16(BucketIP(s.clientIP(r)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
@@ -252,7 +252,7 @@ func (s *Service) claimRateLimited(r *http.Request) bool {
 }
 
 func (s *Service) noteClaimFailure(r *http.Request) {
-	key := Sha16(s.clientIP(r))
+	key := Sha16(BucketIP(s.clientIP(r)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[key] = append(s.failures[key], nowSecs())
