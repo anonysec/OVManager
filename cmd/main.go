@@ -81,13 +81,24 @@ func main() {
 type blankHandler struct{ http.Handler }
 
 func (h blankHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.Handler.ServeHTTP(blankWriter{ResponseWriter: w}, r)
+	h.Handler.ServeHTTP(&blankWriter{ResponseWriter: w}, r)
 }
 
-type blankWriter struct{ http.ResponseWriter }
+type blankWriter struct {
+	http.ResponseWriter
+	status int
+}
 
-func (w blankWriter) Write(p []byte) (int, error) {
-	return len(p), nil
+func (w *blankWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *blankWriter) Write(p []byte) (int, error) {
+	if w.status == http.StatusNotFound {
+		return len(p), nil
+	}
+	return w.ResponseWriter.Write(p)
 }
 
 // panelRouter assembles the panel surface: root /health, every router under
