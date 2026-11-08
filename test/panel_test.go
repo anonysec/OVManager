@@ -144,7 +144,7 @@ func newPanelEnv(t *testing.T) *panelEnv {
 
 	root := http.NewServeMux()
 	root.Handle("/api/", http.StripPrefix("/api", inner))
-	h.MountSub(root)
+	root.Handle("/", h.SubHandler())
 
 	srv := httptest.NewServer(panel.SecurityHeaders(root))
 	t.Cleanup(srv.Close)

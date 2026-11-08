@@ -78,6 +78,18 @@ func main() {
 	}
 }
 
+type blankHandler struct{ http.Handler }
+
+func (h blankHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.Handler.ServeHTTP(blankWriter{ResponseWriter: w}, r)
+}
+
+type blankWriter struct{ http.ResponseWriter }
+
+func (w blankWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
 // panelRouter assembles the panel surface: root /health, every router under
 // /api, the unprefixed subscription page, and the built SPA as the fallback.
 func panelRouter(svc *auth.Service) http.Handler {
@@ -98,7 +110,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	root := http.NewServeMux()
 	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
 	root.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.StripPrefix("/api", api).ServeHTTP(w, r)
+		http.StripPrefix("/api", blankHandler{Handler: api}).ServeHTTP(w, r)
 	}))
 	root.Handle("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
