@@ -96,8 +96,12 @@ func panelRouter(svc *auth.Service) http.Handler {
 	h.MountLogs(api)
 
 	root := http.NewServeMux()
-	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
-	root.Handle("/api/", http.StripPrefix("/api", api))
+	root.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.StripPrefix("/api", api).ServeHTTP(w, r)
+	}))
+	root.Handle("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
 
 	// The panel prefix is resolved per request (5s DB cache) so a URL-path
 	// change in Settings takes effect without a restart.
