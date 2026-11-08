@@ -190,6 +190,9 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 				tgSend(token, chatID, "That link is invalid. Ask your operator for a fresh activation link.")
 				return
 			}
+			if u.ChatID.Valid && u.ChatID.Int64 != 0 && u.ChatID.Int64 != chatID {
+				tgSend(token, u.ChatID.Int64, "Your account was re-linked to a new Telegram chat. If this was not you, contact the panel owner.")
+			}
 			if _, err := db.Exec(`UPDATE users SET telegram_chat_id = ? WHERE uuid = ?`, chatID, u.UUID); err != nil {
 				tgSend(token, chatID, "Binding failed — try again, or open the panel.")
 				return

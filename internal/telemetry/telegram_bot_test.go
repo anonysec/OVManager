@@ -99,6 +99,29 @@ func TestBotActivationBinds(t *testing.T) {
 		t.Fatalf("telegram_chat_id = %d, want 42", chat)
 	}
 }
+func TestBotRebindNotifiesPreviousChat(t *testing.T) {
+	conn := newBotDB(t)
+	_, _ = conn.Exec(`UPDATE users SET telegram_chat_id=111 WHERE uuid='u-aaa'`)
+	st := startStub(t, nil)
+	TgHandleText(conn, "tok", 999, 222, "/start u-aaa")
+	found := false
+	for _, m := range st.sent {
+		if id, _ := m["chat_id"].(float64); int64(id) == 111 {
+			found = true
+			if txt, _ := m["text"].(string); !strings.Contains(txt, "re-linked") {
+				t.Fatalf("rebind notice = %q", txt)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no rebind notice to previous chat 111; sent=%v", st.sent)
+	}
+	var chat int64
+	_ = conn.QueryRow(`SELECT telegram_chat_id FROM users WHERE uuid='u-aaa'`).Scan(&chat)
+	if chat != 222 {
+		t.Fatalf("telegram_chat_id = %d, want 222", chat)
+	}
+}
 
 func TestBotInvalidTokenRejected(t *testing.T) {
 	conn := newBotDB(t)

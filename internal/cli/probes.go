@@ -33,11 +33,11 @@ var (
 // certificate, but the hostname is not checked (the probe dials 127.0.0.1).
 func pinnedTLSConfig(cafile string) *tls.Config {
 	if cafile == "" {
-		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
+		return nil
 	}
 	raw, err := os.ReadFile(cafile) // #nosec G304 // path is validated within trusted data or application directory
 	if err != nil {
-		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
+		return nil
 	}
 	// Pin to the leaf certificate's raw bytes so CA-issued (non-self-signed)
 	// certs validate even when the full chain/root is not in the pinned pool.
@@ -61,7 +61,7 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 		}
 	}
 	if pinnedDER == nil {
-		return &tls.Config{InsecureSkipVerify: true} // #nosec G402 // probe fallback
+		return nil
 	}
 	return &tls.Config{
 		InsecureSkipVerify:     true, // #nosec G402 // TOFU pinning
@@ -90,7 +90,11 @@ func pinnedTLSConfig(cafile string) *tls.Config {
 func fetchHealthImpl(url string, timeout time.Duration, cafile string) (bool, string) {
 	client := &http.Client{Timeout: timeout}
 	if strings.HasPrefix(url, "https://") {
-		client.Transport = &http.Transport{TLSClientConfig: pinnedTLSConfig(cafile)}
+		tlsCfg := pinnedTLSConfig(cafile)
+		if tlsCfg == nil {
+			return false, "?"
+		}
+		client.Transport = &http.Transport{TLSClientConfig: tlsCfg}
 	}
 	resp, err := client.Get(url)
 	if err != nil {

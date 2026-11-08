@@ -97,19 +97,15 @@ func (s *Service) IssueSession(w http.ResponseWriter, r *http.Request, username,
 		writeDetail(w, http.StatusInternalServerError, "Could not create a session")
 		return
 	}
-	secure := r.TLS != nil
-	if s.TrustedProxy && firstProto(r.Header.Get("X-Forwarded-Proto")) == "https" {
-		secure = true
-	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "ovm_session",
 		Value:    raw,
 		Path:     "/",
 		MaxAge:   s.MaxSeconds,
 		HttpOnly: true,
-		Secure:   secure,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-	}) // #nosec // Secure set dynamically; HTTP deployments cannot use Secure
+	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"refresh_token": nil,
 		"token_type":    "bearer",
