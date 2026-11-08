@@ -166,7 +166,28 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 	})
 }
 
-// spaHandler serves the built web and falls back to index.html for the
+func isAssetPath(path string) bool {
+	return path == "sw.js" || strings.HasPrefix(path, "assets/") || strings.HasPrefix(path, "icons/") || strings.HasPrefix(path, "fonts/")
+}
+
+func serveIndex(w http.ResponseWriter, r *http.Request, index []byte, basePath string) {
+	htmlContent := string(index)
+	bp := basePath
+	if !strings.HasSuffix(bp, "/") {
+		bp += "/"
+	}
+	if !strings.Contains(htmlContent, "<base") {
+		htmlContent = strings.Replace(htmlContent, "<head>", "<head><base href=\""+html.EscapeString(bp)+"\">", 1)
+	}
+	if nonce := panel.NonceFromContext(r.Context()); nonce != "" {
+		htmlContent = strings.ReplaceAll(htmlContent, "<script>", `<script nonce="`+nonce+`">`)
+		htmlContent = strings.ReplaceAll(htmlContent, "<script type=\"module\"", `<script nonce="`+nonce+`" type="module"`)
+	}
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(htmlContent))
+}
+
 // client-side router. Reserved prefixes answer 404 like the catch-all,
 // never SPA HTML.
 //
@@ -206,6 +227,15 @@ func spaHandler(h *panel.Handler) http.Handler {
 			if _, err := fs.Stat(fsys, filepath.ToSlash(rel)); err != nil {
 				candidate := strings.TrimSuffix(rel, "/")
 				if _, fileErr := fs.Stat(fsys, filepath.ToSlash(candidate)); fileErr != nil {
+					if !isAssetPath(rel) {
+						index, err := fs.ReadFile(fsys, "index.html")
+						if err != nil {
+							w.WriteHeader(http.StatusNotFound)
+							return
+						}
+						serveIndex(w, r, index, basePath)
+						return
+					}
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
@@ -227,24 +257,10 @@ func spaHandler(h *panel.Handler) http.Handler {
 		}
 		index, err := fs.ReadFile(fsys, "index.html")
 		if err != nil {
-			http.NotFound(w, r)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		htmlContent := string(index)
-		bp := basePath
-		if !strings.HasSuffix(bp, "/") {
-			bp += "/"
-		}
-		if !strings.Contains(htmlContent, "<base") {
-			htmlContent = strings.Replace(htmlContent, "<head>", "<head><base href=\""+html.EscapeString(bp)+"\">", 1)
-		}
-		if nonce := panel.NonceFromContext(r.Context()); nonce != "" {
-			htmlContent = strings.ReplaceAll(htmlContent, "<script>", `<script nonce="`+nonce+`">`)
-			htmlContent = strings.ReplaceAll(htmlContent, "<script type=\"module\"", `<script nonce="`+nonce+`" type="module"`)
-		}
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(htmlContent))
+		serveIndex(w, r, index, basePath)
 	})
 }
 
