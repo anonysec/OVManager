@@ -218,3 +218,27 @@ func TestTgPollHandlesUpdate(t *testing.T) {
 	}
 	_ = time.Now()
 }
+func TestBotActivationRateLimit(t *testing.T) {
+	conn := newBotDB(t)
+	activateAttempts.Delete(42)
+	activateAttempts.Delete(99)
+	st := startStub(t, nil)
+	for range 5 {
+		TgHandleText(conn, "tok", 999, 42, "/start u-aaa")
+	}
+	if !strings.Contains(st.texts()[0], "Linked") {
+		t.Fatalf("first attempt should bind, got %q", st.texts()[0])
+	}
+	st.sent = nil
+	TgHandleText(conn, "tok", 999, 42, "/start u-aaa")
+	if len(st.sent) != 1 || !strings.Contains(st.sent[0]["text"].(string), "Too many") {
+		t.Fatalf("6th attempt should be rate-limited, sent=%v", st.sent)
+	}
+	// A different chat is not affected.
+	st.sent = nil
+	_, _ = conn.Exec(`INSERT INTO users (id, uuid, name, total, used, expiry_date, is_active, max_logins) VALUES (2, 'u-bbb', 'bob', 1073741824, 0, '2030-01-01', 1, 3)`)
+	TgHandleText(conn, "tok", 999, 99, "/start u-bbb")
+	if !strings.Contains(st.texts()[0], "Linked") {
+		t.Fatalf("other chat should still be allowed, got %q", st.texts()[0])
+	}
+}
