@@ -41,7 +41,7 @@ describe('the session stays out of localStorage', () => {
       removeItem: (k: string) => { delete store[k]; },
     });
     post.mockReset();
-    post.mockResolvedValue({ data: { access_token: 'SECRET-TOKEN', refresh_token: 'REFRESH', role: 'owner', username: 'admin' } });
+    post.mockResolvedValue({ data: { data: { role: 'owner', username: 'admin' } } });
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
