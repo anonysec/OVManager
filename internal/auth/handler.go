@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -60,7 +61,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	username := r.PostFormValue("username")
 	password := r.PostFormValue("password")
-	ip := s.clientIP(r)
+	ip := BucketIP(s.clientIP(r))
 
 	// Check all three rate limit buckets atomically
 	if s.checkBucket(s.rateKey(ip, username), maxAttempts) ||
@@ -394,11 +395,21 @@ func (s *Service) incrementBucket(key string) {
 	fresh = append(fresh, now)
 	s.attempts[key] = fresh
 	if overflow := len(s.attempts) - maxBuckets; overflow > 0 {
-		for k := range s.attempts {
-			delete(s.attempts, k)
-			if overflow--; overflow == 0 {
-				break
+		type victim struct {
+			k    string
+			last float64
+		}
+		var victims []victim
+		for k, ts := range s.attempts {
+			last := 0.0
+			if len(ts) > 0 {
+				last = ts[len(ts)-1]
 			}
+			victims = append(victims, victim{k, last})
+		}
+		sort.Slice(victims, func(i, j int) bool { return victims[i].last < victims[j].last })
+		for i := 0; i < overflow && i < len(victims); i++ {
+			delete(s.attempts, victims[i].k)
 		}
 	}
 

@@ -4,6 +4,7 @@
 package auth
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -35,6 +36,9 @@ func prepare(password string) []byte {
 // HashPassword returns a bcrypt hash (12 rounds, $2b$ prefix). New hashes stay
 // byte-comparable with the backend.
 func HashPassword(password string) (string, error) {
+	if len(password) > maxBytes {
+		return "", fmt.Errorf("password must be at most 72 bytes")
+	}
 	h, err := bcrypt.GenerateFromPassword(prepare(password), BcryptCost)
 	if err != nil {
 		return "", err

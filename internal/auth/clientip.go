@@ -26,12 +26,8 @@ func init() {
 
 func defaultTrustedCIDRStrings() []string {
 	return []string{
-		"127.0.0.0/8",    // IPv4 loopback
-		"::1/128",        // IPv6 loopback
-		"10.0.0.0/8",     // RFC1918
-		"172.16.0.0/12",  // RFC1918
-		"192.168.0.0/16", // RFC1918
-		"fc00::/7",       // IPv6 Unique Local Address
+		"127.0.0.0/8", // IPv4 loopback
+		"::1/128",     // IPv6 loopback
 	}
 }
 
@@ -108,6 +104,28 @@ func isTrustedProxyIP(remoteHost string) bool {
 	}
 	return false
 }
+func xffClientIP(xff string) string {
+	parts := strings.Split(xff, ",")
+	for _, p := range parts {
+		c := strings.TrimSpace(p)
+		if c == "" {
+			continue
+		}
+		if net.ParseIP(c) == nil {
+			return c
+		}
+		if !isTrustedProxyIP(c) {
+			return c
+		}
+	}
+	for _, p := range parts {
+		c := strings.TrimSpace(p)
+		if c != "" && net.ParseIP(c) != nil {
+			return c
+		}
+	}
+	return ""
+}
 
 // ClientIP returns the verified client IP address. Forwarded headers are
 // strictly accepted only when trustedProxy is true AND RemoteAddr originates
@@ -131,10 +149,8 @@ func ClientIP(trustedProxy bool, r *http.Request) string {
 		val := strings.TrimSpace(r.Header.Get(headerToUse))
 		if val != "" {
 			if headerToUse == "X-Forwarded-For" {
-				parts := strings.Split(val, ",")
-				candidate := strings.TrimSpace(parts[len(parts)-1])
-				if net.ParseIP(candidate) != nil {
-					return candidate
+				if c := xffClientIP(val); c != "" && net.ParseIP(c) != nil {
+					return c
 				}
 			} else if net.ParseIP(val) != nil {
 				return val
@@ -145,10 +161,8 @@ func ClientIP(trustedProxy bool, r *http.Request) string {
 
 	// Default fallback chain behind trusted proxy
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		candidate := strings.TrimSpace(parts[len(parts)-1])
-		if net.ParseIP(candidate) != nil {
-			return candidate
+		if c := xffClientIP(xff); c != "" && net.ParseIP(c) != nil {
+			return c
 		}
 	}
 	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {

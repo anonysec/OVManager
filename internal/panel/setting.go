@@ -124,10 +124,14 @@ func orDefault(v, def int) int {
 // maskedBotToken is the GET shape of the stored token: last four characters
 // only — the secret itself never leaves the row.
 func maskedBotToken(s settings) any {
-	if s.strOr("bot_token") == "" {
+	t := s.strOr("bot_token")
+	if t == "" {
 		return nil
 	}
-	return s.strOr("bot_token")
+	if len(t) <= 4 {
+		return "••••"
+	}
+	return "••••" + t[len(t)-4:]
 }
 
 // publicURLOr is (config.PUBLIC_URL or str(request.base_url)).

@@ -260,7 +260,7 @@ func (s *Service) noteClaimFailure(r *http.Request) {
 
 // --- validation + JSON helpers shared with the owner claim ---
 
-const passwordMinLength = 8
+const passwordMinLength = 12
 
 var passwordPlaceholders = []string{"change-me", "changeme", "change_me", "password123", "admin123"}
 
@@ -272,8 +272,11 @@ func passwordProblem(value string) string {
 	if strings.ContainsAny(value, "\n\r") {
 		return "must be a single line"
 	}
+	if len(value) > 72 {
+		return "must be at most 72 bytes"
+	}
 	if len([]rune(value)) < passwordMinLength {
-		return "must be at least 8 characters (the panel requires >= 8)"
+		return "must be at least 12 characters (the panel requires >= 12)"
 	}
 	lowered := strings.ToLower(value)
 	for _, p := range passwordPlaceholders {

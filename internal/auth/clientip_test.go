@@ -26,12 +26,13 @@ func TestClientIPSecurityAndCIDRTrust(t *testing.T) {
 		t.Fatalf("SECURITY FLAW: ClientIP trusted proxy headers from untrusted RemoteAddr %q, got %q", reqPublic.RemoteAddr, got)
 	}
 
-	// 3. RemoteAddr from a TRUSTED CIDR (e.g. 127.0.0.1 or 10.0.0.1) accepts forwarded header
+	// 3. RemoteAddr from a TRUSTED CIDR (e.g. 127.0.0.1) accepts forwarded header;
+	// left-most untrusted address wins (client 198.51.100.1, proxy 203.0.113.195).
 	reqTrusted, _ := http.NewRequest(http.MethodGet, "http://localhost/", nil)
 	reqTrusted.RemoteAddr = "127.0.0.1:54321"
 	reqTrusted.Header.Set("X-Forwarded-For", "198.51.100.1, 203.0.113.195")
-	if got := ClientIP(true, reqTrusted); got != "203.0.113.195" {
-		t.Errorf("ClientIP from trusted proxy = %q, want %q", got, "203.0.113.195")
+	if got := ClientIP(true, reqTrusted); got != "198.51.100.1" {
+		t.Errorf("ClientIP from trusted proxy = %q, want left-most %q", got, "198.51.100.1")
 	}
 
 	// 4. Configurable trusted header
