@@ -830,9 +830,9 @@ func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
 			}
 			TgHandleCallbackQuery(db, token, ownerID, chatID, senderID, up.CallbackQuery.Data, up.CallbackQuery.ID)
 		} else if up.EditedMessage != nil && up.EditedMessage.Chat != nil {
-			TgHandleText(db, token, ownerID, up.EditedMessage.Chat.ID, up.EditedMessage.Text)
+			TgHandleTextWithType(db, token, ownerID, up.EditedMessage.Chat.ID, up.EditedMessage.Text, up.EditedMessage.Chat.Type)
 		} else if up.Message != nil && up.Message.Chat != nil {
-			TgHandleText(db, token, ownerID, up.Message.Chat.ID, up.Message.Text)
+			TgHandleTextWithType(db, token, ownerID, up.Message.Chat.ID, up.Message.Text, up.Message.Chat.Type)
 		}
 		if int64(up.UpdateID) > tgLastUpdate(db) {
 			tgSetLastUpdate(db, int64(up.UpdateID))
