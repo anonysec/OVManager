@@ -39,14 +39,7 @@ const (
 func (s *Service) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("POST /logout", s.handleLogout)
-	mux.HandleFunc("POST /refresh", s.handleRefresh)
 	s.mountClaim(mux)
-}
-
-// handleRefresh is the retired JWT endpoint: 401 drives the frontend's forced
-// logout path.
-func (s *Service) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	writeDetail(w, http.StatusUnauthorized, "Session expired — please log in again")
 }
 
 func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +119,6 @@ func (s *Service) pruneAttempts() {
 // IssueSession opens a session and returns the login-shaped response: token +
 // cookie. The owner claim returns the same shape.
 func (s *Service) IssueSession(w http.ResponseWriter, r *http.Request, username, role string) {
-	s.PurgeExpired()
 	raw, err := s.CreateSession(username, role, r.UserAgent(), s.clientIP(r), 0)
 	if err != nil {
 		writeDetail(w, http.StatusInternalServerError, "Could not create a session")
@@ -163,9 +155,16 @@ func (s *Service) handleLogout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"detail": "Logged out"})
 }
 
-// CurrentUser resolves the presented credentials to an identity
-// (auth.py get_current_user). It is also exposed for node-facing routers.
+// CurrentUser resolves the presented credentials to an identity. It is also
+// exposed for node-facing routers.
 func (s *Service) CurrentUser(r *http.Request) (Identity, bool) {
+	return s.identity(r)
+}
+
+func (s *Service) identity(r *http.Request) (Identity, bool) {
+	if ident, ok := r.Context().Value(identityCtxKey).(Identity); ok && ident.Username != "" {
+		return ident, true
+	}
 	raw := bearerToken(r)
 	if raw == "" {
 		if c, err := r.Cookie("ovm_session"); err == nil {
@@ -176,46 +175,27 @@ func (s *Service) CurrentUser(r *http.Request) (Identity, bool) {
 		return Identity{}, false
 	}
 	ident, ok := s.VerifySession(raw)
-	if !ok {
+	if !ok || ident.Type != "owner" {
 		return Identity{}, false
 	}
-	if ident.Type != "owner" {
-		return Identity{}, false
-	}
-	if !s.roleIsCurrent(ident.Username, ident.Type) {
-		return Identity{}, false
-	}
+	*r = *r.WithContext(context.WithValue(r.Context(), identityCtxKey, ident))
 	return ident, true
 }
 
 // RequireUser wraps a handler with the 401 gate.
 func (s *Service) RequireUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := s.CurrentUser(r); !ok {
+		if _, ok := s.identity(r); !ok {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			writeDetail(w, http.StatusUnauthorized, "Could not validate credentials")
 			return
 		}
-		// CSRF guard: cookie-authenticated mutations must carry an Origin
-		// matching scheme/host/port. Bearer API clients may omit Origin.
 		if s.originRejected(r) {
 			writeDetail(w, http.StatusForbidden, "Origin not allowed")
 			return
 		}
 		next(w, r)
 	}
-}
-
-// RequireOwner mirrors authz.require_owner.
-func (s *Service) RequireOwner(next http.HandlerFunc) http.HandlerFunc {
-	return s.RequireUser(func(w http.ResponseWriter, r *http.Request) {
-		ident, _ := s.CurrentUser(r)
-		if ident.Type != "owner" {
-			writeDetail(w, http.StatusForbidden, "This action requires owner privileges")
-			return
-		}
-		next(w, r)
-	})
 }
 
 func isMutatingMethod(m string) bool {
@@ -241,8 +221,7 @@ func (s *Service) originRejected(r *http.Request) bool {
 	}
 	hasValidBearer := false
 	if hasBearer {
-		raw := bearerToken(r)
-		if _, ok := s.VerifySession(raw); ok {
+		if _, ok := s.identity(r); ok {
 			hasValidBearer = true
 		}
 	}

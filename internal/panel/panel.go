@@ -70,7 +70,7 @@ func NewHandler(svc *auth.Service) *Handler {
 // Mount registers the Phase 4 routes relative to the caller's prefix (app
 // includes every router under /api).
 func (h *Handler) Mount(mux *http.ServeMux) {
-	owner := h.Svc.RequireOwner
+	owner := h.Svc.RequireUser
 	mux.HandleFunc("GET /health/overview", owner(h.healthOverview))
 	mux.HandleFunc("GET /health/login-health", owner(h.loginHealth))
 	mux.HandleFunc("GET /health/login-diagnostics/{username}", owner(h.loginDiagnostics))

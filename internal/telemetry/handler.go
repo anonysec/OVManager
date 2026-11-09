@@ -32,7 +32,7 @@ func NewHandler(svc *auth.Service) *Handler { return &Handler{Svc: svc} }
 // Mount registers the telemetry routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
 	guard := h.Svc.RequireUser
-	owner := h.Svc.RequireOwner
+	owner := h.Svc.RequireUser
 	mux.HandleFunc("GET /activity/", guard(h.activity))
 	mux.HandleFunc("GET /metrics/history", owner(h.metricsHistory))
 	mux.HandleFunc("POST /metrics/collect", owner(h.collectNow))

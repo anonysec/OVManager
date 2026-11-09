@@ -40,7 +40,7 @@ func NewHandler(svc *auth.Service) *Handler {
 
 // Mount registers the /nodes routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
-	owner := func(fn http.HandlerFunc) http.HandlerFunc { return h.svc.RequireOwner(fn) }
+	owner := func(fn http.HandlerFunc) http.HandlerFunc { return h.svc.RequireUser(fn) }
 	user := func(fn http.HandlerFunc) http.HandlerFunc { return h.svc.RequireUser(fn) }
 
 	h.register(mux, "POST /nodes/", owner(h.handleAddNode))

@@ -163,6 +163,7 @@ func TestAuthLoginLockout(t *testing.T) {
 // idle timeout, revocation.
 func TestAuthSessionVerifyRevoke(t *testing.T) {
 	conn, _ := newTestDB(t)
+	seedOwner(t, conn, "admin", bcryptHash)
 	svc := auth.NewService(conn, t.TempDir())
 
 	token, err := svc.CreateSession("admin", "owner", "", "", 604800)
@@ -207,19 +208,14 @@ func TestAuthSessionVerifyRevoke(t *testing.T) {
 	}
 }
 
-// TestAuthExpiredSessionShape: the retired JWT /refresh endpoint returns 401
-// with the login-again detail (backend).
 func TestAuthRefreshRetired(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
 	srv := newServer(t, conn, dir)
-	res, body := doJSON(t, http.MethodPost, srv.URL+"/api/refresh", "", nil)
+	res, _ := doJSON(t, http.MethodPost, srv.URL+"/api/refresh", "", nil)
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", res.StatusCode)
-	}
-	if body["detail"] != "Session expired — please log in again" {
-		t.Errorf("detail = %v", body["detail"])
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (route removed)", res.StatusCode)
 	}
 }
 
@@ -251,7 +247,6 @@ func TestAuthLogoutRevokes(t *testing.T) {
 	}
 }
 
-// TestAuthRequireOwner403 mirrors authz.require_owner.
 func TestAuthRequireOwner403(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
@@ -261,18 +256,13 @@ func TestAuthRequireOwner403(t *testing.T) {
 	guard := svc.RequireUser(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	guardedOwner := svc.RequireOwner(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	srv := newServerWith(t, inner, guard, guardedOwner)
+	srv := newServerWith(t, inner, guard, guard)
 
-	// No credentials → 401 with the FastAPI detail shape.
 	res, body := doJSON(t, http.MethodGet, srv+"/api/_guard", "", nil)
 	res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized || body["detail"] != "Could not validate credentials" {
 		t.Fatalf("401 shape = %d %v", res.StatusCode, body)
 	}
-	// A session whose role no longer matches the DB is rejected.
 	token, _ := svc.CreateSession("admin", "admin", "", "", 604800)
 	if _, err := conn.Exec(`UPDATE admins SET is_owner=0 WHERE username='admin'`); err != nil {
 		t.Fatal(err)

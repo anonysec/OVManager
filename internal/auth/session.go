@@ -45,6 +45,8 @@ type Service struct {
 	mu       sync.Mutex
 	attempts map[string][]float64 // login buckets
 	failures map[string][]float64 // claim buckets
+	idMu     sync.Mutex
+	idCache  map[string]cachedIdentity
 }
 
 func NewService(db *sql.DB, dataDir string) *Service {
@@ -56,12 +58,20 @@ func NewService(db *sql.DB, dataDir string) *Service {
 		IdleSeconds:  envInt("SESSION_IDLE_SECONDS", 1800),
 		attempts:     map[string][]float64{},
 		failures:     map[string][]float64{},
+		idCache:      map[string]cachedIdentity{},
 	}
 	go func() {
 		t := time.NewTicker(time.Duration(cleanupInterval) * time.Second)
 		defer t.Stop()
 		for range t.C {
 			s.pruneAttempts()
+		}
+	}()
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for range t.C {
+			s.PurgeExpired()
 		}
 	}()
 	return s
@@ -138,18 +148,26 @@ func newToken() (string, error) {
 }
 
 // VerifySession resolves a raw token to its identity, or false when
-// invalid/expired. Expired rows are deleted eagerly (sessions).
+// invalid/expired. Expired rows are deleted eagerly (sessions). The admin
+// check is a JOIN in the same query: only sessions whose user is still an
+// owner authenticate.
 func (s *Service) VerifySession(raw string) (Identity, bool) {
 	var zero Identity
 	if raw == "" {
 		return zero, false
 	}
+	th := tokenHash(raw)
+	if ident, ok := s.cacheGet(th); ok {
+		return ident, true
+	}
 	var id int64
 	var ident Identity
 	var expiresAt, lastSeen float64
 	err := s.DB().QueryRow(
-		`SELECT id, username, role, expires_at, last_seen_at FROM sessions WHERE token_hash = ?`,
-		tokenHash(raw),
+		`SELECT s.id, s.username, s.role, s.expires_at, s.last_seen_at
+		 FROM sessions s JOIN admins a ON a.username = s.username AND a.is_owner = 1
+		 WHERE s.token_hash = ?`,
+		th,
 	).Scan(&id, &ident.Username, &ident.Type, &expiresAt, &lastSeen)
 	if err == sql.ErrNoRows {
 		return zero, false
@@ -163,18 +181,72 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 		return zero, false
 	}
 	if now-lastSeen >= touchThrottleSeconds {
-		// A failed touch must never break the request.
 		_, _ = s.DB().Exec(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now, id)
 	}
+	s.cachePut(th, ident)
 	return ident, true
 }
 
-// RevokeToken deletes the session backing this raw token (logout).
+const identityCacheTTLSeconds = 30
+const identityCacheMaxEntries = 1024
+
+type cachedIdentity struct {
+	ident  Identity
+	expiry float64
+}
+
+type ctxKey int
+
+const identityCtxKey ctxKey = 0
+
+func (s *Service) cacheGet(th string) (Identity, bool) {
+	s.idMu.Lock()
+	defer s.idMu.Unlock()
+	e, ok := s.idCache[th]
+	if !ok || nowSecs() >= e.expiry {
+		if ok {
+			delete(s.idCache, th)
+		}
+		return Identity{}, false
+	}
+	return e.ident, true
+}
+
+func (s *Service) cachePut(th string, ident Identity) {
+	s.idMu.Lock()
+	defer s.idMu.Unlock()
+	if len(s.idCache) >= identityCacheMaxEntries {
+		for k := range s.idCache {
+			delete(s.idCache, k)
+			break
+		}
+	}
+	s.idCache[th] = cachedIdentity{ident: ident, expiry: nowSecs() + identityCacheTTLSeconds}
+}
+
+func (s *Service) cacheDelete(th string) {
+	s.idMu.Lock()
+	defer s.idMu.Unlock()
+	delete(s.idCache, th)
+}
+
+func (s *Service) cacheDeleteUser(username string) {
+	s.idMu.Lock()
+	defer s.idMu.Unlock()
+	for th, e := range s.idCache {
+		if e.ident.Username == username {
+			delete(s.idCache, th)
+		}
+	}
+}
+
 func (s *Service) RevokeToken(raw string) bool {
 	if raw == "" {
 		return false
 	}
-	res, err := s.DB().Exec(`DELETE FROM sessions WHERE token_hash = ?`, tokenHash(raw))
+	th := tokenHash(raw)
+	res, err := s.DB().Exec(`DELETE FROM sessions WHERE token_hash = ?`, th)
+	s.cacheDelete(th)
 	if err != nil {
 		return false
 	}
@@ -182,9 +254,9 @@ func (s *Service) RevokeToken(raw string) bool {
 	return n > 0
 }
 
-// RevokeUserSessions deletes every session of a user.
 func (s *Service) RevokeUserSessions(username string) int {
 	res, err := s.DB().Exec(`DELETE FROM sessions WHERE username = ?`, username)
+	s.cacheDeleteUser(username)
 	if err != nil {
 		return 0
 	}
@@ -209,19 +281,6 @@ func (s *Service) PurgeExpired() int {
 	}
 	s.pruneAttempts()
 	return total
-}
-
-// roleIsCurrent re-checks the session role against the admins table.
-func (s *Service) roleIsCurrent(username, role string) bool {
-	var isOwner int64
-	err := s.DB().QueryRow(`SELECT is_owner FROM admins WHERE username = ?`, username).Scan(&isOwner)
-	if err == sql.ErrNoRows || err != nil {
-		return false
-	}
-	if role == "owner" {
-		return isOwner != 0
-	}
-	return false
 }
 
 // Authenticate checks the single owner credential row. Only the is_owner row
