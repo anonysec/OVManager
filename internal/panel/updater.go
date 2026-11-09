@@ -19,8 +19,8 @@ import (
 //
 // The panel never downloads or installs anything: /status only reads GitHub's
 // public release API (fail-soft, so an unreachable GitHub never turns the
-// health page into an error), and /run hands the work to the installer that
-// already owns it. /run hands the work to the installer.
+// health page into an error), and /run delegates to the installer, whose
+// `ovmanager update` path verifies the binary against the release SHA256SUMS.
 
 const (
 	updaterDefaultAppDir = "/opt/ovmanager"

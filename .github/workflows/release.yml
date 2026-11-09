@@ -4,8 +4,7 @@
 name: Release assets
 
 # Builds bare per-platform binaries with the SPA embedded (internal/webfs) and
-# attaches them to the published GitHub Release with no checksum or signature
-# sidecars; install.sh installs them as-is.
+# attaches them to the published GitHub Release with a SHA256SUMS sidecar.
 on:
   push:
     tags:
@@ -97,6 +96,7 @@ jobs:
             out="ovmanager-linux-${arch}"
             GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath -o "${out}" ./cmd
           done
+          sha256sum ovmanager-linux-* > SHA256SUMS
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
@@ -116,4 +116,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "v${VER}" \
-            ovmanager-linux-amd64 ovmanager-linux-arm64
+            ovmanager-linux-amd64 ovmanager-linux-arm64 SHA256SUMS

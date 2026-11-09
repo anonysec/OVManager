@@ -12,7 +12,10 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -136,6 +139,9 @@ func releaseAsset() string {
 
 func releaseURL(v string) string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/%s", repoSlug(), v, releaseAsset())
+}
+func releaseSumsURL(v string) string {
+	return fmt.Sprintf("https://github.com/%s/releases/download/v%s/SHA256SUMS", repoSlug(), v)
 }
 func updateStatePath(install Install) string {
 	return filepath.Join(install.DataDir, "update-state.json")
@@ -427,12 +433,13 @@ func stageRelease(stage, target, src string, install Install) error {
 			return fmt.Errorf("build failed: %s", strings.TrimSpace(string(out)))
 		}
 	} else {
-		// Bare-binary release: download the platform binary straight into the
-		// stage under the service name, then make it executable. No archive,
-		// no extract, no checksum/signature sidecar (releases ship bare).
 		bin := filepath.Join(stage, appSlug)
-		if err := download(releaseURL(target), bin); err != nil {
-			return fmt.Errorf("no release file is available for v%s", target)
+		expected, err := fetchExpectedHash(target)
+		if err != nil {
+			return fmt.Errorf("could not read SHA256SUMS for v%s: %w", target, err)
+		}
+		if err := downloadVerified(releaseURL(target), bin, expected); err != nil {
+			return fmt.Errorf("checksum verification failed for v%s: %w", target, err)
 		}
 		if err := os.Chmod(bin, 0o755); err != nil { // #nosec G302 // directory permissions managed according to least-privilege policy
 			return err
@@ -467,7 +474,33 @@ func stripEnvKey(body, key string) string {
 	return strings.Join(out, "\n")
 }
 
-func download(url, dst string) error {
+func fetchExpectedHash(target string) (string, error) {
+	resp, err := (&http.Client{Timeout: time.Minute}).Get(releaseSumsURL(target))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	return expectedHashFor(string(body), releaseAsset())
+}
+
+func expectedHashFor(sums, name string) (string, error) {
+	for _, line := range strings.Split(sums, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[1] == name {
+			return strings.ToLower(fields[0]), nil
+		}
+	}
+	return "", fmt.Errorf("SHA256SUMS has no entry for %s", name)
+}
+
+func downloadVerified(url, dst, expected string) error {
 	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Get(url)
 	if err != nil {
 		return err
@@ -481,8 +514,16 @@ func download(url, dst string) error {
 		return err
 	}
 	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-	return err
+	h := sha256.New()
+	if _, err := io.Copy(f, io.TeeReader(resp.Body, h)); err != nil {
+		return err
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+		_ = os.Remove(dst)
+		return fmt.Errorf("checksum mismatch")
+	}
+	return nil
 }
 
 func serviceRestart(install Install) bool {

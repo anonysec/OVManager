@@ -209,6 +209,7 @@ detect_arch() {
 release_asset() { printf '%s-linux-%s' "$APP_SLUG" "$(detect_arch)"; }
 release_tag() { case "$VERSION" in dev|dev-*) printf 'dev' ;; *) printf 'v%s' "$VERSION" ;; esac; }
 release_url() { printf 'https://github.com/%s/releases/download/%s/%s' "$REPO" "$(release_tag)" "$(release_asset)"; }
+release_sums_url() { printf 'https://github.com/%s/releases/download/%s/SHA256SUMS' "$REPO" "$(release_tag)"; }
 
 
 fetch_release() {
@@ -224,9 +225,8 @@ fetch_release() {
         if [[ $retries -ge 3 ]]; then rm -rf "$work"; die "No release file for v$VERSION"; fi
         sleep $((2 ** retries))
     done
-    # The release ships bare binaries; no checksum and no signature is attached.
-    # Installed as-is. (ponytail: removed sha256 + signature verification; add
-    # back if a hardened download path is required.)
+    curl -fsSL --max-time 60 --retry 3 --retry-delay 2 --retry-max-time 120 -o "$work/SHA256SUMS" "$(release_sums_url)" 2>/dev/null || { rm -rf "$work"; die "Could not download SHA256SUMS for v$VERSION, refusing to install an unverified release"; }
+    ( cd "$work" && grep " $asset\$" SHA256SUMS | sha256sum -c - >/dev/null ) || { rm -rf "$work"; die "Checksum verification failed for $asset (v$VERSION): SHA256SUMS is missing a line for $asset or the download does not match, refusing to install"; }
     mkdir -p "$dest"
     install -m 0755 "$work/$asset" "$dest/$SERVER_BIN"
     chown root:root "$dest/$SERVER_BIN"
