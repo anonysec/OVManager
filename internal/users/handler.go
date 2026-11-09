@@ -688,6 +688,7 @@ func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 				nodeNames[id] = name
 			}
 		}
+		_ = res.Err() // iteration errors are non-fatal here; partial node map is degraded but usable
 	}
 	var usage map[string]json.RawMessage
 	if json.Unmarshal([]byte(u.NodeUsage), &usage) != nil {

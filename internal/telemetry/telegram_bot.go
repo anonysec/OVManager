@@ -349,6 +349,10 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 				break
 			}
 		}
+		if err := rows.Err(); err != nil {
+			tgSend(token, chatID, "Could not list users.")
+			return
+		}
 		if len(lines) == 0 {
 			tgSend(token, chatID, "No users yet.")
 			return
