@@ -6,8 +6,8 @@ package users
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -232,7 +232,7 @@ func (h *Handler) issueActivationToken(w http.ResponseWriter, r *http.Request) {
 	tokenHex := hex.EncodeToString(raw)
 	hash := sha256.Sum256(raw)
 	hashHex := hex.EncodeToString(hash[:])
-	expiresAt := float64(time.Now().UnixNano()) / 1e9 + float64(days*24*60*60)
+	expiresAt := float64(time.Now().UnixNano())/1e9 + float64(days*24*60*60)
 	if _, err := h.Svc.DB().Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE id = ?`,
 		hashHex, expiresAt, userID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "could not persist token")

@@ -6,16 +6,16 @@ package telemetry
 import (
 	"bytes"
 	"context"
-	"database/sql"
-	"modernc.org/sqlite"
-	"database/sql/driver"
 	"crypto/sha256"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"mime/multipart"
+	"modernc.org/sqlite"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -38,9 +38,9 @@ var activateAttempts sync.Map // chatID -> []time.Time (sliding 10min window, ma
 var telegramBotOnce sync.Once
 
 type tgUpdate struct {
-	UpdateID      int `json:"update_id"`
-	Message       *tgMessage `json:"message"`
-	EditedMessage *tgMessage `json:"edited_message"`
+	UpdateID      int              `json:"update_id"`
+	Message       *tgMessage       `json:"message"`
+	EditedMessage *tgMessage       `json:"edited_message"`
 	CallbackQuery *tgCallbackQuery `json:"callback_query"`
 }
 
@@ -54,8 +54,8 @@ type tgMessage struct {
 }
 
 type tgCallbackQuery struct {
-	ID      string `json:"id"`
-	From    *struct {
+	ID   string `json:"id"`
+	From *struct {
 		ID int64 `json:"id"`
 	} `json:"from"`
 	Message *struct {
@@ -158,6 +158,7 @@ func tgSend(token string, chatID int64, text string) bool {
 	}
 	return out.Ok
 }
+
 // tgSendKB posts one message with an optional inline keyboard.
 func tgSendKB(token string, chatID int64, text string, markup any) bool {
 	payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML"}
@@ -299,6 +300,7 @@ func statusText(u *tgUser) string {
 	}
 	return fmt.Sprintf("%s · %s\nUsed %s / %s\nExpires %s", u.Name, active, used, total, expiry)
 }
+
 // subURL builds the subscription URL for a user from settings.
 func subURL(db *sql.DB, uuid string) string {
 	if db == nil || uuid == "" {
@@ -332,10 +334,10 @@ func ovpnConfigForUser(db *sql.DB, uuid string) []byte {
 }
 
 var (
-	ErrActivationInvalid   = errors.New("activation token invalid or expired")
-	ErrActivationInactive  = errors.New("user account is inactive")
-	ErrActivationConflict  = errors.New("activation token already used")
-	ErrActivationExhausted = errors.New("activation redemption exhausted retries")
+	ErrActivationInvalid    = errors.New("activation token invalid or expired")
+	ErrActivationInactive   = errors.New("user account is inactive")
+	ErrActivationConflict   = errors.New("activation token already used")
+	ErrActivationExhausted  = errors.New("activation redemption exhausted retries")
 	ErrActivationNotPrivate = errors.New("binding is available only in a private chat")
 )
 
@@ -652,7 +654,12 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 		}
 		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
-		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string { if len(fields) >= 3 { return "\n+ "+fields[2]+" GB" }; return "" }(), ownerMenuKB())
+		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string {
+			if len(fields) >= 3 {
+				return "\n+ " + fields[2] + " GB"
+			}
+			return ""
+		}(), ownerMenuKB())
 		return
 	default:
 		tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nTap below or send /help.", ownerMenuKB())

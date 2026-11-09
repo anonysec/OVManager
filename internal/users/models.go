@@ -16,19 +16,19 @@ import (
 )
 
 type userRow struct {
-	ID            int64
-	UUID          string
-	Name          string
-	Total         *int64
-	Used          *int64
-	LastNodeUsage int64
-	NodeUsage     string
-	MaxLogins     int64
-	ExpiryDate    sql.NullString
-	IsActive      int64
-	LastOnline    sql.NullString
-	LastLoginIP           sql.NullString
-	Tag                   sql.NullString
+	ID                     int64
+	UUID                   string
+	Name                   string
+	Total                  *int64
+	Used                   *int64
+	LastNodeUsage          int64
+	NodeUsage              string
+	MaxLogins              int64
+	ExpiryDate             sql.NullString
+	IsActive               int64
+	LastOnline             sql.NullString
+	LastLoginIP            sql.NullString
+	Tag                    sql.NullString
 	ActivationTokenHash    sql.NullString
 	ActivationTokenExpires sql.NullFloat64
 }
