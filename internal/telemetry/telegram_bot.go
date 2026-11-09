@@ -35,6 +35,26 @@ import (
 
 var activateAttempts sync.Map // chatID -> []time.Time (sliding 10min window, max 5)
 
+var telegramClient = &http.Client{
+	Transport: &http.Transport{
+		MaxIdleConns:        10,
+		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConnsPerHost: 5,
+	},
+}
+
+// BotSettingsChanged is signaled by the settings handler after a bot
+// config write; the bot loop re-reads settings on this signal instead of
+// polling the DB.
+var BotSettingsChanged = make(chan struct{}, 1)
+
+func NotifyBotSettingsChanged() {
+	select {
+	case BotSettingsChanged <- struct{}{}:
+	default:
+	}
+}
+
 var telegramBotOnce sync.Once
 
 type tgUpdate struct {
@@ -141,8 +161,9 @@ func tgSend(token string, chatID int64, text string) bool {
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	resp, err := telegramClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return false
 	}
@@ -215,8 +236,9 @@ func tgSendDocument(token string, chatID int64, filename string, content []byte,
 		return false
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := telegramClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return false
 	}
@@ -241,8 +263,9 @@ func tgPost(token, method string, payload map[string]any) bool {
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	resp, err := telegramClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return false
 	}
@@ -347,6 +370,316 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 	TgHandleTextWithType(db, token, ownerID, chatID, text, "private")
 }
 
+type msgCtx struct {
+	db       *sql.DB
+	token    string
+	ownerID  int64
+	chatID   int64
+	arg      string
+	chatType string
+}
+
+type tgCommand func(m *msgCtx)
+
+var tgCommands = map[string]tgCommand{
+	"/me": cmdMe, "/status": cmdMe,
+	"/subscription": cmdSubscription, "/sub": cmdSubscription, "/link": cmdSubscription,
+	"/ovpn": cmdOVPN, "/download": cmdOVPN,
+	"/help": cmdHelp, "/commands": cmdHelp,
+	"/nodes":   cmdNodes,
+	"/balance": cmdBalance,
+}
+
+var ownerCommands = map[string]tgCommand{
+	"/list":   cmdList,
+	"/extend": cmdExtend,
+}
+
+func cmdStart(m *msgCtx) {
+	db, token, ownerID, chatID := m.db, m.token, m.ownerID, m.chatID
+	if m.arg != "" {
+		now := time.Now()
+		cutoff := now.Add(-10 * time.Minute)
+		activateAttempts.Range(func(k, v any) bool {
+			if ts, ok := v.([]time.Time); ok {
+				if len(ts) == 0 || ts[len(ts)-1].Before(cutoff) {
+					activateAttempts.Delete(k)
+				}
+			}
+			return true
+		})
+		var recent []time.Time
+		if v, ok := activateAttempts.Load(chatID); ok {
+			for _, t := range v.([]time.Time) {
+				if t.After(cutoff) {
+					recent = append(recent, t)
+				}
+			}
+		}
+		if len(recent) >= 5 {
+			tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
+			return
+		}
+		ct := m.chatType
+		if ct == "" {
+			ct = "private"
+		}
+		if ct != "private" {
+			tgSend(token, chatID, "Binding is available only in a private chat.")
+			activateAttempts.Store(chatID, append(recent, now))
+			return
+		}
+		activateAttempts.Store(chatID, append(recent, now))
+		res, err := redeemActivation(context.Background(), db, m.arg, chatID, ct)
+		if err != nil {
+			switch err {
+			case ErrActivationInvalid:
+				tgSendKB(token, chatID, "⚠️ That link is invalid or has already been used.\n\nAsk your operator for a fresh activation link.", retryKB())
+			case ErrActivationInactive:
+				tgSendKB(token, chatID, "⚠️ Your account is inactive — contact your operator.", retryKB())
+			case ErrActivationConflict:
+				tgSendKB(token, chatID, "⚠️ This link was already used.\n\nAsk your operator for a fresh activation link.", retryKB())
+			default:
+				tgSendKB(token, chatID, "❌ Binding failed — try again, or open the panel.", retryKB())
+			}
+			return
+		}
+		if res.PriorChat != 0 && res.PriorChat != chatID {
+			tgSend(token, res.PriorChat, "ℹ️ Your account was re-linked to a new Telegram chat.\nIf this was not you, contact the panel owner.")
+		}
+		tgSendKB(token, chatID, "✅ <b>Linked!</b> "+res.StatusText+"\n\nTap below or send /ovpn to download your config.", userMenuKB())
+		return
+	}
+	if chatID == ownerID {
+		tgSendKB(token, chatID, "👋 <b>Welcome, owner!</b>\n\nYou have full management access.\n\n📋 <b>/list</b> — users\n✏️ <b>/extend</b> — adjust expiry & quota\n🖥 <b>/nodes</b> — node status\n\nTap below or send /help.", ownerMenuKB())
+		return
+	}
+	if u, err := userByChat(db, chatID); err == nil {
+		link := subURL(db, u.UUID)
+		msg := "✅ <b>Welcome back, " + u.Name + "!</b>\n\n" + statusText(u)
+		if link != "" {
+			msg += "\n\n🔗 Subscription:\n<code>" + link + "</code>"
+		}
+		tgSendKB(token, chatID, msg, userMenuKB())
+		return
+	}
+	tgSendKB(token, chatID, "👋 <b>Welcome!</b>\n\nSend <code>/start &lt;token&gt;</code> with your activation link from your operator.", retryKB())
+}
+
+func cmdMe(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	if u, err := userByChat(db, chatID); err == nil && u != nil {
+		msg := "📊 <b>" + u.Name + "</b>\n\n" + statusText(u)
+		if link := subURL(db, u.UUID); link != "" {
+			msg += "\n\n🔗 <code>" + link + "</code>"
+		}
+		tgSendKB(token, chatID, msg, userMenuKB())
+	} else {
+		tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
+	}
+}
+
+func cmdSubscription(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	if u, err := userByChat(db, chatID); err == nil && u != nil {
+		if link := subURL(db, u.UUID); link != "" {
+			tgSendKB(token, chatID, "🔗 <b>Your subscription:</b>\n\n<code>"+link+"</code>\n\nTap to copy (long-press on mobile).", userMenuKB())
+		} else {
+			tgSendKB(token, chatID, "⚠️ Subscription link unavailable. Open the panel instead.", userMenuKB())
+		}
+	} else {
+		tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
+	}
+}
+
+func cmdOVPN(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	u, err := userByChat(db, chatID)
+	if err != nil || u == nil {
+		tgSend(token, chatID, "Not linked yet. Ask your operator for an activation link.")
+		return
+	}
+	if u.IsActive == 0 {
+		tgSend(token, chatID, "Your account is disabled — contact your operator.")
+		return
+	}
+	if data := ovpnConfigForUser(db, u.UUID); data != nil {
+		if tgSendDocument(token, chatID, "config.ovpn", data, "Your OpenVPN config for "+u.Name) {
+			return
+		}
+	}
+	tgSend(token, chatID, "Open the panel subscription page for your config. Your account: "+u.Name)
+}
+
+func cmdHelp(m *msgCtx) {
+	db, token, chatID, ownerID := m.db, m.token, m.chatID, m.ownerID
+	if u, err := userByChat(db, chatID); err == nil && u != nil {
+		tgSendKB(token, chatID, "ℹ️ <b>Available commands:</b>\n\n📊 <b>/me</b> — traffic & expiry\n📥 <b>/ovpn</b> — download config\n🔗 <b>/subscription</b> — copy link\n🖥 <b>/nodes</b> — node status\n💾 <b>/balance</b> — quota details", userMenuKB())
+	} else if chatID == ownerID {
+		tgSendKB(token, chatID, "ℹ️ <b>Owner commands:</b>\n\n📋 <b>/list</b> — users\n✏️ <b>/extend &lt;user&gt; &lt;days&gt; [gb]</b> — extend\n🖥 <b>/nodes</b> — node status\n\nTap below or type a command.", ownerMenuKB())
+	} else {
+		tgSendKB(token, chatID, "👋 You need an activation link first.\n\nAsk your operator — then send <code>/start &lt;token&gt;</code>.", retryKB())
+	}
+}
+
+func cmdNodes(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	var lines []string
+	rows, err := db.Query(`SELECT name, status FROM nodes ORDER BY id`)
+	if err != nil {
+		tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		var status sql.NullInt64
+		if rows.Scan(&name, &status) != nil {
+			continue
+		}
+		st := "🟢 online"
+		if !status.Valid || status.Int64 == 0 {
+			st = "🔴 offline"
+		}
+		lines = append(lines, "• "+name+" — "+st)
+	}
+	if err := rows.Err(); err != nil {
+		tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
+		return
+	}
+	if len(lines) == 0 {
+		tgSendKB(token, chatID, "ℹ️ No nodes configured.", userMenuKB())
+		return
+	}
+	tgSendKB(token, chatID, "🖥 <b>Nodes</b>\n\n"+strings.Join(lines, "\n"), userMenuKB())
+}
+
+func cmdBalance(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	u, err := userByChat(db, chatID)
+	if err != nil || u == nil {
+		tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
+		return
+	}
+	used := u.Used.Int64
+	var total int64
+	if u.Total.Valid {
+		total = u.Total.Int64
+	}
+	exp := "—"
+	if u.Expiry.Valid && u.Expiry.String != "" {
+		exp = u.Expiry.String
+	}
+	if total <= 0 {
+		tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / unlimited\nExpires "+exp, userMenuKB())
+		return
+	}
+	remaining := total - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	pct := float64(used) / float64(total) * 100
+	tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / "+formatBytes(total)+" ("+fmt.Sprintf("%.0f", pct)+"%%)\nRemaining "+formatBytes(remaining)+"\nExpires "+exp, userMenuKB())
+}
+
+func cmdList(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	rows, err := db.Query(`SELECT uuid, name, is_active, expiry_date FROM users ORDER BY id`)
+	if err != nil {
+		tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
+		return
+	}
+	defer rows.Close()
+	var kbdRows [][]map[string]any
+	var lines []string
+	for rows.Next() {
+		var uuid, name, expiry sql.NullString
+		var active int64
+		if err := rows.Scan(&uuid, &name, &active, &expiry); err != nil {
+			continue
+		}
+		state := "🟢"
+		if active == 0 {
+			state = "🔴"
+		}
+		exp := "—"
+		if expiry.Valid && expiry.String != "" {
+			exp = expiry.String
+		}
+		line := state + " " + name.String + " · " + exp
+		lines = append(lines, line)
+		if uuid.Valid {
+			kbdRows = append(kbdRows, []map[string]any{{"text": line, "callback_data": "ext:" + uuid.String}})
+		}
+		if len(lines) >= 20 {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
+		return
+	}
+	if len(lines) == 0 {
+		tgSendKB(token, chatID, "ℹ️ No users yet.", ownerMenuKB())
+		return
+	}
+	kbd := map[string]any{"inline_keyboard": kbdRows}
+	tgSendKB(token, chatID, "📋 <b>Users</b> (tap to extend):\n\n"+strings.Join(lines, "\n"), kbd)
+}
+
+func cmdExtend(m *msgCtx) {
+	db, token, chatID := m.db, m.token, m.chatID
+	arg := m.arg
+	fields := strings.Fields(arg)
+	if len(fields) < 2 {
+		tgSendKB(token, chatID, "✏️ <b>Usage:</b> <code>/extend &lt;user&gt; &lt;days&gt; [gb]</code>\n\nExample: <code>/extend alice 30 10</code>", ownerMenuKB())
+		return
+	}
+	days, err := strconv.Atoi(fields[1])
+	if err != nil || days <= 0 || days > 3650 {
+		tgSendKB(token, chatID, "⚠️ Days must be a number 1..3650.", ownerMenuKB())
+		return
+	}
+	u, err := userByUUID(db, fields[0])
+	if err != nil {
+		var uuid string
+		err2 := db.QueryRow(`SELECT uuid FROM users WHERE name = ?`, fields[0]).Scan(&uuid)
+		if err2 != nil {
+			tgSendKB(token, chatID, "⚠️ Unknown user: "+fields[0], ownerMenuKB())
+			return
+		}
+		u, _ = userByUUID(db, uuid)
+	}
+	var gb float64
+	if len(fields) >= 3 {
+		gb, err = strconv.ParseFloat(fields[2], 64)
+		if err != nil || math.IsNaN(gb) || math.IsInf(gb, 0) || gb < 0 || gb > 10240 {
+			tgSendKB(token, chatID, "⚠️ GB must be a number 0..10240.", ownerMenuKB())
+			return
+		}
+	}
+	newExpiry := time.Now().UTC().AddDate(0, 0, days)
+	if u.Expiry.Valid && u.Expiry.String != "" {
+		if cur, err := time.Parse("2006-01-02", u.Expiry.String); err == nil && cur.After(time.Now()) {
+			newExpiry = cur.AddDate(0, 0, days)
+		}
+	}
+	expiryStr := newExpiry.Format("2006-01-02")
+	if len(fields) >= 3 {
+		addBytes := int64(gb * 1024 * 1024 * 1024)
+		_, _ = db.Exec(`UPDATE users SET expiry_date = ?, total = COALESCE(total,0) + ? WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
+	} else {
+		_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
+	}
+	audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
+	tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string {
+		if len(fields) >= 3 {
+			return "\n+ " + fields[2] + " GB"
+		}
+		return ""
+	}(), ownerMenuKB())
+}
+
 // TgHandleTextWithType handles one message with explicit chat type.
 func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64, text, chatType string) {
 	txt := strings.TrimSpace(text)
@@ -358,208 +691,16 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 	if len(parts) > 1 {
 		arg = strings.Join(parts[1:], " ")
 	}
-	isOwner := chatID == ownerID
-
-	// Activation: /start <token> binds the chat to that user.
+	m := &msgCtx{db: db, token: token, ownerID: ownerID, chatID: chatID, arg: arg, chatType: chatType}
 	if cmd == "/start" || cmd == "/start@bot" {
-		if arg != "" {
-			// Private-chat enforcement: Telegram provides chat.type.
-			chatType := ""
-			if t := strings.TrimSpace(arg); len(t) == 64 {
-				// arg is the activation token; chat type must come from the update.
-			}
-			_ = chatType
-			// Determine chat type from the caller context. The poller passes
-			// the chat type via the same TgHandleText signature? No — it does
-			// not. We therefore require the update to carry chat.type and
-			// reject when it is absent or non-private.
-			// (See tgUpdate.Message.Chat.Type.)
-			// NOTE: chatType is resolved by the caller; for direct TgHandleText
-			// calls in tests we accept a sentinel. Tests drive TgHandleText
-			// with chat types via a new parameter below.
-			// For now, use the update's type from the closure captured above.
-			// (Resolved in the final implementation — see redeemActivation.)
-			// --- rate limit ---
-			now := time.Now()
-			cutoff := now.Add(-10 * time.Minute)
-			activateAttempts.Range(func(k, v any) bool {
-				if ts, ok := v.([]time.Time); ok {
-					if len(ts) == 0 || ts[len(ts)-1].Before(cutoff) {
-						activateAttempts.Delete(k)
-					}
-				}
-				return true
-			})
-			var recent []time.Time
-			if v, ok := activateAttempts.Load(chatID); ok {
-				for _, t := range v.([]time.Time) {
-					if t.After(cutoff) {
-						recent = append(recent, t)
-					}
-				}
-			}
-			if len(recent) >= 5 {
-				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
-				return
-			}
-			ct := chatType
-			if ct == "" {
-				ct = "private"
-			}
-			if ct != "private" {
-				tgSend(token, chatID, "Binding is available only in a private chat.")
-				activateAttempts.Store(chatID, append(recent, now))
-				return
-			}
-			activateAttempts.Store(chatID, append(recent, now))
-			// --- redemption ---
-			res, err := redeemActivation(context.Background(), db, arg, chatID, ct)
-			if err != nil {
-				switch err {
-				case ErrActivationInvalid:
-					tgSendKB(token, chatID, "⚠️ That link is invalid or has already been used.\n\nAsk your operator for a fresh activation link.", retryKB())
-				case ErrActivationInactive:
-					tgSendKB(token, chatID, "⚠️ Your account is inactive — contact your operator.", retryKB())
-				case ErrActivationConflict:
-					tgSendKB(token, chatID, "⚠️ This link was already used.\n\nAsk your operator for a fresh activation link.", retryKB())
-				default:
-					tgSendKB(token, chatID, "❌ Binding failed — try again, or open the panel.", retryKB())
-				}
-				return
-			}
-			if res.PriorChat != 0 && res.PriorChat != chatID {
-				tgSend(token, res.PriorChat, "ℹ️ Your account was re-linked to a new Telegram chat.\nIf this was not you, contact the panel owner.")
-			}
-			tgSendKB(token, chatID, "✅ <b>Linked!</b> "+res.StatusText+"\n\nTap below or send /ovpn to download your config.", userMenuKB())
-			return
-		}
-		if isOwner {
-			tgSendKB(token, chatID, "👋 <b>Welcome, owner!</b>\n\nYou have full management access.\n\n📋 <b>/list</b> — users\n✏️ <b>/extend</b> — adjust expiry & quota\n🖥 <b>/nodes</b> — node status\n\nTap below or send /help.", ownerMenuKB())
-			return
-		}
-		if u, err := userByChat(db, chatID); err == nil {
-			link := subURL(db, u.UUID)
-			msg := "✅ <b>Welcome back, " + u.Name + "!</b>\n\n" + statusText(u)
-			if link != "" {
-				msg += "\n\n🔗 Subscription:\n<code>" + link + "</code>"
-			}
-			tgSendKB(token, chatID, msg, userMenuKB())
-			return
-		}
-		tgSendKB(token, chatID, "👋 <b>Welcome!</b>\n\nSend <code>/start &lt;token&gt;</code> with your activation link from your operator.", retryKB())
+		cmdStart(m)
 		return
 	}
-
-	// User self-service (read-only).
-	switch cmd {
-	case "/me", "/status":
-		if u, err := userByChat(db, chatID); err == nil && u != nil {
-			msg := "📊 <b>" + u.Name + "</b>\n\n" + statusText(u)
-			if link := subURL(db, u.UUID); link != "" {
-				msg += "\n\n🔗 <code>" + link + "</code>"
-			}
-			tgSendKB(token, chatID, msg, userMenuKB())
-		} else {
-			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
-		}
-		return
-	case "/subscription", "/sub", "/link":
-		if u, err := userByChat(db, chatID); err == nil && u != nil {
-			if link := subURL(db, u.UUID); link != "" {
-				tgSendKB(token, chatID, "🔗 <b>Your subscription:</b>\n\n<code>"+link+"</code>\n\nTap to copy (long-press on mobile).", userMenuKB())
-			} else {
-				tgSendKB(token, chatID, "⚠️ Subscription link unavailable. Open the panel instead.", userMenuKB())
-			}
-		} else {
-			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
-		}
-		return
-	case "/ovpn", "/download":
-		u, err := userByChat(db, chatID)
-		if err != nil || u == nil {
-			tgSend(token, chatID, "Not linked yet. Ask your operator for an activation link.")
-			return
-		}
-		if u.IsActive == 0 {
-			tgSend(token, chatID, "Your account is disabled — contact your operator.")
-			return
-		}
-		if data := ovpnConfigForUser(db, u.UUID); data != nil {
-			if tgSendDocument(token, chatID, "config.ovpn", data, "Your OpenVPN config for "+u.Name) {
-				return
-			}
-		}
-		tgSend(token, chatID, "Open the panel subscription page for your config. Your account: "+u.Name)
-		return
-	case "/help", "/commands":
-		if u, err := userByChat(db, chatID); err == nil && u != nil {
-			tgSendKB(token, chatID, "ℹ️ <b>Available commands:</b>\n\n📊 <b>/me</b> — traffic & expiry\n📥 <b>/ovpn</b> — download config\n🔗 <b>/subscription</b> — copy link\n🖥 <b>/nodes</b> — node status\n💾 <b>/balance</b> — quota details", userMenuKB())
-		} else if isOwner {
-			tgSendKB(token, chatID, "ℹ️ <b>Owner commands:</b>\n\n📋 <b>/list</b> — users\n✏️ <b>/extend &lt;user&gt; &lt;days&gt; [gb]</b> — extend\n🖥 <b>/nodes</b> — node status\n\nTap below or type a command.", ownerMenuKB())
-		} else {
-			tgSendKB(token, chatID, "👋 You need an activation link first.\n\nAsk your operator — then send <code>/start &lt;token&gt;</code>.", retryKB())
-		}
-		return
-	case "/nodes":
-		var lines []string
-		rows, err := db.Query(`SELECT name, status FROM nodes ORDER BY id`)
-		if err != nil {
-			tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
-			return
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var name string
-			var status sql.NullInt64
-			if rows.Scan(&name, &status) != nil {
-				continue
-			}
-			st := "🟢 online"
-			if !status.Valid || status.Int64 == 0 {
-				st = "🔴 offline"
-			}
-			lines = append(lines, "• "+name+" — "+st)
-		}
-		if err := rows.Err(); err != nil {
-			tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
-			return
-		}
-		if len(lines) == 0 {
-			tgSendKB(token, chatID, "ℹ️ No nodes configured.", userMenuKB())
-			return
-		}
-		tgSendKB(token, chatID, "🖥 <b>Nodes</b>\n\n"+strings.Join(lines, "\n"), userMenuKB())
-		return
-	case "/balance":
-		u, err := userByChat(db, chatID)
-		if err != nil || u == nil {
-			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
-			return
-		}
-		used := u.Used.Int64
-		var total int64
-		if u.Total.Valid {
-			total = u.Total.Int64
-		}
-		exp := "—"
-		if u.Expiry.Valid && u.Expiry.String != "" {
-			exp = u.Expiry.String
-		}
-		if total <= 0 {
-			tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / unlimited\nExpires "+exp, userMenuKB())
-			return
-		}
-		remaining := total - used
-		if remaining < 0 {
-			remaining = 0
-		}
-		pct := float64(used) / float64(total) * 100
-		tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / "+formatBytes(total)+" ("+fmt.Sprintf("%.0f", pct)+"%%)\nRemaining "+formatBytes(remaining)+"\nExpires "+exp, userMenuKB())
+	if fn, ok := tgCommands[cmd]; ok {
+		fn(m)
 		return
 	}
-
-	// Owner-only management.
-	if !isOwner {
+	if chatID != ownerID {
 		if u, err := userByChat(db, chatID); err == nil && u != nil {
 			tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nUse the buttons below or send /help.", userMenuKB())
 		} else {
@@ -567,103 +708,11 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 		}
 		return
 	}
-	switch cmd {
-	case "/list":
-		rows, err := db.Query(`SELECT uuid, name, is_active, expiry_date FROM users ORDER BY id`)
-		if err != nil {
-			tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
-			return
-		}
-		defer rows.Close()
-		var kbdRows [][]map[string]any
-		var lines []string
-		for rows.Next() {
-			var uuid, name, expiry sql.NullString
-			var active int64
-			if err := rows.Scan(&uuid, &name, &active, &expiry); err != nil {
-				continue
-			}
-			state := "🟢"
-			if active == 0 {
-				state = "🔴"
-			}
-			exp := "—"
-			if expiry.Valid && expiry.String != "" {
-				exp = expiry.String
-			}
-			line := state + " " + name.String + " · " + exp
-			lines = append(lines, line)
-			if uuid.Valid {
-				kbdRows = append(kbdRows, []map[string]any{{"text": line, "callback_data": "ext:" + uuid.String}})
-			}
-			if len(lines) >= 20 {
-				break
-			}
-		}
-		if err := rows.Err(); err != nil {
-			tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
-			return
-		}
-		if len(lines) == 0 {
-			tgSendKB(token, chatID, "ℹ️ No users yet.", ownerMenuKB())
-			return
-		}
-		kbd := map[string]any{"inline_keyboard": kbdRows}
-		tgSendKB(token, chatID, "📋 <b>Users</b> (tap to extend):\n\n"+strings.Join(lines, "\n"), kbd)
+	if fn, ok := ownerCommands[cmd]; ok {
+		fn(m)
 		return
-	case "/extend":
-		fields := strings.Fields(arg)
-		if len(fields) < 2 {
-			tgSendKB(token, chatID, "✏️ <b>Usage:</b> <code>/extend &lt;user&gt; &lt;days&gt; [gb]</code>\n\nExample: <code>/extend alice 30 10</code>", ownerMenuKB())
-			return
-		}
-		days, err := strconv.Atoi(fields[1])
-		if err != nil || days <= 0 || days > 3650 {
-			tgSendKB(token, chatID, "⚠️ Days must be a number 1..3650.", ownerMenuKB())
-			return
-		}
-		u, err := userByUUID(db, fields[0])
-		if err != nil {
-			var uuid string
-			err2 := db.QueryRow(`SELECT uuid FROM users WHERE name = ?`, fields[0]).Scan(&uuid)
-			if err2 != nil {
-				tgSendKB(token, chatID, "⚠️ Unknown user: "+fields[0], ownerMenuKB())
-				return
-			}
-			u, _ = userByUUID(db, uuid)
-		}
-		var gb float64
-		if len(fields) >= 3 {
-			gb, err = strconv.ParseFloat(fields[2], 64)
-			if err != nil || math.IsNaN(gb) || math.IsInf(gb, 0) || gb < 0 || gb > 10240 {
-				tgSendKB(token, chatID, "⚠️ GB must be a number 0..10240.", ownerMenuKB())
-				return
-			}
-		}
-		newExpiry := time.Now().UTC().AddDate(0, 0, days)
-		if u.Expiry.Valid && u.Expiry.String != "" {
-			if cur, err := time.Parse("2006-01-02", u.Expiry.String); err == nil && cur.After(time.Now()) {
-				newExpiry = cur.AddDate(0, 0, days)
-			}
-		}
-		expiryStr := newExpiry.Format("2006-01-02")
-		if len(fields) >= 3 {
-			addBytes := int64(gb * 1024 * 1024 * 1024)
-			_, _ = db.Exec(`UPDATE users SET expiry_date = ?, total = COALESCE(total,0) + ? WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
-		} else {
-			_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
-		}
-		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
-		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string {
-			if len(fields) >= 3 {
-				return "\n+ " + fields[2] + " GB"
-			}
-			return ""
-		}(), ownerMenuKB())
-		return
-	default:
-		tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nTap below or send /help.", ownerMenuKB())
 	}
+	tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nTap below or send /help.", ownerMenuKB())
 }
 
 // tgPollOnce fetches one batch of updates and handles them. Returns the
@@ -852,14 +901,23 @@ func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int6
 }
 
 func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return tgPollOnceCtx(ctx, db, token, ownerID)
+}
+
+func tgPollOnceCtx(ctx context.Context, db *sql.DB, token string, ownerID int64) int {
 	offset := tgLastUpdate(db) + 1
 	u := fmt.Sprintf("%s/bot%s/getUpdates", telegramAPIBase, token)
 	q := url.Values{}
 	q.Set("offset", strconv.FormatInt(offset, 10))
 	q.Set("timeout", "50")
 	reqURL := u + "?" + q.Encode()
-	client := &http.Client{Timeout: 65 * time.Second}
-	resp, err := client.Get(reqURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return 0
+	}
+	resp, err := telegramClient.Do(req)
 	if err != nil {
 		return 0
 	}
@@ -959,43 +1017,68 @@ func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int
 	TgHandleText(db, token, ownerID, chatID, cmdText)
 }
 
-// StartTelegramBot launches the long-poll worker (once per process).
+var lastCommandsToken string
+
+func tgSetMyCommands(token string) {
+	if token == "" || token == lastCommandsToken {
+		return
+	}
+	tgPost(token, "setMyCommands", map[string]any{"commands": []map[string]string{
+		{"command": "start", "description": "Start / link account"},
+		{"command": "me", "description": "Status & subscription"},
+		{"command": "ovpn", "description": "Download config"},
+		{"command": "subscription", "description": "Copy subscription link"},
+		{"command": "nodes", "description": "Node status"},
+		{"command": "balance", "description": "Quota details"},
+		{"command": "help", "description": "All commands"},
+	}})
+	lastCommandsToken = token
+}
+
+var botDisabledCheckInterval = 30 * time.Second
+
+func tgBotLoop(db *sql.DB, ctx context.Context, changed <-chan struct{}) {
+	token, ownerID, ok := tgBotToken(db)
+	for {
+		if !ok {
+			select {
+			case <-ctx.Done():
+				return
+			case <-changed:
+				token, ownerID, ok = tgBotToken(db)
+				if !ok {
+					continue
+				}
+			case <-time.After(botDisabledCheckInterval):
+				token, ownerID, ok = tgBotToken(db)
+				if !ok {
+					continue
+				}
+			}
+			tgSetMyCommands(token)
+		}
+		for {
+			tgPollOnceCtx(ctx, db, token, ownerID)
+			select {
+			case <-ctx.Done():
+				return
+			case <-changed:
+				token, ownerID, ok = tgBotToken(db)
+				break
+			default:
+			}
+			if !ok {
+				break
+			}
+		}
+	}
+}
+
 func StartTelegramBot(db *sql.DB) {
 	telegramBotOnce.Do(func() {
-		// Register native command menu (best-effort).
 		go func() {
 			defer func() { _ = recover() }()
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				token, _, ok := tgBotToken(db)
-				if !ok {
-					continue
-				}
-				tgPost(token, "setMyCommands", map[string]any{"commands": []map[string]string{
-					{"command": "start", "description": "Start / link account"},
-					{"command": "me", "description": "Status & subscription"},
-					{"command": "ovpn", "description": "Download config"},
-					{"command": "subscription", "description": "Copy subscription link"},
-					{"command": "nodes", "description": "Node status"},
-					{"command": "balance", "description": "Quota details"},
-					{"command": "help", "description": "All commands"},
-				}})
-				ticker.Stop()
-				return
-			}
-		}()
-		go func() {
-			defer func() { _ = recover() }()
-			ticker := time.NewTicker(2 * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				token, ownerID, ok := tgBotToken(db)
-				if !ok {
-					continue
-				}
-				tgPollOnce(db, token, ownerID)
-			}
+			tgBotLoop(db, context.Background(), BotSettingsChanged)
 		}()
 	})
 }

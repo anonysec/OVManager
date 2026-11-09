@@ -446,6 +446,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "Bot config update failed", nil)
 		return
 	}
+	telemetry.NotifyBotSettingsChanged()
 
 	s := h.settings()
 	data := map[string]any{

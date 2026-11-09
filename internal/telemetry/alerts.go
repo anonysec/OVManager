@@ -5,6 +5,7 @@ package telemetry
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -377,8 +378,9 @@ func sendTelegram(db *sql.DB, text string) bool {
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	resp, err := telegramClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return false
 	}
