@@ -47,10 +47,8 @@ type Service struct {
 	failures map[string][]float64 // claim buckets
 }
 
-// NewService builds the auth service with the panel defaults
-// (SESSION_MAX_SECONDS=604800, SESSION_IDLE_SECONDS=1800).
 func NewService(db *sql.DB, dataDir string) *Service {
-	return &Service{
+	s := &Service{
 		db:           db,
 		DataDir:      dataDir,
 		TrustedProxy: strings.EqualFold(os.Getenv("TRUSTED_PROXY"), "true"),
@@ -59,6 +57,14 @@ func NewService(db *sql.DB, dataDir string) *Service {
 		attempts:     map[string][]float64{},
 		failures:     map[string][]float64{},
 	}
+	go func() {
+		t := time.NewTicker(time.Duration(cleanupInterval) * time.Second)
+		defer t.Stop()
+		for range t.C {
+			s.pruneAttempts()
+		}
+	}()
+	return s
 }
 
 // DB returns the live database handle (swap-safe).
@@ -187,8 +193,9 @@ func (s *Service) RevokeUserSessions(username string) int {
 }
 
 // PurgeExpired deletes dead sessions (absolute cap OR idle timeout) and
-// expired login-attempt rows, then caps the login_attempts table. Returns the
-// total number of rows removed.
+// prunes the in-memory login buckets. Returns the total number of rows
+// removed; the login_attempts table is left alone (see handler.go) and can
+// be dropped in a later migration.
 func (s *Service) PurgeExpired() int {
 	total := 0
 	now := nowSecs()
@@ -200,29 +207,7 @@ func (s *Service) PurgeExpired() int {
 			total += int(n)
 		}
 	}
-	// Drop buckets whose whole window has elapsed.
-	if res, err := s.DB().Exec(
-		`DELETE FROM login_attempts WHERE updated <= ?`,
-		now-float64(lockoutSeconds),
-	); err == nil {
-		if n, _ := res.RowsAffected(); n > 0 {
-			total += int(n)
-		}
-	}
-	// Defensible table cap: keep the newest rows, drop the rest.
-	const maxLoginAttemptRows = 10000
-	var count int
-	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM login_attempts`).Scan(&count); err == nil && count > maxLoginAttemptRows {
-		if res, err := s.DB().Exec(
-			`DELETE FROM login_attempts WHERE key_hash IN (
-				SELECT key_hash FROM login_attempts ORDER BY updated ASC LIMIT ?)`,
-			count-maxLoginAttemptRows,
-		); err == nil {
-			if n, _ := res.RowsAffected(); n > 0 {
-				total += int(n)
-			}
-		}
-	}
+	s.pruneAttempts()
 	return total
 }
 

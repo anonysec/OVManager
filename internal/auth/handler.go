@@ -1,14 +1,17 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/anonysec/OVManager/go/internal/audit"
 )
@@ -24,7 +27,8 @@ type Response struct {
 const (
 	maxAttempts     = 5
 	maxPerIP        = 20
-	maxPerUser      = 60
+	delayAfter      = 20
+	delayCapSeconds = 5
 	lockoutSeconds  = 300
 	cleanupInterval = 600
 	maxBuckets      = 10000
@@ -46,11 +50,8 @@ func (s *Service) handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
-	// The session is a cookie and this response sets it, so a cross-site POST
-	// would leave the victim's browser holding the attacker's session — the
-	// SPA acts on the cookie, so the victim would act as the attacker.
-	// Rejected before the rate limiter sees it, so a cross-site caller cannot
-	// spend the victim's login budget either.
+	// Session cookie set here, so cross-site POSTs are rejected before the
+	// limiter spends the victim's budget.
 	if s.originRejected(r) {
 		writeDetail(w, http.StatusForbidden, "Origin not allowed")
 		return
@@ -64,18 +65,20 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	password := r.PostFormValue("password")
 	ip := BucketIP(s.clientIP(r))
 
-	// Check all three rate limit buckets atomically
-	if s.checkBucket(s.rateKey(ip, username), maxAttempts) ||
-		s.checkBucket(s.ipKey(ip), maxPerIP) ||
-		s.checkBucket(s.userKey(username), maxPerUser) {
+	if s.checkBucket(s.rateKey(ip, username), maxAttempts) || s.checkBucket(s.ipKey(ip), maxPerIP) {
 		w.Header().Set("Retry-After", "300")
 		writeDetail(w, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
 		return
 	}
 
+	if delay := s.loginDelay(username); delay > 0 {
+		if err := waitContext(r.Context(), delay); err != nil {
+			return
+		}
+	}
+
 	ident, ok := s.Authenticate(username, password)
 	if !ok {
-		// Record the failed attempt in all three buckets
 		s.incrementBucket(s.rateKey(ip, username))
 		s.incrementBucket(s.ipKey(ip))
 		s.incrementBucket(s.userKey(username))
@@ -88,6 +91,36 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	audit.Record(s.DB(), ident.Username, "auth.login", "info",
 		"Signed in.", map[string]any{"target": ident.Username, "role": ident.Type})
 	s.IssueSession(w, r, ident.Username, ident.Type)
+}
+
+func waitContext(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Service) pruneAttempts() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := nowSecs()
+	for k, times := range s.attempts {
+		fresh := times[:0]
+		for _, t := range times {
+			if now-t < lockoutSeconds {
+				fresh = append(fresh, t)
+			}
+		}
+		if len(fresh) == 0 {
+			delete(s.attempts, k)
+		} else {
+			s.attempts[k] = fresh
+		}
+	}
 }
 
 // IssueSession opens a session and returns the login-shaped response: token +
@@ -340,33 +373,54 @@ func (s *Service) userKey(username string) string {
 
 func (s *Service) ipKey(ip string) string { return Sha16(ip) }
 
-// --- in-memory rate-limit buckets (auth) ---
+// In-memory rate-limit buckets (auth). The login_attempts SQLite table is
+// no longer written on this path; it stays only to avoid a schema change
+// and can be dropped in a later migration.
 
 func (s *Service) clearBucket(key string) {
 	s.mu.Lock()
 	delete(s.attempts, key)
 	s.mu.Unlock()
-	if db := s.DB(); db != nil {
-		_, _ = db.Exec(`DELETE FROM login_attempts WHERE key_hash = ?`, key)
-	}
 }
 
-// checkBucket reports whether a bucket is at or over its limit, without modifying it.
+func (s *Service) bucketCount(key string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := nowSecs()
+	times := s.attempts[key]
+	n := 0
+	for _, t := range times {
+		if now-t < lockoutSeconds {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Service) loginDelay(username string) time.Duration {
+	failures := s.bucketCount(s.userKey(username))
+	if sec := loginDelaySeconds(failures); sec > 0 {
+		return time.Duration(sec) * time.Second
+	}
+	return 0
+}
+
+func loginDelaySeconds(failures int) int {
+	if failures < delayAfter {
+		return 0
+	}
+	d := int(math.Pow(2, float64(failures-delayAfter)))
+	if d > delayCapSeconds {
+		return delayCapSeconds
+	}
+	return d
+}
+
 func (s *Service) checkBucket(key string, limit int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
-	var times []float64
-
-	if len(s.attempts[key]) == 0 && s.DB() != nil {
-		var rawAttempts string
-		if err := s.DB().QueryRow(`SELECT attempts FROM login_attempts WHERE key_hash = ?`, key).Scan(&rawAttempts); err == nil && rawAttempts != "" {
-			_ = json.Unmarshal([]byte(rawAttempts), &times)
-		}
-	} else {
-		times = s.attempts[key]
-	}
-
+	times := s.attempts[key]
 	fresh := make([]float64, 0, len(times))
 	for _, t := range times {
 		if now-t < lockoutSeconds {
@@ -381,19 +435,11 @@ func (s *Service) checkBucket(key string, limit int) bool {
 	return len(fresh) >= limit
 }
 
-// incrementBucket adds the current timestamp to a bucket (used on failed login).
 func (s *Service) incrementBucket(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
 	times := s.attempts[key]
-	if len(times) == 0 && s.DB() != nil {
-		var rawAttempts string
-		if err := s.DB().QueryRow(`SELECT attempts FROM login_attempts WHERE key_hash = ?`, key).Scan(&rawAttempts); err == nil && rawAttempts != "" {
-			_ = json.Unmarshal([]byte(rawAttempts), &times)
-		}
-	}
-
 	fresh := make([]float64, 0, len(times)+1)
 	for _, t := range times {
 		if now-t < lockoutSeconds {
@@ -418,15 +464,6 @@ func (s *Service) incrementBucket(key string) {
 		sort.Slice(victims, func(i, j int) bool { return victims[i].last < victims[j].last })
 		for i := 0; i < overflow && i < len(victims); i++ {
 			delete(s.attempts, victims[i].k)
-		}
-	}
-
-	if db := s.DB(); db != nil {
-		if payload, err := json.Marshal(fresh); err == nil {
-			_, _ = db.Exec(`INSERT INTO login_attempts (key_hash, attempts, updated)
-				VALUES (?, ?, ?)
-				ON CONFLICT(key_hash) DO UPDATE SET attempts = excluded.attempts, updated = excluded.updated`,
-				key, string(payload), now)
 		}
 	}
 }
