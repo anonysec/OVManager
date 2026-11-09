@@ -17,7 +17,6 @@ import (
 	"math"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"net/url"
 	"strconv"
 	"strings"
@@ -320,6 +319,11 @@ var (
 // TgHandleText handles one incoming message text for an already-fetched chat.
 // Separated from polling so tests drive it without HTTP.
 func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text string) {
+	TgHandleTextWithType(db, token, ownerID, chatID, text, "private")
+}
+
+// TgHandleTextWithType handles one message with explicit chat type.
+func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64, text, chatType string) {
 	txt := strings.TrimSpace(text)
 	parts := strings.Fields(txt)
 	if len(parts) == 0 {
@@ -373,14 +377,9 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 				tgSend(token, chatID, "Too many activation attempts. Try again in 10 minutes.")
 				return
 			}
-			// chat-type gate
-			// chatType is determined by the caller; default reject if unknown.
-			// (Implementation detail: TgHandleText signature unchanged; the
-			// update's chat.type is read from a package-level override set by
-			// the poller. Tests set it via t.Setenv("TG_CHAT_TYPE", ...).)
-			ct := os.Getenv("TG_CHAT_TYPE")
+			ct := chatType
 			if ct == "" {
-				ct = "private" // default for direct test calls
+				ct = "private"
 			}
 			if ct != "private" {
 				tgSend(token, chatID, "Binding is available only in a private chat.")
@@ -394,8 +393,6 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 				switch err {
 				case ErrActivationInvalid:
 					tgSend(token, chatID, "That link is invalid or has already been used. Ask your operator for a fresh activation link.")
-				case ErrActivationInvalid: // expired maps to invalid
-					tgSend(token, chatID, "Your activation link expired. Ask your operator for a fresh one.")
 				case ErrActivationInactive:
 					tgSend(token, chatID, "Your account is inactive — contact your operator.")
 				case ErrActivationConflict:
