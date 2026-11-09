@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 func newBackupTestHandler(t *testing.T) (*Handler, string) {

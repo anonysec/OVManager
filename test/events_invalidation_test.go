@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 func collectEventOps(ch chan telemetry.Event, topic string, timeout time.Duration) []string {

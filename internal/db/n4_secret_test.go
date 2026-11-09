@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/internal/crypto"
 	_ "modernc.org/sqlite"
 )
 

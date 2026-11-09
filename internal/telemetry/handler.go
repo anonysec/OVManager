@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/billing"
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // DefaultBus is the process-wide live event bus (live.bus).
@@ -39,8 +39,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /notifications/", guard(h.notifications))
 	mux.HandleFunc("GET /live/stream", h.Svc.RequireUser(StreamHandler(h.Svc, DefaultBus)))
 }
-
-// --- activity (routers/telemetry.py get_activity) ---
 
 func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	ident, _ := h.Svc.CurrentUser(r)
@@ -97,8 +95,6 @@ func recentEvents(db *sql.DB, limit int, actor, action *string) []map[string]any
 	return out
 }
 
-// --- notifications (routers/telemetry.py notifications) ---
-
 // INBOXTypes: threshold types that surface in the inbox (usage is Telegram-only).
 var inboxTypes = map[string]bool{"threshold_expiry": true, "threshold_cpu": true}
 
@@ -128,8 +124,6 @@ func (h *Handler) notifications(w http.ResponseWriter, r *http.Request) {
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Notifications", Data: items})
 }
-
-// --- thresholds (observability/thresholds.py) ---
 
 const (
 	defaultDaysLeft = 3
@@ -211,8 +205,6 @@ func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
 	CollectMetrics(h.Svc.DB())
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Metrics snapshot collected"})
 }
-
-// --- metrics (observability/metrics.py) ---
 
 // metricsTables is the DDL the collector/history need at runtime;
 // migrations own it, this is the idempotent mirror.
@@ -730,8 +722,6 @@ func applyGrace(online, prev map[string]bool, now float64) map[string]bool {
 	}
 	return online
 }
-
-// --- audit (observability/audit.py) ---
 
 // RecordEvent writes one system event row (audit.record_event).
 //

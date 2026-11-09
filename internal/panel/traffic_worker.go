@@ -1,10 +1,11 @@
-// Per-user traffic accounting worker (design §4.4): a single goroutine polls
+// Per-user traffic accounting worker: a single goroutine polls
 // every active node's cumulative totals and bills the deltas through
 // node.SyncTraffic. Independent of the Telegram ready() gate — accounting must
 // run whether or not a bot is configured.
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
@@ -13,12 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
-// trafficBootDelay leaves the panel time to settle before the first poll;
-// mirrors the ACME worker's boot delay.
+// trafficBootDelay leaves the panel time to settle before the first poll.
 const trafficBootDelay = 30 * time.Second
 
 var trafficWorkerOnce sync.Once
@@ -49,18 +48,16 @@ func trafficPollSeconds() int {
 }
 
 // startTrafficWorker launches the traffic poll loop once per process.
-// Idempotent, so Mount can call it unconditionally.
+// The once-guard is test-only (prevents duplicate loops in tests calling
+// Mount repeatedly); production Mount calls it once.
 func (h *Handler) startTrafficWorker() {
 	trafficWorkerOnce.Do(func() {
-		go func() {
-			defer func() { recover() }()
-			time.Sleep(trafficBootDelay)
-			ticker := time.NewTicker(time.Duration(trafficPollSeconds()) * time.Second)
-			defer ticker.Stop()
-			for range ticker.C {
-				runGuarded("traffic worker", h.trafficTick)
-			}
-		}()
+		Run(context.Background(), []job{{
+			name:  "traffic worker",
+			delay: trafficBootDelay,
+			every: func() time.Duration { return time.Duration(trafficPollSeconds()) * time.Second },
+			fn:    func(ctx context.Context) { h.trafficTick(ctx) },
+		}})
 	})
 }
 
@@ -72,12 +69,11 @@ var (
 
 // trafficTick runs one accounting pass. SwapDB-safe: h.Svc.DB() is read per
 // tick, not cached.
-func (h *Handler) trafficTick() {
+func (h *Handler) trafficTick(ctx context.Context) {
 	db := h.Svc.DB()
 	res := runTrafficSync(db)
 	log.Printf("traffic: polled %d node(s), failed %d, users updated %d, seeded %d, billed %d bytes",
 		res.NodesPolled, res.NodesFailed, res.UsersUpdated, res.UsersSeeded, res.BytesBilled)
-	recordAliasCollisions(db, res)
 
 	now := time.Now()
 	force := false
@@ -95,31 +91,10 @@ func (h *Handler) trafficTick() {
 	}
 }
 
-// recordAliasCollisions surfaces the (user, node) pairs where a node reported
-// more than one key for the same user. The bytes are summed, so nothing is
-// lost — but a node whose keying has drifted is worth knowing about, and the
-// accounting package cannot write the event itself (internal/telemetry
-// imports internal/node, so the reverse would be an import cycle).
-func recordAliasCollisions(db *sql.DB, res node.TrafficResult) {
-	for _, msg := range res.AmbiguousKeys {
-		log.Printf("traffic: ambiguous usage key; accounting deferred: %s", msg)
-		telemetry.RecordEvent(db, "traffic_ambiguous_key", "warning",
-			"A node usage key matches both a username and another user's ID; accounting for both users on that node was deferred.",
-			map[string]any{"target": msg, "detail": msg})
-	}
-	for _, msg := range res.AliasCollisions {
-		log.Printf("traffic: alias keys for one user: %s", msg)
-		telemetry.RecordEvent(db, "traffic_alias_keys", "warning",
-			"A node reported more than one key for the same user; the byte pools were summed.",
-			map[string]any{"target": msg, "detail": msg})
-	}
-}
-
 // syncTraffic is POST /maintenance/sync-traffic: run one accounting pass now
 // and return its TrafficResult envelope.
 func (h *Handler) syncTraffic(w http.ResponseWriter, r *http.Request) {
 	db := h.Svc.DB()
 	res := runTrafficSync(db)
-	recordAliasCollisions(db, res)
 	envelope(w, true, "Traffic synced", res)
 }

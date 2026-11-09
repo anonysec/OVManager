@@ -1,5 +1,4 @@
 // Parity tests for Phase 6 Task 3: the Go migration runner against the deleted
-// legacy package backend/db/migrations (runner/schema/seeds/steps,
 // last version at 07204ee^). SCHEMA_VERSION stays 28; the cutover plan moves the
 // version into PRAGMA user_version.
 package tests
@@ -10,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 func newMigrateDB(t *testing.T) *sql.DB {
@@ -84,8 +83,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 33 || userVersion(t, conn) != 33 {
-		t.Fatalf("version = %d, user_version = %d, want 33", v, userVersion(t, conn))
+	if v != 34 || userVersion(t, conn) != 34 {
+		t.Fatalf("version = %d, user_version = %d, want 34", v, userVersion(t, conn))
 	}
 
 	for _, table := range []string{
@@ -122,8 +121,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v2 != 33 || userVersion(t, conn) != 33 {
-		t.Fatalf("second run version = %d/%d, want 33", v2, userVersion(t, conn))
+	if v2 != 34 || userVersion(t, conn) != 34 {
+		t.Fatalf("second run version = %d/%d, want 34", v2, userVersion(t, conn))
 	}
 	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
 		t.Fatalf("second run duplicated settings rows: %d", n)
@@ -170,8 +169,8 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 33 || userVersion(t, conn) != 33 {
-		t.Fatalf("version = %d/%d, want 33", v, userVersion(t, conn))
+	if v != 34 || userVersion(t, conn) != 34 {
+		t.Fatalf("version = %d/%d, want 34", v, userVersion(t, conn))
 	}
 	if !hasColumn(t, conn, "users", "tag") {
 		t.Fatalf("v8 did not add users.tag")
@@ -461,8 +460,8 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v != 33 {
-		t.Fatalf("version = %d, want 33", v)
+	if v != 34 {
+		t.Fatalf("version = %d, want 34", v)
 	}
 	var second int
 	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
@@ -645,8 +644,8 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 33 {
-		t.Fatalf("version = %d, want 33", v)
+	if v != 34 {
+		t.Fatalf("version = %d, want 34", v)
 	}
 	// user preserved
 	var id int64

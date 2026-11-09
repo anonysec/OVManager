@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 	_ "modernc.org/sqlite"
 )
 

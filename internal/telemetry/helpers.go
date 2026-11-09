@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/config"
+	"github.com/anonysec/OVManager/internal/config"
 )
 
 func bankerRound(f float64) int {

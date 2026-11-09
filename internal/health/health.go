@@ -8,8 +8,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 // Router returns the health endpoint as an http.Handler.

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 // A restore whose swapped database will not reopen must not leave the panel

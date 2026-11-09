@@ -106,7 +106,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const update = () => setNowTs(Math.floor(Date.now() / 1000));
+    const update = () => { if (!document.hidden) setNowTs(Math.floor(Date.now() / 1000)); };
     update();
     const id = setInterval(update, 30000);
     return () => clearInterval(id);

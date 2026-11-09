@@ -4,6 +4,7 @@
 package telemetry
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 func newBotDB(t *testing.T) *sql.DB {
@@ -207,7 +208,7 @@ func TestTgPollHandlesUpdate(t *testing.T) {
 		Type string `json:"type"`
 	}{ID: 42, Type: "private"}
 	st := startStub(t, []tgUpdate{*msg})
-	if n := tgPollOnce(conn, "tok", 999); n != 1 {
+	if n := tgPollOnceCtx(context.Background(), conn, "tok", 999); n != 1 {
 		t.Fatalf("handled %d, want 1", n)
 	}
 	if len(st.sent) == 0 {

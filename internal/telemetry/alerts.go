@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/audit"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
 	"os"
 )
 
@@ -40,10 +40,6 @@ func lastEventMeta(db *sql.DB, kind string) map[string]any {
 	meta, _ := payload["meta"].(map[string]any)
 	return meta
 }
-
-// PromoteEvents delivers enrolled events to Telegram once each; returns the
-// number sent. Exported for the health overview and panel alert routes.
-func PromoteEvents(db *sql.DB, send func(string) bool) int { return promoteEvents(db, send) }
 
 // PruneAuditLogs deletes audit_logs rows older than keepDays, but only those
 // that have already been delivered (or carry no event_key), so an undelivered
@@ -254,8 +250,6 @@ func messageOf(group []map[string]any) string {
 	return "Threshold alert: " + body
 }
 
-// --- node alerts (observability/node_alerts.py) ---
-
 const downAlertCooldownSeconds = 30 * 60
 
 // nodeAlerts owns every package-level live/node alert map. CollectMetrics is
@@ -334,8 +328,6 @@ func checkNodeAlerts(db *sql.DB, rows []map[string]any, notify bool) int {
 	}
 	return sent
 }
-
-// --- notifier (observability/notifier.py) ---
 
 // SendTelegram is the exported notifier for the panel's alert test and the
 // health-overview promoter.

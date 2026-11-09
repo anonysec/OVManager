@@ -23,7 +23,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // contractProfile is a node-native .ovpn body: the panel has to take it as

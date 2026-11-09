@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/crypto"
 	_ "modernc.org/sqlite"
 )
 

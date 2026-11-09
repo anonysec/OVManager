@@ -18,16 +18,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/cli"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/health"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/panel"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/users"
-	"github.com/anonysec/OVManager/go/internal/version"
-	"github.com/anonysec/OVManager/go/internal/webfs"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/cli"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/health"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/panel"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/users"
+	"github.com/anonysec/OVManager/internal/version"
+	"github.com/anonysec/OVManager/internal/webfs"
 )
 
 func main() {
@@ -42,7 +42,7 @@ func run() int {
 	defer stop()
 	dataDir := env("DATA_DIR", node.DataDir)
 	cfg := db.ConfigFromEnv()
-	if cfg.Path == "" && cfg.URL == "" {
+	if cfg.Path == "" {
 		cfg.Path = filepath.Join(dataDir, "ovmanager.db")
 	}
 	conn, err := db.OpenConfig(cfg)
@@ -51,7 +51,7 @@ func run() int {
 		return 1
 	}
 	defer func() { _ = conn.Close() }()
-	if _, err := db.MigrateWithBackend(conn, cfg.Backend()); err != nil {
+	if _, err := db.Migrate(conn); err != nil {
 		log.Printf("migrate database: %v", err)
 		return 1
 	}

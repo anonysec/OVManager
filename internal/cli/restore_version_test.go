@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 func TestRestoreStampsVersion(t *testing.T) {

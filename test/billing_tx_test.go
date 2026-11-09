@@ -5,7 +5,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/internal/billing"
 )
 
 func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {

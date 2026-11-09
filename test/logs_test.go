@@ -18,9 +18,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/panel"
 )
 
 const journalStubEcho = `#!/bin/sh

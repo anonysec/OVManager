@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/config"
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/config"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 // Handler serves the Phase 4 routes.
@@ -32,7 +32,6 @@ type Handler struct {
 	Svc       *auth.Service
 	startedAt time.Time
 
-	// urlpath cache (backend/urlpath, 5s TTL). Per-handler rather
 	// than process-global: observable behaviour is identical for the single
 	// panel process, and it keeps tests hermetic.
 	urlMu    sync.Mutex
@@ -468,7 +467,6 @@ func plain(w http.ResponseWriter, body any) {
 	auth.WriteJSON(w, http.StatusOK, body)
 }
 
-// decodeBody reads a JSON body; a malformed one is a 422 like FastAPI's.
 func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
@@ -486,7 +484,6 @@ func (h *Handler) clientIP(r *http.Request) string {
 	return auth.ClientIP(h.Svc.TrustedProxy, r)
 }
 
-// baseURL is FastAPI's str(request.base_url), using the externally visible
 // scheme only when X-Forwarded-Proto comes from a configured trusted proxy.
 func baseURL(r *http.Request) string {
 	scheme := "http"

@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -16,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/billing"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/users"
+	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/users"
 )
 
 // Panel maintenance: backups, restore, sync, cleanup and usage levers
@@ -31,19 +32,12 @@ const (
 	cleanupSampleSize = 20
 )
 
-// maintenanceLock serializes backup/restore (maintenance.py's RLock).
 var maintenanceLock sync.Mutex
 
 func backupDir() string { return filepath.Join(dataDir(), "backups") }
 func dbFilePath() string {
 	cfg := db.ConfigFromEnv()
-	if p := cfg.Path; p != "" {
-		return p
-	}
-	if p := db.SQLitePathFromURL(cfg.URL); p != "" {
-		return p
-	}
-	return filepath.Join(dataDir(), "ovmanager.db")
+	return cfg.Path
 }
 
 // backupSortKey is (mtime, name) — newest first, deterministic on ties.
@@ -96,7 +90,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 		return "", err
 	}
 	_ = os.Chmod(backupDir(), 0o700) // #nosec G302 // directory permissions managed according to least-privilege policy
-	if _, err := h.Svc.DB().Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+	if _, err := h.Svc.DB().ExecContext(context.Background(), `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		return "", err
 	}
 
@@ -109,7 +103,7 @@ func (h *Handler) createPanelBackup(keep int, label string) (string, error) {
 	_ = os.Chmod(snapshot, 0o600)
 	_ = os.Remove(snapshot) // VACUUM INTO refuses an existing target
 	defer func() { _ = os.Remove(snapshot) }()
-	if _, err := h.Svc.DB().Exec(`VACUUM INTO ?`, snapshot); err != nil {
+	if _, err := h.Svc.DB().ExecContext(context.Background(), `VACUUM INTO ?`, snapshot); err != nil {
 		return "", err
 	}
 
@@ -517,7 +511,7 @@ func (h *Handler) activateDatabase(stage func(dst string) (string, error)) (dist
 // and one from a newer release would leave the running code behind it.
 func (h *Handler) restoreVersionCompatible(candidate string) error {
 	var live int
-	if err := h.Svc.DB().QueryRow(`PRAGMA user_version`).Scan(&live); err != nil {
+	if err := h.Svc.DB().QueryRowContext(context.Background(), `PRAGMA user_version`).Scan(&live); err != nil {
 		// The live file is unreadable — restoring is the recovery path.
 		return nil
 	}
@@ -671,7 +665,7 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 		query = `SELECT id, name FROM users WHERE ` + expired + ` ORDER BY id DESC`
 		args = []any{cutoffDay}
 	}
-	rows, err := h.Svc.DB().Query(query, args...)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), query, args...)
 	if err != nil {
 		return nil
 	}
@@ -713,7 +707,7 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 		sample = append(sample, name)
 	}
 	var total int
-	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM users`).Scan(&total)
 	envelope(w, true, fmt.Sprintf("%d user(s) match", len(candidates)), map[string]any{
 		"status": status, "older_than_days": payload.OlderThanDays,
 		"matched": len(candidates), "sample": sample,
@@ -784,7 +778,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep node_usage (baselines + push_hash) and set the reseed marker so the
 	// next traffic pass seeds instead of re-billing (design §4.6).
-	rows, err := h.Svc.DB().Query(`SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM users`)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM users`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 		return
@@ -813,7 +807,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 			var used int64
 			var state string
 			if attempt > 0 {
-				if err := h.Svc.DB().QueryRow(`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE id = ?`, u.id).Scan(&used, &state); err != nil {
+				if err := h.Svc.DB().QueryRowContext(context.Background(), `SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE id = ?`, u.id).Scan(&used, &state); err != nil {
 					envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 					return
 				}
@@ -831,7 +825,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 				envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 				return
 			}
-			res, err := h.Svc.DB().Exec(
+			res, err := h.Svc.DB().ExecContext(context.Background(),
 				`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, string(merged), u.id, used, state,
 			)
 			if err != nil {

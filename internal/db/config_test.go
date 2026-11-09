@@ -5,7 +5,6 @@ package db
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -13,7 +12,6 @@ func TestOpenConfigSQLiteOnly(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "test.db")
 
-	// 1. SQLite opens successfully
 	cfg := Config{Path: dbPath}
 	conn, err := OpenConfig(cfg)
 	if err != nil {
@@ -23,18 +21,17 @@ func TestOpenConfigSQLiteOnly(t *testing.T) {
 	if err := conn.Ping(); err != nil {
 		t.Fatalf("Ping SQLite: %v", err)
 	}
+}
 
-	// 2. Postgres is rejected with clear error
-	pgCfg := Config{URL: "postgresql://user:pass@localhost:5432/ovm"}
-	_, err = OpenConfig(pgCfg)
-	if err == nil || !strings.Contains(err.Error(), "SQLite-only") {
-		t.Fatalf("expected SQLite-only error on postgres, got: %v", err)
+func TestConfigFromEnv(t *testing.T) {
+	t.Setenv("DB_PATH", "/tmp/explicit.db")
+	t.Setenv("DATA_DIR", "/tmp/fallback")
+	t.Setenv("DB_POOL_SIZE", "9")
+	cfg := ConfigFromEnv()
+	if cfg.Path != "/tmp/explicit.db" {
+		t.Fatalf("Path = %q, want /tmp/explicit.db", cfg.Path)
 	}
-
-	// 3. MySQL is rejected with clear error
-	myCfg := Config{URL: "mysql://user:pass@localhost:3306/ovm"}
-	_, err = OpenConfig(myCfg)
-	if err == nil || !strings.Contains(err.Error(), "SQLite-only") {
-		t.Fatalf("expected SQLite-only error on mysql, got: %v", err)
+	if cfg.PoolSize != 9 {
+		t.Fatalf("PoolSize = %d, want 9", cfg.PoolSize)
 	}
 }

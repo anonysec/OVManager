@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/internal/billing"
 )
 
 type diagUser struct {

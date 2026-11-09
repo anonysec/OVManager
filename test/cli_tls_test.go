@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/cli"
+	"github.com/anonysec/OVManager/internal/cli"
 )
 
 // TestCLITLSSelfSigned: a happy-path selfsigned run must install a real

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/config"
-	"github.com/anonysec/OVManager/go/internal/maintenance"
+	"github.com/anonysec/OVManager/internal/config"
+	"github.com/anonysec/OVManager/internal/maintenance"
 )
 
 const (

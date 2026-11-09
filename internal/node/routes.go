@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/audit"
+	"github.com/anonysec/OVManager/internal/auth"
 )
 
 // Handler serves the /nodes routes; it borrows the auth service's DB handle
@@ -68,7 +68,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 //
 // Go's ServeMux cannot rank "/nodes/ovpn-all/{id}" above "/nodes/{id}/status"
 // (each is more specific in a different segment) and panics at registration,
-// while FastAPI resolved the overlap by declaration order. Both live here:
 // "/nodes/ovpn-all/{id}" is a strict subset of "/nodes/{first}/{second}", so it
 // wins on specificity, and everything else lands in this switch.
 func (h *Handler) handleNodeSubresource(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +281,7 @@ func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = h.svc.DB().Exec(`UPDATE nodes SET server_ca = ? WHERE id = ?`, newPEM, n.ID)
+	_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE nodes SET server_ca = ? WHERE id = ?`, newPEM, n.ID)
 
 	actor := "owner"
 	if h.svc != nil {
@@ -416,7 +415,7 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 	}
 	if success {
 		// Persist extra_ports in the database
-		_, _ = h.svc.DB().Exec(`UPDATE nodes SET extra_ports = ? WHERE id = ?`, *req.ExtraPorts, n.ID)
+		_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE nodes SET extra_ports = ? WHERE id = ?`, *req.ExtraPorts, n.ID)
 		n.ExtraPorts = *req.ExtraPorts
 	}
 	data := env["data"]
@@ -521,7 +520,7 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 	var active bool
 	var total, used sql.NullInt64
 	var expiry sql.NullString
-	if err := h.svc.DB().QueryRow(userQuery, userLookup).Scan(&userID, &active, &total, &used, &expiry); err != nil {
+	if err := h.svc.DB().QueryRowContext(r.Context(), userQuery, userLookup).Scan(&userID, &active, &total, &used, &expiry); err != nil {
 		auth.WriteDetail(w, http.StatusNotFound, "User not found")
 		return
 	}

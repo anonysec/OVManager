@@ -8,21 +8,22 @@
 package users
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 // expiredHandler is GET /users/expired: users whose account is expired or
 // quota-depleted (exactly the activationBlocked predicate — one source of
 // truth for "this user is dead"), in the same JSON shape as the list handler.
 func (h *Handler) expiredHandler(w http.ResponseWriter, r *http.Request) {
-	res, err := h.Svc.DB().Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
+	res, err := h.Svc.DB().QueryContext(r.Context(), `SELECT `+userCols+` FROM users ORDER BY id`)
 	if err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 		return
@@ -62,7 +63,7 @@ func (h *Handler) purge(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var total int64
-	if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+	if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not purge users")
 		return
 	}
@@ -146,7 +147,7 @@ func (h *Handler) kickHandler(w http.ResponseWriter, r *http.Request) {
 // kept here so the users package can build the fan-out without touching
 // internal/node (its exported GetNodeByID + NodeClient + GatherNodes pieces).
 func (h *Handler) activeNodeIDs() []int64 {
-	rows, err := h.Svc.DB().Query(`SELECT id FROM nodes WHERE status = 1`)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id FROM nodes WHERE status = 1`)
 	if err != nil {
 		return nil
 	}

@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/audit"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 // Panel-settings validation (backend).
@@ -30,10 +30,9 @@ const (
 
 var (
 	autoBackupTimeRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
-	// setting.py's own domain rule: a dot is required.
-	panelDomainRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
-	subSupportRe  = regexp.MustCompile(`(?i)^https?://`)
-	urlPathRe     = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	panelDomainRe    = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+	subSupportRe     = regexp.MustCompile(`(?i)^https?://`)
+	urlPathRe        = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )
 
 // thresholdBounds are the alert-threshold ranges (name, low, high).
@@ -542,8 +541,6 @@ func validURLPath(value string) bool {
 	}
 	return len(value) <= 64 && urlPathRe.MatchString(value)
 }
-
-// --- /server/info (observability/server_info.py) ---
 
 var (
 	cpuMu       sync.Mutex

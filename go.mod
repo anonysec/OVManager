@@ -1,4 +1,4 @@
-module github.com/anonysec/OVManager/go
+module github.com/anonysec/OVManager
 
 go 1.27.3
 

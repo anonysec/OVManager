@@ -22,7 +22,7 @@ gen-contract:
 	@go run ./cmd/gen_contract >/dev/null
 
 check-contract:
-	@go run ./cmd/gen_contract internal/node/contract.gen.json --check
+	@go run ./cmd/gen_contract internal/node/contract.json --check
 	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
 	grep -q "badge/version-$$v-blue" README.md || { echo "README badge mismatch with version.go ($$v)"; exit 1; }; \
 	grep -q "anonysec/OVManager/main/install.sh" README.md || { echo "README install pin (main) missing"; exit 1; }; \
@@ -42,7 +42,7 @@ build:
 	@mkdir -p internal/webfs/dist
 	@find internal/webfs/dist -mindepth 1 ! -name .gitkeep -delete
 	@cp -a web/dist/. internal/webfs/dist/
-	@cp -a web/templates/subscription.js internal/webfs/templates/subscription.js
+	@mkdir -p internal/webfs/templates && cp -a web/templates/subscription.js internal/webfs/templates/subscription.js
 	go build -o ovmanager ./cmd
 
 # The full Go suite. tests holds the cross-implementation parity tests, so
@@ -50,11 +50,12 @@ build:
 test:
 	go test ./...
 
-# go vet across the module plus a gofmt gate: the tree is clean, so any
-# unformatted file now fails lint instead of drifting.
+# gofmt + go vet + staticcheck + deadcode (non-empty deadcode output fails).
 lint:
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
+	staticcheck ./...
+	@test -z "$$(deadcode ./... 2>&1)" || { deadcode ./... 2>&1; exit 1; }
 
 verify: test gen-contract check-contract version check-version
 	cd web && npm run verify

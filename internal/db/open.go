@@ -17,8 +17,9 @@ const DefaultPath = "data/ovmanager.db"
 // variant DSN when the setting gains a reader here.
 const dsnPragmas = "?_pragma=journal_mode(WAL)" +
 	"&_pragma=synchronous(NORMAL)" +
-	"&_pragma=busy_timeout(30000)" +
+	"&_pragma=busy_timeout(5000)" +
 	"&_pragma=foreign_keys(ON)" +
 	"&_pragma=temp_store(MEMORY)" +
 	"&_pragma=cache_size(-32768)" +
-	"&_pragma=mmap_size(268435456)"
+	"&_pragma=mmap_size(268435456)" +
+	"&_txlock=immediate"

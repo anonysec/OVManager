@@ -3,6 +3,7 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"os"
@@ -11,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/backup"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/backup"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 const backupWorkerBootDelay = 5 * time.Minute
@@ -21,20 +22,21 @@ var backupWorkerOnce sync.Once
 
 func (h *Handler) startBackupWorker() {
 	backupWorkerOnce.Do(func() {
-		go func() {
-			defer func() { recover() }()
-			time.Sleep(backupWorkerBootDelay)
-			ticker := time.NewTicker(time.Minute)
-			defer ticker.Stop()
-			runGuarded("backup worker", h.backupTick)
-			for range ticker.C {
-				runGuarded("backup worker", h.backupTick)
-			}
-		}()
+		Run(context.Background(), []job{{
+			name:  "backup worker",
+			delay: backupWorkerBootDelay,
+			every: func() time.Duration { return time.Minute },
+			fn:    func(ctx context.Context) { h.backupTick(ctx) },
+		}})
 	})
 }
 
-func (h *Handler) backupTick() {
+func (h *Handler) backupTick(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 	h.backupTickAt(time.Now())
 }
 

@@ -3,7 +3,7 @@ package panel
 import (
 	"database/sql"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // setLiveCollect swaps the collector and returns a restore func.

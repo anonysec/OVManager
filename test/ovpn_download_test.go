@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // ovpnProfile is a node-native profile: one `remote` line naming the node's own
@@ -122,7 +122,6 @@ func TestDownloadOVPNKeepsNodeAddressWithoutPanelDomain(t *testing.T) {
 }
 
 // TestDownloadOVPNGating pins the handler's per-user gates: active+under-quota
-// passes, inactive/over-quota/expired are refused with FastAPI-shaped 403s.
 func TestDownloadOVPNGating(t *testing.T) {
 	env := newPanelEnv(t)
 	agent := fakeOVPNAgent(t, ovpnProfile, nil, nil)

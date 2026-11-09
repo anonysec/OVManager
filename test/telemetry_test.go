@@ -12,12 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 // extraTelemetryDDL is the observability schema Phase 3 needs on top of
-// testSchema (mirrors backend/db/migrations/constants.py).
 const extraTelemetryDDL = `
 CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
@@ -220,41 +219,6 @@ func readFrame(t *testing.T, rd *bufio.Reader) string {
 			return strings.TrimSuffix(sb.String(), "\n")
 		}
 		sb.WriteString(line)
-	}
-}
-
-// TestPromoteEventsDeliversOnce seeds delivered rows and asserts each system
-// event is promoted at most once.
-func TestPromoteEventsDeliversOnce(t *testing.T) {
-	conn, _ := newTelemetryConn(t)
-	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`); err != nil {
-		t.Fatal(err)
-	}
-
-	for i := 0; i < 2; i++ {
-		key := "key" + string(rune('a'+i))
-		detail := `{"severity":"info","message":"msg ` + key + `","meta":{"event_key":"` + key + `"}}`
-		if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, target, detail) VALUES (?,?,?,?,?)`,
-			float64(100+i), "system", "threshold.test", "t", detail); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := conn.Exec(`INSERT INTO delivered (subscription, event_key, ts) VALUES (?,?,?)`, "threshold.test", "keya", 1.0); err != nil {
-		t.Fatal(err)
-	}
-
-	calls := 0
-	sent := telemetry.PromoteEvents(conn, func(msg string) bool { calls++; return true })
-	if sent != 1 {
-		t.Fatalf("sent = %d, want 1", sent)
-	}
-	if calls != 1 {
-		t.Fatalf("send calls = %d, want 1", calls)
-	}
-
-	sent2 := telemetry.PromoteEvents(conn, func(msg string) bool { calls++; return true })
-	if sent2 != 0 {
-		t.Fatalf("second pass sent = %d, want 0", sent2)
 	}
 }
 

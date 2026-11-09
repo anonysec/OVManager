@@ -3,13 +3,14 @@ package tests
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // authedServer boots a server with an owner row and returns base URL + token.
@@ -94,7 +95,6 @@ func TestUsersCreateAndList(t *testing.T) {
 	}
 }
 
-// TestUsersCreateDuplicate409 mirrors the explicit 409 in routers/users.py.
 func TestUsersCreateDuplicate409(t *testing.T) {
 	_, base, token := authedServer(t)
 	for i := 0; i < 2; i++ {
@@ -457,7 +457,11 @@ func TestUsersResetReseedsBaselines(t *testing.T) {
 		t.Fatalf("reset = %d %v", res.StatusCode, got)
 	}
 
-	agent := fakeUsageNode(t, map[string]any{"user": int64(600)})
+	var uid int64
+	if err := env.conn.QueryRow(`SELECT id FROM users WHERE uuid=?`, uuid).Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
+	agent := fakeUsageNode(t, map[string]any{fmt.Sprintf("%d", uid): int64(600)})
 	host, port := hostPort(t, agent.URL)
 	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
 

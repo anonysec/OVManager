@@ -13,10 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/internal/audit"
 )
 
-// Response is the FastAPI ResponseModel envelope.
 type Response struct {
 	Success bool   `json:"success"`
 	Msg     string `json:"msg"`
@@ -35,7 +34,6 @@ const (
 )
 
 // Mount registers the auth routes the routers expose, relative to the
-// caller's prefix (app.py includes them under /api).
 func (s *Service) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /login", s.handleLogin)
 	mux.HandleFunc("POST /logout", s.handleLogout)
@@ -334,23 +332,22 @@ func firstProto(v string) string {
 	return strings.TrimSpace(v)
 }
 
-// Sha16 is the shared rate-limit bucket key: the first 16 hex characters of
-// the SHA-256 of s. Exported so every package (auth, panel) hashes the same
-// way instead of keeping private copies.
-func Sha16(s string) string {
+// sha16 is the rate-limit bucket key: the first 16 hex characters of
+// the SHA-256 of s.
+func sha16(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])[:16]
 }
 
 func (s *Service) rateKey(ip, username string) string {
-	return Sha16(ip + "\x00" + strings.ToLower(username))
+	return sha16(ip + "\x00" + strings.ToLower(username))
 }
 
 func (s *Service) userKey(username string) string {
-	return Sha16("user\x00" + strings.ToLower(username))
+	return sha16("user\x00" + strings.ToLower(username))
 }
 
-func (s *Service) ipKey(ip string) string { return Sha16(ip) }
+func (s *Service) ipKey(ip string) string { return sha16(ip) }
 
 // In-memory rate-limit buckets (auth). The login_attempts SQLite table is
 // no longer written on this path; it stays only to avoid a schema change
@@ -460,11 +457,8 @@ func writeDetail(w http.ResponseWriter, status int, detail string) {
 }
 
 // WriteJSON / WriteDetail / WriteValidation are the exported twins the users
-// package needs to keep FastAPI's response shapes.
 func WriteJSON(w http.ResponseWriter, status int, body any) { writeJSON(w, status, body) }
 
-// WriteDetail writes the {"detail": ...} FastAPI error body.
 func WriteDetail(w http.ResponseWriter, status int, detail string) { writeDetail(w, status, detail) }
 
-// WriteValidation writes FastAPI's 422 error-list body.
 func WriteValidation(w http.ResponseWriter, field, msg string) { writeValidation(w, field, msg) }

@@ -7,7 +7,7 @@
 package maintenance
 
 import (
-	"github.com/anonysec/OVManager/go/internal/panel"
+	"github.com/anonysec/OVManager/internal/panel"
 )
 
 // BackupInfo is one restorable backup.
@@ -41,9 +41,4 @@ func LiveURLPath(dataDir string) (string, error) {
 // SetURLPath persists a new prefix.
 func SetURLPath(value, dataDir string) (string, error) {
 	return panel.SetURLPath(value, dataDir)
-}
-
-// ParseOffsiteTarget parses an offsite target string.
-func ParseOffsiteTarget(target string) (user, host, path string, err error) {
-	return panel.ParseOffsiteTarget(target)
 }

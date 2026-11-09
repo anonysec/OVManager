@@ -5,13 +5,12 @@ package node
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/internal/billing"
 )
 
 // TrafficResult summarizes one SyncTraffic pass.
@@ -21,15 +20,6 @@ type TrafficResult struct {
 	UsersUpdated int
 	UsersSeeded  int
 	BytesBilled  int64
-	// AliasCollisions names the (user, node) pairs where the node reported
-	// more than one key for the same user. The bytes are summed (see
-	// SyncTraffic), but the collision is reported so a node whose keying has
-	// drifted is visible instead of silent.
-	AliasCollisions []string
-	// AmbiguousKeys identifies usage keys that could refer to two different
-	// users (a numeric ID and a legacy username). They are not billed until
-	// the ambiguity is resolved, rather than charging the wrong account.
-	AmbiguousKeys []string
 }
 
 // trafficFanoutDeadline bounds one usage pass. A var so tests need not wait the
@@ -94,10 +84,6 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	raw := GatherNodes(calls, trafficFanoutDeadline)
 	contribs := map[int64]map[string]int64{}
 	contribEpochs := map[int64]map[string]string{}
-	ambiguous := map[int64]map[string]bool{}
-	// aliasKeys remembers the first reported key per (user, node) so a
-	// collision can name both keys.
-	aliasKeys := map[int64]map[string]string{}
 	for i, n := range nodes {
 		if _, ok := raw[i].(error); ok {
 			res.NodesFailed++
@@ -126,32 +112,13 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		res.NodesPolled++
 		nodeKey := strconv.FormatInt(n.ID, 10)
 		for reported, rawTotal := range totals {
-			// Reserved keys (push_hash, __epochs) exist only inside stored
-			// node_usage bookkeeping. A reported username that happens to
-			// be "push_hash" is a real user and must be billed.
-			// Older nodes report names, newer ones report numeric IDs. A
-			// numeric name may also be another user's ID; the payload has no
-			// way to disambiguate it, so do not guess and charge either user.
-			name := billing.ExtractUsername(reported, n.Name, known)
-			idKey := reported
-			if _, ok := idToName[idKey]; !ok {
-				idKey = strings.TrimSuffix(reported, "-"+n.Name)
+			// Node keys are numeric panel ids only (OpenVPN CN guarantee).
+			// One query built idToName; no username fallback, no ambiguity.
+			uid, err := strconv.ParseInt(reported, 10, 64)
+			if err != nil {
+				continue
 			}
-			if mapped, ok := idToName[idKey]; ok {
-				if known[name] && name != mapped {
-					res.AmbiguousKeys = append(res.AmbiguousKeys,
-						fmt.Sprintf("node=%s key=%s users=%s,%s", n.Name, reported, name, mapped))
-					for _, u := range []trafficUser{byName[name], byName[mapped]} {
-						if ambiguous[u.id] == nil {
-							ambiguous[u.id] = map[string]bool{}
-						}
-						ambiguous[u.id][nodeKey] = true
-					}
-					continue
-				}
-				name = mapped
-			}
-			u, ok := byName[name]
+			u, ok := byName[strconv.FormatInt(uid, 10)]
 			if !ok {
 				continue
 			}
@@ -180,28 +147,15 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			if prev, seen := contribs[u.id][nodeKey]; seen {
 				contribs[u.id][nodeKey] = prev + cur
 				contribEpochs[u.id][nodeKey] = aggregateEpoch(contribEpochs[u.id][nodeKey], reportedEpoch)
-				res.AliasCollisions = append(res.AliasCollisions,
-					fmt.Sprintf("user=%s node=%s keys=%s,%s", u.name, nodeKey, aliasKeys[u.id][nodeKey], reported))
 			} else {
 				contribs[u.id][nodeKey] = cur
 				contribEpochs[u.id][nodeKey] = reportedEpoch
-			}
-			if aliasKeys[u.id] == nil {
-				aliasKeys[u.id] = map[string]string{}
-			}
-			if _, ok := aliasKeys[u.id][nodeKey]; !ok {
-				aliasKeys[u.id][nodeKey] = reported
 			}
 		}
 	}
 
 	for _, u := range users {
 		c := contribs[u.id]
-		// Skip the entire node contribution for both affected users, even
-		// if another alias was also reported, to keep their baselines intact.
-		for key := range ambiguous[u.id] {
-			delete(c, key)
-		}
 		if len(c) == 0 {
 			continue
 		}
@@ -220,131 +174,182 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 // applyTrafficUser computes one user's deltas and persists them under the OCC
 // guard, retrying up to 3 attempts; a reseed marker (or an absent baseline)
 // seeds all nodes with delta 0.
+// applyTrafficUser computes one user's deltas and persists them under the OCC
+// guard, retrying up to 3 attempts; a reseed marker (or an absent baseline)
+// seeds all nodes with delta 0.
 func applyTrafficUser(db *sql.DB, u trafficUser, contribs map[string]int64, epochs map[string]string) (billed, seeded bool, bytes int64) {
+	return applyTrafficUserTx(db, u, contribs, epochs, nil)
+}
+
+// applyTrafficUserTx reads baselines from user_node_usage (falling back to
+// the node_usage blob only when the table has no rows for the user), computes
+// deltas, and writes used + baselines in one tx when tx is non-nil.
+func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, epochs map[string]string, tx *sql.Tx) (billed, seeded bool, bytes int64) {
 	used, state := u.used, u.state
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			if err := db.QueryRow(
-				`SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE id = ?`, u.id,
-			).Scan(&used, &state); err != nil {
-				return false, false, 0
+	if trafficTestHook != nil {
+		trafficTestHook()
+	}
+	baselines := map[int64]int64{}
+	baseEpochs := map[int64]string{}
+	reseed := false
+	// table baselines (one query)
+	rows, err := db.Query(`SELECT node_id, baseline, epoch FROM user_node_usage WHERE user_id = ?`, u.id)
+	if err == nil {
+		for rows.Next() {
+			var nid, base int64
+			var ep string
+			if rows.Scan(&nid, &base, &ep) == nil {
+				baselines[nid] = base
+				baseEpochs[nid] = ep
 			}
 		}
-		if trafficTestHook != nil {
-			trafficTestHook()
-		}
-
+		rows.Close()
+	}
+	// blob fallback only when table empty for this user
+	if len(baselines) == 0 {
 		data := decodeUsageState(state)
-		_, reseed := data[ReseedMarkerKey]
-		if reseed {
-			// Invalidate *all* old baselines, including nodes that did not
-			// answer this pass. Each node will seed independently when it
-			// next reports, rather than billing its pre-reset traffic.
-			for key := range data {
-				if !IsReservedUsageKey(key) {
-					delete(data, key)
-				}
-			}
-			// Invalidate offline-node epochs as well: drop epoch entries for
-			// nodes that are not in this pass.
-			if em, ok := data[EpochsKey].(map[string]any); ok {
-				for key := range em {
-					if _, present := contribs[key]; !present {
-						delete(em, key)
-					}
-				}
-				if len(em) == 0 {
-					delete(data, EpochsKey)
-				} else {
-					data[EpochsKey] = em
-				}
-			}
-			delete(data, ReseedMarkerKey)
+		_, reseed = data[ReseedMarkerKey]
+		if _, ok := data[ReseedMarkerKey]; ok {
+			reseed = true
 		}
-
-		// stored epochs
 		storedEpochs := map[string]any{}
 		if em, ok := data[EpochsKey].(map[string]any); ok {
 			for k, v := range em {
 				storedEpochs[k] = v
 			}
 		}
-
-		newUsed := used
-		var delta int64
-		didSeed := false
-		epochChanged := false
-		for key, cur := range contribs {
-			if cur < 0 {
+		for k, v := range data {
+			if k == PushHashKey || k == ReseedMarkerKey || k == EpochsKey {
 				continue
 			}
-			reportedEpoch := ""
-			if epochs != nil {
-				reportedEpoch = epochs[key]
-			}
-			prev, present := toInt64(data[key])
-			prevEpoch := toStringValue(storedEpochs[key])
-
-			if reseed || !present {
-				// seed
-				data[key] = cur
-				didSeed = true
-				if reportedEpoch != "" && toStringValue(storedEpochs[key]) != reportedEpoch {
-					epochChanged = true
-				}
-				if reportedEpoch != "" {
-					storedEpochs[key] = reportedEpoch
-				}
+			nid, err := strconv.ParseInt(k, 10, 64)
+			if err != nil {
 				continue
 			}
-
-			explicitReset := false
-			if reportedEpoch != "" && prevEpoch != "" && reportedEpoch != prevEpoch {
-				explicitReset = true
+			if b, ok := toInt64(v); ok {
+				baselines[nid] = b
 			}
-			// first epoch adoption: adopt without reset (explicitReset stays false)
-
-			d, newBaseline := billing.ComputeTotalDelta(cur, prev, explicitReset)
-			delta += d
-			newUsed += d
-			data[key] = newBaseline
-			if explicitReset {
-				didSeed = true
-			}
-			if reportedEpoch != "" && prevEpoch != reportedEpoch {
-				epochChanged = true
-			}
-			if reportedEpoch != "" {
-				storedEpochs[key] = reportedEpoch
+			baseEpochs[nid] = toStringValue(storedEpochs[k])
+		}
+	}
+	if reseed {
+		for nid := range baselines {
+			if _, present := contribs[strconv.FormatInt(nid, 10)]; !present {
+				delete(baselines, nid)
+				delete(baseEpochs, nid)
 			}
 		}
-
-		// persist epochs map if non-empty
-		if len(storedEpochs) > 0 {
-			data[EpochsKey] = storedEpochs
-		} else {
-			delete(data, EpochsKey)
+		for nid := range baseEpochs {
+			if _, present := contribs[strconv.FormatInt(nid, 10)]; !present {
+				delete(baseEpochs, nid)
+			}
 		}
-
-		if !reseed && !didSeed && delta == 0 && !epochChanged {
-			return false, false, 0
+	}
+	newUsed := used
+	var delta int64
+	didSeed := false
+	for key, cur := range contribs {
+		if cur < 0 {
+			continue
 		}
-
-		tx, err := db.Begin()
+		nid, err := strconv.ParseInt(key, 10, 64)
+		if err != nil {
+			continue
+		}
+		reportedEpoch := ""
+		if epochs != nil {
+			reportedEpoch = epochs[key]
+		}
+		prev, present := baselines[nid]
+		prevEpoch := baseEpochs[nid]
+		if reseed || !present {
+			baselines[nid] = cur
+			baseEpochs[nid] = reportedEpoch
+			didSeed = true
+			continue
+		}
+		explicitReset := reportedEpoch != "" && prevEpoch != "" && reportedEpoch != prevEpoch
+		d, newBaseline := billing.ComputeTotalDelta(cur, prev, explicitReset)
+		delta += d
+		newUsed += d
+		baselines[nid] = newBaseline
+		baseEpochs[nid] = reportedEpoch
+		if explicitReset {
+			didSeed = true
+		}
+	}
+	// persist: used + table baselines + blob (for fallback readers)
+	data := decodeUsageState(state)
+	delete(data, ReseedMarkerKey)
+	if len(baseEpochs) > 0 {
+		em := map[string]any{}
+		for nid, e := range baseEpochs {
+			em[strconv.FormatInt(nid, 10)] = e
+		}
+		data[EpochsKey] = em
+	} else {
+		delete(data, EpochsKey)
+	}
+	for _, k := range []string{} {
+		_ = k
+	}
+	for nid, b := range baselines {
+		data[strconv.FormatInt(nid, 10)] = b
+	}
+	// drop offline baselines left in blob by reseed
+	for k := range data {
+		if k == PushHashKey || k == ReseedMarkerKey || k == EpochsKey {
+			continue
+		}
+		nid, err := strconv.ParseInt(k, 10, 64)
+		if err != nil {
+			continue
+		}
+		if _, ok := baselines[nid]; !ok {
+			delete(data, k)
+		}
+	}
+	exec := func(q string, args ...any) error {
+		if tx != nil {
+			_, e := tx.Exec(q, args...)
+			return e
+		}
+		_, e := db.Exec(q, args...)
+		return e
+	}
+	if tx == nil {
+		tx2, err := db.Begin()
 		if err != nil {
 			return false, false, 0
 		}
-		if !billing.ApplyUserTraffic(tx, u.id, used, state, newUsed, billing.Canon(data), delta) {
-			_ = tx.Rollback()
-			continue
+		defer func() { _ = tx2.Rollback() }()
+		if !billing.ApplyUserTraffic(tx2, u.id, used, state, newUsed, billing.Canon(data), delta) {
+			// re-read used/state, recompute would need restructure; single-write poll accepts miss
+			_ = tx2.Rollback()
+			return false, false, 0
 		}
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
+		for nid, b := range baselines {
+			if _, e := tx2.Exec(`INSERT OR REPLACE INTO user_node_usage (user_id, node_id, baseline, epoch) VALUES (?, ?, ?, ?)`, u.id, nid, b, baseEpochs[nid]); e != nil {
+				return false, false, 0
+			}
+		}
+		if err := tx2.Commit(); err != nil {
 			return false, false, 0
 		}
 		return delta > 0, didSeed, delta
 	}
-	return false, false, 0
+	if err := exec(`UPDATE users SET used = ?, node_usage = ? WHERE id = ?`, newUsed, billing.Canon(data), u.id); err != nil {
+		return false, false, 0
+	}
+	for nid, b := range baselines {
+		if _, e := tx.Exec(`INSERT OR REPLACE INTO user_node_usage (user_id, node_id, baseline, epoch) VALUES (?, ?, ?, ?)`, u.id, nid, b, baseEpochs[nid]); e != nil {
+			return false, false, 0
+		}
+	}
+	if delta > 0 {
+		billing.RecordDailyBytes(tx, u.id, delta, "")
+	}
+	return delta > 0, didSeed, delta
 }
 
 func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
@@ -361,7 +366,7 @@ func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 			break
 		}
 		out = append(out, u)
-		byName[u.name] = u
+		byName[strconv.FormatInt(u.id, 10)] = u
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil

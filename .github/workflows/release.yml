@@ -116,4 +116,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "v${VER}" \
-            ovmanager-linux-amd64 ovmanager-linux-arm64 SHA256SUMS
+            ovmanager-linux-amd64 ovmanager-linux-arm64 SHA256SUMS \
+            internal/node/contract.json

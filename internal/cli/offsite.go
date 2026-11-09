@@ -15,10 +15,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/backup"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/maintenance"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/backup"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/maintenance"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 // offsiteCopy pushes one backup file to the offsite target. It returns the

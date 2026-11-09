@@ -1,26 +1,22 @@
-// Schema migration runner, ported from the legacy package
-// backend/db/migrations (last version at 07204ee^: runner.py, schema.py,
-// seeds.py, steps.py, constants.py).
-//
-// The numbered steps are reproduced one-for-one, in order, with the same guards
-// so a database is upgraded exactly like the runner did. The difference
-// the cutover plan prescribes: the version lives in PRAGMA user_version instead
-// of the schema_version table (no table survives, nothing to inspect).
-//
-// SCHEMA_VERSION is 29 (pending revocations + monotonic users.id).
+// Schema migration runner: numbered steps applied in order with guards
+// so a database is upgraded exactly like the legacy runner did.
+// The version lives in PRAGMA user_version (no schema_version table).
+
 package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 33
+const SchemaVersion = 34
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -55,6 +51,9 @@ func Migrate(conn *sql.DB) (int, error) {
 
 	if fresh {
 		if err := createMappedTables(conn); err != nil {
+			return 0, err
+		}
+		if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
 			return 0, err
 		}
 		if err := createExtraTables(conn); err != nil {
@@ -163,8 +162,6 @@ func Migrate(conn *sql.DB) (int, error) {
 	return SchemaVersion, nil
 }
 
-// --- version tracking (PRAGMA user_version; schema.py current_version/_stamp) ---
-
 func userVersion(x execer) (int, error) {
 	var v int
 	if err := x.QueryRow("PRAGMA user_version").Scan(&v); err != nil {
@@ -178,8 +175,6 @@ func stamp(x execer, version int) error {
 	_, err := x.Exec(fmt.Sprintf("PRAGMA user_version = %d", version))
 	return err
 }
-
-// --- schema inspection (schema.py table_names/column_names) ---
 
 func tableNames(x execer) map[string]bool {
 	out := map[string]bool{}
@@ -217,8 +212,6 @@ func columnNames(x execer, table string) map[string]bool {
 	return out
 }
 
-// --- mapped-table construction (models.py + create_all) ---
-
 type mcolumn struct {
 	name string
 	add  string // "TYPE [DEFAULT x] [NOT NULL]"
@@ -227,7 +220,6 @@ type mcolumn struct {
 // mappedTableOrder is create_all's (dependency-free) table set.
 var mappedTableOrder = []string{"admins", "sessions", "users", "nodes", "settings"}
 
-// mappedColumns mirrors backend/db/models.py. The "add" tails carry the
 // SQL literal a column needs when ALTER TABLE ADD COLUMN synthesises it, so the
 // same list drives both CREATE TABLE and legacy-column reconciliation.
 var mappedColumns = map[string][]mcolumn{
@@ -339,6 +331,7 @@ var mappedUniques = map[string][]string{
 var mappedIndices = []string{
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON admins (is_owner) WHERE is_owner = 1",
 	"CREATE INDEX IF NOT EXISTS ix_sessions_username ON sessions (username)",
+	"CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash)",
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON users (activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''",
 	"CREATE INDEX IF NOT EXISTS idx_users_expiry ON users(expiry_date)",
 	"CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)",
@@ -388,6 +381,7 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0)`,
 	`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)`,
 	`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, id)`,
+	`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
 	// shortcut: this index targets the rowid alias, so it can never serve a
 	// query and every insert maintained it. Drop it wherever it lingers.
 	`DROP INDEX IF EXISTS idx_audit_logs_promoted`,
@@ -422,7 +416,6 @@ func createExtraTables(x execer) error {
 }
 
 // reconcileColumns adds mapped columns missing from an existing table
-// (schema.py _reconcile_columns): the one thing create_all cannot do.
 func reconcileColumns(x execer) ([]string, error) {
 	present := tableNames(x)
 	var added []string
@@ -496,7 +489,6 @@ func seedOwnerAndFirstUser(x execer) error {
 			return err
 		}
 		if n == 0 {
-			// is_owner only exists once v22/v24 has run (seeds.py guards this).
 			if columnNames(x, "admins")["is_owner"] {
 				if _, err := x.Exec("INSERT INTO admins (username, password, is_owner) VALUES (?, '', 1)", owner); err != nil {
 					return err
@@ -572,8 +564,6 @@ func importOwnerCredential(x execer) error {
 	_, err = x.Exec("UPDATE admins SET password = ? WHERE username = ?", hash, owner)
 	return err
 }
-
-// --- numbered steps (steps.py STEPS) ---
 
 type step struct {
 	version     int
@@ -751,13 +741,51 @@ var steps = []step{
 		_, err := x.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON users(activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''`)
 		return err
 	}},
-}
-
-// MigrateWithBackend is the backend-aware entry point. SQLite delegates to
-// Migrate (PRAGMA path); other backends are not yet implemented.
-func MigrateWithBackend(conn *sql.DB, backend Backend) (int, error) {
-	if backend == BackendSQLite || backend == "" {
-		return Migrate(conn)
-	}
-	return 0, fmt.Errorf("migrations for backend %q not implemented yet", backend)
+	{34, "user_node_usage baselines table", func(x execer) error {
+		if !tableNames(x)["users"] {
+			return nil
+		}
+		if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
+			return err
+		}
+		rows, err := x.Query(`SELECT id, COALESCE(node_usage,'{}') FROM users`)
+		if err != nil {
+			return nil
+		}
+		defer rows.Close()
+		type row struct {
+			id    int64
+			state string
+		}
+		var pending []row
+		for rows.Next() {
+			var r row
+			if rows.Scan(&r.id, &r.state) == nil && r.state != "" && r.state != "{}" {
+				pending = append(pending, r)
+			}
+		}
+		for _, r := range pending {
+			m := map[string]any{}
+			if json.Unmarshal([]byte(r.state), &m) != nil {
+				continue
+			}
+			for k, v := range m {
+				if k == "push_hash" || k == "__reseed" || k == "__epochs" {
+					continue
+				}
+				nid, err := strconv.ParseInt(k, 10, 64)
+				if err != nil {
+					continue
+				}
+				base := int64(0)
+				if f, ok := v.(float64); ok {
+					base = int64(f)
+				} else if iv, ok := v.(int64); ok {
+					base = iv
+				}
+				_, _ = x.Exec(`INSERT OR IGNORE INTO user_node_usage (user_id, node_id, baseline) VALUES (?, ?, ?)`, r.id, nid, base)
+			}
+		}
+		return nil
+	}},
 }

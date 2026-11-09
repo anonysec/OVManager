@@ -8,13 +8,14 @@
 package panel
 
 import (
+	"context"
 	"net/http"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 )
 
 const (
@@ -48,7 +49,7 @@ func (h *Handler) allowedUnit(unit string) (string, bool) {
 		return "", false
 	}
 	var n int
-	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes WHERE name = ?`, name).Scan(&n)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM nodes WHERE name = ?`, name).Scan(&n)
 	if n == 0 {
 		return "", false
 	}

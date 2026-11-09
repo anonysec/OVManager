@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
-	dbPkg "github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/audit"
+	dbPkg "github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // Telegram management bot: users activate via an owner-provided link
@@ -900,12 +900,6 @@ func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int6
 	return result, nil
 }
 
-func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	return tgPollOnceCtx(ctx, db, token, ownerID)
-}
-
 func tgPollOnceCtx(ctx context.Context, db *sql.DB, token string, ownerID int64) int {
 	offset := tgLastUpdate(db) + 1
 	u := fmt.Sprintf("%s/bot%s/getUpdates", telegramAPIBase, token)
@@ -1064,7 +1058,6 @@ func tgBotLoop(db *sql.DB, ctx context.Context, changed <-chan struct{}) {
 				return
 			case <-changed:
 				token, ownerID, ok = tgBotToken(db)
-				break
 			default:
 			}
 			if !ok {

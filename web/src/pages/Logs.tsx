@@ -79,9 +79,9 @@ const Logs = () => {
   useEffect(() => {
     if (!follow || activeTab !== 'system') return;
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchLogs({ background: true });
+      if (!document.hidden) fetchLogs({ background: true });
     }, 5000);
-    const onVisible = () => { if (document.visibilityState === 'visible') fetchLogs({ background: true }); };
+    const onVisible = () => { if (!document.hidden) fetchLogs({ background: true }); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(id);

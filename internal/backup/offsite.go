@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/internal/crypto"
 )
 
 // offsiteTimeout bounds rsync/scp so a hung ssh cannot block the caller

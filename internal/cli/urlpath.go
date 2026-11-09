@@ -5,7 +5,7 @@ package cli
 import (
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/maintenance"
+	"github.com/anonysec/OVManager/internal/maintenance"
 )
 
 func runURLPathShow(install Install) (string, int) {

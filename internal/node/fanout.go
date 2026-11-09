@@ -6,34 +6,11 @@ import (
 	"time"
 )
 
-// Fanout limits and deadline mirror backend/node/fanout.py.
 const (
 	NodeFanoutLimit       = 20
 	BackgroundFanoutLimit = 4
 	RequestFanoutDeadline = 10 * time.Second
 )
-
-// ChunkBySize splits items into chunks of at most batchSize items and maxBytes
-// total. A single item over maxBytes still forms its own chunk.
-func ChunkBySize[T any](items []T, batchSize, maxBytes int, itemBytes func(T) int) [][]T {
-	chunks := [][]T{}
-	current := []T{}
-	currentBytes := 0
-	for _, item := range items {
-		size := itemBytes(item)
-		if len(current) > 0 && (len(current) >= batchSize || currentBytes+size > maxBytes) {
-			chunks = append(chunks, current)
-			current = []T{}
-			currentBytes = 0
-		}
-		current = append(current, item)
-		currentBytes += size
-	}
-	if len(current) > 0 {
-		chunks = append(chunks, current)
-	}
-	return chunks
-}
 
 var (
 	// semMu guards nodeSem: a test swaps it, and a swap that raced with a
@@ -84,27 +61,6 @@ func RunBounded(fn func() any) any {
 	sem <- struct{}{}
 	defer func() { <-sem }()
 	return fn()
-}
-
-// GatherBounded runs calls concurrently under the shared cap and returns one
-// result per call in order; a panic becomes an error (return_exceptions=True).
-func GatherBounded(calls []func() any) []any {
-	results := make([]any, len(calls))
-	var wg sync.WaitGroup
-	for i, call := range calls {
-		wg.Add(1)
-		go func(i int, call func() any) {
-			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					results[i] = asError(r)
-				}
-			}()
-			results[i] = RunBounded(call)
-		}(i, call)
-	}
-	wg.Wait()
-	return results
 }
 
 // FanoutDeadline is returned for a node that did not answer before the

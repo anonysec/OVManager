@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/internal/audit"
 )
 
 // owner-claim constants (backend).
@@ -224,9 +224,8 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 // Claim rate limiting is intentionally in-memory: claim attempts are rare, and
 // a process restart clearing the small per-IP failure window is an acceptable
 // trade-off versus adding a second persisted limiter table.
-// claimRateLimited reproduces owner_claim.py's per-IP failure window.
 func (s *Service) claimRateLimited(r *http.Request) bool {
-	key := Sha16(BucketIP(s.clientIP(r)))
+	key := sha16(BucketIP(s.clientIP(r)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := nowSecs()
@@ -252,7 +251,7 @@ func (s *Service) claimRateLimited(r *http.Request) bool {
 }
 
 func (s *Service) noteClaimFailure(r *http.Request) {
-	key := Sha16(BucketIP(s.clientIP(r)))
+	key := sha16(BucketIP(s.clientIP(r)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.failures[key] = append(s.failures[key], nowSecs())
@@ -264,7 +263,6 @@ const passwordMinLength = 12
 
 var passwordPlaceholders = []string{"change-me", "changeme", "change_me", "password123", "admin123"}
 
-// passwordProblem mirrors backend/validation.py password_problem.
 func passwordProblem(value string) string {
 	if value == "" {
 		return "must not be empty"
@@ -287,7 +285,6 @@ func passwordProblem(value string) string {
 	return ""
 }
 
-// writeValidation emits FastAPI's 422 error-list shape.
 func writeValidation(w http.ResponseWriter, field, msg string) {
 	writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
 		"detail": []map[string]any{{

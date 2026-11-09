@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
 // fakeSessionsAgent answers /sync/sessions with one live session per CN.

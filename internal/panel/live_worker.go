@@ -1,19 +1,19 @@
-// Live snapshot worker (design §5.1): the single goroutine that drives
+// Live snapshot worker: the single goroutine that drives
 // telemetry.CollectLiveSnapshot on a ticker at telemetry.PollSeconds(). It is
 // the only caller, so the collector's lock-free grace/alert state stays
 // single-writer. The idle cadence itself lives in the collector's pollDue gate.
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
-// liveBootDelay leaves the panel time to settle before the first poll; mirrors
-// the ACME worker's boot delay.
+// liveBootDelay leaves the panel time to settle before the first poll.
 const liveBootDelay = 15 * time.Second
 
 var liveWorkerOnce sync.Once
@@ -33,23 +33,18 @@ func runLiveCollect(db *sql.DB) {
 }
 
 // startLiveWorker launches the live snapshot loop once per process.
-// Idempotent, so Mount can call it unconditionally.
 func (h *Handler) startLiveWorker() {
 	liveWorkerOnce.Do(func() {
-		go func() {
-			defer func() { recover() }()
-			time.Sleep(liveBootDelay)
-			ticker := time.NewTicker(livePollInterval())
-			defer ticker.Stop()
-			for range ticker.C {
-				runGuarded("live worker", h.liveTick)
-			}
-		}()
+		Run(context.Background(), []job{{
+			name:  "live worker",
+			delay: liveBootDelay,
+			every: livePollInterval,
+			fn:    func(ctx context.Context) { h.liveTick(ctx) },
+		}})
 	})
 }
 
-// livePollInterval clamps PollSeconds to a positive interval: a 0/negative env
-// value would panic time.NewTicker.
+// livePollInterval clamps PollSeconds to a positive interval.
 func livePollInterval() time.Duration {
 	secs := telemetry.PollSeconds()
 	if secs <= 0 {
@@ -59,7 +54,12 @@ func livePollInterval() time.Duration {
 }
 
 // liveTick runs one collector pass. SwapDB-safe: h.Svc.DB() is read per tick.
-func (h *Handler) liveTick() {
+func (h *Handler) liveTick(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 	db := h.Svc.DB()
 	runLiveCollect(db)
 	telemetry.CollectMetricsIfDue(db)

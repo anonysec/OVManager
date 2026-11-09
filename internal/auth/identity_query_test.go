@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -36,25 +37,19 @@ func (c *countingConn) QueryerContext() driver.QueryerContext { return c }
 func (c *countingConn) ExecerContext() driver.ExecerContext   { return c }
 func (c *countingConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	queryCount.Add(1)
-	if qc, ok := c.Conn.(driver.QueryerContext); ok {
-		return qc.QueryContext(ctx, q, args)
+	qc, ok := c.Conn.(driver.QueryerContext)
+	if !ok {
+		return nil, errors.New("unsupported query")
 	}
-	vals := make([]driver.Value, len(args))
-	for i, a := range args {
-		vals[i] = a.Value
-	}
-	return c.Conn.(driver.Queryer).Query(q, vals)
+	return qc.QueryContext(ctx, q, args)
 }
 func (c *countingConn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	queryCount.Add(1)
-	if ec, ok := c.Conn.(driver.ExecerContext); ok {
-		return ec.ExecContext(ctx, q, args)
+	ec, ok := c.Conn.(driver.ExecerContext)
+	if !ok {
+		return nil, errors.New("unsupported exec")
 	}
-	vals := make([]driver.Value, len(args))
-	for i, a := range args {
-		vals[i] = a.Value
-	}
-	return c.Conn.(driver.Execer).Exec(q, vals)
+	return ec.ExecContext(ctx, q, args)
 }
 func (c *countingConn) ResetSession(ctx context.Context) error {
 	if rs, ok := c.Conn.(driver.SessionResetter); ok {

@@ -1,6 +1,3 @@
-// Package billing ports backend/operations/billing: the per-user daily traffic
-// history and the traffic ledger (usage.py + the DB half of daily.py).
-//
 // All accounting is integer bytes; there is no fractional currency anywhere in
 // the ledger, so exactness comes from int64 arithmetic (no decimal type).
 package billing
@@ -8,8 +5,6 @@ package billing
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -140,7 +135,6 @@ func PruneLedger(db *sql.DB, keepDays, batch int) int {
 
 // Canon renders the canonical node_usage text both sides of an OCC compare speak.
 //
-// note: only handles the shapes daily.py stores (object or its JSON text);
 // default-str fallback for exotic types is not reproduced.
 func Canon(state any) string {
 	if s, ok := state.(string); ok {
@@ -164,150 +158,14 @@ func compact(v any) string {
 	return string(b)
 }
 
-// ExtractUsername resolves a node-reported key to a panel username.
-func ExtractUsername(clientName, nodeName string, known map[string]bool) string {
-	if known != nil && known[clientName] {
-		return clientName
-	}
-	suffix := "-" + nodeName
-	if strings.HasSuffix(clientName, suffix) {
-		return clientName[:len(clientName)-len(suffix)]
-	}
-	return clientName
-}
-
-// ResolveSessionUsername resolves a node-reported common name through the
-// optional numeric-ID map. A known username (including its node-suffix-stripped
-// form) takes precedence over an identical numeric ID string; without this
-// check, a user named "42" could be reported as the unrelated row whose ID is 42.
+// ResolveSessionUsername resolves a node-reported common name (numeric
+// panel user id) through idToName. Node keys are numeric ids only, so direct
+// lookup is the full semantics; a user named "42" is a different row.
 func ResolveSessionUsername(clientName, nodeName string, idToName map[string]string, known map[string]bool) string {
-	username := ExtractUsername(clientName, nodeName, known)
-	if known != nil && known[username] {
-		return username
-	}
-	if mapped, ok := idToName[username]; ok {
+	if mapped, ok := idToName[clientName]; ok {
 		return mapped
 	}
-	return username
-}
-
-// extractNodeUsageData extracts the "data" map from a versioned node_usage state.
-// Returns nil if the state is not a valid versioned format.
-func extractNodeUsageData(state any) map[string]map[string]int64 {
-	if state == nil {
-		return nil
-	}
-	// If state is a string, parse it first
-	var parsed any
-	switch s := state.(type) {
-	case string:
-		if err := json.Unmarshal([]byte(s), &parsed); err != nil {
-			return nil
-		}
-	case map[string]any:
-		parsed = s
-	default:
-		return nil
-	}
-
-	m, ok := parsed.(map[string]any)
-	if !ok {
-		return nil
-	}
-
-	// Check for versioned format
-	if v, ok := m["version"]; ok {
-		if int(toI64(v)) >= NodeUsageVersion {
-			if data, ok := m["data"].(map[string]any); ok {
-				result := make(map[string]map[string]int64)
-				for k, v := range data {
-					if sub, ok := v.(map[string]any); ok {
-						if total, ok := sub["total"]; ok {
-							result[k] = map[string]int64{"total": toI64(total)}
-						}
-					}
-				}
-				return result
-			}
-		}
-	}
-	// Legacy flat map format
-	result := make(map[string]map[string]int64)
-	for k, v := range m {
-		if k == "version" || k == "data" {
-			continue
-		}
-		total := int64(0)
-		if sub, ok := v.(map[string]any); ok {
-			if t, ok := sub["total"]; ok {
-				total = toI64(t)
-			} else {
-				total = 0
-			}
-		} else {
-			total = toI64(v)
-		}
-		if total > 0 {
-			result[k] = map[string]int64{"total": total}
-		}
-	}
-	return result
-}
-
-// ComputeSessionDelta returns (delta_bytes, new_state) for one user on one node.
-//
-// new_state is a map[string]int64 when the node reports per-session data, or an
-// int64 legacy total otherwise (mirrors the union return).
-func ComputeSessionDelta(sessions map[string]any, prevState any, legacyTotal float64) (int, any) {
-	if sessions != nil {
-		// Extract previous state data map
-		prevData := extractNodeUsageData(prevState)
-		delta := 0
-		for skey, cur := range sessions {
-			last := int64(0)
-			if prevData != nil {
-				if sub, ok := prevData[skey]; ok {
-					last = sub["total"]
-				}
-			}
-			curInt := toI64(cur)
-			if curInt >= last {
-				delta += int(curInt - last)
-			} else {
-				delta += int(curInt)
-			}
-		}
-		return delta, intMap(sessions)
-	}
-	// sessions is nil: legacy behavior returns integer total, not a map
-	prevData := extractNodeUsageData(prevState)
-	prevInt := int64(0)
-	if prevData != nil {
-		// Sum all totals from previous data
-		for _, sub := range prevData {
-			prevInt += sub["total"]
-		}
-	} else if prevState != nil {
-		if _, isDict := prevState.(map[string]any); !isDict {
-			prevInt = toI64(prevState)
-		}
-	}
-	curTotal := int64(legacyTotal)
-	delta := 0
-	if curTotal >= prevInt {
-		delta = int(curTotal - prevInt)
-	} else {
-		delta = int(curTotal)
-	}
-	return delta, curTotal
-}
-
-func intMap(m map[string]any) map[string]int64 {
-	out := make(map[string]int64, len(m))
-	for k, v := range m {
-		out[k] = toI64(v)
-	}
-	return out
+	return clientName
 }
 
 // ComputeTotalDelta applies the D5 rule for one node's cumulative counter.
@@ -355,23 +213,4 @@ func clamp(v, low, high int) int {
 		return high
 	}
 	return v
-}
-
-func toI64(v any) int64 {
-	switch n := v.(type) {
-	case float64:
-		return int64(n)
-	case int:
-		return int64(n)
-	case int64:
-		return n
-	case json.Number:
-		i, _ := n.Int64()
-		return i
-	case string:
-		var i int64
-		_, _ = fmt.Sscanf(n, "%d", &i)
-		return i
-	}
-	return 0
 }

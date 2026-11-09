@@ -1,18 +1,18 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // trafficSchema covers the columns SyncTraffic and the owner gate touch.
@@ -97,9 +97,6 @@ func TestSyncTrafficRouteZeroCounts(t *testing.T) {
 		body.Data.UsersUpdated != 0 || body.Data.UsersSeeded != 0 || body.Data.BytesBilled != 0 {
 		t.Fatalf("result = %+v, want a zero TrafficResult", body.Data)
 	}
-	if len(body.Data.AliasCollisions) != 0 {
-		t.Fatalf("AliasCollisions = %v, want none", body.Data.AliasCollisions)
-	}
 }
 
 // TestTrafficWorkerIgnoresTelegram pins that the poll runs with the bot
@@ -120,7 +117,7 @@ func TestTrafficWorkerIgnoresTelegram(t *testing.T) {
 	t.Cleanup(restore)
 
 	h.startTrafficWorker() // idempotent; must not panic
-	h.trafficTick()
+	h.trafficTick(context.Background())
 
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("SyncTraffic calls after one tick = %d, want 1", got)
@@ -141,34 +138,3 @@ func TestTrafficPollSeconds(t *testing.T) {
 
 // A node reporting two keys for one user is an anomaly worth seeing: the
 // bytes are summed, but the operator should know their node's keying drifted.
-func TestRecordAliasCollisionsWritesAnEvent(t *testing.T) {
-	conn, _ := newTrafficDB(t)
-	recordAliasCollisions(conn, node.TrafficResult{
-		AliasCollisions: []string{"user=alice node=1 keys=alice,12"},
-	})
-
-	var action string
-	var detail string
-	err := conn.QueryRow(`SELECT action, detail FROM audit_logs ORDER BY id DESC LIMIT 1`).Scan(&action, &detail)
-	if err != nil {
-		t.Fatalf("read audit row: %v", err)
-	}
-	if action != "traffic_alias_keys" {
-		t.Errorf("action = %q, want traffic_alias_keys", action)
-	}
-	if !strings.Contains(detail, "alice") {
-		t.Errorf("detail does not name the user: %q", detail)
-	}
-}
-
-func TestRecordAliasCollisionsWritesNothingWhenClean(t *testing.T) {
-	conn, _ := newTrafficDB(t)
-	recordAliasCollisions(conn, node.TrafficResult{})
-	var n int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&n); err != nil {
-		t.Fatalf("count: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("audit rows = %d, want 0", n)
-	}
-}

@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 // BackupInfo is one restorable backup.
@@ -25,11 +25,6 @@ func cliHandler(dataDir string) (*Handler, func(), error) {
 	_ = os.Setenv("DATA_DIR", dataDir)
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
-	if path == "" {
-		if p := db.SQLitePathFromURL(cfg.URL); p != "" {
-			path = p
-		}
-	}
 	if path == "" {
 		path = filepath.Join(dataDir, "ovmanager.db")
 	}

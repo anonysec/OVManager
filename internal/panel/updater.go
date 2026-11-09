@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 // Panel update checker (backend).
@@ -33,7 +33,6 @@ const (
 	hostNativeUpdateCmd = "sudo ovmanager update"
 )
 
-// updateCache is updater.py's module-level _cache (1h TTL, process-wide).
 var updateCache = struct {
 	mu     sync.Mutex
 	ts     float64

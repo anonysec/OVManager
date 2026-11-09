@@ -1,109 +1,5 @@
 [
   {
-    "method": "GET",
-    "path": "/sync/status",
-    "request": [],
-    "response": [
-      "version",
-      "cpu_usage",
-      "memory_usage",
-      "cert_expiry"
-    ],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:GetNodeInfo",
-    "response_at": [
-      "internal/node/management.go:info",
-      "internal/telemetry/handler.go:info",
-      "web/src/components/NodeDrawer.tsx"
-    ],
-    "note": "the panel ignores every other key of this payload: openvpn_running is read from the restart response, not from here"
-  },
-  {
-    "method": "GET",
-    "path": "/sync/usage",
-    "request": [],
-    "response": [
-      "totals",
-      "totals_epochs"
-    ],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:GetUsage",
-    "response_at": [
-      "internal/node/traffic.go:data"
-    ],
-    "note": "totals may be null when the node has no user to report"
-  },
-  {
-    "method": "GET",
-    "path": "/sync/sessions",
-    "query": [
-      "hours",
-      "common_name"
-    ],
-    "request": [],
-    "response": [
-      "live_sessions",
-      "stale_markers",
-      "live_count",
-      "stale_marker_count",
-      "auth_errors",
-      "auth_errors_by_cn",
-      "rejects",
-      "policy_rejects",
-      "warn_rejects",
-      "events",
-      "last_error"
-    ],
-    "response_items": [
-      "common_name",
-      "cn",
-      "peer",
-      "ts",
-      "action",
-      "severity",
-      "reason",
-      "ongoing"
-    ],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:GetSessions",
-    "response_at": [
-      "internal/node/diagnostics.go:data",
-      "internal/node/diagnostics.go:s",
-      "internal/node/sync.go:cleanNodeSessions:data",
-      "internal/panel/security.go:data",
-      "internal/panel/security.go:nodeEvents:ev",
-      "internal/telemetry/handler.go:sessions",
-      "internal/telemetry/handler.go:data"
-    ],
-    "note": "common_name is only sent when the panel asks for one user; the SPA also accepts a legacy sessions key"
-  },
-  {
-    "method": "GET",
-    "path": "/sync/logs",
-    "query": [
-      "level",
-      "limit"
-    ],
-    "request": [],
-    "response": [
-      "records",
-      "last_error",
-      "errors_1h"
-    ],
-    "response_items": [
-      "level",
-      "time",
-      "message",
-      "where"
-    ],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:GetLogs",
-    "response_at": [
-      "web/src/components/NodeDrawer.tsx"
-    ],
-    "note": "the Go panel forwards the payload unread; the SPA reads it"
-  },
-  {
     "method": "POST",
     "path": "/sync/config",
     "request": [
@@ -118,23 +14,33 @@
       "extra_ports"
     ],
     "response": [],
-    "response_raw": false,
     "request_at": "internal/node/client.go:UpdateConfig",
-    "note": "the panel reads the envelope only (success, msg); the node's data is forwarded to the SPA unread"
+    "response_at": [],
+    "note": "the panel reads the envelope only (success, msg); the node's data is forwarded to the SPA unread (management.go:1061)"
   },
   {
-    "method": "POST",
-    "path": "/sync/restart",
+    "method": "GET",
+    "path": "/sync/download/ovpn/{uid}",
+    "request": [],
+    "response": [],
+    "request_at": "internal/node/client.go:DownloadOVPNBytes",
+    "response_at": [],
+    "note": "the panel accepts a body that starts with \"client\" or holds \"\u003cca\u003e\" (client.go:770) and rewrites the remote lines as text (management.go:569)"
+  },
+  {
+    "method": "GET",
+    "path": "/sync/logs",
     "request": [],
     "response": [
-      "openvpn_running"
+      "records",
+      "last_error",
+      "errors_1h"
     ],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:RestartVPN",
+    "request_at": "internal/node/client.go:GetLogs",
     "response_at": [
       "web/src/components/NodeDrawer.tsx"
     ],
-    "note": "the Go panel forwards the envelope's data unread"
+    "note": "the Go panel forwards the payload unread (management.go:971); the SPA reads it"
   },
   {
     "method": "POST",
@@ -143,80 +49,133 @@
     "response": [
       "server_expiry"
     ],
-    "response_raw": false,
     "request_at": "internal/node/client.go:RenewServerCert",
     "response_at": [
       "web/src/components/NodeDrawer.tsx"
     ],
-    "note": "the Go panel forwards the envelope's data unread"
+    "note": "the Go panel forwards the envelope's data unread (management.go:1085)"
+  },
+  {
+    "method": "POST",
+    "path": "/sync/restart",
+    "request": [],
+    "response": [
+      "openvpn_running"
+    ],
+    "request_at": "internal/node/client.go:RestartVPN",
+    "response_at": [
+      "web/src/components/NodeDrawer.tsx"
+    ],
+    "note": "the Go panel forwards the envelope's data unread (management.go:1085)"
+  },
+  {
+    "method": "GET",
+    "path": "/sync/sessions",
+    "request": [],
+    "response": [
+      "live_sessions",
+      "stale_markers",
+      "live_count",
+      "stale_marker_count",
+      "auth_errors",
+      "auth_errors_by_cn",
+      "rejects",
+      "policy_rejects",
+      "warn_rejects",
+      "events",
+      "last_error"
+    ],
+    "request_at": "internal/node/client.go:GetSessions",
+    "response_at": [
+      "internal/node/diagnostics.go:data",
+      "internal/node/diagnostics.go:s",
+      "internal/node/sync.go:cleanNodeSessions:data",
+      "internal/panel/security.go:data",
+      "internal/panel/security.go:nodeEvents:ev",
+      "internal/telemetry/handler.go:sessions",
+      "internal/telemetry/handler.go:data"
+    ],
+    "note": "common_name is only sent when the panel asks for one user; the SPA also accepts a legacy sessions key (NodeDrawer.tsx:129)"
+  },
+  {
+    "method": "GET",
+    "path": "/sync/status",
+    "request": [],
+    "response": [
+      "contract_version",
+      "version",
+      "cpu_usage",
+      "memory_usage",
+      "cert_expiry"
+    ],
+    "request_at": "internal/node/client.go:GetStatus",
+    "response_at": [
+      "internal/node/management.go:info",
+      "internal/telemetry/handler.go:info",
+      "web/src/components/NodeDrawer.tsx"
+    ],
+    "note": "the panel ignores every other key of this payload: openvpn_running is read from the restart response, not from here"
   },
   {
     "method": "POST",
     "path": "/sync/update",
     "request": [],
     "response": [],
-    "response_raw": false,
     "request_at": "internal/node/client.go:TriggerUpdate",
+    "response_at": [],
     "note": "the panel reads the envelope only (success, msg)"
   },
   {
-    "method": "POST",
+    "method": "GET",
+    "path": "/sync/usage",
+    "request": [],
+    "response": [
+      "totals",
+      "totals_epochs"
+    ],
+    "request_at": "internal/node/client.go:GetUsage",
+    "response_at": [
+      "internal/node/traffic.go:data"
+    ],
+    "note": "totals may be null when the node has no user to report (traffic.go:84)"
+  },
+  {
+    "method": "PUT",
     "path": "/sync/user",
     "request": [
+      "id",
       "name",
       "max_logins",
-      "id"
+      "status"
     ],
     "response": [],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:CreateUser",
-    "note": "no data key is read; only CreateUserOnAllNodes calls it, and that fan-out is dead code"
+    "request_at": "internal/node/user_policy.go:ApplyUserPolicy",
+    "response_at": [],
+    "note": "the panel reads the envelope only (success, msg)"
   },
   {
     "method": "DELETE",
     "path": "/sync/user/{uid}",
     "request": [],
     "response": [],
-    "response_raw": false,
     "request_at": "internal/node/client.go:DeleteUser",
+    "response_at": [],
     "note": "no data key is read: the client only checks the envelope"
   },
   {
     "method": "POST",
     "path": "/sync/user/{uid}/disconnect",
-    "query": [
-      "only_stale"
-    ],
     "request": [],
     "response": [
       "removed_markers",
       "killed_sessions"
     ],
-    "response_raw": false,
     "request_at": "internal/node/client.go:DisconnectUser",
     "response_at": [
       "internal/node/sync.go:cleanNodeSessions:res",
       "internal/users/sweep.go:res"
     ],
-    "note": "only_stale is sent only when the panel asks the node to drop stale markers instead of live sessions"
-  },
-  {
-    "method": "POST",
-    "path": "/sync/user/{uid}/reset-usage",
-    "request": [],
-    "response": [],
-    "response_raw": false,
-    "request_at": "internal/node/client.go:ResetUsage",
-    "note": "no data key is read: the client only checks the envelope's success"
-  },
-  {
-    "method": "GET",
-    "path": "/sync/download/ovpn/{uid}",
-    "request": [],
-    "response": [],
-    "response_raw": true,
-    "request_at": "internal/node/client.go:DownloadOVPNBytes",
-    "note": "raw text, not an envelope; the panel accepts a body that starts with client or holds <ca> and rewrites the remote lines as text"
+    "note": "only_stale is sent only when the panel asks the node to drop stale markers instead of live sessions (client.go:638)"
   },
   {
     "method": "POST",
@@ -230,24 +189,9 @@
       "applied",
       "failed"
     ],
-    "response_raw": false,
     "request_at": "internal/node/sync.go:pushLimitsBatch",
     "response_at": [
       "internal/node/sync.go:pushLimitsBatch:data"
     ]
-  },
-  {
-    "method": "PUT",
-    "path": "/sync/user",
-    "request": [
-      "id",
-      "name",
-      "max_logins",
-      "status"
-    ],
-    "response": [],
-    "response_raw": false,
-    "request_at": "internal/node/user_policy.go:ApplyUserPolicy",
-    "note": "desired account policy delivery; the panel reads the envelope only"
   }
 ]

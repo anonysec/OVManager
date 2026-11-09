@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   FiCheckCircle, FiPlus, FiPower,
   FiSearch, FiServer, FiShield, FiSliders, FiTrash2, FiUsers, FiXCircle,
 } from 'react-icons/fi';
-import NodeDrawer from '../components/NodeDrawer';
+const NodeDrawer = lazy(() => import('../components/NodeDrawer'));
 import NodeFormModal from '../components/NodeFormModal';
 import ConfirmModal from '../components/ConfirmModal';
 import apiClient from '../services/api';

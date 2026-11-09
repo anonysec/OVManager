@@ -67,7 +67,7 @@ func TestReservedLookingUsernameIsBilled(t *testing.T) {
 	resetForTests()
 	t.Cleanup(resetForTests)
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "node", usageServer(t, map[string]any{"push_hash": int64(100)}, 0))
+	seedTrafficNode(t, conn, 1, "node", usageServer(t, map[string]any{"1": int64(100)}, 0))
 	seedTrafficUser(t, conn, 1, "push_hash", "0", `{"1":0}`)
 	result := SyncTraffic(conn)
 	if result.BytesBilled != 100 {
@@ -89,7 +89,7 @@ func TestSyncTrafficEpochDecreaseReboundAndReset(t *testing.T) {
 	seedTrafficUser(t, conn, 1, "alice", "0", `{}`)
 
 	pass := func(total int64, epoch string) int64 {
-		srv.set(map[string]any{"alice": total}, map[string]string{"alice": epoch})
+		srv.set(map[string]any{"1": total}, map[string]string{"1": epoch})
 		return SyncTraffic(conn).BytesBilled
 	}
 	if got := pass(120, "e1"); got != 0 {
@@ -129,11 +129,11 @@ func TestSyncTrafficFirstEpochAdoption(t *testing.T) {
 	seedTrafficNode(t, conn, 1, "node", httpSrv)
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":100}`)
 
-	srv.set(map[string]any{"alice": int64(120)}, nil) // legacy: no epochs
+	srv.set(map[string]any{"1": int64(120)}, nil) // legacy: no epochs
 	if got := SyncTraffic(conn).BytesBilled; got != 20 {
 		t.Fatalf("legacy delta billed=%d, want 20", got)
 	}
-	srv.set(map[string]any{"alice": int64(130)}, map[string]string{"alice": "e1"})
+	srv.set(map[string]any{"1": int64(130)}, map[string]string{"1": "e1"})
 	if got := SyncTraffic(conn).BytesBilled; got != 10 {
 		t.Fatalf("first epoch adoption billed=%d, want 10 (not a reseed)", got)
 	}
@@ -153,7 +153,7 @@ func TestSyncTrafficIntegerPrecisionAbove2_53(t *testing.T) {
 	seedTrafficNode(t, conn, 1, "node", httpSrv)
 	const base = int64(9007199254740992) // 2^53
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":9007199254740992}`)
-	srv.set(map[string]any{"alice": base + 1}, map[string]string{"alice": "e1"})
+	srv.set(map[string]any{"1": base + 1}, map[string]string{"1": "e1"})
 	if got := SyncTraffic(conn).BytesBilled; got != 1 {
 		t.Fatalf("billed=%d, want exactly 1 above 2^53", got)
 	}
@@ -173,13 +173,13 @@ func TestSyncTrafficInvalidTotalsDoNotMutate(t *testing.T) {
 	seedTrafficUser(t, conn, 1, "alice", "40", `{"1":100,"__epochs":{"1":"e1"}}`)
 
 	invalid := []map[string]any{
-		{"alice": int64(-5)},
-		{"alice": json.Number("1.5")},
-		{"alice": json.Number("99999999999999999999999")},
-		{"alice": "not-a-number"},
+		{"1": int64(-5)},
+		{"1": json.Number("1.5")},
+		{"1": json.Number("99999999999999999999999")},
+		{"1": "not-a-number"},
 	}
 	for i, totals := range invalid {
-		srv.set(totals, map[string]string{"alice": "e1"})
+		srv.set(totals, map[string]string{"1": "e1"})
 		res := SyncTraffic(conn)
 		if res.BytesBilled != 0 {
 			t.Fatalf("case %d billed=%d on invalid total %v", i, res.BytesBilled, totals)
@@ -196,7 +196,7 @@ func TestSyncTrafficInvalidTotalsDoNotMutate(t *testing.T) {
 		}
 	}
 	// A valid increase afterwards still bills against the untouched baseline.
-	srv.set(map[string]any{"alice": int64(110)}, map[string]string{"alice": "e1"})
+	srv.set(map[string]any{"1": int64(110)}, map[string]string{"1": "e1"})
 	if got := SyncTraffic(conn).BytesBilled; got != 10 {
 		t.Fatalf("valid increase after invalid samples billed=%d, want 10", got)
 	}
@@ -212,7 +212,7 @@ func TestSyncTrafficReseedInvalidatesOfflineEpochs(t *testing.T) {
 	seedTrafficNode(t, conn, 1, "node", httpSrv)
 	seedTrafficUser(t, conn, 1, "alice", "0",
 		`{"1":999,"2":888,"__reseed":true,"__epochs":{"1":"e1","2":"e9"}}`)
-	srv.set(map[string]any{"alice": int64(50)}, map[string]string{"alice": "e2"})
+	srv.set(map[string]any{"1": int64(50)}, map[string]string{"1": "e2"})
 	if got := SyncTraffic(conn).BytesBilled; got != 0 {
 		t.Fatalf("reseed pass billed=%d, want 0", got)
 	}

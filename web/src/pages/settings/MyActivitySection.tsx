@@ -68,7 +68,7 @@ const MyActivitySection = () => {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const tick = () => setNowTs(Math.floor(Date.now() / 1000));
+    const tick = () => { if (!document.hidden) setNowTs(Math.floor(Date.now() / 1000)); };
     tick();
     const id = setInterval(tick, 30000);
     return () => clearInterval(id);

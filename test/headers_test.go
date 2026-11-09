@@ -17,10 +17,8 @@ func headers(t *testing.T, env *panelEnv, method, path string, h map[string]stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h != nil {
-		for k, v := range h {
-			req.Header.Set(k, v)
-		}
+	for k, v := range h {
+		req.Header.Set(k, v)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

@@ -4,7 +4,7 @@
 package auth
 
 import (
-	"github.com/anonysec/OVManager/go/internal/config"
+	"github.com/anonysec/OVManager/internal/config"
 	"net"
 	"net/http"
 	"strings"
@@ -57,30 +57,6 @@ func initTrustedCIDRs() {
 
 	var parsed []*net.IPNet
 	for _, s := range cidrList {
-		if _, ipNet, err := net.ParseCIDR(s); err == nil {
-			parsed = append(parsed, ipNet)
-		}
-	}
-	cidrMu.Lock()
-	trustedCIDRs = parsed
-	cidrMu.Unlock()
-}
-
-// SetTrustedCIDRs overrides the trusted proxy CIDR allowlist.
-func SetTrustedCIDRs(cidrs ...string) {
-	var parsed []*net.IPNet
-	for _, s := range cidrs {
-		s = strings.TrimSpace(s)
-		if s == "" {
-			continue
-		}
-		if !strings.Contains(s, "/") {
-			if strings.Contains(s, ":") {
-				s += "/128"
-			} else {
-				s += "/32"
-			}
-		}
 		if _, ipNet, err := net.ParseCIDR(s); err == nil {
 			parsed = append(parsed, ipNet)
 		}

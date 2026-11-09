@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 )
 
 type userRow struct {
@@ -59,7 +59,6 @@ func (u userRow) base() map[string]any {
 	}
 }
 
-// live adds the panel-only connection fields (routers/users.py serialize()),
 // read from the live snapshot the telemetry collector keeps.
 func (u userRow) live(conns map[string]int) map[string]any {
 	m := u.base()

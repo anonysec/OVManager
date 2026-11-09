@@ -1,4 +1,3 @@
-// `ovmanager backup` (cli/backup.py backup_now + manager.sh backup_now).
 package cli
 
 import (
@@ -8,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/maintenance"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/maintenance"
 )
 
 const defaultBackupKeep = 14

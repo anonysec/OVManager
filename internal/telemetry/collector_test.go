@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // collectorSchema is the slice of the panel schema the collector reads.
@@ -239,34 +239,6 @@ func TestTouchLastOnline(t *testing.T) {
 	}
 	if bob != "" {
 		t.Errorf("bob last_online = %q, want untouched", bob)
-	}
-}
-
-func TestResolveSessionUsernameForms(t *testing.T) {
-	idToName := map[string]string{"42": "alice"}
-	known := map[string]bool{"alice": true, "bob": true}
-	for _, tc := range []struct {
-		commonName string
-		want       string
-	}{
-		{commonName: "42", want: "alice"},
-		{commonName: "42-nodeA", want: "alice"},
-		{commonName: "alice-nodeA", want: "alice"},
-		{commonName: "bob", want: "bob"},
-	} {
-		if got := resolveSessionUsername(tc.commonName, "nodeA", idToName, known); got != tc.want {
-			t.Errorf("resolveSessionUsername(%q) = %q, want %q", tc.commonName, got, tc.want)
-		}
-	}
-}
-
-func TestResolveSessionUsernamePrefersNumericUsernameOverCollidingID(t *testing.T) {
-	idToName := map[string]string{"42": "alice", "99": "42"}
-	known := map[string]bool{"alice": true, "42": true}
-	for _, commonName := range []string{"42", "42-nodeA"} {
-		if got := resolveSessionUsername(commonName, "nodeA", idToName, known); got != "42" {
-			t.Errorf("resolveSessionUsername(%q) = %q, want the known numeric username", commonName, got)
-		}
 	}
 }
 

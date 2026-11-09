@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 )
 
 // TestAuthVerifiesHash is the hash-parity guard: a hash written by the
@@ -45,7 +45,6 @@ func TestAuthVerifiesHash(t *testing.T) {
 	}
 }
 
-// TestAuthLoginSuccess mirrors backend/auth login: token envelope plus
 // the ovm_session cookie (max-age = SESSION_MAX_SECONDS, HttpOnly, Lax, "/").
 func TestAuthLoginSuccess(t *testing.T) {
 	conn, dir := newTestDB(t)
@@ -124,7 +123,6 @@ func TestAuthLoginWrongPassword(t *testing.T) {
 }
 
 // TestAuthLoginUnknownNonOwnerNeverAuthenticates: only the is_owner row is a
-// credential (backend/auth authenticate_user).
 func TestAuthLoginUnknownNonOwner(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
@@ -274,7 +272,6 @@ func TestAuthRequireOwner403(t *testing.T) {
 	}
 }
 
-// TestOwnerClaimFlow mirrors backend/routers/owner_claim: the key file is
 // consumed by a successful claim and the response is a login-shaped session.
 func TestOwnerClaimFlow(t *testing.T) {
 	conn, dir := newTestDB(t)

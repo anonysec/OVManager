@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"html"
@@ -15,16 +16,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/webfs"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/webfs"
 )
 
 // Subscription page (backend). The template is the Jinja source
 // from frontend/templates/subscription.html converted to html/template syntax
-// (backend/ is going away, so the Go copy is the live one).
 //
 //go:embed subscription.html
 var subscriptionTemplate string
@@ -97,7 +97,6 @@ var subFuncs = template.FuncMap{
 
 var subTmpl = template.Must(template.New("subscription").Funcs(subFuncs).Parse(subscriptionTemplate))
 
-// Subscription rate limiting (sub.py: 30 hits / 60s per IP, capped buckets).
 const (
 	subMax        = 30
 	subWindow     = 60.0
@@ -111,7 +110,7 @@ var (
 )
 
 func (h *Handler) subRateLimited(r *http.Request) bool {
-	key := auth.Sha16(auth.BucketIP(h.clientIP(r)))
+	key := auth.BucketIP(h.clientIP(r))
 	now := float64(time.Now().UnixNano()) / 1e9
 	subMu.Lock()
 	defer subMu.Unlock()
@@ -293,7 +292,7 @@ func (h *Handler) subUser(w http.ResponseWriter, uuid string, r *http.Request) (
 	var used sql.NullInt64
 	var expiry sql.NullString
 	var active sql.NullInt64
-	err := h.Svc.DB().QueryRow(
+	err := h.Svc.DB().QueryRowContext(context.Background(),
 		`SELECT id, name, total, used, expiry_date, is_active FROM users WHERE uuid = ?`, uuid,
 	).Scan(&row.id, &row.name, &total, &used, &expiry, &active)
 	if err == sql.ErrNoRows {
@@ -388,7 +387,7 @@ func fmtDate(value string) string {
 }
 
 func (h *Handler) activeNodes() []*node.Node {
-	rows, err := h.Svc.DB().Query(
+	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes WHERE status = 1 ORDER BY id`)
 	if err != nil {
@@ -409,7 +408,7 @@ func (h *Handler) activeNodes() []*node.Node {
 }
 
 func (h *Handler) nodeByName(name string) *node.Node {
-	rows, err := h.Svc.DB().Query(
+	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes WHERE name = ?`, name)
 	if err != nil {

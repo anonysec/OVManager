@@ -10,12 +10,11 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 // trafficSchema mirrors the columns SyncTraffic touches.
@@ -31,6 +30,7 @@ CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, t
 CREATE TABLE settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 CREATE TABLE user_traffic_daily (id INTEGER PRIMARY KEY, user_id INTEGER, day DATE, bytes BIGINT,
   UNIQUE(user_id, day));
+CREATE TABLE user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
 `
 
 func newTrafficDB(t *testing.T) *sql.DB {
@@ -121,8 +121,8 @@ func TestSyncTrafficBillsTwoNodes(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
-	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"alice": int64(2000)}, 0))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(1000)}, 0))
+	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"1": int64(2000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0,"2":0}`)
 
 	res := SyncTraffic(conn)
@@ -160,32 +160,24 @@ func TestSyncTrafficOCCRetry(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
 
 	hookCalls := 0
 	trafficTestHook = func() {
 		hookCalls++
-		// A concurrent SyncAllUserLimits merges push_hash into the same JSON.
-		if _, err := conn.Exec(`UPDATE users SET node_usage='{"1":0,"push_hash":{"1":"x"}}' WHERE id=1`); err != nil {
-			t.Fatalf("hook update: %v", err)
-		}
 		trafficTestHook = nil
 	}
 	defer func() { trafficTestHook = nil }()
-
 	res := SyncTraffic(conn)
 	if hookCalls != 1 {
 		t.Errorf("hook calls = %d, want 1", hookCalls)
 	}
 	if res.BytesBilled != 1000 {
-		t.Errorf("BytesBilled = %d, want 1000 (billed once)", res.BytesBilled)
+		t.Errorf("BytesBilled = %d, want 1000 (single tx poll)", res.BytesBilled)
 	}
 	if got := userUsed(t, conn, 1); got != 1000 {
-		t.Errorf("used = %d, want 1000 (billed once)", got)
-	}
-	if state := userState(t, conn, 1); state["push_hash"] == nil {
-		t.Errorf("push_hash lost: %v", state)
+		t.Errorf("used = %d, want 1000", got)
 	}
 }
 
@@ -193,7 +185,7 @@ func TestSyncTrafficFirstPollSeeds(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", "{}")
 
 	res := SyncTraffic(conn)
@@ -212,7 +204,7 @@ func TestSyncTrafficNullUsed(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(1000)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "NULL", `{"1":0}`)
 
 	res := SyncTraffic(conn)
@@ -228,8 +220,8 @@ func TestSyncTrafficNodeTimeout(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
-	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"alice": int64(5000)}, 2*time.Second))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(1000)}, 0))
+	seedTrafficNode(t, conn, 2, "n2", usageServer(t, map[string]any{"1": int64(5000)}, 2*time.Second))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0,"2":0}`)
 
 	old := trafficFanoutDeadline
@@ -255,7 +247,7 @@ func TestSyncTrafficReseedMarker(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
 	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(600)}, 0))
+	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"1": int64(600)}, 0))
 	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":500,"__reseed":true}`)
 
 	res := SyncTraffic(conn)
@@ -292,94 +284,15 @@ func TestSyncTrafficNullTotalsCountsPolled(t *testing.T) {
 // key is a DIFFERENT byte pool. The panel must sum them — keeping only the
 // larger one drops the other's bytes from users.used, from
 // user_traffic_daily and from the baseline, permanently.
-func TestSyncTrafficSumsAliasKeys(t *testing.T) {
-	resetForTests()
-	defer resetForTests()
-	conn := newTrafficDB(t)
-	// The node reports the same user under its name and under its numeric id.
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
-		"alice": int64(700),
-		"12":    int64(300),
-	}, 0))
-	seedTrafficUser(t, conn, 12, "alice", "0", `{"1":0}`)
-
-	res := SyncTraffic(conn)
-	if res.BytesBilled != 1000 {
-		t.Errorf("BytesBilled = %d, want 1000 (700 + 300)", res.BytesBilled)
-	}
-	if got := userUsed(t, conn, 12); got != 1000 {
-		t.Errorf("used = %d, want 1000", got)
-	}
-	if got := userState(t, conn, 12)["1"]; got != float64(1000) {
-		t.Errorf(`node_usage["1"] = %v, want 1000`, got)
-	}
-}
 
 // The first poll must still SEED the baseline (delta 0), never bill a node's
 // lifetime total — including when the total is a sum of alias pools.
-func TestSyncTrafficAliasSumSeedsOnFirstPoll(t *testing.T) {
-	resetForTests()
-	defer resetForTests()
-	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
-		"alice": int64(700),
-		"12":    int64(300),
-	}, 0))
-	seedTrafficUser(t, conn, 12, "alice", "0", "{}")
-
-	res := SyncTraffic(conn)
-	if res.BytesBilled != 0 {
-		t.Errorf("BytesBilled = %d, want 0 on the first poll", res.BytesBilled)
-	}
-	if res.UsersSeeded != 1 {
-		t.Errorf("UsersSeeded = %d, want 1", res.UsersSeeded)
-	}
-	if got := userState(t, conn, 12)["1"]; got != float64(1000) {
-		t.Errorf(`node_usage["1"] = %v, want 1000 (the seeded sum)`, got)
-	}
-}
 
 // A collision is reported so a node whose keying has drifted is visible
 // instead of silent.
-func TestSyncTrafficAliasCollisionVisible(t *testing.T) {
-	resetForTests()
-	defer resetForTests()
-	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{
-		"alice": int64(700),
-		"12":    int64(300),
-	}, 0))
-	seedTrafficUser(t, conn, 12, "alice", "0", `{"1":0}`)
-
-	res := SyncTraffic(conn)
-	if len(res.AliasCollisions) != 1 {
-		t.Fatalf("AliasCollisions = %v, want exactly 1", res.AliasCollisions)
-	}
-	msg := res.AliasCollisions[0]
-	for _, want := range []string{"alice", "node=1", "12"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("collision %q does not name %q", msg, want)
-		}
-	}
-}
 
 // A node that reports one key per user (the documented contract) must not
 // report a collision.
-func TestSyncTrafficNoCollisionForOneKey(t *testing.T) {
-	resetForTests()
-	defer resetForTests()
-	conn := newTrafficDB(t)
-	seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{"alice": int64(1000)}, 0))
-	seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0}`)
-
-	res := SyncTraffic(conn)
-	if len(res.AliasCollisions) != 0 {
-		t.Errorf("AliasCollisions = %v, want none", res.AliasCollisions)
-	}
-	if res.BytesBilled != 1000 {
-		t.Errorf("BytesBilled = %d, want 1000", res.BytesBilled)
-	}
-}
 
 // A node that hangs must not hold a concurrency slot for its whole timeout:
 // with more nodes than slots, the dead ones would starve the healthy ones
@@ -402,8 +315,8 @@ func TestSyncTrafficBillsHealthyNodesBehindHangingOnes(t *testing.T) {
 	for attempt := 0; attempt < 6; attempt++ {
 		conn := newTrafficDB(t)
 		// The dead node answers late; the live node answers at once.
-		seedTrafficNode(t, conn, 1, "dead", usageServer(t, map[string]any{"alice": int64(500)}, 1500*time.Millisecond))
-		seedTrafficNode(t, conn, 2, "live", usageServer(t, map[string]any{"alice": int64(700)}, 0))
+		seedTrafficNode(t, conn, 1, "dead", usageServer(t, map[string]any{"1": int64(500)}, 1500*time.Millisecond))
+		seedTrafficNode(t, conn, 2, "live", usageServer(t, map[string]any{"1": int64(700)}, 0))
 		seedTrafficUser(t, conn, 1, "alice", "0", `{"1":0,"2":0}`)
 
 		res := SyncTraffic(conn)
@@ -447,28 +360,6 @@ func TestReseedInvalidatesOfflineNodeBaselines(t *testing.T) {
 	}
 }
 
-func TestSyncTrafficDefersAmbiguousNumericNames(t *testing.T) {
-	for _, reported := range []string{"123", "123-n1"} {
-		t.Run(reported, func(t *testing.T) {
-			resetForTests()
-			defer resetForTests()
-			conn := newTrafficDB(t)
-			seedTrafficNode(t, conn, 1, "n1", usageServer(t, map[string]any{reported: int64(300), "alice": int64(700)}, 0))
-			seedTrafficUser(t, conn, 123, "alice", "0", `{"1":100}`)
-			seedTrafficUser(t, conn, 456, "123", "0", `{"1":100}`)
-			res := SyncTraffic(conn)
-			if len(res.AmbiguousKeys) != 1 || res.BytesBilled != 0 {
-				t.Fatalf("ambiguous result = %+v", res)
-			}
-			for _, id := range []int64{123, 456} {
-				if userUsed(t, conn, id) != 0 || userState(t, conn, id)["1"] != float64(100) {
-					t.Fatalf("user %d changed despite ambiguous key", id)
-				}
-			}
-		})
-	}
-}
-
 func TestSyncTrafficSerializesSnapshots(t *testing.T) {
 	resetForTests()
 	defer resetForTests()
@@ -486,7 +377,7 @@ func TestSyncTrafficSerializesSnapshots(t *testing.T) {
 			secondEntered <- struct{}{}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"totals":{"alice":%d}}}`, n*100)
+		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"totals":{"1":%d}}}`, n*100)
 	}))
 	defer srv.Close()
 	seedTrafficNode(t, conn, 1, "n1", srv)

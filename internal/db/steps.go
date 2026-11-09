@@ -16,8 +16,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/anonysec/OVManager/go/internal/config"
-	ovcrypto "github.com/anonysec/OVManager/go/internal/crypto"
+	"github.com/anonysec/OVManager/internal/config"
+	ovcrypto "github.com/anonysec/OVManager/internal/crypto"
 )
 
 func noopStep(execer) error { return nil }

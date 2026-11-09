@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"regexp"
@@ -9,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 // Security summary (backend). Aggregates per-node login
@@ -218,7 +219,7 @@ func nodeEvents(data map[string]any, nodeName string, tz *time.Location, idToNam
 
 // allNodes loads every node row (crud.get_all_nodes).
 func (h *Handler) allNodes() []*node.Node {
-	rows, err := h.Svc.DB().Query(
+	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
 		 FROM nodes ORDER BY id`)
 	if err != nil {

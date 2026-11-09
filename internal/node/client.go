@@ -1,4 +1,3 @@
-// Package node ports the backend/node package: the mTLS API client,
 // the connection/health registry, fan-out bounds, sync workers, diagnostics
 // and the node management handlers.
 package node
@@ -23,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
+	"github.com/anonysec/OVManager/internal/audit"
 )
 
 var (
@@ -59,7 +58,6 @@ func (c *Client) recordTLSUnverified() {
 	}
 }
 
-// Timeouts mirror backend/node/requests.py.
 const (
 	Timeout     = 10 * time.Second
 	LongTimeout = 30 * time.Second
@@ -101,7 +99,6 @@ type Node struct {
 	ExtraPorts    string
 }
 
-// Client is the per-node HTTP client (backend/node/requests.NodeRequests).
 type Client struct {
 	address   string // host:port as dialled
 	headers   map[string]string
@@ -150,7 +147,6 @@ func NewClient(address string, port int, apiKey, serverCA, panelID string, nodeI
 	return c, nil
 }
 
-// parseAddress accepts an optional scheme and mirrors requests.py's host/port
 // resolution (an explicit port in the address wins over the row port).
 func parseAddress(raw string, port int) (string, int, error) {
 	raw = strings.TrimSpace(raw)
@@ -180,7 +176,6 @@ func parseAddress(raw string, port int) (string, int, error) {
 	return host, target, nil
 }
 
-// checkHostname mirrors requests.py _check_hostname_for: a name is checked on
 // top of the pin; an IP literal is not; anything unparsable stays strict.
 func checkHostname(host string) bool {
 	if host == "" {
@@ -260,7 +255,6 @@ func (c *Client) TLSVerified() *bool {
 	return c.tlsVerified
 }
 
-// TLSMode is the UI-facing connection security (requests.py tls_mode).
 func (c *Client) TLSMode() string {
 	v := c.TLSVerified()
 	if v == nil {
@@ -321,7 +315,6 @@ func (e *nodeError) Error() string {
 }
 
 // request runs one RPC and returns the parsed envelope (nil on any failure),
-// recording health from this single choke point (requests.py _request).
 type envelope struct {
 	Success bool            `json:"success"`
 	Msg     string          `json:"msg"`
@@ -409,7 +402,6 @@ func (c *Client) requestInner(method, path string, o reqOpts) (*envelope, error)
 }
 
 // send performs (and retries once on 429) the request, applying the 409 /
-// non-200 / success:false rules (requests.py _send).
 func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (*envelope, error) {
 	c.mu.Lock()
 	c.conflictMsg = ""
@@ -522,7 +514,6 @@ func retryAfterS(v string) time.Duration {
 	return time.Duration(f * float64(time.Second))
 }
 
-// conflictMessage surfaces the node's own 409 explanation (requests.py).
 func conflictMessage(resp *http.Response) string {
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxNodeBodyJSON+1))
 	if len(raw) > maxNodeBodyJSON {
@@ -569,8 +560,6 @@ func isTLSError(err error) bool {
 	s := err.Error()
 	return strings.Contains(s, "certificate") || strings.Contains(s, "tls:") || strings.Contains(s, "x509:")
 }
-
-// --- NodeRequests methods (requests.py) ---
 
 // CheckNode is a reachability probe (GET /sync/status).
 type statusResponse struct {

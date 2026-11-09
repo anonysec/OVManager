@@ -8,14 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/billing"
+	"github.com/anonysec/OVManager/internal/billing"
 )
 
 type golden struct {
-	Canon           [][2]any `json:"canon"`
-	ExtractUsername [][4]any `json:"extract_username"`
-	SessionDelta    [][5]any `json:"session_delta"`
-	PyRound         [][2]any `json:"py_round"`
+	Canon   [][2]any `json:"canon"`
+	PyRound [][2]any `json:"py_round"`
 }
 
 func loadGolden(t *testing.T) golden {
@@ -38,58 +36,6 @@ func TestBillingCanonGolden(t *testing.T) {
 			t.Errorf("Canon(%v) = %q, want %q", tc[0], got, tc[1])
 		}
 	}
-}
-
-func TestBillingExtractUsernameGolden(t *testing.T) {
-	for _, tc := range loadGolden(t).ExtractUsername {
-		known := map[string]bool{}
-		for _, name := range tc[2].([]any) {
-			known[name.(string)] = true
-		}
-		got := billing.ExtractUsername(tc[0].(string), tc[1].(string), known)
-		if got != tc[3].(string) {
-			t.Errorf("ExtractUsername(%v,%v) = %q, want %q", tc[0], tc[1], got, tc[3])
-		}
-	}
-}
-
-func TestBillingSessionDeltaGolden(t *testing.T) {
-	for _, tc := range loadGolden(t).SessionDelta {
-		var sessions map[string]any
-		if tc[0] != nil {
-			sessions, _ = tc[0].(map[string]any)
-		}
-		delta, state := billing.ComputeSessionDelta(sessions, tc[1], numOrZero(tc[2]))
-		if delta != int(numOrZero(tc[3])) {
-			t.Errorf("delta(%v) = %d, want %v", tc[0], delta, tc[3])
-		}
-		gotState := mustJSON(t, state)
-		wantState := mustJSON(t, tc[4])
-		if gotState != wantState {
-			t.Errorf("new_state(%v) = %s, want %s", tc[0], gotState, wantState)
-		}
-	}
-}
-
-func numOrZero(v any) float64 {
-	f, _ := v.(float64)
-	return f
-}
-
-func mustJSON(t *testing.T, v any) string {
-	t.Helper()
-	if m, ok := v.(map[string]int64); ok {
-		conv := map[string]any{}
-		for k, n := range m {
-			conv[k] = n
-		}
-		v = conv
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	return string(b)
 }
 
 func TestDailyBytesUpsertAndSeries(t *testing.T) {

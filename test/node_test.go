@@ -19,12 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
-// nodeSchema mirrors the columns backend/node/*.py touches.
 const nodeSchema = `
 CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   tunnel_address VARCHAR, protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194,
@@ -306,28 +305,6 @@ func TestUpdateConfigUnreachable(t *testing.T) {
 	}
 	if got := c.UpdateConfig(node.UpdateConfigParams{Protocol: "tcp", OVPNPort: 1194}); got != false {
 		t.Fatalf("update_config = %#v, want false", got)
-	}
-}
-
-// TestChunkBySize mirrors backend/node/fanout.chunk_by_size.
-func TestChunkBySize(t *testing.T) {
-	items := []int{1, 2, 3, 4, 5}
-	one := func(int) int { return 1 }
-	chunks := node.ChunkBySize(items, 2, 1000, one)
-	if len(chunks) != 3 || len(chunks[0]) != 2 || len(chunks[2]) != 1 {
-		t.Fatalf("chunks = %v, want sizes [2 2 1]", chunks)
-	}
-	// byte cap splits before the count cap (two 4-byte items fit in 10)
-	big := func(int) int { return 4 }
-	chunks = node.ChunkBySize(items, 100, 10, big)
-	if len(chunks) != 3 {
-		t.Fatalf("byte-capped chunks = %v, want 3", chunks)
-	}
-	// a single oversized item still forms its own chunk
-	huge := func(int) int { return 999 }
-	chunks = node.ChunkBySize(items, 100, 10, huge)
-	if len(chunks) != 5 {
-		t.Fatalf("oversized chunks = %v, want 5", chunks)
 	}
 }
 

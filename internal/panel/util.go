@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	backuppkg "github.com/anonysec/OVManager/go/internal/backup"
+	"github.com/anonysec/OVManager/internal/auth"
+	backuppkg "github.com/anonysec/OVManager/internal/backup"
 )
 
 // cryptoRead fills b with random bytes (used by the audit event key).
@@ -48,13 +48,11 @@ func decodeRawBody(r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
-// auth404 is FastAPI's HTTPException(404, detail): the bare {"detail": ...}
 // body rather than the ResponseModel envelope.
 func auth404(w http.ResponseWriter, msg string) {
 	auth.WriteDetail(w, http.StatusNotFound, msg)
 }
 
-// writeValidationError writes FastAPI's 422 error-list shape with an explicit
 // error type.
 func writeValidationError(w http.ResponseWriter, kind, field, msg string) {
 	auth.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{

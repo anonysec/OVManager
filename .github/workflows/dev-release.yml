@@ -38,7 +38,7 @@ jobs:
           for arch in amd64 arm64; do
             out="ovmanager-linux-${arch}"
             GOOS=linux GOARCH="${arch}" CGO_ENABLED=0 go build -trimpath \
-              -ldflags "-s -w -X github.com/anonysec/OVManager/go/internal/version.Version=${VER}" \
+              -ldflags "-s -w -X github.com/anonysec/OVManager/internal/version.Version=${VER}" \
               -o "${out}" ./cmd
           done
       - name: Publish dev release

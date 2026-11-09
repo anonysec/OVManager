@@ -6,7 +6,7 @@ package version_test
 import (
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 func TestIsLegacyPreReset(t *testing.T) {

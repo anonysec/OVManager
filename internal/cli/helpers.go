@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 func certEnddate(cert string) (time.Time, bool) {
@@ -148,11 +148,6 @@ func restoreDBPath(install Install) string {
 	}
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
-	if path == "" {
-		if p := db.SQLitePathFromURL(cfg.URL); p != "" {
-			path = p
-		}
-	}
 	if path == "" {
 		path = filepath.Join(install.DataDir, "ovmanager.db")
 	}

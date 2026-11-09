@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/anonysec/OVManager/go/internal/node"
+	"github.com/anonysec/OVManager/internal/node"
 )
 
 func main() {
 	data := node.GenerateContractJSON()
-	path := "internal/node/contract.gen.json"
+	path := "internal/node/contract.json"
 	if len(os.Args) > 1 {
 		path = os.Args[1]
 	}

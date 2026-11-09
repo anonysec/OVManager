@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 )
 
 // TestFreshSchemaMatchesMigratedSchema: a fresh install and an upgraded

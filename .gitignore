@@ -10,6 +10,7 @@ data/
 web/node_modules/
 node_modules/
 web/dist/
+web/test-results/
 
 # Embedded SPA (staged by `make build`; .gitkeep keeps go:embed valid on a
 # clean checkout)

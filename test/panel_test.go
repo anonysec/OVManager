@@ -19,16 +19,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/panel"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/users"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/panel"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/users"
 )
 
-// panelSchema mirrors the columns the Phase 4 routers touch (models.py +
-// migrations/constants.py).
 const panelSchema = `
 DROP TABLE IF EXISTS admins;
 CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
@@ -80,6 +78,8 @@ CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREME
 CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL,
   offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL);
+DROP TABLE IF EXISTS user_node_usage;
+CREATE TABLE user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
 DROP TABLE IF EXISTS user_traffic_daily;
 CREATE TABLE user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));

@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -14,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/node"
-	"github.com/anonysec/OVManager/go/internal/telemetry"
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/node"
+	"github.com/anonysec/OVManager/internal/telemetry"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 // check is one row of the /overview checklist.
@@ -141,7 +142,7 @@ func (h *Handler) checkDatabase() check {
 	}
 	size := info.Size()
 	var raw any
-	_ = h.Svc.DB().QueryRow(`PRAGMA quick_check`).Scan(&raw)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `PRAGMA quick_check`).Scan(&raw)
 	resultText := "ok"
 	if raw != nil {
 		resultText = fmt.Sprint(raw)
@@ -158,7 +159,7 @@ func (h *Handler) checkDatabase() check {
 }
 
 func (h *Handler) checkNodes() check {
-	rows, err := h.Svc.DB().Query(`SELECT name FROM nodes ORDER BY id`)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT name FROM nodes ORDER BY id`)
 	names := []string{}
 	if err == nil {
 		for rows.Next() {
@@ -379,9 +380,9 @@ func (h *Handler) loginDiagnostics(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) healthSetup(w http.ResponseWriter, r *http.Request) {
 	var nodeCount, activeNodeCount, userCount int
-	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes`).Scan(&nodeCount)
-	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM nodes WHERE status = 1`).Scan(&activeNodeCount)
-	_ = h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM users`).Scan(&userCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM nodes`).Scan(&nodeCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM nodes WHERE status = 1`).Scan(&activeNodeCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM users`).Scan(&userCount)
 	plain(w, map[string]any{
 		"has_node": nodeCount > 0, "has_user": userCount > 0,
 		"has_active_node": activeNodeCount > 0,
@@ -389,7 +390,6 @@ func (h *Handler) healthSetup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// activeCertPath is health.py's _active_cert_path: the panel-managed pair in
 // DATA_DIR/tls is only consulted when the declared pair is absent, and the
 // declared fallback is SSL_CERTFILE.
 func activeCertPath() string {

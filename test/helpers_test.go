@@ -12,13 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/users"
+	"github.com/anonysec/OVManager/internal/auth"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/users"
 )
 
 // bcryptHash is a real bcrypt hash minted by the backend's
-// backend/auth/hash.py (bcrypt 12 rounds, $2b$). knownPassword must verify
 // against it from Go — this is the cross-implementation hash guard.
 const (
 	knownPassword = "correct-horse-battery"
@@ -72,7 +71,6 @@ func seedOwner(t *testing.T, conn *sql.DB, username, hash string) {
 	}
 }
 
-// newServer mounts the Go auth + users routers under /api, mirroring app.py's
 // `api.include_router(prefix="/api", ...)`.
 func newServer(t *testing.T, conn *sql.DB, dataDir string) *httptest.Server {
 	t.Helper()
@@ -95,7 +93,6 @@ func newHTTPServer(t *testing.T, handler http.Handler) string {
 	return srv.URL
 }
 
-// postForm posts OAuth2 password-form credentials like FastAPI's
 // OAuth2PasswordRequestForm expects.
 func postForm(t *testing.T, base, path string, form url.Values) *http.Response {
 	t.Helper()

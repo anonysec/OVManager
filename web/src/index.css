@@ -458,12 +458,6 @@
 }
 
 .toast span,
-.toast-message {
-  color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.4;
-  display: block;
-}
 
 .toast.toast-error {
   background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
@@ -779,32 +773,16 @@
 
 /* The rail centers its nav icons, so the knob pulls tighter to the edge to
    stay clear of them. */
-.ops-sidebar--collapsed .sidebar-toggle {
-  inset-inline-end: 4px;
-  width: 22px;
-  height: 22px;
-}
 
 .ops-sidebar--collapsed .sidebar-footer {
   padding: 4px;
   align-items: center;
 }
 
-.ops-sidebar--mobile {
-  transform: translateX(-100%);
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
-  width: 280px;
-}
 
-.ops-sidebar--mobile.ops-sidebar--open {
-  transform: translateX(0);
-}
 
 /* translateX has no logical form, so the off-screen direction is spelled out:
    the drawer lives on the inline-end, which is the left in RTL. */
-html[dir="rtl"] .ops-sidebar--mobile {
-  transform: translateX(100%);
-}
 
 .sidebar-hamburger {
   display: none;
@@ -840,39 +818,9 @@ html[dir="rtl"] .ops-sidebar--mobile {
   z-index: var(--z-mobile-overlay);
 }
 
-.sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  inset-inline-end: 8px;
-  transform: translateY(-50%);
-  z-index: 6;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--text-muted, var(--muted));
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, color .15s ease;
-}
 
-.sidebar-toggle:hover {
-  background: var(--surface-2, rgba(255, 255, 255, 0.06));
-  border-color: var(--border, var(--line));
-  color: var(--text-primary, var(--text));
-}
 
-.sidebar-toggle:focus-visible {
-  outline: 2px solid var(--focus-ring, var(--accent-color));
-  outline-offset: 1px;
-}
 
-.sidebar-toggle svg {
-  width: 14px;
-  height: 14px;
-}
 
 .sidebar-footer {
   display: flex;
@@ -971,42 +919,13 @@ html[dir="rtl"] .ops-sidebar--mobile {
 
 /* Mobile: show hamburger, hide sidebar by default */
 @media (max-width: 767.98px) {
-  .ops-sidebar:not(.ops-sidebar--mobile) {
-    transform: translateX(-100%);
-  }
-  html[dir="rtl"] .ops-sidebar:not(.ops-sidebar--mobile) {
-    transform: translateX(100%);
-  }
 }
 
 /* Status pulse animations (3x-ui pattern) */
-.status-dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  animation: pulse-blink 1.5s ease-in-out infinite;
-}
 
-.status-dot.online {
-  background: var(--success-color, #0e9f85);
-  animation: pulse-online 1.5s ease-in-out infinite;
-}
 
-.status-dot.offline {
-  background: var(--text-muted, #6b7280);
-  animation: none;
-}
 
-.status-dot.danger {
-  background: var(--danger-color, #c0392b);
-  animation: pulse-danger 1.5s ease-in-out infinite;
-}
 
-.status-dot.warning {
-  background: #e6a700;
-  animation: pulse-warning 1.5s ease-in-out infinite;
-}
 
 @keyframes pulse-online {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -1035,10 +954,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
   .status-dot.warning,
   .status-dot.danger,
   .status-dot.purple,
-  .privacy-toggle {
-    animation: none !important;
-    transition: none !important;
-  }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -1058,9 +973,6 @@ html[dir="rtl"] .ops-sidebar--mobile {
 /* Sidebar starts below the topbar on mobile too */
 @media (max-width: 767.98px) {
   .ops-sidebar {
-    top: var(--topbar-h);
-  }
-  .ops-sidebar--mobile {
     top: var(--topbar-h);
   }
   .sidebar-hamburger {
@@ -1326,14 +1238,6 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
 
 
 /* ---- SEARCH BAR ---- */
-.search-pagination-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
 /* ---- Date input with shortcuts ---- */
 
 .date-chip {
@@ -1389,39 +1293,12 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
   border-bottom: none;
 }
 
-.status-pill {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-}
 .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
 .status-pill.idle { background: var(--info-soft); color: var(--info-text); }
 .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
 .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
-.modal-footer {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 8px;
-}
 
 /* ===== PanelSkeleton (shared) ===== */
-.panel-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
-}
-.skeleton-shimmer {
-  display: block;
-  height: 14px;
-  background: linear-gradient(90deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.06) 100%);
-  background-size: 200% 100%;
-  border-radius: 6px;
-  animation: shimmer 1.6s ease-in-out infinite;
-}
 
 @keyframes shimmer {
   0% { background-position: 200% 0; }
@@ -1447,9 +1324,6 @@ input[type="checkbox"]:focus-visible,
   .status-badge {
     transition: none;
   }
-  .skeleton-shimmer {
-    animation: none;
-  }
 }
 
 /* ============================================================
@@ -1470,81 +1344,21 @@ input[type="checkbox"]:focus-visible,
   margin-inline: auto;
 }
 
-.is-spinning {
-  animation: spin .8s linear infinite;
-}
 
-.quick-link-icon.is-cyan {
-  background: color-mix(in srgb, var(--cyan) 14%, transparent);
-  color: var(--cyan);
-}
 
-.quick-link-icon.is-neutral {
-  background: color-mix(in srgb, var(--text-secondary) 13%, transparent);
-  color: var(--text-secondary);
-}
 
 /* Make panels read as related sections instead of floating blocks. */
 .ops-overview-grid,
 
 /* Shared management toolbar (live: .search-pagination-controls + .search-field) */
-.search-pagination-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 60px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
-}
 
-.search-field {
-  display: flex;
-  position: relative;
-  align-items: center;
-}
 
-.search-field .search-icon {
-  position: absolute;
-  inset-inline-start: 13px;
-  z-index: 1;
-  color: var(--text-muted);
-  pointer-events: none;
-}
 
 /* The .search-field wrapper owns the border; the inner input stays minimal —
    no border, no focus ring, no fixed height — so the wrapper's
    height/padding/border do all the work. */
-.search-field .search-input {
-  width: 100%;
-  height: 100%;
-  padding: 0 0 0 26px;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  outline: none;
-  box-shadow: none !important;
-  transition: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
 
-.search-field .search-input:focus {
-  border: 0 !important;
-  box-shadow: none !important;
-  outline: none;
-}
 
-.seg-toggle .seg-tab.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
 
 .results-meta {
   display: inline-flex;
@@ -1619,12 +1433,6 @@ input[type="checkbox"]:focus-visible,
 
   /* The dashboard node table is too wide for a phone panel — make it scroll
      inside its own box instead of blowing up the whole page width. */
-  .nodes-map-panel .ops-table.compact {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
 
   /* One-row topbar on phones: [hamburger][brand][…userbar…]. The brand keeps
      a visible wordmark and a small inline-start padding (logical, so it
@@ -1667,35 +1475,13 @@ input[type="checkbox"]:focus-visible,
 }
 
 .security-review-item.danger .security-review-dot,
-.alert-center-item.danger .alert-center-item-dot {
-  background: var(--danger-color);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--danger-color) 55%, transparent);
-}
 
 /* Soft tinted surface, not solid red, so the row text stays readable. */
 
-.alert-center-item.danger {
-  border-color: color-mix(in srgb, var(--danger-color) 36%, var(--border));
-  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
-}
 
-.alert-center-item.danger .alert-center-item-copy strong {
-  color: var(--text-primary);
-}
 
-.alert-center-item.danger .alert-center-item-copy small {
-  color: var(--text-muted);
-}
 
-.ops-alert-center.is-clear {
-  border-color: color-mix(in srgb, var(--success-color) 25%, var(--border));
-  background: linear-gradient(135deg, color-mix(in srgb, var(--success-color) 6%, var(--surface-1)), var(--surface-1));
-}
 
-.is-clear .alert-center-icon {
-  background: color-mix(in srgb, var(--success-color) 14%, transparent);
-  color: var(--success-color);
-}
 
 .alert-center-item.danger .alert-center-item-dot { background: var(--danger-color); }
 
@@ -1720,13 +1506,7 @@ html[data-theme="light"] .profile-trigger.active {
 
 /* Keep the danger tint (readable red-on-light) even where the light theme
    forces a neutral panel background. */
-html[data-theme="light"] .alert-center-item.danger {
-  background: color-mix(in srgb, var(--danger-color) 11%, var(--surface-1));
-}
 
-html[data-theme="light"] .security-review-item.danger {
-  background: color-mix(in srgb, var(--danger-color) 11%, #f7f9fc);
-}
 
 
 /* Additional overrides moved from styles.css */

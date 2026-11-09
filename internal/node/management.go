@@ -1,5 +1,3 @@
-// Node CRUD + management endpoints (backend/node/management.py and
-// backend/routers/node.py).
 package node
 
 import (
@@ -19,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/go/internal/audit"
-	"github.com/anonysec/OVManager/go/internal/crypto"
-	"github.com/anonysec/OVManager/go/internal/version"
+	"github.com/anonysec/OVManager/internal/audit"
+	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/version"
 )
 
 // --- settings / crud helpers ---
@@ -464,7 +462,6 @@ func (r nodeCreate) status() bool {
 // --- management operations ---
 
 // AddNodeHandler registers a new node. A node-side 409 surfaces the node's own
-// message. geolocation is skipped (backend/utils/geolocation.py is out of this
 // phase): country_code comes from the manual override only.
 func AddNodeHandler(req nodeCreate, db *sql.DB) (bool, string) {
 	serverCA := ""
@@ -536,7 +533,6 @@ func UpdateNodeHandler(nodeID int64, req nodeCreate, db *sql.DB) (bool, string) 
 		return false, err.Error()
 	}
 	if structural {
-		// note: restart-debounce worker (operations/restart_debounce.py) is
 		// out of this phase; the flag is not queued.
 		_ = structural
 	}
@@ -705,8 +701,6 @@ func nullIfEmpty(s string) any {
 	}
 	return s
 }
-
-// --- OVPN downloads (management.py) ---
 
 var remoteLineRe = regexp.MustCompile(`(?i)^\s*remote\s+`)
 
@@ -980,31 +974,6 @@ func allUsers(db *sql.DB) []userRef {
 		out = append(out, u)
 	}
 	return out
-}
-
-// --- user fan-outs (management.py) ---
-
-// DeleteUserOnAllNodes deletes a user from every active node.
-func DeleteUserOnAllNodes(userID int64, db *sql.DB) map[string]any {
-	nodes := getActiveNodes(db)
-	if len(nodes) == 0 {
-		return map[string]any{"ok": true, "failed": []string{}}
-	}
-	pid := PanelIDFor(db)
-	uid := strconv.FormatInt(userID, 10)
-	calls := make([]func() any, 0, len(nodes))
-	for _, n := range nodes {
-		c := NodeClient(n, pid)
-		calls = append(calls, func() any { return c.DeleteUser(uid) })
-	}
-	results := GatherBounded(calls)
-	failed := []string{}
-	for i, n := range nodes {
-		if ok, _ := results[i].(bool); !ok {
-			failed = append(failed, n.Name)
-		}
-	}
-	return map[string]any{"ok": len(failed) == 0, "failed": failed}
 }
 
 // --- HTTP handlers (backend) ---

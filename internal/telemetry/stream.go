@@ -1,4 +1,3 @@
-// Package telemetry ports backend/routers/telemetry.py plus the observability
 // modules it stands on (audit, live, metrics, thresholds, notifier,
 // node_alerts).
 //
@@ -10,7 +9,7 @@
 package telemetry
 
 import (
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,10 +17,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 )
-
-// --- event bus (live.py LiveBus) ---
 
 // KV is one ordered object member. Dicts preserve insertion order and
 // json.dumps serialises in that order, so the SSE wire format carries order
@@ -31,14 +28,12 @@ type KV struct {
 	Val any
 }
 
-// Event is one published invalidation (live.py LiveEvent).
 type Event struct {
 	Topic string
 	Data  []KV
 	TS    float64
 }
 
-// Bus fans one event out to every subscriber (live.py LiveBus).
 type Bus struct {
 	mu   sync.Mutex
 	subs map[chan Event]struct{}
@@ -95,8 +90,6 @@ func (b *Bus) Publish(topic string, data ...KV) {
 		}
 	}
 }
-
-// --- live snapshot (live.py LiveSnapshot) ---
 
 // SnapshotMaxNodes is the default cap on tracked nodes.
 const SnapshotMaxNodes = 50
@@ -200,8 +193,6 @@ func updateSnapshot(connections map[string]int, nodes map[string]bool, cap int) 
 	snap.lastPoll = time.Since(procStart).Seconds()
 	return countsChanged, nodesChanged
 }
-
-// --- SSE handler (routers/telemetry.py live_stream) ---
 
 // heartbeatSeconds mirrors _HEARTBEAT_SECONDS.
 const heartbeatSeconds = 15

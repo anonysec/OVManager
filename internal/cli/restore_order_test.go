@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/internal/db"
 	_ "modernc.org/sqlite"
 )
 

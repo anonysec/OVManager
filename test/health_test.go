@@ -11,13 +11,12 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/db"
-	"github.com/anonysec/OVManager/go/internal/health"
+	"github.com/anonysec/OVManager/internal/db"
+	"github.com/anonysec/OVManager/internal/health"
 )
 
 // releaseVersion reads internal/version/version.go so the served /health
 // version is pinned to the source constant. It used to read pyproject.toml,
-// then backend/version.py before that; both are gone now that it is
 // deleted (Phase 6).
 func releaseVersion(t *testing.T) string {
 	t.Helper()
@@ -32,7 +31,6 @@ func releaseVersion(t *testing.T) string {
 	return string(m[2])
 }
 
-// TestHealthMatches mirrors backend/app.py /health: {"status":"ok"} plus
 // "version" for loopback clients (httptest is loopback, as is the panel itself).
 func TestHealthMatches(t *testing.T) {
 	srv := httptest.NewServer(health.Router(true))
@@ -78,7 +76,7 @@ func TestOpenAppliesPragmas(t *testing.T) {
 	for pragma, want := range map[string]string{
 		"journal_mode": "wal",
 		"synchronous":  "1",
-		"busy_timeout": "30000",
+		"busy_timeout": "5000",
 		"foreign_keys": "1",
 		"mmap_size":    "268435456",
 		"cache_size":   "-32768",
@@ -94,7 +92,6 @@ func TestOpenAppliesPragmas(t *testing.T) {
 	}
 }
 
-// TestHealthNonGet mirrors app.py's 405 shape for non-GET on /health.
 func TestHealthNonGet(t *testing.T) {
 	srv := httptest.NewServer(health.Router(true))
 	defer srv.Close()

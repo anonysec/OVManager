@@ -290,7 +290,7 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	var isOwner int64
 	err := s.DB().QueryRow(`SELECT password, is_owner FROM admins WHERE username = ?`, username).Scan(&hash, &isOwner)
 	if err != nil || hash == "" || isOwner == 0 {
-		_, _ = bcryptWaste(password)
+		_, _ = dummyVerify(password)
 		return Identity{}, false
 	}
 	if !VerifyPassword(password, hash) {
@@ -306,7 +306,7 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 
 // bcryptWaste spends the same bcrypt time a real credential would so a
 // missing/foreign row is not distinguishable by timing (auth _waste_verify).
-func bcryptWaste(password string) (bool, error) {
+func dummyVerify(password string) (bool, error) {
 	return VerifyPassword(password, dummyBcryptHash), nil
 }
 

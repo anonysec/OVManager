@@ -1,11 +1,12 @@
 package panel
 
 import (
+	"context"
 	"database/sql"
 	"sync/atomic"
 	"testing"
 
-	"github.com/anonysec/OVManager/go/internal/auth"
+	"github.com/anonysec/OVManager/internal/auth"
 )
 
 // TestLiveWorkerStarts launches the collector worker against a node-less DB
@@ -21,7 +22,7 @@ func TestLiveWorkerStarts(t *testing.T) {
 	t.Cleanup(restore)
 
 	h.startLiveWorker() // idempotent; must not panic
-	h.liveTick()
+	h.liveTick(context.Background())
 
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("CollectLiveSnapshot calls after one tick = %d, want 1", got)
