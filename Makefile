@@ -1,7 +1,7 @@
 # Copyright (c) 2026 anonysec
 # SPDX-License-Identifier: MIT
 
-.PHONY: setup build test lint verify clean version check-version gen-contract check-contract
+.PHONY: setup build test lint verify clean version check-version
 
 setup:
 	go mod download
@@ -18,11 +18,7 @@ version:
 	sed -i -E "s|\(v[0-9.]+, matching the binary's version constant\)|\(v$$v, matching the binary's version constant\)|" README.md; \
 	echo "version -> $$v"
 
-gen-contract:
-	@go run ./cmd/gen_contract >/dev/null
-
 check-contract:
-	@go run ./cmd/gen_contract internal/node/contract.json --check
 	@v=$$(grep -m1 'var Version' internal/version/version.go | cut -d'"' -f2); \
 	grep -q "badge/version-$$v-blue" README.md || { echo "README badge mismatch with version.go ($$v)"; exit 1; }; \
 	grep -q "anonysec/OVManager/main/install.sh" README.md || { echo "README install pin (main) missing"; exit 1; }; \
@@ -57,7 +53,7 @@ lint:
 	staticcheck ./...
 	@test -z "$$(deadcode ./... 2>&1)" || { deadcode ./... 2>&1; exit 1; }
 
-verify: test gen-contract check-contract version check-version
+verify: test check-contract version check-version
 	cd web && npm run verify
 
 clean:

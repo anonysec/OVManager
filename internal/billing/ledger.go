@@ -5,6 +5,7 @@ package billing
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -158,12 +159,26 @@ func compact(v any) string {
 	return string(b)
 }
 
-// ResolveSessionUsername resolves a node-reported common name (numeric
-// panel user id) through idToName. Node keys are numeric ids only, so direct
-// lookup is the full semantics; a user named "42" is a different row.
 func ResolveSessionUsername(clientName, nodeName string, idToName map[string]string, known map[string]bool) string {
-	if mapped, ok := idToName[clientName]; ok {
+	username := extractUsername(clientName, nodeName, known)
+	if known != nil && known[username] {
+		return username
+	}
+	if mapped, ok := idToName[username]; ok {
 		return mapped
+	}
+	return username
+}
+
+func extractUsername(clientName, nodeName string, known map[string]bool) string {
+	if known != nil && known[clientName] {
+		return clientName
+	}
+	if nodeName != "" {
+		suffix := "-" + nodeName
+		if strings.HasSuffix(clientName, suffix) && len(clientName) > len(suffix) {
+			return clientName[:len(clientName)-len(suffix)]
+		}
 	}
 	return clientName
 }

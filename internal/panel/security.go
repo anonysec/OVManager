@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"sort"
@@ -121,23 +122,25 @@ func parseLogLine(line, commonName string, tz *time.Location) map[string]any {
 // legacyEvents is _legacy_events: events from a node that predates structured
 // diagnostics. Flagged unclassified so the UI can say the exact numbers arrive
 // after an update.
-func legacyEvents(data map[string]any, nodeName string, tz *time.Location, idToName map[string]string) []map[string]any {
+func legacyEvents(s *node.SessionsResponse, nodeName string, tz *time.Location, idToName map[string]string) []map[string]any {
 	raw := []map[string]any{}
-	switch le := data["last_error"].(type) {
-	case map[string]any:
-		// iterate the map in document order; sort for a stable result.
-		keys := make([]string, 0, len(le))
-		for k := range le {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			text, _ := le[k].(string)
-			raw = append(raw, parseLogLine(text, k, tz))
-		}
-	case string:
-		if le != "" {
-			raw = append(raw, parseLogLine(le, "", tz))
+	if len(s.LastError) > 0 {
+		var le map[string]any
+		if err := json.Unmarshal(s.LastError, &le); err == nil {
+			keys := make([]string, 0, len(le))
+			for k := range le {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				text, _ := le[k].(string)
+				raw = append(raw, parseLogLine(text, k, tz))
+			}
+		} else {
+			var leStr string
+			if err := json.Unmarshal(s.LastError, &leStr); err == nil && leStr != "" {
+				raw = append(raw, parseLogLine(leStr, "", tz))
+			}
 		}
 	}
 
@@ -167,18 +170,13 @@ func legacyEvents(data map[string]any, nodeName string, tz *time.Location, idToN
 }
 
 // nodeEvents is _node_events: the structured diagnostics a current node sends.
-func nodeEvents(data map[string]any, nodeName string, tz *time.Location, idToName map[string]string) []map[string]any {
+func nodeEvents(s *node.SessionsResponse, nodeName string, tz *time.Location, idToName map[string]string) []map[string]any {
 	now := float64(time.Now().UTC().UnixNano()) / 1e9
 	rows := []map[string]any{}
-	list, _ := data["events"].([]any)
-	for _, item := range list {
-		ev, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		cn := stringOr(ev["cn"], "")
-		peer := stringOr(ev["peer"], "")
-		ts := numberOr(ev["ts"], 0)
+	for _, ev := range s.Events {
+		cn := ev.CN
+		peer := ev.Peer
+		ts := ev.TS
 		knownUser, known := "", false
 		if cn != "" {
 			knownUser, known = idToName[cn]
@@ -199,19 +197,16 @@ func nodeEvents(data map[string]any, nodeName string, tz *time.Location, idToNam
 			localTime = time.Unix(int64(ts), 0).In(tz).Format("2006-01-02 15:04:05")
 		}
 		ongoing := ts != 0 && now-ts <= securityOngoingWindowS
-		if v, present := ev["ongoing"]; present && v != nil {
-			ongoing = truthy(v)
+		if len(ev.Ongoing) > 0 {
+			var b bool
+			if err := json.Unmarshal(ev.Ongoing, &b); err == nil {
+				ongoing = b
+			}
 		}
 		rows = append(rows, map[string]any{
 			"node": nodeName, "cn": cn, "user": user, "user_known": userKnown,
-			"action":     stringOr(ev["action"], "event"),
-			"severity":   stringOr(ev["severity"], "warn"),
-			"reason":     stringOr(ev["reason"], "connection event"),
-			"peer":       peer,
-			"ts":         ts,
-			"time_local": localTime,
-			"ongoing":    ongoing,
-			"classified": true,
+			"action": ev.Action, "severity": ev.Severity, "reason": ev.Reason,
+			"peer": peer, "ts": ts, "time_local": localTime, "ongoing": ongoing, "classified": true,
 		})
 	}
 	return rows
@@ -274,11 +269,7 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 		n := n
 		calls = append(calls, func() any {
 			s, _ := node.NodeClient(n, pid).GetSessions("", hours, share)
-			var m map[string]any
-			if s != nil {
-				m = map[string]any{"events": s.Events, "live_sessions": s.LiveSessions}
-			}
-			return []any{n.Name, m}
+			return []any{n.Name, s}
 		})
 	}
 
@@ -292,31 +283,30 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 	for _, item := range node.GatherNodes(calls, node.RequestFanoutDeadline) {
 		pair, ok := item.([]any)
 		if !ok || len(pair) < 2 {
-			continue // an exception
-		}
-		nodeName, _ := pair[0].(string)
-		data, _ := pair[1].(map[string]any)
-		if data == nil {
 			continue
 		}
-		stale := intOr(data["stale_marker_count"], 0)
-		rejects := intOr(data["rejects"], 0)
-		eventList, _ := data["events"].([]any)
-		hasEvents := len(eventList) > 0
+		nodeName, _ := pair[0].(string)
+		sess, _ := pair[1].(*node.SessionsResponse)
+		if sess == nil {
+			continue
+		}
+		stale := sess.StaleMarkerCount
+		rejects := sess.Rejects
+		hasEvents := len(sess.Events) > 0
 
 		var nodeEventsList []map[string]any
 		if hasEvents {
-			nodeEventsList = nodeEvents(data, nodeName, tz, idToName)
+			nodeEventsList = nodeEvents(sess, nodeName, tz, idToName)
 		} else {
-			nodeEventsList = legacyEvents(data, nodeName, tz, idToName)
+			nodeEventsList = legacyEvents(sess, nodeName, tz, idToName)
 		}
 
 		var authFailures, policyRejects, warnEvents int
 		classified := hasEvents
 		if hasEvents {
-			authFailures = intOr(data["auth_errors"], 0)
-			policyRejects = intOr(data["policy_rejects"], 0)
-			warnEvents = intOr(data["warn_rejects"], 0)
+			authFailures = sess.AuthErrors
+			policyRejects = sess.PolicyRejects
+			warnEvents = sess.WarnRejects
 		} else {
 			seenFailures, seenWarns := 0, 0
 			for _, e := range nodeEventsList {
@@ -354,7 +344,7 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 		perNode = append(perNode, map[string]any{
 			"node": nodeName, "auth_errors": authFailures, "auth_failures": authFailures,
 			"policy_rejects": policyRejects, "warn_events": warnEvents, "rejects": rejects,
-			"stale_markers": stale, "live": intOr(data["live_count"], 0),
+			"stale_markers": stale, "live": sess.LiveCount,
 			"ongoing": ongoing, "classified": classified,
 		})
 	}
@@ -450,32 +440,4 @@ func numberOr(v any, def float64) float64 {
 		return float64(n)
 	}
 	return def
-}
-
-func intOr(v any, def int) int {
-	switch n := v.(type) {
-	case float64:
-		return int(n)
-	case int:
-		return n
-	case int64:
-		return int(n)
-	case string:
-		if parsed, err := strconv.Atoi(n); err == nil {
-			return parsed
-		}
-	}
-	return def
-}
-
-func truthy(v any) bool {
-	switch b := v.(type) {
-	case bool:
-		return b
-	case float64:
-		return b != 0
-	case string:
-		return b != ""
-	}
-	return false
 }

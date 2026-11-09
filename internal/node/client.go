@@ -316,9 +316,10 @@ func (e *nodeError) Error() string {
 
 // request runs one RPC and returns the parsed envelope (nil on any failure),
 type envelope struct {
-	Success bool            `json:"success"`
-	Msg     string          `json:"msg"`
-	Data    json.RawMessage `json:"data"`
+	Success  bool            `json:"success"`
+	Msg      string          `json:"msg"`
+	Data     json.RawMessage `json:"data"`
+	Conflict bool            `json:"conflict"`
 }
 
 func do[T any](c *Client, method, path string, body any, opts reqOpts) (T, error) {
@@ -431,7 +432,7 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (*envelop
 		c.mu.Lock()
 		c.conflictMsg = msg
 		c.mu.Unlock()
-		return &envelope{Success: false, Msg: msg}, nil
+		return &envelope{Success: false, Msg: msg, Conflict: true}, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, &nodeError{node: c.address, status: resp.StatusCode}
@@ -574,7 +575,7 @@ type usageResponse struct {
 	TotalsEpochs map[string]string      `json:"totals_epochs"`
 }
 
-type sessionEntry struct {
+type SessionEntry struct {
 	CommonName string `json:"common_name"`
 	CN         string `json:"cn"`
 	Peer       string `json:"peer"`
@@ -585,39 +586,51 @@ type sessionEntry struct {
 	Ongoing    bool   `json:"ongoing"`
 }
 
-type sessionsResponse struct {
-	LiveSessions     []sessionEntry `json:"live_sessions"`
-	StaleMarkers     []sessionEntry `json:"stale_markers"`
-	LiveCount        int            `json:"live_count"`
-	StaleMarkerCount int            `json:"stale_marker_count"`
-	AuthErrors       int            `json:"auth_errors"`
-	AuthErrorsByCN   map[string]int `json:"auth_errors_by_cn"`
-	Rejects          int            `json:"rejects"`
-	PolicyRejects    int            `json:"policy_rejects"`
-	WarnRejects      int            `json:"warn_rejects"`
-	Events           []sessionEntry `json:"events"`
-	LastError        string         `json:"last_error"`
+type EventEntry struct {
+	TS       float64         `json:"ts"`
+	LastSeen float64         `json:"last_seen"`
+	Ongoing  json.RawMessage `json:"ongoing"`
+	CN       string          `json:"cn"`
+	Action   string          `json:"action"`
+	Severity string          `json:"severity"`
+	Reason   string          `json:"reason"`
+	Peer     string          `json:"peer"`
+	Source   string          `json:"source"`
 }
 
-type logRecord struct {
+type SessionsResponse struct {
+	LiveSessions     []SessionEntry  `json:"live_sessions"`
+	StaleMarkers     []SessionEntry  `json:"stale_markers"`
+	LiveCount        int             `json:"live_count"`
+	StaleMarkerCount int             `json:"stale_marker_count"`
+	AuthErrors       int             `json:"auth_errors"`
+	AuthErrorsByCN   map[string]int  `json:"auth_errors_by_cn"`
+	Rejects          int             `json:"rejects"`
+	PolicyRejects    int             `json:"policy_rejects"`
+	WarnRejects      int             `json:"warn_rejects"`
+	Events           []EventEntry    `json:"events"`
+	LastError        json.RawMessage `json:"last_error"`
+}
+
+type LogRecord struct {
 	Level   string `json:"level"`
 	Time    string `json:"time"`
 	Message string `json:"message"`
 	Where   string `json:"where"`
 }
 
-type logsResponse struct {
-	Records   []logRecord `json:"records"`
+type LogsResponse struct {
+	Records   []LogRecord `json:"records"`
 	LastError string      `json:"last_error"`
 	Errors1h  int         `json:"errors_1h"`
 }
 
-type disconnectResponse struct {
+type DisconnectResponse struct {
 	RemovedMarkers []string `json:"removed_markers"`
-	KilledSessions []string `json:"killed_sessions"`
+	KilledSessions int      `json:"killed_sessions"`
 }
 
-type limitsBatchResponse struct {
+type LimitsBatchResponse struct {
 	Applied int               `json:"applied"`
 	Failed  []json.RawMessage `json:"failed"`
 }
@@ -700,7 +713,7 @@ func (c *Client) UpdateConfig(p UpdateConfigParams) any {
 		if err != nil || env == nil {
 			return any(nil)
 		}
-		return map[string]any{"success": env.Success, "msg": env.Msg, "data": env.Data}
+		return map[string]any{"success": env.Success, "msg": env.Msg, "data": env.Data, "conflict": env.Conflict}
 	}
 	_, err := do[emptyResponse](c, http.MethodPost, "/sync/config", payload, reqOpts{timeout: LongTimeout})
 	return err == nil
@@ -730,7 +743,7 @@ func (c *Client) DeleteUser(uid string) bool {
 
 // SetUserLimit pushes a max-logins limit to the node.
 // DisconnectUser drops a user's session(s) on the node.
-func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duration) (*disconnectResponse, error) {
+func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duration) (*DisconnectResponse, error) {
 	if timeout <= 0 {
 		timeout = LongTimeout
 	}
@@ -738,7 +751,7 @@ func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duratio
 	if onlyStale {
 		o.params = url.Values{"only_stale": {"true"}}
 	}
-	r, err := do[disconnectResponse](c, http.MethodPost, "/sync/user/"+uid+"/disconnect", nil, o)
+	r, err := do[DisconnectResponse](c, http.MethodPost, "/sync/user/"+uid+"/disconnect", nil, o)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +759,7 @@ func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duratio
 }
 
 // GetSessions returns the node's live sessions/stale markers.
-func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration) (*sessionsResponse, error) {
+func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration) (*SessionsResponse, error) {
 	if timeout == 0 {
 		timeout = LongTimeout
 	}
@@ -754,7 +767,7 @@ func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration
 	if commonName != "" {
 		params.Set("common_name", commonName)
 	}
-	r, err := do[sessionsResponse](c, http.MethodGet, "/sync/sessions", nil, reqOpts{params: params, timeout: timeout})
+	r, err := do[SessionsResponse](c, http.MethodGet, "/sync/sessions", nil, reqOpts{params: params, timeout: timeout})
 	if err != nil {
 		return nil, err
 	}
@@ -762,7 +775,7 @@ func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration
 }
 
 // GetLogs returns the node's in-memory log ring.
-func (c *Client) GetLogs(level string, limit int) (*logsResponse, error) {
+func (c *Client) GetLogs(level string, limit int) (*LogsResponse, error) {
 	level = strings.ToUpper(level)
 	switch level {
 	case "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL":
@@ -776,7 +789,7 @@ func (c *Client) GetLogs(level string, limit int) (*logsResponse, error) {
 		limit = 500
 	}
 	params := url.Values{"level": {level}, "limit": {strconv.Itoa(limit)}}
-	r, err := do[logsResponse](c, http.MethodGet, "/sync/logs", nil, reqOpts{params: params, timeout: LongTimeout})
+	r, err := do[LogsResponse](c, http.MethodGet, "/sync/logs", nil, reqOpts{params: params, timeout: LongTimeout})
 	if err != nil {
 		return nil, err
 	}

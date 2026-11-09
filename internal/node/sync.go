@@ -79,7 +79,7 @@ func pushLimitsBatch(n *Node, users []limitUser, panelID string) map[string]any 
 	for _, u := range users {
 		items = append(items, map[string]any{"id": strconv.FormatInt(u.id, 10), "max_logins": u.maxLogins})
 	}
-	res, err := do[limitsBatchResponse](c, http.MethodPost, "/sync/users", map[string]any{"users": items}, reqOpts{timeout: LongTimeout, allowFail: true})
+	res, err := do[LimitsBatchResponse](c, http.MethodPost, "/sync/users", map[string]any{"users": items}, reqOpts{timeout: LongTimeout, allowFail: true})
 	if err != nil {
 		return map[string]any{"node": n.Name, "applied": 0, "failed": len(users), "success": false}
 	}
@@ -195,20 +195,6 @@ func cleanNodeSessions(n *Node, pid string, share time.Duration) map[string]any 
 		}
 	}
 	return map[string]any{"node": n.Name, "success": true, "removed": removed}
-}
-
-func sessionList(v any) []map[string]any {
-	list, ok := v.([]any)
-	if !ok {
-		return nil
-	}
-	out := make([]map[string]any, 0, len(list))
-	for _, item := range list {
-		if m, ok := item.(map[string]any); ok {
-			out = append(out, m)
-		}
-	}
-	return out
 }
 
 func intOf(v any) int {

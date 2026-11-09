@@ -188,31 +188,22 @@ func (h *Handler) kickUserNodes(u userRow) (killed int, failed []string) {
 			if err != nil || res == nil {
 				return nil
 			}
-			return map[string]any{"killed_sessions": res.KilledSessions, "removed_markers": res.RemovedMarkers}
+			return res
 		})
 	}
 	results := node.GatherNodes(calls, node.RequestFanoutDeadline)
 	for i, item := range results {
-		res, ok := item.(map[string]any)
-		if !ok || len(res) == 0 {
-			failed = append(failed, nodes[i].Name)
+		res, ok := item.(*node.DisconnectResponse)
+		if !ok || res == nil {
+			if i < len(nodes) {
+				failed = append(failed, nodes[i].Name)
+			}
 			continue
 		}
-		killed += killCountOf(res)
+		if len(res.RemovedMarkers) == 0 && res.KilledSessions == 0 {
+			continue
+		}
+		killed += res.KilledSessions + len(res.RemovedMarkers)
 	}
 	return killed, failed
-}
-
-// killCountOf reads the per-node disconnect response the way
-// cleanNodeSessions reads it (removed_markers), plus the live-kill counter
-// when the node reports one.
-func killCountOf(res map[string]any) int {
-	n := 0
-	if list, ok := res["removed_markers"].([]any); ok {
-		n += len(list)
-	}
-	if v, ok := res["killed_sessions"].(float64); ok {
-		n += int(v)
-	}
-	return n
 }

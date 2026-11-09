@@ -444,17 +444,11 @@ func CollectMetrics(db *sql.DB) {
 	// last_online + full-user count from the per-user live connection counts.
 	activeCounts := map[string]int{}
 	for _, snapshot := range sessionsByNode {
-		live, ok := snapshot.sessions["live_sessions"].([]any)
-		if !ok {
+		if snapshot.sessions == nil {
 			continue
 		}
-		for _, item := range live {
-			sess, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			cn, _ := sess["common_name"].(string)
-			username := resolveSessionUsername(cn, snapshot.nodeName, idToName, known)
+		for _, sess := range snapshot.sessions.LiveSessions {
+			username := resolveSessionUsername(sess.CommonName, snapshot.nodeName, idToName, known)
 			if username != "" {
 				activeCounts[username]++
 			}
@@ -497,7 +491,7 @@ func CollectMetrics(db *sql.DB) {
 // which types every call result as any.
 type snapshotPair struct {
 	row      map[string]any
-	sessions map[string]any
+	sessions *node.SessionsResponse
 	nodeName string
 }
 
@@ -507,29 +501,27 @@ func resolveSessionUsername(commonName, nodeName string, idToName map[string]str
 	return billing.ResolveSessionUsername(commonName, nodeName, idToName, known)
 }
 
-func nodeSnapshot(n *node.Node, pid string) (map[string]any, map[string]any) {
+func nodeSnapshot(n *node.Node, pid string) (map[string]any, *node.SessionsResponse) {
 	start := time.Now()
 	info := node.NodeClient(n, pid).GetNodeInfo()
 	sess, _ := node.NodeClient(n, pid).GetSessions("", 8, 0)
-	var sessions map[string]any
-	if sess != nil {
-		sessions = map[string]any{"live_count": sess.LiveCount, "stale_marker_count": sess.StaleMarkerCount}
-	} else {
-		sessions = map[string]any{}
-	}
 	latency := round1(float64(time.Since(start).Microseconds()) / 1000.0)
 	if info == nil {
 		info = map[string]any{}
 	}
 	reachable := len(info) > 0
+	var liveCount, authErrors, rejects, staleMarkers int64
+	if sess != nil {
+		liveCount, authErrors, rejects, staleMarkers = int64(sess.LiveCount), int64(sess.AuthErrors), int64(sess.Rejects), int64(sess.StaleMarkerCount)
+	}
 	row := map[string]any{
 		"node_id": n.ID, "node_name": n.Name,
 		"cpu": f64(info["cpu_usage"]), "memory": f64(info["memory_usage"]),
-		"live_count": toI64(sessions["live_count"]), "latency_ms": latency,
-		"reachable": boolInt(reachable), "auth_errors": toI64(sessions["auth_errors"]),
-		"rejects": toI64(sessions["rejects"]), "stale_markers": toI64(sessions["stale_marker_count"]),
+		"live_count": liveCount, "latency_ms": latency,
+		"reachable": boolInt(reachable), "auth_errors": authErrors,
+		"rejects": rejects, "stale_markers": staleMarkers,
 	}
-	return row, sessions
+	return row, sess
 }
 
 // --- collector (live.collect_live_snapshot) ---
@@ -641,10 +633,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 		n := n
 		calls[i] = func() any {
 			s, _ := node.NodeClient(n, pid).GetSessions("", 1, node.NodeTimeout(n, share))
-			if s == nil {
-				return map[string]any{}
-			}
-			return map[string]any{"live_sessions": s.LiveSessions, "live_count": s.LiveCount}
+			return s
 		}
 	}
 	results := node.GatherNodes(calls, liveFanoutDeadline)
@@ -653,23 +642,14 @@ func CollectLiveSnapshot(db *sql.DB) {
 	online := map[string]bool{}
 	touched := map[string]bool{}
 	for i, n := range nodes {
-		data, _ := results[i].(map[string]any)
-		if len(data) == 0 {
+		sess, _ := results[i].(*node.SessionsResponse)
+		if sess == nil {
 			online[n.Name] = false
 			continue
 		}
 		online[n.Name] = true
-		live, ok := data["live_sessions"].([]any)
-		if !ok {
-			continue
-		}
-		for _, item := range live {
-			sess, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			cn, _ := sess["common_name"].(string)
-			username := resolveSessionUsername(cn, n.Name, idToName, known)
+		for _, entry := range sess.LiveSessions {
+			username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
 			if username != "" {
 				counts[username]++
 				touched[username] = true

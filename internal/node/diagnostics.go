@@ -95,11 +95,7 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 		n := n
 		calls = append(calls, func() any {
 			s, _ := NodeClient(n, pid).GetSessions("", hours, share)
-			var m map[string]any
-			if s != nil {
-				m = map[string]any{"live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
-			}
-			return []any{n.Name, m}
+			return []any{n.Name, s}
 		})
 	}
 	nodeRows := []any{}
@@ -110,18 +106,18 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 		if i < len(nodes) && nodes[i] != nil {
 			fallbackName = nodes[i].Name
 		}
-		nodeName, data := diagnosticNodeResult(item, fallbackName)
+		nodeName, sess := diagnosticNodeResult(item, fallbackName)
 		if nodeName == "" {
 			continue
 		}
-		if data == nil {
+		if sess == nil {
 			unavailableNodes++
 			nodeRows = append(nodeRows, map[string]any{"node": nodeName, "reachable": false})
 			continue
 		}
-		live := filterUserCN(sessionList(data["live_sessions"]), name, nodeName, names, known)
-		stale := filterUserCN(sessionList(data["stale_markers"]), name, nodeName, names, known)
-		userAuth := userAuthErrorCount(data["auth_errors_by_cn"], name, nodeName, names, known)
+		live := filterUserCN(sess.LiveSessions, name, nodeName, names, known)
+		stale := filterUserCN(sess.StaleMarkers, name, nodeName, names, known)
+		userAuth := userAuthErrorCount(sess.AuthErrorsByCN, name, nodeName, names, known)
 		nodeRows = append(nodeRows, map[string]any{
 			"node":               nodeName,
 			"reachable":          true,
@@ -129,12 +125,12 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 			"stale_markers":      stale,
 			"live_count":         len(live),
 			"stale_marker_count": len(stale),
-			"auth_errors":        intOf(data["auth_errors"]),
+			"auth_errors":        sess.AuthErrors,
 			"auth_events":        userAuth,
 		})
 		totalLive += len(live)
 		totalStale += len(stale)
-		totalAuth += intOf(data["auth_errors"])
+		totalAuth += sess.AuthErrors
 		totalUserAuth += userAuth
 	}
 	return map[string]any{
@@ -154,26 +150,22 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 	}
 }
 
-func filterUserCN(list []map[string]any, username, nodeName string, names map[string]string, known map[string]bool) []map[string]any {
+func filterUserCN(list []SessionEntry, username, nodeName string, names map[string]string, known map[string]bool) []map[string]any {
 	out := []map[string]any{}
 	for _, s := range list {
-		commonName, _ := s["common_name"].(string)
-		if resolved(names, commonName, nodeName, known) == username {
-			out = append(out, s)
+		if resolved(names, s.CommonName, nodeName, known) == username {
+			m := map[string]any{"common_name": s.CommonName, "cn": s.CN, "peer": s.Peer, "ts": s.TS, "action": s.Action, "severity": s.Severity, "reason": s.Reason, "ongoing": s.Ongoing}
+			out = append(out, m)
 		}
 	}
 	return out
 }
 
-func userAuthErrorCount(values any, username, nodeName string, names map[string]string, known map[string]bool) int {
-	byCN, ok := values.(map[string]any)
-	if !ok {
-		return 0
-	}
+func userAuthErrorCount(values map[string]int, username, nodeName string, names map[string]string, known map[string]bool) int {
 	total := 0
-	for commonName, value := range byCN {
+	for commonName, value := range values {
 		if resolved(names, commonName, nodeName, known) == username {
-			total += intOf(value)
+			total += value
 		}
 	}
 	return total
@@ -189,7 +181,7 @@ func idxString(pair []any, i int) string {
 
 // diagnosticNodeResult keeps the configured node identity when a fan-out
 // returns an error/timeout instead of the normal {name, data} pair.
-func diagnosticNodeResult(result any, fallbackName string) (string, map[string]any) {
+func diagnosticNodeResult(result any, fallbackName string) (string, *SessionsResponse) {
 	pair, ok := result.([]any)
 	if !ok || len(pair) < 2 {
 		return fallbackName, nil
@@ -197,8 +189,8 @@ func diagnosticNodeResult(result any, fallbackName string) (string, map[string]a
 	if name := idxString(pair, 0); name != "" {
 		fallbackName = name
 	}
-	data, _ := pair[1].(map[string]any)
-	return fallbackName, data
+	sess, _ := pair[1].(*SessionsResponse)
+	return fallbackName, sess
 }
 
 // LoginHealthSummary aggregates login health for every user with activity.
@@ -237,11 +229,7 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 		n := n
 		calls = append(calls, func() any {
 			s, _ := NodeClient(n, pid).GetSessions("", hours, share)
-			var m map[string]any
-			if s != nil {
-				m = map[string]any{"live_sessions": s.LiveSessions, "stale_markers": s.StaleMarkers, "live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
-			}
-			return []any{n.Name, m}
+			return []any{n.Name, s}
 		})
 	}
 
@@ -255,37 +243,33 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 		if i < len(nodes) && nodes[i] != nil {
 			fallbackName = nodes[i].Name
 		}
-		nodeName, data := diagnosticNodeResult(item, fallbackName)
+		nodeName, sess := diagnosticNodeResult(item, fallbackName)
 		if nodeName == "" {
 			continue
 		}
-		if data == nil {
+		if sess == nil {
 			unavailableNodes++
 			nodeRows = append(nodeRows, map[string]any{"node": nodeName, "reachable": false})
 			continue
 		}
-		for _, sess := range sessionList(data["live_sessions"]) {
-			cn, _ := sess["common_name"].(string)
-			username := resolved(names, cn, nodeName, known)
+		for _, entry := range sess.LiveSessions {
+			username := resolved(names, entry.CommonName, nodeName, known)
 			activeCounts[username]++
 			if _, ok := staleCounts[username]; !ok {
 				staleCounts[username] = 0
 			}
 		}
-		for _, marker := range sessionList(data["stale_markers"]) {
-			cn, _ := marker["common_name"].(string)
-			staleCounts[resolved(names, cn, nodeName, known)]++
+		for _, marker := range sess.StaleMarkers {
+			staleCounts[resolved(names, marker.CommonName, nodeName, known)]++
 		}
-		if byCN, ok := data["auth_errors_by_cn"].(map[string]any); ok {
-			for cn, v := range byCN {
-				authCounts[resolved(names, cn, nodeName, known)] += intOf(v)
-			}
+		for cn, v := range sess.AuthErrorsByCN {
+			authCounts[resolved(names, cn, nodeName, known)] += v
 		}
 		nodeRows = append(nodeRows, map[string]any{
 			"node":               nodeName,
-			"live_count":         intOf(data["live_count"]),
-			"stale_marker_count": intOf(data["stale_marker_count"]),
-			"auth_errors":        intOf(data["auth_errors"]),
+			"live_count":         sess.LiveCount,
+			"stale_marker_count": sess.StaleMarkerCount,
+			"auth_errors":        sess.AuthErrors,
 			"reachable":          true,
 		})
 	}

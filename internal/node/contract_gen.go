@@ -8,32 +8,35 @@ import (
 	"sort"
 )
 
-// contractJSONRow is one row of the generated contract.json.
-type contractJSONRow struct {
-	Method      string   `json:"method"`
-	Path        string   `json:"path"`
-	Request     []string `json:"request"`
-	Response    []string `json:"response"`
-	RequestAt   string   `json:"request_at"`
-	ResponseAt  []string `json:"response_at"`
-	ResponseRaw bool     `json:"response_raw,omitempty"`
-	Note        string   `json:"note,omitempty"`
+// ContractJSONRow is one row of the embedded contract.json.
+type ContractJSONRow struct {
+	Method        string   `json:"method"`
+	Path          string   `json:"path"`
+	Query         []string `json:"query,omitempty"`
+	Request       []string `json:"request"`
+	Response      []string `json:"response"`
+	ResponseItems []string `json:"response_items,omitempty"`
+	RequestAt     string   `json:"request_at"`
+	ResponseAt    []string `json:"response_at"`
+	ResponseRaw   bool     `json:"response_raw,omitempty"`
+	Note          string   `json:"note,omitempty"`
 }
 
-// GenerateContractJSON serializes the contract table to the JSON the node
-// vendors. Generated at release time; drift becomes a red build, not a
-// runtime surprise.
-func GenerateContractJSON() []byte {
-	rows := make([]contractJSONRow, 0, len(Contract))
+// ContractJSONRows parses the Go table into the embedded JSON shape.
+func ContractJSONRows() []ContractJSONRow {
+	rows := make([]ContractJSONRow, 0, len(Contract))
 	for _, c := range Contract {
-		r := contractJSONRow{
-			Method:     c.Method,
-			Path:       c.Path,
-			Request:    c.Request,
-			Response:   c.Response,
-			RequestAt:  c.RequestAt,
-			ResponseAt: c.ResponseAt,
-			Note:       c.Note,
+		r := ContractJSONRow{
+			Method:        c.Method,
+			Path:          c.Path,
+			Query:         c.Query,
+			Request:       c.Request,
+			Response:      c.Response,
+			ResponseItems: c.ResponseItems,
+			RequestAt:     c.RequestAt,
+			ResponseAt:    c.ResponseAt,
+			ResponseRaw:   c.ResponseRaw,
+			Note:          c.Note,
 		}
 		if r.Request == nil {
 			r.Request = []string{}
@@ -52,6 +55,12 @@ func GenerateContractJSON() []byte {
 		}
 		return rows[i].Method < rows[j].Method
 	})
+	return rows
+}
+
+// MarshalContractJSON serializes the Go table to JSON at init.
+func MarshalContractJSON() []byte {
+	rows := ContractJSONRows()
 	data, _ := json.MarshalIndent(rows, "", "  ")
 	return append(data, '\n')
 }

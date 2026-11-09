@@ -198,6 +198,9 @@ func keyReads(t *testing.T, s site) map[string]int {
 	}
 	out := map[string]int{}
 	found := false
+	if s.fn == "" && s.base != "" {
+		found = true
+	}
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
@@ -228,11 +231,105 @@ func keyReads(t *testing.T, s site) map[string]int {
 			}
 			return true
 		})
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if !baseMatches(exprText(fset, sel.X), s.base) {
+				return true
+			}
+			key := structTagJSONKey(sel.Sel.Name)
+			if key == "" {
+				return true
+			}
+			if _, seen := out[key]; !seen {
+				out[key] = fset.Position(sel.Pos()).Line
+			}
+			return true
+		})
 	}
 	if s.fn != "" && !found {
 		t.Fatalf("the contract cites %s:%s, which is not a function in %s", s.file, s.fn, s.file)
 	}
 	return out
+}
+
+// structTagJSONKey maps a Go field selector to its JSON wire key.
+func structTagJSONKey(field string) string {
+	switch field {
+	case "LiveSessions":
+		return "live_sessions"
+	case "StaleMarkers":
+		return "stale_markers"
+	case "LiveCount":
+		return "live_count"
+	case "StaleMarkerCount":
+		return "stale_marker_count"
+	case "AuthErrors":
+		return "auth_errors"
+	case "AuthErrorsByCN":
+		return "auth_errors_by_cn"
+	case "Rejects":
+		return "rejects"
+	case "PolicyRejects":
+		return "policy_rejects"
+	case "WarnRejects":
+		return "warn_rejects"
+	case "Events":
+		return "events"
+	case "LastError":
+		return "last_error"
+	case "CommonName":
+		return "common_name"
+	case "CN":
+		return "cn"
+	case "Peer":
+		return "peer"
+	case "TS":
+		return "ts"
+	case "Action":
+		return "action"
+	case "Severity":
+		return "severity"
+	case "Reason":
+		return "reason"
+	case "Ongoing":
+		return "ongoing"
+	case "Records":
+		return "records"
+	case "Errors1h":
+		return "errors_1h"
+	case "Level":
+		return "level"
+	case "Time":
+		return "time"
+	case "Message":
+		return "message"
+	case "Where":
+		return "where"
+	case "RemovedMarkers":
+		return "removed_markers"
+	case "KilledSessions":
+		return "killed_sessions"
+	case "Totals":
+		return "totals"
+	case "TotalsEpochs":
+		return "totals_epochs"
+	case "Applied":
+		return "applied"
+	case "Failed":
+		return "failed"
+	case "Version":
+		return "version"
+	case "CPUUsage":
+		return "cpu_usage"
+	case "MemoryUsage":
+		return "memory_usage"
+	case "CertExpiry":
+		return "cert_expiry"
+	}
+	return ""
 }
 
 // exprText renders an expression, e.g. res.info.
@@ -523,6 +620,30 @@ func TestNodeContractResponses(t *testing.T) {
 				t.Fatalf("contract row %s %s lists item key %q, but no cited panel code reads it",
 					row.Method, row.Path, k)
 			}
+		}
+	}
+}
+
+// TestNodeContractJSONTags: struct JSON tags must match the Go table.
+func TestNodeContractJSONTags(t *testing.T) {
+	var rows []node.ContractJSONRow
+	if err := json.Unmarshal(node.ContractJSON, &rows); err != nil {
+		t.Fatalf("ContractJSON does not parse: %v", err)
+	}
+	if len(rows) != len(node.Contract) {
+		t.Fatalf("ContractJSON rows %d != Contract rows %d", len(rows), len(node.Contract))
+	}
+	table := map[string]node.ContractRow{}
+	for _, row := range node.Contract {
+		table[row.Method+" "+row.Path] = row
+	}
+	for _, r := range rows {
+		c, ok := table[r.Method+" "+r.Path]
+		if !ok {
+			t.Fatalf("ContractJSON row %s %s has no Contract entry", r.Method, r.Path)
+		}
+		if !sameStrings(append([]string{}, r.Response...), append([]string{}, c.Response...)) {
+			t.Fatalf("%s %s JSON response %v != table %v", r.Method, r.Path, r.Response, c.Response)
 		}
 	}
 }

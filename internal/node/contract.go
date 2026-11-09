@@ -98,13 +98,12 @@ var Contract = []ContractRow{
 			"cn", "peer", "ts", "action", "severity", "reason", "ongoing", // an events entry
 		},
 		ResponseAt: []string{
-			"internal/node/diagnostics.go:data",            // live_sessions, stale_markers, auth_errors, auth_errors_by_cn, live_count, stale_marker_count (diagnostics.go:81)
-			"internal/node/diagnostics.go:s",               // common_name (diagnostics.go:112)
-			"internal/node/sync.go:cleanNodeSessions:data", // live_sessions, stale_markers (sync.go:286)
-			"internal/panel/security.go:data",              // rejects, policy_rejects, warn_rejects, last_error, events (security.go:297)
-			"internal/panel/security.go:nodeEvents:ev",     // cn, peer, ts, action, severity, reason, ongoing (security.go:178)
-			"internal/telemetry/handler.go:sessions",       // live_count, auth_errors, rejects, stale_marker_count (handler.go:460)
-			"internal/telemetry/handler.go:data",           // live_sessions (handler.go:585)
+			"internal/node/diagnostics.go:sess",
+			"internal/node/sync.go:cleanNodeSessions:data",
+			"internal/panel/security.go:sess",
+			"internal/panel/security.go:legacyEvents:s",
+			"internal/panel/security.go:nodeEvents:ev",
+			"internal/telemetry/handler.go:sess",
 		},
 		Note: "common_name is only sent when the panel asks for one user; " +
 			"the SPA also accepts a legacy sessions key (NodeDrawer.tsx:129)",

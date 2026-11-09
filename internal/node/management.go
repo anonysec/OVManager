@@ -317,7 +317,7 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 
 	type infoRes struct {
 		info     map[string]any
-		sessions map[string]any
+		sessions *SessionsResponse
 		verified *bool
 		mode     string
 	}
@@ -326,17 +326,12 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 		infoC := NodeClient(n, pid)
 		sessC := NodeClient(n, pid)
 		infoCh := make(chan map[string]any, 1)
-		// note: sessions use LongTimeout like management.get_node_status.
-		sessCh := make(chan map[string]any, 1)
+		sessCh := make(chan *SessionsResponse, 1)
 		go func() { infoCh <- infoC.GetNodeInfo() }()
 		info := <-infoCh
 		go func() {
 			s, _ := sessC.GetSessions("", 8, 0)
-			var m map[string]any
-			if s != nil {
-				m = map[string]any{"live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
-			}
-			sessCh <- m
+			sessCh <- s
 		}()
 		sessions := <-sessCh
 		mode := infoC.TLSMode()
@@ -384,7 +379,7 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 		},
 		"node_info":           orEmpty(res.info),
 		"version_compat":      nodeVersionCompat2(orEmpty(res.info)),
-		"session_diagnostics": orEmpty(res.sessions),
+		"session_diagnostics": sessionDiagnosticsMap(res.sessions),
 		"latency_ms":          latency,
 		"reachable":           len(res.info) > 0,
 		"tls_verified":        tlsVerified,
@@ -398,6 +393,13 @@ func orEmpty(m map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return m
+}
+
+func sessionDiagnosticsMap(s *SessionsResponse) map[string]any {
+	if s == nil {
+		return map[string]any{}
+	}
+	return map[string]any{"live_sessions": s.LiveSessions, "stale_markers": s.StaleMarkers, "live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "auth_errors_by_cn": s.AuthErrorsByCN, "rejects": s.Rejects, "policy_rejects": s.PolicyRejects, "warn_rejects": s.WarnRejects, "events": s.Events, "last_error": s.LastError}
 }
 
 // --- handlers request bodies ---

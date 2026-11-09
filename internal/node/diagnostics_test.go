@@ -15,9 +15,9 @@ func TestDiagnosticNodeResultRetainsNodeWhenFanoutFails(t *testing.T) {
 }
 
 func TestDiagnosticNodeResultUsesReturnedNodeAndData(t *testing.T) {
-	wantData := map[string]any{"live_sessions": []any{}}
+	wantData := &SessionsResponse{LiveSessions: []SessionEntry{{CommonName: "42"}}}
 	name, data := diagnosticNodeResult([]any{"nodeA", wantData}, "fallback")
-	if name != "nodeA" || data["live_sessions"] == nil {
+	if name != "nodeA" || data == nil || len(data.LiveSessions) != 1 {
 		t.Fatalf("result = (%q, %v), want returned node and data", name, data)
 	}
 }
