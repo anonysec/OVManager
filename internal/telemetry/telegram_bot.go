@@ -131,9 +131,8 @@ func formatBytes(n int64) string {
 	return fmt.Sprintf("%.1f %s", f, units[i])
 }
 
-// tgSend posts one message; errors are swallowed (best-effort channel).
 func tgSend(token string, chatID int64, text string) bool {
-	body, err := json.Marshal(map[string]any{"chat_id": chatID, "text": text})
+	body, err := json.Marshal(map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML"})
 	if err != nil {
 		return false
 	}
@@ -161,11 +160,35 @@ func tgSend(token string, chatID int64, text string) bool {
 }
 // tgSendKB posts one message with an optional inline keyboard.
 func tgSendKB(token string, chatID int64, text string, markup any) bool {
-	payload := map[string]any{"chat_id": chatID, "text": text}
+	payload := map[string]any{"chat_id": chatID, "text": text, "parse_mode": "HTML"}
 	if markup != nil {
 		payload["reply_markup"] = markup
 	}
 	return tgPost(token, "sendMessage", payload)
+}
+
+// userMenuKB returns the main user keyboard.
+func userMenuKB() any {
+	return map[string]any{"inline_keyboard": [][]map[string]any{
+		{{"text": "📊 Status", "callback_data": "me"}, {"text": "📥 Config", "callback_data": "ovpn"}},
+		{{"text": "🔗 Subscription", "callback_data": "sub"}, {"text": "🖥 Nodes", "callback_data": "nodes"}},
+		{{"text": "💾 Balance", "callback_data": "balance"}, {"text": "ℹ️ Help", "callback_data": "help"}},
+	}}
+}
+
+// ownerMenuKB returns the owner keyboard.
+func ownerMenuKB() any {
+	return map[string]any{"inline_keyboard": [][]map[string]any{
+		{{"text": "📋 Users", "callback_data": "list"}, {"text": "✏️ Extend", "callback_data": "extend_help"}},
+		{{"text": "🖥 Nodes", "callback_data": "nodes"}, {"text": "📊 Status", "callback_data": "me"}},
+	}}
+}
+
+// retryKB returns a retry keyboard (back to activation).
+func retryKB() any {
+	return map[string]any{"inline_keyboard": [][]map[string]any{
+		{{"text": "🔄 Retry", "callback_data": "retry"}, {"text": "ℹ️ Help", "callback_data": "help"}},
+	}}
 }
 
 // tgSendDocument posts a document (e.g., .ovpn config file).
@@ -392,45 +415,61 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			if err != nil {
 				switch err {
 				case ErrActivationInvalid:
-					tgSend(token, chatID, "That link is invalid or has already been used. Ask your operator for a fresh activation link.")
+					tgSendKB(token, chatID, "⚠️ That link is invalid or has already been used.\n\nAsk your operator for a fresh activation link.", retryKB())
 				case ErrActivationInactive:
-					tgSend(token, chatID, "Your account is inactive — contact your operator.")
+					tgSendKB(token, chatID, "⚠️ Your account is inactive — contact your operator.", retryKB())
 				case ErrActivationConflict:
-					tgSend(token, chatID, "This link was already used. Ask your operator for a fresh activation link.")
+					tgSendKB(token, chatID, "⚠️ This link was already used.\n\nAsk your operator for a fresh activation link.", retryKB())
 				default:
-					tgSend(token, chatID, "Binding failed — try again, or open the panel.")
+					tgSendKB(token, chatID, "❌ Binding failed — try again, or open the panel.", retryKB())
 				}
 				return
 			}
 			if res.PriorChat != 0 && res.PriorChat != chatID {
-				tgSend(token, res.PriorChat, "Your account was re-linked to a new Telegram chat. If this was not you, contact the panel owner.")
+				tgSend(token, res.PriorChat, "ℹ️ Your account was re-linked to a new Telegram chat.\nIf this was not you, contact the panel owner.")
 			}
-			tgSend(token, chatID, "Linked! "+res.StatusText+"\n/ovpn — download your config via the panel.")
+			tgSendKB(token, chatID, "✅ <b>Linked!</b> "+res.StatusText+"\n\nTap below or send /ovpn to download your config.", userMenuKB())
 			return
 		}
 		if isOwner {
-			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
-				{{"text": "📋 Users", "callback_data": "list"}, {"text": "✏️ Extend", "callback_data": "extend_help"}},
-				{{"text": "🖥 Nodes", "callback_data": "nodes"}},
-			}}
-			tgSendKB(token, chatID, "Owner commands: /list · /extend <uuid> <days> [gb]\n/nodes — node status\n/help for all commands", kbd)
+			tgSendKB(token, chatID, "👋 <b>Welcome, owner!</b>\n\nYou have full management access.\n\n📋 <b>/list</b> — users\n✏️ <b>/extend</b> — adjust expiry & quota\n🖥 <b>/nodes</b> — node status\n\nTap below or send /help.", ownerMenuKB())
 			return
 		}
 		if u, err := userByChat(db, chatID); err == nil {
-			tgSend(token, chatID, "Linked! "+statusText(u)+"\n/me — status · /ovpn — subscription link")
+			link := subURL(db, u.UUID)
+			msg := "✅ <b>Welcome back, " + u.Name + "!</b>\n\n" + statusText(u)
+			if link != "" {
+				msg += "\n\n🔗 Subscription:\n<code>" + link + "</code>"
+			}
+			tgSendKB(token, chatID, msg, userMenuKB())
 			return
 		}
-		tgSend(token, chatID, "Send /start <activation-link-token> from the link your operator gave you.")
+		tgSendKB(token, chatID, "👋 <b>Welcome!</b>\n\nSend <code>/start &lt;token&gt;</code> with your activation link from your operator.", retryKB())
 		return
 	}
 
 	// User self-service (read-only).
 	switch cmd {
-	case "/me", "/status", "/subscription":
+	case "/me", "/status":
 		if u, err := userByChat(db, chatID); err == nil && u != nil {
-			tgSend(token, chatID, statusText(u))
+			msg := "📊 <b>" + u.Name + "</b>\n\n" + statusText(u)
+			if link := subURL(db, u.UUID); link != "" {
+				msg += "\n\n🔗 <code>" + link + "</code>"
+			}
+			tgSendKB(token, chatID, msg, userMenuKB())
 		} else {
-			tgSend(token, chatID, "Not linked yet. Ask your operator for an activation link.")
+			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
+		}
+		return
+	case "/subscription", "/sub", "/link":
+		if u, err := userByChat(db, chatID); err == nil && u != nil {
+			if link := subURL(db, u.UUID); link != "" {
+				tgSendKB(token, chatID, "🔗 <b>Your subscription:</b>\n\n<code>"+link+"</code>\n\nTap to copy (long-press on mobile).", userMenuKB())
+			} else {
+				tgSendKB(token, chatID, "⚠️ Subscription link unavailable. Open the panel instead.", userMenuKB())
+			}
+		} else {
+			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
 		}
 		return
 	case "/ovpn", "/download":
@@ -452,26 +491,18 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 		return
 	case "/help", "/commands":
 		if u, err := userByChat(db, chatID); err == nil && u != nil {
-			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
-				{{"text": "📊 My status", "callback_data": "me"}, {"text": "📥 Config", "callback_data": "ovpn"}},
-				{{"text": "🔗 Subscription", "callback_data": "sub"}, {"text": "🖥 Nodes", "callback_data": "nodes"}},
-			}}
-			tgSendKB(token, chatID, "Commands:\n/me — traffic & expiry\n/ovpn — download config\n/subscription — link\n/nodes — node status\n/balance — quota", kbd)
+			tgSendKB(token, chatID, "ℹ️ <b>Available commands:</b>\n\n📊 <b>/me</b> — traffic & expiry\n📥 <b>/ovpn</b> — download config\n🔗 <b>/subscription</b> — copy link\n🖥 <b>/nodes</b> — node status\n💾 <b>/balance</b> — quota details", userMenuKB())
 		} else if isOwner {
-			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
-				{{"text": "📋 Users", "callback_data": "list"}, {"text": "✏️ Extend", "callback_data": "extend_help"}},
-				{{"text": "🖥 Nodes", "callback_data": "nodes"}},
-			}}
-			tgSendKB(token, chatID, "Owner commands:\n/list — users\n/extend <uuid> <days> [gb]\n/nodes — node status", kbd)
+			tgSendKB(token, chatID, "ℹ️ <b>Owner commands:</b>\n\n📋 <b>/list</b> — users\n✏️ <b>/extend &lt;user&gt; &lt;days&gt; [gb]</b> — extend\n🖥 <b>/nodes</b> — node status\n\nTap below or type a command.", ownerMenuKB())
 		} else {
-			tgSend(token, chatID, "You need an activation link first. Ask your operator for one.")
+			tgSendKB(token, chatID, "👋 You need an activation link first.\n\nAsk your operator — then send <code>/start &lt;token&gt;</code>.", retryKB())
 		}
 		return
 	case "/nodes":
 		var lines []string
 		rows, err := db.Query(`SELECT name, status FROM nodes ORDER BY id`)
 		if err != nil {
-			tgSend(token, chatID, "Could not fetch nodes.")
+			tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
 			return
 		}
 		defer rows.Close()
@@ -488,19 +519,19 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			lines = append(lines, "• "+name+" — "+st)
 		}
 		if err := rows.Err(); err != nil {
-			tgSend(token, chatID, "Could not fetch nodes.")
+			tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
 			return
 		}
 		if len(lines) == 0 {
-			tgSend(token, chatID, "No nodes configured.")
+			tgSendKB(token, chatID, "ℹ️ No nodes configured.", userMenuKB())
 			return
 		}
-		tgSend(token, chatID, "🖥 Nodes:\n"+strings.Join(lines, "\n"))
+		tgSendKB(token, chatID, "🖥 <b>Nodes</b>\n\n"+strings.Join(lines, "\n"), userMenuKB())
 		return
 	case "/balance":
 		u, err := userByChat(db, chatID)
 		if err != nil || u == nil {
-			tgSend(token, chatID, "Not linked yet. Ask your operator for an activation link.")
+			tgSendKB(token, chatID, "⚠️ Not linked yet.\n\nAsk your operator for an activation link.", retryKB())
 			return
 		}
 		used := u.Used.Int64
@@ -513,7 +544,7 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			exp = u.Expiry.String
 		}
 		if total <= 0 {
-			tgSend(token, chatID, fmt.Sprintf("Used %s / unlimited\nExpires %s", formatBytes(used), exp))
+			tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / unlimited\nExpires "+exp, userMenuKB())
 			return
 		}
 		remaining := total - used
@@ -521,23 +552,28 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			remaining = 0
 		}
 		pct := float64(used) / float64(total) * 100
-		tgSend(token, chatID, fmt.Sprintf("Used %s / %s (%.0f%%)\nRemaining %s\nExpires %s", formatBytes(used), formatBytes(total), pct, formatBytes(remaining), exp))
+		tgSendKB(token, chatID, "💾 <b>Balance</b>\n\nUsed "+formatBytes(used)+" / "+formatBytes(total)+" ("+fmt.Sprintf("%.0f", pct)+"%%)\nRemaining "+formatBytes(remaining)+"\nExpires "+exp, userMenuKB())
 		return
 	}
 
 	// Owner-only management.
 	if !isOwner {
-		tgSend(token, chatID, "Commands: /me · /ovpn")
+		if u, err := userByChat(db, chatID); err == nil && u != nil {
+			tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nUse the buttons below or send /help.", userMenuKB())
+		} else {
+			tgSendKB(token, chatID, "👋 Send /start &lt;token&gt; to link your account.\n\nNeed help? Ask your operator.", retryKB())
+		}
 		return
 	}
 	switch cmd {
 	case "/list":
 		rows, err := db.Query(`SELECT uuid, name, is_active, expiry_date FROM users ORDER BY id`)
 		if err != nil {
-			tgSend(token, chatID, "Could not list users.")
+			tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
 			return
 		}
 		defer rows.Close()
+		var kbdRows [][]map[string]any
 		var lines []string
 		for rows.Next() {
 			var uuid, name, expiry sql.NullString
@@ -545,47 +581,51 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			if err := rows.Scan(&uuid, &name, &active, &expiry); err != nil {
 				continue
 			}
-			state := "on"
+			state := "🟢"
 			if active == 0 {
-				state = "off"
+				state = "🔴"
 			}
 			exp := "—"
 			if expiry.Valid && expiry.String != "" {
 				exp = expiry.String
 			}
-			lines = append(lines, fmt.Sprintf("%s · %s · %s", name.String, state, exp))
+			line := state + " " + name.String + " · " + exp
+			lines = append(lines, line)
+			if uuid.Valid {
+				kbdRows = append(kbdRows, []map[string]any{{"text": line, "callback_data": "ext:" + uuid.String}})
+			}
 			if len(lines) >= 20 {
 				break
 			}
 		}
 		if err := rows.Err(); err != nil {
-			tgSend(token, chatID, "Could not list users.")
+			tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
 			return
 		}
 		if len(lines) == 0 {
-			tgSend(token, chatID, "No users yet.")
+			tgSendKB(token, chatID, "ℹ️ No users yet.", ownerMenuKB())
 			return
 		}
-		tgSend(token, chatID, strings.Join(lines, "\n"))
+		kbd := map[string]any{"inline_keyboard": kbdRows}
+		tgSendKB(token, chatID, "📋 <b>Users</b> (tap to extend):\n\n"+strings.Join(lines, "\n"), kbd)
 		return
 	case "/extend":
 		fields := strings.Fields(arg)
 		if len(fields) < 2 {
-			tgSend(token, chatID, "Usage: /extend <uuid> <days> [gb]")
+			tgSendKB(token, chatID, "✏️ <b>Usage:</b> <code>/extend &lt;user&gt; &lt;days&gt; [gb]</code>\n\nExample: <code>/extend alice 30 10</code>", ownerMenuKB())
 			return
 		}
 		days, err := strconv.Atoi(fields[1])
 		if err != nil || days <= 0 || days > 3650 {
-			tgSend(token, chatID, "Days must be a number 1..3650.")
+			tgSendKB(token, chatID, "⚠️ Days must be a number 1..3650.", ownerMenuKB())
 			return
 		}
 		u, err := userByUUID(db, fields[0])
 		if err != nil {
-			// fall back to name lookup for owner convenience
 			var uuid string
 			err2 := db.QueryRow(`SELECT uuid FROM users WHERE name = ?`, fields[0]).Scan(&uuid)
 			if err2 != nil {
-				tgSend(token, chatID, "Unknown user: "+fields[0])
+				tgSendKB(token, chatID, "⚠️ Unknown user: "+fields[0], ownerMenuKB())
 				return
 			}
 			u, _ = userByUUID(db, uuid)
@@ -594,7 +634,7 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 		if len(fields) >= 3 {
 			gb, err = strconv.ParseFloat(fields[2], 64)
 			if err != nil || math.IsNaN(gb) || math.IsInf(gb, 0) || gb < 0 || gb > 10240 {
-				tgSend(token, chatID, "GB must be a number 0..10240.")
+				tgSendKB(token, chatID, "⚠️ GB must be a number 0..10240.", ownerMenuKB())
 				return
 			}
 		}
@@ -612,10 +652,10 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 		}
 		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
-		tgSend(token, chatID, fmt.Sprintf("Extended %s: expires %s", u.Name, expiryStr))
+		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string { if len(fields) >= 3 { return "\n+ "+fields[2]+" GB" }; return "" }(), ownerMenuKB())
 		return
 	default:
-		tgSend(token, chatID, "Owner commands: /list · /extend <uuid> <days> [gb]")
+		tgSendKB(token, chatID, "ℹ️ Unknown command.\n\nTap below or send /help.", ownerMenuKB())
 	}
 }
 
@@ -846,10 +886,46 @@ func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
 	return handled
 }
 
-// TgHandleCallbackQuery handles inline button presses.
 func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int64, data, callbackID string) {
 	tgAnswerCallback(token, callbackID, "")
-	// Map callback data to text commands.
+	// Guided extend: tapping a user row shows day shortcuts.
+	if strings.HasPrefix(data, "ext:") {
+		uuid := strings.TrimPrefix(data, "ext:")
+		u, err := userByUUID(db, uuid)
+		if err != nil {
+			tgSendKB(token, chatID, "⚠️ User not found.", ownerMenuKB())
+			return
+		}
+		kbd := map[string]any{"inline_keyboard": [][]map[string]any{
+			{{"text": "+7 days", "callback_data": "ext:days:" + uuid + ":7"}, {"text": "+30 days", "callback_data": "ext:days:" + uuid + ":30"}},
+			{{"text": "+90 days", "callback_data": "ext:days:" + uuid + ":90"}, {"text": "Cancel", "callback_data": "list"}},
+		}}
+		tgSendKB(token, chatID, "✏️ <b>Extend "+u.Name+"</b>\n\nChoose duration:", kbd)
+		return
+	}
+	if strings.HasPrefix(data, "ext:days:") {
+		parts := strings.Split(data, ":")
+		if len(parts) != 4 {
+			return
+		}
+		u, err := userByUUID(db, parts[2])
+		if err != nil {
+			tgSendKB(token, chatID, "⚠️ User not found.", ownerMenuKB())
+			return
+		}
+		days, _ := strconv.Atoi(parts[3])
+		newExpiry := time.Now().UTC().AddDate(0, 0, days)
+		if u.Expiry.Valid && u.Expiry.String != "" {
+			if cur, err := time.Parse("2006-01-02", u.Expiry.String); err == nil && cur.After(time.Now()) {
+				newExpiry = cur.AddDate(0, 0, days)
+			}
+		}
+		expiryStr := newExpiry.Format("2006-01-02")
+		_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
+		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days})
+		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr, ownerMenuKB())
+		return
+	}
 	var cmdText string
 	switch data {
 	case "me":
@@ -862,18 +938,46 @@ func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int
 		cmdText = "/nodes"
 	case "list":
 		cmdText = "/list"
+	case "balance":
+		cmdText = "/balance"
+	case "help":
+		cmdText = "/help"
 	case "extend_help":
 		cmdText = "/help"
+	case "retry":
+		cmdText = "/start"
 	default:
 		return
 	}
-	// Inherit chat context; ownerID still gates owner commands.
 	TgHandleText(db, token, ownerID, chatID, cmdText)
 }
 
 // StartTelegramBot launches the long-poll worker (once per process).
 func StartTelegramBot(db *sql.DB) {
 	telegramBotOnce.Do(func() {
+		// Register native command menu (best-effort).
+		go func() {
+			defer func() { _ = recover() }()
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for range ticker.C {
+				token, _, ok := tgBotToken(db)
+				if !ok {
+					continue
+				}
+				tgPost(token, "setMyCommands", map[string]any{"commands": []map[string]string{
+					{"command": "start", "description": "Start / link account"},
+					{"command": "me", "description": "Status & subscription"},
+					{"command": "ovpn", "description": "Download config"},
+					{"command": "subscription", "description": "Copy subscription link"},
+					{"command": "nodes", "description": "Node status"},
+					{"command": "balance", "description": "Quota details"},
+					{"command": "help", "description": "All commands"},
+				}})
+				ticker.Stop()
+				return
+			}
+		}()
 		go func() {
 			defer func() { _ = recover() }()
 			ticker := time.NewTicker(2 * time.Second)
