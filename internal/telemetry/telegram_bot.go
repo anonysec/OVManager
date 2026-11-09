@@ -409,7 +409,11 @@ func TgHandleTextWithType(db *sql.DB, token string, ownerID int64, chatID int64,
 			return
 		}
 		if isOwner {
-			tgSend(token, chatID, "Owner commands: /list · /extend <uuid> <days> [gb]")
+			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
+				{{"text": "📋 Users", "callback_data": "list"}, {"text": "✏️ Extend", "callback_data": "extend_help"}},
+				{{"text": "🖥 Nodes", "callback_data": "nodes"}},
+			}}
+			tgSendKB(token, chatID, "Owner commands: /list · /extend <uuid> <days> [gb]\n/nodes — node status\n/help for all commands", kbd)
 			return
 		}
 		if u, err := userByChat(db, chatID); err == nil {
