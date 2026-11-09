@@ -518,13 +518,16 @@ func resolveSessionUsername(commonName, nodeName string, idToName map[string]str
 func nodeSnapshot(n *node.Node, pid string) (map[string]any, map[string]any) {
 	start := time.Now()
 	info := node.NodeClient(n, pid).GetNodeInfo()
-	sessions := node.NodeClient(n, pid).GetSessions("", 8, 0)
+	sess, _ := node.NodeClient(n, pid).GetSessions("", 8, 0)
+	var sessions map[string]any
+	if sess != nil {
+		sessions = map[string]any{"live_count": sess.LiveCount, "stale_marker_count": sess.StaleMarkerCount}
+	} else {
+		sessions = map[string]any{}
+	}
 	latency := round1(float64(time.Since(start).Microseconds()) / 1000.0)
 	if info == nil {
 		info = map[string]any{}
-	}
-	if sessions == nil {
-		sessions = map[string]any{}
 	}
 	reachable := len(info) > 0
 	row := map[string]any{
@@ -645,7 +648,11 @@ func CollectLiveSnapshot(db *sql.DB) {
 	for i, n := range nodes {
 		n := n
 		calls[i] = func() any {
-			return node.NodeClient(n, pid).GetSessions("", 1, node.NodeTimeout(n, share))
+			s, _ := node.NodeClient(n, pid).GetSessions("", 1, node.NodeTimeout(n, share))
+			if s == nil {
+				return map[string]any{}
+			}
+			return map[string]any{"live_sessions": s.LiveSessions, "live_count": s.LiveCount}
 		}
 	}
 	results := node.GatherNodes(calls, liveFanoutDeadline)

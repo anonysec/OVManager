@@ -5,6 +5,7 @@ package node
 import (
 	"database/sql"
 	"encoding/json"
+	"net/http"
 	"sort"
 	"strconv"
 	"time"
@@ -78,26 +79,25 @@ func pushLimitsBatch(n *Node, users []limitUser, panelID string) map[string]any 
 	for _, u := range users {
 		items = append(items, map[string]any{"id": strconv.FormatInt(u.id, 10), "max_logins": u.maxLogins})
 	}
-	r := c.request("POST", "/sync/users", reqOpts{
-		jsonBody:  map[string]any{"users": items},
-		timeout:   LongTimeout,
-		allowFail: true,
-	})
-	if r == nil {
+	res, err := do[limitsBatchResponse](c, http.MethodPost, "/sync/users", map[string]any{"users": items}, reqOpts{timeout: LongTimeout, allowFail: true})
+	if err != nil {
 		return map[string]any{"node": n.Name, "applied": 0, "failed": len(users), "success": false}
 	}
-	data := dataOf(r)
-	applied := intOf(data["applied"])
 	failedItems := []any{}
-	if list, ok := data["failed"].([]any); ok {
-		failedItems = list
+	for _, f := range res.Failed {
+		var v any
+		if err := json.Unmarshal(f, &v); err == nil {
+			failedItems = append(failedItems, v)
+		}
 	}
+	data := map[string]any{"applied": res.Applied, "failed": failedItems}
+	applied := intOf(data["applied"])
 	return map[string]any{
 		"node":         n.Name,
 		"applied":      applied,
 		"failed":       len(failedItems),
 		"success":      applied+len(failedItems) >= len(users) && len(failedItems) == 0,
-		"failed_items": failedItems,
+		"failed_items": data["failed"],
 	}
 }
 
@@ -158,19 +158,27 @@ func CleanStaleSessionsAllNodes(db *sql.DB) map[string]any {
 
 func cleanNodeSessions(n *Node, pid string, share time.Duration) map[string]any {
 	c := NodeClient(n, pid)
-	data := c.GetSessions("", 8, share)
-	if data == nil {
+	data, err := c.GetSessions("", 8, share)
+	if err != nil || data == nil {
 		return map[string]any{"node": n.Name, "success": false, "error": "diagnostics unavailable", "removed": []string{}}
 	}
 	liveCNs := map[string]bool{}
-	for _, s := range sessionList(data["live_sessions"]) {
-		if cn, ok := s["common_name"].(string); ok && cn != "" {
+	for _, s := range data.LiveSessions {
+		cn := s.CommonName
+		if cn == "" {
+			cn = s.CN
+		}
+		if cn != "" {
 			liveCNs[cn] = true
 		}
 	}
 	staleSet := map[string]bool{}
-	for _, m := range sessionList(data["stale_markers"]) {
-		if cn, ok := m["common_name"].(string); ok && cn != "" {
+	for _, m := range data.StaleMarkers {
+		cn := m.CommonName
+		if cn == "" {
+			cn = m.CN
+		}
+		if cn != "" {
 			staleSet[cn] = true
 		}
 	}
@@ -181,13 +189,9 @@ func cleanNodeSessions(n *Node, pid string, share time.Duration) map[string]any 
 	sort.Strings(stale)
 	removed := []string{}
 	for _, cn := range stale {
-		res := c.DisconnectUser(cn, liveCNs[cn], 0)
-		if list, ok := res["removed_markers"].([]any); ok {
-			for _, m := range list {
-				if s, ok := m.(string); ok {
-					removed = append(removed, s)
-				}
-			}
+		res, err := c.DisconnectUser(cn, liveCNs[cn], 0)
+		if err == nil {
+			removed = append(removed, res.RemovedMarkers...)
 		}
 	}
 	return map[string]any{"node": n.Name, "success": true, "removed": removed}

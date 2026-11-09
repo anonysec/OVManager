@@ -323,7 +323,8 @@ func (h *Handler) handleNodeLogs(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 	c := NodeClient(n, PanelIDFor(h.svc.DB()))
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node logs retrieved successfully", Data: c.GetLogs(level, limit)})
+	logs, _ := c.GetLogs(level, limit)
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Node logs retrieved successfully", Data: logs})
 }
 
 func (h *Handler) handleNodeDNS(w http.ResponseWriter, r *http.Request) {
@@ -425,36 +426,30 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: success, Msg: msg, Data: data})
 }
 
-func (h *Handler) nodeEnvelopeAction(w http.ResponseWriter, r *http.Request, call func(*Client) map[string]any, unreachable string) {
+func (h *Handler) nodeEnvelopeAction(w http.ResponseWriter, r *http.Request, call func(*Client) error, unreachable string) {
 	n := h.nodeByID(r)
 	if n == nil {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
 	c := NodeClient(n, PanelIDFor(h.svc.DB()))
-	answer := call(c)
-	if answer == nil {
+	if err := call(c); err != nil {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: unreachable})
 		return
 	}
-	success, _ := answer["success"].(bool)
-	msg, _ := answer["msg"].(string)
-	if msg == "" {
-		msg = "Request processed."
-	}
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: success, Msg: msg, Data: answer["data"]})
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "Request processed."})
 }
 
 func (h *Handler) handleNodeRestart(w http.ResponseWriter, r *http.Request) {
-	h.nodeEnvelopeAction(w, r, func(c *Client) map[string]any { return c.RestartVPN() }, "Node unreachable — the restart was not requested.")
+	h.nodeEnvelopeAction(w, r, func(c *Client) error { return c.RestartVPN() }, "Node unreachable — the restart was not requested.")
 }
 
 func (h *Handler) handleNodeRenewCert(w http.ResponseWriter, r *http.Request) {
-	h.nodeEnvelopeAction(w, r, func(c *Client) map[string]any { return c.RenewServerCert() }, "Node unreachable — nothing was renewed.")
+	h.nodeEnvelopeAction(w, r, func(c *Client) error { return c.RenewServerCert() }, "Node unreachable — nothing was renewed.")
 }
 
 func (h *Handler) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
-	h.nodeEnvelopeAction(w, r, func(c *Client) map[string]any { return c.TriggerUpdate() }, "Node unreachable — the update was not started.")
+	h.nodeEnvelopeAction(w, r, func(c *Client) error { return c.TriggerUpdate() }, "Node unreachable — the update was not started.")
 }
 
 func (h *Handler) handleListNodes(w http.ResponseWriter, r *http.Request) {

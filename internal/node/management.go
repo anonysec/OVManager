@@ -331,8 +331,15 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 		// note: sessions use LongTimeout like management.get_node_status.
 		sessCh := make(chan map[string]any, 1)
 		go func() { infoCh <- infoC.GetNodeInfo() }()
-		go func() { sessCh <- sessC.GetSessions("", 8, 0) }()
 		info := <-infoCh
+		go func() {
+			s, _ := sessC.GetSessions("", 8, 0)
+			var m map[string]any
+			if s != nil {
+				m = map[string]any{"live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
+			}
+			sessCh <- m
+		}()
 		sessions := <-sessCh
 		mode := infoC.TLSMode()
 		if infoC.TLSVerified() == nil {

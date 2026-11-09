@@ -272,7 +272,12 @@ func (h *Handler) securitySummary(w http.ResponseWriter, r *http.Request) {
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			return []any{n.Name, node.NodeClient(n, pid).GetSessions("", hours, share)}
+			s, _ := node.NodeClient(n, pid).GetSessions("", hours, share)
+			var m map[string]any
+			if s != nil {
+				m = map[string]any{"events": s.Events, "live_sessions": s.LiveSessions}
+			}
+			return []any{n.Name, m}
 		})
 	}
 

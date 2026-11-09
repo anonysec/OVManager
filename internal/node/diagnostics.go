@@ -94,8 +94,12 @@ func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]a
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			sessions := NodeClient(n, pid).GetSessions("", hours, share)
-			return []any{n.Name, sessions}
+			s, _ := NodeClient(n, pid).GetSessions("", hours, share)
+			var m map[string]any
+			if s != nil {
+				m = map[string]any{"live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
+			}
+			return []any{n.Name, m}
 		})
 	}
 	nodeRows := []any{}
@@ -232,8 +236,12 @@ func LoginHealthSummary(db *sql.DB, hours int) map[string]any {
 	for _, n := range nodes {
 		n := n
 		calls = append(calls, func() any {
-			sessions := NodeClient(n, pid).GetSessions("", hours, share)
-			return []any{n.Name, sessions}
+			s, _ := NodeClient(n, pid).GetSessions("", hours, share)
+			var m map[string]any
+			if s != nil {
+				m = map[string]any{"live_sessions": s.LiveSessions, "stale_markers": s.StaleMarkers, "live_count": s.LiveCount, "stale_marker_count": s.StaleMarkerCount, "auth_errors": s.AuthErrors, "events": s.Events}
+			}
+			return []any{n.Name, m}
 		})
 	}
 

@@ -108,7 +108,7 @@
       "memory_usage",
       "cert_expiry"
     ],
-    "request_at": "internal/node/client.go:GetNodeInfo",
+    "request_at": "internal/node/client.go:GetStatus",
     "response_at": [
       "internal/node/management.go:info",
       "internal/telemetry/handler.go:info",

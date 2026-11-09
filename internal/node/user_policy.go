@@ -36,16 +36,10 @@ func (c *Client) ApplyUserPolicy(uid, name string, maxLogins int, active bool) b
 	if active {
 		status = "activate"
 	}
-	r := c.request(http.MethodPut, "/sync/user", reqOpts{
-		jsonBody: map[string]any{
-			"id":         uid,
-			"name":       name,
-			"max_logins": maxLogins,
-			"status":     status,
-		},
-		timeout: Timeout,
-	})
-	return r != nil
+	_, err := do[emptyResponse](c, http.MethodPut, "/sync/user", map[string]any{
+		"id": uid, "name": name, "max_logins": maxLogins, "status": status,
+	}, reqOpts{timeout: Timeout})
+	return err == nil
 }
 
 type PolicySyncResult struct {

@@ -83,16 +83,33 @@ func emittedRoutes(t *testing.T) map[route][]emit {
 					return true
 				}
 				sel, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
+				isDo := false
+				if ix, ok := call.Fun.(*ast.IndexExpr); ok {
+					if id, ok := ix.X.(*ast.Ident); ok && id.Name == "do" {
+						isDo = true
+					}
+				}
+				if !ok && !isDo {
 					return true
 				}
+				name := ""
+				if ok {
+					name = sel.Sel.Name
+				} else if isDo {
+					name = "do"
+				}
 				method, path := "", ""
-				switch sel.Sel.Name {
+				switch name {
 				case "request", "requestInner":
 					if len(call.Args) < 2 {
 						return true
 					}
 					method, path = methodName(call.Args[0]), pathName(call.Args[1])
+				case "do":
+					if len(call.Args) < 3 {
+						return true
+					}
+					method, path = methodName(call.Args[1]), pathName(call.Args[2])
 				case "GetRaw":
 					if len(call.Args) < 1 {
 						return true

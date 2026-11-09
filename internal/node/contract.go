@@ -61,7 +61,7 @@ var Contract = []ContractRow{
 		// Reachability probe and status read (client.go:516, client.go:521).
 		Method:    http.MethodGet,
 		Path:      "/sync/status",
-		RequestAt: "internal/node/client.go:GetNodeInfo",
+		RequestAt: "internal/node/client.go:GetStatus",
 		Response:  []string{"contract_version", "version", "cpu_usage", "memory_usage", "cert_expiry"},
 		ResponseAt: []string{
 			"internal/node/management.go:info",   // version (management.go:301)
@@ -212,7 +212,7 @@ var Contract = []ContractRow{
 		Request:   []string{"users", "users[].id", "users[].max_logins"},
 		Response:  []string{"applied", "failed"},
 		ResponseAt: []string{
-			"internal/node/sync.go:pushLimitsBatch:data", // applied, failed (sync.go:109)
+			"internal/node/sync.go:pushLimitsBatch:data", // applied, failed
 		},
 	},
 }

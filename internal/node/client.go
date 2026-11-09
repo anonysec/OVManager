@@ -1,11 +1,6 @@
 // Package node ports the backend/node package: the mTLS API client,
 // the connection/health registry, fan-out bounds, sync workers, diagnostics
 // and the node management handlers.
-//
-// TLS policy (backend): a stored server_ca pin verifies the
-// node against exactly that certificate and an SSL failure fails closed. With
-// no pin, an SSL failure also fails closed unless NODE_TLS_INSECURE_FALLBACK
-// is set, in which case one unverified retry happens with a loud warning.
 package node
 
 import (
@@ -122,11 +117,9 @@ type Client struct {
 	tlsVerified *bool
 	conflictMsg string
 
-	transportMu       sync.Mutex
-	pinnedTransport   *http.Transport
-	plainTransport    *http.Transport
-	insecureTransport *http.Transport
-	fallbackUsed      bool
+	transportMu  sync.Mutex
+	transport    *http.Transport
+	fallbackUsed bool
 }
 
 // NewClient builds a client for address:port. serverCA is the stored pin PEM
@@ -292,99 +285,132 @@ func (c *Client) setVerified(v bool) {
 	c.mu.Unlock()
 }
 
-// cachedTransport returns a reusable *http.Transport for the given TLS config.
-// cfg == nil yields a plain transport; the insecure flag selects the
-// InsecureSkipVerify transport used only when insecureFallback() is true.
-func (c *Client) cachedTransport(cfg *tls.Config, insecure bool) *http.Transport {
+func (c *Client) cachedTransport() *http.Transport {
 	c.transportMu.Lock()
 	defer c.transportMu.Unlock()
-	if insecure {
-		if c.insecureTransport == nil {
-			c.insecureTransport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec // NODE_TLS_INSECURE_FALLBACK
+	if c.transport != nil {
+		return c.transport
+	}
+	var cfg *tls.Config
+	if c.pinPEM != "" {
+		var err error
+		cfg, err = pinnedTLSConfig(c.pinPEM, c.address, c.checkName)
+		if err != nil {
+			c.transport = &http.Transport{}
+			return c.transport
 		}
-		return c.insecureTransport
 	}
-	if cfg == nil {
-		if c.plainTransport == nil {
-			c.plainTransport = &http.Transport{}
-		}
-		return c.plainTransport
+	c.transport = &http.Transport{TLSClientConfig: cfg}
+	return c.transport
+}
+
+type nodeError struct {
+	node   string
+	status int
+	msg    string
+}
+
+func (e *nodeError) Error() string {
+	if e.status != 0 {
+		return fmt.Sprintf("node %s: HTTP %d: %s", e.node, e.status, e.msg)
 	}
-	if c.pinnedTransport == nil {
-		c.pinnedTransport = &http.Transport{TLSClientConfig: cfg}
+	if e.msg != "" {
+		return fmt.Sprintf("node %s: %s", e.node, e.msg)
 	}
-	return c.pinnedTransport
+	return fmt.Sprintf("node %s: unreachable", e.node)
 }
 
 // request runs one RPC and returns the parsed envelope (nil on any failure),
 // recording health from this single choke point (requests.py _request).
-func (c *Client) request(method, path string, o reqOpts) map[string]any {
-	result := c.requestInner(method, path, o)
-	if c.NodeID != 0 {
-		Record(c.NodeID, result != nil)
-	}
-	return result
+type envelope struct {
+	Success bool            `json:"success"`
+	Msg     string          `json:"msg"`
+	Data    json.RawMessage `json:"data"`
 }
 
-func (c *Client) requestInner(method, path string, o reqOpts) map[string]any {
+func do[T any](c *Client, method, path string, body any, opts reqOpts) (T, error) {
+	var zero T
+	if body != nil {
+		opts.jsonBody = body
+	}
+	if opts.timeout == 0 {
+		opts.timeout = Timeout
+	}
+	env, err := c.requestInner(method, path, opts)
+	if err != nil {
+		return zero, err
+	}
+	if env == nil {
+		return zero, &nodeError{node: c.address}
+	}
+	if !env.Success && !opts.allowFail {
+		return zero, &nodeError{node: c.address, msg: env.Msg}
+	}
+	if len(env.Data) == 0 || string(env.Data) == "null" {
+		return zero, nil
+	}
+	var out T
+	if err := json.Unmarshal(env.Data, &out); err != nil {
+		return zero, &nodeError{node: c.address, msg: env.Msg}
+	}
+	return out, nil
+}
+
+func (c *Client) requestInner(method, path string, o reqOpts) (*envelope, error) {
 	if o.timeout == 0 {
 		o.timeout = Timeout
 	}
-	if c.pinPEM != "" {
-		cfg, err := pinnedTLSConfig(c.pinPEM, c.address, c.checkName)
-		if err != nil {
-			if c.TLSVerified() != nil {
-				c.setVerified(false)
-			}
-			return nil
-		}
-		hc := &http.Client{Transport: c.cachedTransport(cfg, false), Timeout: o.timeout}
-		r, err := c.send(hc, method, path, o)
-		if err != nil {
-			if c.TLSVerified() != nil {
-				c.setVerified(false)
-			}
-			return nil // pin mismatch/transport: fail closed, never fall back
-		}
-		c.setVerified(true)
-		return r
-	}
-	hc := &http.Client{Transport: c.cachedTransport(nil, false), Timeout: o.timeout}
-	r, err := c.send(hc, method, path, o)
+	hc := &http.Client{Transport: c.cachedTransport(), Timeout: o.timeout}
+	env, err := c.send(hc, method, path, o)
 	if err == nil {
+		// The pin config was already applied inside cachedTransport(): a
+		// bad pin fails at dial time, never here.
 		c.setVerified(true)
-		return r
+		if c.NodeID != 0 {
+			Record(c.NodeID, true)
+		}
+		return env, nil
 	}
-	if !isTLSError(err) {
+	if c.pinPEM != "" {
 		if c.TLSVerified() != nil {
 			c.setVerified(false)
 		}
-		return nil
+		if c.NodeID != 0 {
+			Record(c.NodeID, false)
+		}
+		return nil, err
 	}
-	if !insecureFallback() || c.fallbackUsed {
+	if !isTLSError(err) || !insecureFallback() || c.fallbackUsed {
 		if c.TLSVerified() != nil {
 			c.setVerified(false)
 		}
-		return nil
+		if c.NodeID != 0 {
+			Record(c.NodeID, false)
+		}
+		return nil, err
 	}
-	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK); failing closed on next fallback for this node until restart", c.address)
+	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK)", c.address)
 	c.fallbackUsed = true
-	hc2 := &http.Client{Transport: c.cachedTransport(nil, true), Timeout: o.timeout}
-	r2, err2 := c.send(hc2, method, path, o)
+	insecure := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	hc2 := &http.Client{Transport: insecure, Timeout: o.timeout}
+	env2, err2 := c.send(hc2, method, path, o)
 	if err2 != nil {
-		if c.TLSVerified() != nil {
-			c.setVerified(false)
+		if c.NodeID != 0 {
+			Record(c.NodeID, false)
 		}
-		return nil
+		return nil, err2
 	}
 	c.setVerified(false)
 	c.recordTLSUnverified()
-	return r2
+	if c.NodeID != 0 {
+		Record(c.NodeID, true)
+	}
+	return env2, nil
 }
 
 // send performs (and retries once on 429) the request, applying the 409 /
 // non-200 / success:false rules (requests.py _send).
-func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[string]any, error) {
+func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (*envelope, error) {
 	c.mu.Lock()
 	c.conflictMsg = ""
 	c.mu.Unlock()
@@ -413,13 +439,10 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[stri
 		c.mu.Lock()
 		c.conflictMsg = msg
 		c.mu.Unlock()
-		if o.allowFail {
-			return map[string]any{"success": false, "conflict": true, "msg": msg}, nil
-		}
-		return nil, nil
+		return &envelope{Success: false, Msg: msg}, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil
+		return nil, &nodeError{node: c.address, status: resp.StatusCode}
 	}
 	// Bound the read so an oversized body is a clean failure, not a partial
 	// JSON object decoded into data.
@@ -430,20 +453,15 @@ func (c *Client) send(hc *http.Client, method, path string, o reqOpts) (map[stri
 	if len(raw) > maxNodeBodyJSON {
 		return nil, fmt.Errorf("node response body exceeds %d bytes", maxNodeBodyJSON)
 	}
-	var data map[string]any
+	var env envelope
+	dec := json.NewDecoder(bytes.NewReader(raw))
 	if o.useNumber {
-		dec := json.NewDecoder(bytes.NewReader(raw))
 		dec.UseNumber()
-		if err := dec.Decode(&data); err != nil {
-			return nil, nil
-		}
-	} else if err := json.Unmarshal(raw, &data); err != nil {
+	}
+	if err := dec.Decode(&env); err != nil {
 		return nil, nil
 	}
-	if ok, _ := data["success"].(bool); !ok && !o.allowFail {
-		return nil, nil
-	}
-	return data, nil
+	return &env, nil
 }
 
 // panelIDHeader resolves the X-Panel-ID to send. Cached clients read it from
@@ -552,44 +570,102 @@ func isTLSError(err error) bool {
 	return strings.Contains(s, "certificate") || strings.Contains(s, "tls:") || strings.Contains(s, "x509:")
 }
 
-// dataOf returns r["data"] as a map.
-//
-// A nil result means the node did not answer: the call failed, or the
-// response carried no data object. Callers that need to tell "unreachable"
-// from "answered with nothing" must see that difference, so this returns
-// nil rather than an empty map — an empty map made every "the node is
-// unreachable" check dead code, and an unreachable node was reported as
-// reachable with zero counters.
-//
-// A caller that puts the result on the wire goes through orEmpty.
-func dataOf(r map[string]any) map[string]any {
-	if r == nil {
-		return nil
-	}
-	if d, ok := r["data"].(map[string]any); ok {
-		return d
-	}
-	return map[string]any{}
-}
-
 // --- NodeRequests methods (requests.py) ---
 
 // CheckNode is a reachability probe (GET /sync/status).
+type statusResponse struct {
+	Version     string  `json:"version"`
+	CPUUsage    float64 `json:"cpu_usage"`
+	MemoryUsage float64 `json:"memory_usage"`
+	CertExpiry  string  `json:"cert_expiry"`
+}
+
+type usageResponse struct {
+	Totals       map[string]json.Number `json:"totals"`
+	TotalsEpochs map[string]string      `json:"totals_epochs"`
+}
+
+type sessionEntry struct {
+	CommonName string `json:"common_name"`
+	CN         string `json:"cn"`
+	Peer       string `json:"peer"`
+	TS         string `json:"ts"`
+	Action     string `json:"action"`
+	Severity   string `json:"severity"`
+	Reason     string `json:"reason"`
+	Ongoing    bool   `json:"ongoing"`
+}
+
+type sessionsResponse struct {
+	LiveSessions     []sessionEntry `json:"live_sessions"`
+	StaleMarkers     []sessionEntry `json:"stale_markers"`
+	LiveCount        int            `json:"live_count"`
+	StaleMarkerCount int            `json:"stale_marker_count"`
+	AuthErrors       int            `json:"auth_errors"`
+	AuthErrorsByCN   map[string]int `json:"auth_errors_by_cn"`
+	Rejects          int            `json:"rejects"`
+	PolicyRejects    int            `json:"policy_rejects"`
+	WarnRejects      int            `json:"warn_rejects"`
+	Events           []sessionEntry `json:"events"`
+	LastError        string         `json:"last_error"`
+}
+
+type logRecord struct {
+	Level   string `json:"level"`
+	Time    string `json:"time"`
+	Message string `json:"message"`
+	Where   string `json:"where"`
+}
+
+type logsResponse struct {
+	Records   []logRecord `json:"records"`
+	LastError string      `json:"last_error"`
+	Errors1h  int         `json:"errors_1h"`
+}
+
+type disconnectResponse struct {
+	RemovedMarkers []string `json:"removed_markers"`
+	KilledSessions []string `json:"killed_sessions"`
+}
+
+type limitsBatchResponse struct {
+	Applied int               `json:"applied"`
+	Failed  []json.RawMessage `json:"failed"`
+}
+
 func (c *Client) CheckNode() bool {
-	return c.request(http.MethodGet, "/sync/status", reqOpts{jsonBody: map[string]any{}}) != nil
+	_, err := do[statusResponse](c, http.MethodGet, "/sync/status", nil, reqOpts{jsonBody: map[string]any{}})
+	return err == nil
 }
 
-// GetNodeInfo returns the node's reported data (GET /sync/status).
+func (c *Client) GetStatus() (*statusResponse, error) {
+	s, err := do[statusResponse](c, http.MethodGet, "/sync/status", nil, reqOpts{jsonBody: map[string]any{}})
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 func (c *Client) GetNodeInfo() map[string]any {
-	return dataOf(c.request(http.MethodGet, "/sync/status", reqOpts{jsonBody: map[string]any{}}))
+	s, err := c.GetStatus()
+	if err != nil {
+		return nil
+	}
+	return map[string]any{
+		"version": s.Version, "cpu_usage": s.CPUUsage,
+		"memory_usage": s.MemoryUsage, "cert_expiry": s.CertExpiry,
+	}
 }
 
-// GetUsage returns per-user traffic counters.
-func (c *Client) GetUsage(timeout time.Duration) map[string]any {
+func (c *Client) GetUsage(timeout time.Duration) (*usageResponse, error) {
 	if timeout == 0 {
 		timeout = LongTimeout
 	}
-	return dataOf(c.request(http.MethodGet, "/sync/usage", reqOpts{timeout: timeout, useNumber: true}))
+	u, err := do[usageResponse](c, http.MethodGet, "/sync/usage", nil, reqOpts{timeout: timeout, useNumber: true})
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // UpdateConfigParams carries the optional per-node endpoint settings.
@@ -631,39 +707,41 @@ func (c *Client) UpdateConfig(p UpdateConfigParams) any {
 		payload["extra_ports"] = *p.ExtraPorts
 	}
 	if p.ReturnEnvelope {
-		r := c.request(http.MethodPost, "/sync/config", reqOpts{jsonBody: payload, timeout: LongTimeout, allowFail: true})
-		if r == nil {
+		env, err := c.requestInner(http.MethodPost, "/sync/config", reqOpts{jsonBody: payload, timeout: LongTimeout, allowFail: true})
+		if err != nil || env == nil {
 			return any(nil)
 		}
-		return r
+		return map[string]any{"success": env.Success, "msg": env.Msg, "data": env.Data}
 	}
-	return c.request(http.MethodPost, "/sync/config", reqOpts{jsonBody: payload, timeout: LongTimeout}) != nil
+	_, err := do[emptyResponse](c, http.MethodPost, "/sync/config", payload, reqOpts{timeout: LongTimeout})
+	return err == nil
 }
 
-// RestartVPN asks the node to restart OpenVPN (envelope even on refusal).
-func (c *Client) RestartVPN() map[string]any {
-	return c.request(http.MethodPost, "/sync/restart", reqOpts{timeout: LongTimeout, allowFail: true})
+type emptyResponse struct{}
+
+func (c *Client) RestartVPN() error {
+	_, err := do[emptyResponse](c, http.MethodPost, "/sync/restart", nil, reqOpts{timeout: LongTimeout, allowFail: true})
+	return err
 }
 
-// RenewServerCert asks the node to renew its server certificate.
-func (c *Client) RenewServerCert() map[string]any {
-	return c.request(http.MethodPost, "/sync/renew-cert", reqOpts{timeout: LongTimeout, allowFail: true})
+func (c *Client) RenewServerCert() error {
+	_, err := do[emptyResponse](c, http.MethodPost, "/sync/renew-cert", nil, reqOpts{timeout: LongTimeout, allowFail: true})
+	return err
 }
 
-// TriggerUpdate asks the node to run its self-update.
-func (c *Client) TriggerUpdate() map[string]any {
-	return c.request(http.MethodPost, "/sync/update", reqOpts{timeout: LongTimeout, allowFail: true})
+func (c *Client) TriggerUpdate() error {
+	_, err := do[emptyResponse](c, http.MethodPost, "/sync/update", nil, reqOpts{timeout: LongTimeout, allowFail: true})
+	return err
 }
 
-// ChangeUserStatus activates/deactivates a user on the node.
-// DeleteUser removes a user from the node.
 func (c *Client) DeleteUser(uid string) bool {
-	return c.request(http.MethodDelete, "/sync/user/"+uid, reqOpts{timeout: 120 * time.Second}) != nil
+	_, err := do[emptyResponse](c, http.MethodDelete, "/sync/user/"+uid, nil, reqOpts{timeout: 120 * time.Second})
+	return err == nil
 }
 
 // SetUserLimit pushes a max-logins limit to the node.
 // DisconnectUser drops a user's session(s) on the node.
-func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duration) map[string]any {
+func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duration) (*disconnectResponse, error) {
 	if timeout <= 0 {
 		timeout = LongTimeout
 	}
@@ -671,11 +749,15 @@ func (c *Client) DisconnectUser(uid string, onlyStale bool, timeout time.Duratio
 	if onlyStale {
 		o.params = url.Values{"only_stale": {"true"}}
 	}
-	return dataOf(c.request(http.MethodPost, "/sync/user/"+uid+"/disconnect", o))
+	r, err := do[disconnectResponse](c, http.MethodPost, "/sync/user/"+uid+"/disconnect", nil, o)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // GetSessions returns the node's live sessions/stale markers.
-func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration) map[string]any {
+func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration) (*sessionsResponse, error) {
 	if timeout == 0 {
 		timeout = LongTimeout
 	}
@@ -683,11 +765,15 @@ func (c *Client) GetSessions(commonName string, hours int, timeout time.Duration
 	if commonName != "" {
 		params.Set("common_name", commonName)
 	}
-	return dataOf(c.request(http.MethodGet, "/sync/sessions", reqOpts{params: params, timeout: timeout}))
+	r, err := do[sessionsResponse](c, http.MethodGet, "/sync/sessions", nil, reqOpts{params: params, timeout: timeout})
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // GetLogs returns the node's in-memory log ring.
-func (c *Client) GetLogs(level string, limit int) map[string]any {
+func (c *Client) GetLogs(level string, limit int) (*logsResponse, error) {
 	level = strings.ToUpper(level)
 	switch level {
 	case "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL":
@@ -701,7 +787,11 @@ func (c *Client) GetLogs(level string, limit int) map[string]any {
 		limit = 500
 	}
 	params := url.Values{"level": {level}, "limit": {strconv.Itoa(limit)}}
-	return dataOf(c.request(http.MethodGet, "/sync/logs", reqOpts{params: params, timeout: LongTimeout}))
+	r, err := do[logsResponse](c, http.MethodGet, "/sync/logs", nil, reqOpts{params: params, timeout: LongTimeout})
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // GetRaw fetches raw bytes with the same TLS policy as request. Returns nil on
@@ -730,7 +820,7 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		hc := &http.Client{Transport: c.cachedTransport(cfg, false), Timeout: timeout}
+		hc := &http.Client{Transport: c.cachedTransport(), Timeout: timeout}
 		resp, err := hc.Do(req)
 		if err != nil {
 			return nil, err

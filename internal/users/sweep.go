@@ -183,7 +183,11 @@ func (h *Handler) kickUserNodes(u userRow) (killed int, failed []string) {
 		}
 		nodes = append(nodes, n)
 		calls = append(calls, func() any {
-			return node.NodeClient(n, pid).DisconnectUser(uid, false, share)
+			res, err := node.NodeClient(n, pid).DisconnectUser(uid, false, share)
+			if err != nil || res == nil {
+				return nil
+			}
+			return map[string]any{"killed_sessions": res.KilledSessions, "removed_markers": res.RemovedMarkers}
 		})
 	}
 	results := node.GatherNodes(calls, node.RequestFanoutDeadline)

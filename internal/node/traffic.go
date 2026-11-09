@@ -74,10 +74,24 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	calls := make([]func() any, 0, len(nodes))
 	for _, n := range nodes {
 		n := n
-		calls = append(calls, func() any { return NodeClient(n, pid).GetUsage(NodeTimeout(n, share)) })
+		calls = append(calls, func() any {
+			c := NodeClient(n, pid)
+			u, err := c.GetUsage(NodeTimeout(n, share))
+			if err != nil || u == nil {
+				return nil
+			}
+			epochs := map[string]any{}
+			for k, v := range u.TotalsEpochs {
+				epochs[k] = v
+			}
+			m := map[string]any{"totals": map[string]any{}, "totals_epochs": epochs}
+			for k, v := range u.Totals {
+				m["totals"].(map[string]any)[k] = v
+			}
+			return m
+		})
 	}
 	raw := GatherNodes(calls, trafficFanoutDeadline)
-
 	contribs := map[int64]map[string]int64{}
 	contribEpochs := map[int64]map[string]string{}
 	ambiguous := map[int64]map[string]bool{}
@@ -141,14 +155,14 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 			if !ok {
 				continue
 			}
-			cur, ok := toInt64(rawTotal)
+			cur, ok := totalsInt64(rawTotal)
 			if !ok || cur < 0 {
 				continue
 			}
 			reportedEpoch := ""
 			if totalsEpochs != nil {
 				if v, ok := totalsEpochs[reported]; ok {
-					reportedEpoch = toStringValue(v)
+					reportedEpoch, _ = v.(string)
 				}
 			}
 			if contribs[u.id] == nil {
@@ -355,12 +369,27 @@ func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 	return out, byName
 }
 
-// toInt64 reads a JSON scalar as int64; a non-scalar (or absent) value reports
-// false so the caller treats the baseline as missing.
+func totalsInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
+	case float64:
+		if n != float64(int64(n)) {
+			return 0, false
+		}
+		return int64(n), true
+	case int64:
+		return n, true
+	}
+	return 0, false
+}
 func toInt64(v any) (int64, bool) {
 	switch n := v.(type) {
+	case json.Number:
+		i, err := n.Int64()
+		return i, err == nil
 	case float64:
-		// Reject fractional and out-of-range floats instead of truncating.
 		if n != float64(int64(n)) {
 			return 0, false
 		}
@@ -369,14 +398,10 @@ func toInt64(v any) (int64, bool) {
 		return n, true
 	case int:
 		return int64(n), true
-	case json.Number:
-		i, err := n.Int64()
-		return i, err == nil
 	}
 	return 0, false
 }
 
-// decodeUsageState decodes a node_usage JSON string without float conversion.
 func decodeUsageState(s string) map[string]any {
 	if s == "" {
 		return map[string]any{}
