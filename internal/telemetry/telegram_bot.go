@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"net/url"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/anonysec/OVManager/go/internal/audit"
 	dbPkg "github.com/anonysec/OVManager/go/internal/db"
+	"github.com/anonysec/OVManager/go/internal/node"
 )
 
 // Telegram management bot: users activate via an owner-provided link
@@ -37,15 +39,32 @@ var activateAttempts sync.Map // chatID -> []time.Time (sliding 10min window, ma
 var telegramBotOnce sync.Once
 
 type tgUpdate struct {
-	UpdateID int `json:"update_id"`
-	Message  *struct {
-		MessageID int `json:"message_id"`
-		Chat      *struct {
-			ID   int64  `json:"id"`
-			Type string `json:"type"`
+	UpdateID      int `json:"update_id"`
+	Message       *tgMessage `json:"message"`
+	EditedMessage *tgMessage `json:"edited_message"`
+	CallbackQuery *tgCallbackQuery `json:"callback_query"`
+}
+
+type tgMessage struct {
+	MessageID int `json:"message_id"`
+	Chat      *struct {
+		ID   int64  `json:"id"`
+		Type string `json:"type"`
+	} `json:"chat"`
+	Text string `json:"text"`
+}
+
+type tgCallbackQuery struct {
+	ID      string `json:"id"`
+	From    *struct {
+		ID int64 `json:"id"`
+	} `json:"from"`
+	Message *struct {
+		Chat *struct {
+			ID int64 `json:"id"`
 		} `json:"chat"`
-		Text string `json:"text"`
 	} `json:"message"`
+	Data string `json:"data"`
 }
 
 type tgPollResult struct {
@@ -141,6 +160,86 @@ func tgSend(token string, chatID int64, text string) bool {
 	}
 	return out.Ok
 }
+// tgSendKB posts one message with an optional inline keyboard.
+func tgSendKB(token string, chatID int64, text string, markup any) bool {
+	payload := map[string]any{"chat_id": chatID, "text": text}
+	if markup != nil {
+		payload["reply_markup"] = markup
+	}
+	return tgPost(token, "sendMessage", payload)
+}
+
+// tgSendDocument posts a document (e.g., .ovpn config file).
+func tgSendDocument(token string, chatID int64, filename string, content []byte, caption string) bool {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.WriteField("chat_id", strconv.FormatInt(chatID, 10))
+	if caption != "" {
+		_ = w.WriteField("caption", caption)
+	}
+	pw, err := w.CreateFormFile("document", filename)
+	if err != nil {
+		return false
+	}
+	if _, err := pw.Write(content); err != nil {
+		return false
+	}
+	if err := w.Close(); err != nil {
+		return false
+	}
+	req, err := http.NewRequest(http.MethodPost, telegramAPIBase+"/bot"+token+"/sendDocument", &buf)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var out struct {
+		Ok bool `json:"ok"`
+	}
+	return json.NewDecoder(resp.Body).Decode(&out) == nil && out.Ok
+}
+
+// tgPost posts a JSON payload to a Bot API method; errors swallowed.
+func tgPost(token, method string, payload map[string]any) bool {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false
+	}
+	req, err := http.NewRequest(http.MethodPost, telegramAPIBase+"/bot"+token+"/"+method, bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var out struct {
+		Ok bool `json:"ok"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false
+	}
+	return out.Ok
+}
+
+// tgAnswerCallback answers a callback query (stops loading spinner).
+func tgAnswerCallback(token, callbackID, text string) {
+	tgPost(token, "answerCallbackQuery", map[string]any{"callback_query_id": callbackID, "text": text})
+}
 
 func userByUUID(db *sql.DB, uuid string) (*tgUser, error) {
 	u := &tgUser{}
@@ -177,6 +276,37 @@ func statusText(u *tgUser) string {
 		active = "disabled"
 	}
 	return fmt.Sprintf("%s · %s\nUsed %s / %s\nExpires %s", u.Name, active, used, total, expiry)
+}
+// subURL builds the subscription URL for a user from settings.
+func subURL(db *sql.DB, uuid string) string {
+	if db == nil || uuid == "" {
+		return ""
+	}
+	var prefix, subPath, urlpath string
+	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub'), COALESCE(urlpath,'dashboard') FROM settings LIMIT 1`)
+	if err := row.Scan(&prefix, &subPath, &urlpath); err != nil {
+		return ""
+	}
+	if prefix == "" {
+		prefix = "https://127.0.0.1:2095/" + urlpath + "/"
+	}
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	return prefix + subPath + "/" + uuid + ".txt"
+}
+
+// ovpnConfigForUser returns the OVPN config bytes for the user's first node.
+func ovpnConfigForUser(db *sql.DB, uuid string) []byte {
+	var userID int64
+	if err := db.QueryRow(`SELECT id FROM users WHERE uuid = ?`, uuid).Scan(&userID); err != nil {
+		return nil
+	}
+	var nodeID int64
+	if err := db.QueryRow(`SELECT id FROM nodes WHERE COALESCE(status,0) = 1 ORDER BY id LIMIT 1`).Scan(&nodeID); err != nil {
+		return nil
+	}
+	return node.DownloadOVPNClient(userID, nodeID, db)
 }
 
 var (
@@ -312,7 +442,85 @@ func TgHandleText(db *sql.DB, token string, ownerID int64, chatID int64, text st
 			tgSend(token, chatID, "Your account is disabled — contact your operator.")
 			return
 		}
+		if data := ovpnConfigForUser(db, u.UUID); data != nil {
+			if tgSendDocument(token, chatID, "config.ovpn", data, "Your OpenVPN config for "+u.Name) {
+				return
+			}
+		}
 		tgSend(token, chatID, "Open the panel subscription page for your config. Your account: "+u.Name)
+		return
+	case "/help", "/commands":
+		if u, err := userByChat(db, chatID); err == nil && u != nil {
+			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
+				{{"text": "📊 My status", "callback_data": "me"}, {"text": "📥 Config", "callback_data": "ovpn"}},
+				{{"text": "🔗 Subscription", "callback_data": "sub"}, {"text": "🖥 Nodes", "callback_data": "nodes"}},
+			}}
+			tgSendKB(token, chatID, "Commands:\n/me — traffic & expiry\n/ovpn — download config\n/subscription — link\n/nodes — node status\n/balance — quota", kbd)
+		} else if isOwner {
+			kbd := map[string]any{"inline_keyboard": [][]map[string]any{
+				{{"text": "📋 Users", "callback_data": "list"}, {"text": "✏️ Extend", "callback_data": "extend_help"}},
+				{{"text": "🖥 Nodes", "callback_data": "nodes"}},
+			}}
+			tgSendKB(token, chatID, "Owner commands:\n/list — users\n/extend <uuid> <days> [gb]\n/nodes — node status", kbd)
+		} else {
+			tgSend(token, chatID, "You need an activation link first. Ask your operator for one.")
+		}
+		return
+	case "/nodes":
+		var lines []string
+		rows, err := db.Query(`SELECT name, status FROM nodes ORDER BY id`)
+		if err != nil {
+			tgSend(token, chatID, "Could not fetch nodes.")
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			var status sql.NullInt64
+			if rows.Scan(&name, &status) != nil {
+				continue
+			}
+			st := "🟢 online"
+			if !status.Valid || status.Int64 == 0 {
+				st = "🔴 offline"
+			}
+			lines = append(lines, "• "+name+" — "+st)
+		}
+		if err := rows.Err(); err != nil {
+			tgSend(token, chatID, "Could not fetch nodes.")
+			return
+		}
+		if len(lines) == 0 {
+			tgSend(token, chatID, "No nodes configured.")
+			return
+		}
+		tgSend(token, chatID, "🖥 Nodes:\n"+strings.Join(lines, "\n"))
+		return
+	case "/balance":
+		u, err := userByChat(db, chatID)
+		if err != nil || u == nil {
+			tgSend(token, chatID, "Not linked yet. Ask your operator for an activation link.")
+			return
+		}
+		used := u.Used.Int64
+		var total int64
+		if u.Total.Valid {
+			total = u.Total.Int64
+		}
+		exp := "—"
+		if u.Expiry.Valid && u.Expiry.String != "" {
+			exp = u.Expiry.String
+		}
+		if total <= 0 {
+			tgSend(token, chatID, fmt.Sprintf("Used %s / unlimited\nExpires %s", formatBytes(used), exp))
+			return
+		}
+		remaining := total - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		pct := float64(used) / float64(total) * 100
+		tgSend(token, chatID, fmt.Sprintf("Used %s / %s (%.0f%%)\nRemaining %s\nExpires %s", formatBytes(used), formatBytes(total), pct, formatBytes(remaining), exp))
 		return
 	}
 
@@ -617,7 +825,16 @@ func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
 	}
 	handled := 0
 	for _, up := range out.Result {
-		if up.Message != nil && up.Message.Chat != nil {
+		if up.CallbackQuery != nil && up.CallbackQuery.Message != nil && up.CallbackQuery.Message.Chat != nil {
+			chatID := up.CallbackQuery.Message.Chat.ID
+			var senderID int64
+			if up.CallbackQuery.From != nil {
+				senderID = up.CallbackQuery.From.ID
+			}
+			TgHandleCallbackQuery(db, token, ownerID, chatID, senderID, up.CallbackQuery.Data, up.CallbackQuery.ID)
+		} else if up.EditedMessage != nil && up.EditedMessage.Chat != nil {
+			TgHandleText(db, token, ownerID, up.EditedMessage.Chat.ID, up.EditedMessage.Text)
+		} else if up.Message != nil && up.Message.Chat != nil {
 			TgHandleText(db, token, ownerID, up.Message.Chat.ID, up.Message.Text)
 		}
 		if int64(up.UpdateID) > tgLastUpdate(db) {
@@ -626,6 +843,31 @@ func tgPollOnce(db *sql.DB, token string, ownerID int64) int {
 		handled++
 	}
 	return handled
+}
+
+// TgHandleCallbackQuery handles inline button presses.
+func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int64, data, callbackID string) {
+	tgAnswerCallback(token, callbackID, "")
+	// Map callback data to text commands.
+	var cmdText string
+	switch data {
+	case "me":
+		cmdText = "/me"
+	case "ovpn":
+		cmdText = "/ovpn"
+	case "sub":
+		cmdText = "/subscription"
+	case "nodes":
+		cmdText = "/nodes"
+	case "list":
+		cmdText = "/list"
+	case "extend_help":
+		cmdText = "/help"
+	default:
+		return
+	}
+	// Inherit chat context; ownerID still gates owner commands.
+	TgHandleText(db, token, ownerID, chatID, cmdText)
 }
 
 // StartTelegramBot launches the long-poll worker (once per process).

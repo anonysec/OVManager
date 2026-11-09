@@ -201,17 +201,11 @@ func TestBotOwnerList(t *testing.T) {
 func TestTgPollHandlesUpdate(t *testing.T) {
 	conn := newBotDB(t)
 	msg := &tgUpdate{UpdateID: 7}
-	msg.Message = &struct {
-		MessageID int `json:"message_id"`
-		Chat      *struct {
-			ID   int64  `json:"id"`
-			Type string `json:"type"`
-		} `json:"chat"`
-		Text string `json:"text"`
-	}{MessageID: 1, Chat: &struct {
+	msg.Message = &tgMessage{MessageID: 1, Text: "/start u-aaa"}
+	msg.Message.Chat = &struct {
 		ID   int64  `json:"id"`
 		Type string `json:"type"`
-	}{ID: 42, Type: "private"}, Text: "/start u-aaa"}
+	}{ID: 42, Type: "private"}
 	st := startStub(t, []tgUpdate{*msg})
 	if n := tgPollOnce(conn, "tok", 999); n != 1 {
 		t.Fatalf("handled %d, want 1", n)
