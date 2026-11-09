@@ -186,6 +186,8 @@ func (h *Handler) backupList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) backupDownload(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
 	files := backupFiles()
 	if len(files) == 0 {
 		auth404(w, "No backups found")
@@ -198,10 +200,9 @@ func (h *Handler) backupDownload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) backupRestore(w http.ResponseWriter, r *http.Request) {
-	// ParseForm first so both urlencoded (restore_from_server) and multipart
-	// (file upload) bodies work; FastAPI accepts either.
-	// MaxBytesReader is the real body limit: ParseMultipartForm alone spools the
-	// excess to disk.
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Time{})
+	_ = rc.SetWriteDeadline(time.Time{})
 	r.Body = http.MaxBytesReader(w, r.Body, maxBackupFileSize+1<<20)
 	// The parser spools a file part over 32 MB to the system temp dir; the
 	// request has to clean it up.

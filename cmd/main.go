@@ -4,14 +4,18 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"html"
 	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/anonysec/OVManager/go/internal/auth"
@@ -30,6 +34,12 @@ func main() {
 	if len(os.Args) > 1 {
 		os.Exit(cli.Run(os.Args[1:], os.Stdout))
 	}
+	os.Exit(run())
+}
+
+func run() int {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 	dataDir := env("DATA_DIR", node.DataDir)
 	cfg := db.ConfigFromEnv()
 	if cfg.Path == "" && cfg.URL == "" {
@@ -37,73 +47,55 @@ func main() {
 	}
 	conn, err := db.OpenConfig(cfg)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		log.Printf("open database: %v", err)
+		return 1
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if _, err := db.MigrateWithBackend(conn, cfg.Backend()); err != nil {
-		log.Fatalf("migrate database: %v", err)
+		log.Printf("migrate database: %v", err)
+		return 1
 	}
-
 	port := env("PORT", "2095")
 	migrateLegacyTLS(dataDir)
 	certFile := panel.SSLCertPath()
 	keyFile := panel.SSLKeyPath()
 	tlsEnabled := fileExists(certFile) && fileExists(keyFile)
-
 	svc := auth.NewService(conn, dataDir)
-	// The flag is read from the process environment inside NewService; the
-	// panel's .env is consulted too, so a panel started by hand next to its
-	// .env trusts the proxy the same way a systemd or container one does.
 	svc.TrustedProxy = svc.TrustedProxy || panel.TrustedProxyEnabled()
 	handler := panelRouter(svc)
-
 	addr, useTLS := serveMode(tlsEnabled, port)
 	if svc.TrustedProxy && (strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, ":")) {
-		log.Printf("SECURITY WARNING: TRUSTED_PROXY is enabled while binding to public address %s. Direct connections could spoof headers unless behind a firewall/proxy!", addr)
+		log.Printf("SECURITY WARNING: TRUSTED_PROXY is enabled while binding to public address %s.", addr)
+	}
+	if !useTLS && !svc.TrustedProxy {
+		log.Printf("SECURITY WARNING: panel is serving over HTTP without TLS; session cookies are Secure and will be blocked by browsers.")
 	}
 	srv := newServer(addr, handler)
-	if useTLS {
-		log.Printf("ovmanager-go %s listening on https://%s (TLS)", version.Version, addr)
-		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil {
-			log.Fatalf("listen %s: %v", addr, err)
+	srvErr := make(chan error, 1)
+	go func() {
+		if useTLS {
+			log.Printf("ovmanager-go %s listening on https://%s (TLS)", version.Version, addr)
+			srvErr <- srv.ListenAndServeTLS(certFile, keyFile)
+		} else {
+			log.Printf("ovmanager-go %s listening on http://%s (no TLS)", version.Version, addr)
+			srvErr <- srv.ListenAndServe()
 		}
-	} else {
-		if !svc.TrustedProxy {
-			log.Printf("SECURITY WARNING: panel is serving over HTTP without TLS; session cookies are Secure and will be blocked by browsers - configure TLS or set TRUSTED_PROXY behind an HTTPS proxy")
+	}()
+	select {
+	case err := <-srvErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("listen %s: %v", addr, err)
+			return 1
 		}
-		log.Printf("ovmanager-go %s listening on http://%s (no TLS)", version.Version, addr)
-		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("listen %s: %v", addr, err)
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("shutdown: %v", err)
+			return 1
 		}
 	}
-}
-
-type blankHandler struct {
-	Handler http.Handler
-	Path    string
-}
-
-func (h blankHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.Handler.ServeHTTP(&blankWriter{ResponseWriter: w, path: h.Path}, r)
-}
-
-type blankWriter struct {
-	http.ResponseWriter
-	status int
-	path   string
-}
-
-func (w *blankWriter) WriteHeader(status int) {
-	w.status = status
-	w.ResponseWriter.WriteHeader(status)
-}
-
-func (w *blankWriter) Write(p []byte) (int, error) {
-	isAPI := w.path == "/api" || len(w.path) >= 5 && w.path[:5] == "/api/"
-	if w.status == http.StatusNotFound && !isAPI {
-		return len(p), nil
-	}
-	return w.ResponseWriter.Write(p)
+	return 0
 }
 
 // panelRouter assembles the panel surface: root /health, every router under
@@ -125,17 +117,26 @@ func panelRouter(svc *auth.Service) http.Handler {
 
 	root := http.NewServeMux()
 	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
-	root.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orig := r.URL.Path
-		http.StripPrefix("/api", blankHandler{Handler: api, Path: orig}).ServeHTTP(w, r)
-	}))
+	root.Handle("/api/", http.StripPrefix("/api", api))
 	root.Handle("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
+	api.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Empty 404 for unmatched paths; method mismatches keep ServeMux 405.
+		if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/logout") {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	_ = api
 
-	// The panel prefix is resolved per request (5s DB cache) so a URL-path
-	// change in Settings takes effect without a restart.
-	root.Handle("/", panelDispatcher(h))
+	spa := spaHandler(h)
+	root.Handle("/", panelDispatcher(h, spa))
 
 	// Track active requests so a database restore can drain in-flight
 	// requests before swapping the live pool.
@@ -158,13 +159,13 @@ func appDir() string {
 // panelDispatcher routes the site root: the current panel prefix serves the
 // SPA (bare prefix redirects to the trailing slash), everything else gets the
 // decoy 404. The prefix is resolved per request.
-func panelDispatcher(h *panel.Handler) http.Handler {
+func panelDispatcher(h *panel.Handler, spa http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		prefix := "/" + strings.Trim(h.URLPath(), "/")
 		isRoot := prefix == "/" || prefix == "//"
 		p := r.URL.Path
 		if isRoot {
-			spaHandler(h).ServeHTTP(w, r)
+			spa.ServeHTTP(w, r)
 			return
 		}
 		if p == "/" {
@@ -176,7 +177,7 @@ func panelDispatcher(h *panel.Handler) http.Handler {
 			return
 		}
 		if strings.HasPrefix(p, prefix+"/") {
-			spaHandler(h).ServeHTTP(w, r)
+			spa.ServeHTTP(w, r)
 			return
 		}
 		h.SubHandler().ServeHTTP(w, r)
@@ -216,7 +217,12 @@ func spaHandler(h *panel.Handler) http.Handler {
 	if dist := filepath.Join(appDir(), "web", "dist"); diskIndex(dist) {
 		fsys = os.DirFS(dist)
 	}
+	return spaHandlerWithFS(h, fsys)
+}
+
+func spaHandlerWithFS(h *panel.Handler, fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
+	index, _ := fs.ReadFile(fsys, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		basePath := "/" + strings.Trim(h.URLPath(), "/")
 		isRoot := basePath == "/" || basePath == "//"
@@ -245,8 +251,7 @@ func spaHandler(h *panel.Handler) http.Handler {
 				candidate := strings.TrimSuffix(rel, "/")
 				if _, fileErr := fs.Stat(fsys, filepath.ToSlash(candidate)); fileErr != nil {
 					if !isAssetPath(rel) {
-						index, err := fs.ReadFile(fsys, "index.html")
-						if err != nil {
+						if len(index) == 0 {
 							w.WriteHeader(http.StatusNotFound)
 							return
 						}
@@ -272,8 +277,7 @@ func spaHandler(h *panel.Handler) http.Handler {
 				return
 			}
 		}
-		index, err := fs.ReadFile(fsys, "index.html")
-		if err != nil {
+		if len(index) == 0 {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -318,22 +322,13 @@ func serveMode(tlsEnabled bool, port string) (string, bool) {
 	return net.JoinHostPort(host, port), tlsEnabled
 }
 
-// newServer builds the panel's http.Server with bounded read/idle timeouts.
-// WriteTimeout is deliberately left at 0: the SSE stream is a long-lived
-// response and a global write deadline would kill every live stream (the
-// stream sets its own per-write deadline).
-//
-// ReadHeaderTimeout is the slowloris guard — headers must arrive quickly.
-// ReadTimeout covers the whole request BODY, so it is generous: the restore
-// endpoint accepts a 100 MB database upload, which on a slow uplink takes
-// minutes. The body SIZE is bounded separately, per endpoint, by
-// http.MaxBytesReader.
 func newServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       10 * time.Minute,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 }
