@@ -129,18 +129,18 @@ func recordOffsiteResult(db *sql.DB, target, tool string, copyErr error) {
 // settingKeyBackupLastSuccessDay is the settings_kv key read/written below.
 const settingKeyBackupLastSuccessDay = "backup.last_success_day"
 
-// readSetting reads one settings_kv row without failing the tick.
+// readSetting reads the backup_last_success_day column from settings.
 func readSetting(db *sql.DB, key string) string {
-	var v string
-	_ = db.QueryRow(`SELECT value FROM settings_kv WHERE key = ?`, key).Scan(&v)
-	return v
+	var v sql.NullString
+	_ = db.QueryRow(`SELECT backup_last_success_day FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	if v.Valid {
+		return v.String
+	}
+	return ""
 }
 
-// writeSetting persists one settings_kv row atomically.
+// writeSetting persists backup_last_success_day into settings.
 func writeSetting(db *sql.DB, key, value string, nowUnix int64) error {
-	_, err := db.Exec(
-		`INSERT INTO settings_kv (key, value, updated_at) VALUES (?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
-		key, value, nowUnix, value, nowUnix)
+	_, err := db.Exec(`UPDATE settings SET backup_last_success_day = ? WHERE id = (SELECT MIN(id) FROM settings)`, value)
 	return err
 }

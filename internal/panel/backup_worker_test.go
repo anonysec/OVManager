@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -21,8 +22,8 @@ func newBackupTestHandler(t *testing.T) (*Handler, string) {
 	if _, err := conn.Exec(`CREATE TABLE settings (
 		id INTEGER PRIMARY KEY, auto_backup_enabled INTEGER DEFAULT 0,
 		auto_backup_time TEXT DEFAULT '03:30', auto_backup_keep INTEGER DEFAULT 50,
-		timezone TEXT DEFAULT 'UTC', offsite_backup_target TEXT DEFAULT '');
-CREATE TABLE settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL DEFAULT 0);
+		timezone TEXT DEFAULT 'UTC', offsite_backup_target TEXT DEFAULT '',
+		backup_last_success_day TEXT);
 CREATE TABLE telemetry (id INTEGER PRIMARY KEY);`); err != nil {
 		t.Fatal(err)
 	}
@@ -41,9 +42,10 @@ func setBackupSettings(t *testing.T, h *Handler, enabled int, timeStr, tz string
 
 func lastSuccessDay(t *testing.T, h *Handler) string {
 	t.Helper()
-	var v string
-	_ = h.Svc.DB().QueryRow(`SELECT value FROM settings_kv WHERE key = 'backup.last_success_day'`).Scan(&v)
-	return v
+	var v sql.NullString
+	_ = h.Svc.DB().QueryRow(`SELECT backup_last_success_day FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	if v.Valid { return v.String }
+	return "" 
 }
 
 func TestBackupTickDisabledDoesNothing(t *testing.T) {
@@ -89,7 +91,7 @@ func TestBackupTickInvalidTimeDoesNothing(t *testing.T) {
 func TestBackupTickSameDaySkipped(t *testing.T) {
 	h, _ := newBackupTestHandler(t)
 	setBackupSettings(t, h, 1, "03:30", "UTC")
-	if _, err := h.Svc.DB().Exec(`INSERT INTO settings_kv (key, value, updated_at) VALUES ('backup.last_success_day', '2026-11-06', 0)`); err != nil {
+	if _, err := h.Svc.DB().Exec(`INSERT INTO settings (id, backup_last_success_day) VALUES (1, '2026-11-06') ON CONFLICT(id) DO UPDATE SET backup_last_success_day = '2026-11-06'`); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC) // after schedule, same day already done

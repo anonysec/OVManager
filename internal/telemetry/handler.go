@@ -553,7 +553,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 		return
 	}
 	cap := SnapshotMaxNodes
-	if v := kvValue(db, SnapshotMaxNodesKey); v != "" {
+	if v := kvValue(db); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			cap = n
 		}

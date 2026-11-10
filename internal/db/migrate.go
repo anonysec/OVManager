@@ -320,6 +320,10 @@ var mappedColumns = map[string][]mcolumn{
 		{"panel_url", "VARCHAR"},
 		{"panel_domain", "VARCHAR"},
 		{"bot_owner_setup_complete", "BOOLEAN DEFAULT 0 NOT NULL"},
+		{"backup_last_success_day", "VARCHAR"},
+		{"telegram_sent_day", "VARCHAR"},
+		{"snapshot_max_nodes", "INTEGER DEFAULT 0 NOT NULL"},
+		{"telegram_last_update_id", "BIGINT DEFAULT 0 NOT NULL"},
 	},
 }
 
@@ -384,7 +388,6 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 	`CREATE TABLE IF NOT EXISTS user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
 	`CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
-	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS pending_user_revocations (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
 	`CREATE TABLE IF NOT EXISTS NodeUsage (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL DEFAULT 0, downlink INTEGER NOT NULL DEFAULT 0, UNIQUE (created_at, node_id))`,
 	`CREATE INDEX IF NOT EXISTS idx_node_usage_created ON NodeUsage(created_at)`,
@@ -778,7 +781,7 @@ var steps = []step{
 	{35, "drop legacy snapshot/audit/traffic tables (DB simplification)", func(x execer) error {
 		for _, t := range []string{
 			"node_health_snapshots", "traffic_snapshots", "security_snapshots",
-			"audit_logs", "deleted_users", "deleted_nodes", "login_attempts",
+			"audit_logs", "deleted_users", "deleted_nodes", "login_attempts", "settings_kv",
 		} {
 			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
 		}

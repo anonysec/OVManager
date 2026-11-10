@@ -12,13 +12,13 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/crypto"
-	"github.com/anonysec/OVManager/internal/db"
 	"github.com/anonysec/OVManager/internal/node"
 )
 
@@ -456,8 +456,13 @@ func latestNodeCPU(db *sql.DB) []nodeCPU {
 	return nil
 }
 
-func kvValue(conn *sql.DB, key db.SettingsKey) string {
-	return db.ReadSetting(conn, key)
+func kvValue(conn *sql.DB) string {
+	var v sql.NullInt64
+	_ = conn.QueryRow(`SELECT snapshot_max_nodes FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	if v.Valid && v.Int64 > 0 {
+		return strconv.FormatInt(v.Int64, 10)
+	}
+	return ""
 }
 
 // bankerRound is banker's rounding, which Go's math.Round is not.

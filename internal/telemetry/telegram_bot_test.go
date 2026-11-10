@@ -25,9 +25,8 @@ func newBotDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	_, err = conn.Exec(`
-CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER);
+CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER, telegram_last_update_id BIGINT DEFAULT 0);
 CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT, expiry_date VARCHAR, is_active BOOLEAN DEFAULT 1, max_logins INTEGER DEFAULT 1, telegram_chat_id INTEGER, activation_token_hash VARCHAR(64), activation_token_expires_at REAL);
-CREATE TABLE settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor VARCHAR, action VARCHAR, target VARCHAR, detail VARCHAR);
 	`)
 	if err != nil {

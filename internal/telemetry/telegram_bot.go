@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/internal/audit"
-	dbPkg "github.com/anonysec/OVManager/internal/db"
 	"github.com/anonysec/OVManager/internal/node"
 )
 
@@ -122,16 +121,16 @@ func tgBotToken(db *sql.DB) (string, int64, bool) {
 }
 
 func tgLastUpdate(db *sql.DB) int64 {
-	v := dbPkg.ReadSetting(db, dbPkg.KeyTelegramLastUpdateID)
-	n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
-	if err != nil {
-		return 0
+	var v sql.NullInt64
+	_ = db.QueryRow(`SELECT telegram_last_update_id FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	if v.Valid {
+		return v.Int64
 	}
-	return n
+	return 0
 }
 
 func tgSetLastUpdate(db *sql.DB, id int64) {
-	_ = dbPkg.WriteSetting(db, dbPkg.KeyTelegramLastUpdateID, strconv.FormatInt(id, 10), time.Now().Unix())
+	_, _ = db.Exec(`UPDATE settings SET telegram_last_update_id = ? WHERE id = (SELECT MIN(id) FROM settings)`, id)
 }
 
 func formatBytes(n int64) string {
