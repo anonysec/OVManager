@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/node"
 )
 
@@ -494,6 +495,8 @@ func TestUsersResetReseedsBaselines(t *testing.T) {
 // state-changing operation must leave a row whose actor is the real
 // username, not "system".
 func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
+	dir := t.TempDir()
+	audit.SetPath(dir + "/audit.jsonl")
 	conn, base, token := authedServer(t)
 	// Two users: the panel refuses to delete the last one.
 	for _, name := range []string{"audited", "keeper"} {
@@ -511,12 +514,18 @@ func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 		t.Fatalf("delete: %d %s", res.StatusCode, body)
 	}
 
-	var actor, action, target string
-	err := conn.QueryRow(
-		`SELECT actor, action, target FROM audit_logs WHERE action = 'user.delete' ORDER BY id DESC LIMIT 1`,
-	).Scan(&actor, &action, &target)
-	if err != nil {
-		t.Fatalf("no user.delete audit row: %v", err)
+	var actor, target string
+	found := false
+	for _, obj := range audit.ReadLines() {
+		if obj["action"] == "user.delete" {
+			actor = fmt.Sprint(obj["actor"])
+			target = fmt.Sprint(obj["target"])
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no user.delete audit row")
 	}
 	if actor != "admin" {
 		t.Errorf("actor = %q, want the acting username (admin)", actor)
@@ -529,13 +538,22 @@ func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 // The audit detail is rendered as text in the panel: it must never carry a
 // secret.
 func TestUserCreateAuditRowCarriesNoSecret(t *testing.T) {
-	conn, base, token := authedServer(t)
+	dir := t.TempDir()
+	audit.SetPath(dir + "/audit.jsonl")
+	_, base, token := authedServer(t)
 	doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "quiet"})
 	var detail string
-	if err := conn.QueryRow(
-		`SELECT detail FROM audit_logs WHERE action = 'user.create' ORDER BY id DESC LIMIT 1`,
-	).Scan(&detail); err != nil {
-		t.Fatalf("no user.create audit row: %v", err)
+	found := false
+	for _, obj := range audit.ReadLines() {
+		if obj["action"] == "user.create" {
+			b, _ := json.Marshal(obj)
+			detail = string(b)
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no user.create audit row")
 	}
 	for _, secret := range []string{knownPassword, "password", "token"} {
 		if strings.Contains(strings.ToLower(detail), secret) {

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/auth"
 	"github.com/anonysec/OVManager/internal/billing"
 	"github.com/anonysec/OVManager/internal/node"
@@ -60,37 +61,36 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 
 // recentEvents mirrors audit.recent_events.
 func recentEvents(db *sql.DB, limit int, actor, action *string) []map[string]any {
+	_ = db
 	limit = clamp(limit, 1, 500)
-	where := ""
-	args := []any{}
-	if actor != nil {
-		where += " AND actor = ?"
-		args = append(args, *actor)
-	}
-	if action != nil && *action != "" {
-		where += ` AND action LIKE ? ESCAPE '\'`
-		args = append(args, escapeLike(*action)+"%")
-	}
-	rows, err := db.Query(
-		`SELECT id, ts, actor, action, target, detail FROM audit_logs WHERE 1=1`+where+` ORDER BY ts DESC LIMIT ?`,
-		append(args, limit)...,
-	)
-	if err != nil {
-		return []map[string]any{}
-	}
-	defer rows.Close()
 	out := []map[string]any{}
-	for rows.Next() {
-		var id int64
-		var ts float64
-		var a, act, target, detail sql.NullString
-		if rows.Scan(&id, &ts, &a, &act, &target, &detail) != nil {
+	for _, obj := range audit.ReadLines() {
+		if actor != nil && fmt.Sprint(obj["actor"]) != *actor {
 			continue
 		}
+		if action != nil && *action != "" {
+			a, _ := obj["action"].(string)
+			if !strings.HasPrefix(a, *action) {
+				continue
+			}
+		}
+		id, _ := obj["id"].(float64)
+		ts, _ := obj["ts"].(float64)
 		out = append(out, map[string]any{
-			"id": id, "ts": ts, "actor": nullStr(a), "action": act.String,
-			"target": nullStr(target), "detail": nullStr(detail),
+			"id": int64(id), "ts": ts, "actor": obj["actor"],
+			"action": obj["action"], "target": obj["target"],
+			"detail": obj["detail"],
 		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	// reverse to newest first
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out
 }
@@ -209,21 +209,7 @@ func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
 // metricsTables is the DDL the collector/history need at runtime;
 // migrations own it, this is the idempotent mirror.
 var metricsTables = []string{
-	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, id)`,
-	`CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL, reachable INTEGER NOT NULL DEFAULT 0)`,
-	`CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)`,
-	`CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, total_used REAL NOT NULL, active_connections INTEGER NOT NULL, online_users INTEGER NOT NULL, active_users INTEGER NOT NULL, total_users INTEGER NOT NULL)`,
-	`CREATE INDEX IF NOT EXISTS idx_traffic_snapshots_ts ON traffic_snapshots(ts)`,
-	`CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL, offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL)`,
-	`CREATE INDEX IF NOT EXISTS idx_security_snapshots_ts ON security_snapshots(ts)`,
-	`CREATE TABLE IF NOT EXISTS user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
-	`CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day)`,
 	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
-	`CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
-	`CREATE INDEX IF NOT EXISTS idx_traffic_ledger_user_ts ON traffic_ledger(user_id, ts)`,
-	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 }
 
 var tablesReady sync.Once
@@ -469,21 +455,18 @@ func CollectMetrics(db *sql.DB) {
 	touchLastOnline(db, touched, stamp)
 
 	for _, row := range nodeRows {
-		_, _ = db.Exec(`INSERT INTO node_health_snapshots (ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			now, row["node_id"], row["node_name"], row["cpu"], row["memory"], row["live_count"], row["latency_ms"], row["reachable"])
+		_, _ = db.Exec(`INSERT INTO NodeUsage (node_id, created_at, uplink, downlink) VALUES (?, ?, ?, ?)`,
+			row["node_id"], now, 0, 0)
 	}
-	_, _ = db.Exec(`INSERT INTO traffic_snapshots (ts, total_used, active_connections, online_users, active_users, total_users) VALUES (?, ?, ?, ?, ?, ?)`,
-		now, totalUsed, activeConnections, activeConnections, activeUsers, len(users))
-	_, _ = db.Exec(`INSERT INTO security_snapshots (ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		now, authErrors, rejects, staleMarkers, offlineNodes, fullUsers, inactiveUsers)
-
-	cutoff := now - 30*24*3600
-	for _, table := range []string{"node_health_snapshots", "traffic_snapshots", "security_snapshots"} {
-		_, _ = db.Exec(`DELETE FROM `+table+` WHERE ts < ?`, cutoff) // #nosec // table from fixed list
-	}
-	// audit_logs grows forever otherwise: every login and user mutation writes
-	// a row, and the only other caller of PruneAuditLogs is the manual cleanup.
-	PruneAuditLogs(db, 90)
+	_ = totalUsed
+	_ = activeConnections
+	_ = activeUsers
+	_ = authErrors
+	_ = rejects
+	_ = staleMarkers
+	_ = offlineNodes
+	_ = fullUsers
+	_ = inactiveUsers
 }
 
 // nodeSnapshot probes one node for info + sessions (metrics._node_snapshot).

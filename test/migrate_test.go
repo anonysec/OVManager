@@ -83,13 +83,13 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 34 || userVersion(t, conn) != 34 {
-		t.Fatalf("version = %d, user_version = %d, want 34", v, userVersion(t, conn))
+	if v != 35 || userVersion(t, conn) != 35 {
+		t.Fatalf("version = %d, user_version = %d, want 35", v, userVersion(t, conn))
 	}
 
 	for _, table := range []string{
 		"users", "admins", "sessions", "nodes", "settings",
-		"delivered", "traffic_ledger", "settings_kv", "login_attempts", "audit_logs",
+		"delivered", "traffic_ledger", "settings_kv", "login_attempts",
 		"pending_user_revocations",
 	} {
 		if !hasTable(t, conn, table) {
@@ -121,8 +121,8 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v2 != 34 || userVersion(t, conn) != 34 {
-		t.Fatalf("second run version = %d/%d, want 34", v2, userVersion(t, conn))
+	if v2 != 35 || userVersion(t, conn) != 35 {
+		t.Fatalf("second run version = %d/%d, want 35", v2, userVersion(t, conn))
 	}
 	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
 		t.Fatalf("second run duplicated settings rows: %d", n)
@@ -169,8 +169,8 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 34 || userVersion(t, conn) != 34 {
-		t.Fatalf("version = %d/%d, want 34", v, userVersion(t, conn))
+	if v != 35 || userVersion(t, conn) != 35 {
+		t.Fatalf("version = %d/%d, want 35", v, userVersion(t, conn))
 	}
 	if !hasColumn(t, conn, "users", "tag") {
 		t.Fatalf("v8 did not add users.tag")
@@ -460,8 +460,8 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
-	if v != 34 {
-		t.Fatalf("version = %d, want 34", v)
+	if v != 35 {
+		t.Fatalf("version = %d, want 35", v)
 	}
 	var second int
 	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
@@ -644,8 +644,8 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if v != 34 {
-		t.Fatalf("version = %d, want 34", v)
+	if v != 35 {
+		t.Fatalf("version = %d, want 35", v)
 	}
 	// user preserved
 	var id int64
@@ -693,19 +693,4 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	}
 }
 
-// TestMigrateDropsUnusableAuditIndex
-func TestMigrateDropsUnusableAuditIndex(t *testing.T) {
-	conn := newMigrateDB(t)
-	if _, err := db.Migrate(conn); err != nil {
-		t.Fatalf("first migrate: %v", err)
-	}
-	if _, err := conn.Exec(`CREATE INDEX idx_audit_logs_promoted ON audit_logs(id) WHERE promoted = 0`); err != nil {
-		t.Fatalf("pre-create index: %v", err)
-	}
-	if _, err := db.Migrate(conn); err != nil {
-		t.Fatalf("second migrate: %v", err)
-	}
-	if hasIndex(t, conn, "idx_audit_logs_promoted") {
-		t.Error("idx_audit_logs_promoted still present after migrate")
-	}
-}
+// TestMigrateDropsUnusableAuditIndex removed: audit_logs table dropped.

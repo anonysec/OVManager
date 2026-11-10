@@ -1,48 +1,130 @@
-// Package audit writes the panel's audit trail: one row per state-changing
-// operation, attributed to the actor who performed it.
-//
-// It is a leaf package (stdlib + a *sql.DB) so that every layer can write
-// audit rows without importing a sibling: internal/telemetry imports
-// internal/node, so internal/node cannot import internal/telemetry.
-//
-// The stored detail keeps the shape the rest of the tree already expects:
-// {"severity": ..., "message": ..., "meta": {...}}. The event promoter in
-// internal/telemetry reads meta.event_key to decide what to send to Telegram,
-// and the audit prune removes rows that carry NO event_key — so an audit row
-// (which has no event_key) is never messaged and is always prunable.
+// Package audit writes the panel's audit trail: one JSONL line per state-changing
+// operation, attributed to the actor who performed it. File-based (not DB).
 package audit
 
 import (
-	"database/sql"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
-// Record writes one audit row. actor is the authenticated username; an empty
-// actor is stored as "system". meta must never carry a secret (no password, no
-// token, no certificate body) — the detail column is rendered as text in the
-// panel and is readable by anyone who can read the activity page.
-func Record(db *sql.DB, actor, kind, severity, message string, meta map[string]any) {
-	if db == nil {
-		return
-	}
+var (
+	auditPath = "/var/log/ovmanager/audit.jsonl"
+	mu        sync.Mutex
+	idSeq     int64
+)
+
+// SetPath overrides the audit file location (for tests).
+func SetPath(p string) { auditPath = p }
+
+func Path() string { return auditPath }
+
+// Record writes one audit line. actor is the authenticated username; an empty
+// actor is stored as "system". meta must never carry a secret.
+func Record(db interface{}, actor, kind, severity, message string, meta map[string]any) {
 	if meta == nil {
 		meta = map[string]any{}
 	}
-	payload := map[string]any{"severity": severity, "message": message, "meta": meta}
-	detail, err := json.Marshal(payload)
+	mu.Lock()
+	defer mu.Unlock()
+	idSeq++
+	payload := map[string]any{
+		"id":       idSeq,
+		"ts":       float64(time.Now().Unix()),
+		"actor":    strings.TrimSpace(actor),
+		"action":   kind,
+		"severity": severity,
+		"message":  message,
+		"meta":     meta,
+		"promoted": false,
+	}
+	if payload["actor"] == "" {
+		payload["actor"] = "system"
+	}
+	if t, ok := meta["target"].(string); ok && t != "" {
+		payload["target"] = t
+	}
+	line, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
-	var target any
-	if t, ok := meta["target"].(string); ok && t != "" {
-		target = t
+	payload["detail"] = string(line)
+	line, err = json.Marshal(payload)
+	if err != nil {
+		return
 	}
-	who := strings.TrimSpace(actor)
-	if who == "" {
-		who = "system"
+	if err := os.MkdirAll(filepath.Dir(auditPath), 0o700); err != nil {
+		return
 	}
-	_, _ = db.Exec(`INSERT INTO audit_logs (ts, actor, action, target, detail) VALUES (?, ?, ?, ?, ?)`,
-		float64(time.Now().Unix()), who, kind, target, string(detail))
+	f, err := os.OpenFile(auditPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = fmt.Fprintf(f, "%s\n", line)
+}
+
+// ReadLines returns all audit lines parsed as maps.
+func ReadLines() []map[string]any {
+	data, err := os.ReadFile(auditPath)
+	if err != nil {
+		return nil
+	}
+	var out []map[string]any
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) == nil {
+			out = append(out, obj)
+		}
+	}
+	return out
+}
+
+// MarkPromoted sets promoted=true for the given id in the file.
+func MarkPromoted(id int64) {
+	mu.Lock()
+	defer mu.Unlock()
+	data, err := os.ReadFile(auditPath)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	var out []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) != nil {
+			out = append(out, line)
+			continue
+		}
+		if v, ok := obj["id"].(float64); ok && int64(v) == id {
+			obj["promoted"] = true
+			b, _ := json.Marshal(obj)
+			out = append(out, string(b))
+		} else {
+			out = append(out, line)
+		}
+	}
+	_ = os.WriteFile(auditPath, []byte(strings.Join(out, "\n")+"\n"), 0o600)
+}
+
+// LoadIDSeq initializes the id counter from existing file (call at startup).
+func LoadIDSeq() {
+	lines := ReadLines()
+	for _, obj := range lines {
+		if v, ok := obj["id"].(float64); ok {
+			if int64(v) > idSeq {
+				idSeq = int64(v)
+			}
+		}
+	}
 }

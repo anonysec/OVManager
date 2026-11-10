@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -19,7 +20,6 @@ import (
 	"github.com/anonysec/OVManager/internal/crypto"
 	"github.com/anonysec/OVManager/internal/db"
 	"github.com/anonysec/OVManager/internal/node"
-	"os"
 )
 
 func RecordEvent(db *sql.DB, kind, severity, message string, meta map[string]any) {
@@ -28,63 +28,68 @@ func RecordEvent(db *sql.DB, kind, severity, message string, meta map[string]any
 
 // lastEventMeta returns the meta of the newest record_event row for kind.
 func lastEventMeta(db *sql.DB, kind string) map[string]any {
-	var detail sql.NullString
-	err := db.QueryRow(`SELECT detail FROM audit_logs WHERE action = ? AND actor = 'system' ORDER BY id DESC LIMIT 1`, kind).Scan(&detail)
-	if err != nil || !detail.Valid || detail.String == "" {
+	_ = db
+	var latest map[string]any
+	var latestTS float64
+	for _, obj := range audit.ReadLines() {
+		if obj["action"] != kind || obj["actor"] != "system" {
+			continue
+		}
+		ts, _ := obj["ts"].(float64)
+		if ts > latestTS {
+			latestTS = ts
+			latest = obj
+		}
+	}
+	if latest == nil {
 		return nil
 	}
-	var payload map[string]any
-	if json.Unmarshal([]byte(detail.String), &payload) != nil {
-		return nil
-	}
-	meta, _ := payload["meta"].(map[string]any)
+	meta, _ := latest["meta"].(map[string]any)
 	return meta
 }
 
-// PruneAuditLogs deletes audit_logs rows older than keepDays, but only those
-// that have already been delivered (or carry no event_key), so an undelivered
-// alert is never dropped. Returns the number removed.
-//
-// One statement: the delivered check is a correlated subquery, so the prune
-// does not issue a query per candidate row.
+// PruneAuditLogs removes audit lines older than keepDays from the JSONL file.
+// Returns number removed.
 func PruneAuditLogs(db *sql.DB, keepDays int) int {
+	_ = db
 	if keepDays <= 0 {
 		keepDays = 90
 	}
 	keepDays = clamp(keepDays, 1, 1<<30)
-	cutoff := float64(time.Now().UTC().AddDate(0, 0, -keepDays).UnixNano()) / 1e9
-
-	if !auditDeliveredTableExists(db) {
-		// Without the delivered table there is no way to tell a delivered row
-		// from a pending one: keep everything rather than drop an alert.
-		return 0
-	}
-	res, err := db.Exec(
-		`DELETE FROM audit_logs WHERE ts < ? AND (
-		   detail IS NULL OR detail = '' OR NOT json_valid(detail)
-		   OR json_extract(detail, '$.meta.event_key') IS NULL
-		   OR EXISTS (
-		     SELECT 1 FROM delivered d
-		     WHERE d.subscription = audit_logs.action
-		       AND d.event_key = json_extract(audit_logs.detail, '$.meta.event_key')
-		   )
-		 )`,
-		cutoff,
-	)
+	cutoff := float64(time.Now().UTC().AddDate(0, 0, -keepDays).Unix())
+	path := audit.Path()
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
-	n, _ := res.RowsAffected()
-	return int(n)
-}
-func auditDeliveredTableExists(db *sql.DB) bool {
-	var n int64
-	if err := db.QueryRow(
-		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='delivered'`,
-	).Scan(&n); err != nil {
-		return false
+	lines := strings.Split(string(data), "\n")
+	var kept []string
+	removed := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) != nil {
+			kept = append(kept, line)
+			continue
+		}
+		ts, _ := obj["ts"].(float64)
+		if ts < cutoff {
+			removed++
+			continue
+		}
+		kept = append(kept, line)
 	}
-	return n > 0
+	if removed == 0 {
+		return 0
+	}
+	out := strings.Join(kept, "\n")
+	if len(kept) > 0 {
+		out += "\n"
+	}
+	_ = os.WriteFile(path, []byte(out), 0o600)
+	return removed
 }
 
 // promoteEvents delivers enrolled audit events to Telegram, once each.
@@ -95,76 +100,41 @@ func auditDeliveredTableExists(db *sql.DB) bool {
 // inside the JSON detail, so the exclusion uses SQLite's json_extract against
 // the delivered table.
 func promoteEvents(db *sql.DB, send func(string) bool) int {
+	_ = db
 	sent := 0
-	if !auditDeliveredTableExists(db) {
-		return 0
-	}
-	var lastID int64
-	for {
-		rows, err := db.Query(
-			`SELECT a.id, a.action, a.detail FROM audit_logs a
-			 WHERE a.actor = 'system' AND a.promoted = 0 AND a.id > ?
-			   AND a.detail IS NOT NULL AND a.detail != ''
-			   AND json_valid(a.detail)
-			   AND json_extract(a.detail, '$.meta.event_key') IS NOT NULL
-			   AND NOT EXISTS (
-			     SELECT 1 FROM delivered d
-			     WHERE d.subscription = a.action
-			       AND d.event_key = json_extract(a.detail, '$.meta.event_key')
-			   )
-			 ORDER BY a.id ASC LIMIT 100`,
-			lastID,
-		)
-		if err != nil {
-			break
+	for _, obj := range audit.ReadLines() {
+		actor, _ := obj["actor"].(string)
+		if actor != "system" {
+			continue
 		}
-		batch := 0
-		maxID := lastID
-		for rows.Next() {
-			var id int64
-			var action string
-			var detail sql.NullString
-			if rows.Scan(&id, &action, &detail) != nil {
-				continue
-			}
-			batch++
-			if id > maxID {
-				maxID = id
-			}
-			if !detail.Valid || detail.String == "" {
-				continue
-			}
-			var payload map[string]any
-			if json.Unmarshal([]byte(detail.String), &payload) != nil {
-				continue
-			}
-			meta, _ := payload["meta"].(map[string]any)
-			key, _ := meta["event_key"].(string)
-			if key == "" {
-				continue
-			}
-			message, _ := payload["message"].(string)
-			if message == "" {
-				message = action
-			}
-			if !send(message) {
-				continue
-			}
-			_, _ = db.Exec(
-				`INSERT OR IGNORE INTO delivered (subscription, event_key, ts) VALUES (?, ?, ?)`,
-				action, key, nowSecs(),
-			)
-			_, _ = db.Exec(
-				`UPDATE audit_logs SET promoted = 1 WHERE id = ?`,
-				id,
-			)
-			sent++
+		promoted, _ := obj["promoted"].(bool)
+		if promoted {
+			continue
 		}
-		_ = rows.Close()
-		lastID = maxID
-		if batch < 100 {
-			break
+		meta, _ := obj["meta"].(map[string]any)
+		key, _ := meta["event_key"].(string)
+		if key == "" {
+			continue
 		}
+		action, _ := obj["action"].(string)
+		// check delivered
+		var exists int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM delivered WHERE subscription = ? AND event_key = ?`, action, key).Scan(&exists)
+		if exists > 0 {
+			continue
+		}
+		message, _ := obj["message"].(string)
+		if message == "" {
+			message = action
+		}
+		if !send(message) {
+			continue
+		}
+		_, _ = db.Exec(`INSERT OR IGNORE INTO delivered (subscription, event_key, ts) VALUES (?, ?, ?)`, action, key, nowSecs())
+		if v, ok := obj["id"].(float64); ok {
+			audit.MarkPromoted(int64(v))
+		}
+		sent++
 	}
 	return sent
 }
@@ -483,29 +453,7 @@ type nodeCPU struct {
 }
 
 func latestNodeCPU(db *sql.DB) []nodeCPU {
-	var exists int64
-	if db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='node_health_snapshots'`).Scan(&exists) != nil || exists == 0 {
-		return nil
-	}
-	rows, err := db.Query(`SELECT node_id, node_name, cpu FROM node_health_snapshots WHERE id IN (SELECT MAX(id) FROM node_health_snapshots GROUP BY node_id)`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var out []nodeCPU
-	for rows.Next() {
-		var id int64
-		var name sql.NullString
-		var cpu sql.NullFloat64
-		if rows.Scan(&id, &name, &cpu) == nil {
-			n := name.String
-			if n == "" {
-				n = fmt.Sprintf("node-%d", id)
-			}
-			out = append(out, nodeCPU{id: id, name: n, cpu: cpu.Float64})
-		}
-	}
-	return out
+	return nil
 }
 
 func kvValue(conn *sql.DB, key db.SettingsKey) string {

@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 34
+const SchemaVersion = 35
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -249,6 +249,9 @@ var mappedColumns = map[string][]mcolumn{
 		{"used", "BIGINT"},
 		{"last_node_usage", "BIGINT DEFAULT 0 NOT NULL"},
 		{"node_usage", "VARCHAR DEFAULT '{}' NOT NULL"},
+		{"data_limit", "BIGINT DEFAULT 0 NOT NULL"},
+		{"traffic_reset", "VARCHAR DEFAULT 'never' NOT NULL"},
+		{"last_traffic_reset", "BIGINT DEFAULT 0 NOT NULL"},
 		{"max_logins", "INTEGER DEFAULT 1 NOT NULL"},
 		{"expiry_date", "DATE DEFAULT CURRENT_TIMESTAMP NOT NULL"},
 		{"is_active", "BOOLEAN DEFAULT 1 NOT NULL"},
@@ -378,32 +381,21 @@ func createTableSQL(table string) string {
 
 // extraTables is constants._EXTRA_DDL: the non-ORM tables.
 var extraTables = []string{
-	`CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_logs_ts ON audit_logs(ts)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor, id)`,
-	`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
-	// shortcut: this index targets the rowid alias, so it can never serve a
-	// query and every insert maintained it. Drop it wherever it lingers.
-	`DROP INDEX IF EXISTS idx_audit_logs_promoted`,
-	`CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL, reachable INTEGER NOT NULL DEFAULT 0)`,
-	`CREATE INDEX IF NOT EXISTS idx_node_health_ts ON node_health_snapshots(ts)`,
-	`CREATE INDEX IF NOT EXISTS idx_node_health_node_ts ON node_health_snapshots(node_id, ts)`,
-	`CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, total_used REAL NOT NULL, active_connections INTEGER NOT NULL, online_users INTEGER NOT NULL, active_users INTEGER NOT NULL, total_users INTEGER NOT NULL)`,
-	`CREATE INDEX IF NOT EXISTS idx_traffic_snapshots_ts ON traffic_snapshots(ts)`,
-	`CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL, offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL)`,
-	`CREATE INDEX IF NOT EXISTS idx_security_snapshots_ts ON security_snapshots(ts)`,
+	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 	`CREATE TABLE IF NOT EXISTS login_attempts (key_hash TEXT PRIMARY KEY, attempts TEXT NOT NULL DEFAULT '[]', updated REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
-	`CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day)`,
-	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 	`CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
-	`CREATE INDEX IF NOT EXISTS idx_traffic_ledger_user_ts ON traffic_ledger(user_id, ts)`,
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at)`,
 	`CREATE TABLE IF NOT EXISTS deleted_nodes (id INTEGER PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS idx_deleted_nodes_expires ON deleted_nodes(expires_at)`,
 	`CREATE TABLE IF NOT EXISTS pending_user_revocations (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
+	`CREATE TABLE IF NOT EXISTS NodeUsage (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL DEFAULT 0, downlink INTEGER NOT NULL DEFAULT 0, UNIQUE (created_at, node_id))`,
+	`CREATE INDEX IF NOT EXISTS idx_node_usage_created ON NodeUsage(created_at)`,
+	`CREATE TABLE IF NOT EXISTS NodeUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL, downlink INTEGER NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS idx_node_usage_reset_node ON NodeUsageResetLogs(node_id, created_at)`,
+	`CREATE TABLE IF NOT EXISTS UserUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at REAL NOT NULL, used_bytes INTEGER NOT NULL)`,
 }
 
 func createExtraTables(x execer) error {
@@ -785,6 +777,15 @@ var steps = []step{
 				}
 				_, _ = x.Exec(`INSERT OR IGNORE INTO user_node_usage (user_id, node_id, baseline) VALUES (?, ?, ?)`, r.id, nid, base)
 			}
+		}
+		return nil
+	}},
+	{35, "drop legacy snapshot/audit/traffic tables (DB simplification)", func(x execer) error {
+		for _, t := range []string{
+			"node_health_snapshots", "traffic_snapshots", "security_snapshots",
+			"audit_logs",
+		} {
+			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
 		}
 		return nil
 	}},

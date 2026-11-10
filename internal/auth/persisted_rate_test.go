@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anonysec/OVManager/internal/audit"
 	_ "modernc.org/sqlite"
 )
 
@@ -154,9 +155,14 @@ func TestDistributedFailuresDoNotBlockOwner(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("correct login from new IP = %d, want 200", w.Code)
 	}
-	var cnt int
-	_ = d.QueryRow(`SELECT COUNT(*) FROM audit_logs WHERE action = 'auth.login' AND actor = 'owner'`).Scan(&cnt)
-	if cnt < 1 {
+	found := false
+	for _, obj := range audit.ReadLines() {
+		if obj["action"] == "auth.login" && obj["actor"] == "owner" {
+			found = true
+			break
+		}
+	}
+	if !found {
 		t.Fatal("audit record missing on success")
 	}
 }

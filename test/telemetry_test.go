@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/auth"
 	"github.com/anonysec/OVManager/internal/telemetry"
 )
@@ -68,6 +71,8 @@ func newTelemetryServer(t *testing.T, conn *sql.DB, dir string) (*httptest.Serve
 
 func TestActivityMatches(t *testing.T) {
 	conn, dir := newTelemetryConn(t)
+	auditFile := filepath.Join(dir, "audit.jsonl")
+	audit.SetPath(auditFile)
 	srv, token := newTelemetryServer(t, conn, dir)
 
 	rows := []struct {
@@ -79,10 +84,17 @@ func TestActivityMatches(t *testing.T) {
 		{300.0, "admin1", "user.update", "ann", nil},
 	}
 	for _, r := range rows {
-		if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, target, detail) VALUES (?,?,?,?,?)`,
-			r.ts, r.actor, r.action, r.target, r.detail); err != nil {
-			t.Fatalf("seed audit: %v", err)
+		obj := map[string]any{
+			"ts": r.ts, "actor": r.actor, "action": r.action,
+			"target": r.target, "detail": r.detail,
 		}
+		if r.detail == nil {
+			delete(obj, "detail")
+		}
+		b, _ := json.Marshal(obj)
+		f, _ := os.OpenFile(auditFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		_, _ = f.WriteString(string(b) + "\n")
+		_ = f.Close()
 	}
 
 	// The seeded rows are the subject of this test: the login that set the
@@ -133,14 +145,10 @@ func TestNotificationsShape(t *testing.T) {
 		(2,'u2','bob',1000,900,?,1)`, soon, later); err != nil {
 		t.Fatalf("seed users: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO node_health_snapshots (ts, node_id, node_name, cpu, reachable) VALUES (?,2,'online-node',90,1)`, time.Now().Unix()); err != nil {
-		t.Fatalf("seed cpu: %v", err)
-	}
-
 	_, body := doJSON(t, http.MethodGet, srv.URL+"/api/notifications/", token, nil)
 	items, _ := body["data"].([]any)
-	if len(items) != 3 {
-		t.Fatalf("len(data) = %d, want 3 (%v)", len(items), items)
+	if len(items) != 2 {
+		t.Fatalf("len(data) = %d, want 2 (%v)", len(items), items)
 	}
 	got := map[string]string{}
 	for _, it := range items {
@@ -157,9 +165,6 @@ func TestNotificationsShape(t *testing.T) {
 	}
 	if title := got["threshold_expiry:ann"]; title != "ann expires in 2 day(s)" {
 		t.Fatalf("expiry title = %q", title)
-	}
-	if title := got["threshold_cpu:online-node"]; title != "Node online-node CPU at 90% (warn limit 85%)" {
-		t.Fatalf("cpu title = %q", title)
 	}
 }
 
@@ -219,40 +224,5 @@ func readFrame(t *testing.T, rd *bufio.Reader) string {
 			return strings.TrimSuffix(sb.String(), "\n")
 		}
 		sb.WriteString(line)
-	}
-}
-
-// TestPruneAuditLogsKeepsRecentAndUndelivered checks date and delivered gating.
-func TestPruneAuditLogsKeepsRecentAndUndelivered(t *testing.T) {
-	conn, _ := newTelemetryConn(t)
-	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`); err != nil {
-		t.Fatal(err)
-	}
-
-	old := float64(1000)
-	recent := float64(time.Now().Unix())
-	detail := `{"severity":"info","message":"old","meta":{"event_key":"k1"}}`
-	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, old, "system", "a", detail); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO delivered (subscription, event_key, ts) VALUES (?,?,?)`, "a", "k1", old); err != nil {
-		t.Fatal(err)
-	}
-	detail2 := `{"severity":"info","message":"old2","meta":{"event_key":"k2"}}`
-	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, old, "system", "b", detail2); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO audit_logs (ts, actor, action, detail) VALUES (?,?,?,?)`, recent, "system", "c", detail2); err != nil {
-		t.Fatal(err)
-	}
-
-	removed := telemetry.PruneAuditLogs(conn, 1)
-	if removed != 1 {
-		t.Fatalf("removed = %d, want 1", removed)
-	}
-	var n int
-	_ = conn.QueryRow(`SELECT COUNT(*) FROM audit_logs`).Scan(&n)
-	if n != 2 {
-		t.Fatalf("remaining = %d, want 2", n)
 	}
 }
