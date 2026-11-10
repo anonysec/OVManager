@@ -44,8 +44,10 @@ func lastSuccessDay(t *testing.T, h *Handler) string {
 	t.Helper()
 	var v sql.NullString
 	_ = h.Svc.DB().QueryRow(`SELECT backup_last_success_day FROM Setting ORDER BY id LIMIT 1`).Scan(&v)
-	if v.Valid { return v.String }
-	return "" 
+	if v.Valid {
+		return v.String
+	}
+	return ""
 }
 
 func TestBackupTickDisabledDoesNothing(t *testing.T) {

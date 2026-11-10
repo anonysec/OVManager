@@ -218,7 +218,7 @@ type mcolumn struct {
 }
 
 // mappedTableOrder is create_all's (dependency-free) table set.
-var mappedTableOrder = []string{"Admin", "Session", "User", "Node", "Setting"}
+var mappedTableOrder = []string{"Admin", "User", "Node", "Setting"}
 
 // SQL literal a column needs when ALTER TABLE ADD COLUMN synthesises it, so the
 // same list drives both CREATE TABLE and legacy-column reconciliation.
@@ -230,17 +230,6 @@ var mappedColumns = map[string][]mcolumn{
 		{"is_owner", "BOOLEAN DEFAULT 0 NOT NULL"},
 		{"role", "VARCHAR DEFAULT 'admin' NOT NULL"},
 		{"telegram_id", "INTEGER"},
-	},
-	"Session": {
-		{"id", "INTEGER"},
-		{"token_hash", "VARCHAR DEFAULT '' NOT NULL"},
-		{"username", "VARCHAR DEFAULT '' NOT NULL"},
-		{"role", "VARCHAR DEFAULT '' NOT NULL"},
-		{"created_at", "FLOAT DEFAULT 0 NOT NULL"},
-		{"expires_at", "FLOAT DEFAULT 0 NOT NULL"},
-		{"last_seen_at", "FLOAT DEFAULT 0 NOT NULL"},
-		{"user_agent", "VARCHAR"},
-		{"ip", "VARCHAR"},
 	},
 	"User": {
 		{"id", "INTEGER"},
@@ -330,16 +319,13 @@ var mappedColumns = map[string][]mcolumn{
 
 // mappedUniques are the model-level UNIQUE constraints create_all emits.
 var mappedUniques = map[string][]string{
-	"Admin":   {"username", "telegram_id"},
-	"Session": {"token_hash"},
-	"User":    {"uuid", "name"},
+	"Admin": {"username", "telegram_id"},
+	"User":  {"uuid", "name"},
 }
 
 // mappedIndices are the model-level (partial) indices create_all emits.
 var mappedIndices = []string{
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON Admin (is_owner) WHERE is_owner = 1",
-	"CREATE INDEX IF NOT EXISTS ix_sessions_username ON Session (username)",
-	"CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON Session (token_hash)",
 	"CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON User (activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''",
 	"CREATE INDEX IF NOT EXISTS idx_users_expiry ON User(expiry_date)",
 	"CREATE INDEX IF NOT EXISTS idx_nodes_status ON Node(status)",
@@ -700,7 +686,7 @@ var steps = []step{
 	{25, "add traffic ledger and settings kv", createTrafficLedgerAndKV},
 	{26, "unique owner index (admins.is_owner)", addAdminsOwnerUnique},
 	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
-	{28, "delete non-owner sessions", deleteNonOwnerSessions},
+	{28, "delete non-owner sessions (no-op, sessions dropped)", noopStep},
 	{29, "pending user revocations and monotonic users.id", rebuildUsersWithAutoincrement},
 	{30, "nodes.node_contract_version", func(x execer) error {
 		if !tableNames(x)["Node"] {
@@ -784,7 +770,7 @@ var steps = []step{
 	{35, "drop legacy snapshot/audit/traffic tables (DB simplification)", func(x execer) error {
 		for _, t := range []string{
 			"node_health_snapshots", "traffic_snapshots", "security_snapshots",
-			"audit_logs", "deleted_users", "deleted_nodes", "login_attempts", "settings_kv",
+			"audit_logs", "deleted_users", "deleted_nodes", "login_attempts", "settings_kv", "Session",
 		} {
 			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
 		}

@@ -32,7 +32,7 @@ type userRow struct {
 	ActivationTokenExpires sql.NullFloat64
 }
 
-const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, (SELECT ip FROM Session WHERE username = User.name ORDER BY created_at DESC LIMIT 1) AS last_login_ip`
+const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, NULL AS last_login_ip`
 
 func scanUser(row interface{ Scan(...any) error }) (userRow, error) {
 	var u userRow
@@ -232,7 +232,7 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 	if snap.ID == 0 {
 		snap = userRow{ID: userID, UUID: uuid, Name: name}
 	}
-tx, err := db.Begin()
+	tx, err := db.Begin()
 	if err != nil {
 		return res, err
 	}

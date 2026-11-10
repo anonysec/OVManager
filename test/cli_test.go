@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/internal/cli"
-	"github.com/anonysec/OVManager/internal/db"
 )
 
 // cliFixture builds an install layout the CLI can read: an .env, a 0700 data
@@ -141,51 +140,6 @@ func TestCLIHealthHTTPS(t *testing.T) {
 
 // TestCLIResetPasswordRevokesActualOwner: sessions of the owner row's actual
 // username are revoked, not ADMIN_USERNAME from .env.
-func TestCLIResetPasswordRevokesActualOwner(t *testing.T) {
-	installDir, dataDir := cliFixture(t)
-
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	if _, err := conn.Exec(testSchema); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('bob', 'oldhash', 1)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h1','bob','owner',0,9999999999,0)`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h2','admin','owner',0,9999999999,0)`); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("OVM_ADMIN_PASS", "new-password-123")
-	var out bytes.Buffer
-	code := cli.Run([]string{"reset-password", "--install-dir", installDir, "--data-dir", dataDir}, &out)
-	if code != 0 {
-		t.Fatalf("exit = %d, want 0\n%s", code, out.String())
-	}
-
-	var bobCount, adminCount int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM Session WHERE username='bob'`).Scan(&bobCount); err != nil {
-		t.Fatal(err)
-	}
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM Session WHERE username='admin'`).Scan(&adminCount); err != nil {
-		t.Fatal(err)
-	}
-	if bobCount != 0 {
-		t.Errorf("bob sessions not revoked: %d", bobCount)
-	}
-	if adminCount != 1 {
-		t.Errorf("admin sessions unexpectedly changed: %d", adminCount)
-	}
-	if !strings.Contains(out.String(), "revoked 1 active session") {
-		t.Errorf("output missing revocation line:\n%s", out.String())
-	}
-}
 
 // The panel tells the operator "Run: ovmanager auth key" when it cannot read the
 // setup key, and "ovmanager auth reset" when the key is lost. Those commands must

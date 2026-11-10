@@ -578,7 +578,7 @@ func verifyDatabase(path string) error {
 	}
 
 	// Verify required tables exist (OVManager schema).
-	required := []string{"Admin", "Session", "User", "Node", "Setting"}
+	required := []string{"Admin", "User", "Node", "Setting"}
 	for _, t := range required {
 		var cnt int
 		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, t).Scan(&cnt); err != nil {

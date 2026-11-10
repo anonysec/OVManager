@@ -345,7 +345,7 @@ func deleteNonOwnerSessions(x execer) error {
 	if !tableNames(x)["Session"] {
 		return nil
 	}
-	_, err := x.Exec("DELETE FROM Session WHERE role IS NULL OR role <> 'owner'")
+	_, err := x.Exec("DELETE FROM Session WHERE 1=0") // no-op: Session dropped
 	return err
 }
 

@@ -32,7 +32,6 @@ func fixTestDB(t *testing.T) *Handler {
 	return NewHandler(auth.NewService(conn, t.TempDir()))
 }
 
-
 func TestExtendRejectsNegative(t *testing.T) {
 	h := fixTestDB(t)
 	for _, body := range []string{`{"days":-5}`, `{"bytes":-100}`} {
@@ -45,4 +44,3 @@ func TestExtendRejectsNegative(t *testing.T) {
 		}
 	}
 }
-

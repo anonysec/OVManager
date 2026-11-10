@@ -32,6 +32,15 @@ type Identity struct {
 // (panel.activateDatabase), and an unguarded field would race every query
 // against the swap. Read it through DB(); NewService/DBSwap are the only
 // writers.
+type sessionEntry struct {
+	username  string
+	role      string
+	expiresAt float64
+	lastSeen  float64
+	userAgent string
+	ip        string
+}
+
 type Service struct {
 	dbmu sync.RWMutex
 	db   *sql.DB
@@ -47,6 +56,9 @@ type Service struct {
 	failures map[string][]float64 // claim buckets
 	idMu     sync.Mutex
 	idCache  map[string]cachedIdentity
+
+	sessMu   sync.RWMutex
+	sessions map[string]sessionEntry // token_hash -> session
 }
 
 func NewService(db *sql.DB, dataDir string) *Service {
@@ -59,6 +71,7 @@ func NewService(db *sql.DB, dataDir string) *Service {
 		attempts:     map[string][]float64{},
 		failures:     map[string][]float64{},
 		idCache:      map[string]cachedIdentity{},
+		sessions:     map[string]sessionEntry{},
 	}
 	go func() {
 		t := time.NewTicker(time.Duration(cleanupInterval) * time.Second)
@@ -127,13 +140,16 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 	if len(ip) > 64 {
 		ip = ip[:64]
 	}
-	if _, err := s.DB().Exec(
-		`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at, user_agent, ip)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		tokenHash(raw), username, role, now, now+float64(ttl), now, nullIfEmpty(userAgent), nullIfEmpty(ip),
-	); err != nil {
-		return "", err
+	s.sessMu.Lock()
+	s.sessions[tokenHash(raw)] = sessionEntry{
+		username:  username,
+		role:      role,
+		expiresAt: now + float64(ttl),
+		lastSeen:  now,
+		userAgent: userAgent,
+		ip:        ip,
 	}
+	s.sessMu.Unlock()
 	return raw, nil
 }
 
@@ -160,29 +176,26 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 	if ident, ok := s.cacheGet(th); ok {
 		return ident, true
 	}
-	var id int64
-	var ident Identity
-	var expiresAt, lastSeen float64
-	err := s.DB().QueryRow(
-		`SELECT s.id, s.username, s.role, s.expires_at, s.last_seen_at
-		 FROM Session s JOIN Admin a ON a.username = s.username AND a.is_owner = 1
-		 WHERE s.token_hash = ?`,
-		th,
-	).Scan(&id, &ident.Username, &ident.Type, &expiresAt, &lastSeen)
-	if err == sql.ErrNoRows {
-		return zero, false
-	}
-	if err != nil {
+	s.sessMu.RLock()
+	entry, ok := s.sessions[th]
+	s.sessMu.RUnlock()
+	if !ok {
 		return zero, false
 	}
 	now := nowSecs()
-	if now >= expiresAt || now-lastSeen > float64(s.IdleSeconds) {
-		_, _ = s.DB().Exec(`DELETE FROM Session WHERE id = ?`, id)
+	if now >= entry.expiresAt || now-entry.lastSeen > float64(s.IdleSeconds) {
+		s.sessMu.Lock()
+		delete(s.sessions, th)
+		s.sessMu.Unlock()
 		return zero, false
 	}
-	if now-lastSeen >= touchThrottleSeconds {
-		_, _ = s.DB().Exec(`UPDATE Session SET last_seen_at = ? WHERE id = ?`, now, id)
+	if now-entry.lastSeen >= touchThrottleSeconds {
+		s.sessMu.Lock()
+		entry.lastSeen = now
+		s.sessions[th] = entry
+		s.sessMu.Unlock()
 	}
+	ident := Identity{Username: entry.username, Type: entry.role}
 	s.cachePut(th, ident)
 	return ident, true
 }
@@ -245,23 +258,26 @@ func (s *Service) RevokeToken(raw string) bool {
 		return false
 	}
 	th := tokenHash(raw)
-	res, err := s.DB().Exec(`DELETE FROM Session WHERE token_hash = ?`, th)
+	s.sessMu.Lock()
+	_, ok := s.sessions[th]
+	delete(s.sessions, th)
+	s.sessMu.Unlock()
 	s.cacheDelete(th)
-	if err != nil {
-		return false
-	}
-	n, _ := res.RowsAffected()
-	return n > 0
+	return ok
 }
 
 func (s *Service) RevokeUserSessions(username string) int {
-	res, err := s.DB().Exec(`DELETE FROM Session WHERE username = ?`, username)
-	s.cacheDeleteUser(username)
-	if err != nil {
-		return 0
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+	n := 0
+	for th, e := range s.sessions {
+		if e.username == username {
+			delete(s.sessions, th)
+			n++
+		}
 	}
-	n, _ := res.RowsAffected()
-	return int(n)
+	s.cacheDeleteUser(username)
+	return n
 }
 
 // PurgeExpired deletes dead sessions (absolute cap OR idle timeout) and
@@ -271,14 +287,14 @@ func (s *Service) RevokeUserSessions(username string) int {
 func (s *Service) PurgeExpired() int {
 	total := 0
 	now := nowSecs()
-	if res, err := s.DB().Exec(
-		`DELETE FROM Session WHERE expires_at <= ? OR (? - last_seen_at) > ?`,
-		now, now, s.IdleSeconds,
-	); err == nil {
-		if n, _ := res.RowsAffected(); n > 0 {
-			total += int(n)
+	s.sessMu.Lock()
+	for th, e := range s.sessions {
+		if now >= e.expiresAt || now-e.lastSeen > float64(s.IdleSeconds) {
+			delete(s.sessions, th)
+			total++
 		}
 	}
+	s.sessMu.Unlock()
 	s.pruneAttempts()
 	return total
 }

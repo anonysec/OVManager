@@ -93,7 +93,6 @@ func (b *Bus) Publish(topic string, data ...KV) {
 // SnapshotMaxNodes is the default cap on tracked nodes.
 const SnapshotMaxNodes = 50
 
-
 var procStart = time.Now()
 
 type snapshotState struct {
@@ -406,4 +405,3 @@ func sameBools(a, b map[string]bool) bool {
 	}
 	return true
 }
-

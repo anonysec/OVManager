@@ -88,7 +88,7 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	}
 
 	for _, table := range []string{
-		"User", "Admin", "Session", "Node", "Setting",
+		"User", "Admin", "Node", "Setting",
 		"Delivered", "TrafficLedger",
 		"PendingUserRevocation",
 	} {

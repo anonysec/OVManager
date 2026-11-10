@@ -4,12 +4,11 @@
 package node
 
 import (
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
-
 )
 
 // TrafficResult summarizes one SyncTraffic pass.
@@ -168,4 +167,3 @@ func totalsInt64(v any) (int64, bool) {
 	}
 	return 0, false
 }
-
