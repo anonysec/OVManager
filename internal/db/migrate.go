@@ -395,6 +395,8 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS NodeUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL, downlink INTEGER NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS idx_node_usage_reset_node ON NodeUsageResetLogs(node_id, created_at)`,
 	`CREATE TABLE IF NOT EXISTS UserUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at REAL NOT NULL, used_bytes INTEGER NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS NodeStat (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, cpu REAL NOT NULL DEFAULT 0, memory REAL NOT NULL DEFAULT 0, live_count INTEGER NOT NULL DEFAULT 0, reachable INTEGER NOT NULL DEFAULT 0)`,
+	`CREATE INDEX IF NOT EXISTS idx_node_stat_node_ts ON NodeStat(node_id, created_at)`,
 }
 
 func createExtraTables(x execer) error {

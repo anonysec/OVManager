@@ -457,6 +457,8 @@ func CollectMetrics(db *sql.DB) {
 	for _, row := range nodeRows {
 		_, _ = db.Exec(`INSERT INTO NodeUsage (node_id, created_at, uplink, downlink) VALUES (?, ?, ?, ?)`,
 			row["node_id"], now, 0, 0)
+		_, _ = db.Exec(`INSERT INTO NodeStat (node_id, created_at, cpu, memory, live_count, reachable) VALUES (?, ?, ?, ?, ?, ?)`,
+			row["node_id"], now, row["cpu"], row["memory"], row["live_count"], row["reachable"])
 	}
 	_ = totalUsed
 	_ = activeConnections
