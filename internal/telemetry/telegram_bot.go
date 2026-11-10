@@ -213,7 +213,7 @@ func retryKB() any {
 }
 
 // tgSendDocument posts a document (e.g., .ovpn config file).
-func tgSendDocument(token string, chatID int64, filename string, content []byte, caption string) bool {
+func TgSendDocumentExported(token string, chatID int64, filename string, content []byte, caption string) bool {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 	_ = w.WriteField("chat_id", strconv.FormatInt(chatID, 10))
@@ -503,7 +503,7 @@ func cmdOVPN(m *msgCtx) {
 		return
 	}
 	if data := ovpnConfigForUser(db, u.UUID); data != nil {
-		if tgSendDocument(token, chatID, "config.ovpn", data, "Your OpenVPN config for "+u.Name) {
+		if TgSendDocumentExported(token, chatID, "config.ovpn", data, "Your OpenVPN config for "+u.Name) {
 			return
 		}
 	}

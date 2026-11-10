@@ -7,7 +7,9 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -94,15 +96,42 @@ func (h *Handler) backupTickAt(now time.Time) {
 		return
 	}
 
+	// Optional encryption with AES-256 (openssl).
+	if pass := os.Getenv("BACKUP_PASSPHRASE"); pass != "" {
+		encPath := path + ".enc"
+		cmd := exec.Command("openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-in", path, "-out", encPath, "-pass", "env:BACKUP_PASSPHRASE")
+		if err := cmd.Run(); err != nil {
+			log.Printf("backup worker: encryption failed: %v", err)
+			return
+		}
+		_ = os.Remove(path)
+		path = encPath
+	}
+
 	target := strings.TrimSpace(s.strOr("offsite_backup_target"))
 	if target != "" {
 		tool, copyErr := backup.CopyOffsite(dataDir(), path, target)
 		recordOffsiteResult(db, target, tool, copyErr)
 		if copyErr != nil {
-			// Local success is not offsite success: leave the success day
-			// unset so the next tick retries the copy.
 			log.Printf("backup worker: offsite copy failed: %v", copyErr)
 			return
+		}
+	}
+
+	// Telegram backup (optional): send the snapshot to the owner chat.
+	if s.boolean("telegram_backup_enabled", false) {
+		token := s.strOr("bot_token")
+		var chatID int64
+		_ = db.QueryRow(`SELECT COALESCE(owner_telegram_id,0) FROM settings LIMIT 1`).Scan(&chatID)
+		if token != "" && chatID != 0 {
+			data, err := os.ReadFile(path)
+			if err == nil {
+				name := filepath.Base(path)
+				if !telemetry.TgSendDocumentExported(token, chatID, name, data, "OVManager backup "+day) {
+					log.Printf("backup worker: telegram upload failed")
+					return
+				}
+			}
 		}
 	}
 
