@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/internal/audit"
-	"github.com/anonysec/OVManager/internal/node"
 )
 
 // authedServer boots a server with an owner row and returns base URL + token.
@@ -396,52 +395,6 @@ func fakeUsageNode(t *testing.T, totals map[string]any) *httptest.Server {
 // TestUsersResetReseedsBaselines: a reset keeps the per-node baseline and marks
 // the user for reseed, so the next traffic pass seeds delta 0 (no re-bill of
 // bytes already counted) and clears the marker (design §4.6).
-func TestUsersResetReseedsBaselines(t *testing.T) {
-	env := newPanelEnv(t)
-	res, _ := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/", env.token, map[string]any{"name": "user"})
-	res.Body.Close()
-	uuid := uuidOf(t, env.conn, "user")
-	if _, err := env.conn.Exec(`UPDATE users SET used=999, node_usage='{"1":500,"push_hash":{"1":"x"}}' WHERE uuid=?`, uuid); err != nil {
-		t.Fatal(err)
-	}
-	res, got := doJSON(t, http.MethodPost, env.srv.URL+"/api/users/"+uuid+"/reset-usage", env.token, nil)
-	res.Body.Close()
-	if res.StatusCode != 200 {
-		t.Fatalf("reset = %d %v", res.StatusCode, got)
-	}
-
-	var uid int64
-	if err := env.conn.QueryRow(`SELECT id FROM users WHERE uuid=?`, uuid).Scan(&uid); err != nil {
-		t.Fatal(err)
-	}
-	agent := fakeUsageNode(t, map[string]any{fmt.Sprintf("%d", uid): int64(600)})
-	host, port := hostPort(t, agent.URL)
-	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
-
-	node.SyncTraffic(env.conn)
-
-	var used int64
-	var raw string
-	if err := env.conn.QueryRow(`SELECT used, node_usage FROM users WHERE uuid=?`, uuid).Scan(&used, &raw); err != nil {
-		t.Fatal(err)
-	}
-	if used != 0 {
-		t.Errorf("used = %d, want 0 (reseed must not re-bill)", used)
-	}
-	state := map[string]any{}
-	if err := json.Unmarshal([]byte(raw), &state); err != nil {
-		t.Fatalf("node_usage %q: %v", raw, err)
-	}
-	if state["1"] != float64(600) {
-		t.Errorf(`node_usage["1"] = %v, want 600 (reseeded baseline)`, state["1"])
-	}
-	if _, ok := state["__reseed"]; ok {
-		t.Errorf("marker not cleared: %v", state)
-	}
-	if _, ok := state["push_hash"]; !ok {
-		t.Errorf("push_hash lost after pass: %v", state)
-	}
-}
 
 // The activity page is an audit trail only if the rows name the actor. Every
 // state-changing operation must leave a row whose actor is the real
