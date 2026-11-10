@@ -170,7 +170,7 @@ const UserManagement = () => {
 
   useEffect(() => {
     if (!lastDeleted) return undefined;
-    const id = setTimeout(() => setLastDeleted(null), 25000);
+    const id = setTimeout(() => setLastDeleted(null), 10000);
     return () => clearTimeout(id);
   }, [lastDeleted]);
 
@@ -341,43 +341,47 @@ const UserManagement = () => {
     );
   }, [addToast, t]);
 
+  const deleteTimer = useRef<any>(null);
   const handleDelete = useCallback((user: any) => {
     openConfirm(
       t('deleteUser', 'Delete user'),
       t('confirmDelete', 'Delete {{name}} and all their data?', { name: user.name }),
-      async () => {
-        try {
-          const res = await apiClient.delete(userApiPath(user));
-          if (res.data?.success) {
-            setLastDeleted({ uuid: user.uuid, name: user.name });
-            setSelected((prev) => { const n = new Set(prev); n.delete(String(user.uuid)); return n; });
-            addToast(t('userDeletedUndo', 'User {{name}} deleted', { name: user.name }), 'success');
-          } else {
-            addToast(res.data?.msg || t('error'), 'error');
-          }
+      () => {
+        setLastDeleted({ uuid: user.uuid, name: user.name });
+        setSelected((prev) => { const n = new Set(prev); n.delete(String(user.uuid)); return n; });
+        // Defer the actual delete by 10s so the user can undo.
+        if (deleteTimer.current) clearTimeout(deleteTimer.current);
+        deleteTimer.current = setTimeout(async () => {
+          try {
+            await apiClient.delete(userApiPath(user));
+          } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); }
+          setLastDeleted(null);
           fetchUsers({ background: true });
-        } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); fetchUsers({ background: true }); }
+        }, 10000);
       },
       true,
       t('deleteUser')
     );
   }, [addToast, fetchUsers, t]);
 
-  const handleUndoDelete = useCallback(async () => {
+  const handleUndoDelete = useCallback(() => {
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null; }
+    setLastDeleted(null);
+    fetchUsers({ background: true });
+  }, [fetchUsers]);
+
+  const handleDismissDelete = useCallback(async () => {
     if (!lastDeleted) return;
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null; }
     try {
-      const res = await apiClient.post(`/users/${lastDeleted.uuid}/restore`);
-      if (res.data?.success) {
-        addToast(t('userRestored', 'User {{name}} restored.', { name: lastDeleted.name }), 'success');
-        setLastDeleted(null);
-        fetchUsers({ background: true });
-      } else {
-        addToast(res.data?.msg || t('undoFailed', 'Undo failed — user could not be restored.'), 'error');
-      }
-    } catch (e) {
-      addToast(errorMessageOf(e, t('undoFailed', 'Undo failed — user could not be restored.')), 'error');
-    }
+      // Find the user to delete (by uuid) — re-fetch path from lastDeleted
+      await apiClient.delete(`/users/${lastDeleted.uuid}`);
+    } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); }
+    setLastDeleted(null);
+    fetchUsers({ background: true });
   }, [lastDeleted, addToast, fetchUsers, t]);
+
+
 
   const handleExtend = useCallback(async (user: any, { days, bytes }: { days: any; bytes: any }) => {
     const res = await apiClient.post(`${userApiPath(user)}/extend`, { days, bytes });
@@ -743,7 +747,7 @@ const UserManagement = () => {
         <div className="um-bulkbar" role="status" aria-live="polite">
           <span>{t('userDeletedUndo', 'User {{name}} deleted', { name: lastDeleted.name })}</span>
           <Button size="sm" onClick={handleUndoDelete}>{t('undo', 'Undo')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => setLastDeleted(null)} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
+          <Button size="sm" variant="ghost" onClick={handleDismissDelete} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
         </div>
       )}
 
