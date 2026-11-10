@@ -382,7 +382,6 @@ func createTableSQL(table string) string {
 // extraTables is constants._EXTRA_DDL: the non-ORM tables.
 var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
-	`CREATE TABLE IF NOT EXISTS login_attempts (key_hash TEXT PRIMARY KEY, attempts TEXT NOT NULL DEFAULT '[]', updated REAL NOT NULL DEFAULT 0)`,
 	`CREATE TABLE IF NOT EXISTS user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
 	`CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
 	`CREATE TABLE IF NOT EXISTS settings_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '{}', updated_at REAL NOT NULL DEFAULT 0)`,
@@ -779,7 +778,7 @@ var steps = []step{
 	{35, "drop legacy snapshot/audit/traffic tables (DB simplification)", func(x execer) error {
 		for _, t := range []string{
 			"node_health_snapshots", "traffic_snapshots", "security_snapshots",
-			"audit_logs", "deleted_users", "deleted_nodes",
+			"audit_logs", "deleted_users", "deleted_nodes", "login_attempts",
 		} {
 			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
 		}
