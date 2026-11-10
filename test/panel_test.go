@@ -64,32 +64,13 @@ CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNI
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
   max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1,
   last_online DATETIME, tag VARCHAR);
-CREATE TABLE IF NOT EXISTS settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
-CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS Delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL,
   event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key));
-CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL,
-  reachable INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  total_used REAL NOT NULL, active_connections INTEGER NOT NULL, online_users INTEGER NOT NULL,
-  active_users INTEGER NOT NULL, total_users INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL,
-  offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL);
-DROP TABLE IF EXISTS user_node_usage;
-CREATE TABLE user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
+DROP TABLE IF EXISTS UserNodeUsage;
+CREATE TABLE UserNodeUsage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
 DROP TABLE IF EXISTS UserTrafficDaily;
 CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));
-CREATE TABLE IF NOT EXISTS TrafficLedger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
-  delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}',
-  UNIQUE (user_id, ts, kind, node_id));
-CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL,
-  deleted_at REAL NOT NULL, expires_at REAL NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_deleted_users_expires ON deleted_users(expires_at);
 `
 
 // panelEnv is the isolated filesystem + PATH the panel server runs against.
@@ -305,7 +286,7 @@ func TestPanelSurface(t *testing.T) {
 			body: map[string]any{}, wantStatus: 200, wantEnvelope: true, wantSuccess: boolPtr(false)},
 		{name: "usage purge confirmed", method: "POST", path: "/api/maintenance/usage/purge",
 			body: map[string]any{"older_than_days": 90, "confirm": true}, wantStatus: 200, wantEnvelope: true,
-			wantSuccess: boolPtr(true), dataKeys: []string{"removed", "removed_ledger"}},
+			wantSuccess: boolPtr(true), dataKeys: []string{"removed", "removed_audit"}},
 
 		// --- updater ---
 		{name: "updater operation no state", method: "GET", path: "/api/updater/operation", wantStatus: 200,

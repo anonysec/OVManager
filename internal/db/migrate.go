@@ -53,7 +53,7 @@ func Migrate(conn *sql.DB) (int, error) {
 		if err := createMappedTables(conn); err != nil {
 			return 0, err
 		}
-		if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
+		if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS UserNodeUsage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
 			return 0, err
 		}
 		if err := createExtraTables(conn); err != nil {
@@ -239,9 +239,6 @@ var mappedColumns = map[string][]mcolumn{
 		{"used", "BIGINT"},
 		{"last_node_usage", "BIGINT DEFAULT 0 NOT NULL"},
 		{"node_usage", "VARCHAR DEFAULT '{}' NOT NULL"},
-		{"data_limit", "BIGINT DEFAULT 0 NOT NULL"},
-		{"traffic_reset", "VARCHAR DEFAULT 'never' NOT NULL"},
-		{"last_traffic_reset", "BIGINT DEFAULT 0 NOT NULL"},
 		{"max_logins", "INTEGER DEFAULT 1 NOT NULL"},
 		{"expiry_date", "DATE DEFAULT CURRENT_TIMESTAMP NOT NULL"},
 		{"is_active", "BOOLEAN DEFAULT 1 NOT NULL"},
@@ -375,7 +372,6 @@ func createTableSQL(table string) string {
 var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS Delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 	`CREATE TABLE IF NOT EXISTS UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
-	`CREATE TABLE IF NOT EXISTS TrafficLedger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}', UNIQUE (user_id, ts, kind, node_id))`,
 	`CREATE TABLE IF NOT EXISTS PendingUserRevocation (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
 	`CREATE TABLE IF NOT EXISTS NodeUsage (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL DEFAULT 0, downlink INTEGER NOT NULL DEFAULT 0, UNIQUE (created_at, node_id))`,
 	`CREATE INDEX IF NOT EXISTS idx_node_usage_created ON NodeUsage(created_at)`,
@@ -684,7 +680,7 @@ var steps = []step{
 		return err
 	}},
 	{24, "single-admin cut (drop multi-admin columns)", singleAdminSchema},
-	{25, "add traffic ledger and settings kv", createTrafficLedgerAndKV},
+	{25, "add user traffic daily table", createUserTrafficDaily},
 	{26, "unique owner index (admins.is_owner)", addAdminsOwnerUnique},
 	{27, "encrypt stored secrets at rest", encryptStoredSecrets},
 	{28, "delete non-owner sessions (no-op, sessions dropped)", noopStep},
@@ -721,11 +717,11 @@ var steps = []step{
 		_, err := x.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_users_activation_token_hash ON User(activation_token_hash) WHERE activation_token_hash IS NOT NULL AND activation_token_hash <> ''`)
 		return err
 	}},
-	{34, "user_node_usage baselines table", func(x execer) error {
+	{34, "UserNodeUsage baselines table", func(x execer) error {
 		if !tableNames(x)["User"] {
 			return nil
 		}
-		if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
+		if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS UserNodeUsage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id))`); err != nil {
 			return err
 		}
 		rows, err := x.Query(`SELECT id, COALESCE(node_usage,'{}') FROM User`)
@@ -763,7 +759,7 @@ var steps = []step{
 				} else if iv, ok := v.(int64); ok {
 					base = iv
 				}
-				_, _ = x.Exec(`INSERT OR IGNORE INTO user_node_usage (user_id, node_id, baseline) VALUES (?, ?, ?)`, r.id, nid, base)
+				_, _ = x.Exec(`INSERT OR IGNORE INTO UserNodeUsage (user_id, node_id, baseline) VALUES (?, ?, ?)`, r.id, nid, base)
 			}
 		}
 		return nil

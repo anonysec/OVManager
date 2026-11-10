@@ -21,21 +21,6 @@ import (
 
 // extraTelemetryDDL is the observability schema Phase 3 needs on top of
 const extraTelemetryDDL = `
-CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL,
-  reachable INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  total_used REAL NOT NULL, active_connections INTEGER NOT NULL, online_users INTEGER NOT NULL,
-  active_users INTEGER NOT NULL, total_users INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL,
-  offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS TrafficLedger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
-  user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
-  delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}',
-  UNIQUE (user_id, ts, kind, node_id));
 DROP TABLE IF EXISTS UserTrafficDaily;
 CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));
@@ -72,7 +57,7 @@ func newTelemetryServer(t *testing.T, conn *sql.DB, dir string) (*httptest.Serve
 func TestActivityMatches(t *testing.T) {
 	conn, dir := newTelemetryConn(t)
 	auditFile := filepath.Join(dir, "audit.jsonl")
-	audit.SetPath(auditFile)
+	t.Setenv(audit.PathEnv, auditFile)
 	srv, token := newTelemetryServer(t, conn, dir)
 
 	rows := []struct {

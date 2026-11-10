@@ -12,7 +12,7 @@ import (
 // audit log, so the operator can see that the offsite copy did not happen.
 func TestRecordOffsiteCopyWritesTheOutcome(t *testing.T) {
 	dir := t.TempDir()
-	audit.SetPath(filepath.Join(dir, "audit.jsonl"))
+	t.Setenv(audit.PathEnv, filepath.Join(dir, "audit.jsonl"))
 	recordOffsiteCopy(dir, "backup@server:/backups", "rsync", nil)
 
 	found := false

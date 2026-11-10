@@ -35,11 +35,6 @@ func NewHandler(svc *auth.Service) *Handler {
 	return &Handler{Svc: svc}
 }
 
-// deletedUserKey is the prefix for deleted_users table keys.
-// Undo window is under 30 seconds: the frontend banner and the database
-// snapshot both expire in 25s so a deletion is never recoverable overnight.
-const deletedTTLSeconds = 25
-
 // Mount registers the users routes relative to the caller's prefix.
 func (h *Handler) Mount(mux *http.ServeMux) {
 	guard := h.Svc.RequireUser
@@ -748,13 +743,6 @@ func nullTag(t sql.NullString) any {
 		return nil
 	}
 	return t.String
-}
-
-func nonEmpty(v, fallback string) string {
-	if v == "" {
-		return fallback
-	}
-	return v
 }
 
 func mustJSON(v any) []byte {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -378,30 +377,12 @@ func TestUsersTrafficDailySeries(t *testing.T) {
 }
 
 // fakeUsageNode answers GET /sync/usage with pinned cumulative totals.
-func fakeUsageNode(t *testing.T, totals map[string]any) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		body, _ := json.Marshal(map[string]any{
-			"success": true,
-			"data":    map[string]any{"totals": totals},
-		})
-		_, _ = w.Write(body)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
-}
-
-// TestUsersResetReseedsBaselines: a reset keeps the per-node baseline and marks
-// the user for reseed, so the next traffic pass seeds delta 0 (no re-bill of
-// bytes already counted) and clears the marker (design §4.6).
-
 // The activity page is an audit trail only if the rows name the actor. Every
 // state-changing operation must leave a row whose actor is the real
 // username, not "system".
 func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 	dir := t.TempDir()
-	audit.SetPath(dir + "/audit.jsonl")
+	t.Setenv(audit.PathEnv, dir+"/audit.jsonl")
 	conn, base, token := authedServer(t)
 	// Two users: the panel refuses to delete the last one.
 	for _, name := range []string{"audited", "keeper"} {
@@ -444,7 +425,7 @@ func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 // secret.
 func TestUserCreateAuditRowCarriesNoSecret(t *testing.T) {
 	dir := t.TempDir()
-	audit.SetPath(dir + "/audit.jsonl")
+	t.Setenv(audit.PathEnv, dir+"/audit.jsonl")
 	_, base, token := authedServer(t)
 	doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "quiet"})
 	var detail string

@@ -13,15 +13,23 @@ import (
 )
 
 var (
-	auditPath = "/var/log/ovmanager/audit.jsonl"
-	mu        sync.Mutex
-	idSeq     int64
+	mu       sync.Mutex
+	idSeq    int64
+	seqOnce  sync.Once
+	auditDir = "/var/log/ovmanager"
 )
 
-// SetPath overrides the audit file location (for tests).
-func SetPath(p string) { auditPath = p }
+// PathEnv names the environment variable that overrides the audit file
+// location. The default sits under /var/log.
+const PathEnv = "OVMANAGER_AUDIT_PATH"
 
-func Path() string { return auditPath }
+// Path returns the audit file path.
+func Path() string {
+	if p := strings.TrimSpace(os.Getenv(PathEnv)); p != "" {
+		return p
+	}
+	return filepath.Join(auditDir, "audit.jsonl")
+}
 
 // Record writes one audit line. actor is the authenticated username; an empty
 // actor is stored as "system". meta must never carry a secret.
@@ -31,6 +39,7 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	seqOnce.Do(loadIDSeq)
 	idSeq++
 	payload := map[string]any{
 		"id":       idSeq,
@@ -57,10 +66,11 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 	if err != nil {
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(auditPath), 0o700); err != nil {
+	path := Path()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
-	f, err := os.OpenFile(auditPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
@@ -70,7 +80,7 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 
 // ReadLines returns all audit lines parsed as maps.
 func ReadLines() []map[string]any {
-	data, err := os.ReadFile(auditPath)
+	data, err := os.ReadFile(Path())
 	if err != nil {
 		return nil
 	}
@@ -91,7 +101,7 @@ func ReadLines() []map[string]any {
 func MarkPromoted(id int64) {
 	mu.Lock()
 	defer mu.Unlock()
-	data, err := os.ReadFile(auditPath)
+	data, err := os.ReadFile(Path())
 	if err != nil {
 		return
 	}
@@ -114,13 +124,13 @@ func MarkPromoted(id int64) {
 			out = append(out, line)
 		}
 	}
-	_ = os.WriteFile(auditPath, []byte(strings.Join(out, "\n")+"\n"), 0o600)
+	_ = os.WriteFile(Path(), []byte(strings.Join(out, "\n")+"\n"), 0o600)
 }
 
-// LoadIDSeq initializes the id counter from existing file (call at startup).
-func LoadIDSeq() {
-	lines := ReadLines()
-	for _, obj := range lines {
+// loadIDSeq seeds the id counter from the existing file, so ids stay
+// monotonic across a restart.
+func loadIDSeq() {
+	for _, obj := range ReadLines() {
 		if v, ok := obj["id"].(float64); ok {
 			if int64(v) > idSeq {
 				idSeq = int64(v)

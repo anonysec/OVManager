@@ -329,10 +329,3 @@ func dummyVerify(password string) (bool, error) {
 // dummyBcryptHash is a valid $2b$12$ hash of an unknown random string; timing
 // noise only, never a credential.
 const dummyBcryptHash = "$2b$12$8SlU4k4IX4m.tP5fJQuWdenXCdwIlWYz8gF4lpOuVorq83CxScpTm"
-
-func nullIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}

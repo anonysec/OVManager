@@ -46,10 +46,6 @@ func panelDomainFor(db *sql.DB) string {
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
 	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'')`
 
-// deletedNodeTTLSeconds is the node undo window (under 30 seconds), matching
-// the user undo TTL in internal/users.
-const deletedNodeTTLSeconds = 25
-
 // dataDir resolves DATA_DIR per call so tests and callers swapping the
 // environment stay fresh, falling back to the package default.
 func dataDir() string {

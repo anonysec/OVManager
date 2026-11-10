@@ -121,18 +121,8 @@ func singleAdminSchema(x execer) error {
 	return nil
 }
 
-func createTrafficLedgerAndKV(x execer) error {
-	if err := createExtraTables(x); err != nil {
-		return err
-	}
-	if !tableNames(x)["UserTrafficDaily"] {
-		return nil
-	}
-	_, err := x.Exec(
-		"INSERT OR IGNORE INTO TrafficLedger (user_id, ts, node_id, kind, delta_bytes, meta_json) " +
-			"SELECT user_id, CAST(strftime('%s', day || 'T00:00:00Z') AS REAL), '', 'backfill', bytes, '{}' " +
-			"FROM UserTrafficDaily")
-	return err
+func createUserTrafficDaily(x execer) error {
+	return createExtraTables(x)
 }
 
 func addAdminsOwnerUnique(x execer) error {
@@ -338,15 +328,6 @@ func encryptStoredSecrets(x execer) error {
 		}
 	}
 	return nil
-}
-
-// deleteNonOwnerSessions removes sessions whose role is not owner.
-func deleteNonOwnerSessions(x execer) error {
-	if !tableNames(x)["Session"] {
-		return nil
-	}
-	_, err := x.Exec("DELETE FROM Session WHERE 1=0") // no-op: Session dropped
-	return err
 }
 
 // rebuildUsersWithAutoincrement creates pending_user_revocations and rebuilds

@@ -861,8 +861,7 @@ func (h *Handler) usagePurge(w http.ResponseWriter, r *http.Request) {
 		keep = 90
 	}
 	removed := billing.PruneDaily(h.Svc.DB(), keep)
-	removedLedger := billing.PruneLedger(h.Svc.DB(), keep, 5000)
 	removedAudit := telemetry.PruneAuditLogs(h.Svc.DB(), keep)
 	envelope(w, true, fmt.Sprintf("Removed %d daily usage row(s)", removed),
-		map[string]any{"removed": removed, "removed_ledger": removedLedger, "removed_audit": removedAudit})
+		map[string]any{"removed": removed, "removed_audit": removedAudit})
 }

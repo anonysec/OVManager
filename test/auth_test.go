@@ -1,8 +1,6 @@
 package tests
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -316,11 +314,6 @@ func TestOwnerClaimNoKey(t *testing.T) {
 	if res.StatusCode != 400 || body["detail"] != "No claim key on this host. Run: ovmanager auth key" {
 		t.Fatalf("no key = %d %v", res.StatusCode, body)
 	}
-}
-
-func hashToken(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
 }
 
 func newServerWith(t *testing.T, inner *http.ServeMux, guard, owner http.HandlerFunc) string {

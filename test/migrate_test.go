@@ -89,7 +89,7 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 
 	for _, table := range []string{
 		"User", "Admin", "Node", "Setting",
-		"Delivered", "TrafficLedger",
+		"Delivered",
 		"PendingUserRevocation",
 	} {
 		if !hasTable(t, conn, table) {
@@ -448,8 +448,8 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 		t.Fatalf("first Migrate: %v", err)
 	}
 	var first int
-	if err := conn.QueryRow("SELECT COUNT(*) FROM TrafficLedger").Scan(&first); err != nil {
-		t.Fatalf("count ledger: %v", err)
+	if err := conn.QueryRow("SELECT COUNT(*) FROM UserTrafficDaily").Scan(&first); err != nil {
+		t.Fatalf("count daily: %v", err)
 	}
 
 	// Simulate crash-after-backfill-before-stamp: roll the version back to 24.
@@ -464,11 +464,11 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 		t.Fatalf("version = %d, want 36", v)
 	}
 	var second int
-	if err := conn.QueryRow("SELECT COUNT(*) FROM TrafficLedger").Scan(&second); err != nil {
-		t.Fatalf("count ledger: %v", err)
+	if err := conn.QueryRow("SELECT COUNT(*) FROM UserTrafficDaily").Scan(&second); err != nil {
+		t.Fatalf("count daily: %v", err)
 	}
 	if second != first {
-		t.Fatalf("ledger rows changed: %d -> %d", first, second)
+		t.Fatalf("daily rows changed: %d -> %d", first, second)
 	}
 }
 

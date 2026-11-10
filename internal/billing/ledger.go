@@ -20,16 +20,6 @@ type Execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-// LedgerRow is one traffic_ledger insert (usage.write_ledger_batch).
-type LedgerRow struct {
-	UserID     int64
-	TS         float64
-	NodeID     string
-	Kind       string
-	DeltaBytes int64
-	MetaJSON   string
-}
-
 // today renders the UTC date key used by user_traffic_daily.
 func today() string { return time.Now().UTC().Format("2006-01-02") }
 
@@ -108,28 +98,6 @@ func PruneDaily(db *sql.DB, keepDays int) int {
 	}
 	n, _ := res.RowsAffected()
 	return int(n)
-}
-
-// PruneLedger deletes ledger rows older than keep_days in LIMIT batches.
-func PruneLedger(db *sql.DB, keepDays, batch int) int {
-	cutoff := float64(time.Now().Unix()) - float64(clamp(keepDays, 1, 1<<30))*86400
-	batch = clamp(batch, 1, 1<<30)
-	total := 0
-	for {
-		res, err := db.Exec(
-			`DELETE FROM TrafficLedger WHERE id IN (SELECT id FROM TrafficLedger WHERE ts < ? LIMIT ?)`,
-			cutoff, batch,
-		)
-		if err != nil {
-			break
-		}
-		removed, _ := res.RowsAffected()
-		total += int(removed)
-		if int(removed) < batch {
-			break
-		}
-	}
-	return total
 }
 
 // --- pure helpers (daily) ---

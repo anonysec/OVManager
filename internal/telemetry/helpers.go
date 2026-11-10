@@ -10,7 +10,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/anonysec/OVManager/internal/config"
 )
@@ -75,12 +74,6 @@ func newEventKey() string {
 			return hex.EncodeToString(buf)
 		}
 	}
-}
-
-func escapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "%", `\%`)
-	return strings.ReplaceAll(s, "_", `\_`)
 }
 
 func firstNonEmpty(a, b string) string {
