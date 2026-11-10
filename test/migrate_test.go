@@ -88,16 +88,16 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	}
 
 	for _, table := range []string{
-		"users", "admins", "sessions", "nodes", "settings",
-		"delivered", "traffic_ledger",
-		"pending_user_revocations",
+		"User", "Admin", "Session", "Node", "Setting",
+		"Delivered", "TrafficLedger",
+		"PendingUserRevocation",
 	} {
 		if !hasTable(t, conn, table) {
 			t.Fatalf("fresh schema missing table %s", table)
 		}
 	}
 	for _, col := range []struct{ table, name string }{
-		{"users", "tag"}, {"settings", "panel_id"}, {"admins", "is_owner"}, {"nodes", "server_ca"},
+		{"User", "tag"}, {"Setting", "panel_id"}, {"Admin", "is_owner"}, {"Node", "server_ca"},
 	} {
 		if !hasColumn(t, conn, col.table, col.name) {
 			t.Fatalf("fresh schema missing column %s.%s", col.table, col.name)
@@ -106,13 +106,13 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if !hasIndex(t, conn, "uq_admins_owner") {
 		t.Fatalf("fresh schema missing partial unique index uq_admins_owner")
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
-		t.Fatalf("settings rows = %d, want 1", n)
+	if n := count(t, conn, "SELECT COUNT(*) FROM Setting"); n != 1 {
+		t.Fatalf("Setting rows = %d, want 1", n)
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM admins WHERE is_owner = 1"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM Admin WHERE is_owner = 1"); n != 1 {
 		t.Fatalf("owner rows = %d, want 1", n)
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM users"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM User"); n != 1 {
 		t.Fatalf("first user rows = %d, want 1", n)
 	}
 
@@ -124,31 +124,31 @@ func TestMigrateFreshReachesHead(t *testing.T) {
 	if v2 != 36 || userVersion(t, conn) != 36 {
 		t.Fatalf("second run version = %d/%d, want 36", v2, userVersion(t, conn))
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM settings"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM Setting"); n != 1 {
 		t.Fatalf("second run duplicated settings rows: %d", n)
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM admins"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM Admin"); n != 1 {
 		t.Fatalf("second run duplicated admins rows: %d", n)
 	}
-	if n := count(t, conn, "SELECT COUNT(*) FROM users"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM User"); n != 1 {
 		t.Fatalf("second run duplicated users rows: %d", n)
 	}
 }
 
 const legacyUpgradeSchema = `
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT,
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT,
   last_node_usage BIGINT, node_usage VARCHAR, max_logins INTEGER, expiry_date DATE,
   is_active BOOLEAN, last_online DATETIME, owner VARCHAR);
-CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR, password VARCHAR, telegram_id INTEGER,
+CREATE TABLE Admin (id INTEGER PRIMARY KEY, username VARCHAR, password VARCHAR, telegram_id INTEGER,
   username_prefix VARCHAR, disabled BOOLEAN);
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, protocol VARCHAR,
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, protocol VARCHAR,
   ovpn_port INTEGER, port INTEGER, key VARCHAR, status BOOLEAN);
-CREATE TABLE settings (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTEGER,
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTEGER,
   protocol VARCHAR, timezone VARCHAR, bot_token VARCHAR, bot_enabled BOOLEAN,
   default_days INTEGER, default_traffic_gb INTEGER, default_max_users INTEGER,
   owner_telegram_id INTEGER, subscription_url_prefix VARCHAR, subscription_path VARCHAR,
   urlpath VARCHAR);
-CREATE TABLE user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
+CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));
 `
 
@@ -172,22 +172,22 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 	if v != 36 || userVersion(t, conn) != 36 {
 		t.Fatalf("version = %d/%d, want 36", v, userVersion(t, conn))
 	}
-	if !hasColumn(t, conn, "users", "tag") {
+	if !hasColumn(t, conn, "User", "tag") {
 		t.Fatalf("v8 did not add users.tag")
 	}
-	if !hasColumn(t, conn, "settings", "notify_expiry") || !hasColumn(t, conn, "settings", "notify_traffic") {
+	if !hasColumn(t, conn, "Setting", "notify_expiry") || !hasColumn(t, conn, "Setting", "notify_traffic") {
 		t.Fatalf("v6 did not add settings.notify_expiry/notify_traffic")
 	}
-	if !hasColumn(t, conn, "admins", "is_owner") {
+	if !hasColumn(t, conn, "Admin", "is_owner") {
 		t.Fatalf("v22 did not add admins.is_owner")
 	}
-	if hasColumn(t, conn, "admins", "username_prefix") || hasColumn(t, conn, "users", "owner") {
+	if hasColumn(t, conn, "Admin", "username_prefix") || hasColumn(t, conn, "User", "owner") {
 		t.Fatalf("v24 did not drop the multi-admin columns")
 	}
 	if !hasIndex(t, conn, "idx_users_expiry") {
 		t.Fatalf("v4 did not add idx_users_expiry")
 	}
-	if !hasTable(t, conn, "delivered") {
+	if !hasTable(t, conn, "Delivered") {
 		t.Fatalf("v23 did not create delivered")
 	}
 	if !hasIndex(t, conn, "uq_admins_owner") {
@@ -199,7 +199,7 @@ func TestMigrateUpgradesOlderDatabase(t *testing.T) {
 // stamped past HEAD is refused, not silently run.
 func TestMigrateRefusesNewerDatabase(t *testing.T) {
 	conn := newMigrateDB(t)
-	if _, err := conn.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY)"); err != nil {
+	if _, err := conn.Exec("CREATE TABLE User (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
 	if _, err := conn.Exec("PRAGMA user_version = 99"); err != nil {
@@ -219,10 +219,10 @@ const (
 )
 
 const legacyEncryptedSchema = `
-CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR);
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, key VARCHAR);
-INSERT INTO settings (id, bot_token) VALUES (1, 'enc:` + fernetToken + `');
-INSERT INTO nodes (id, key) VALUES (1, 'enc:` + fernetToken + `');
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, bot_token VARCHAR);
+CREATE TABLE Node (id INTEGER PRIMARY KEY, key VARCHAR);
+INSERT INTO Setting (id, bot_token) VALUES (1, 'enc:` + fernetToken + `');
+INSERT INTO Node (id, key) VALUES (1, 'enc:` + fernetToken + `');
 `
 
 // TestMigrateDecryptsStoredSecrets proves a Go-built DB reads the Fernet
@@ -244,10 +244,10 @@ func TestMigrateDecryptsStoredSecrets(t *testing.T) {
 		t.Fatalf("Migrate: %v", err)
 	}
 	var bot, key string
-	if err := conn.QueryRow("SELECT bot_token FROM settings WHERE id = 1").Scan(&bot); err != nil {
+	if err := conn.QueryRow("SELECT bot_token FROM Setting WHERE id = 1").Scan(&bot); err != nil {
 		t.Fatalf("read bot_token: %v", err)
 	}
-	if err := conn.QueryRow("SELECT key FROM nodes WHERE id = 1").Scan(&key); err != nil {
+	if err := conn.QueryRow("SELECT key FROM Node WHERE id = 1").Scan(&key); err != nil {
 		t.Fatalf("read node key: %v", err)
 	}
 	if !strings.HasPrefix(bot, crypto.EncPrefix) || !strings.HasPrefix(key, crypto.EncPrefix) {
@@ -283,7 +283,7 @@ func TestMigrateLeavesEncryptedRowsWithoutAKey(t *testing.T) {
 		t.Fatalf("Migrate: %v", err)
 	}
 	var bot string
-	if err := conn.QueryRow("SELECT bot_token FROM settings WHERE id = 1").Scan(&bot); err != nil {
+	if err := conn.QueryRow("SELECT bot_token FROM Setting WHERE id = 1").Scan(&bot); err != nil {
 		t.Fatalf("read bot_token: %v", err)
 	}
 	if bot != "enc:"+fernetToken {
@@ -395,7 +395,7 @@ func TestMigrateFreshAndUpgradedConverge(t *testing.T) {
 	if _, err := upgraded.Exec(legacyUpgradeSchema); err != nil {
 		t.Fatalf("legacy schema: %v", err)
 	}
-	if _, err := upgraded.Exec("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
+	if _, err := upgraded.Exec("INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
 		t.Fatalf("legacy traffic row: %v", err)
 	}
 	if _, err := upgraded.Exec("PRAGMA user_version = 3"); err != nil {
@@ -437,7 +437,7 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
 		t.Fatalf("legacy schema: %v", err)
 	}
-	if _, err := conn.Exec("INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
+	if _, err := conn.Exec("INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (1, '2026-01-01', 100)"); err != nil {
 		t.Fatalf("legacy traffic row: %v", err)
 	}
 	if _, err := conn.Exec("PRAGMA user_version = 3"); err != nil {
@@ -448,7 +448,7 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 		t.Fatalf("first Migrate: %v", err)
 	}
 	var first int
-	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&first); err != nil {
+	if err := conn.QueryRow("SELECT COUNT(*) FROM TrafficLedger").Scan(&first); err != nil {
 		t.Fatalf("count ledger: %v", err)
 	}
 
@@ -464,7 +464,7 @@ func TestMigrateV25BackfillRerunnable(t *testing.T) {
 		t.Fatalf("version = %d, want 36", v)
 	}
 	var second int
-	if err := conn.QueryRow("SELECT COUNT(*) FROM traffic_ledger").Scan(&second); err != nil {
+	if err := conn.QueryRow("SELECT COUNT(*) FROM TrafficLedger").Scan(&second); err != nil {
 		t.Fatalf("count ledger: %v", err)
 	}
 	if second != first {
@@ -483,13 +483,13 @@ func TestMigrateDeduplicatesOwnersBeforeTheUniqueIndex(t *testing.T) {
 	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
 		t.Fatalf("legacy schema: %v", err)
 	}
-	if _, err := conn.Exec(`ALTER TABLE admins ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
+	if _, err := conn.Exec(`ALTER TABLE Admin ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
 		t.Fatalf("add is_owner: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec("PRAGMA user_version = 25"); err != nil {
@@ -500,7 +500,7 @@ func TestMigrateDeduplicatesOwnersBeforeTheUniqueIndex(t *testing.T) {
 		t.Fatalf("Migrate refused a database with two owner rows: %v", err)
 	}
 	var owners int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM admins WHERE is_owner = 1`).Scan(&owners); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM Admin WHERE is_owner = 1`).Scan(&owners); err != nil {
 		t.Fatal(err)
 	}
 	if owners != 1 {
@@ -522,13 +522,13 @@ func TestMigratePreRunnerDatabaseDeduplicatesOwners(t *testing.T) {
 	if _, err := conn.Exec(legacyUpgradeSchema); err != nil {
 		t.Fatalf("legacy schema: %v", err)
 	}
-	if _, err := conn.Exec(`ALTER TABLE admins ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
+	if _, err := conn.Exec(`ALTER TABLE Admin ADD COLUMN is_owner BOOLEAN DEFAULT 0`); err != nil {
 		t.Fatalf("add is_owner: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('owner-a', 'x', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('owner-b', 'x', 1)`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -536,7 +536,7 @@ func TestMigratePreRunnerDatabaseDeduplicatesOwners(t *testing.T) {
 		t.Fatalf("Migrate refused a pre-runner database with two owner rows: %v", err)
 	}
 	var owners int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM admins WHERE is_owner = 1`).Scan(&owners); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM Admin WHERE is_owner = 1`).Scan(&owners); err != nil {
 		t.Fatal(err)
 	}
 	if owners != 1 {
@@ -557,12 +557,12 @@ func TestDeletedHighestUserIDIsNotReused(t *testing.T) {
 		t.Fatalf("Migrate: %v", err)
 	}
 	// insert two users, capture the higher id
-	res, err := conn.Exec(`INSERT INTO users (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-1", "u1")
+	res, err := conn.Exec(`INSERT INTO User (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-1", "u1")
 	if err != nil {
 		t.Fatalf("insert u1: %v", err)
 	}
 	id1, _ := res.LastInsertId()
-	res, err = conn.Exec(`INSERT INTO users (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-2", "u2")
+	res, err = conn.Exec(`INSERT INTO User (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-2", "u2")
 	if err != nil {
 		t.Fatalf("insert u2: %v", err)
 	}
@@ -572,11 +572,11 @@ func TestDeletedHighestUserIDIsNotReused(t *testing.T) {
 		higher = id2
 	}
 	// delete the highest-id account
-	if _, err := conn.Exec(`DELETE FROM users WHERE id = ?`, higher); err != nil {
+	if _, err := conn.Exec(`DELETE FROM User WHERE id = ?`, higher); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	// insert another
-	res, err = conn.Exec(`INSERT INTO users (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-3", "u3")
+	res, err = conn.Exec(`INSERT INTO User (uuid, name, max_logins, expiry_date, is_active, used) VALUES (?, ?, 1, date('now','+30 days'), 1, 0)`, "u-3", "u3")
 	if err != nil {
 		t.Fatalf("insert u3: %v", err)
 	}
@@ -593,30 +593,30 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD_HASH", "")
 	conn := newMigrateDB(t)
 	// legacy v28-shaped users table (no AUTOINCREMENT) with one row
-	if _, err := conn.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT,
+	if _, err := conn.Exec(`CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT,
 		last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}', max_logins INTEGER DEFAULT 1, expiry_date DATE,
 		is_active BOOLEAN DEFAULT 1, last_online DATETIME, tag VARCHAR)`); err != nil {
 		t.Fatalf("legacy users: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, total, used, max_logins, expiry_date, is_active, tag) VALUES (42, 'uuid-42', 'alice', 1000, 500, 3, '2026-12-31', 1, 'vip')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, total, used, max_logins, expiry_date, is_active, tag) VALUES (42, 'uuid-42', 'alice', 1000, 500, 3, '2026-12-31', 1, 'vip')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(`CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, protocol VARCHAR, ovpn_port INTEGER, port INTEGER, key VARCHAR, status BOOLEAN)`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, protocol VARCHAR, ovpn_port INTEGER, port INTEGER, key VARCHAR, status BOOLEAN)`); err != nil {
 		t.Fatalf("nodes: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO nodes (id, name, address, protocol, ovpn_port, port, key, status) VALUES (7, 'n1', '1.2.3.4', 'tcp', 1194, 1194, 'secretkey', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Node (id, name, address, protocol, ovpn_port, port, key, status) VALUES (7, 'n1', '1.2.3.4', 'tcp', 1194, 1194, 'secretkey', 1)`); err != nil {
 		t.Fatalf("insert node: %v", err)
 	}
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY)`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY)`); err != nil {
 		t.Fatalf("settings: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO settings (id) VALUES (1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id) VALUES (1)`); err != nil {
 		t.Fatalf("settings row: %v", err)
 	}
-	if _, err := conn.Exec(`CREATE TABLE user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`); err != nil {
 		t.Fatalf("daily: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (42, '2026-01-01', 123)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (42, '2026-01-01', 123)`); err != nil {
 		t.Fatalf("daily row: %v", err)
 	}
 	// A deleted-user undo snapshot holding an ID above every live row: the
@@ -654,27 +654,27 @@ func TestRevocationMigrationPreservesUsers(t *testing.T) {
 	var maxlogins int
 	var expiry string
 	var isactive int
-	if err := conn.QueryRow(`SELECT id, uuid, name, total, used, max_logins, expiry_date, is_active, tag FROM users WHERE id=42`).Scan(&id, &uuid, &name, &total, &used, &maxlogins, &expiry, &isactive, &tag); err != nil {
+	if err := conn.QueryRow(`SELECT id, uuid, name, total, used, max_logins, expiry_date, is_active, tag FROM User WHERE id=42`).Scan(&id, &uuid, &name, &total, &used, &maxlogins, &expiry, &isactive, &tag); err != nil {
 		t.Fatalf("read user: %v", err)
 	}
 	if id != 42 || uuid != "uuid-42" || name != "alice" || total != 1000 || used != 500 || maxlogins != 3 || !strings.HasPrefix(expiry, "2026-12-31") || isactive != 1 || tag != "vip" {
 		t.Fatalf("user not preserved: %+v", map[string]any{"id": id, "uuid": uuid, "name": name, "total": total, "used": used, "max": maxlogins, "exp": expiry, "active": isactive, "tag": tag})
 	}
 	// daily preserved
-	if n := count(t, conn, "SELECT COUNT(*) FROM user_traffic_daily WHERE user_id=42"); n != 1 {
+	if n := count(t, conn, "SELECT COUNT(*) FROM UserTrafficDaily WHERE user_id=42"); n != 1 {
 		t.Fatalf("daily row lost")
 	}
 	// pending table exists
-	if !hasTable(t, conn, "pending_user_revocations") {
-		t.Fatalf("pending_user_revocations missing")
+	if !hasTable(t, conn, "PendingUserRevocation") {
+		t.Fatalf("PendingUserRevocation missing")
 	}
 	// node secret preserved
 	var key string
-	if err := conn.QueryRow("SELECT key FROM nodes WHERE id=7").Scan(&key); err != nil || key != "secretkey" {
+	if err := conn.QueryRow("SELECT key FROM Node WHERE id=7").Scan(&key); err != nil || key != "secretkey" {
 		t.Fatalf("node not preserved: %v %s", err, key)
 	}
 	// sequence seeded past the deleted snapshot IDs (777, 888), not just live max
-	res, err := conn.Exec(`INSERT INTO users (uuid, name, max_logins, expiry_date, is_active, used) VALUES ('uuid-new', 'newuser', 1, date('now','+30 days'), 1, 0)`)
+	res, err := conn.Exec(`INSERT INTO User (uuid, name, max_logins, expiry_date, is_active, used) VALUES ('uuid-new', 'newuser', 1, date('now','+30 days'), 1, 0)`)
 	if err != nil {
 		t.Fatalf("insert after migrate: %v", err)
 	}

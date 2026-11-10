@@ -17,12 +17,12 @@ import (
 
 // collectorSchema is the slice of the panel schema the collector reads.
 const collectorSchema = `
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   tunnel_address VARCHAR, protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194,
   port INTEGER DEFAULT 2083, key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR,
   country_code VARCHAR, latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
-CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
   max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1, tag VARCHAR,
   last_online VARCHAR);
@@ -82,7 +82,7 @@ func addNode(t *testing.T, conn *sql.DB, id int64, name string, srv *httptest.Se
 	port, _ := strconv.Atoi(u.Port())
 	pin := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}))
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, port, status, server_ca) VALUES (?, ?, ?, ?, 1, ?)`,
+		`INSERT INTO Node (id, name, address, port, status, server_ca) VALUES (?, ?, ?, ?, 1, ?)`,
 		id, name, u.Hostname(), port, pin,
 	); err != nil {
 		t.Fatalf("insert node: %v", err)
@@ -167,7 +167,7 @@ func TestCollectLiveSnapshotIdleNodeOnline(t *testing.T) {
 func TestCollectLiveSnapshotCNMapping(t *testing.T) {
 	resetLiveState()
 	conn := newCollectorDB(t)
-	if _, err := conn.Exec(`INSERT INTO users (id, name) VALUES (42, 'alice')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, name) VALUES (42, 'alice')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	addNode(t, conn, 1, "n1", fakeNode(t, `{"live_sessions":[{"common_name":"42"}]}`, nil))
@@ -184,7 +184,7 @@ func TestCollectLiveSnapshotCNMapping(t *testing.T) {
 func TestCollectLiveSnapshotNameFallback(t *testing.T) {
 	resetLiveState()
 	conn := newCollectorDB(t)
-	if _, err := conn.Exec(`INSERT INTO users (id, name) VALUES (7, 'bob')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, name) VALUES (7, 'bob')`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	addNode(t, conn, 1, "nodeA", fakeNode(t, `{"live_sessions":[{"common_name":"bob-nodeA"}]}`, nil))
@@ -224,15 +224,15 @@ func TestApplyGrace(t *testing.T) {
 func TestTouchLastOnline(t *testing.T) {
 	conn := newCollectorDB(t)
 	stamp := "2026-10-26 12:00:00.000000"
-	if _, err := conn.Exec(`INSERT INTO users (id, name) VALUES (1, 'alice'), (2, 'bob'), (3, 'carol')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, name) VALUES (1, 'alice'), (2, 'bob'), (3, 'carol')`); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
 	touchLastOnline(conn, []string{"alice", "carol"}, stamp)
 
 	var alice, bob string
-	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM users WHERE name = 'alice'`).Scan(&alice)
-	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM users WHERE name = 'bob'`).Scan(&bob)
+	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM User WHERE name = 'alice'`).Scan(&alice)
+	_ = conn.QueryRow(`SELECT COALESCE(last_online, '') FROM User WHERE name = 'bob'`).Scan(&bob)
 	if alice != stamp {
 		t.Errorf("alice last_online = %q, want %q", alice, stamp)
 	}

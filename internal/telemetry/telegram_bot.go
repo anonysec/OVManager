@@ -108,7 +108,7 @@ func tgBotToken(db *sql.DB) (string, int64, bool) {
 	var stored string
 	var enabled sql.NullInt64
 	var ownerID sql.NullInt64
-	err := db.QueryRow(`SELECT bot_token, bot_enabled, owner_telegram_id FROM settings LIMIT 1`).
+	err := db.QueryRow(`SELECT bot_token, bot_enabled, owner_telegram_id FROM Setting LIMIT 1`).
 		Scan(&stored, &enabled, &ownerID)
 	if err != nil || !enabled.Valid || enabled.Int64 == 0 || !ownerID.Valid || ownerID.Int64 == 0 {
 		return "", 0, false
@@ -122,7 +122,7 @@ func tgBotToken(db *sql.DB) (string, int64, bool) {
 
 func tgLastUpdate(db *sql.DB) int64 {
 	var v sql.NullInt64
-	_ = db.QueryRow(`SELECT telegram_last_update_id FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	_ = db.QueryRow(`SELECT telegram_last_update_id FROM Setting ORDER BY id LIMIT 1`).Scan(&v)
 	if v.Valid {
 		return v.Int64
 	}
@@ -130,7 +130,7 @@ func tgLastUpdate(db *sql.DB) int64 {
 }
 
 func tgSetLastUpdate(db *sql.DB, id int64) {
-	_, _ = db.Exec(`UPDATE settings SET telegram_last_update_id = ? WHERE id = (SELECT MIN(id) FROM settings)`, id)
+	_, _ = db.Exec(`UPDATE Setting SET telegram_last_update_id = ? WHERE id = (SELECT MIN(id) FROM Setting)`, id)
 }
 
 func formatBytes(n int64) string {
@@ -288,7 +288,7 @@ func tgAnswerCallback(token, callbackID, text string) {
 
 func userByUUID(db *sql.DB, uuid string) (*tgUser, error) {
 	u := &tgUser{}
-	err := db.QueryRow(`SELECT uuid, name, total, used, expiry_date, is_active, max_logins, telegram_chat_id FROM users WHERE uuid = ?`, uuid).
+	err := db.QueryRow(`SELECT uuid, name, total, used, expiry_date, is_active, max_logins, telegram_chat_id FROM User WHERE uuid = ?`, uuid).
 		Scan(&u.UUID, &u.Name, &u.Total, &u.Used, &u.Expiry, &u.IsActive, &u.MaxLogins, &u.ChatID)
 	if err != nil {
 		return nil, err
@@ -298,7 +298,7 @@ func userByUUID(db *sql.DB, uuid string) (*tgUser, error) {
 
 func userByChat(db *sql.DB, chatID int64) (*tgUser, error) {
 	u := &tgUser{}
-	err := db.QueryRow(`SELECT uuid, name, total, used, expiry_date, is_active, max_logins, telegram_chat_id FROM users WHERE telegram_chat_id = ?`, chatID).
+	err := db.QueryRow(`SELECT uuid, name, total, used, expiry_date, is_active, max_logins, telegram_chat_id FROM User WHERE telegram_chat_id = ?`, chatID).
 		Scan(&u.UUID, &u.Name, &u.Total, &u.Used, &u.Expiry, &u.IsActive, &u.MaxLogins, &u.ChatID)
 	if err != nil {
 		return nil, err
@@ -329,7 +329,7 @@ func subURL(db *sql.DB, uuid string) string {
 		return ""
 	}
 	var prefix, subPath, urlpath string
-	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub'), COALESCE(urlpath,'dashboard') FROM settings LIMIT 1`)
+	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub'), COALESCE(urlpath,'dashboard') FROM Setting LIMIT 1`)
 	if err := row.Scan(&prefix, &subPath, &urlpath); err != nil {
 		return ""
 	}
@@ -345,11 +345,11 @@ func subURL(db *sql.DB, uuid string) string {
 // ovpnConfigForUser returns the OVPN config bytes for the user's first node.
 func ovpnConfigForUser(db *sql.DB, uuid string) []byte {
 	var userID int64
-	if err := db.QueryRow(`SELECT id FROM users WHERE uuid = ?`, uuid).Scan(&userID); err != nil {
+	if err := db.QueryRow(`SELECT id FROM User WHERE uuid = ?`, uuid).Scan(&userID); err != nil {
 		return nil
 	}
 	var nodeID int64
-	if err := db.QueryRow(`SELECT id FROM nodes WHERE COALESCE(status,0) = 1 ORDER BY id LIMIT 1`).Scan(&nodeID); err != nil {
+	if err := db.QueryRow(`SELECT id FROM Node WHERE COALESCE(status,0) = 1 ORDER BY id LIMIT 1`).Scan(&nodeID); err != nil {
 		return nil
 	}
 	return node.DownloadOVPNClient(userID, nodeID, db)
@@ -524,7 +524,7 @@ func cmdHelp(m *msgCtx) {
 func cmdNodes(m *msgCtx) {
 	db, token, chatID := m.db, m.token, m.chatID
 	var lines []string
-	rows, err := db.Query(`SELECT name, status FROM nodes ORDER BY id`)
+	rows, err := db.Query(`SELECT name, status FROM Node ORDER BY id`)
 	if err != nil {
 		tgSendKB(token, chatID, "❌ Could not fetch nodes.", userMenuKB())
 		return
@@ -583,7 +583,7 @@ func cmdBalance(m *msgCtx) {
 
 func cmdList(m *msgCtx) {
 	db, token, chatID := m.db, m.token, m.chatID
-	rows, err := db.Query(`SELECT uuid, name, is_active, expiry_date FROM users ORDER BY id`)
+	rows, err := db.Query(`SELECT uuid, name, is_active, expiry_date FROM User ORDER BY id`)
 	if err != nil {
 		tgSendKB(token, chatID, "❌ Could not list users.", ownerMenuKB())
 		return
@@ -642,7 +642,7 @@ func cmdExtend(m *msgCtx) {
 	u, err := userByUUID(db, fields[0])
 	if err != nil {
 		var uuid string
-		err2 := db.QueryRow(`SELECT uuid FROM users WHERE name = ?`, fields[0]).Scan(&uuid)
+		err2 := db.QueryRow(`SELECT uuid FROM User WHERE name = ?`, fields[0]).Scan(&uuid)
 		if err2 != nil {
 			tgSendKB(token, chatID, "⚠️ Unknown user: "+fields[0], ownerMenuKB())
 			return
@@ -666,9 +666,9 @@ func cmdExtend(m *msgCtx) {
 	expiryStr := newExpiry.Format("2006-01-02")
 	if len(fields) >= 3 {
 		addBytes := int64(gb * 1024 * 1024 * 1024)
-		_, _ = db.Exec(`UPDATE users SET expiry_date = ?, total = COALESCE(total,0) + ? WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
+		_, _ = db.Exec(`UPDATE User SET expiry_date = ?, total = COALESCE(total,0) + ? WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
 	} else {
-		_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
+		_, _ = db.Exec(`UPDATE User SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 	}
 	audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
 	tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string {
@@ -803,7 +803,7 @@ func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int6
 		var isActive int64
 		err := conn.QueryRowContext(ctx,
 			`SELECT uuid, name, telegram_chat_id, is_active
-			 FROM users
+			 FROM User
 			 WHERE activation_token_hash = ?
 			   AND activation_token_expires_at IS NOT NULL
 			   AND activation_token_expires_at > ?`,
@@ -826,7 +826,7 @@ func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int6
 		}
 
 		res, err := conn.ExecContext(ctx,
-			`UPDATE users
+			`UPDATE User
 			 SET telegram_chat_id = ?,
 			     activation_token_hash = NULL,
 			     activation_token_expires_at = NULL
@@ -979,7 +979,7 @@ func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int
 			}
 		}
 		expiryStr := newExpiry.Format("2006-01-02")
-		_, _ = db.Exec(`UPDATE users SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
+		_, _ = db.Exec(`UPDATE User SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days})
 		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr, ownerMenuKB())
 		return

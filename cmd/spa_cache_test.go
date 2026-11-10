@@ -50,7 +50,7 @@ func TestSPACachesIndexAndFileServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY, url_path TEXT); INSERT INTO settings (id, url_path) VALUES (1, '');`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY, url_path TEXT); INSERT INTO Setting (id, url_path) VALUES (1, '');`); err != nil {
 		t.Fatal(err)
 	}
 	h := panel.NewHandler(auth.NewService(conn, dataDir))
@@ -88,7 +88,7 @@ func TestSPACachedIndexAvoidsStat(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY, url_path TEXT); INSERT INTO settings (id, url_path) VALUES (1, '');`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY, url_path TEXT); INSERT INTO Setting (id, url_path) VALUES (1, '');`); err != nil {
 		t.Fatal(err)
 	}
 	h := panel.NewHandler(auth.NewService(conn, dataDir))

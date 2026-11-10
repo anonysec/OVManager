@@ -15,7 +15,7 @@ func TestUsersSessionsReturnsLiveNodeDiagnostics(t *testing.T) {
 	env := newPanelEnv(t)
 	const uuid = "aaaa0000-0000-0000-0000-000000000042"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (42, ?, 'alice', NULL, 0, 0, '{}', 2, '2099-01-01', 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
@@ -79,13 +79,13 @@ func TestUsersDisconnectAliasUsesKick(t *testing.T) {
 
 	const uuid = "bbbb0000-0000-0000-0000-000000000042"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
+		`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
 		 VALUES (?, 'alice', NULL, 0, 0, '{}', 2, 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	var userID int64
-	if err := env.conn.QueryRow(`SELECT id FROM users WHERE uuid = ?`, uuid).Scan(&userID); err != nil {
+	if err := env.conn.QueryRow(`SELECT id FROM User WHERE uuid = ?`, uuid).Scan(&userID); err != nil {
 		t.Fatalf("select user id: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestUsersNumericIDKickUsesResolvedPanelID(t *testing.T) {
 	insertTestNode(t, env.conn, 1, "nodeA", host, port, 1194, certPEM(t, agent))
 	const uuid = "cccc0000-0000-0000-0000-000000000042"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
+		`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
 		 VALUES (42, ?, 'numeric-kick', NULL, 0, 0, '{}', 2, 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
@@ -156,7 +156,7 @@ func TestUserSessionsDiagnosticsUsesOneNodeSnapshot(t *testing.T) {
 	insertTestNode(t, env.conn, 1, "nodeA", host, port, 1194, certPEM(t, agent))
 	const uuid = "dddd0000-0000-0000-0000-000000000042"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (42, ?, 'alice', NULL, 0, 0, '{}', 2, '2099-01-01', 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)

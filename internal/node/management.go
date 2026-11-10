@@ -29,7 +29,7 @@ func PanelIDFor(db *sql.DB) string {
 		return ""
 	}
 	var pid sql.NullString
-	if err := db.QueryRow(`SELECT panel_id FROM settings LIMIT 1`).Scan(&pid); err != nil {
+	if err := db.QueryRow(`SELECT panel_id FROM Setting LIMIT 1`).Scan(&pid); err != nil {
 		return ""
 	}
 	return pid.String
@@ -37,7 +37,7 @@ func PanelIDFor(db *sql.DB) string {
 
 func panelDomainFor(db *sql.DB) string {
 	var d sql.NullString
-	if err := db.QueryRow(`SELECT panel_domain FROM settings LIMIT 1`).Scan(&d); err != nil {
+	if err := db.QueryRow(`SELECT panel_domain FROM Setting LIMIT 1`).Scan(&d); err != nil {
 		return ""
 	}
 	return strings.TrimSpace(d.String)
@@ -81,7 +81,7 @@ func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 
 // GetNodeByID loads one node row, or nil.
 func GetNodeByID(db *sql.DB, id int64) *Node {
-	n, err := scanNode(db.QueryRow(`SELECT `+nodeCols+` FROM nodes WHERE id = ?`, id))
+	n, err := scanNode(db.QueryRow(`SELECT `+nodeCols+` FROM Node WHERE id = ?`, id))
 	if err != nil {
 		return nil
 	}
@@ -89,7 +89,7 @@ func GetNodeByID(db *sql.DB, id int64) *Node {
 }
 
 func getNodeByName(db *sql.DB, name string) *Node {
-	n, err := scanNode(db.QueryRow(`SELECT `+nodeCols+` FROM nodes WHERE name = ?`, name))
+	n, err := scanNode(db.QueryRow(`SELECT `+nodeCols+` FROM Node WHERE name = ?`, name))
 	if err != nil {
 		return nil
 	}
@@ -97,7 +97,7 @@ func getNodeByName(db *sql.DB, name string) *Node {
 }
 
 func getAllNodes(db *sql.DB) []*Node {
-	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM nodes`)
+	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM Node`)
 	if err != nil {
 		return nil
 	}
@@ -111,7 +111,7 @@ func getActiveNodes(db *sql.DB) []*Node {
 }
 
 func getActiveNodesWithErr(db *sql.DB) ([]*Node, error) {
-	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM nodes WHERE status = 1`)
+	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM Node WHERE status = 1`)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +365,7 @@ func GetNodeStatus(db *sql.DB, nodeID int64) map[string]any {
 	// Persist the advertised wire contract so "needs update" is one SQL
 	// query instead of a live probe per node.
 	if cv, ok := res.info["contract_version"].(float64); ok {
-		_, _ = db.Exec(`UPDATE nodes SET node_contract_version = ? WHERE id = ?`, int64(cv), n.ID)
+		_, _ = db.Exec(`UPDATE Node SET node_contract_version = ? WHERE id = ?`, int64(cv), n.ID)
 	}
 
 	return map[string]any{
@@ -561,7 +561,7 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	if db == nil {
 		return false
 	}
-	res, err := db.Exec(`DELETE FROM nodes WHERE id = ?`, nodeID)
+	res, err := db.Exec(`DELETE FROM Node WHERE id = ?`, nodeID)
 	if err != nil {
 		return false
 	}
@@ -570,7 +570,7 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 		return false
 	}
 	// Retire pending revocations for a deliberately removed node.
-	_, _ = db.Exec(`DELETE FROM pending_user_revocations WHERE node_id = ?`, nodeID)
+	_, _ = db.Exec(`DELETE FROM PendingUserRevocation WHERE node_id = ?`, nodeID)
 	Forget(nodeID)
 
 	// Clean up node's traffic baselines and push hashes from all users.
@@ -578,10 +578,10 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	jsonPath1 := "$.\"" + nodeIDStr + "\""
 	jsonPath2 := "$.push_hash.\"" + nodeIDStr + "\""
 	_, _ = db.Exec(
-		"UPDATE users SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
+		"UPDATE User SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
 		jsonPath1, jsonPath1)
 	_, _ = db.Exec(
-		"UPDATE users SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
+		"UPDATE User SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
 		jsonPath2, jsonPath2)
 
 	audit.Record(db, "admin", "node.delete", "warning", fmt.Sprintf("Node deleted (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
@@ -605,7 +605,7 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 		storedKey = enc
 	}
 	res, err := db.Exec(
-		`INSERT INTO nodes (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude)
+		`INSERT INTO Node (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(),
 		storedKey, req.status(), nullIfEmpty(serverCA), cc, lat, lon,
@@ -636,7 +636,7 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 		args = append(args, cert)
 	}
 	args = append(args, id)
-	_, err := db.Exec(`UPDATE nodes SET `+set+` WHERE id = ?`, args...)
+	_, err := db.Exec(`UPDATE Node SET `+set+` WHERE id = ?`, args...)
 	return err
 }
 
@@ -801,7 +801,7 @@ func pushDesiredPolicy(db *sql.DB, n *Node, pid string, userID int64) {
 	var total sql.NullInt64
 	var used sql.NullInt64
 	var expiry sql.NullString
-	if err := db.QueryRow(`SELECT name, COALESCE(max_logins,0), is_active, total, used, expiry_date FROM users WHERE id = ?`, userID).Scan(&name, &maxLogins, &active, &total, &used, &expiry); err != nil {
+	if err := db.QueryRow(`SELECT name, COALESCE(max_logins,0), is_active, total, used, expiry_date FROM User WHERE id = ?`, userID).Scan(&name, &maxLogins, &active, &total, &used, &expiry); err != nil {
 		return
 	}
 	var totalPtr *int64
@@ -885,7 +885,7 @@ func userEffectivelyActive(db *sql.DB, id int64) bool {
 	var isActive int64
 	var expiry sql.NullString
 	var total, used sql.NullInt64
-	err := db.QueryRow(`SELECT is_active, expiry_date, total, used FROM users WHERE id = ?`, id).
+	err := db.QueryRow(`SELECT is_active, expiry_date, total, used FROM User WHERE id = ?`, id).
 		Scan(&isActive, &expiry, &total, &used)
 	if err != nil {
 		return false
@@ -905,7 +905,7 @@ func userEffectivelyActive(db *sql.DB, id int64) bool {
 }
 
 func allUsers(db *sql.DB) []userRef {
-	rows, err := db.Query(`SELECT id, name FROM users`)
+	rows, err := db.Query(`SELECT id, name FROM User`)
 	if err != nil {
 		return nil
 	}

@@ -128,7 +128,7 @@ func (s *Service) CreateSession(username, role, userAgent, ip string, ttl int) (
 		ip = ip[:64]
 	}
 	if _, err := s.DB().Exec(
-		`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at, user_agent, ip)
+		`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at, user_agent, ip)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		tokenHash(raw), username, role, now, now+float64(ttl), now, nullIfEmpty(userAgent), nullIfEmpty(ip),
 	); err != nil {
@@ -165,7 +165,7 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 	var expiresAt, lastSeen float64
 	err := s.DB().QueryRow(
 		`SELECT s.id, s.username, s.role, s.expires_at, s.last_seen_at
-		 FROM sessions s JOIN admins a ON a.username = s.username AND a.is_owner = 1
+		 FROM Session s JOIN Admin a ON a.username = s.username AND a.is_owner = 1
 		 WHERE s.token_hash = ?`,
 		th,
 	).Scan(&id, &ident.Username, &ident.Type, &expiresAt, &lastSeen)
@@ -177,11 +177,11 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 	}
 	now := nowSecs()
 	if now >= expiresAt || now-lastSeen > float64(s.IdleSeconds) {
-		_, _ = s.DB().Exec(`DELETE FROM sessions WHERE id = ?`, id)
+		_, _ = s.DB().Exec(`DELETE FROM Session WHERE id = ?`, id)
 		return zero, false
 	}
 	if now-lastSeen >= touchThrottleSeconds {
-		_, _ = s.DB().Exec(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now, id)
+		_, _ = s.DB().Exec(`UPDATE Session SET last_seen_at = ? WHERE id = ?`, now, id)
 	}
 	s.cachePut(th, ident)
 	return ident, true
@@ -245,7 +245,7 @@ func (s *Service) RevokeToken(raw string) bool {
 		return false
 	}
 	th := tokenHash(raw)
-	res, err := s.DB().Exec(`DELETE FROM sessions WHERE token_hash = ?`, th)
+	res, err := s.DB().Exec(`DELETE FROM Session WHERE token_hash = ?`, th)
 	s.cacheDelete(th)
 	if err != nil {
 		return false
@@ -255,7 +255,7 @@ func (s *Service) RevokeToken(raw string) bool {
 }
 
 func (s *Service) RevokeUserSessions(username string) int {
-	res, err := s.DB().Exec(`DELETE FROM sessions WHERE username = ?`, username)
+	res, err := s.DB().Exec(`DELETE FROM Session WHERE username = ?`, username)
 	s.cacheDeleteUser(username)
 	if err != nil {
 		return 0
@@ -272,7 +272,7 @@ func (s *Service) PurgeExpired() int {
 	total := 0
 	now := nowSecs()
 	if res, err := s.DB().Exec(
-		`DELETE FROM sessions WHERE expires_at <= ? OR (? - last_seen_at) > ?`,
+		`DELETE FROM Session WHERE expires_at <= ? OR (? - last_seen_at) > ?`,
 		now, now, s.IdleSeconds,
 	); err == nil {
 		if n, _ := res.RowsAffected(); n > 0 {
@@ -288,7 +288,7 @@ func (s *Service) PurgeExpired() int {
 func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	var hash string
 	var isOwner int64
-	err := s.DB().QueryRow(`SELECT password, is_owner FROM admins WHERE username = ?`, username).Scan(&hash, &isOwner)
+	err := s.DB().QueryRow(`SELECT password, is_owner FROM Admin WHERE username = ?`, username).Scan(&hash, &isOwner)
 	if err != nil || hash == "" || isOwner == 0 {
 		_, _ = dummyVerify(password)
 		return Identity{}, false
@@ -298,7 +298,7 @@ func (s *Service) Authenticate(username, password string) (Identity, bool) {
 	}
 	if NeedsRehash(hash) {
 		if fresh, err := HashPassword(password); err == nil {
-			_, _ = s.DB().Exec(`UPDATE admins SET password = ? WHERE username = ?`, fresh, username)
+			_, _ = s.DB().Exec(`UPDATE Admin SET password = ? WHERE username = ?`, fresh, username)
 		}
 	}
 	return Identity{Username: username, Type: "owner"}, true

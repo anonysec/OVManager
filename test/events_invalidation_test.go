@@ -134,14 +134,14 @@ func TestDiagnosticsHandlesDBQueryFailureGracefully(t *testing.T) {
 	_ = dir
 
 	if _, err := conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (1, 'u-1', 'test_user', NULL, 0, 0, '{}', 1, '2099-01-01', 1)`,
 	); err != nil {
 		t.Fatal(err)
 	}
 
 	// Drop nodes table to simulate a database query failure during getActiveNodes
-	if _, err := conn.Exec(`DROP TABLE nodes`); err != nil {
+	if _, err := conn.Exec(`DROP TABLE Node`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -159,7 +159,7 @@ func TestDiagnosticsHandlesDBQueryFailureGracefully(t *testing.T) {
 	}
 
 	// Drop users table to simulate both node and user queries failing
-	if _, err := conn.Exec(`DROP TABLE users`); err != nil {
+	if _, err := conn.Exec(`DROP TABLE User`); err != nil {
 		t.Fatal(err)
 	}
 	summaryBoth := node.LoginHealthSummary(conn, 8)

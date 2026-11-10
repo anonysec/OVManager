@@ -152,13 +152,13 @@ func TestCLIResetPasswordRevokesActualOwner(t *testing.T) {
 	if _, err := conn.Exec(testSchema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('bob', 'oldhash', 1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('bob', 'oldhash', 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h1','bob','owner',0,9999999999,0)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h1','bob','owner',0,9999999999,0)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO sessions (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h2','admin','owner',0,9999999999,0)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Session (token_hash, username, role, created_at, expires_at, last_seen_at) VALUES ('h2','admin','owner',0,9999999999,0)`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,10 +170,10 @@ func TestCLIResetPasswordRevokesActualOwner(t *testing.T) {
 	}
 
 	var bobCount, adminCount int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sessions WHERE username='bob'`).Scan(&bobCount); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM Session WHERE username='bob'`).Scan(&bobCount); err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sessions WHERE username='admin'`).Scan(&adminCount); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM Session WHERE username='admin'`).Scan(&adminCount); err != nil {
 		t.Fatal(err)
 	}
 	if bobCount != 0 {

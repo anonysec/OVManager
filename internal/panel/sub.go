@@ -293,7 +293,7 @@ func (h *Handler) subUser(w http.ResponseWriter, uuid string, r *http.Request) (
 	var expiry sql.NullString
 	var active sql.NullInt64
 	err := h.Svc.DB().QueryRowContext(context.Background(),
-		`SELECT id, name, total, used, expiry_date, is_active FROM users WHERE uuid = ?`, uuid,
+		`SELECT id, name, total, used, expiry_date, is_active FROM User WHERE uuid = ?`, uuid,
 	).Scan(&row.id, &row.name, &total, &used, &expiry, &active)
 	if err == sql.ErrNoRows {
 		writeSubError(w, 404, "Not Found", "This subscription link is invalid or the user no longer exists.")
@@ -389,7 +389,7 @@ func fmtDate(value string) string {
 func (h *Handler) activeNodes() []*node.Node {
 	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
-		 FROM nodes WHERE status = 1 ORDER BY id`)
+		 FROM Node WHERE status = 1 ORDER BY id`)
 	if err != nil {
 		return nil
 	}
@@ -410,7 +410,7 @@ func (h *Handler) activeNodes() []*node.Node {
 func (h *Handler) nodeByName(name string) *node.Node {
 	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
-		 FROM nodes WHERE name = ?`, name)
+		 FROM Node WHERE name = ?`, name)
 	if err != nil {
 		return nil
 	}

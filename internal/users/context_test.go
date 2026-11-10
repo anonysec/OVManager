@@ -20,7 +20,7 @@ func TestCancelledContextAbortsQuery(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := conn.QueryContext(ctx, `SELECT id FROM users WHERE id = ?`, 1); err == nil {
+	if _, err := conn.QueryContext(ctx, `SELECT id FROM User WHERE id = ?`, 1); err == nil {
 		t.Fatal("want cancelled error, got nil")
 	}
 	_ = auth.NewService(conn, t.TempDir())

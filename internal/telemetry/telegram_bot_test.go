@@ -25,15 +25,15 @@ func newBotDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	_, err = conn.Exec(`
-CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER, telegram_last_update_id BIGINT DEFAULT 0);
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT, expiry_date VARCHAR, is_active BOOLEAN DEFAULT 1, max_logins INTEGER DEFAULT 1, telegram_chat_id INTEGER, activation_token_hash VARCHAR(64), activation_token_expires_at REAL);
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER, telegram_last_update_id BIGINT DEFAULT 0);
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR, total BIGINT, used BIGINT, expiry_date VARCHAR, is_active BOOLEAN DEFAULT 1, max_logins INTEGER DEFAULT 1, telegram_chat_id INTEGER, activation_token_hash VARCHAR(64), activation_token_expires_at REAL);
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor VARCHAR, action VARCHAR, target VARCHAR, detail VARCHAR);
 	`)
 	if err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	_, _ = conn.Exec(`INSERT INTO settings (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, 'tok', 1, 999)`)
-	_, _ = conn.Exec(`INSERT INTO users (id, uuid, name, total, used, expiry_date, is_active, max_logins) VALUES (1, 'u-aaa', 'alice', 1073741824, 0, '2030-01-01', 1, 3)`)
+	_, _ = conn.Exec(`INSERT INTO Setting (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, 'tok', 1, 999)`)
+	_, _ = conn.Exec(`INSERT INTO User (id, uuid, name, total, used, expiry_date, is_active, max_logins) VALUES (1, 'u-aaa', 'alice', 1073741824, 0, '2030-01-01', 1, 3)`)
 	return conn
 }
 
@@ -85,7 +85,7 @@ func (s *stubTelegram) texts() []string {
 
 func TestBotActivationBinds(t *testing.T) {
 	conn := newBotDB(t)
-	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+	_, _ = conn.Exec(`UPDATE User SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
 		"e0e77a507412b120f6ede61f62295b1a7b2ff19d3dcc8f7253e51663470c888e", float64(time.Now().UnixNano())/1e9+3600)
 	st := startStub(t, nil)
 	TgHandleText(conn, "tok", 999, 42, "/start aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
@@ -96,15 +96,15 @@ func TestBotActivationBinds(t *testing.T) {
 		t.Fatalf("reply = %q", st.texts()[0])
 	}
 	var chat int64
-	_ = conn.QueryRow(`SELECT telegram_chat_id FROM users WHERE uuid='u-aaa'`).Scan(&chat)
+	_ = conn.QueryRow(`SELECT telegram_chat_id FROM User WHERE uuid='u-aaa'`).Scan(&chat)
 	if chat != 42 {
 		t.Fatalf("telegram_chat_id = %d, want 42", chat)
 	}
 }
 func TestBotRebindNotifiesPreviousChat(t *testing.T) {
 	conn := newBotDB(t)
-	_, _ = conn.Exec(`UPDATE users SET telegram_chat_id=111 WHERE uuid='u-aaa'`)
-	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+	_, _ = conn.Exec(`UPDATE User SET telegram_chat_id=111 WHERE uuid='u-aaa'`)
+	_, _ = conn.Exec(`UPDATE User SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
 		"4ca14526b2751b640d549ce7caf8ac39438592211a0ec370064d57666a682ad6", float64(time.Now().UnixNano())/1e9+3600)
 	st := startStub(t, nil)
 	TgHandleText(conn, "tok", 999, 222, "/start bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
@@ -121,7 +121,7 @@ func TestBotRebindNotifiesPreviousChat(t *testing.T) {
 		t.Fatalf("no rebind notice to previous chat 111; sent=%v", st.sent)
 	}
 	var chat int64
-	_ = conn.QueryRow(`SELECT telegram_chat_id FROM users WHERE uuid='u-aaa'`).Scan(&chat)
+	_ = conn.QueryRow(`SELECT telegram_chat_id FROM User WHERE uuid='u-aaa'`).Scan(&chat)
 	if chat != 222 {
 		t.Fatalf("telegram_chat_id = %d, want 222", chat)
 	}
@@ -135,7 +135,7 @@ func TestBotInvalidTokenRejected(t *testing.T) {
 		t.Fatalf("reply = %q", st.texts()[0])
 	}
 	var chat int
-	_ = conn.QueryRow(`SELECT COUNT(*) FROM users WHERE telegram_chat_id=42`).Scan(&chat)
+	_ = conn.QueryRow(`SELECT COUNT(*) FROM User WHERE telegram_chat_id=42`).Scan(&chat)
 	if chat != 0 {
 		t.Fatalf("chat bound for invalid token: %d", chat)
 	}
@@ -153,7 +153,7 @@ func TestBotMeRequiresBinding(t *testing.T) {
 func TestBotMeAfterBind(t *testing.T) {
 	conn := newBotDB(t)
 	st := startStub(t, nil)
-	_, _ = conn.Exec(`UPDATE users SET telegram_chat_id=42 WHERE uuid='u-aaa'`)
+	_, _ = conn.Exec(`UPDATE User SET telegram_chat_id=42 WHERE uuid='u-aaa'`)
 	TgHandleText(conn, "tok", 999, 42, "/me")
 	if !strings.Contains(st.texts()[0], "alice") {
 		t.Fatalf("status = %q", st.texts()[0])
@@ -166,7 +166,7 @@ func TestBotStrangerLockout(t *testing.T) {
 	TgHandleText(conn, "tok", 999, 777, "/extend u-aaa 30")
 	// strangers get the short menu, and no mutation happens
 	var expiry string
-	_ = conn.QueryRow(`SELECT expiry_date FROM users WHERE uuid='u-aaa'`).Scan(&expiry)
+	_ = conn.QueryRow(`SELECT expiry_date FROM User WHERE uuid='u-aaa'`).Scan(&expiry)
 	if expiry != "2030-01-01" {
 		t.Fatalf("expiry mutated by stranger: %s", expiry)
 	}
@@ -183,7 +183,7 @@ func TestBotOwnerExtend(t *testing.T) {
 		t.Fatalf("reply = %q", st.texts()[0])
 	}
 	var total int64
-	_ = conn.QueryRow(`SELECT total FROM users WHERE uuid='u-aaa'`).Scan(&total)
+	_ = conn.QueryRow(`SELECT total FROM User WHERE uuid='u-aaa'`).Scan(&total)
 	if total != 1073741824+2*1024*1024*1024 {
 		t.Fatalf("total = %d", total)
 	}
@@ -220,7 +220,7 @@ func TestTgPollHandlesUpdate(t *testing.T) {
 }
 func TestBotActivationRateLimit(t *testing.T) {
 	conn := newBotDB(t)
-	_, _ = conn.Exec(`UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
+	_, _ = conn.Exec(`UPDATE User SET activation_token_hash = ?, activation_token_expires_at = ? WHERE uuid = 'u-aaa'`,
 		"c2f480d4dda9f4522b9f6d590011636d904accfe59f12f9d66a0221c2558e3a2", float64(time.Now().UnixNano())/1e9+3600)
 	activateAttempts.Delete(42)
 	activateAttempts.Delete(99)

@@ -12,7 +12,7 @@ import (
 func seedNumericRouteUser(t *testing.T, conn *sql.DB, id int64, uuid, name string, active int64) {
 	t.Helper()
 	if _, err := conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, ?, ?, NULL, 64, 0, '{}', 2, '2099-01-01', ?)`,
 		id, uuid, name, active,
 	); err != nil {
@@ -72,10 +72,10 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 		t.Fatalf("numeric status update = %d %v", res.StatusCode, body)
 	}
 	var aliceActive, numericUUIDActive int64
-	if err := env.conn.QueryRow(`SELECT is_active FROM users WHERE id = 42`).Scan(&aliceActive); err != nil {
+	if err := env.conn.QueryRow(`SELECT is_active FROM User WHERE id = 42`).Scan(&aliceActive); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.conn.QueryRow(`SELECT is_active FROM users WHERE id = 43`).Scan(&numericUUIDActive); err != nil {
+	if err := env.conn.QueryRow(`SELECT is_active FROM User WHERE id = 43`).Scan(&numericUUIDActive); err != nil {
 		t.Fatal(err)
 	}
 	if aliceActive != 0 || numericUUIDActive != 1 {
@@ -87,7 +87,7 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 	if res.StatusCode != http.StatusOK || body["success"] != true {
 		t.Fatalf("legacy numeric UUID status update = %d %v", res.StatusCode, body)
 	}
-	if err := env.conn.QueryRow(`SELECT is_active FROM users WHERE id = 43`).Scan(&numericUUIDActive); err != nil {
+	if err := env.conn.QueryRow(`SELECT is_active FROM User WHERE id = 43`).Scan(&numericUUIDActive); err != nil {
 		t.Fatal(err)
 	}
 	if numericUUIDActive != 0 {
@@ -102,11 +102,11 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 		t.Fatalf("numeric update = %d %v", res.StatusCode, body)
 	}
 	var tag string
-	if err := env.conn.QueryRow(`SELECT tag FROM users WHERE id = 42`).Scan(&tag); err != nil || tag != "via-id" {
+	if err := env.conn.QueryRow(`SELECT tag FROM User WHERE id = 42`).Scan(&tag); err != nil || tag != "via-id" {
 		t.Fatalf("updated tag = %q, err=%v; want via-id", tag, err)
 	}
 
-	if _, err := env.conn.Exec(`UPDATE users SET used = 512, node_usage = '{"1":512}' WHERE id = 42`); err != nil {
+	if _, err := env.conn.Exec(`UPDATE User SET used = 512, node_usage = '{"1":512}' WHERE id = 42`); err != nil {
 		t.Fatal(err)
 	}
 	res, body = doJSON(t, http.MethodPost, env.srv.URL+"/api/users/id/42/reset-usage", env.token, nil)
@@ -115,7 +115,7 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 		t.Fatalf("numeric reset = %d %v", res.StatusCode, body)
 	}
 	var used int64
-	if err := env.conn.QueryRow(`SELECT used FROM users WHERE id = 42`).Scan(&used); err != nil || used != 0 {
+	if err := env.conn.QueryRow(`SELECT used FROM User WHERE id = 42`).Scan(&used); err != nil || used != 0 {
 		t.Fatalf("numeric reset used = %d, err=%v; want 0", used, err)
 	}
 
@@ -145,7 +145,7 @@ func TestUsersNumericIDRouteBoundariesAndAmbiguities(t *testing.T) {
 		t.Fatalf("PUT /users/id/status = %d %v, want 200 for user with uuid='id'", res.StatusCode, body)
 	}
 	var active int64
-	if err := env.conn.QueryRow(`SELECT is_active FROM users WHERE uuid = 'id'`).Scan(&active); err != nil || active != 0 {
+	if err := env.conn.QueryRow(`SELECT is_active FROM User WHERE uuid = 'id'`).Scan(&active); err != nil || active != 0 {
 		t.Errorf("user with uuid='id' active = %d, want 0", active)
 	}
 
@@ -156,7 +156,7 @@ func TestUsersNumericIDRouteBoundariesAndAmbiguities(t *testing.T) {
 		t.Fatalf("PUT /users/id/51 = %d %v, want 200", res.StatusCode, body)
 	}
 	var tag string
-	if err := env.conn.QueryRow(`SELECT tag FROM users WHERE id = 51`).Scan(&tag); err != nil || tag != "tag-51" {
+	if err := env.conn.QueryRow(`SELECT tag FROM User WHERE id = 51`).Scan(&tag); err != nil || tag != "tag-51" {
 		t.Errorf("user 51 tag = %q, want 'tag-51'", tag)
 	}
 

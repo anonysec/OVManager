@@ -13,7 +13,7 @@ func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {
 	if _, err := conn.Exec(extraTelemetryDDL); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, used, node_usage) VALUES (1,'u1','ann',100,'{}')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, used, node_usage) VALUES (1,'u1','ann',100,'{}')`); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 
@@ -25,7 +25,7 @@ func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {
 		t.Fatalf("ApplyUserTraffic on tx = false, want true")
 	}
 	// Force a failure inside the tx, then roll back: both writes must vanish.
-	if _, err := tx.Exec(`INSERT INTO users (id, uuid, name) VALUES (1,'dup','dup')`); err == nil {
+	if _, err := tx.Exec(`INSERT INTO User (id, uuid, name) VALUES (1,'dup','dup')`); err == nil {
 		t.Fatalf("conflicting insert unexpectedly succeeded")
 	}
 	if err := tx.Rollback(); err != nil {
@@ -34,14 +34,14 @@ func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {
 
 	var used int64
 	var state string
-	if err := conn.QueryRow(`SELECT used, node_usage FROM users WHERE id = 1`).Scan(&used, &state); err != nil {
+	if err := conn.QueryRow(`SELECT used, node_usage FROM User WHERE id = 1`).Scan(&used, &state); err != nil {
 		t.Fatalf("read user: %v", err)
 	}
 	if used != 100 || state != "{}" {
 		t.Fatalf("after rollback used=%d state=%q, want 100 and {}", used, state)
 	}
 	var daily int64
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM user_traffic_daily WHERE user_id = 1`).Scan(&daily); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM UserTrafficDaily WHERE user_id = 1`).Scan(&daily); err != nil {
 		t.Fatalf("read daily: %v", err)
 	}
 	if daily != 0 {
@@ -54,7 +54,7 @@ func TestApplyUserTrafficCommitsWithTx(t *testing.T) {
 	if _, err := conn.Exec(extraTelemetryDDL); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, used, node_usage) VALUES (1,'u1','ann',100,'{}')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, used, node_usage) VALUES (1,'u1','ann',100,'{}')`); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 
@@ -71,10 +71,10 @@ func TestApplyUserTrafficCommitsWithTx(t *testing.T) {
 
 	var used int64
 	var bytes int64
-	if err := conn.QueryRow(`SELECT used FROM users WHERE id = 1`).Scan(&used); err != nil {
+	if err := conn.QueryRow(`SELECT used FROM User WHERE id = 1`).Scan(&used); err != nil {
 		t.Fatalf("read user: %v", err)
 	}
-	if err := conn.QueryRow(`SELECT bytes FROM user_traffic_daily WHERE user_id = 1`).Scan(&bytes); err != nil {
+	if err := conn.QueryRow(`SELECT bytes FROM UserTrafficDaily WHERE user_id = 1`).Scan(&bytes); err != nil {
 		t.Fatalf("read daily: %v", err)
 	}
 	if used != 150 || bytes != 50 {

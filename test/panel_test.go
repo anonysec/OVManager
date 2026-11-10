@@ -28,15 +28,15 @@ import (
 )
 
 const panelSchema = `
-DROP TABLE IF EXISTS admins;
-CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
+DROP TABLE IF EXISTS Admin;
+CREATE TABLE Admin (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
   is_owner BOOLEAN DEFAULT 0, telegram_id INTEGER);
-DROP TABLE IF EXISTS sessions;
-CREATE TABLE sessions (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
+DROP TABLE IF EXISTS Session;
+CREATE TABLE Session (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
   role VARCHAR, created_at FLOAT, expires_at FLOAT, last_seen_at FLOAT,
   user_agent VARCHAR, ip VARCHAR);
-DROP TABLE IF EXISTS settings;
-CREATE TABLE settings (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTEGER DEFAULT 1194,
+DROP TABLE IF EXISTS Setting;
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTEGER DEFAULT 1194,
   protocol VARCHAR DEFAULT 'tcp', timezone VARCHAR DEFAULT 'UTC', bot_token VARCHAR,
   bot_enabled BOOLEAN DEFAULT 0, default_days INTEGER DEFAULT 30,
   default_traffic_gb INTEGER DEFAULT 100, default_max_users INTEGER DEFAULT 1,
@@ -54,20 +54,20 @@ CREATE TABLE settings (id INTEGER PRIMARY KEY, tunnel_address VARCHAR, port INTE
   ssl_cert_file VARCHAR, ssl_key_file VARCHAR, acme_domain VARCHAR, acme_email VARCHAR,
   cert_method VARCHAR DEFAULT 'selfsigned', panel_id VARCHAR, panel_url VARCHAR,
   panel_domain VARCHAR, bot_owner_setup_complete BOOLEAN DEFAULT 0);
-DROP TABLE IF EXISTS nodes;
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, tunnel_address VARCHAR,
+DROP TABLE IF EXISTS Node;
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, tunnel_address VARCHAR,
   protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194, port INTEGER DEFAULT 2083,
   key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR, country_code VARCHAR,
   latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
-DROP TABLE IF EXISTS users;
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNIQUE, total BIGINT,
+DROP TABLE IF EXISTS User;
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
   max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1,
   last_online DATETIME, tag VARCHAR);
 CREATE TABLE IF NOT EXISTS settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT);
-CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS Delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL,
   event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key));
 CREATE TABLE IF NOT EXISTS node_health_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   node_id INTEGER, node_name TEXT, cpu REAL, memory REAL, live_count INTEGER, latency_ms REAL,
@@ -80,10 +80,10 @@ CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREM
   offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL);
 DROP TABLE IF EXISTS user_node_usage;
 CREATE TABLE user_node_usage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
-DROP TABLE IF EXISTS user_traffic_daily;
-CREATE TABLE user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
+DROP TABLE IF EXISTS UserTrafficDaily;
+CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));
-CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
+CREATE TABLE IF NOT EXISTS TrafficLedger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
   delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}',
   UNIQUE (user_id, ts, kind, node_id));

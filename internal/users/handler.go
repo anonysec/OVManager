@@ -157,11 +157,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	var total int64
 	if serverFilter {
 		like := "%" + escapeLike(search) + "%"
-		if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COUNT(*) FROM users WHERE name LIKE ? ESCAPE '\'`, like).Scan(&total); err != nil {
+		if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COUNT(*) FROM User WHERE name LIKE ? ESCAPE '\'`, like).Scan(&total); err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 			return
 		}
-		res, err := h.Svc.DB().QueryContext(r.Context(), `SELECT `+userCols+` FROM users WHERE name LIKE ? ESCAPE '\' ORDER BY id LIMIT ? OFFSET ?`,
+		res, err := h.Svc.DB().QueryContext(r.Context(), `SELECT `+userCols+` FROM User WHERE name LIKE ? ESCAPE '\' ORDER BY id LIMIT ? OFFSET ?`,
 			like, pageSize, (page-1)*pageSize)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
@@ -169,7 +169,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = scanAll(res)
 	} else {
-		res, err := h.Svc.DB().QueryContext(r.Context(), `SELECT `+userCols+` FROM users ORDER BY id`)
+		res, err := h.Svc.DB().QueryContext(r.Context(), `SELECT `+userCols+` FROM User ORDER BY id`)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not list users")
 			return
@@ -217,7 +217,7 @@ func (h *Handler) issueActivationToken(w http.ResponseWriter, r *http.Request) {
 	}
 	uuidStr := r.PathValue("uuid")
 	var userID int64
-	if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT id FROM users WHERE uuid = ?`, uuidStr).Scan(&userID); err != nil {
+	if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT id FROM User WHERE uuid = ?`, uuidStr).Scan(&userID); err != nil {
 		userNotFound(w)
 		return
 	}
@@ -230,7 +230,7 @@ func (h *Handler) issueActivationToken(w http.ResponseWriter, r *http.Request) {
 	hash := sha256.Sum256(raw)
 	hashHex := hex.EncodeToString(hash[:])
 	expiresAt := float64(time.Now().UnixNano())/1e9 + float64(days*24*60*60)
-	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE users SET activation_token_hash = ?, activation_token_expires_at = ? WHERE id = ?`,
+	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE User SET activation_token_hash = ?, activation_token_expires_at = ? WHERE id = ?`,
 		hashHex, expiresAt, userID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "could not persist token")
 		return
@@ -284,7 +284,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.ReplaceAll(req.Name, " ", "_")
 	var exists int64
-	if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COUNT(*) FROM users WHERE name = ?`, name).Scan(&exists); err == nil && exists > 0 {
+	if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COUNT(*) FROM User WHERE name = ?`, name).Scan(&exists); err == nil && exists > 0 {
 		auth.WriteDetail(w, http.StatusConflict, "User with this name already exists")
 		return
 	}
@@ -309,7 +309,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := h.Svc.DB().ExecContext(r.Context(),
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
+		`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
 		 VALUES (?, ?, ?, ?, 0, '{}', ?, ?, 1, ?)`,
 		uuid.NewString(), name, req.Total, req.Used, maxLogins, expiry, tag,
 	)
@@ -318,7 +318,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
-	row, _ := scanUser(h.Svc.DB().QueryRowContext(r.Context(), `SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	row, _ := scanUser(h.Svc.DB().QueryRowContext(r.Context(), `SELECT `+userCols+` FROM User WHERE id = ?`, id))
 	audit.Record(h.Svc.DB(), h.actor(r), "user.create", "info",
 		"User created.", map[string]any{"target": name, "max_logins": maxLogins})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "create"})
@@ -434,7 +434,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.Svc.DB().ExecContext(r.Context(),
-		`UPDATE users SET total = ?, max_logins = ?, expiry_date = ?, is_active = ?, tag = ? WHERE uuid = ?`,
+		`UPDATE User SET total = ?, max_logins = ?, expiry_date = ?, is_active = ?, tag = ? WHERE uuid = ?`,
 		row.Total, row.MaxLogins, row.ExpiryDate.String, row.IsActive, nullTag(row.Tag), row.UUID,
 	); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not update user")
@@ -481,7 +481,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	if *req.Status {
 		active = 1
 	}
-	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE users SET is_active = ? WHERE uuid = ?`, active, row.UUID); err != nil {
+	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE User SET is_active = ? WHERE uuid = ?`, active, row.UUID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not change user status")
 		return
 	}
@@ -506,7 +506,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 	for attempt := 0; attempt < 3; attempt++ {
 		var used int64
 		var state string
-		if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE uuid = ?`, row.UUID).Scan(&used, &state); err != nil {
+		if err := h.Svc.DB().QueryRowContext(r.Context(), `SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM User WHERE uuid = ?`, row.UUID).Scan(&used, &state); err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 			return
 		}
@@ -516,7 +516,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 		}
 		data[node.ReseedMarkerKey] = json.RawMessage("true")
 		merged := string(mustJSON(data))
-		res, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, merged, row.UUID, used, state)
+		res, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE User SET used = 0, last_node_usage = 0, node_usage = ? WHERE uuid = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, merged, row.UUID, used, state)
 		if err != nil {
 			auth.WriteDetail(w, http.StatusInternalServerError, "Could not reset usage")
 			return
@@ -590,7 +590,7 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		total += req.Bytes
 		row.Total = &total
 	}
-	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE users SET total = ?, expiry_date = ? WHERE uuid = ?`,
+	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE User SET total = ?, expiry_date = ? WHERE uuid = ?`,
 		row.Total, row.ExpiryDate.String, row.UUID); err != nil {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not extend user")
 		return
@@ -625,7 +625,7 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 func aggregateNodeUsage(db *sql.DB, u userRow) (int64, []map[string]any) {
 	nodeIDs := map[string]int64{}
 	nodeNames := map[int64]string{}
-	if res, err := db.Query(`SELECT id, name FROM nodes`); err == nil {
+	if res, err := db.Query(`SELECT id, name FROM Node`); err == nil {
 		defer res.Close()
 		for res.Next() {
 			var name string
@@ -695,7 +695,7 @@ type defaults struct{ days, trafficGB, maxUsers int }
 
 func (h *Handler) userDefaults(ctx context.Context) defaults {
 	d := defaults{days: 30, trafficGB: 100, maxUsers: 1}
-	_ = h.Svc.DB().QueryRowContext(ctx, `SELECT default_days, default_traffic_gb, default_max_users FROM settings LIMIT 1`).
+	_ = h.Svc.DB().QueryRowContext(ctx, `SELECT default_days, default_traffic_gb, default_max_users FROM Setting LIMIT 1`).
 		Scan(&d.days, &d.trafficGB, &d.maxUsers)
 	if d.days == 0 {
 		d.days = 30

@@ -16,15 +16,15 @@ func TestConcurrentDeletesKeepOneUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, uuid TEXT UNIQUE);
-CREATE TABLE user_traffic_daily (user_id INTEGER, bytes INTEGER);`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE User (id INTEGER PRIMARY KEY, uuid TEXT UNIQUE);
+CREATE TABLE UserTrafficDaily (user_id INTEGER, bytes INTEGER);`); err != nil {
 		t.Fatal(err)
 	}
 	h := NewHandler(auth.NewService(conn, t.TempDir()))
 	for i := 0; i < 20; i++ {
-		if _, err := conn.Exec(`DELETE FROM users; DELETE FROM user_traffic_daily;
-INSERT INTO users (id, uuid) VALUES (1, 'a'), (2, 'b');
-INSERT INTO user_traffic_daily (user_id, bytes) VALUES (1, 100), (2, 200);`); err != nil {
+		if _, err := conn.Exec(`DELETE FROM User; DELETE FROM UserTrafficDaily;
+INSERT INTO User (id, uuid) VALUES (1, 'a'), (2, 'b');
+INSERT INTO UserTrafficDaily (user_id, bytes) VALUES (1, 100), (2, 200);`); err != nil {
 			t.Fatal(err)
 		}
 		start := make(chan struct{})
@@ -44,10 +44,10 @@ INSERT INTO user_traffic_daily (user_id, bytes) VALUES (1, 100), (2, 200);`); er
 			t.Fatalf("iteration %d: deletes returned %v and %v", i, first, second)
 		}
 		var users, daily int
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users); err != nil {
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM User`).Scan(&users); err != nil {
 			t.Fatal(err)
 		}
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM user_traffic_daily`).Scan(&daily); err != nil {
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM UserTrafficDaily`).Scan(&daily); err != nil {
 			t.Fatal(err)
 		}
 		if users != 1 || daily != 1 {
@@ -63,11 +63,11 @@ func TestFailedDeleteRollsBackUser(t *testing.T) {
 	}
 	defer conn.Close()
 	// Fail the user delete after deleting its history; both must roll back.
-	if _, err := conn.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, uuid TEXT);
-CREATE TABLE user_traffic_daily (user_id INTEGER, bytes INTEGER);
-INSERT INTO users VALUES (1, 'a'), (2, 'b');
-INSERT INTO user_traffic_daily VALUES (1, 100);
-CREATE TRIGGER refuse_delete BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'no'); END;`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE User (id INTEGER PRIMARY KEY, uuid TEXT);
+CREATE TABLE UserTrafficDaily (user_id INTEGER, bytes INTEGER);
+INSERT INTO User VALUES (1, 'a'), (2, 'b');
+INSERT INTO UserTrafficDaily VALUES (1, 100);
+CREATE TRIGGER refuse_delete BEFORE DELETE ON User BEGIN SELECT RAISE(ABORT, 'no'); END;`); err != nil {
 		t.Fatal(err)
 	}
 	h := NewHandler(auth.NewService(conn, t.TempDir()))
@@ -75,10 +75,10 @@ CREATE TRIGGER refuse_delete BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'n
 		t.Fatal("expected daily-history deletion to fail")
 	}
 	var count int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil || count != 2 {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM User`).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("users after rollback = %d, err=%v", count, err)
 	}
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM user_traffic_daily`).Scan(&count); err != nil || count != 1 {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM UserTrafficDaily`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("history after rollback = %d, err=%v", count, err)
 	}
 }

@@ -55,7 +55,7 @@ func insertTestNode(t *testing.T, conn *sql.DB, id int64, name, address string, 
 		ca = pin
 	}
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
+		`INSERT INTO Node (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
 		 VALUES (?, ?, ?, '', 'tcp', ?, ?, 'k', 1, ?)`,
 		id, name, address, ovpnPort, port, ca,
 	); err != nil {
@@ -72,7 +72,7 @@ func TestDownloadOVPNInjectsPanelDomainAndFallbacks(t *testing.T) {
 	host, port := hostPort(t, agent.URL)
 	insertTestNode(t, env.conn, 1, "n1", host, port, 1194, certPEM(t, agent))
 	insertTestNode(t, env.conn, 2, "n2", "203.0.113.9", 2083, 443, "")
-	if _, err := env.conn.Exec(`INSERT INTO settings (id, panel_domain) VALUES (1, 'panel.example.com')`); err != nil {
+	if _, err := env.conn.Exec(`INSERT INTO Setting (id, panel_domain) VALUES (1, 'panel.example.com')`); err != nil {
 		t.Fatalf("settings: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestDownloadOVPNGating(t *testing.T) {
 	seed := func(uuid string, active int, total, used any, expiry string) {
 		t.Helper()
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
 			 VALUES (?, ?, ?, ?, 0, '{}', 1, ?, ?, NULL)`,
 			uuid, "u-"+uuid[:4], total, used, expiry, active,
 		); err != nil {
@@ -196,7 +196,7 @@ func TestDownloadOVPNNumericUserIDAlias(t *testing.T) {
 		{43, "bbbbbbbb-0000-0000-0000-000000000043", "numeric-inactive", 0},
 	} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, ?, 1000000000, 0, 0, '{}', 1, ?, ?)`,
 			user.id, user.uuid, user.name, future, user.active,
 		); err != nil {
@@ -250,7 +250,7 @@ func TestDeleteUserFansOutToNodes(t *testing.T) {
 		{"eeeeeeee-0000-0000-0000-000000000002", "gone"},
 	} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, NULL, 1)`, u.uuid, u.name,
 		); err != nil {
 			t.Fatalf("insert user %s: %v", u.name, err)
@@ -262,7 +262,7 @@ func TestDeleteUserFansOutToNodes(t *testing.T) {
 		t.Fatalf("delete status = %d, want 200 (body %s)", res.StatusCode, raw)
 	}
 	var left int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users WHERE name = 'gone'`).Scan(&left); err != nil {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User WHERE name = 'gone'`).Scan(&left); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if left != 0 {
@@ -290,7 +290,7 @@ func TestDeleteUserSurvivesUnreachableNode(t *testing.T) {
 		{"ffffffff-0000-0000-0000-000000000002", "gone2"},
 	} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, NULL, 1)`, u.uuid, u.name,
 		); err != nil {
 			t.Fatalf("insert user %s: %v", u.name, err)
@@ -304,7 +304,7 @@ func TestDeleteUserSurvivesUnreachableNode(t *testing.T) {
 	body, _ := io.ReadAll(res.Body)
 	_ = body
 	var left int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users WHERE name = 'gone2'`).Scan(&left); err != nil {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User WHERE name = 'gone2'`).Scan(&left); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if left != 0 {

@@ -23,18 +23,18 @@ import (
 func noopStep(execer) error { return nil }
 
 func dropOrphanDailyRows(x execer) error {
-	if !tableNames(x)["user_traffic_daily"] {
+	if !tableNames(x)["UserTrafficDaily"] {
 		return nil
 	}
-	_, err := x.Exec("DELETE FROM user_traffic_daily WHERE user_id NOT IN (SELECT id FROM users)")
+	_, err := x.Exec("DELETE FROM UserTrafficDaily WHERE user_id NOT IN (SELECT id FROM User)")
 	return err
 }
 
 func addLookupIndices(x execer) error {
 	for _, stmt := range []string{
-		"CREATE INDEX IF NOT EXISTS idx_users_expiry ON users(expiry_date)",
-		"CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)",
-		"CREATE INDEX IF NOT EXISTS idx_nodes_name ON nodes(name)",
+		"CREATE INDEX IF NOT EXISTS idx_users_expiry ON User(expiry_date)",
+		"CREATE INDEX IF NOT EXISTS idx_nodes_status ON Node(status)",
+		"CREATE INDEX IF NOT EXISTS idx_nodes_name ON Node(name)",
 	} {
 		if _, err := x.Exec(stmt); err != nil {
 			return err
@@ -44,13 +44,13 @@ func addLookupIndices(x execer) error {
 }
 
 func addPanelID(x execer) error {
-	if !tableNames(x)["settings"] {
+	if !tableNames(x)["Setting"] {
 		return nil
 	}
-	if err := addColumn(x, "settings", "panel_id", "VARCHAR DEFAULT '' NOT NULL"); err != nil {
+	if err := addColumn(x, "Setting", "panel_id", "VARCHAR DEFAULT '' NOT NULL"); err != nil {
 		return err
 	}
-	rows, err := x.Query("SELECT id FROM settings WHERE panel_id IS NULL OR panel_id = ''")
+	rows, err := x.Query("SELECT id FROM Setting WHERE panel_id IS NULL OR panel_id = ''")
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func addPanelID(x execer) error {
 		return err
 	}
 	for _, id := range ids {
-		if _, err := x.Exec("UPDATE settings SET panel_id = ? WHERE id = ?", uuid.NewString(), id); err != nil {
+		if _, err := x.Exec("UPDATE Setting SET panel_id = ? WHERE id = ?", uuid.NewString(), id); err != nil {
 			return err
 		}
 	}
@@ -76,15 +76,15 @@ func addPanelID(x execer) error {
 }
 
 func addAdminIsOwner(x execer) error {
-	if !tableNames(x)["admins"] {
+	if !tableNames(x)["Admin"] {
 		return nil
 	}
-	if err := addColumn(x, "admins", "is_owner", "BOOLEAN DEFAULT 0 NOT NULL"); err != nil {
+	if err := addColumn(x, "Admin", "is_owner", "BOOLEAN DEFAULT 0 NOT NULL"); err != nil {
 		return err
 	}
 	owner := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
 	if owner != "" {
-		if _, err := x.Exec("UPDATE admins SET is_owner = 1 WHERE username = ? AND is_owner = 0", owner); err != nil {
+		if _, err := x.Exec("UPDATE Admin SET is_owner = 1 WHERE username = ? AND is_owner = 0", owner); err != nil {
 			return err
 		}
 	}
@@ -92,29 +92,29 @@ func addAdminIsOwner(x execer) error {
 }
 
 func singleAdminSchema(x execer) error {
-	if tableNames(x)["admins"] {
-		if err := addColumn(x, "admins", "is_owner", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+	if tableNames(x)["Admin"] {
+		if err := addColumn(x, "Admin", "is_owner", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 			return err
 		}
 		owner := strings.TrimSpace(os.Getenv("ADMIN_USERNAME"))
 		if owner != "" {
-			if _, err := x.Exec("UPDATE admins SET is_owner = 1 WHERE username = ? AND is_owner = 0", owner); err != nil {
+			if _, err := x.Exec("UPDATE Admin SET is_owner = 1 WHERE username = ? AND is_owner = 0", owner); err != nil {
 				return err
 			}
 		}
 		for _, name := range []string{"username_prefix", "disabled", "default_days", "default_traffic_gb", "default_max_users"} {
-			if columnNames(x, "admins")[name] {
-				if _, err := x.Exec("ALTER TABLE admins DROP COLUMN " + name); err != nil {
+			if columnNames(x, "Admin")[name] {
+				if _, err := x.Exec("ALTER TABLE Admin DROP COLUMN " + name); err != nil {
 					return err
 				}
 			}
 		}
 	}
-	if tableNames(x)["users"] && columnNames(x, "users")["owner"] {
-		if _, err := x.Exec("DROP INDEX IF EXISTS idx_users_owner"); err != nil {
+	if tableNames(x)["User"] && columnNames(x, "User")["owner"] {
+		if _, err := x.Exec("DROP INDEX IF EXISTS idx_User_owner"); err != nil {
 			return err
 		}
-		if _, err := x.Exec("ALTER TABLE users DROP COLUMN owner"); err != nil {
+		if _, err := x.Exec("ALTER TABLE User DROP COLUMN owner"); err != nil {
 			return err
 		}
 	}
@@ -125,26 +125,26 @@ func createTrafficLedgerAndKV(x execer) error {
 	if err := createExtraTables(x); err != nil {
 		return err
 	}
-	if !tableNames(x)["user_traffic_daily"] {
+	if !tableNames(x)["UserTrafficDaily"] {
 		return nil
 	}
 	_, err := x.Exec(
-		"INSERT OR IGNORE INTO traffic_ledger (user_id, ts, node_id, kind, delta_bytes, meta_json) " +
+		"INSERT OR IGNORE INTO TrafficLedger (user_id, ts, node_id, kind, delta_bytes, meta_json) " +
 			"SELECT user_id, CAST(strftime('%s', day || 'T00:00:00Z') AS REAL), '', 'backfill', bytes, '{}' " +
-			"FROM user_traffic_daily")
+			"FROM UserTrafficDaily")
 	return err
 }
 
 func addAdminsOwnerUnique(x execer) error {
-	if !tableNames(x)["admins"] {
+	if !tableNames(x)["Admin"] {
 		return nil
 	}
 	if _, err := x.Exec(
-		"UPDATE admins SET is_owner = 0 WHERE is_owner = 1 AND id NOT IN (SELECT MIN(id) FROM admins WHERE is_owner = 1)",
+		"UPDATE Admin SET is_owner = 0 WHERE is_owner = 1 AND id NOT IN (SELECT MIN(id) FROM Admin WHERE is_owner = 1)",
 	); err != nil {
 		return err
 	}
-	_, err := x.Exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON admins (is_owner) WHERE is_owner = 1")
+	_, err := x.Exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_admins_owner ON Admin (is_owner) WHERE is_owner = 1")
 	return err
 }
 
@@ -155,12 +155,12 @@ func addAdminsOwnerUnique(x execer) error {
 // decrypt is left as-is — fail-closed, never truncated.
 func decryptStoredSecrets(x execer) error {
 	botKey := cleanKey(os.Getenv("BOT_ENCRYPT_KEY"))
-	if botKey != "" && tableNames(x)["settings"] {
+	if botKey != "" && tableNames(x)["Setting"] {
 		var stored sql.NullString
-		if err := x.QueryRow("SELECT bot_token FROM settings LIMIT 1").Scan(&stored); err == nil &&
+		if err := x.QueryRow("SELECT bot_token FROM Setting LIMIT 1").Scan(&stored); err == nil &&
 			stored.Valid && strings.HasPrefix(stored.String, "enc:") {
 			if plain, err := fernetDecrypt(botKey, stored.String[4:]); err == nil {
-				if _, err := x.Exec("UPDATE settings SET bot_token = ?", plain); err != nil {
+				if _, err := x.Exec("UPDATE Setting SET bot_token = ?", plain); err != nil {
 					return err
 				}
 			}
@@ -171,10 +171,10 @@ func decryptStoredSecrets(x execer) error {
 	if nodeKey == "" {
 		nodeKey = botKey
 	}
-	if nodeKey == "" || !tableNames(x)["nodes"] {
+	if nodeKey == "" || !tableNames(x)["Node"] {
 		return nil
 	}
-	rows, err := x.Query("SELECT id, key FROM nodes")
+	rows, err := x.Query("SELECT id, key FROM Node")
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func decryptStoredSecrets(x execer) error {
 		if err != nil {
 			continue // left as-is; re-enter the key
 		}
-		if _, err := x.Exec("UPDATE nodes SET key = ? WHERE id = ?", plain, r.id); err != nil {
+		if _, err := x.Exec("UPDATE Node SET key = ? WHERE id = ?", plain, r.id); err != nil {
 			return err
 		}
 	}
@@ -264,8 +264,8 @@ func envDefault(key, fallback string) string {
 func encryptStoredSecrets(x execer) error {
 	dataDir := config.EnvOrFile("DATA_DIR", "data")
 
-	if tableNames(x)["settings"] && columnNames(x, "settings")["bot_token"] {
-		rows, err := x.Query("SELECT rowid, bot_token FROM settings")
+	if tableNames(x)["Setting"] && columnNames(x, "Setting")["bot_token"] {
+		rows, err := x.Query("SELECT rowid, bot_token FROM Setting")
 		if err != nil {
 			return err
 		}
@@ -295,14 +295,14 @@ func encryptStoredSecrets(x execer) error {
 			if err != nil {
 				return err
 			}
-			if _, err := x.Exec("UPDATE settings SET bot_token = ? WHERE rowid = ?", enc, r.rowid); err != nil {
+			if _, err := x.Exec("UPDATE Setting SET bot_token = ? WHERE rowid = ?", enc, r.rowid); err != nil {
 				return err
 			}
 		}
 	}
 
-	if tableNames(x)["nodes"] && columnNames(x, "nodes")["key"] {
-		rows, err := x.Query("SELECT rowid, key FROM nodes")
+	if tableNames(x)["Node"] && columnNames(x, "Node")["key"] {
+		rows, err := x.Query("SELECT rowid, key FROM Node")
 		if err != nil {
 			return err
 		}
@@ -332,7 +332,7 @@ func encryptStoredSecrets(x execer) error {
 			if err != nil {
 				return err
 			}
-			if _, err := x.Exec("UPDATE nodes SET key = ? WHERE rowid = ?", enc, r.rowid); err != nil {
+			if _, err := x.Exec("UPDATE Node SET key = ? WHERE rowid = ?", enc, r.rowid); err != nil {
 				return err
 			}
 		}
@@ -342,10 +342,10 @@ func encryptStoredSecrets(x execer) error {
 
 // deleteNonOwnerSessions removes sessions whose role is not owner.
 func deleteNonOwnerSessions(x execer) error {
-	if !tableNames(x)["sessions"] {
+	if !tableNames(x)["Session"] {
 		return nil
 	}
-	_, err := x.Exec("DELETE FROM sessions WHERE role IS NULL OR role <> 'owner'")
+	_, err := x.Exec("DELETE FROM Session WHERE role IS NULL OR role <> 'owner'")
 	return err
 }
 
@@ -353,7 +353,7 @@ func deleteNonOwnerSessions(x execer) error {
 // the users table as INTEGER PRIMARY KEY AUTOINCREMENT, preserving all rows,
 // columns, constraints and indexes. Seeds sqlite_sequence from MAX(id).
 func rebuildUsersWithAutoincrement(x execer) error {
-	if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS pending_user_revocations (
+	if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS PendingUserRevocation (
 		node_id INTEGER NOT NULL,
 		user_id INTEGER NOT NULL,
 		user_uuid TEXT NOT NULL,
@@ -364,36 +364,36 @@ func rebuildUsersWithAutoincrement(x execer) error {
 	)`); err != nil {
 		return err
 	}
-	if !tableNames(x)["users"] {
+	if !tableNames(x)["User"] {
 		return nil
 	}
 
 	// Build a fresh users table with AUTOINCREMENT.
-	if _, err := x.Exec("DROP TABLE IF EXISTS users_new"); err != nil {
+	if _, err := x.Exec("DROP TABLE IF EXISTS User_new"); err != nil {
 		return err
 	}
-	ddl := strings.Replace(createTableSQL("users"), "CREATE TABLE IF NOT EXISTS users", "CREATE TABLE users_new", 1)
+	ddl := strings.Replace(createTableSQL("User"), "CREATE TABLE IF NOT EXISTS User", "CREATE TABLE User_new", 1)
 	if _, err := x.Exec(ddl); err != nil {
 		return err
 	}
 
 	// Copy all existing rows/columns.
-	cols := make([]string, 0, len(mappedColumns["users"]))
-	for _, c := range mappedColumns["users"] {
+	cols := make([]string, 0, len(mappedColumns["User"]))
+	for _, c := range mappedColumns["User"] {
 		cols = append(cols, c.name)
 	}
 	colList := strings.Join(cols, ", ")
-	copySQL := fmt.Sprintf("INSERT INTO users_new (%s) SELECT %s FROM users", colList, colList)
+	copySQL := fmt.Sprintf("INSERT INTO User_new (%s) SELECT %s FROM User", colList, colList)
 	if _, err := x.Exec(copySQL); err != nil {
-		_, _ = x.Exec("DROP TABLE IF EXISTS users_new")
+		_, _ = x.Exec("DROP TABLE IF EXISTS User_new")
 		return err
 	}
 
-	if _, err := x.Exec("DROP TABLE users"); err != nil {
-		_, _ = x.Exec("DROP TABLE IF EXISTS users_new")
+	if _, err := x.Exec("DROP TABLE User"); err != nil {
+		_, _ = x.Exec("DROP TABLE IF EXISTS User_new")
 		return err
 	}
-	if _, err := x.Exec("ALTER TABLE users_new RENAME TO users"); err != nil {
+	if _, err := x.Exec("ALTER TABLE User_new RENAME TO User"); err != nil {
 		return err
 	}
 
@@ -402,16 +402,16 @@ func rebuildUsersWithAutoincrement(x execer) error {
 	// Deleted-user undo snapshots may hold IDs above every live row; seeding
 	// only from live MAX(id) would reissue that ID, and stale node CNs keyed
 	// by numeric ID would then resolve to the new account.
-	if _, err := x.Exec("DELETE FROM sqlite_sequence WHERE name = 'users'"); err != nil {
+	if _, err := x.Exec("DELETE FROM sqlite_sequence WHERE name = 'User'"); err != nil {
 		return err
 	}
-	if _, err := x.Exec("INSERT INTO sqlite_sequence (name, seq) SELECT 'users', COALESCE(MAX(id), 0) FROM users"); err != nil {
+	if _, err := x.Exec("INSERT INTO sqlite_sequence (name, seq) SELECT 'User', COALESCE(MAX(id), 0) FROM User"); err != nil {
 		return err
 	}
 	if tableNames(x)["deleted_users"] {
 		// Unrecoverable snapshots (malformed JSON) are skipped, not fatal:
 		// json_extract raises on them, so only valid JSON seeds the sequence.
-		if _, err := x.Exec(`UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT MAX(MAX(COALESCE(CAST(json_extract(snap_json, '$.ID') AS INTEGER), 0), COALESCE(CAST(json_extract(snap_json, '$.id') AS INTEGER), 0))) FROM deleted_users WHERE json_valid(snap_json)), 0)) WHERE name = 'users'`); err != nil {
+		if _, err := x.Exec(`UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT MAX(MAX(COALESCE(CAST(json_extract(snap_json, '$.ID') AS INTEGER), 0), COALESCE(CAST(json_extract(snap_json, '$.id') AS INTEGER), 0))) FROM deleted_users WHERE json_valid(snap_json)), 0)) WHERE name = 'User'`); err != nil {
 			return err
 		}
 	}

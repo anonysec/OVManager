@@ -42,7 +42,7 @@ func RecordDailyBytes(db Execer, userID, delta int64, day string) {
 		day = today()
 	}
 	_, _ = db.Exec(
-		`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?, ?, ?)
+		`INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (?, ?, ?)
 		 ON CONFLICT(user_id, day) DO UPDATE SET bytes = bytes + ?`,
 		userID, day, delta, delta,
 	)
@@ -57,7 +57,7 @@ func UserDailySeries(db *sql.DB, userID int64, days int) []map[string]any {
 		wanted = append(wanted, now.AddDate(0, 0, -i).Format("2006-01-02"))
 	}
 	have := map[string]int64{}
-	if rows, err := db.Query(`SELECT day, bytes FROM user_traffic_daily WHERE user_id = ? AND day >= ?`, userID, wanted[0]); err == nil {
+	if rows, err := db.Query(`SELECT day, bytes FROM UserTrafficDaily WHERE user_id = ? AND day >= ?`, userID, wanted[0]); err == nil {
 		for rows.Next() {
 			var day string
 			var bytes int64
@@ -80,8 +80,8 @@ func TopUsers(db *sql.DB, days, limit int) []map[string]any {
 	limit = clamp(limit, 1, 25)
 	start := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 	rows, err := db.Query(
-		`SELECT u.name, SUM(d.bytes) AS b FROM user_traffic_daily d
-		 JOIN users u ON u.id = d.user_id WHERE d.day >= ? GROUP BY u.name ORDER BY b DESC LIMIT ?`,
+		`SELECT u.name, SUM(d.bytes) AS b FROM UserTrafficDaily d
+		 JOIN User u ON u.id = d.user_id WHERE d.day >= ? GROUP BY u.name ORDER BY b DESC LIMIT ?`,
 		start, limit,
 	)
 	if err != nil {
@@ -102,7 +102,7 @@ func TopUsers(db *sql.DB, days, limit int) []map[string]any {
 // PruneDaily deletes daily rows older than keep_days.
 func PruneDaily(db *sql.DB, keepDays int) int {
 	cutoff := time.Now().UTC().AddDate(0, 0, -clamp(keepDays, 1, 1<<30)).Format("2006-01-02")
-	res, err := db.Exec(`DELETE FROM user_traffic_daily WHERE day < ?`, cutoff)
+	res, err := db.Exec(`DELETE FROM UserTrafficDaily WHERE day < ?`, cutoff)
 	if err != nil {
 		return 0
 	}
@@ -117,7 +117,7 @@ func PruneLedger(db *sql.DB, keepDays, batch int) int {
 	total := 0
 	for {
 		res, err := db.Exec(
-			`DELETE FROM traffic_ledger WHERE id IN (SELECT id FROM traffic_ledger WHERE ts < ? LIMIT ?)`,
+			`DELETE FROM TrafficLedger WHERE id IN (SELECT id FROM TrafficLedger WHERE ts < ? LIMIT ?)`,
 			cutoff, batch,
 		)
 		if err != nil {
@@ -204,7 +204,7 @@ func ComputeTotalDelta(current, previous int64, explicitReset bool) (delta, base
 // loaded values (daily._apply_user_traffic). Returns false on an OCC miss.
 func ApplyUserTraffic(db Execer, userID int64, expectedUsed int64, expectedState string, newUsed int64, newState string, delta int64) bool {
 	res, err := db.Exec(
-		`UPDATE users SET used = ?, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`,
+		`UPDATE User SET used = ?, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`,
 		newUsed, newState, userID, expectedUsed, expectedState,
 	)
 	if err != nil {

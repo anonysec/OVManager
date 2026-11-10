@@ -41,7 +41,7 @@ func TestUsersLiveConnections(t *testing.T) {
 	seedUser := func(id int64, name string) {
 		t.Helper()
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
+			`INSERT INTO User (id, uuid, name, total, used, last_node_usage, node_usage, max_logins, is_active)
 			 VALUES (?, ?, ?, NULL, 0, 0, '{}', 1, 1)`,
 			id, fmt.Sprintf("eeee0000-0000-0000-0000-%012d", id), name,
 		); err != nil {
@@ -59,7 +59,7 @@ func TestUsersLiveConnections(t *testing.T) {
 	t.Cleanup(func() {
 		// Poll once more with no nodes so the process-wide snapshot is empty
 		// for every test that runs after this one.
-		_, _ = env.conn.Exec(`DELETE FROM nodes`)
+		_, _ = env.conn.Exec(`DELETE FROM Node`)
 		telemetry.CollectLiveSnapshot(env.conn)
 	})
 

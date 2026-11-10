@@ -14,7 +14,7 @@ func usageTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if _, err := db.Exec(`CREATE TABLE nodes (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`); err != nil {
+	if _, err := db.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -22,7 +22,7 @@ func usageTestDB(t *testing.T) *sql.DB {
 
 func TestAggregateNodeUsageSkipsReservedKeys(t *testing.T) {
 	db := usageTestDB(t)
-	if _, err := db.Exec(`INSERT INTO nodes (id, name) VALUES (1, 'alice')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO Node (id, name) VALUES (1, 'alice')`); err != nil {
 		t.Fatal(err)
 	}
 	u := userRow{Used: ptr(int64(999)), NodeUsage: `{"1": 500, "push_hash": {"1": "abc"}, "__reseed": true}`}
@@ -42,7 +42,7 @@ func TestAggregateNodeUsageSkipsReservedKeys(t *testing.T) {
 
 func TestAggregateNodeUsageNameFallback(t *testing.T) {
 	db := usageTestDB(t)
-	if _, err := db.Exec(`INSERT INTO nodes (id, name) VALUES (2, 'newname')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO Node (id, name) VALUES (2, 'newname')`); err != nil {
 		t.Fatal(err)
 	}
 	u := userRow{NodeUsage: `{"oldname": 500, "newname": 200}`}

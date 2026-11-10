@@ -216,7 +216,7 @@ func nodeEvents(s *node.SessionsResponse, nodeName string, tz *time.Location, id
 func (h *Handler) allNodes() []*node.Node {
 	rows, err := h.Svc.DB().QueryContext(context.Background(),
 		`SELECT id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca
-		 FROM nodes ORDER BY id`)
+		 FROM Node ORDER BY id`)
 	if err != nil {
 		return nil
 	}
@@ -233,7 +233,7 @@ func (h *Handler) allNodes() []*node.Node {
 // panelIDToName is _cn_to_username: numeric user id -> username.
 func panelIDToName(db *sql.DB) map[string]string {
 	out := map[string]string{}
-	rows, err := db.Query(`SELECT id, name FROM users`)
+	rows, err := db.Query(`SELECT id, name FROM User`)
 	if err != nil {
 		return out
 	}

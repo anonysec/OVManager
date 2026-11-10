@@ -88,17 +88,17 @@ func writeOwnerHash(dataDir, hashed, owner string) (int, string) {
 
 	var id int64
 	var actual string
-	err = conn.QueryRow(`SELECT id, username FROM admins WHERE is_owner = 1 LIMIT 1`).Scan(&id, &actual)
+	err = conn.QueryRow(`SELECT id, username FROM Admin WHERE is_owner = 1 LIMIT 1`).Scan(&id, &actual)
 	if err != nil {
-		err = conn.QueryRow(`SELECT id, username FROM admins WHERE username = ? LIMIT 1`, owner).Scan(&id, &actual)
+		err = conn.QueryRow(`SELECT id, username FROM Admin WHERE username = ? LIMIT 1`, owner).Scan(&id, &actual)
 	}
 	if err != nil {
-		if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, owner, hashed); err != nil {
+		if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES (?, ?, 1)`, owner, hashed); err != nil {
 			return -1, "Could not update the owner credential: " + err.Error()
 		}
 		actual = owner
 	} else {
-		if _, err := conn.Exec(`UPDATE admins SET password = ?, is_owner = 1 WHERE id = ?`, hashed, id); err != nil {
+		if _, err := conn.Exec(`UPDATE Admin SET password = ?, is_owner = 1 WHERE id = ?`, hashed, id); err != nil {
 			return -1, "Could not update the owner credential: " + err.Error()
 		}
 	}

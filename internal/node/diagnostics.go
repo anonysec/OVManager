@@ -24,7 +24,7 @@ type diagUser struct {
 
 func diagUsersWithErr(db *sql.DB) ([]diagUser, error) {
 	rows, err := db.Query(`SELECT id, name, COALESCE(is_active,1), COALESCE(max_logins,0),
-		total, COALESCE(used,0), expiry_date FROM users`)
+		total, COALESCE(used,0), expiry_date FROM User`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func diagUsersWithErr(db *sql.DB) ([]diagUser, error) {
 func diagUserNameMaps(db *sql.DB) (map[string]string, map[string]bool) {
 	names := map[string]string{}
 	known := map[string]bool{}
-	rows, err := db.Query(`SELECT id, name FROM users`)
+	rows, err := db.Query(`SELECT id, name FROM User`)
 	if err != nil {
 		return names, known
 	}
@@ -62,7 +62,7 @@ func diagUserNameMaps(db *sql.DB) (map[string]string, map[string]bool) {
 // GetUserSessionDiagnostics aggregates one user's sessions across nodes.
 func GetUserSessionDiagnostics(userID int64, db *sql.DB, hours int) map[string]any {
 	var name string
-	if err := db.QueryRow(`SELECT name FROM users WHERE id = ?`, userID).Scan(&name); err != nil {
+	if err := db.QueryRow(`SELECT name FROM User WHERE id = ?`, userID).Scan(&name); err != nil {
 		return map[string]any{"username": strconv.FormatInt(userID, 10), "found": false}
 	}
 	nodes, nodeErr := getActiveNodesWithErr(db)
@@ -411,7 +411,7 @@ func userHealthRow(u diagUser, diag map[string]any) map[string]any {
 func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 	var u diagUser
 	err := db.QueryRow(`SELECT id, name, COALESCE(is_active,1), COALESCE(max_logins,0),
-		total, COALESCE(used,0), expiry_date FROM users WHERE name = ?`, name).
+		total, COALESCE(used,0), expiry_date FROM User WHERE name = ?`, name).
 		Scan(&u.id, &u.name, &u.isActive, &u.maxLogins, &u.total, &u.used, &u.expiry)
 	if err != nil {
 		return map[string]any{"username": name, "found": false}

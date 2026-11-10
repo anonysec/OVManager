@@ -36,7 +36,7 @@ func TestDownloadAllPushesPolicyBeforeProfiles(t *testing.T) {
 	seedTrafficNode(t, conn, 1, "node-a", srv)
 	// Two users: alice (still active) and bob (disabled). Policy is pushed
 	// for both, but only alice's profile lands in the ZIP.
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, max_logins, is_active) VALUES (7, 'u7', 'alice', 3, 1), (8, 'u8', 'bob', 3, 0)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, max_logins, is_active) VALUES (7, 'u7', 'alice', 3, 1), (8, 'u8', 'bob', 3, 0)`); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	out := DownloadAllOVPNClients(1, conn)

@@ -107,7 +107,7 @@ func TestLogsUnitWhitelist(t *testing.T) {
 
 	// A node row opens its openvpn-<name> unit.
 	if _, err := env.sqlite.Exec(
-		`INSERT INTO nodes (name, address, status, key) VALUES ('eu-1', '203.0.113.10', 1, 'k')`,
+		`INSERT INTO Node (name, address, status, key) VALUES ('eu-1', '203.0.113.10', 1, 'k')`,
 	); err != nil {
 		t.Fatalf("seed node: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestLogsGate(t *testing.T) {
 	// admin session is issued directly (IssueSession) against a seeded
 	// is_owner=0 row.
 	if _, err := env.sqlite.Exec(
-		`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash,
+		`INSERT INTO Admin (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash,
 	); err != nil {
 		t.Fatalf("seed admin: %v", err)
 	}

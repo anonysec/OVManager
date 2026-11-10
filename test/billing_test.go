@@ -43,7 +43,7 @@ func TestDailyBytesUpsertAndSeries(t *testing.T) {
 	if _, err := conn.Exec(extraTelemetryDDL); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name) VALUES (1,'u1','ann')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name) VALUES (1,'u1','ann')`); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	billing.RecordDailyBytes(conn, 1, 100, "")
@@ -51,7 +51,7 @@ func TestDailyBytesUpsertAndSeries(t *testing.T) {
 	billing.RecordDailyBytes(conn, 1, 0, "") // zero is a no-op
 
 	var bytes int64
-	if err := conn.QueryRow(`SELECT bytes FROM user_traffic_daily WHERE user_id = 1`).Scan(&bytes); err != nil {
+	if err := conn.QueryRow(`SELECT bytes FROM UserTrafficDaily WHERE user_id = 1`).Scan(&bytes); err != nil {
 		t.Fatalf("read daily: %v", err)
 	}
 	if bytes != 150 {

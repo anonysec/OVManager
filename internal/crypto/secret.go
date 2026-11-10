@@ -93,8 +93,8 @@ func databaseHasEncryptedSecrets(dataDir string) bool {
 		return false
 	}
 	for _, q := range []string{
-		"SELECT 1 FROM settings WHERE bot_token LIKE 'enc:v2:%' LIMIT 1",
-		"SELECT 1 FROM nodes WHERE key LIKE 'enc:v2:%' LIMIT 1",
+		"SELECT 1 FROM Setting WHERE bot_token LIKE 'enc:v2:%' LIMIT 1",
+		"SELECT 1 FROM Node WHERE key LIKE 'enc:v2:%' LIMIT 1",
 	} {
 		var one int
 		if err := conn.QueryRow(q).Scan(&one); err == nil {

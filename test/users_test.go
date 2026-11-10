@@ -165,7 +165,7 @@ func TestUsersExtend(t *testing.T) {
 	res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "bob", "expiry_date": "2030-01-01"})
 	res.Body.Close()
 	var uuid string
-	if err := conn.QueryRow(`SELECT uuid FROM users WHERE name='bob'`).Scan(&uuid); err != nil {
+	if err := conn.QueryRow(`SELECT uuid FROM User WHERE name='bob'`).Scan(&uuid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -190,7 +190,7 @@ func TestUsersExtend(t *testing.T) {
 // activation_blocked refusal for expired users.
 func TestUsersStatusToggle(t *testing.T) {
 	conn, base, token := authedServer(t)
-	if _, err := conn.Exec(`INSERT INTO users (uuid, name, total, used, node_usage, max_logins, expiry_date, is_active, last_node_usage)
+	if _, err := conn.Exec(`INSERT INTO User (uuid, name, total, used, node_usage, max_logins, expiry_date, is_active, last_node_usage)
 		VALUES ('u-expired','expired',NULL,0,'{}',1,'2020-01-01',0,0)`); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestUsersStatusToggle(t *testing.T) {
 		t.Errorf("msg = %v", got["msg"])
 	}
 
-	if _, err := conn.Exec(`INSERT INTO users (uuid, name, total, used, node_usage, max_logins, expiry_date, is_active, last_node_usage)
+	if _, err := conn.Exec(`INSERT INTO User (uuid, name, total, used, node_usage, max_logins, expiry_date, is_active, last_node_usage)
 		VALUES ('u-ok','ok',NULL,0,'{}',1,'2030-01-01',0,0)`); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestUsersStatusToggle(t *testing.T) {
 func uuidOf(t *testing.T, conn *sql.DB, name string) string {
 	t.Helper()
 	var uuid string
-	if err := conn.QueryRow(`SELECT uuid FROM users WHERE name=?`, name).Scan(&uuid); err != nil {
+	if err := conn.QueryRow(`SELECT uuid FROM User WHERE name=?`, name).Scan(&uuid); err != nil {
 		t.Fatalf("uuid of %s: %v", name, err)
 	}
 	return uuid
@@ -257,7 +257,7 @@ func TestUsersUpdate(t *testing.T) {
 	}
 	var total int64
 	var tag sql.NullString
-	if err := conn.QueryRow(`SELECT total, tag FROM users WHERE uuid=?`, uuid).Scan(&total, &tag); err != nil {
+	if err := conn.QueryRow(`SELECT total, tag FROM User WHERE uuid=?`, uuid).Scan(&total, &tag); err != nil {
 		t.Fatal(err)
 	}
 	if total != 5000 || tag.String != "vip" {
@@ -279,7 +279,7 @@ func TestUsersTrafficAndReset(t *testing.T) {
 		t.Fatalf("traffic = %d %v", res.StatusCode, got)
 	}
 
-	if _, err := conn.Exec(`UPDATE users SET used=1234, node_usage='{"1":900,"push_hash":{"1":"h"}}' WHERE uuid=?`, uuid); err != nil {
+	if _, err := conn.Exec(`UPDATE User SET used=1234, node_usage='{"1":900,"push_hash":{"1":"h"}}' WHERE uuid=?`, uuid); err != nil {
 		t.Fatal(err)
 	}
 	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuid+"/reset-usage", token, nil)
@@ -289,7 +289,7 @@ func TestUsersTrafficAndReset(t *testing.T) {
 	}
 	var used int64
 	var nodeUsage string
-	if err := conn.QueryRow(`SELECT used, node_usage FROM users WHERE uuid=?`, uuid).Scan(&used, &nodeUsage); err != nil {
+	if err := conn.QueryRow(`SELECT used, node_usage FROM User WHERE uuid=?`, uuid).Scan(&used, &nodeUsage); err != nil {
 		t.Fatal(err)
 	}
 	if used != 0 {
@@ -319,7 +319,7 @@ func TestUsersTopTraffic(t *testing.T) {
 		res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": n})
 		res.Body.Close()
 		var id int64
-		if err := conn.QueryRow(`SELECT id FROM users WHERE name=?`, n).Scan(&id); err != nil {
+		if err := conn.QueryRow(`SELECT id FROM User WHERE name=?`, n).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		ids[n] = id
@@ -328,7 +328,7 @@ func TestUsersTopTraffic(t *testing.T) {
 		id    int64
 		bytes int64
 	}{{ids["alice"], 3000}, {ids["bob"], 1000}} {
-		if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, r.id, today, r.bytes); err != nil {
+		if _, err := conn.Exec(`INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (?,?,?)`, r.id, today, r.bytes); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -355,11 +355,11 @@ func TestUsersTrafficDailySeries(t *testing.T) {
 	res.Body.Close()
 	uuid := uuidOf(t, conn, "erin")
 	var id int64
-	if err := conn.QueryRow(`SELECT id FROM users WHERE uuid=?`, uuid).Scan(&id); err != nil {
+	if err := conn.QueryRow(`SELECT id FROM User WHERE uuid=?`, uuid).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	today := time.Now().UTC().Format("2006-01-02")
-	if _, err := conn.Exec(`INSERT INTO user_traffic_daily (user_id, day, bytes) VALUES (?,?,?)`, id, today, 4096); err != nil {
+	if _, err := conn.Exec(`INSERT INTO UserTrafficDaily (user_id, day, bytes) VALUES (?,?,?)`, id, today, 4096); err != nil {
 		t.Fatal(err)
 	}
 	res, got := doJSON(t, http.MethodGet, base+"/api/users/"+uuid+"/traffic?days=14", token, nil)
@@ -411,7 +411,7 @@ func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 		}
 	}
 	var uuid string
-	if err := conn.QueryRow(`SELECT uuid FROM users WHERE name = 'audited'`).Scan(&uuid); err != nil {
+	if err := conn.QueryRow(`SELECT uuid FROM User WHERE name = 'audited'`).Scan(&uuid); err != nil {
 		t.Fatal(err)
 	}
 	res, body := doJSON(t, http.MethodDelete, base+"/api/users/"+uuid, token, nil)
@@ -473,7 +473,7 @@ func TestUserCreateAuditRowCarriesNoSecret(t *testing.T) {
 func TestCreateUsesTheUnlimitedDefault(t *testing.T) {
 	conn, base, token := authedServer(t)
 	if _, err := conn.Exec(
-		`INSERT INTO settings (id, default_days, default_traffic_gb, default_max_users) VALUES (1, 30, 100, 0)`,
+		`INSERT INTO Setting (id, default_days, default_traffic_gb, default_max_users) VALUES (1, 30, 100, 0)`,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +482,7 @@ func TestCreateUsesTheUnlimitedDefault(t *testing.T) {
 		t.Fatalf("create: %d %s", res.StatusCode, body)
 	}
 	var maxLogins int64
-	if err := conn.QueryRow(`SELECT max_logins FROM users WHERE name = 'unlimited'`).Scan(&maxLogins); err != nil {
+	if err := conn.QueryRow(`SELECT max_logins FROM User WHERE name = 'unlimited'`).Scan(&maxLogins); err != nil {
 		t.Fatal(err)
 	}
 	if maxLogins != 0 {

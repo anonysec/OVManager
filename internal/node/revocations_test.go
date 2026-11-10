@@ -9,7 +9,7 @@ import (
 )
 
 const revocationSchema = trafficSchema + `
-CREATE TABLE pending_user_revocations (
+CREATE TABLE PendingUserRevocation (
   node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL,
   user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (node_id, user_id));
@@ -20,7 +20,7 @@ func newRevocationDB(t *testing.T) *sql.DB {
 	conn := newTrafficDB(t)
 	if _, err := conn.Exec(revocationSchema); err != nil {
 		// trafficSchema tables already exist; create only the jobs table.
-		if _, err2 := conn.Exec(`CREATE TABLE pending_user_revocations (
+		if _, err2 := conn.Exec(`CREATE TABLE PendingUserRevocation (
   node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL,
   user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (node_id, user_id))`); err2 != nil {
@@ -32,7 +32,7 @@ func newRevocationDB(t *testing.T) *sql.DB {
 
 func seedJob(t *testing.T, conn *sql.DB, nodeID, userID int64) {
 	t.Helper()
-	if _, err := conn.Exec(`INSERT INTO pending_user_revocations
+	if _, err := conn.Exec(`INSERT INTO PendingUserRevocation
 		(node_id, user_id, user_uuid, user_name, created_at) VALUES (?, ?, 'uuid', 'alice', 1)`,
 		nodeID, userID); err != nil {
 		t.Fatalf("seed job: %v", err)
@@ -42,7 +42,7 @@ func seedJob(t *testing.T, conn *sql.DB, nodeID, userID int64) {
 func jobCount(t *testing.T, conn *sql.DB, nodeID, userID int64) int {
 	t.Helper()
 	var n int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM pending_user_revocations WHERE node_id = ? AND user_id = ?`,
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM PendingUserRevocation WHERE node_id = ? AND user_id = ?`,
 		nodeID, userID).Scan(&n); err != nil {
 		t.Fatalf("count jobs: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestProcessPendingRevocationsRetainsOnFailure(t *testing.T) {
 		t.Fatalf("failure pass = %+v, jobs left = %d", res, jobCount(t, conn, 1, 7))
 	}
 	var msg string
-	if err := conn.QueryRow(`SELECT last_error FROM pending_user_revocations WHERE node_id = 1 AND user_id = 7`).Scan(&msg); err != nil {
+	if err := conn.QueryRow(`SELECT last_error FROM PendingUserRevocation WHERE node_id = 1 AND user_id = 7`).Scan(&msg); err != nil {
 		t.Fatalf("read last_error: %v", err)
 	}
 	if msg == "" {

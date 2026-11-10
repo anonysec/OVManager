@@ -62,7 +62,7 @@ func TestUsersExpiredList(t *testing.T) {
 	seed := func(i int, uuid string, expiry string, total, used any) {
 		t.Helper()
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, ?, ?, 0, '{}', 1, ?, 1)`, uuid, fmt.Sprintf("u-%02d", i), total, used, expiry,
 		); err != nil {
 			t.Fatalf("insert user %s: %v", uuid, err)
@@ -118,7 +118,7 @@ func TestUsersPurgeBulk(t *testing.T) {
 	keep := "bbbb0000-0000-0000-0000-000000000002"
 	for _, u := range []struct{ uuid, name string }{{gone, "pu-gone"}, {keep, "pu-keep"}} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, ?, 1)`,
 			u.uuid, u.name, past,
 		); err != nil {
@@ -143,10 +143,10 @@ func TestUsersPurgeBulk(t *testing.T) {
 		}
 	}
 	var left int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users WHERE uuid = ?`, gone).Scan(&left); err != nil || left != 0 {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User WHERE uuid = ?`, gone).Scan(&left); err != nil || left != 0 {
 		t.Errorf("purged row still present (left=%d err=%v)", left, err)
 	}
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users WHERE uuid = ?`, keep).Scan(&left); err != nil || left != 1 {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User WHERE uuid = ?`, keep).Scan(&left); err != nil || left != 1 {
 		t.Errorf("untouched row changed (left=%d err=%v)", left, err)
 	}
 	mu.Lock()
@@ -162,7 +162,7 @@ func TestUsersPurgeValidatesAndRefusesEverything(t *testing.T) {
 	env := newPanelEnv(t)
 	for i, u := range []string{"cccc0000-0000-0000-0000-000000000001", "cccc0000-0000-0000-0000-000000000002"} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u, fmt.Sprintf("pu-%d", i+1),
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
@@ -187,7 +187,7 @@ func TestUsersPurgeValidatesAndRefusesEverything(t *testing.T) {
 		t.Errorf("detail = %v", body["detail"])
 	}
 	var left int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&left); err != nil || left != 2 {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User`).Scan(&left); err != nil || left != 2 {
 		t.Errorf("rows should be untouched on refusal (left=%d)", left)
 	}
 }
@@ -204,7 +204,7 @@ func TestUsersPurgeSurvivesUnreachableNode(t *testing.T) {
 	kept := "dddd0000-0000-0000-0000-000000000002"
 	for i, u := range []struct{ uuid string }{{gone}, {kept}} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, u.uuid, fmt.Sprintf("pu-%d", i+10),
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
@@ -232,7 +232,7 @@ func TestUsersPurgeSurvivesUnreachableNode(t *testing.T) {
 		t.Errorf("dead node not reported in nodes_skipped: %v", skipped)
 	}
 	var left int
-	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM users WHERE uuid = ?`, gone).Scan(&left); err != nil || left != 0 {
+	if err := env.conn.QueryRow(`SELECT COUNT(*) FROM User WHERE uuid = ?`, gone).Scan(&left); err != nil || left != 0 {
 		t.Errorf("purged row still present (left=%d)", left)
 	}
 }
@@ -244,7 +244,7 @@ func TestUsersPurgeUnknownIDsAreIgnored(t *testing.T) {
 		"eeee0000-0000-0000-0000-000000000001", "eeee0000-0000-0000-0000-000000000002",
 	} {
 		if _, err := env.conn.Exec(
-			`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+			`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 			 VALUES (?, ?, NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, uuid, fmt.Sprintf("pu-%d", i+20),
 		); err != nil {
 			t.Fatalf("insert user: %v", err)
@@ -274,7 +274,7 @@ func TestUsersKickReturnsZeroWhenNoSessions(t *testing.T) {
 
 	const uuid = "ffff0000-0000-0000-0000-000000000001"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, 'ku1', NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
@@ -304,13 +304,13 @@ func TestUsersKickKillsLiveSessions(t *testing.T) {
 
 	const uuid = "ffff0000-0000-0000-0000-000000000002"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, 'ku2', NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	var uid int64
-	if err := env.conn.QueryRow(`SELECT id FROM users WHERE uuid = ?`, uuid).Scan(&uid); err != nil {
+	if err := env.conn.QueryRow(`SELECT id FROM User WHERE uuid = ?`, uuid).Scan(&uid); err != nil {
 		t.Fatalf("select id: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestUsersKickEdgeCases(t *testing.T) {
 	// No nodes at all: kick is a no-op that still answers 200 with kicked=0.
 	const uuid = "ffff0000-0000-0000-0000-000000000003"
 	if _, err := env.conn.Exec(
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
+		`INSERT INTO User (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active)
 		 VALUES (?, 'ku3', NULL, 0, 0, '{}', 1, '2000-01-01', 1)`, uuid,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
@@ -366,7 +366,7 @@ func TestUsersKickEdgeCases(t *testing.T) {
 func TestPurgeDeduplicatesIDs(t *testing.T) {
 	env := newPanelEnv(t)
 	for _, u := range []struct{ uuid, name string }{{"duplicate-a", "duplicate-a"}, {"duplicate-b", "duplicate-b"}} {
-		if _, err := env.conn.Exec(`INSERT INTO users (uuid, name, max_logins) VALUES (?, ?, 1)`, u.uuid, u.name); err != nil {
+		if _, err := env.conn.Exec(`INSERT INTO User (uuid, name, max_logins) VALUES (?, ?, 1)`, u.uuid, u.name); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -19,10 +19,10 @@ func TestMigrateEncryptsStoredSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token TEXT); CREATE TABLE nodes (id INTEGER PRIMARY KEY, key TEXT);`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY, bot_token TEXT); CREATE TABLE Node (id INTEGER PRIMARY KEY, key TEXT);`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO settings (id, bot_token) VALUES (1, 'plain-bot-token'); INSERT INTO nodes (id, key) VALUES (1, 'plain-node-key');`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id, bot_token) VALUES (1, 'plain-bot-token'); INSERT INTO Node (id, key) VALUES (1, 'plain-node-key');`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec("PRAGMA user_version = 26"); err != nil {
@@ -33,10 +33,10 @@ func TestMigrateEncryptsStoredSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	var bot, key string
-	if err := conn.QueryRow("SELECT bot_token FROM settings WHERE id = 1").Scan(&bot); err != nil {
+	if err := conn.QueryRow("SELECT bot_token FROM Setting WHERE id = 1").Scan(&bot); err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.QueryRow("SELECT key FROM nodes WHERE id = 1").Scan(&key); err != nil {
+	if err := conn.QueryRow("SELECT key FROM Node WHERE id = 1").Scan(&key); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(bot, crypto.EncPrefix) || !strings.HasPrefix(key, crypto.EncPrefix) {

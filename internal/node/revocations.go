@@ -40,11 +40,11 @@ func ProcessPendingRevocations(db *sql.DB, limit int) RevocationResult {
 	}
 
 	var hasTable int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='pending_user_revocations'`).Scan(&hasTable); err != nil || hasTable == 0 {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='PendingUserRevocation'`).Scan(&hasTable); err != nil || hasTable == 0 {
 		return res
 	}
 	// If the table does not exist yet, there is nothing to retry.
-	rows, err := db.Query(`SELECT node_id, user_id, user_uuid, user_name FROM pending_user_revocations ORDER BY created_at, node_id, user_id LIMIT ?`, limit)
+	rows, err := db.Query(`SELECT node_id, user_id, user_uuid, user_name FROM PendingUserRevocation ORDER BY created_at, node_id, user_id LIMIT ?`, limit)
 	if err != nil {
 		log.Printf("revocations: query failed: %v", err)
 		return res
@@ -70,14 +70,14 @@ func ProcessPendingRevocations(db *sql.DB, limit int) RevocationResult {
 	for _, j := range jobs {
 		n := GetNodeByID(db, j.nodeID)
 		if n == nil {
-			_, _ = db.Exec(`DELETE FROM pending_user_revocations WHERE node_id = ? AND user_id = ?`, j.nodeID, j.userID)
+			_, _ = db.Exec(`DELETE FROM PendingUserRevocation WHERE node_id = ? AND user_id = ?`, j.nodeID, j.userID)
 			res.Acknowledged++
 			continue
 		}
 		c := NodeClient(n, pid)
 		ok := c.DeleteUser(strconv.FormatInt(j.userID, 10))
 		if ok {
-			_, _ = db.Exec(`DELETE FROM pending_user_revocations WHERE node_id = ? AND user_id = ?`, j.nodeID, j.userID)
+			_, _ = db.Exec(`DELETE FROM PendingUserRevocation WHERE node_id = ? AND user_id = ?`, j.nodeID, j.userID)
 			res.Acknowledged++
 			continue
 		}
@@ -85,7 +85,7 @@ func ProcessPendingRevocations(db *sql.DB, limit int) RevocationResult {
 		if cm := c.ConflictMsg(); cm != "" {
 			msg = cm
 		}
-		_, _ = db.Exec(`UPDATE pending_user_revocations SET last_error = ? WHERE node_id = ? AND user_id = ?`, msg, j.nodeID, j.userID)
+		_, _ = db.Exec(`UPDATE PendingUserRevocation SET last_error = ? WHERE node_id = ? AND user_id = ?`, msg, j.nodeID, j.userID)
 		res.Failed++
 		res.FailedNodes = append(res.FailedNodes, n.Name)
 		res.Failures = append(res.Failures, n.Name+":"+strconv.FormatInt(j.userID, 10))

@@ -38,7 +38,7 @@ type limitUser struct {
 }
 
 func allLimitUsers(db *sql.DB) []limitUser {
-	rows, err := db.Query(`SELECT id, name, COALESCE(max_logins,0), COALESCE(node_usage,'{}') FROM users`)
+	rows, err := db.Query(`SELECT id, name, COALESCE(max_logins,0), COALESCE(node_usage,'{}') FROM User`)
 	if err != nil {
 		return nil
 	}

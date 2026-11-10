@@ -22,7 +22,7 @@ func setupAuthTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = d.Close() })
 	_, err = d.Exec(`
-		CREATE TABLE admins (
+		CREATE TABLE Admin (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
 			password TEXT NOT NULL,
@@ -33,7 +33,7 @@ func setupAuthTestDB(t *testing.T) *sql.DB {
 			attempts TEXT NOT NULL DEFAULT '[]',
 			updated REAL NOT NULL DEFAULT 0
 		);
-		CREATE TABLE sessions (
+		CREATE TABLE Session (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			token_hash TEXT UNIQUE NOT NULL,
 			username TEXT NOT NULL,
@@ -62,7 +62,7 @@ func setupAuthTestDB(t *testing.T) *sql.DB {
 
 func seedUser(t *testing.T, d *sql.DB, username, password string) {
 	hash, _ := HashPassword(password)
-	_, err := d.Exec(`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, username, hash)
+	_, err := d.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES (?, ?, 1)`, username, hash)
 	if err != nil {
 		t.Fatal(err)
 	}

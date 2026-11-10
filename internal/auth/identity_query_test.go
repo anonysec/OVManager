@@ -78,8 +78,8 @@ func TestIdentityQueryCount(t *testing.T) {
 	d := sql.OpenDB(&countingConnector{Connector: base})
 	t.Cleanup(func() { _ = d.Close() })
 	_, err = d.Exec(`
-		CREATE TABLE admins (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, is_owner INTEGER DEFAULT 0);
-		CREATE TABLE sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT UNIQUE NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL, last_seen_at REAL NOT NULL, user_agent TEXT, ip TEXT);
+		CREATE TABLE Admin (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, is_owner INTEGER DEFAULT 0);
+		CREATE TABLE Session (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT UNIQUE NOT NULL, username TEXT NOT NULL, role TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL, last_seen_at REAL NOT NULL, user_agent TEXT, ip TEXT);
 		CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, actor TEXT, action TEXT NOT NULL, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
 		CREATE TABLE login_attempts (key_hash TEXT PRIMARY KEY, attempts TEXT NOT NULL DEFAULT '[]', updated REAL NOT NULL DEFAULT 0);
 	`)

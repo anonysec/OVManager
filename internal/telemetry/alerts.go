@@ -119,7 +119,7 @@ func promoteEvents(db *sql.DB, send func(string) bool) int {
 		action, _ := obj["action"].(string)
 		// check delivered
 		var exists int
-		_ = db.QueryRow(`SELECT COUNT(*) FROM delivered WHERE subscription = ? AND event_key = ?`, action, key).Scan(&exists)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM Delivered WHERE subscription = ? AND event_key = ?`, action, key).Scan(&exists)
 		if exists > 0 {
 			continue
 		}
@@ -130,7 +130,7 @@ func promoteEvents(db *sql.DB, send func(string) bool) int {
 		if !send(message) {
 			continue
 		}
-		_, _ = db.Exec(`INSERT OR IGNORE INTO delivered (subscription, event_key, ts) VALUES (?, ?, ?)`, action, key, nowSecs())
+		_, _ = db.Exec(`INSERT OR IGNORE INTO Delivered (subscription, event_key, ts) VALUES (?, ?, ?)`, action, key, nowSecs())
 		if v, ok := obj["id"].(float64); ok {
 			audit.MarkPromoted(int64(v))
 		}
@@ -316,7 +316,7 @@ func sendTelegram(db *sql.DB, text string) bool {
 	var token string
 	var enabled sql.NullInt64
 	var chatID sql.NullInt64
-	err := db.QueryRow(`SELECT bot_token, bot_enabled, owner_telegram_id FROM settings LIMIT 1`).
+	err := db.QueryRow(`SELECT bot_token, bot_enabled, owner_telegram_id FROM Setting LIMIT 1`).
 		Scan(&token, &enabled, &chatID)
 	if err != nil {
 		return false
@@ -404,7 +404,7 @@ func readSettings(db *sql.DB) settingsRow {
 	}
 	var ne, nnd, aue, ace sql.NullInt64
 	var days, upct, cpct sql.NullInt64
-	err := db.QueryRow(`SELECT notify_expiry, notify_node_down, alert_days_left, alert_usage_enabled, alert_usage_pct, alert_cpu_enabled, alert_cpu_pct FROM settings LIMIT 1`).
+	err := db.QueryRow(`SELECT notify_expiry, notify_node_down, alert_days_left, alert_usage_enabled, alert_usage_pct, alert_cpu_enabled, alert_cpu_pct FROM Setting LIMIT 1`).
 		Scan(&ne, &nnd, &days, &aue, &upct, &ace, &cpct)
 	if err != nil {
 		return s
@@ -429,7 +429,7 @@ type userAlert struct {
 }
 
 func scanUserAlerts(db *sql.DB) []userAlert {
-	rows, err := db.Query(`SELECT COALESCE(uuid,''), name, COALESCE(is_active,0), COALESCE(expiry_date,''), total, used FROM users`)
+	rows, err := db.Query(`SELECT COALESCE(uuid,''), name, COALESCE(is_active,0), COALESCE(expiry_date,''), total, used FROM User`)
 	if err != nil {
 		return nil
 	}
@@ -458,7 +458,7 @@ func latestNodeCPU(db *sql.DB) []nodeCPU {
 
 func kvValue(conn *sql.DB) string {
 	var v sql.NullInt64
-	_ = conn.QueryRow(`SELECT snapshot_max_nodes FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	_ = conn.QueryRow(`SELECT snapshot_max_nodes FROM Setting ORDER BY id LIMIT 1`).Scan(&v)
 	if v.Valid && v.Int64 > 0 {
 		return strconv.FormatInt(v.Int64, 10)
 	}

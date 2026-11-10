@@ -122,7 +122,7 @@ func (h *Handler) backupTickAt(now time.Time) {
 	if s.boolean("telegram_backup_enabled", false) {
 		token := s.strOr("bot_token")
 		var chatID int64
-		_ = db.QueryRow(`SELECT COALESCE(owner_telegram_id,0) FROM settings LIMIT 1`).Scan(&chatID)
+		_ = db.QueryRow(`SELECT COALESCE(owner_telegram_id,0) FROM Setting LIMIT 1`).Scan(&chatID)
 		if token != "" && chatID != 0 {
 			data, err := os.ReadFile(path)
 			if err == nil {
@@ -161,7 +161,7 @@ const settingKeyBackupLastSuccessDay = "backup.last_success_day"
 // readSetting reads the backup_last_success_day column from settings.
 func readSetting(db *sql.DB, key string) string {
 	var v sql.NullString
-	_ = db.QueryRow(`SELECT backup_last_success_day FROM settings ORDER BY id LIMIT 1`).Scan(&v)
+	_ = db.QueryRow(`SELECT backup_last_success_day FROM Setting ORDER BY id LIMIT 1`).Scan(&v)
 	if v.Valid {
 		return v.String
 	}
@@ -170,6 +170,6 @@ func readSetting(db *sql.DB, key string) string {
 
 // writeSetting persists backup_last_success_day into settings.
 func writeSetting(db *sql.DB, key, value string, nowUnix int64) error {
-	_, err := db.Exec(`UPDATE settings SET backup_last_success_day = ? WHERE id = (SELECT MIN(id) FROM settings)`, value)
+	_, err := db.Exec(`UPDATE Setting SET backup_last_success_day = ? WHERE id = (SELECT MIN(id) FROM Setting)`, value)
 	return err
 }

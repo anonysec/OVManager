@@ -19,10 +19,10 @@ func TestBotDisabledRunsZeroSelects(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	_ = sqlite.NewConnector
-	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER)`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE IF NOT EXISTS Setting (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT OR REPLACE INTO settings (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, '', 0, 0)`); err != nil {
+	if _, err := conn.Exec(`INSERT OR REPLACE INTO Setting (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, '', 0, 0)`); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())

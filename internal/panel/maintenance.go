@@ -578,7 +578,7 @@ func verifyDatabase(path string) error {
 	}
 
 	// Verify required tables exist (OVManager schema).
-	required := []string{"admins", "sessions", "users", "nodes", "settings"}
+	required := []string{"Admin", "Session", "User", "Node", "Setting"}
 	for _, t := range required {
 		var cnt int
 		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, t).Scan(&cnt); err != nil {
@@ -656,13 +656,13 @@ func (h *Handler) cleanupCandidates(p cleanupRequest) []map[string]any {
 	var args []any
 	switch status {
 	case "disabled":
-		query = `SELECT id, name FROM users WHERE ` + disabled + ` ORDER BY id DESC`
+		query = `SELECT id, name FROM User WHERE ` + disabled + ` ORDER BY id DESC`
 		args = []any{cutoffDay}
 	case "all":
-		query = `SELECT id, name FROM users WHERE (` + expired + `) OR (` + disabled + `) ORDER BY id DESC`
+		query = `SELECT id, name FROM User WHERE (` + expired + `) OR (` + disabled + `) ORDER BY id DESC`
 		args = []any{cutoffDay, cutoffDay}
 	default:
-		query = `SELECT id, name FROM users WHERE ` + expired + ` ORDER BY id DESC`
+		query = `SELECT id, name FROM User WHERE ` + expired + ` ORDER BY id DESC`
 		args = []any{cutoffDay}
 	}
 	rows, err := h.Svc.DB().QueryContext(context.Background(), query, args...)
@@ -707,7 +707,7 @@ func (h *Handler) cleanupPreview(w http.ResponseWriter, r *http.Request) {
 		sample = append(sample, name)
 	}
 	var total int
-	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM users`).Scan(&total)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM User`).Scan(&total)
 	envelope(w, true, fmt.Sprintf("%d user(s) match", len(candidates)), map[string]any{
 		"status": status, "older_than_days": payload.OlderThanDays,
 		"matched": len(candidates), "sample": sample,
@@ -778,7 +778,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep node_usage (baselines + push_hash) and set the reseed marker so the
 	// next traffic pass seeds instead of re-billing (design §4.6).
-	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM users`)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM User`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 		return
@@ -807,7 +807,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 			var used int64
 			var state string
 			if attempt > 0 {
-				if err := h.Svc.DB().QueryRowContext(context.Background(), `SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM users WHERE id = ?`, u.id).Scan(&used, &state); err != nil {
+				if err := h.Svc.DB().QueryRowContext(context.Background(), `SELECT COALESCE(used,0), COALESCE(node_usage,'{}') FROM User WHERE id = ?`, u.id).Scan(&used, &state); err != nil {
 					envelope(w, false, "Usage reset failed: "+err.Error(), nil)
 					return
 				}
@@ -826,7 +826,7 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			res, err := h.Svc.DB().ExecContext(context.Background(),
-				`UPDATE users SET used = 0, last_node_usage = 0, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, string(merged), u.id, used, state,
+				`UPDATE User SET used = 0, last_node_usage = 0, node_usage = ? WHERE id = ? AND COALESCE(used,0) IS ? AND COALESCE(node_usage,'{}') IS ?`, string(merged), u.id, used, state,
 			)
 			if err != nil {
 				envelope(w, false, "Usage reset failed: "+err.Error(), nil)

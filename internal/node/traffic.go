@@ -102,12 +102,12 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		// traffic reset check
 		var trafficReset string
 		var lastReset int64
-		_ = db.QueryRow(`SELECT COALESCE(traffic_reset,'never'), COALESCE(last_traffic_reset,0) FROM users WHERE id = ?`, u.id).Scan(&trafficReset, &lastReset)
+		_ = db.QueryRow(`SELECT COALESCE(traffic_reset,'never'), COALESCE(last_traffic_reset,0) FROM User WHERE id = ?`, u.id).Scan(&trafficReset, &lastReset)
 		if shouldResetTraffic(trafficReset, lastReset, now) {
 			total = 0
-			_, _ = db.Exec(`UPDATE users SET used = 0, last_traffic_reset = ? WHERE id = ?`, now.Unix(), u.id)
+			_, _ = db.Exec(`UPDATE User SET used = 0, last_traffic_reset = ? WHERE id = ?`, now.Unix(), u.id)
 		}
-		_, _ = db.Exec(`UPDATE users SET used = ? WHERE id = ?`, total, u.id)
+		_, _ = db.Exec(`UPDATE User SET used = ? WHERE id = ?`, total, u.id)
 		res.UsersUpdated++
 		res.BytesBilled += total
 	}
@@ -116,7 +116,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 }
 
 func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[int64]trafficUser) {
-	rows, err := db.Query(`SELECT id, name FROM users`)
+	rows, err := db.Query(`SELECT id, name FROM User`)
 	if err != nil {
 		return nil, nil
 	}

@@ -36,7 +36,7 @@ func TestVersionRejectsNewerSchema(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.Exec(`PRAGMA user_version = 99`)
-	conn.Exec(`CREATE TABLE IF NOT EXISTS users(id INTEGER)`)
+	conn.Exec(`CREATE TABLE IF NOT EXISTS User(id INTEGER)`)
 	if _, err := db.Migrate(conn); err == nil {
 		t.Fatal("migrate on newer schema accepted")
 	}

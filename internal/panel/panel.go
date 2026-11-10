@@ -381,11 +381,11 @@ func (h *Handler) settings() settings {
 // (crud.get_settings).
 func readSettings(db *sql.DB) settings {
 	var count int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM settings`).Scan(&count)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM Setting`).Scan(&count)
 	if count == 0 {
-		_, _ = db.Exec(`INSERT INTO settings (port, protocol) VALUES (1194, 'tcp')`)
+		_, _ = db.Exec(`INSERT INTO Setting (port, protocol) VALUES (1194, 'tcp')`)
 	}
-	rows, err := db.Query(`SELECT * FROM settings ORDER BY id LIMIT 1`)
+	rows, err := db.Query(`SELECT * FROM Setting ORDER BY id LIMIT 1`)
 	if err != nil {
 		return settings{}
 	}
@@ -443,7 +443,7 @@ func setColumns(db *sql.DB, values map[string]any) error {
 			_ = tx.Rollback()
 			return fmt.Errorf("invalid settings column: %s", key)
 		}
-		if _, err := tx.Exec(`UPDATE settings SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM settings)`, value); err != nil { // #nosec // key validated against allowlist above
+		if _, err := tx.Exec(`UPDATE Setting SET `+key+` = ? WHERE id = (SELECT MIN(id) FROM Setting)`, value); err != nil { // #nosec // key validated against allowlist above
 			_ = tx.Rollback()
 			return err
 		}

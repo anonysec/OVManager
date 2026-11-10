@@ -100,7 +100,7 @@ var inboxTypes = map[string]bool{"threshold_expiry": true, "threshold_cpu": true
 
 func (h *Handler) notifications(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
-	rows, err := h.Svc.DB().Query(`SELECT name, status FROM nodes ORDER BY id`)
+	rows, err := h.Svc.DB().Query(`SELECT name, status FROM Node ORDER BY id`)
 	if err == nil {
 		for rows.Next() {
 			var name string
@@ -209,7 +209,7 @@ func (h *Handler) collectNow(w http.ResponseWriter, r *http.Request) {
 // metricsTables is the DDL the collector/history need at runtime;
 // migrations own it, this is the idempotent mirror.
 var metricsTables = []string{
-	`CREATE TABLE IF NOT EXISTS delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
+	`CREATE TABLE IF NOT EXISTS Delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 }
 
 var tablesReady sync.Once
@@ -339,7 +339,7 @@ func touchLastOnline(db *sql.DB, names []string, stamp string) {
 	for _, n := range names {
 		args = append(args, n)
 	}
-	_, _ = db.Exec(`UPDATE users SET last_online = ? WHERE name IN (`+placeholders+`)`, args...) // #nosec // placeholders only
+	_, _ = db.Exec(`UPDATE User SET last_online = ? WHERE name IN (`+placeholders+`)`, args...) // #nosec // placeholders only
 }
 
 func CollectMetrics(db *sql.DB) {
@@ -354,7 +354,7 @@ func CollectMetrics(db *sql.DB) {
 		maxLogins int64
 	}
 	users := []userRow{}
-	if rows, err := db.Query(`SELECT id, name, is_active, COALESCE(used,0), COALESCE(max_logins,0) FROM users`); err == nil {
+	if rows, err := db.Query(`SELECT id, name, is_active, COALESCE(used,0), COALESCE(max_logins,0) FROM User`); err == nil {
 		for rows.Next() {
 			var u userRow
 			if rows.Scan(&u.id, &u.name, &u.isActive, &u.used, &u.maxLogins) == nil {
@@ -372,7 +372,7 @@ func CollectMetrics(db *sql.DB) {
 	}
 	nodeRows := []map[string]any{}
 	sessionsByNode := []snapshotPair{}
-	if nrows, err := db.Query(`SELECT id FROM nodes WHERE status = 1`); err == nil {
+	if nrows, err := db.Query(`SELECT id FROM Node WHERE status = 1`); err == nil {
 		ids := []int64{}
 		for nrows.Next() {
 			var id int64
@@ -563,7 +563,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 
 	ids := []int64{}
 	nodesErr := error(nil)
-	if rows, err := db.Query(`SELECT id FROM nodes WHERE status = 1`); err == nil {
+	if rows, err := db.Query(`SELECT id FROM Node WHERE status = 1`); err == nil {
 		for rows.Next() {
 			var id int64
 			if rows.Scan(&id) == nil {
@@ -577,7 +577,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 	idToName := map[string]string{}
 	known := map[string]bool{}
 	usersErr := error(nil)
-	if rows, err := db.Query(`SELECT id, name FROM users`); err == nil {
+	if rows, err := db.Query(`SELECT id, name FROM User`); err == nil {
 		for rows.Next() {
 			var id int64
 			var name string

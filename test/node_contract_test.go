@@ -520,13 +520,13 @@ func TestNodeContractRequests(t *testing.T) {
 	// The bulk limit push is the one route that needs a database.
 	conn := newNodeDB(t)
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
+		`INSERT INTO Node (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
 		 VALUES (1, 'n1', ?, '', 'tcp', 1194, ?, 'k', 1, ?)`,
 		host, port, certPEM(t, srv)); err != nil {
 		t.Fatalf("insert node: %v", err)
 	}
 	if _, err := conn.Exec(
-		`INSERT INTO users (id, uuid, name, total, used, max_logins, is_active) VALUES (1, 'u-1', 'amy', 0, 0, 2, 1)`,
+		`INSERT INTO User (id, uuid, name, total, used, max_logins, is_active) VALUES (1, 'u-1', 'amy', 0, 0, 2, 1)`,
 	); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -669,11 +669,11 @@ func TestNodeContractOVPNRaw(t *testing.T) {
 	defer srv.Close()
 	host, port := hostPort(t, srv.URL)
 	conn := newNodeDB(t)
-	if _, err := conn.Exec(`INSERT INTO settings (id, panel_id, panel_domain) VALUES (1, 'pid', 'panel.example.com')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id, panel_id, panel_domain) VALUES (1, 'pid', 'panel.example.com')`); err != nil {
 		t.Fatalf("settings: %v", err)
 	}
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
+		`INSERT INTO Node (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
 		 VALUES (1, 'n1', ?, '', 'tcp', 1194, ?, 'k', 1, ?)`,
 		host, port, certPEM(t, srv)); err != nil {
 		t.Fatalf("insert node: %v", err)

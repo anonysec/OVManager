@@ -25,15 +25,14 @@ import (
 )
 
 const nodeSchema = `
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   tunnel_address VARCHAR, protocol VARCHAR DEFAULT 'tcp', ovpn_port INTEGER DEFAULT 1194,
   port INTEGER DEFAULT 2083, key VARCHAR, status BOOLEAN DEFAULT 1, server_ca VARCHAR,
   country_code VARCHAR, latitude REAL, longitude REAL, extra_ports VARCHAR DEFAULT '');
-CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, panel_id VARCHAR, panel_domain VARCHAR);
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR, name VARCHAR UNIQUE, total BIGINT,
   used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
   max_logins INTEGER DEFAULT 1, expiry_date DATE, is_active BOOLEAN DEFAULT 1, tag VARCHAR);
-CREATE TABLE settings_kv (key VARCHAR PRIMARY KEY, value VARCHAR, updated_at FLOAT);
 `
 
 // newNodeDB opens a throwaway SQLite with the node schema.
@@ -221,7 +220,7 @@ func TestNodeStatusShapeReachable(t *testing.T) {
 
 	conn := newNodeDB(t)
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
+		`INSERT INTO Node (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca)
 		 VALUES (1, 'n1', ?, '', 'tcp', 1194, ?, 'k', 1, ?)`,
 		host, port, certPEM(t, srv),
 	); err != nil {
@@ -263,7 +262,7 @@ func TestNodeStatusUnreachable(t *testing.T) {
 	conn := newNodeDB(t)
 	// 127.0.0.1:1 is a closed port; no pin so it fails closed fast.
 	if _, err := conn.Exec(
-		`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status)
+		`INSERT INTO Node (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status)
 		 VALUES (2, 'dead', '127.0.0.1', '', 'tcp', 1194, 1, 'k', 1)`,
 	); err != nil {
 		t.Fatalf("insert node: %v", err)
@@ -328,7 +327,7 @@ func TestPanelIDForMissingSettings(t *testing.T) {
 	if got := node.PanelIDFor(conn); got != "" {
 		t.Errorf("PanelIDFor = %q, want empty", got)
 	}
-	if _, err := conn.Exec(`INSERT INTO settings (id, panel_id) VALUES (1, 'pid-1')`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id, panel_id) VALUES (1, 'pid-1')`); err != nil {
 		t.Fatalf("insert settings: %v", err)
 	}
 	if got := node.PanelIDFor(conn); got != "pid-1" {

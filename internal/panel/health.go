@@ -159,7 +159,7 @@ func (h *Handler) checkDatabase() check {
 }
 
 func (h *Handler) checkNodes() check {
-	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT name FROM nodes ORDER BY id`)
+	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT name FROM Node ORDER BY id`)
 	names := []string{}
 	if err == nil {
 		for rows.Next() {
@@ -380,9 +380,9 @@ func (h *Handler) loginDiagnostics(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) healthSetup(w http.ResponseWriter, r *http.Request) {
 	var nodeCount, activeNodeCount, userCount int
-	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM nodes`).Scan(&nodeCount)
-	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM nodes WHERE status = 1`).Scan(&activeNodeCount)
-	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM users`).Scan(&userCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM Node`).Scan(&nodeCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM Node WHERE status = 1`).Scan(&activeNodeCount)
+	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM User`).Scan(&userCount)
 	plain(w, map[string]any{
 		"has_node": nodeCount > 0, "has_user": userCount > 0,
 		"has_active_node": activeNodeCount > 0,

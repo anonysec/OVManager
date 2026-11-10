@@ -63,7 +63,7 @@ type policyUser struct {
 }
 
 func loadPolicyUsers(db *sql.DB, userID int64) []policyUser {
-	q := `SELECT id, name, COALESCE(max_logins,0), is_active, total, used, COALESCE(expiry_date,''), COALESCE(node_usage,'{}') FROM users`
+	q := `SELECT id, name, COALESCE(max_logins,0), is_active, total, used, COALESCE(expiry_date,''), COALESCE(node_usage,'{}') FROM User`
 	args := []any{}
 	if userID > 0 {
 		q += ` WHERE id = ?`
@@ -227,7 +227,7 @@ func reconcilePolicyUsers(db *sql.DB, userID int64, now time.Time, force bool) (
 	// Conditional merges preserving traffic/epoch updates.
 	for uid, hashes := range fresh {
 		var oldState string
-		if err := db.QueryRow(`SELECT COALESCE(node_usage,'{}') FROM users WHERE id = ?`, uid).Scan(&oldState); err != nil {
+		if err := db.QueryRow(`SELECT COALESCE(node_usage,'{}') FROM User WHERE id = ?`, uid).Scan(&oldState); err != nil {
 			continue
 		}
 		var data map[string]any
@@ -248,7 +248,7 @@ func reconcilePolicyUsers(db *sql.DB, userID int64, now time.Time, force bool) (
 		data[PushHashKey] = merged
 		canonical, _ := json.Marshal(data)
 		_, _ = db.Exec(
-			`UPDATE users SET node_usage = ? WHERE id = ? AND COALESCE(node_usage,'{}') = ?`,
+			`UPDATE User SET node_usage = ? WHERE id = ? AND COALESCE(node_usage,'{}') = ?`,
 			string(canonical), uid, oldState,
 		)
 	}

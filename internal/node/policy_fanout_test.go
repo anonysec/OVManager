@@ -26,7 +26,7 @@ func TestReconcileAppliesBeyondFanoutLimit(t *testing.T) {
 	seedTrafficNode(t, conn, 1, "node-a", srv)
 	const users = 25
 	for i := int64(0); i < users; i++ {
-		if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, max_logins, is_active) VALUES (?, ?, ?, 3, 1)`,
+		if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, max_logins, is_active) VALUES (?, ?, ?, 3, 1)`,
 			1000+i, "u", fmt.Sprintf("user%02d", i)); err != nil {
 			t.Fatalf("insert user: %v", err)
 		}

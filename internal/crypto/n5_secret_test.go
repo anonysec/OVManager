@@ -16,7 +16,7 @@ func TestGetOrCreateSecretKeyRefusesMissingKeyWithEncryptedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE nodes (id INTEGER PRIMARY KEY, key TEXT); INSERT INTO nodes (id, key) VALUES (1, 'enc:v2:AAAA');`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, key TEXT); INSERT INTO Node (id, key) VALUES (1, 'enc:v2:AAAA');`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := GetOrCreateSecretKey(dir); err == nil {
@@ -31,7 +31,7 @@ func TestGetOrCreateSecretKeyRefusesCorruptKeyWithEncryptedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token TEXT); INSERT INTO settings (id, bot_token) VALUES (1, 'enc:v2:AAAA');`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY, bot_token TEXT); INSERT INTO Setting (id, bot_token) VALUES (1, 'enc:v2:AAAA');`); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "secret.key"), []byte("not-a-key\n"), 0o600); err != nil {

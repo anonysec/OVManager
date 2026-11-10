@@ -25,7 +25,7 @@ func TestReconcileBoundedByHangingNode(t *testing.T) {
 	t.Cleanup(func() { close(release) })
 	seedTrafficNode(t, conn, 1, "hanging", srv)
 	for i := int64(0); i < 5; i++ {
-		if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, max_logins, is_active) VALUES (?, ?, ?, 3, 1)`,
+		if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, max_logins, is_active) VALUES (?, ?, ?, 3, 1)`,
 			7+i, "u", "user"+string(rune('0'+i))); err != nil {
 			t.Fatalf("insert user: %v", err)
 		}

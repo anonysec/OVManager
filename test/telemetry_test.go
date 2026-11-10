@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS traffic_snapshots (id INTEGER PRIMARY KEY AUTOINCREME
 CREATE TABLE IF NOT EXISTS security_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   auth_errors INTEGER NOT NULL, rejects INTEGER NOT NULL, stale_markers INTEGER NOT NULL,
   offline_nodes INTEGER NOT NULL, full_users INTEGER NOT NULL, inactive_users INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS traffic_ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
+CREATE TABLE IF NOT EXISTS TrafficLedger (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
   user_id INTEGER NOT NULL, node_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL,
   delta_bytes INTEGER NOT NULL, meta_json TEXT NOT NULL DEFAULT '{}',
   UNIQUE (user_id, ts, kind, node_id));
-DROP TABLE IF EXISTS user_traffic_daily;
-CREATE TABLE user_traffic_daily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
+DROP TABLE IF EXISTS UserTrafficDaily;
+CREATE TABLE UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL,
   bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day));
-CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON user_traffic_daily(day);
+CREATE INDEX IF NOT EXISTS idx_user_traffic_day ON UserTrafficDaily(day);
 `
 
 func newTelemetryConn(t *testing.T) (*sql.DB, string) {
@@ -135,12 +135,12 @@ func TestNotificationsShape(t *testing.T) {
 	conn, dir := newTelemetryConn(t)
 	srv, token := newTelemetryServer(t, conn, dir)
 
-	if _, err := conn.Exec(`INSERT INTO nodes (id, name, address, status) VALUES (1,'offline-node','10.0.0.1',0),(2,'online-node','10.0.0.2',1)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Node (id, name, address, status) VALUES (1,'offline-node','10.0.0.1',0),(2,'online-node','10.0.0.2',1)`); err != nil {
 		t.Fatalf("seed nodes: %v", err)
 	}
 	soon := time.Now().UTC().AddDate(0, 0, 2).Format("2006-01-02")
 	later := time.Now().UTC().AddDate(0, 0, 300).Format("2006-01-02")
-	if _, err := conn.Exec(`INSERT INTO users (id, uuid, name, total, used, expiry_date, is_active) VALUES
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, total, used, expiry_date, is_active) VALUES
 		(1,'u1','ann',1000,100,?,1),
 		(2,'u2','bob',1000,900,?,1)`, soon, later); err != nil {
 		t.Fatalf("seed users: %v", err)

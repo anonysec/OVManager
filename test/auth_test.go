@@ -93,7 +93,7 @@ func TestAuthLoginSuccess(t *testing.T) {
 	// Only the SHA-256 digest of the raw token is stored.
 	sum := sha256.Sum256([]byte(token))
 	var stored string
-	if err := conn.QueryRow(`SELECT token_hash FROM sessions WHERE username='admin'`).Scan(&stored); err != nil {
+	if err := conn.QueryRow(`SELECT token_hash FROM Session WHERE username='admin'`).Scan(&stored); err != nil {
 		t.Fatalf("session row: %v", err)
 	}
 	if stored != hex.EncodeToString(sum[:]) {
@@ -126,7 +126,7 @@ func TestAuthLoginWrongPassword(t *testing.T) {
 func TestAuthLoginUnknownNonOwner(t *testing.T) {
 	conn, dir := newTestDB(t)
 	seedOwner(t, conn, "admin", bcryptHash)
-	if _, err := conn.Exec(`INSERT INTO admins (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES ('second', ?, 0)`, bcryptHash); err != nil {
 		t.Fatal(err)
 	}
 	srv := newServer(t, conn, dir)
@@ -188,7 +188,7 @@ func TestAuthSessionVerifyRevoke(t *testing.T) {
 		t.Errorf("expired session accepted")
 	}
 	var n int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n); err != nil {
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM Session`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
@@ -197,7 +197,7 @@ func TestAuthSessionVerifyRevoke(t *testing.T) {
 
 	// Idle timeout (default SESSION_IDLE_SECONDS = 1800).
 	idle, _ := svc.CreateSession("admin", "owner", "", "", 604800)
-	if _, err := conn.Exec(`UPDATE sessions SET last_seen_at=? WHERE token_hash=?`,
+	if _, err := conn.Exec(`UPDATE Session SET last_seen_at=? WHERE token_hash=?`,
 		float64(time.Now().Unix())-3600, hashToken(idle)); err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestAuthRequireOwner403(t *testing.T) {
 		t.Fatalf("401 shape = %d %v", res.StatusCode, body)
 	}
 	token, _ := svc.CreateSession("admin", "admin", "", "", 604800)
-	if _, err := conn.Exec(`UPDATE admins SET is_owner=0 WHERE username='admin'`); err != nil {
+	if _, err := conn.Exec(`UPDATE Admin SET is_owner=0 WHERE username='admin'`); err != nil {
 		t.Fatal(err)
 	}
 	res, _ = doJSON(t, http.MethodGet, srv+"/api/_owner", token, nil)
@@ -318,7 +318,7 @@ func TestOwnerClaimFlow(t *testing.T) {
 	}
 	var pw string
 	var isOwner bool
-	if err := conn.QueryRow(`SELECT password, is_owner FROM admins WHERE username='root'`).Scan(&pw, &isOwner); err != nil {
+	if err := conn.QueryRow(`SELECT password, is_owner FROM Admin WHERE username='root'`).Scan(&pw, &isOwner); err != nil {
 		t.Fatalf("owner row: %v", err)
 	}
 	if !isOwner || !auth.VerifyPassword("supersecret1", pw) {

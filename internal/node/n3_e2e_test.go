@@ -100,7 +100,7 @@ func TestFingerprintConfirmationFlowEndToEnd(t *testing.T) {
 
 	oldCert := generateTestCert(t, "old-node")
 	oldFP := CertFingerprint(oldCert)
-	res, err := d.Exec(`INSERT INTO nodes (name, address, port, ovpn_port, server_ca, key, status) VALUES ('rn', ?, ?, 1194, ?, 'k', 1)`, addr, port, oldCert)
+	res, err := d.Exec(`INSERT INTO Node (name, address, port, ovpn_port, server_ca, key, status) VALUES ('rn', ?, ?, 1194, ?, 'k', 1)`, addr, port, oldCert)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestFingerprintConfirmationFlowEndToEnd(t *testing.T) {
 		t.Fatalf("repin: exact fingerprint failed: %v", rep3)
 	}
 	var updatedCert string
-	_ = d.QueryRow(`SELECT server_ca FROM nodes WHERE id = ?`, nodeID).Scan(&updatedCert)
+	_ = d.QueryRow(`SELECT server_ca FROM Node WHERE id = ?`, nodeID).Scan(&updatedCert)
 	if CertFingerprint(updatedCert) != newFP {
 		t.Fatalf("repin: DB fingerprint = %s, want %s", CertFingerprint(updatedCert), newFP)
 	}

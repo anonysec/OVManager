@@ -21,10 +21,10 @@ func newTelegramDB(t *testing.T, token string, enabled int64, chatID int64) *sql
 		t.Fatalf("db.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	if _, err := conn.Exec(`CREATE TABLE settings (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER)`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Setting (id INTEGER PRIMARY KEY, bot_token VARCHAR, bot_enabled BOOLEAN, owner_telegram_id INTEGER)`); err != nil {
 		t.Fatalf("schema: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO settings (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, ?, ?, ?)`, token, enabled, chatID); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id, bot_token, bot_enabled, owner_telegram_id) VALUES (1, ?, ?, ?)`, token, enabled, chatID); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	return conn

@@ -28,7 +28,7 @@ func TestNodeKeyAtRestEncryption(t *testing.T) {
 
 	// 1. Inspect raw database column: must be encrypted with enc:v2: prefix
 	var rawStoredKey string
-	err = d.QueryRow("SELECT key FROM nodes WHERE id = ?", id).Scan(&rawStoredKey)
+	err = d.QueryRow("SELECT key FROM Node WHERE id = ?", id).Scan(&rawStoredKey)
 	if err != nil {
 		t.Fatalf("QueryRow key: %v", err)
 	}

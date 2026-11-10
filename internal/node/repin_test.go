@@ -48,7 +48,7 @@ func setupNodeTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { _ = d.Close() })
 	_, err = d.Exec(`
-		CREATE TABLE nodes (
+		CREATE TABLE Node (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			address TEXT NOT NULL,
@@ -86,7 +86,7 @@ func TestHandleRepinRequiresFingerprintConfirmation(t *testing.T) {
 	oldCert := generateTestCert(t, "old-node")
 	oldFP := CertFingerprint(oldCert)
 
-	res, err := d.Exec(`INSERT INTO nodes (name, address, port, ovpn_port, server_ca, key, status)
+	res, err := d.Exec(`INSERT INTO Node (name, address, port, ovpn_port, server_ca, key, status)
 		VALUES ('test-node', '127.0.0.1', 2083, 1194, ?, 'test-key', 1)`, oldCert)
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestHandleRepinRequiresFingerprintConfirmation(t *testing.T) {
 
 	// Verify server_ca in database was not changed
 	var currentCert string
-	_ = d.QueryRow(`SELECT server_ca FROM nodes WHERE id = ?`, nodeID).Scan(&currentCert)
+	_ = d.QueryRow(`SELECT server_ca FROM Node WHERE id = ?`, nodeID).Scan(&currentCert)
 	if CertFingerprint(currentCert) != oldFP {
 		t.Fatalf("SECURITY FLAW: server_ca was modified without confirmation")
 	}

@@ -17,16 +17,16 @@ import (
 
 // trafficSchema covers the columns SyncTraffic and the owner gate touch.
 const trafficSchema = `
-CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
+CREATE TABLE Admin (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
   is_owner BOOLEAN DEFAULT 0, telegram_id INTEGER);
-CREATE TABLE sessions (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
+CREATE TABLE Session (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
   role VARCHAR, created_at FLOAT, expires_at FLOAT, last_seen_at FLOAT,
   user_agent VARCHAR, ip VARCHAR);
-CREATE TABLE users (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE, used BIGINT,
+CREATE TABLE User (id INTEGER PRIMARY KEY, name VARCHAR UNIQUE, used BIGINT,
   node_usage VARCHAR DEFAULT '{}');
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   status BOOLEAN DEFAULT 1, key VARCHAR);
-CREATE TABLE settings (id INTEGER PRIMARY KEY, panel_id VARCHAR, bot_enabled BOOLEAN DEFAULT 0);
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, panel_id VARCHAR, bot_enabled BOOLEAN DEFAULT 0);
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor TEXT,
   action TEXT, target TEXT, detail TEXT);
 `
@@ -52,7 +52,7 @@ func newTrafficDB(t *testing.T) (*sql.DB, string) {
 func TestSyncTrafficRouteZeroCounts(t *testing.T) {
 	conn, dir := newTrafficDB(t)
 	if _, err := conn.Exec(
-		`INSERT INTO admins (id, username, password, is_owner) VALUES (1, 'owner', 'x', 1)`,
+		`INSERT INTO Admin (id, username, password, is_owner) VALUES (1, 'owner', 'x', 1)`,
 	); err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestSyncTrafficRouteZeroCounts(t *testing.T) {
 // the Telegram ready() gate.
 func TestTrafficWorkerIgnoresTelegram(t *testing.T) {
 	conn, dir := newTrafficDB(t)
-	if _, err := conn.Exec(`INSERT INTO settings (id, bot_enabled) VALUES (1, 0)`); err != nil {
+	if _, err := conn.Exec(`INSERT INTO Setting (id, bot_enabled) VALUES (1, 0)`); err != nil {
 		t.Fatalf("seed settings: %v", err)
 	}
 	h := NewHandler(auth.NewService(conn, dir))

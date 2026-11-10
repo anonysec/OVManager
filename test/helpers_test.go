@@ -26,20 +26,20 @@ const (
 
 // testSchema mirrors the columns the ported code touches (backend).
 const testSchema = `
-CREATE TABLE admins (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
+CREATE TABLE Admin (id INTEGER PRIMARY KEY, username VARCHAR UNIQUE, password VARCHAR,
   is_owner BOOLEAN DEFAULT 0, telegram_id INTEGER);
-CREATE TABLE sessions (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
+CREATE TABLE Session (id INTEGER PRIMARY KEY, token_hash VARCHAR UNIQUE, username VARCHAR,
   role VARCHAR, created_at FLOAT, expires_at FLOAT, last_seen_at FLOAT,
   user_agent VARCHAR, ip VARCHAR);
-CREATE TABLE users (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNIQUE,
+CREATE TABLE User (id INTEGER PRIMARY KEY, uuid VARCHAR UNIQUE, name VARCHAR UNIQUE,
   total BIGINT, used BIGINT, last_node_usage BIGINT DEFAULT 0, node_usage VARCHAR DEFAULT '{}',
   max_logins INTEGER DEFAULT 1 NOT NULL, expiry_date DATE, is_active BOOLEAN DEFAULT 1,
   last_online DATETIME, tag VARCHAR);
-CREATE TABLE settings (id INTEGER PRIMARY KEY, default_days INTEGER DEFAULT 30,
+CREATE TABLE Setting (id INTEGER PRIMARY KEY, default_days INTEGER DEFAULT 30,
   default_traffic_gb INTEGER DEFAULT 100, default_max_users INTEGER DEFAULT 1);
-CREATE TABLE nodes (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
+CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   status BOOLEAN DEFAULT 1, key VARCHAR, extra_ports VARCHAR DEFAULT '');
-CREATE TABLE user_traffic_daily (id INTEGER PRIMARY KEY, user_id INTEGER, day TEXT, bytes BIGINT);
+CREATE TABLE UserTrafficDaily (id INTEGER PRIMARY KEY, user_id INTEGER, day TEXT, bytes BIGINT);
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor TEXT,
   action TEXT, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
 CREATE TABLE deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL);
@@ -65,7 +65,7 @@ func newTestDB(t *testing.T) (*sql.DB, string) {
 func seedOwner(t *testing.T, conn *sql.DB, username, hash string) {
 	t.Helper()
 	if _, err := conn.Exec(
-		`INSERT INTO admins (username, password, is_owner) VALUES (?, ?, 1)`, username, hash,
+		`INSERT INTO Admin (username, password, is_owner) VALUES (?, ?, 1)`, username, hash,
 	); err != nil {
 		t.Fatalf("seed owner: %v", err)
 	}

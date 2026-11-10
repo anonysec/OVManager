@@ -32,7 +32,7 @@ type userRow struct {
 	ActivationTokenExpires sql.NullFloat64
 }
 
-const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, (SELECT ip FROM sessions WHERE username = users.name ORDER BY created_at DESC LIMIT 1) AS last_login_ip`
+const userCols = `id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, (SELECT ip FROM Session WHERE username = User.name ORDER BY created_at DESC LIMIT 1) AS last_login_ip`
 
 func scanUser(row interface{ Scan(...any) error }) (userRow, error) {
 	var u userRow
@@ -107,7 +107,7 @@ func (h *Handler) actor(r *http.Request) string {
 }
 
 func (h *Handler) byUUID(uuidStr string) (userRow, bool) {
-	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE uuid = ?`, uuidStr))
+	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM User WHERE uuid = ?`, uuidStr))
 	if err != nil {
 		return userRow{}, false
 	}
@@ -118,7 +118,7 @@ func (h *Handler) byID(id int64) (userRow, bool) {
 	if id <= 0 {
 		return userRow{}, false
 	}
-	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	u, err := scanUser(h.Svc.DB().QueryRow(`SELECT `+userCols+` FROM User WHERE id = ?`, id))
 	if err != nil {
 		return userRow{}, false
 	}
@@ -209,9 +209,9 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 	// Read outside the transaction to avoid a shared->exclusive lock upgrade
 	// that can deadlock concurrent writers on SQLite.
 	var uuid, name string
-	if err := db.QueryRow(`SELECT uuid, name FROM users WHERE id = ?`, userID).Scan(&uuid, &name); err != nil {
+	if err := db.QueryRow(`SELECT uuid, name FROM User WHERE id = ?`, userID).Scan(&uuid, &name); err != nil {
 		if strings.Contains(err.Error(), "no such column") {
-			if err2 := db.QueryRow(`SELECT uuid FROM users WHERE id = ?`, userID).Scan(&uuid); err2 != nil {
+			if err2 := db.QueryRow(`SELECT uuid FROM User WHERE id = ?`, userID).Scan(&uuid); err2 != nil {
 				if errors.Is(err2, sql.ErrNoRows) {
 					return res, errUserAlreadyDeleted
 				}
@@ -228,7 +228,7 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 
 	// Read the full undo snapshot outside the transaction for the same
 	// lock-upgrade reason; the insert still happens inside it.
-	snap, _ := scanUser(db.QueryRow(`SELECT id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, NULL AS last_login_ip FROM users WHERE id = ?`, userID))
+	snap, _ := scanUser(db.QueryRow(`SELECT id, uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, last_online, tag, NULL AS last_login_ip FROM User WHERE id = ?`, userID))
 	if snap.ID == 0 {
 		snap = userRow{ID: userID, UUID: uuid, Name: name}
 	}
@@ -245,14 +245,14 @@ tx, err := db.Begin()
 	res.AccountUUID = uuid
 
 	_ = snap
-	if _, err := tx.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, userID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM UserTrafficDaily WHERE user_id = ?`, userID); err != nil {
 		return res, err
 	}
 	var stmt string
 	if keepOne {
-		stmt = `DELETE FROM users WHERE id = ? AND uuid = ? AND (SELECT COUNT(*) FROM users) > 1`
+		stmt = `DELETE FROM User WHERE id = ? AND uuid = ? AND (SELECT COUNT(*) FROM User) > 1`
 	} else {
-		stmt = `DELETE FROM users WHERE id = ? AND uuid = ?`
+		stmt = `DELETE FROM User WHERE id = ? AND uuid = ?`
 	}
 	r, err := tx.Exec(stmt, userID, uuid)
 	if err != nil {
@@ -264,7 +264,7 @@ tx, err := db.Begin()
 	}
 	if n == 0 {
 		var exists int
-		err := tx.QueryRow(`SELECT 1 FROM users WHERE id = ? AND uuid = ?`, userID, uuid).Scan(&exists)
+		err := tx.QueryRow(`SELECT 1 FROM User WHERE id = ? AND uuid = ?`, userID, uuid).Scan(&exists)
 		if errors.Is(err, sql.ErrNoRows) {
 			return res, errUserAlreadyDeleted
 		}
@@ -277,7 +277,7 @@ tx, err := db.Begin()
 		return res, errUserAlreadyDeleted
 	}
 
-	rows, err := tx.Query(`SELECT id, name FROM nodes`)
+	rows, err := tx.Query(`SELECT id, name FROM Node`)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such table") {
 			rows = nil
@@ -305,7 +305,7 @@ tx, err := db.Begin()
 	now := float64(time.Now().Unix())
 	// Ensure the pending table exists so deletion is durable even on a
 	// partially-migrated or fixture database.
-	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS pending_user_revocations (
+	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS PendingUserRevocation (
 		node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL,
 		user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (node_id, user_id))`); err != nil {
@@ -315,7 +315,7 @@ tx, err := db.Begin()
 	_ = hasPending
 	for _, ni := range nodes {
 		if hasPending > 0 {
-			if _, err := tx.Exec(`INSERT OR IGNORE INTO pending_user_revocations (node_id, user_id, user_uuid, user_name, created_at, last_error) VALUES (?, ?, ?, ?, ?, '')`, ni.id, userID, uuid, name, now); err != nil {
+			if _, err := tx.Exec(`INSERT OR IGNORE INTO PendingUserRevocation (node_id, user_id, user_uuid, user_name, created_at, last_error) VALUES (?, ?, ?, ?, ?, '')`, ni.id, userID, uuid, name, now); err != nil {
 				return res, err
 			}
 		}

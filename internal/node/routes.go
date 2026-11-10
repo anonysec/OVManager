@@ -280,7 +280,7 @@ func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE nodes SET server_ca = ? WHERE id = ?`, newPEM, n.ID)
+	_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE Node SET server_ca = ? WHERE id = ?`, newPEM, n.ID)
 
 	actor := "owner"
 	if h.svc != nil {
@@ -414,7 +414,7 @@ func (h *Handler) handleNodePorts(w http.ResponseWriter, r *http.Request) {
 	}
 	if success {
 		// Persist extra_ports in the database
-		_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE nodes SET extra_ports = ? WHERE id = ?`, *req.ExtraPorts, n.ID)
+		_, _ = h.svc.DB().ExecContext(r.Context(), `UPDATE Node SET extra_ports = ? WHERE id = ?`, *req.ExtraPorts, n.ID)
 		n.ExtraPorts = *req.ExtraPorts
 	}
 	data := env["data"]
@@ -490,7 +490,7 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusNotFound, "OVPN file not found")
 		return
 	}
-	userQuery := `SELECT id, is_active, total, used, expiry_date FROM users WHERE uuid = ?`
+	userQuery := `SELECT id, is_active, total, used, expiry_date FROM User WHERE uuid = ?`
 	var userLookup any = uuid
 	if rawID := r.PathValue("user_id"); rawID != "" {
 		id, ok := parsePositiveRouteID(rawID)
@@ -498,7 +498,7 @@ func (h *Handler) handleDownloadOVPN(w http.ResponseWriter, r *http.Request) {
 			auth.WriteDetail(w, http.StatusNotFound, "User not found")
 			return
 		}
-		userQuery = `SELECT id, is_active, total, used, expiry_date FROM users WHERE id = ?`
+		userQuery = `SELECT id, is_active, total, used, expiry_date FROM User WHERE id = ?`
 		userLookup = id
 	}
 	var userID int64

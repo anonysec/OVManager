@@ -10,11 +10,11 @@ import (
 // vs date cutoff, not a float epoch).
 func TestCleanupCandidatesDisabledFindsLoggedInUsers(t *testing.T) {
 	h, _ := newBackupTestHandler(t)
-	if _, err := h.Svc.DB().Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, is_active INTEGER, last_online TEXT, expiry_date TEXT)`); err != nil {
+	if _, err := h.Svc.DB().Exec(`CREATE TABLE User (id INTEGER PRIMARY KEY, name TEXT, is_active INTEGER, last_online TEXT, expiry_date TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	oldDate := time.Now().UTC().AddDate(0, 0, -400).Format("2006-01-02 15:04:05")
-	if _, err := h.Svc.DB().Exec(`INSERT INTO users (id, name, is_active, last_online) VALUES (1, 'old', 0, ?), (2, 'recent', 0, ?)`, oldDate, time.Now().UTC().Format("2006-01-02 15:04:05")); err != nil {
+	if _, err := h.Svc.DB().Exec(`INSERT INTO User (id, name, is_active, last_online) VALUES (1, 'old', 0, ?), (2, 'recent', 0, ?)`, oldDate, time.Now().UTC().Format("2006-01-02 15:04:05")); err != nil {
 		t.Fatal(err)
 	}
 	got := h.cleanupCandidates(cleanupRequest{Status: "disabled", OlderThanDays: 30})
