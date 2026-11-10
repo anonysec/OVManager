@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -562,15 +561,6 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	if db == nil {
 		return false
 	}
-	nowSec := time.Now().Unix()
-	if n := GetNodeByID(db, nodeID); n != nil {
-		if raw, err := json.Marshal(n); err == nil {
-			_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS deleted_nodes (id INTEGER PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`)
-			_, _ = db.Exec(`INSERT OR REPLACE INTO deleted_nodes (id, snap_json, deleted_at, expires_at) VALUES (?, ?, ?, ?)`,
-				n.ID, string(raw), nowSec, nowSec+deletedNodeTTLSeconds)
-		}
-	}
-	_, _ = db.Exec(`DELETE FROM deleted_nodes WHERE expires_at < ?`, nowSec)
 	res, err := db.Exec(`DELETE FROM nodes WHERE id = ?`, nodeID)
 	if err != nil {
 		return false
@@ -597,53 +587,6 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	audit.Record(db, "admin", "node.delete", "warning", fmt.Sprintf("Node deleted (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
 
 	return true
-}
-
-// RestoreNodeHandler re-inserts a snapshot from deleted_nodes if it is still
-// inside the undo window. Per-user node_usage baselines are not resurrected;
-// they re-baseline on the next poll.
-func RestoreNodeHandler(nodeID int64, db *sql.DB) (bool, string) {
-	if db == nil {
-		return false, "Node database unavailable"
-	}
-	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS deleted_nodes (id INTEGER PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`)
-	var snapJSON string
-	var deletedAt float64
-	err := db.QueryRow(`SELECT snap_json, deleted_at FROM deleted_nodes WHERE id = ?`, nodeID).Scan(&snapJSON, &deletedAt)
-	if err == sql.ErrNoRows {
-		return false, "Undo window expired — node can no longer be restored"
-	}
-	if err != nil {
-		return false, "Could not fetch undo record"
-	}
-	if time.Now().Unix()-int64(deletedAt) > deletedNodeTTLSeconds {
-		_, _ = db.Exec(`DELETE FROM deleted_nodes WHERE id = ?`, nodeID)
-		return false, "Undo window expired — node can no longer be restored"
-	}
-	if GetNodeByID(db, nodeID) != nil {
-		_, _ = db.Exec(`DELETE FROM deleted_nodes WHERE id = ?`, nodeID)
-		return false, "Node already exists"
-	}
-	var snap Node
-	if err := json.Unmarshal([]byte(snapJSON), &snap); err != nil {
-		return false, "Restore failed: corrupt undo record"
-	}
-	storedKey := snap.Key
-	if storedKey != "" {
-		if enc, err := crypto.EncryptSecret(storedKey, dataDir()); err == nil {
-			storedKey = enc
-		}
-	}
-	_, err = db.Exec(`INSERT INTO nodes (id, name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude, extra_ports)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		snap.ID, snap.Name, snap.Address, nullIfEmpty(snap.TunnelAddress), snap.Protocol, snap.OVPNPort, snap.Port,
-		storedKey, snap.Status, snap.ServerCA, snap.CountryCode, snap.Latitude, snap.Longitude, snap.ExtraPorts)
-	if err != nil {
-		return false, "Restore failed. Check the panel logs for details."
-	}
-	_, _ = db.Exec(`DELETE FROM deleted_nodes WHERE id = ?`, nodeID)
-	audit.Record(db, "admin", "node.restore", "info", fmt.Sprintf("Node restored (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
-	return true, "Node restored successfully"
 }
 
 func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
