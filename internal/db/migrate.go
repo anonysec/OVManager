@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 35
+const SchemaVersion = 36
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -228,6 +228,7 @@ var mappedColumns = map[string][]mcolumn{
 		{"username", "VARCHAR DEFAULT '' NOT NULL"},
 		{"password", "VARCHAR DEFAULT '' NOT NULL"},
 		{"is_owner", "BOOLEAN DEFAULT 0 NOT NULL"},
+		{"role", "VARCHAR DEFAULT 'admin' NOT NULL"},
 		{"telegram_id", "INTEGER"},
 	},
 	"sessions": {
@@ -785,6 +786,18 @@ var steps = []step{
 		} {
 			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
 		}
+		return nil
+	}},
+	{36, "add admin role column (base code)", func(x execer) error {
+		if !tableNames(x)["admins"] {
+			return nil
+		}
+		if !columnNames(x, "admins")["role"] {
+			if err := addColumn(x, "admins", "role", "VARCHAR DEFAULT 'admin' NOT NULL"); err != nil {
+				return err
+			}
+		}
+		_, _ = x.Exec(`UPDATE admins SET role = 'owner' WHERE is_owner = 1`)
 		return nil
 	}},
 }
