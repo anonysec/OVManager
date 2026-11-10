@@ -219,54 +219,6 @@ func TestUsersStatusToggle(t *testing.T) {
 
 // TestUsersDeleteRestore covers DELETE (msg shape) and the Undo path:
 // 410 outside the window, 200 on restore, 409 once present again.
-func TestUsersDeleteRestore(t *testing.T) {
-	conn, base, token := authedServer(t)
-	for _, n := range []string{"one", "two"} {
-		res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": n})
-		res.Body.Close()
-	}
-	uuidTwo := uuidOf(t, conn, "two")
-	res, got := doJSON(t, http.MethodDelete, base+"/api/users/"+uuidTwo, token, nil)
-	res.Body.Close()
-	if res.StatusCode != 200 || got["msg"] != "User deleted successfully" {
-		t.Fatalf("delete = %d %v", res.StatusCode, got)
-	}
-	// Restore unknown UUID → 410 (Undo window expired).
-	res, got = doJSON(t, http.MethodPost, base+"/api/users/unknown-uuid/restore", token, nil)
-	res.Body.Close()
-	if res.StatusCode != 410 || !strings.Contains(got["detail"].(string), "Undo window expired") {
-		t.Fatalf("restore unknown = %d %v", res.StatusCode, got["detail"])
-	}
-	// Restore the deleted row (original UUID survives).
-	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuidTwo+"/restore", token, nil)
-	res.Body.Close()
-	if res.StatusCode != 200 || got["success"] != true {
-		t.Fatalf("restore = %d %v", res.StatusCode, got)
-	}
-	if got["data"].(map[string]any)["uuid"] != uuidTwo {
-		t.Errorf("restored uuid = %v, want %v", got["data"].(map[string]any)["uuid"], uuidTwo)
-	}
-	// A consumed entry can no longer be undone (pops on success).
-	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuidTwo+"/restore", token, nil)
-	res.Body.Close()
-	if res.StatusCode != 410 {
-		t.Fatalf("repeat restore = %d %v, want 410", res.StatusCode, got["detail"])
-	}
-
-	// 409 "User already exists": the UUID reappears while undo is still armed.
-	uuidOne := uuidOf(t, conn, "one")
-	res, _ = doJSON(t, http.MethodDelete, base+"/api/users/"+uuidOne, token, nil)
-	res.Body.Close()
-	if _, err := conn.Exec(`INSERT INTO users (uuid, name, total, used, node_usage, last_node_usage, max_logins, expiry_date, is_active)
-		VALUES (?, 'revived', NULL, 0, '{}', 0, 1, '2030-01-01', 1)`, uuidOne); err != nil {
-		t.Fatal(err)
-	}
-	res, got = doJSON(t, http.MethodPost, base+"/api/users/"+uuidOne+"/restore", token, nil)
-	res.Body.Close()
-	if res.StatusCode != 409 || got["detail"] != "User already exists" {
-		t.Fatalf("restore over existing = %d %v", res.StatusCode, got["detail"])
-	}
-}
 
 func uuidOf(t *testing.T, conn *sql.DB, name string) string {
 	t.Helper()

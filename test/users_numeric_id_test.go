@@ -130,20 +130,6 @@ func TestUsersNumericIDRoutesPreserveUUIDRoutesAndValidateIDs(t *testing.T) {
 	if res.StatusCode != http.StatusOK || body["success"] != true {
 		t.Fatalf("numeric delete = %d %v", res.StatusCode, body)
 	}
-	res, body = doJSON(t, http.MethodPost, env.srv.URL+"/api/users/"+primaryUUID+"/restore", env.token, nil)
-	res.Body.Close()
-	if res.StatusCode != http.StatusOK || body["success"] != true {
-		t.Fatalf("UUID restore after numeric delete = %d %v", res.StatusCode, body)
-	}
-	data, _ := body["data"].(map[string]any)
-	if data["uuid"] != primaryUUID || data["id"] == float64(42) {
-		t.Errorf("restored user identity = %v; want preserved UUID and a newly assigned numeric ID", data)
-	}
-
-	res, _ = rawReq(t, http.MethodPost, env.srv.URL+"/api/users/id/42/restore", env.token, nil, "")
-	if res.StatusCode != http.StatusNotFound {
-		t.Errorf("numeric restore route status = %d, want 404 (UUID-only undo contract)", res.StatusCode)
-	}
 }
 
 func TestUsersNumericIDRouteBoundariesAndAmbiguities(t *testing.T) {

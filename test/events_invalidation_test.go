@@ -116,17 +116,6 @@ func TestUserAndNodeMutationsPublishEventInvalidations(t *testing.T) {
 		t.Fatalf("delete user events = %v, want ['delete']", ops)
 	}
 
-	// 7. Restore user -> publishes "users" op="restore"
-	res, body = doJSON(t, http.MethodPost, env.srv.URL+"/api/users/"+uuid+"/restore", env.token, nil)
-	res.Body.Close()
-	if res.StatusCode != http.StatusOK || body["success"] != true {
-		t.Fatalf("restore user = %d %v", res.StatusCode, body)
-	}
-	ops = collectEventOps(ch, "users", 50*time.Millisecond)
-	if len(ops) != 1 || ops[0] != "restore" {
-		t.Fatalf("restore user events = %v, want ['restore']", ops)
-	}
-
 	// 8. Delete node -> publishes "nodes" op="delete"
 	insertTestNode(t, env.conn, 50, "node-50", "127.0.0.1", 2083, 1194, "")
 	res, body = doJSON(t, http.MethodDelete, env.srv.URL+"/api/nodes/50", env.token, nil)

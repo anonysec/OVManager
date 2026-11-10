@@ -86,7 +86,6 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users/{uuid}/disconnect", guard(h.kickHandler))
 	mux.HandleFunc("POST /users/{uuid}/kick", guard(h.kickHandler))
 	mux.HandleFunc("DELETE /users/{uuid}", guard(h.remove))
-	mux.HandleFunc("POST /users/{uuid}/restore", guard(h.restore))
 	mux.HandleFunc("POST /users/{uuid}/extend", guard(h.extend))
 
 	// Explicit numeric-ID aliases avoid changing the meaning of an existing
@@ -555,55 +554,6 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		"User deleted.", map[string]any{"target": row.Name})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
-}
-
-func (h *Handler) restore(w http.ResponseWriter, r *http.Request) {
-	uuidStr := r.PathValue("uuid")
-	var snapJSON string
-	var deletedAt float64
-	err := h.Svc.DB().QueryRowContext(r.Context(),
-		`SELECT snap_json, deleted_at FROM deleted_users WHERE uuid = ?`,
-		uuidStr,
-	).Scan(&snapJSON, &deletedAt)
-	if err == sql.ErrNoRows {
-		auth.WriteDetail(w, http.StatusGone, "Undo window expired — user can no longer be restored")
-		return
-	}
-	if err != nil {
-		auth.WriteDetail(w, http.StatusInternalServerError, "Could not fetch undo record")
-		return
-	}
-	if time.Now().Unix()-int64(deletedAt) > deletedTTLSeconds {
-		_, _ = h.Svc.DB().ExecContext(r.Context(), `DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
-		auth.WriteDetail(w, http.StatusGone, "Undo window expired — user can no longer be restored")
-		return
-	}
-	if _, exists := h.byUUID(uuidStr); exists {
-		_, _ = h.Svc.DB().ExecContext(r.Context(), `DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
-		auth.WriteDetail(w, http.StatusConflict, "User already exists")
-		return
-	}
-	var snap userRow
-	if err := json.Unmarshal([]byte(snapJSON), &snap); err != nil {
-		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Restore failed: corrupt undo record"})
-		return
-	}
-	if _, err := h.Svc.DB().ExecContext(r.Context(),
-		`INSERT INTO users (uuid, name, total, used, last_node_usage, node_usage, max_logins, expiry_date, is_active, tag)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		snap.UUID, snap.Name, snap.Total, snap.Used, snap.LastNodeUsage, nonEmpty(snap.NodeUsage, "{}"),
-		snap.MaxLogins, snap.ExpiryDate.String, snap.IsActive, snap.Tag.String,
-	); err != nil {
-		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Restore failed. Check the panel logs for details."})
-		return
-	}
-	_, _ = h.Svc.DB().ExecContext(r.Context(), `DELETE FROM deleted_users WHERE uuid = ?`, uuidStr)
-	row, _ := h.byUUID(snap.UUID)
-	audit.Record(h.Svc.DB(), h.actor(r), "user.restore", "info",
-		"User restored.", map[string]any{"target": snap.Name})
-	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "restore"})
-	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
-	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User restored successfully", Data: row.base()})
 }
 
 func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {

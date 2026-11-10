@@ -32,23 +32,6 @@ func fixTestDB(t *testing.T) *Handler {
 	return NewHandler(auth.NewService(conn, t.TempDir()))
 }
 
-func TestDeleteWritesUndoSnapshotAtomic(t *testing.T) {
-	h := fixTestDB(t)
-	row, ok := h.byUUID("u1")
-	if !ok {
-		t.Fatal("row missing")
-	}
-	if _, err := h.deleteRow(row, false); err != nil {
-		t.Fatal(err)
-	}
-	var cnt int
-	if err := h.Svc.DB().QueryRow(`SELECT COUNT(*) FROM deleted_users WHERE uuid = 'u1'`).Scan(&cnt); err != nil {
-		t.Fatal(err)
-	}
-	if cnt != 1 {
-		t.Fatalf("deleted_users count = %d, want 1", cnt)
-	}
-}
 
 func TestExtendRejectsNegative(t *testing.T) {
 	h := fixTestDB(t)
@@ -63,24 +46,3 @@ func TestExtendRejectsNegative(t *testing.T) {
 	}
 }
 
-func TestRestoreKeepsTag(t *testing.T) {
-	h := fixTestDB(t)
-	row, _ := h.byUUID("u1")
-	if _, err := h.deleteRow(row, false); err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/users/u1/restore", nil)
-	req.SetPathValue("uuid", "u1")
-	rec := httptest.NewRecorder()
-	h.restore(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("restore status = %d, body %s", rec.Code, rec.Body.String())
-	}
-	var tag string
-	if err := h.Svc.DB().QueryRow(`SELECT COALESCE(tag,'') FROM users WHERE uuid = 'u1'`).Scan(&tag); err != nil {
-		t.Fatal(err)
-	}
-	if tag != "keepme" {
-		t.Fatalf("restored tag = %q, want keepme", tag)
-	}
-}

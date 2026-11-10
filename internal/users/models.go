@@ -5,7 +5,6 @@ package users
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -233,11 +232,7 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 	if snap.ID == 0 {
 		snap = userRow{ID: userID, UUID: uuid, Name: name}
 	}
-	// Ensure the undo table exists on partially-migrated fixture DBs;
-	// migration already creates it in production.
-	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL)`)
-
-	tx, err := db.Begin()
+tx, err := db.Begin()
 	if err != nil {
 		return res, err
 	}
@@ -249,21 +244,7 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 	res.UserUUID = uuid
 	res.AccountUUID = uuid
 
-	snapJSON, err := json.Marshal(snap)
-	if err != nil {
-		return res, err
-	}
-	nowSec := time.Now().Unix()
-	if _, err := tx.Exec(`INSERT INTO deleted_users (uuid, snap_json, deleted_at, expires_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT(uuid) DO UPDATE SET snap_json = ?, deleted_at = ?, expires_at = ?`,
-		snap.UUID, string(snapJSON), nowSec, nowSec+deletedTTLSeconds,
-		string(snapJSON), nowSec, nowSec+deletedTTLSeconds); err != nil {
-		return res, err
-	}
-	if _, err := tx.Exec(`DELETE FROM deleted_users WHERE expires_at < ?`, nowSec); err != nil {
-		return res, err
-	}
-
+	_ = snap
 	if _, err := tx.Exec(`DELETE FROM user_traffic_daily WHERE user_id = ?`, userID); err != nil {
 		return res, err
 	}
