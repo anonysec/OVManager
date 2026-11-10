@@ -25,6 +25,29 @@ const offsiteTimeout = 5 * time.Minute
 // [user@]host:/absolute/path
 var offsiteTargetRe = regexp.MustCompile(`^([A-Za-z0-9._-]+@)?([A-Za-z0-9._-]+):(/[\w./-]+)$`)
 
+// gdriveTargetRe is the accepted shape of a Google Drive target:
+// gdrive:/path or gdrive:<remote>:/path — copied with rclone.
+var gdriveTargetRe = regexp.MustCompile(`^gdrive:(?:([A-Za-z0-9._-]+):)?(/[\w./-]+)$`)
+
+// ParseGoogleDriveTarget splits gdrive:/path or gdrive:<remote>:/path.
+func ParseGoogleDriveTarget(target string) (remote, path string, err error) {
+	trimmed := strings.TrimSpace(target)
+	match := gdriveTargetRe.FindStringSubmatch(trimmed)
+	if match == nil {
+		return "", "", errors.New("google drive target must look like gdrive:/backups or gdrive:<remote>:/backups")
+	}
+	for _, segment := range strings.Split(match[2], "/") {
+		if segment == ".." {
+			return "", "", errors.New("google drive target must not contain '..'")
+		}
+	}
+	remote = match[1]
+	if remote == "" {
+		remote = "gdrive"
+	}
+	return remote, match[2], nil
+}
+
 // ParseOffsiteTarget splits [user@]host:/path and rejects anything else.
 func ParseOffsiteTarget(target string) (user, host, path string, err error) {
 	trimmed := strings.TrimSpace(target)
@@ -50,6 +73,9 @@ func ParseOffsiteTarget(target string) (user, host, path string, err error) {
 // CopyOffsite pushes one backup file to the offsite target. It returns the
 // tool it used ("rsync" or "scp") and the error, if any.
 func CopyOffsite(dataDir, sourcePath, target string) (string, error) {
+	if strings.HasPrefix(strings.TrimSpace(target), "gdrive:") {
+		return copyGoogleDrive(dataDir, sourcePath, target)
+	}
 	user, host, dir, err := ParseOffsiteTarget(target)
 	if err != nil {
 		return "", err
@@ -90,4 +116,38 @@ func CopyOffsite(dataDir, sourcePath, target string) (string, error) {
 		return "scp", fmt.Errorf("scp failed: %s", strings.TrimSpace(string(out)))
 	}
 	return "scp", nil
+}
+
+// copyGoogleDrive uploads one backup file to Google Drive with rclone. rclone
+// must be installed and configured (a "gdrive" remote); the panel never holds
+// Google credentials.
+func copyGoogleDrive(dataDir, sourcePath, target string) (string, error) {
+	remote, dir, err := ParseGoogleDriveTarget(target)
+	if err != nil {
+		return "", err
+	}
+	key, keyErr := crypto.GetOrCreateSecretKey(dataDir)
+	if keyErr != nil {
+		return "", keyErr
+	}
+	if len(key) != 32 {
+		return "", fmt.Errorf("invalid secret key length: %d", len(key))
+	}
+	encPath := sourcePath + ".enc"
+	if err := crypto.EncryptFile(sourcePath, encPath, key); err != nil {
+		return "", err
+	}
+	defer os.Remove(encPath) // #nosec G304 // intentional cleanup
+
+	if _, lookErr := exec.LookPath("rclone"); lookErr != nil {
+		return "rclone", errors.New("rclone is not installed; install and configure a gdrive remote first")
+	}
+	dest := remote + ":" + strings.TrimSuffix(dir, "/") + "/" + filepath.Base(encPath)
+	ctx, cancel := context.WithTimeout(context.Background(), offsiteTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "rclone", "copyto", encPath, dest) // #nosec G204 // arguments validated
+	if out, runErr := cmd.CombinedOutput(); runErr != nil {
+		return "rclone", fmt.Errorf("rclone failed: %s", strings.TrimSpace(string(out)))
+	}
+	return "rclone", nil
 }

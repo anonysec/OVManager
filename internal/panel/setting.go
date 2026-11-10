@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/internal/audit"
+	backuppkg "github.com/anonysec/OVManager/internal/backup"
 	"github.com/anonysec/OVManager/internal/crypto"
 	"github.com/anonysec/OVManager/internal/telemetry"
 	"github.com/anonysec/OVManager/internal/version"
@@ -103,6 +104,7 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"auto_backup_enabled":       s.boolean("auto_backup_enabled", false),
 		"auto_backup_time":          s.str("auto_backup_time", "03:30"),
 		"auto_backup_keep":          orDefault(s.num("auto_backup_keep", 50), 50),
+		"backup_encrypt_enabled":    s.boolean("backup_encrypt_enabled", false),
 		"telegram_backup_enabled":   s.boolean("telegram_backup_enabled", false),
 		"telegram_backup_available": s.strOr("bot_token") != "",
 		"panel_id":                  s.strOr("panel_id"),
@@ -396,7 +398,13 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	// setting used to advertise was never wired up. Re-adding the control
 	// requires a real implementation; do not re-add the dead field here.
 	if payload.OffsiteBackupTarget != nil && strings.TrimSpace(*payload.OffsiteBackupTarget) != "" {
-		if _, _, _, err := ParseOffsiteTarget(*payload.OffsiteBackupTarget); err != nil {
+		target := strings.TrimSpace(*payload.OffsiteBackupTarget)
+		if strings.HasPrefix(target, "gdrive:") {
+			if _, _, err := backuppkg.ParseGoogleDriveTarget(target); err != nil {
+				envelope(w, false, err.Error(), nil)
+				return
+			}
+		} else if _, _, _, err := ParseOffsiteTarget(target); err != nil {
 			envelope(w, false, err.Error(), nil)
 			return
 		}
@@ -461,6 +469,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 		"auto_backup_enabled":       s.boolean("auto_backup_enabled", false),
 		"auto_backup_time":          s.str("auto_backup_time", "03:30"),
 		"auto_backup_keep":          orDefault(s.num("auto_backup_keep", 50), 50),
+		"backup_encrypt_enabled":    s.boolean("backup_encrypt_enabled", false),
 		"telegram_backup_enabled":   s.boolean("telegram_backup_enabled", false),
 		"telegram_backup_available": s.strOr("bot_token") != "",
 		"telegram_summary_time":     s.str("telegram_summary_time", "09:00"),

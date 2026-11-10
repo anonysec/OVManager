@@ -428,7 +428,7 @@ func setColumns(db *sql.DB, values map[string]any) error {
 		"alert_cpu_enabled": true, "alert_cpu_pct": true, "subscription_url_prefix": true,
 		"subscription_path": true, "sub_profile_title": true, "sub_support_url": true,
 		"sub_announce": true, "sub_update_interval_hours": true, "urlpath": true,
-		"auto_backup_enabled": true, "auto_backup_time": true, "auto_backup_keep": true,
+		"auto_backup_enabled": true, "auto_backup_time": true, "auto_backup_keep": true, "backup_encrypt_enabled": true,
 		"offsite_backup_target": true, "telegram_backup_enabled": true, "telegram_summary_time": true,
 		"ssl_cert_file": true, "ssl_key_file": true, "acme_domain": true,
 		"acme_email": true, "cert_method": true, "panel_id": true, "panel_url": true,

@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/anonysec/OVManager/internal/backup"
+	"github.com/anonysec/OVManager/internal/crypto"
 	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
@@ -96,11 +96,15 @@ func (h *Handler) backupTickAt(now time.Time) {
 		return
 	}
 
-	// Optional encryption with AES-256 (openssl).
-	if pass := os.Getenv("BACKUP_PASSPHRASE"); pass != "" {
+	// Optional encryption at rest, using the panel secret key.
+	if s.boolean("backup_encrypt_enabled", false) {
+		key, keyErr := crypto.GetOrCreateSecretKey(dataDir())
+		if keyErr != nil {
+			log.Printf("backup worker: encryption key unavailable: %v", keyErr)
+			return
+		}
 		encPath := path + ".enc"
-		cmd := exec.Command("openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-in", path, "-out", encPath, "-pass", "env:BACKUP_PASSPHRASE")
-		if err := cmd.Run(); err != nil {
+		if err := crypto.EncryptFile(path, encPath, key); err != nil {
 			log.Printf("backup worker: encryption failed: %v", err)
 			return
 		}
