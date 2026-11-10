@@ -110,7 +110,7 @@ func emittedRoutes(t *testing.T) map[route][]emit {
 						return true
 					}
 					method, path = methodName(call.Args[1]), pathName(call.Args[2])
-				case "GetRaw":
+				case "GetRaw", "GetRawLimit":
 					if len(call.Args) < 1 {
 						return true
 					}
@@ -509,6 +509,7 @@ func TestNodeContractRequests(t *testing.T) {
 		{"GetSessions", func(c *node.Client) { c.GetSessions("amy", 8, 0) }},
 		{"GetLogs", func(c *node.Client) { c.GetLogs("ERROR", 10) }},
 		{"DownloadOVPNBytes", func(c *node.Client) { c.DownloadOVPNBytes(uid) }},
+		{"GetBackup", func(c *node.Client) { c.GetBackup(0) }},
 	}
 	for _, d := range drivers {
 		d.call(c)
@@ -658,9 +659,13 @@ func TestNodeContractOVPNRaw(t *testing.T) {
 	if !row.ResponseRaw {
 		t.Fatalf("the .ovpn download row must be marked raw: the body is a profile, not an envelope")
 	}
+	rawRoutes := map[string]bool{
+		row.Path:       true,
+		"/sync/backup": true,
+	}
 	for _, r := range node.Contract {
-		if r.ResponseRaw && r.Path != row.Path {
-			t.Fatalf("only the .ovpn download is raw, but %s %s is marked raw too", r.Method, r.Path)
+		if r.ResponseRaw && !rawRoutes[r.Path] {
+			t.Fatalf("only the .ovpn download and the node backup are raw, but %s %s is marked raw too", r.Method, r.Path)
 		}
 	}
 

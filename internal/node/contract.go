@@ -204,6 +204,17 @@ var Contract = []ContractRow{
 			"(management.go:569)",
 	},
 	{
+		// The node's backup archive: a gzipped tar of its PKI and state,
+		// raw bytes, not an envelope.
+		Method:      http.MethodGet,
+		Path:        "/sync/backup",
+		RequestAt:   "internal/node/client.go:GetBackup",
+		ResponseRaw: true,
+		Note: "the panel stores the archive next to its own database backup " +
+			"so a rebuilt node can be restored without reissuing certificates " +
+			"(client.go:DownloadBackup)",
+	},
+	{
 		// The bulk max-logins push (sync.go:100).
 		Method:    http.MethodPost,
 		Path:      "/sync/users",

@@ -5,9 +5,11 @@ package panel
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/anonysec/OVManager/internal/backup"
 	"github.com/anonysec/OVManager/internal/crypto"
+	"github.com/anonysec/OVManager/internal/node"
 	"github.com/anonysec/OVManager/internal/telemetry"
 )
 
@@ -96,6 +99,10 @@ func (h *Handler) backupTickAt(now time.Time) {
 		return
 	}
 
+	// Node backups: each node owns its PKI, so the panel keeps a copy of the
+	// archive next to its own database backup.
+	h.backupNodes(path, keep)
+
 	// Optional encryption at rest, using the panel secret key.
 	if s.boolean("backup_encrypt_enabled", false) {
 		key, keyErr := crypto.GetOrCreateSecretKey(dataDir())
@@ -176,4 +183,38 @@ func readSetting(db *sql.DB, key string) string {
 func writeSetting(db *sql.DB, key, value string, nowUnix int64) error {
 	_, err := db.Exec(`UPDATE Setting SET backup_last_success_day = ? WHERE id = (SELECT MIN(id) FROM Setting)`, value)
 	return err
+}
+
+// backupNodes pulls each active node's backup archive into the backup
+// directory. A node that is unreachable or answers without an archive is
+// skipped: the panel's own backup is still valid without it.
+func (h *Handler) backupNodes(panelBackupPath string, keep int) {
+	nodes := node.GetActiveNodes(h.Svc.DB())
+	if len(nodes) == 0 {
+		return
+	}
+	dir := backupDir()
+	stamp := time.Now().UTC().Format("20060102_150405")
+	for _, n := range nodes {
+		pid := node.PanelIDFor(h.Svc.DB())
+		c := node.NodeClient(n, pid)
+		name := fmt.Sprintf("ovnode-node%d-%s.tar.gz", n.ID, stamp)
+		dest := filepath.Join(dir, name)
+		written, err := c.DownloadBackup(dest, 120*time.Second)
+		if err != nil {
+			log.Printf("backup worker: node %s backup failed: %v", n.Name, err)
+			continue
+		}
+		log.Printf("backup worker: stored node %s backup (%d bytes)", n.Name, written)
+	}
+	// Prune old node archives of the same label.
+	matches, _ := filepath.Glob(filepath.Join(dir, "ovnode-node*-*.tar.gz"))
+	sort.Slice(matches, func(i, j int) bool { return matches[i] > matches[j] })
+	limit := keep
+	if limit < 1 {
+		limit = 50
+	}
+	for i := limit; i < len(matches); i++ {
+		_ = os.Remove(matches[i])
+	}
 }

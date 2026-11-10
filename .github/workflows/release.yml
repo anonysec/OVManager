@@ -111,6 +111,9 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           gh release view "${TAG}" >/dev/null 2>&1 || gh release create "${TAG}" --title "${TAG}" --generate-notes
 
+      - name: Generate the contract artifact
+        run: make contract
+
       - name: Upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

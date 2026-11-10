@@ -77,6 +77,8 @@ const (
 	MaxNodeBodyJSON = maxNodeBodyJSON
 	// maxNodeBodyOVPN is the larger (but still finite) cap for an .ovpn profile.
 	maxNodeBodyOVPN = 10 << 20 // 10 MiB: downloaded .ovpn profile
+	// maxNodeBodyBackup caps a node's backup archive (PKI + state).
+	maxNodeBodyBackup = 256 << 20 // 256 MiB: node backup archive
 	// MaxNodeBodyOVPN is the exported alias.
 	MaxNodeBodyOVPN = maxNodeBodyOVPN
 )
@@ -807,6 +809,12 @@ func (c *Client) GetRaw(path string, headers map[string]string, timeout time.Dur
 }
 
 func (c *Client) rawInner(path string, headers map[string]string, timeout time.Duration, allowInsecure bool) ([]byte, error) {
+	return c.rawInnerLimit(path, headers, timeout, allowInsecure, maxNodeBodyOVPN, validProfile)
+}
+
+// rawInnerLimit is rawInner with an explicit body cap and body validator: a
+// node backup archive is larger than an .ovpn profile and is not a profile.
+func (c *Client) rawInnerLimit(path string, headers map[string]string, timeout time.Duration, allowInsecure bool, limit int64, validate func([]byte) ([]byte, error)) ([]byte, error) {
 	do := func(cfg *tls.Config) ([]byte, error) {
 		rawURL := c.scheme + "://" + c.address + path
 		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
@@ -828,12 +836,12 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 			return nil, err
 		}
 		defer resp.Body.Close()
-		buf, err := io.ReadAll(io.LimitReader(resp.Body, maxNodeBodyOVPN+1))
+		buf, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 		if err != nil {
 			return nil, err
 		}
-		if len(buf) > maxNodeBodyOVPN {
-			return nil, fmt.Errorf("node response body exceeds %d bytes", maxNodeBodyOVPN)
+		if int64(len(buf)) > limit {
+			return nil, fmt.Errorf("node response body exceeds %d bytes", limit)
 		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
@@ -856,12 +864,12 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 			return nil, err
 		}
 		c.setVerified(true)
-		return validProfile(buf)
+		return validate(buf)
 	}
 	buf, err := do(nil)
 	if err == nil {
 		c.setVerified(true)
-		return validProfile(buf)
+		return validate(buf)
 	}
 	if !isTLSError(err) || !insecureFallback() || c.fallbackUsed {
 		if c.TLSVerified() != nil {
@@ -880,7 +888,7 @@ func (c *Client) rawInner(path string, headers map[string]string, timeout time.D
 	}
 	c.setVerified(false)
 	c.recordTLSUnverified()
-	return validProfile(buf)
+	return validate(buf)
 }
 
 func validProfile(buf []byte) ([]byte, error) {
@@ -895,4 +903,42 @@ func validProfile(buf []byte) ([]byte, error) {
 func (c *Client) DownloadOVPNBytes(uid string) []byte {
 	return c.GetRaw("/sync/download/ovpn/"+uid,
 		map[string]string{"Accept": "application/x-openvpn-profile"}, 120*time.Second)
+}
+
+// GetRawLimit is GetRaw with an explicit body cap: a node backup archive is
+// larger than an .ovpn profile and is not a profile.
+func (c *Client) GetRawLimit(path string, headers map[string]string, timeout time.Duration, limit int64) []byte {
+	if timeout == 0 {
+		timeout = Timeout
+	}
+	body, err := c.rawInnerLimit(path, headers, timeout, false, limit, func(b []byte) ([]byte, error) {
+		return b, nil
+	})
+	if err != nil {
+		return nil
+	}
+	return body
+}
+
+// GetBackup fetches the node's backup archive (a gzipped tar of its PKI and
+// state). It returns the raw bytes or nil on any failure.
+func (c *Client) GetBackup(timeout time.Duration) []byte {
+	if timeout == 0 {
+		timeout = LongTimeout
+	}
+	return c.GetRawLimit("/sync/backup", nil, timeout, maxNodeBodyBackup)
+}
+
+// DownloadBackup writes the node's backup archive to dest and returns the
+// number of bytes written. The node owns its PKI, so the panel keeps a copy
+// rather than moving the CA.
+func (c *Client) DownloadBackup(dest string, timeout time.Duration) (int64, error) {
+	data := c.GetBackup(timeout)
+	if len(data) == 0 {
+		return 0, errors.New("node returned no backup archive")
+	}
+	if err := os.WriteFile(dest, data, 0o600); err != nil {
+		return 0, err
+	}
+	return int64(len(data)), nil
 }

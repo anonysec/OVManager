@@ -110,6 +110,9 @@ func getActiveNodes(db *sql.DB) []*Node {
 	return nodes
 }
 
+// GetActiveNodes returns the nodes the panel polls.
+func GetActiveNodes(db *sql.DB) []*Node { return getActiveNodes(db) }
+
 func getActiveNodesWithErr(db *sql.DB) ([]*Node, error) {
 	rows, err := db.Query(`SELECT ` + nodeCols + ` FROM Node WHERE status = 1`)
 	if err != nil {
