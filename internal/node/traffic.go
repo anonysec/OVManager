@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 )
 
 // TrafficResult summarizes one SyncTraffic pass.
@@ -269,7 +269,7 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 			continue
 		}
 		explicitReset := reportedEpoch != "" && prevEpoch != "" && reportedEpoch != prevEpoch
-		d, newBaseline := billing.ComputeTotalDelta(cur, prev, explicitReset)
+		d, newBaseline := accounting.ComputeTotalDelta(cur, prev, explicitReset)
 		delta += d
 		newUsed += d
 		baselines[nid] = newBaseline
@@ -323,7 +323,7 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 			return false, false, 0
 		}
 		defer func() { _ = tx2.Rollback() }()
-		if !billing.ApplyUserTraffic(tx2, u.id, used, state, newUsed, billing.Canon(data), delta) {
+		if !accounting.ApplyUserTraffic(tx2, u.id, used, state, newUsed, accounting.Canon(data), delta) {
 			// re-read used/state, recompute would need restructure; single-write poll accepts miss
 			_ = tx2.Rollback()
 			return false, false, 0
@@ -338,7 +338,7 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 		}
 		return delta > 0, didSeed, delta
 	}
-	if err := exec(`UPDATE User SET used = ?, node_usage = ? WHERE id = ?`, newUsed, billing.Canon(data), u.id); err != nil {
+	if err := exec(`UPDATE User SET used = ?, node_usage = ? WHERE id = ?`, newUsed, accounting.Canon(data), u.id); err != nil {
 		return false, false, 0
 	}
 	for nid, b := range baselines {
@@ -347,7 +347,7 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 		}
 	}
 	if delta > 0 {
-		billing.RecordDailyBytes(tx, u.id, delta, "")
+		accounting.RecordDailyBytes(tx, u.id, delta, "")
 	}
 	return delta > 0, didSeed, delta
 }

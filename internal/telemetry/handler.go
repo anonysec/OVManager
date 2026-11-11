@@ -12,7 +12,7 @@ import (
 
 	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/auth"
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 	"github.com/anonysec/OVManager/internal/node"
 )
 
@@ -214,7 +214,7 @@ var metricsTables = []string{
 
 var tablesReady sync.Once
 
-// EnsureExtraTables creates the observability/billing tables once per process.
+// EnsureExtraTables creates the observability/accounting tables once per process.
 func EnsureExtraTables(db *sql.DB) {
 	tablesReady.Do(func() {
 		for _, ddl := range metricsTables {
@@ -237,29 +237,13 @@ func history(db *sql.DB, hours int) map[string]any {
 	cutoff := nowSecs() - float64(hours)*3600
 
 	traffic := []map[string]any{}
-	if rows, err := db.Query(`SELECT ts, total_used, active_connections, online_users, active_users, total_users FROM traffic_snapshots WHERE ts >= ? ORDER BY ts ASC`, cutoff); err == nil {
+	if rows, err := db.Query(`SELECT ts, total_used, active_connections FROM TrafficStat WHERE ts >= ? ORDER BY ts ASC`, cutoff); err == nil {
 		for rows.Next() {
 			var ts, totalUsed float64
-			var ac, ou, au, tu int64
-			if rows.Scan(&ts, &totalUsed, &ac, &ou, &au, &tu) == nil {
+			var ac int64
+			if rows.Scan(&ts, &totalUsed, &ac) == nil {
 				traffic = append(traffic, map[string]any{
 					"ts": ts, "total_used": totalUsed, "active_connections": ac,
-					"online_users": ou, "active_users": au, "total_users": tu,
-				})
-			}
-		}
-		_ = rows.Close()
-	}
-
-	security := []map[string]any{}
-	if rows, err := db.Query(`SELECT ts, auth_errors, rejects, stale_markers, offline_nodes, full_users, inactive_users FROM security_snapshots WHERE ts >= ? ORDER BY ts ASC`, cutoff); err == nil {
-		for rows.Next() {
-			var ts float64
-			var ae, rj, sm, of, fu, iu int64
-			if rows.Scan(&ts, &ae, &rj, &sm, &of, &fu, &iu) == nil {
-				security = append(security, map[string]any{
-					"ts": ts, "auth_errors": ae, "rejects": rj, "stale_markers": sm,
-					"offline_nodes": of, "full_users": fu, "inactive_users": iu,
 				})
 			}
 		}
@@ -267,22 +251,27 @@ func history(db *sql.DB, hours int) map[string]any {
 	}
 
 	nodes := []map[string]any{}
-	if rows, err := db.Query(`SELECT ts, node_id, node_name, cpu, memory, live_count, latency_ms, reachable FROM node_health_snapshots WHERE ts >= ? ORDER BY ts ASC`, cutoff); err == nil {
+	if rows, err := db.Query(`
+		SELECT ns.ts, ns.node_id, n.name, ns.cpu, ns.memory, ns.live_count, ns.reachable
+		FROM NodeStat ns
+		JOIN Node n ON n.id = ns.node_id
+		WHERE ns.ts >= ? ORDER BY ns.ts ASC
+	`, cutoff); err == nil {
 		for rows.Next() {
-			var ts, cpu, mem, latency float64
+			var ts, cpu, mem float64
 			var nodeID, liveCount, reachable int64
 			var nodeName sql.NullString
-			if rows.Scan(&ts, &nodeID, &nodeName, &cpu, &mem, &liveCount, &latency, &reachable) == nil {
+			if rows.Scan(&ts, &nodeID, &nodeName, &cpu, &mem, &liveCount, &reachable) == nil {
 				nodes = append(nodes, map[string]any{
-					"ts": ts, "node_id": nodeID, "node_name": nullStr(nodeName), "cpu": cpu,
-					"memory": mem, "live_count": liveCount, "latency_ms": latency, "reachable": reachable != 0,
+					"ts": ts, "node_id": nodeID, "node_name": nullStr(nodeName),
+					"cpu": cpu, "memory": mem, "live_count": liveCount, "reachable": reachable != 0,
 				})
 			}
 		}
 		_ = rows.Close()
 	}
 
-	return map[string]any{"traffic": traffic, "security": security, "nodes": nodes}
+	return map[string]any{"traffic": traffic, "nodes": nodes}
 }
 
 // metricsEvery is the collector's own cadence. Configurable via
@@ -455,8 +444,8 @@ func CollectMetrics(db *sql.DB) {
 	touchLastOnline(db, touched, stamp)
 
 	for _, row := range nodeRows {
-		_, _ = db.Exec(`INSERT INTO NodeUsage (node_id, created_at, uplink, downlink) VALUES (?, ?, ?, ?)`,
-			row["node_id"], now, 0, 0)
+		_, _ = db.Exec(`INSERT INTO TrafficStat (ts, total_used, active_connections) VALUES (?, ?, ?)`,
+			now, totalUsed, activeConnections)
 		_, _ = db.Exec(`INSERT INTO NodeStat (node_id, created_at, cpu, memory, live_count, reachable) VALUES (?, ?, ?, ?, ?, ?)`,
 			row["node_id"], now, row["cpu"], row["memory"], row["live_count"], row["reachable"])
 	}
@@ -483,7 +472,7 @@ type snapshotPair struct {
 // resolveSessionUsername normalizes the name-shaped and numeric common-name
 // formats shared by the metrics and live-snapshot collectors.
 func resolveSessionUsername(commonName, nodeName string, idToName map[string]string, known map[string]bool) string {
-	return billing.ResolveSessionUsername(commonName, nodeName, idToName, known)
+	return accounting.ResolveSessionUsername(commonName, nodeName, idToName, known)
 }
 
 func nodeSnapshot(n *node.Node, pid string) (map[string]any, *node.SessionsResponse) {

@@ -1,6 +1,6 @@
 // All accounting is integer bytes; there is no fractional currency anywhere in
 // the ledger, so exactness comes from int64 arithmetic (no decimal type).
-package billing
+package accounting
 
 import (
 	"database/sql"

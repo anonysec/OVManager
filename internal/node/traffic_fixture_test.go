@@ -30,7 +30,7 @@ func TestFixtureReset(t *testing.T) {
 	}
 }
 
-// Epoch change: epoch bump re-seeds baseline without billing the delta.
+// Epoch change: epoch bump re-seeds baseline without re-billing the delta.
 func TestFixtureEpochChange(t *testing.T) {
 	resetForTests()
 	t.Cleanup(resetForTests)
@@ -53,7 +53,7 @@ func TestFixtureEpochChange(t *testing.T) {
 	}
 }
 
-// Reseed marker: admin reset seeds all node baselines without billing.
+// Reseed marker: admin reset seeds all node baselines without re-billing.
 func TestFixtureReseed(t *testing.T) {
 	resetForTests()
 	t.Cleanup(resetForTests)

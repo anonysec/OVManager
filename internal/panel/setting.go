@@ -479,7 +479,7 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	// The auto-backup schedule lives in the scheduler (Phase 5+); the settings
 	// write is what the API contract covers here.
-	audit.Record(h.Svc.DB(), panelActor(h, r), "admin.settings", "info",
+	audit.Record(h.Svc.DB(), panelActor(h, r), "Admin.Settings", "info",
 		"Panel settings updated.", map[string]any{"target": "bot_config"})
 	envelope(w, true, "Bot config updated", data)
 }
@@ -538,7 +538,7 @@ func (h *Handler) updateURLPath(w http.ResponseWriter, r *http.Request) {
 		msg = "URL path updated — panel moved to the new path immediately."
 		panelURL = "/" + newValue
 	}
-	audit.Record(h.Svc.DB(), panelActor(h, r), "admin.urlpath", "info",
+	audit.Record(h.Svc.DB(), panelActor(h, r), "Admin.UrlPath", "info",
 		"Panel URL path changed.", map[string]any{"target": newValue})
 	envelope(w, true, msg, map[string]any{"urlpath": newValue, "panel_url": panelURL})
 }

@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion is the HEAD schema version (constants.SCHEMA_VERSION).
-const SchemaVersion = 36
+const SchemaVersion = 38
 
 // MigrationStep is one numbered, ordered schema step (steps.STEPS).
 type MigrationStep struct {
@@ -31,12 +31,96 @@ type execer interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-// Migrate brings conn up to SchemaVersion. Idempotent: a database already at
-// HEAD is left untouched. A fresh database is built at HEAD and stamped; a
-// database stamped below HEAD runs the remaining steps in order.
-func Migrate(conn *sql.DB) (int, error) {
+// adoptLegacyTables renames pre-T30 lowercase tables to their PascalCase
+// equivalents and drops obsolete legacy tables. It runs before the fresh
+// detection so that a v2.0.x database (lowercase tables) is correctly
+// upgraded to the PascalCase schema without data loss.
+func adoptLegacyTables(x execer) error {
+	tables := tableNames(x)
+
+	// legacy -> current table name mapping. Only rename when the current
+	// PascalCase table does not yet exist; if both exist, copy rows.
+	renames := map[string]string{
+		"users":                 "User",
+		"admins":                "Admin",
+		"nodes":                 "Node",
+		"settings":              "Setting",
+		"user_traffic_daily":    "UserTrafficDaily",
+		"delivered":             "Delivered",
+		"pending_user_revocations": "PendingUserRevocation",
+	}
+
+	// Obsolete tables that should be dropped (no PascalCase equivalent).
+	obsolete := []string{
+		"sessions",
+		"traffic_ledger",
+		"node_health_snapshots",
+		"traffic_snapshots",
+		"security_snapshots",
+		"audit_logs",
+		"login_attempts",
+		"settings_kv",
+	}
+
+	// Rename legacy tables to PascalCase.
+	for legacy, current := range renames {
+		if !tables[legacy] {
+			continue
+		}
+		if tables[current] {
+			// Both exist - copy rows from legacy to current for missing IDs.
+			if err := copyLegacyRows(x, legacy, current); err != nil {
+				return err
+			}
+		} else {
+			if _, err := x.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", legacy, current)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Drop obsolete tables.
+	for _, t := range obsolete {
+		_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
+	}
+
+	return nil
+}
+
+// copyLegacyRows copies rows from a legacy lowercase table to its PascalCase
+// counterpart, inserting only rows whose primary key (id) does not already
+// exist in the current table. Columns are intersected to handle schema drift.
+func copyLegacyRows(x execer, legacy, current string) error {
+	legacyCols := columnNames(x, legacy)
+	currentCols := columnNames(x, current)
+
+	var common []string
+	for c := range legacyCols {
+		if currentCols[c] {
+			common = append(common, c)
+		}
+	}
+	if len(common) == 0 {
+		return nil // no common columns, nothing to copy
+	}
+
+	cols := strings.Join(common, ",")
+
+	sql := fmt.Sprintf(
+		current, cols, cols, legacy, current,
+	)
+	_, err := x.Exec(sql)
+	return err
+}
+
+ func Migrate(conn *sql.DB) (int, error) {
 	before, err := userVersion(conn)
 	if err != nil {
+		return 0, err
+	}
+	// Adopt legacy lowercase tables BEFORE fresh detection so that a v2.0.x
+	// database (lowercase tables) is correctly recognized as an existing DB.
+	if err := adoptLegacyTables(conn); err != nil {
 		return 0, err
 	}
 
@@ -373,13 +457,14 @@ var extraTables = []string{
 	`CREATE TABLE IF NOT EXISTS Delivered (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription TEXT NOT NULL, event_key TEXT NOT NULL, ts REAL NOT NULL, UNIQUE (subscription, event_key))`,
 	`CREATE TABLE IF NOT EXISTS UserTrafficDaily (user_id INTEGER NOT NULL, day TEXT NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))`,
 	`CREATE TABLE IF NOT EXISTS PendingUserRevocation (node_id INTEGER NOT NULL, user_id INTEGER NOT NULL, user_uuid TEXT NOT NULL, user_name TEXT NOT NULL, created_at REAL NOT NULL, last_error TEXT NOT NULL DEFAULT '', PRIMARY KEY (node_id, user_id))`,
-	`CREATE TABLE IF NOT EXISTS NodeUsage (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL DEFAULT 0, downlink INTEGER NOT NULL DEFAULT 0, UNIQUE (created_at, node_id))`,
-	`CREATE INDEX IF NOT EXISTS idx_node_usage_created ON NodeUsage(created_at)`,
-	`CREATE TABLE IF NOT EXISTS NodeUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, uplink INTEGER NOT NULL, downlink INTEGER NOT NULL)`,
-	`CREATE INDEX IF NOT EXISTS idx_node_usage_reset_node ON NodeUsageResetLogs(node_id, created_at)`,
-	`CREATE TABLE IF NOT EXISTS UserUsageResetLogs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at REAL NOT NULL, used_bytes INTEGER NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS NodeStat (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER NOT NULL, created_at REAL NOT NULL, cpu REAL NOT NULL DEFAULT 0, memory REAL NOT NULL DEFAULT 0, live_count INTEGER NOT NULL DEFAULT 0, reachable INTEGER NOT NULL DEFAULT 0)`,
 	`CREATE INDEX IF NOT EXISTS idx_node_stat_node_ts ON NodeStat(node_id, created_at)`,
+	`CREATE TABLE IF NOT EXISTS TrafficStat (
+		ts REAL PRIMARY KEY,
+		total_used REAL NOT NULL DEFAULT 0,
+		active_connections INTEGER NOT NULL DEFAULT 0
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_traffic_stat_ts ON TrafficStat(ts)`,
 }
 
 func createExtraTables(x execer) error {
@@ -783,6 +868,27 @@ var steps = []step{
 			}
 		}
 		_, _ = x.Exec(`UPDATE Admin SET role = 'owner' WHERE is_owner = 1`)
+		return nil
+	}},
+	{37, "traffic time-series for dashboard (replaces dropped snapshots)", func(x execer) error {
+		if _, err := x.Exec(`CREATE TABLE IF NOT EXISTS TrafficStat (
+			ts REAL PRIMARY KEY,
+			total_used REAL NOT NULL DEFAULT 0,
+			active_connections INTEGER NOT NULL DEFAULT 0
+		)`); err != nil {
+			return err
+		}
+		_, _ = x.Exec(`CREATE INDEX IF NOT EXISTS idx_traffic_stat_ts ON TrafficStat(ts)`)
+		return nil
+	}},
+	{38, "drop dead node usage and reset-log tables", func(x execer) error {
+		for _, t := range []string{
+			"NodeUsage",
+			"NodeUsageResetLogs",
+			"UserUsageResetLogs",
+		} {
+			_, _ = x.Exec("DROP TABLE IF EXISTS " + t)
+		}
 		return nil
 	}},
 }

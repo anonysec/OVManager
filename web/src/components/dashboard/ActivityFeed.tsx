@@ -10,9 +10,9 @@ import { fmtDateTime, fmtRelative } from '../../utils/time';
 
 const actionTone = (action: any) => {
   if (!action) return '';
-  if (action.startsWith('user.delete')) return 'danger';
-  if (action.startsWith('user.disable') || action.startsWith('node.disable')) return 'warning';
-  if (action.startsWith('user.create') || action.startsWith('user.enable') || action.startsWith('node.enable')) return 'ok';
+  if (action.startsWith('User.Delete')) return 'danger';
+  if (action.startsWith('User.Disable') || action.startsWith('Node.Disable')) return 'warning';
+  if (action.startsWith('User.Create') || action.startsWith('User.Enable') || action.startsWith('Node.Enable')) return 'ok';
   return '';
 };
 

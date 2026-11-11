@@ -670,7 +670,7 @@ func cmdExtend(m *msgCtx) {
 	} else {
 		_, _ = db.Exec(`UPDATE User SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 	}
-	audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
+	audit.Record(db, "telegram-bot", "User.Extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days, "gb": gb})
 	tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr+func() string {
 		if len(fields) >= 3 {
 			return "\n+ " + fields[2] + " GB"
@@ -980,7 +980,7 @@ func TgHandleCallbackQuery(db *sql.DB, token string, ownerID, chatID, fromID int
 		}
 		expiryStr := newExpiry.Format("2006-01-02")
 		_, _ = db.Exec(`UPDATE User SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
-		audit.Record(db, "telegram-bot", "user.extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days})
+	audit.Record(db, "telegram-bot", "User.Extend", "info", "Extended via Telegram.", map[string]any{"target": u.Name, "days": days})
 		tgSendKB(token, chatID, "✅ Extended <b>"+u.Name+"</b>\n\nExpires "+expiryStr, ownerMenuKB())
 		return
 	}

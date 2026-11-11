@@ -119,7 +119,6 @@ func TestSyncTrafficEpochDecreaseReboundAndReset(t *testing.T) {
 	}
 }
 
-// TestSyncTrafficFirstEpochAdoption: legacy passes without epochs seed a
 // baseline; the first epoch then adopts without re-billing the seed.
 func TestSyncTrafficFirstEpochAdoption(t *testing.T) {
 	resetForTests()

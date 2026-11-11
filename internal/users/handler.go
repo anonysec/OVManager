@@ -20,7 +20,7 @@ import (
 
 	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/auth"
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 	"github.com/anonysec/OVManager/internal/node"
 	"github.com/anonysec/OVManager/internal/telemetry"
 )
@@ -111,7 +111,7 @@ func (h *Handler) topTraffic(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, auth.Response{
 		Success: true,
 		Msg:     "Top traffic users retrieved",
-		Data:    billing.TopUsers(h.Svc.DB(), days, limit),
+		Data:    accounting.TopUsers(h.Svc.DB(), days, limit),
 	})
 }
 
@@ -230,7 +230,7 @@ func (h *Handler) issueActivationToken(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "could not persist token")
 		return
 	}
-	audit.Record(h.Svc.DB(), h.actor(r), "user.activation_issue", "info",
+	audit.Record(h.Svc.DB(), h.actor(r), "User.ActivationIssue", "info",
 		"Activation token issued.", map[string]any{"target": uuidStr, "days": days})
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
@@ -314,7 +314,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := res.LastInsertId()
 	row, _ := scanUser(h.Svc.DB().QueryRowContext(r.Context(), `SELECT `+userCols+` FROM User WHERE id = ?`, id))
-	audit.Record(h.Svc.DB(), h.actor(r), "user.create", "info",
+	audit.Record(h.Svc.DB(), h.actor(r), "User.Create", "info",
 		"User created.", map[string]any{"target": name, "max_logins": maxLogins})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "create"})
 	node.SyncUserPolicy(h.Svc.DB(), id, time.Now())
@@ -439,7 +439,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 	if len(diffs) > 0 {
 		updateMsg = fmt.Sprintf("User updated: %s", strings.Join(diffs, ", "))
 	}
-	audit.Record(h.Svc.DB(), h.actor(r), "user.update", "info",
+	audit.Record(h.Svc.DB(), h.actor(r), "User.Update", "info",
 		updateMsg, map[string]any{"target": row.Name, "active": row.IsActive != 0, "changes": diffs})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "update"})
 	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
@@ -480,7 +480,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusInternalServerError, "Could not change user status")
 		return
 	}
-	audit.Record(h.Svc.DB(), h.actor(r), "user.status", "info",
+	audit.Record(h.Svc.DB(), h.actor(r), "User.Status", "info",
 		"User enabled or disabled.", map[string]any{"target": row.Name, "active": *req.Status})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "status"})
 	node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
@@ -495,7 +495,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep per-node baselines and push_hash; zero only the counters, and set the
 	// reseed marker so the next traffic pass seeds every node with delta 0
-	// instead of re-billing bytes the panel already counted (design §4.6).
+	// instead of re-accounting bytes the panel already counted (design §4.6).
 	// OCC guard prevents a traffic pass landing between read and write from
 	// clobbering the just-written baseline.
 	for attempt := 0; attempt < 3; attempt++ {
@@ -517,7 +517,7 @@ func (h *Handler) resetUsage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if n, _ := res.RowsAffected(); n == 1 {
-			audit.Record(h.Svc.DB(), h.actor(r), "user.reset_usage", "info",
+			audit.Record(h.Svc.DB(), h.actor(r), "User.ResetUsage", "info",
 				"User usage reset.", map[string]any{"target": row.Name})
 			telemetry.Publish("users", telemetry.KV{Key: "op", Val: "reset-usage"})
 			node.SyncUserPolicy(h.Svc.DB(), row.ID, time.Now())
@@ -545,7 +545,7 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Undo snapshot written inside DeleteAccount's transaction.
-	audit.Record(h.Svc.DB(), h.actor(r), "user.delete", "warning",
+	audit.Record(h.Svc.DB(), h.actor(r), "User.Delete", "warning",
 		"User deleted.", map[string]any{"target": row.Name})
 	telemetry.Publish("users", telemetry.KV{Key: "op", Val: "delete"})
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "User deleted successfully"})
@@ -608,7 +608,7 @@ func (h *Handler) traffic(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Msg:     "User traffic history retrieved",
 		Data: map[string]any{
-			"days":       billing.UserDailySeries(h.Svc.DB(), row.ID, days),
+			"days":       accounting.UserDailySeries(h.Svc.DB(), row.ID, days),
 			"used":       deref(row.Used),
 			"total_used": total,
 			"per_node":   perNode,

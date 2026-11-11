@@ -64,9 +64,9 @@ func TestActivityMatches(t *testing.T) {
 		ts                            float64
 		actor, action, target, detail any
 	}{
-		{100.0, "admin1", "user.create", "ann", `{"severity": "info"}`},
-		{200.0, "admin2", "user.delete", "bob", nil},
-		{300.0, "admin1", "user.update", "ann", nil},
+		{100.0, "admin1", "User.Create", "ann", `{"severity": "info"}`},
+		{200.0, "admin2", "User.Delete", "bob", nil},
+		{300.0, "admin1", "User.Update", "ann", nil},
 	}
 	for _, r := range rows {
 		obj := map[string]any{
@@ -85,7 +85,7 @@ func TestActivityMatches(t *testing.T) {
 	// The seeded rows are the subject of this test: the login that set the
 	// session up also wrote an auth.login row, so the feed is filtered to the
 	// user.* actions to keep the ordering assertion about the seeded rows.
-	_, body := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=user", token, nil)
+	_, body := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=User", token, nil)
 	if body["msg"] != "Activity retrieved" || body["success"] != true {
 		t.Fatalf("envelope = %v", body)
 	}
@@ -94,7 +94,7 @@ func TestActivityMatches(t *testing.T) {
 		t.Fatalf("len(data) = %d, want 3", len(items))
 	}
 	first, _ := items[0].(map[string]any)
-	if first["action"] != "user.update" || first["target"] != "ann" {
+	if first["action"] != "User.Update" || first["target"] != "ann" {
 		t.Fatalf("first row = %v, want newest-by-ts (user.update)", first)
 	}
 	if first["detail"] != nil {
@@ -105,10 +105,10 @@ func TestActivityMatches(t *testing.T) {
 	}
 
 	// A sign-in is recorded with the real username, not "system".
-	_, loginFeed := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=auth.login", token, nil)
+	_, loginFeed := doJSON(t, http.MethodGet, srv.URL+"/api/activity/?action=Auth.Login", token, nil)
 	loginRows, _ := loginFeed["data"].([]any)
 	if len(loginRows) != 1 {
-		t.Fatalf("auth.login rows = %d, want 1", len(loginRows))
+		t.Fatalf("Auth.Login rows = %d, want 1", len(loginRows))
 	}
 	row, _ := loginRows[0].(map[string]any)
 	if row["actor"] != "owner" {

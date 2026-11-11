@@ -46,7 +46,7 @@ func (c *Client) recordTLSUnverified() {
 	}
 	if AuditDB != nil {
 		if db := AuditDB(); db != nil {
-			audit.Record(db, "system", "node.tls_unverified", "critical",
+			audit.Record(db, "system", "Node.TlsUnverified", "critical",
 				fmt.Sprintf("SECURITY ALERT: Node %d TLS unverified fallback to %s. API key transmitted without peer verification!", c.NodeID, c.address),
 				map[string]any{
 					"node_id":  c.NodeID,

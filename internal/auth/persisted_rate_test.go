@@ -157,7 +157,7 @@ func TestDistributedFailuresDoNotBlockOwner(t *testing.T) {
 	}
 	found := false
 	for _, obj := range audit.ReadLines() {
-		if obj["action"] == "auth.login" && obj["actor"] == "owner" {
+		if obj["action"] == "Auth.Login" && obj["actor"] == "owner" {
 			found = true
 			break
 		}

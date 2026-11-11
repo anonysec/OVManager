@@ -222,13 +222,13 @@ describe('ServerStats resilience', () => {
   it('shows recent activity with relative time and audit link', async () => {
     baseMock((url) => {
       if (url.includes('activity')) {
-        return ok([{ id: 1, ts: Math.floor(Date.now() / 1000), actor: 'admin', action: 'user.create', target: 'amy', detail: '' }]);
+        return ok([{ id: 1, ts: Math.floor(Date.now() / 1000), actor: 'admin', action: 'User.Create', target: 'amy', detail: '' }]);
       }
       return undefined;
     });
     renderStats();
     await waitFor(() => expect(screen.getByText('amy')).toBeTruthy());
-    expect(screen.getByText('user.create')).toBeTruthy();
+    expect(screen.getByText('User.Create')).toBeTruthy();
   });
 
   it('hero cards navigate to filtered views', async () => {

@@ -288,7 +288,7 @@ func (h *Handler) handleRepin(w http.ResponseWriter, r *http.Request) {
 			actor = u.Username
 		}
 	}
-	audit.Record(h.svc.DB(), actor, "node.repin", "warning",
+	audit.Record(h.svc.DB(), actor, "Node.Repin", "warning",
 		fmt.Sprintf("Node %s (ID %d) certificate repinned by %s. Old fingerprint: %s, New fingerprint: %s", n.Name, n.ID, actor, oldFP, newFP),
 		map[string]any{
 			"node_id":         n.ID,

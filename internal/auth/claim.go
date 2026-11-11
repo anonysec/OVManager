@@ -162,7 +162,7 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = os.Remove(s.claimKeyPath())
-	audit.Record(s.DB(), chosen, "auth.claim", "warning",
+	audit.Record(s.DB(), chosen, "Auth.Claim", "warning",
 		"Panel claimed.", map[string]any{"target": chosen})
 	s.IssueSession(w, r, chosen, "owner")
 }
@@ -210,7 +210,7 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 	}
 	s.RevokeUserSessions(chosen)
 	_ = os.Remove(s.claimKeyPath())
-	audit.Record(s.DB(), chosen, "auth.recover", "warning",
+	audit.Record(s.DB(), chosen, "Auth.Recover", "warning",
 		"Owner credentials reset with a fresh setup key.", map[string]any{"target": chosen})
 	s.IssueSession(w, r, chosen, "owner")
 }

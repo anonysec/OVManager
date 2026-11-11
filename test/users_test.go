@@ -403,7 +403,7 @@ func TestUserMutationsWriteAnAuditRowWithTheActor(t *testing.T) {
 	var actor, target string
 	found := false
 	for _, obj := range audit.ReadLines() {
-		if obj["action"] == "user.delete" {
+		if obj["action"] == "User.Delete" {
 			actor = fmt.Sprint(obj["actor"])
 			target = fmt.Sprint(obj["target"])
 			found = true
@@ -431,7 +431,7 @@ func TestUserCreateAuditRowCarriesNoSecret(t *testing.T) {
 	var detail string
 	found := false
 	for _, obj := range audit.ReadLines() {
-		if obj["action"] == "user.create" {
+		if obj["action"] == "User.Create" {
 			b, _ := json.Marshal(obj)
 			detail = string(b)
 			found = true

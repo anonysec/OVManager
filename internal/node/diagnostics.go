@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 )
 
 type diagUser struct {
@@ -484,7 +484,7 @@ func LoginDiagnostics(name string, db *sql.DB, hours int) map[string]any {
 }
 
 func resolved(names map[string]string, commonName, nodeName string, known map[string]bool) string {
-	return billing.ResolveSessionUsername(commonName, nodeName, names, known)
+	return accounting.ResolveSessionUsername(commonName, nodeName, names, known)
 }
 
 func expiredBefore(date string) bool {

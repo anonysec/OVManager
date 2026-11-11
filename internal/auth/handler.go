@@ -79,7 +79,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearBucket(s.rateKey(ip, username))
 	s.clearBucket(s.userKey(username))
-	audit.Record(s.DB(), ident.Username, "auth.login", "info",
+	audit.Record(s.DB(), ident.Username, "Auth.Login", "info",
 		"Signed in.", map[string]any{"target": ident.Username, "role": ident.Type})
 	s.IssueSession(w, r, ident.Username, ident.Type)
 }

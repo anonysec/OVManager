@@ -52,6 +52,7 @@ const NodeManagement = () => {
   type NodeConfirm = { open: boolean; title: string; message: string; onConfirm: (() => void | Promise<void>) | null };
   const [confirm, setConfirm] = useState<NodeConfirm>({ open: false, title: '', message: '', onConfirm: null });
   const [lastDeleted, setLastDeleted] = useState<{ id: number; name: string } | null>(null);
+  const deleteTimer = useRef<any>(null);
 
   const openConfirm = (title: string, message: string, onConfirm: () => void | Promise<void>) => setConfirm({ open: true, title, message, onConfirm });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
@@ -213,36 +214,37 @@ const NodeManagement = () => {
   const handleDelete = useCallback((node: any) => {
     openConfirm(
       t('deleteNode', 'Delete node'),
-      t('nodeConfirmDelete', 'Delete "{{name}}"? Its users and configs are removed too. You can undo within 25 seconds.', { name: node.name }),
-      async () => {
-        try {
-          const res = await apiClient.delete(`/nodes/${node.id}`);
-          if (res.data?.success) {
-            setLastDeleted({ id: node.id, name: node.name });
-          }
-          addToast(res.data?.success ? t('nodeDeletedSuccess', 'Node deleted successfully.') : (res.data?.msg || t('error', 'Error')), res.data?.success ? 'success' : 'error');
+      t('nodeConfirmDelete', 'Delete "{{name}}"? Its users and configs are removed too. You can undo within 10 seconds.', { name: node.name }),
+      () => {
+        setLastDeleted({ id: node.id, name: node.name });
+        // Defer the actual delete by 10s so the user can undo.
+        if (deleteTimer.current) clearTimeout(deleteTimer.current);
+        deleteTimer.current = setTimeout(async () => {
+          try {
+            await apiClient.delete(`/nodes/${node.id}`);
+          } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); }
+          setLastDeleted(null);
           fetchNodes({ background: true });
-        } catch (e) {
-          addToast(errorMessageOf(e, t('error', 'Error')), 'error');
-        }
+        }, 10000);
       },
     );
   }, [addToast, fetchNodes, t]);
 
-  const handleUndoDelete = useCallback(async () => {
+  const handleUndoDelete = useCallback(() => {
     if (!lastDeleted) return;
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null; }
+    setLastDeleted(null);
+    fetchNodes({ background: true });
+  }, [lastDeleted, fetchNodes]);
+
+  const handleDismissDelete = useCallback(async () => {
+    if (!lastDeleted) return;
+    if (deleteTimer.current) { clearTimeout(deleteTimer.current); deleteTimer.current = null; }
     try {
-      const res = await apiClient.post(`/nodes/${lastDeleted.id}/restore`);
-      if (res.data?.success) {
-        addToast(t('nodeRestored', 'Node {{name}} restored.', { name: lastDeleted.name }), 'success');
-        setLastDeleted(null);
-        fetchNodes({ background: true });
-      } else {
-        addToast(res.data?.msg || t('undoFailed', 'Undo failed — node could not be restored.'), 'error');
-      }
-    } catch (e) {
-      addToast(errorMessageOf(e, t('undoFailed', 'Undo failed — node could not be restored.')), 'error');
-    }
+      await apiClient.delete(`/nodes/${lastDeleted.id}`);
+    } catch (e) { addToast(errorMessageOf(e, t('error')), 'error'); }
+    setLastDeleted(null);
+    fetchNodes({ background: true });
   }, [lastDeleted, addToast, fetchNodes, t]);
 
   const handleNodeCreated = (msg: any) => {
@@ -281,7 +283,7 @@ const NodeManagement = () => {
         <div className="nm-bulkbar" role="status" aria-live="polite">
           <span>{t('nodeDeletedUndo', 'Node {{name}} deleted', { name: lastDeleted.name })}</span>
           <Button size="sm" onClick={handleUndoDelete}>{t('undo', 'Undo')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => setLastDeleted(null)} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
+          <Button size="sm" variant="ghost" onClick={handleDismissDelete} aria-label={t('dismiss', 'Dismiss')}>✕</Button>
         </div>
       )}
 

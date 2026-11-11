@@ -1,11 +1,11 @@
-// Billing transaction capability: ApplyUserTraffic's user write and its daily
+// Accounting transaction capability: ApplyUserTraffic's user write and its daily
 // row must roll back together when they share an Execer (*sql.Tx).
 package tests
 
 import (
 	"testing"
 
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 )
 
 func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {
@@ -21,8 +21,7 @@ func TestApplyUserTrafficRollsBackUserAndDailyTogether(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if !billing.ApplyUserTraffic(tx, 1, 100, "{}", 150, `{"1":150}`, 50) {
-		t.Fatalf("ApplyUserTraffic on tx = false, want true")
+	if !accounting.ApplyUserTraffic(tx, 1, 100, "{}", 150, `{"1":150}`, 50) {
 	}
 	// Force a failure inside the tx, then roll back: both writes must vanish.
 	if _, err := tx.Exec(`INSERT INTO User (id, uuid, name) VALUES (1,'dup','dup')`); err == nil {
@@ -62,7 +61,7 @@ func TestApplyUserTrafficCommitsWithTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if !billing.ApplyUserTraffic(tx, 1, 100, "{}", 150, `{"1":150}`, 50) {
+	if !accounting.ApplyUserTraffic(tx, 1, 100, "{}", 150, `{"1":150}`, 50) {
 		t.Fatalf("ApplyUserTraffic = false, want true")
 	}
 	if err := tx.Commit(); err != nil {

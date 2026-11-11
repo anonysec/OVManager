@@ -121,8 +121,8 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// `ovmanager tls install <cert.pem> <key.pem>`; the panel only reads them
 	// at startup.
 
-	// Per-user traffic accounting: one goroutine polling active nodes and
-	// billing their cumulative-total deltas. Runs regardless of the Telegram
+// Per-user traffic accounting: one goroutine polling active nodes and
+// accounting their cumulative-total deltas. Runs regardless of the Telegram
 	// bot state.
 	h.startTrafficWorker()
 

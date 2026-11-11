@@ -20,20 +20,20 @@ const ACTION_TONES: Record<string, string> = {
 };
 
 const ACTION_LABELS: Record<string, string> = {
-  'auth.login': 'Sign In',
-  'auth.claim': 'Owner Claim',
-  'auth.recover': 'Account Recovery',
-  'user.create': 'Create User',
-  'user.update': 'Update User',
-  'user.delete': 'Delete User',
-  'user.status': 'Toggle User Status',
-  'user.restore': 'Restore User',
-  'user.reset_usage': 'Reset User Usage',
-  'node.create': 'Add Node',
-  'node.update': 'Update Node',
-  'node.delete': 'Delete Node',
-  'admin.settings': 'Change Settings',
-  'admin.urlpath': 'Change URL Path',
+  'Auth.Login': 'Sign In',
+  'Auth.Claim': 'Owner Claim',
+  'Auth.Recover': 'Account Recovery',
+  'User.Create': 'Create User',
+  'User.Update': 'Update User',
+  'User.Delete': 'Delete User',
+  'User.Status': 'Toggle User Status',
+  'User.Restore': 'Restore User',
+  'User.ResetUsage': 'Reset User Usage',
+  'Node.Create': 'Add Node',
+  'Node.Update': 'Update Node',
+  'Node.Delete': 'Delete Node',
+  'Admin.Settings': 'Change Settings',
+  'Admin.UrlPath': 'Change URL Path',
 };
 
 const formatActionName = (t: TFunction, action: string) =>

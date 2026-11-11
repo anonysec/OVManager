@@ -502,7 +502,7 @@ func AddNodeHandler(req nodeCreate, db *sql.DB) (bool, string) {
 		return false, err.Error()
 	}
 	_ = id
-	audit.Record(db, "admin", "node.create", "info", fmt.Sprintf("Node added: %s (%s:%d)", req.Name, req.Address, req.port()), map[string]any{"target": req.Name, "address": req.Address, "port": req.port()})
+	audit.Record(db, "admin", "Node.Create", "info", fmt.Sprintf("Node added: %s (%s:%d)", req.Name, req.Address, req.port()), map[string]any{"target": req.Name, "address": req.Address, "port": req.port()})
 	return true, "Node added successfully"
 }
 
@@ -583,7 +583,7 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 		"UPDATE User SET node_usage = json_remove(node_usage, ?) WHERE json_type(node_usage, ?) IS NOT NULL",
 		jsonPath2, jsonPath2)
 
-	audit.Record(db, "admin", "node.delete", "warning", fmt.Sprintf("Node deleted (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
+	audit.Record(db, "admin", "Node.Delete", "warning", fmt.Sprintf("Node deleted (ID: %d)", nodeID), map[string]any{"node_id": nodeID})
 
 	return true
 }

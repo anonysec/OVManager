@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anonysec/OVManager/internal/billing"
+	"github.com/anonysec/OVManager/internal/accounting"
 	"github.com/anonysec/OVManager/internal/db"
 	"github.com/anonysec/OVManager/internal/node"
 	"github.com/anonysec/OVManager/internal/telemetry"
@@ -776,8 +776,8 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "Confirmation required — resend with confirm=true", nil)
 		return
 	}
-	// Keep node_usage (baselines + push_hash) and set the reseed marker so the
-	// next traffic pass seeds instead of re-billing (design §4.6).
+// Keep node_usage (baselines + push_hash) and set the reseed marker so the
+// next traffic pass seeds instead of re-accounting (design §4.6).
 	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM User`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)
@@ -860,7 +860,7 @@ func (h *Handler) usagePurge(w http.ResponseWriter, r *http.Request) {
 	if keep == 0 {
 		keep = 90
 	}
-	removed := billing.PruneDaily(h.Svc.DB(), keep)
+	removed := accounting.PruneDaily(h.Svc.DB(), keep)
 	removedAudit := telemetry.PruneAuditLogs(h.Svc.DB(), keep)
 	envelope(w, true, fmt.Sprintf("Removed %d daily usage row(s)", removed),
 		map[string]any{"removed": removed, "removed_audit": removedAudit})

@@ -1,9 +1,8 @@
-package billing
+package accounting
 
 import "testing"
 
-// TestComputeTotalDelta pins the D5 rules: increases bill, unexplained
-// decreases hold the baseline, explicit resets seed without billing.
+// decreases hold the baseline, explicit resets seed without re-billing.
 func TestComputeTotalDelta(t *testing.T) {
 	cases := []struct {
 		name          string
