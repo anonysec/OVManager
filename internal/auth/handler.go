@@ -317,13 +317,6 @@ func (s *Service) clientIP(r *http.Request) string {
 	return ClientIP(r)
 }
 
-func firstProto(v string) string {
-	if i := strings.IndexByte(v, ','); i >= 0 {
-		v = v[:i]
-	}
-	return strings.TrimSpace(v)
-}
-
 // sha16 is the rate-limit bucket key: the first 16 hex characters of
 // the SHA-256 of s.
 func sha16(s string) string {

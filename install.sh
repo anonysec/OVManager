@@ -48,7 +48,6 @@ URLPATH_VAL="${OVM_URLPATH:-$DEFAULT_URLPATH}"
 DB_TYPE="${OVM_DB_TYPE:-sqlite}"
 DB_URL="${OVM_DATABASE_URL:-}"
 HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
-ACME_TIMEOUT="${OVM_ACME_TIMEOUT:-60}"
 INTERACTIVE=0
 YES=0
 FROM_SOURCE=0
@@ -463,17 +462,8 @@ check_acme_domain() {
             SSL_DOMAIN=""; SSL_MODE="none"; return 0
         fi
     fi
-    if (exec 3<>/dev/tcp/127.0.0.1/80) 2>/dev/null; then
-        _warn "port 80 is in use - skipping auto ACME issuance"
-        _note "free port 80, then run: ovmanager tls issue $SSL_DOMAIN"
-        SSL_DOMAIN=""; SSL_MODE="none"; return 0
-    fi
-    if is_domain "$SSL_DOMAIN"; then
-        _ok "acme    Let's Encrypt issuance scheduled for $SSL_DOMAIN"
-    else
-        _warn "OVM_ACME_DOMAIN '$SSL_DOMAIN' is not a valid DNS name"
-        SSL_DOMAIN=""; SSL_MODE="none"
-    fi
+    _warn "in-process ACME was removed; place your certificate at $DATA_DIR/tls/fullchain.pem and privkey.pem, then restart"
+    SSL_DOMAIN=""; SSL_MODE="none"
 }
 
 write_env() {
@@ -488,13 +478,9 @@ write_env() {
         printf 'BasePath=%s\n' "$URLPATH_VAL"
         printf 'OwnerUsername=%s\n' "$DEFAULT_USER"
         printf 'DataDir=%s\n' "$data_dir"
-        if [[ "$DB_TYPE" != "sqlite" && -n "$DB_URL" ]]; then
-            printf 'DATABASE_URL=%s\n' "$DB_URL"
-        fi
         if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
             printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
             printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
-            printf 'OVM_ACME_DOMAIN=%s\n' "$SSL_DOMAIN"
             mkdir -p "$data_dir/tls"
         fi
         if [[ "$SSL_MODE" == "custom" ]]; then
@@ -746,21 +732,6 @@ offer_node_and_logs() {
     fi
 }
 
-verify_acme() {
-    local data_dir="$1" cert key i check
-    cert="$data_dir/tls/fullchain.pem"; key="$data_dir/tls/privkey.pem"
-    _note "waiting for the Let's Encrypt certificate (up to $((ACME_TIMEOUT * 3))s)…"
-    for ((i = 0; i < ACME_TIMEOUT; i++)); do
-        if [[ -s "$cert" && -s "$key" ]]; then
-            if check="$(openssl x509 -in "$cert" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
-                _ok "acme    certificate installed at $cert"; return 0
-            fi
-        fi
-        sleep 3
-    done
-    _warn "no Let's Encrypt certificate after 3 minutes, panel continues on plain HTTP"
-    return 0
-}
 
 verify_health() {
     local port="$1" want="$2" i body got
@@ -962,7 +933,6 @@ do_install() {
     colorized_echo blue "Verification"
     verify_health "$port" "$VERSION" || die "The panel did not report v$VERSION on /health after 40s"
     _ok "installed v$VERSION to $dest (service $SYSTEMD_SERVICE, port $port)"
-    [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && verify_acme "$DATA_DIR"
     offer_node_and_logs native "$port" "$urlpath" "$key"
 }
 

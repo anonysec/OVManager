@@ -113,7 +113,7 @@ func TestLogsUnitWhitelist(t *testing.T) {
 	); err != nil {
 		t.Fatalf("seed node: %v", err)
 	}
-	res, raw = rawReq(t, "GET", env.srv.URL+"/api/logs?unit=openvpn-eu-1&lines=10", env.token, nil, "")
+	res, _ = rawReq(t, "GET", env.srv.URL+"/api/logs?unit=openvpn-eu-1&lines=10", env.token, nil, "")
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("node unit status = %d, want 400", res.StatusCode)
 	}

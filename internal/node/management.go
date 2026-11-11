@@ -36,14 +36,6 @@ func PanelIDFor(db *sql.DB) string {
 	return pid.String
 }
 
-func panelDomainFor(db *sql.DB) string {
-	var d sql.NullString
-	if err := db.QueryRow(`SELECT panel_domain FROM Setting LIMIT 1`).Scan(&d); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(d.String)
-}
-
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
 	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,''), COALESCE(settings,'{}')`
 
