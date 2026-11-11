@@ -63,10 +63,11 @@ func insertTestNode(t *testing.T, conn *sql.DB, id int64, name, address string, 
 	}
 }
 
-// TestDownloadOVPNInjectsPanelDomainAndFallbacks: with panel_domain set the
-// primary remote is the panel domain + node ovpn_port, followed by one fallback
-// remote per other node; the node-native remote line is kept.
-func TestDownloadOVPNInjectsPanelDomainAndFallbacks(t *testing.T) {
+// TestDownloadOVPNInjectsPanelDomain: with panel_domain set the
+// primary remote is the panel domain + node ovpn_port; the node-native
+// remote line is kept. No fallback remotes are injected (each .ovpn
+// connects only to its own node).
+func TestDownloadOVPNInjectsPanelDomain(t *testing.T) {
 	env := newPanelEnv(t)
 	agent := fakeOVPNAgent(t, ovpnProfile, nil, nil)
 	host, port := hostPort(t, agent.URL)
@@ -84,11 +85,11 @@ func TestDownloadOVPNInjectsPanelDomainAndFallbacks(t *testing.T) {
 	if !strings.Contains(s, "remote panel.example.com 1194") {
 		t.Errorf("missing panel-domain primary remote:\n%s", s)
 	}
-	if !strings.Contains(s, "remote 203.0.113.9 443") {
-		t.Errorf("missing per-other-node fallback remote:\n%s", s)
-	}
 	if !strings.Contains(s, "remote node-native.example 1194") {
 		t.Errorf("node-native remote line was dropped:\n%s", s)
+	}
+	if strings.Contains(s, "remote 203.0.113.9 443") {
+		t.Errorf("fallback remote should not be injected:\n%s", s)
 	}
 	if strings.Index(s, "remote panel.example.com 1194") > strings.Index(s, "remote node-native.example 1194") {
 		t.Errorf("panel-domain remote should precede the node-native line:\n%s", s)
@@ -96,8 +97,7 @@ func TestDownloadOVPNInjectsPanelDomainAndFallbacks(t *testing.T) {
 }
 
 // TestDownloadOVPNKeepsNodeAddressWithoutPanelDomain: with panel_domain empty the
-// node-native remote is retained (a warning is acceptable) and only the fallback
-// remotes are appended.
+// node-native remote is retained. No fallback remotes are injected.
 func TestDownloadOVPNKeepsNodeAddressWithoutPanelDomain(t *testing.T) {
 	env := newPanelEnv(t)
 	agent := fakeOVPNAgent(t, ovpnProfile, nil, nil)
@@ -113,8 +113,8 @@ func TestDownloadOVPNKeepsNodeAddressWithoutPanelDomain(t *testing.T) {
 	if !strings.Contains(s, "remote node-native.example 1194") {
 		t.Errorf("node-native remote line should be retained when no panel domain:\n%s", s)
 	}
-	if !strings.Contains(s, "remote 203.0.113.9 443") {
-		t.Errorf("fallback remote missing:\n%s", s)
+	if strings.Contains(s, "remote 203.0.113.9 443") {
+		t.Errorf("fallback remote should not be injected:\n%s", s)
 	}
 	if strings.Contains(s, "panel.example.com") {
 		t.Errorf("no panel domain is set, but one was injected:\n%s", s)
