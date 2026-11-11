@@ -63,10 +63,30 @@ func OpenConfig(cfg Config) (*sql.DB, error) {
 }
 
 // Open keeps the legacy signature (SQLite file path) so existing callers
+// refuseOrphanedLegacyDatabase stops a 2.0.0 build from starting beside a
+// pre-2.0.0 database. Creating a fresh app.db there would look healthy while
+// every user, node and setting stayed in the old file.
+func refuseOrphanedLegacyDatabase(path string) error {
+	if filepath.Base(path) != "app.db" {
+		return nil
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	legacy := filepath.Join(filepath.Dir(path), "ovmanager.db")
+	if _, err := os.Stat(legacy); err == nil {
+		return fmt.Errorf("found %s but this build uses %s; 2.0.0 cannot upgrade a pre-2.0.0 database — move it aside and start fresh", legacy, path)
+	}
+	return nil
+}
+
 // keep working while the codebase migrates to OpenConfig.
 func Open(path string) (*sql.DB, error) {
 	if path == "" {
 		path = DefaultPath
+	}
+	if err := refuseOrphanedLegacyDatabase(path); err != nil {
+		return nil, err
 	}
 	conn, err := sql.Open("sqlite", "file:"+path+dsnPragmas)
 	if err != nil {
