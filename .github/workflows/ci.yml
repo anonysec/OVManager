@@ -69,6 +69,11 @@ jobs:
           cache: true
       - name: Check version parity
         run: make check-version
+      - name: Install lint tools
+        run: |
+          # Pinned: bump deliberately (Dependabot does not track go install).
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
+          go install golang.org/x/tools/cmd/deadcode@v0.52.0
       - name: Lint
         run: make lint
       - name: Check contract
