@@ -719,147 +719,39 @@ func nullIfEmpty(s string) any {
 
 var remoteLineRe = regexp.MustCompile(`(?i)^\s*remote\s+`)
 
-func remotePlan(n *Node, db *sql.DB) (string, int, [][2]any) {
-	domain := panelDomainFor(db)
+// remotePlan is the address a profile dials: the node's tunnel address when
+// one is configured, otherwise its public address. It deliberately ignores
+// panel_domain: that setting is for subscription links, and using it here
+// pointed every node's profile at the panel host.
+func remotePlan(n *Node) (string, int) {
+	domain := strings.TrimSpace(n.TunnelAddress)
 	if domain == "" {
-		if strings.TrimSpace(n.TunnelAddress) != "" {
-			domain = strings.TrimSpace(n.TunnelAddress)
-		} else {
-			domain = strings.TrimSpace(n.Address)
-		}
+		domain = strings.TrimSpace(n.Address)
 	}
-	fallbacks := [][2]any{}
-	// Add current node's own extra ports as immediate fallback lines
-	if strings.TrimSpace(n.ExtraPorts) != "" {
-		for _, pStr := range strings.Split(n.ExtraPorts, ",") {
-			if p, err := strconv.Atoi(strings.TrimSpace(pStr)); err == nil && isValidPort(p) && p != n.OVPNPort {
-				fallbacks = append(fallbacks, [2]any{domain, p})
-			}
-		}
-	}
-	for _, other := range getAllNodes(db) {
-		if other.ID != n.ID {
-			addr := strings.TrimSpace(other.TunnelAddress)
-			if addr == "" {
-				addr = strings.TrimSpace(other.Address)
-			}
-			fallbacks = append(fallbacks, [2]any{addr, other.OVPNPort})
-			if strings.TrimSpace(other.ExtraPorts) != "" {
-				for _, pStr := range strings.Split(other.ExtraPorts, ",") {
-					if p, err := strconv.Atoi(strings.TrimSpace(pStr)); err == nil && isValidPort(p) && p != other.OVPNPort {
-						fallbacks = append(fallbacks, [2]any{addr, p})
-					}
-				}
-			}
-		}
-	}
-	return domain, n.OVPNPort, fallbacks
+	return domain, n.OVPNPort
 }
 
-func injectRemoteLines(content []byte, domain string, primaryPort int, fallbacks [][2]any) []byte {
-	if domain == "" && len(fallbacks) == 0 {
-		return content
-	}
-	// Validate domain and primary port
-	if domain != "" && (!isValidHostname(domain) || !isValidPort(primaryPort)) {
-		// Invalid domain/port: skip injection, return original content
-		return content
-	}
-	// Validate fallbacks
-	validFallbacks := [][2]any{}
-	for _, fb := range fallbacks {
-		if len(fb) == 2 {
-			host, _ := fb[0].(string)
-			port, _ := fb[1].(int)
-			if isValidHostname(host) && isValidPort(port) {
-				validFallbacks = append(validFallbacks, fb)
-			}
-		}
-	}
-	if domain == "" && len(validFallbacks) == 0 {
+// injectRemoteLines replaces the "auto" placeholder in a client template with
+// the node's address. The node emits one <connection> block per protocol and
+// port; profiles are never given another node's address.
+func injectRemoteLines(content []byte, domain string, primaryPort int) []byte {
+	if domain == "" || !isValidHostname(domain) || !isValidPort(primaryPort) {
 		return content
 	}
 	text := string(content)
 	if !utf8Valid(text) {
 		return content
 	}
-	// Connection-block mode: the template carries one or more
-	// <connection>...</connection> blocks, each with its own remote/proto.
-	// Substitute the "auto" placeholder in every remote line and leave the
-	// blocks intact (no fallback injection inside them).
-	if strings.Contains(text, "<connection>") {
-		lines := strings.Split(text, "\n")
-		inBlock := false
-		out := make([]string, len(lines))
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "<connection>") {
-				inBlock = true
-				out[i] = line
-				continue
-			}
-			if strings.HasPrefix(trimmed, "</connection>") {
-				inBlock = false
-				out[i] = line
-				continue
-			}
-			if inBlock && remoteLineRe.MatchString(line) && strings.Contains(trimmed, " auto ") {
-				out[i] = strings.Replace(line, " auto ", " "+domain+" ", 1)
-				// ensure port is present
-				fields := strings.Fields(strings.TrimSpace(out[i]))
-				if len(fields) == 3 {
-					out[i] = strings.TrimSpace(out[i]) + " " + strconv.Itoa(primaryPort)
-				}
-				continue
-			}
-			out[i] = line
-		}
-		// Also replace any top-level "remote auto" placeholders.
-		for i, line := range out {
-			if !inBlock && remoteLineRe.MatchString(line) && strings.Contains(strings.TrimSpace(line), " auto ") {
-				out[i] = fmt.Sprintf("remote %s %d", domain, primaryPort)
-			}
-		}
-		trailing := ""
-		if strings.HasSuffix(text, "\n") {
-			trailing = "\n"
-		}
-		return []byte(strings.Join(out, "\n") + trailing)
-	}
 	lines := strings.Split(text, "\n")
-	remoteIdx := []int{}
 	for i, line := range lines {
-		if remoteLineRe.MatchString(line) {
-			remoteIdx = append(remoteIdx, i)
+		if !remoteLineRe.MatchString(line) {
+			continue
+		}
+		if strings.Contains(strings.TrimSpace(line), " auto ") {
+			lines[i] = strings.Replace(line, " auto ", " "+domain+" ", 1)
 		}
 	}
-	if len(remoteIdx) == 0 {
-		return content
-	}
-	out := append([]string{}, lines...)
-	if domain != "" {
-		insertAt := remoteIdx[0]
-		// If the existing remote line is a placeholder like "remote auto", replace it
-		if strings.HasPrefix(strings.TrimSpace(lines[insertAt]), "remote auto") {
-			out[insertAt] = fmt.Sprintf("remote %s %d", domain, primaryPort)
-		} else {
-			out = append(out[:insertAt], append([]string{fmt.Sprintf("remote %s %d", domain, primaryPort)}, out[insertAt:]...)...)
-			for i := range remoteIdx {
-				remoteIdx[i]++
-			}
-		}
-	}
-	// No fallbacks: each .ovpn connects only to its own node.
-	fallbackLines := []string{}
-	if len(fallbackLines) > 0 {
-		pos := remoteIdx[len(remoteIdx)-1] + 1
-		out = append(out[:pos], append(fallbackLines, out[pos:]...)...)
-	}
-	trailing := ""
-	if strings.HasSuffix(text, "\n") {
-		trailing = "\n"
-	}
-	return []byte(strings.Join(out, "\n") + trailing)
+	return []byte(strings.Join(lines, "\n"))
 }
 
 func utf8Valid(s string) bool {
@@ -941,13 +833,13 @@ func DownloadOVPNClient(userID, nodeID int64, db *sql.DB) []byte {
 	}
 	// Send fresh desired policy before fetching the profile.
 	pushDesiredPolicy(db, n, PanelIDFor(db), userID)
-	domain, port, fallbacks := remotePlan(n, db)
+	domain, port := remotePlan(n)
 	c := NodeClient(n, PanelIDFor(db))
 	content := c.DownloadOVPNBytes(strconv.FormatInt(userID, 10))
 	if content == nil {
 		return nil
 	}
-	return injectRemoteLines(content, domain, port, fallbacks)
+	return injectRemoteLines(content, domain, port)
 }
 
 // DownloadAllOVPNClients returns a ZIP of every user's .ovpn, or nil.
@@ -956,7 +848,7 @@ func DownloadAllOVPNClients(nodeID int64, db *sql.DB) []byte {
 	if n == nil {
 		return nil
 	}
-	domain, port, fallbacks := remotePlan(n, db)
+	domain, port := remotePlan(n)
 	pid := PanelIDFor(db)
 	c := NodeClient(n, pid)
 	buf := &bytes.Buffer{}
@@ -979,7 +871,7 @@ func DownloadAllOVPNClients(nodeID int64, db *sql.DB) []byte {
 		if err != nil {
 			continue
 		}
-		_, _ = w.Write(injectRemoteLines(raw, domain, port, fallbacks))
+		_, _ = w.Write(injectRemoteLines(raw, domain, port))
 	}
 	_ = zw.Close()
 	return buf.Bytes()

@@ -691,8 +691,11 @@ func TestNodeContractOVPNRaw(t *testing.T) {
 	if !strings.Contains(text, "<ca>") {
 		t.Fatalf("the profile body was not passed through as text:\n%s", text)
 	}
-	if !strings.Contains(text, "remote panel.example.com 1194") {
-		t.Fatalf("the remote lines were not rewritten as text:\n%s", text)
+	if !strings.Contains(text, "remote node-native.example 1194") {
+		t.Fatalf("the profile body was not passed through:\n%s", text)
+	}
+	if strings.Contains(text, "panel.example.com") {
+		t.Fatalf("panel_domain leaked into the profile:\n%s", text)
 	}
 }
 

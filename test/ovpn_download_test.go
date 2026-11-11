@@ -63,11 +63,10 @@ func insertTestNode(t *testing.T, conn *sql.DB, id int64, name, address string, 
 	}
 }
 
-// TestDownloadOVPNInjectsPanelDomain: with panel_domain set the
-// primary remote is the panel domain + node ovpn_port; the node-native
-// remote line is kept. No fallback remotes are injected (each .ovpn
-// connects only to its own node).
-func TestDownloadOVPNInjectsPanelDomain(t *testing.T) {
+// TestDownloadOVPNUsesNodeAddress: the profile dials the node's own address,
+// never panel_domain. That setting is for subscription links; using it here
+// pointed every node at the panel host. No other node is ever injected.
+func TestDownloadOVPNUsesNodeAddress(t *testing.T) {
 	env := newPanelEnv(t)
 	agent := fakeOVPNAgent(t, ovpnProfile, nil, nil)
 	host, port := hostPort(t, agent.URL)
@@ -82,17 +81,14 @@ func TestDownloadOVPNInjectsPanelDomain(t *testing.T) {
 		t.Fatalf("DownloadOVPNClient = nil, want rewritten profile")
 	}
 	s := string(out)
-	if !strings.Contains(s, "remote panel.example.com 1194") {
-		t.Errorf("missing panel-domain primary remote:\n%s", s)
-	}
 	if !strings.Contains(s, "remote node-native.example 1194") {
-		t.Errorf("node-native remote line was dropped:\n%s", s)
+		t.Errorf("the node's own remote was not retained:\n%s", s)
 	}
-	if strings.Contains(s, "remote 203.0.113.9 443") {
-		t.Errorf("fallback remote should not be injected:\n%s", s)
+	if strings.Contains(s, "panel.example.com") {
+		t.Errorf("panel_domain leaked into the profile:\n%s", s)
 	}
-	if strings.Index(s, "remote panel.example.com 1194") > strings.Index(s, "remote node-native.example 1194") {
-		t.Errorf("panel-domain remote should precede the node-native line:\n%s", s)
+	if strings.Contains(s, "203.0.113.9") {
+		t.Errorf("another node's address was injected:\n%s", s)
 	}
 }
 
@@ -237,7 +233,6 @@ func TestDownloadOVPNNumericUserIDAlias(t *testing.T) {
 // TestDeleteUserFansOutToNodes: deleting a panel user also evicts it from every
 // reachable node.
 func TestDeleteUserFansOutToNodes(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "")
 	env := newPanelEnv(t)
 	var deleted []string
 	var mu sync.Mutex
@@ -280,7 +275,6 @@ func TestDeleteUserFansOutToNodes(t *testing.T) {
 // TestDeleteUserSurvivesUnreachableNode: a node the panel cannot reach must not
 // block the panel-side delete (log + continue, no stuck row).
 func TestDeleteUserSurvivesUnreachableNode(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "")
 	env := newPanelEnv(t)
 	// 127.0.0.1:1 is a closed port: the fan-out call fails fast.
 	insertTestNode(t, env.conn, 1, "dead", "127.0.0.1", 1, 1194, "")
