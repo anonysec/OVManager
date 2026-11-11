@@ -23,7 +23,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 22
           cache: npm
@@ -42,7 +42,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@1e60f639196014664a7e1324411fb74b0822da0b # v4.2.0
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: 22
           cache: npm
@@ -63,7 +63,7 @@ jobs:
         with:
           name: frontend-dist
           path: web/dist
-      - uses: actions/setup-go@f111f330738fe338886e8a9d52a77686134b9906 # v5.3.0
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
           go-version-file: go.mod
           cache: true
@@ -75,12 +75,13 @@ jobs:
         run: make check-contract
 
       - name: Staticcheck
-        uses: dominikh/staticcheck-action@fecfcbfab7110e5272a0bfcf9a224a189f7f4803 # v1.3.1
+        uses: dominikh/staticcheck-action@672a31696676d1592844bf0164b3bbfd855a4d50 # v1.4.1
         with:
-          version: "2024.1.1"
+          version: "2026.2.2"
+          install-go: false
 
       - name: Gosec Security Scanner
-        uses: securego/gosec@5eb1d104ef85ff2c905c877eb600e8c1dee33a22 # v2.30.0
+        uses: securego/gosec@2385f2cc274ab1654795dbba53c74e74ea8a296d # v2.30.0
         with:
           args: '-exclude-dir=web -exclude-dir=test ./...'
 
