@@ -61,7 +61,7 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	dbPrefix := s.strOr("subscription_url_prefix")
 	subPrefixSource := dbPrefix
 	if subPrefixSource == "" {
-		subPrefixSource = envOrFile("SUBSCRIPTION_URL_PREFIX")
+		subPrefixSource = envOrFile("PublicUrl")
 	}
 	publicBase := strings.TrimRight(publicURLOr(r), "/")
 	subscriptionPrefix := publicBase + "/"
@@ -137,7 +137,7 @@ func maskedBotToken(s settings) any {
 
 // publicURLOr is (config.PUBLIC_URL or str(request.base_url)).
 func publicURLOr(r *http.Request) string {
-	if v := strings.TrimSpace(envOrFile("PUBLIC_URL")); v != "" {
+	if v := strings.TrimSpace(envOrFile("PublicUrl")); v != "" {
 		return v
 	}
 	return baseURL(r)

@@ -483,11 +483,11 @@ write_env() {
     (
     umask 077
     {
-        printf 'HOST=127.0.0.1\n'
-        printf 'PORT=%s\n' "$PORT_VAL"
-        printf 'URLPATH=%s\n' "$URLPATH_VAL"
-        printf 'ADMIN_USERNAME=%s\n' "$DEFAULT_USER"
-        printf 'DATA_DIR=%s\n' "$data_dir"
+        printf 'Host=127.0.0.1\n'
+        printf 'Port=%s\n' "$PORT_VAL"
+        printf 'BasePath=%s\n' "$URLPATH_VAL"
+        printf 'OwnerUsername=%s\n' "$DEFAULT_USER"
+        printf 'DataDir=%s\n' "$data_dir"
         if [[ "$DB_TYPE" != "sqlite" && -n "$DB_URL" ]]; then
             printf 'DATABASE_URL=%s\n' "$DB_URL"
         fi
@@ -498,8 +498,8 @@ write_env() {
             mkdir -p "$data_dir/tls"
         fi
         if [[ "$SSL_MODE" == "custom" ]]; then
-            printf 'SSL_CERTFILE=%s\n' "$SSL_CERT_SRC"
-            printf 'SSL_KEYFILE=%s\n' "$SSL_KEY_SRC"
+            printf 'TlsCertFile=%s\n' "$SSL_CERT_SRC"
+            printf 'TlsKeyFile=%s\n' "$SSL_KEY_SRC"
         fi
         if [[ "$SSL_MODE" == "ip" || "$SSL_MODE" == "selfsigned" ]]; then
             printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
@@ -510,14 +510,11 @@ write_env() {
     cat >> "$envfile" <<'OPTS'
 
 # ── Optional (uncomment to use) ────────────────────────────────────────
-# PUBLIC_URL=https://panel.example.com
-# SSL_CERTFILE=/path/to/fullchain.pem
-# SSL_KEYFILE=/path/to/privkey.pem
-# TRUSTED_PROXY=false
-# OVM_ACME_DOMAIN=
-# OVM_ACME_DIRECTORY_URL=
-# OVM_ACME_HTTP_PORT=80
-# OVM_TRAFFIC_POLL_SECONDS=10
+# PublicUrl=https://panel.example.com
+# TlsCertFile=/path/to/fullchain.pem
+# TlsKeyFile=/path/to/privkey.pem
+# TrafficPollSeconds=10
+# ProbeTimeoutSeconds=5
 OPTS
     chmod 600 "$envfile"
     chown "root:$PANEL_USER" "$envfile"

@@ -30,7 +30,7 @@ const (
 // enc:v2: values: doing so would make every stored secret undecryptable.
 // Callers must restore secret.key (or set OVM_SECRET_KEY) in that case.
 func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
-	if envKey := strings.TrimSpace(os.Getenv("OVM_SECRET_KEY")); envKey != "" {
+	if envKey := strings.TrimSpace(os.Getenv("SecretKey")); envKey != "" {
 		if k, err := hex.DecodeString(envKey); err == nil && len(k) == 32 {
 			return k, nil
 		}

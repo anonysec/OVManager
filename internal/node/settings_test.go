@@ -25,7 +25,7 @@ func TestValidateNodeSettings(t *testing.T) {
 
 func TestNodeRowStoresAndReturnsSettings(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("DATA_DIR", dir)
+	t.Setenv("DataDir", dir)
 	conn, err := db.Open(filepath.Join(dir, "app.db"))
 	if err != nil {
 		t.Fatal(err)

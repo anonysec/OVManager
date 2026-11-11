@@ -135,7 +135,7 @@ func (s *Service) handleClaimOwner(w http.ResponseWriter, r *http.Request) {
 
 	chosen := strings.TrimSpace(req.Username)
 	if chosen == "" {
-		chosen = envOr("ADMIN_USERNAME", "admin")
+		chosen = envOr("OwnerUsername", "admin")
 	}
 	var ownerID int64
 	var ownerName string

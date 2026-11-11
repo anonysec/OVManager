@@ -95,7 +95,7 @@ func newPanelEnv(t *testing.T) *panelEnv {
 	dataDir := t.TempDir()
 	appDir := t.TempDir()
 	empty := t.TempDir()
-	t.Setenv("DATA_DIR", dataDir)
+	t.Setenv("DataDir", dataDir)
 	t.Setenv("PATH", empty)
 	t.Setenv("HOME", empty)
 	t.Setenv("OVM_APP_DIR", appDir)

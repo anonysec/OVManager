@@ -254,14 +254,6 @@ func (s *Service) originAllowed(origin string, r *http.Request) bool {
 	requestScheme := "http"
 	if r.TLS != nil {
 		requestScheme = "https"
-	} else if s.TrustedProxy {
-		forwardedScheme := strings.ToLower(firstProto(r.Header.Get("X-Forwarded-Proto")))
-		if forwardedScheme != "" && forwardedScheme != "http" && forwardedScheme != "https" {
-			return false
-		}
-		if forwardedScheme != "" {
-			requestScheme = forwardedScheme
-		}
 	}
 	if scheme != requestScheme {
 		return false
@@ -322,7 +314,7 @@ func bearerToken(r *http.Request) string {
 }
 
 func (s *Service) clientIP(r *http.Request) string {
-	return ClientIP(s.TrustedProxy, r)
+	return ClientIP(r)
 }
 
 func firstProto(v string) string {

@@ -22,7 +22,7 @@ type BackupInfo struct {
 }
 
 func cliHandler(dataDir string) (*Handler, func(), error) {
-	_ = os.Setenv("DATA_DIR", dataDir)
+	_ = os.Setenv("DataDir", dataDir)
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
 	if path == "" {
@@ -61,7 +61,7 @@ func CreateBackup(keep int, label, dataDir string) (string, error) {
 
 // ListStoredBackups are the restorable backups, newest first.
 func ListStoredBackups(dataDir string) ([]BackupInfo, string) {
-	_ = os.Setenv("DATA_DIR", dataDir)
+	_ = os.Setenv("DataDir", dataDir)
 	files := backupFiles()
 	out := make([]BackupInfo, 0, len(files))
 	for _, path := range files {

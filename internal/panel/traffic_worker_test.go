@@ -124,13 +124,13 @@ func TestTrafficWorkerIgnoresTelegram(t *testing.T) {
 	}
 }
 
-// TestTrafficPollSeconds pins the OVM_TRAFFIC_POLL_SECONDS default and override.
+// TestTrafficPollSeconds pins the TrafficPollSeconds default and override.
 func TestTrafficPollSeconds(t *testing.T) {
-	t.Setenv("OVM_TRAFFIC_POLL_SECONDS", "")
+	t.Setenv("TrafficPollSeconds", "")
 	if got := trafficPollSeconds(); got != 60 {
 		t.Fatalf("default = %d, want 60", got)
 	}
-	t.Setenv("OVM_TRAFFIC_POLL_SECONDS", "15")
+	t.Setenv("TrafficPollSeconds", "15")
 	if got := trafficPollSeconds(); got != 15 {
 		t.Fatalf("override = %d, want 15", got)
 	}

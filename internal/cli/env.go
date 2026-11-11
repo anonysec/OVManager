@@ -28,8 +28,8 @@ type Install struct {
 }
 
 var envKeys = []string{
-	"PORT", "URLPATH", "SSL_KEYFILE", "SSL_CERTFILE",
-	"ADMIN_USERNAME", "ADMIN_PASSWORD", "ADMIN_PASSWORD_HASH",
+	"Port", "BasePath", "TlsKeyFile", "TlsCertFile",
+	"OwnerUsername", "ADMIN_PASSWORD", "ADMIN_PASSWORD_HASH",
 }
 
 func readEnvFile(path string) map[string]string {
@@ -62,20 +62,20 @@ func DetectInstall(installDir, dataDir string) Install {
 	env := readInstallEnv(filepath.Join(installDir, ".env"))
 	inst.Env = env
 	if dataDir == "" {
-		if v := os.Getenv("DATA_DIR"); v != "" {
+		if v := os.Getenv("DataDir"); v != "" {
 			dataDir = v
 		}
 	}
-	if p, err := strconv.Atoi(env["PORT"]); err == nil {
+	if p, err := strconv.Atoi(env["Port"]); err == nil {
 		inst.Port = p
 	}
-	inst.PathPrefix = strings.Trim(env["URLPATH"], "/")
+	inst.PathPrefix = strings.Trim(env["BasePath"], "/")
 	if dataDir != "" {
 		inst.DataDir = dataDir
-	} else if env["DATA_DIR"] != "" {
-		inst.DataDir = env["DATA_DIR"]
+	} else if env["DataDir"] != "" {
+		inst.DataDir = env["DataDir"]
 	}
-	if env["SSL_KEYFILE"] != "" {
+	if env["TlsKeyFile"] != "" {
 		inst.TLSMode = "self"
 	}
 	return inst
@@ -93,7 +93,7 @@ func (i Install) HealthURL() string {
 }
 
 func (i Install) Cafile() string {
-	if c := strings.TrimSpace(i.Env["SSL_CERTFILE"]); c != "" {
+	if c := strings.TrimSpace(i.Env["TlsCertFile"]); c != "" {
 		return c
 	}
 	return filepath.Join(i.DataDir, "tls", "fullchain.pem")

@@ -31,7 +31,7 @@ func cliFixture(t *testing.T) (installDir, dataDir string) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	env := "PORT=2095\nDATA_DIR=" + dataDir + "\nADMIN_USERNAME=admin\n"
+	env := "Port=2095\nDATA_DIR=" + dataDir + "\nADMIN_USERNAME=admin\n"
 	path := filepath.Join(installDir, ".env")
 	if err := os.WriteFile(path, []byte(env), 0o600); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestCLIHealthHTTPS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PORT", u.Port())
+	t.Setenv("Port", u.Port())
 
 	var out bytes.Buffer
 	code := cli.Run([]string{"health"}, &out)

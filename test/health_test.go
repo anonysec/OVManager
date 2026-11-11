@@ -33,7 +33,7 @@ func releaseVersion(t *testing.T) string {
 
 // "version" for loopback clients (httptest is loopback, as is the panel itself).
 func TestHealthMatches(t *testing.T) {
-	srv := httptest.NewServer(health.Router(true))
+	srv := httptest.NewServer(health.Router())
 	defer srv.Close()
 
 	res, err := http.Get(srv.URL + "/health")
@@ -93,7 +93,7 @@ func TestOpenAppliesPragmas(t *testing.T) {
 }
 
 func TestHealthNonGet(t *testing.T) {
-	srv := httptest.NewServer(health.Router(true))
+	srv := httptest.NewServer(health.Router())
 	defer srv.Close()
 
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/health", nil)

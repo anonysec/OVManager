@@ -93,7 +93,7 @@ func TestUpdateSkipsMigrationWhenDataDirOutsideTree(t *testing.T) {
 	inst := cli.Install{
 		InstallDir: "/opt/ovmanager",
 		DataDir:    "/var/lib/ovmanager",
-		Env:        map[string]string{"DATA_DIR": "/var/lib/ovmanager"},
+		Env:        map[string]string{"DataDir": "/var/lib/ovmanager"},
 	}
 	if dir, inTree := cli.CaptureDataDir(inst); inTree {
 		t.Fatalf("CaptureDataDir(%q) reported in-tree, want outside", dir)
@@ -119,7 +119,7 @@ func TestUpdateCaptureDataDirInTree(t *testing.T) {
 	inst := cli.Install{
 		InstallDir: "/opt/ovmanager",
 		DataDir:    "/opt/ovmanager/data",
-		Env:        map[string]string{"DATA_DIR": "/opt/ovmanager/data"},
+		Env:        map[string]string{"DataDir": "/opt/ovmanager/data"},
 	}
 	dir, inTree := cli.CaptureDataDir(inst)
 	if !inTree {

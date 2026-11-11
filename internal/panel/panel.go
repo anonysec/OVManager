@@ -183,7 +183,7 @@ func appDir() string {
 
 // dataDir resolves DATA_DIR per call so tests can point it at a temp dir.
 func dataDir() string {
-	if d := os.Getenv("DATA_DIR"); d != "" {
+	if d := os.Getenv("DataDir"); d != "" {
 		return d
 	}
 	return node.DataDir
@@ -225,15 +225,6 @@ func envFileValues() map[string]string {
 
 // envOrFile is pydantic-settings precedence: a real environment variable wins
 // over the .env line.
-// TrustedProxyEnabled reports whether the panel sits behind a trusted
-// reverse proxy. The panel's own auth service reads the same flag from the
-// process environment; this reads it the way every other panel setting is
-// read — process environment first, then the .env file — so a panel started
-// by hand next to its .env behaves like a systemd or container one.
-func TrustedProxyEnabled() bool {
-	return strings.EqualFold(strings.TrimSpace(envOrFile("TRUSTED_PROXY")), "true")
-}
-
 func envOrFile(key string) string {
 	// .env wins so a user can force an option by editing the file, even when
 	// the process environment carries a different value (PasarGuard-style).
@@ -248,14 +239,14 @@ func envOrFile(key string) string {
 
 // sslKeyPath / sslCertPath are tls_paths.key_path / cert_path.
 func sslKeyPath() string {
-	if v := envOrFile("SSL_KEYFILE"); v != "" {
+	if v := envOrFile("TlsKeyFile"); v != "" {
 		return v
 	}
 	return filepath.Join(dataDir(), "tls", "privkey.pem")
 }
 
 func sslCertPath() string {
-	if v := envOrFile("SSL_CERTFILE"); v != "" {
+	if v := envOrFile("TlsCertFile"); v != "" {
 		return v
 	}
 	return filepath.Join(dataDir(), "tls", "fullchain.pem")
@@ -267,7 +258,7 @@ func SSLCertPath() string { return sslCertPath() }
 func SSLKeyPath() string  { return sslKeyPath() }
 
 func subscriptionPath() string {
-	v := strings.Trim(envOrFile("SUBSCRIPTION_PATH"), "/")
+	v := strings.Trim(envOrFile("SubscriptionPath"), "/")
 	if v == "" {
 		v = "sub"
 	}
@@ -278,14 +269,14 @@ func subscriptionPath() string {
 }
 
 func serverHost() string {
-	if v := envOrFile("HOST"); v != "" {
+	if v := envOrFile("Host"); v != "" {
 		return v
 	}
 	return "0.0.0.0"
 }
 
 func serverPort() int {
-	if v := envOrFile("PORT"); v != "" {
+	if v := envOrFile("Port"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
@@ -481,7 +472,7 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 func (h *Handler) clientIP(r *http.Request) string {
-	return auth.ClientIP(h.Svc.TrustedProxy, r)
+	return auth.ClientIP(r)
 }
 
 // scheme only when X-Forwarded-Proto comes from a configured trusted proxy.
@@ -493,19 +484,7 @@ func baseURL(r *http.Request) string {
 	return scheme + "://" + r.Host + "/"
 }
 
-func externallySecure(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	if !TrustedProxyEnabled() {
-		return false
-	}
-	forwarded := r.Header.Get("X-Forwarded-Proto")
-	if i := strings.IndexByte(forwarded, ','); i >= 0 {
-		forwarded = forwarded[:i]
-	}
-	return strings.EqualFold(strings.TrimSpace(forwarded), "https")
-}
+func externallySecure(r *http.Request) bool { return r.TLS != nil }
 
 func intQuery(r *http.Request, key string, def int) int {
 	if v := r.URL.Query().Get(key); v != "" {

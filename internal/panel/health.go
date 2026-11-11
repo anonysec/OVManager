@@ -217,8 +217,8 @@ func (h *Handler) checkNodes() check {
 }
 
 func (h *Handler) checkTLS() check {
-	certFile := strings.TrimSpace(envOrFile("SSL_CERTFILE"))
-	keyFile := strings.TrimSpace(envOrFile("SSL_KEYFILE"))
+	certFile := strings.TrimSpace(envOrFile("TlsCertFile"))
+	keyFile := strings.TrimSpace(envOrFile("TlsKeyFile"))
 	detail := map[string]any{
 		"mode": nil, "cert_file": nil, "key_file": nil,
 		"expires_in_days": nil, "expires_at": nil,
@@ -233,17 +233,17 @@ func (h *Handler) checkTLS() check {
 	if certFile == "" && keyFile == "" {
 		detail["mode"] = "disabled"
 		return entry("tls", "warn", "TLS is turned off, so the panel is served over plain HTTP.",
-			"Set SSL_CERTFILE and SSL_KEYFILE in the panel settings and restart to serve the panel over HTTPS.",
+			"Set TlsCertFile and TlsKeyFile in the panel settings and restart to serve the panel over HTTPS.",
 			detail)
 	}
 	if certFile == "" || keyFile == "" {
 		detail["mode"] = "misconfigured"
-		missing := "SSL_CERTFILE"
+		missing := "TlsCertFile"
 		if certFile != "" {
-			missing = "SSL_KEYFILE"
+			missing = "TlsKeyFile"
 		}
 		return entry("tls", "error", "TLS is only half configured: "+missing+" is missing.",
-			"Set both SSL_CERTFILE and SSL_KEYFILE together, or clear both to run the panel without TLS.", detail)
+			"Set both TlsCertFile and TlsKeyFile together, or clear both to run the panel without TLS.", detail)
 	}
 	detail["mode"] = "files"
 	for _, p := range []string{certFile, keyFile} {
@@ -398,8 +398,8 @@ func activeCertPath() string {
 	if fileExists(legacyCert) && fileExists(legacyKey) {
 		return legacyCert
 	}
-	certFile := strings.TrimSpace(envOrFile("SSL_CERTFILE"))
-	keyFile := strings.TrimSpace(envOrFile("SSL_KEYFILE"))
+	certFile := strings.TrimSpace(envOrFile("TlsCertFile"))
+	keyFile := strings.TrimSpace(envOrFile("TlsKeyFile"))
 	if certFile != "" && keyFile != "" && fileExists(certFile) {
 		return certFile
 	}

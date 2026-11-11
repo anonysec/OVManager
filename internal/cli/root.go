@@ -101,7 +101,7 @@ func (a *app) healthCmd() *cobra.Command {
 		Use:   "health",
 		Short: "probe the local panel /health endpoint",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			port := os.Getenv("PORT")
+			port := os.Getenv("Port")
 			if port == "" {
 				port = "2095"
 			}

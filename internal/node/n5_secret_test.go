@@ -22,7 +22,7 @@ func TestScanNodeReturnsErrorOnBadEncryptedKey(t *testing.T) {
 	}
 	// no valid secret.key -> decryption must fail
 	dir := t.TempDir()
-	t.Setenv("DATA_DIR", dir)
+	t.Setenv("DataDir", dir)
 	_, err = scanNode(d.QueryRow(`SELECT id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port, COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'') FROM Node WHERE id=1`))
 	if err == nil {
 		t.Fatal("expected decryption error")

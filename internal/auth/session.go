@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -45,8 +44,7 @@ type Service struct {
 	dbmu sync.RWMutex
 	db   *sql.DB
 
-	DataDir      string
-	TrustedProxy bool
+	DataDir string
 
 	MaxSeconds  int
 	IdleSeconds int
@@ -63,15 +61,14 @@ type Service struct {
 
 func NewService(db *sql.DB, dataDir string) *Service {
 	s := &Service{
-		db:           db,
-		DataDir:      dataDir,
-		TrustedProxy: strings.EqualFold(os.Getenv("TRUSTED_PROXY"), "true"),
-		MaxSeconds:   envInt("SESSION_MAX_SECONDS", 604800),
-		IdleSeconds:  envInt("SESSION_IDLE_SECONDS", 1800),
-		attempts:     map[string][]float64{},
-		failures:     map[string][]float64{},
-		idCache:      map[string]cachedIdentity{},
-		sessions:     map[string]sessionEntry{},
+		db:          db,
+		DataDir:     dataDir,
+		MaxSeconds:  envInt("SessionTtlSeconds", 604800),
+		IdleSeconds: envInt("SessionIdleSeconds", 1800),
+		attempts:    map[string][]float64{},
+		failures:    map[string][]float64{},
+		idCache:     map[string]cachedIdentity{},
+		sessions:    map[string]sessionEntry{},
 	}
 	go func() {
 		t := time.NewTicker(time.Duration(cleanupInterval) * time.Second)

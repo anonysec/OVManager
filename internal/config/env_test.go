@@ -12,20 +12,20 @@ import (
 func TestParseEnvAndEnvOrFile(t *testing.T) {
 	raw := `
 # Comment line
-PORT=2095
-HOST="127.0.0.1"
-DATA_DIR='/var/lib/ovmanager'
+Port=2095
+Host="127.0.0.1"
+DataDir='/var/lib/ovmanager'
 SPACED = value_with_spaces
 `
 	parsed := ParseEnv(raw)
-	if parsed["PORT"] != "2095" {
-		t.Errorf("PORT = %q, want 2095", parsed["PORT"])
+	if parsed["Port"] != "2095" {
+		t.Errorf("Port = %q, want 2095", parsed["Port"])
 	}
-	if parsed["HOST"] != "127.0.0.1" {
-		t.Errorf("HOST = %q, want 127.0.0.1", parsed["HOST"])
+	if parsed["Host"] != "127.0.0.1" {
+		t.Errorf("Host = %q, want 127.0.0.1", parsed["Host"])
 	}
-	if parsed["DATA_DIR"] != "/var/lib/ovmanager" {
-		t.Errorf("DATA_DIR = %q, want /var/lib/ovmanager", parsed["DATA_DIR"])
+	if parsed["DataDir"] != "/var/lib/ovmanager" {
+		t.Errorf("DataDir = %q, want /var/lib/ovmanager", parsed["DataDir"])
 	}
 	if parsed["SPACED"] != "value_with_spaces" {
 		t.Errorf("SPACED = %q, want value_with_spaces", parsed["SPACED"])

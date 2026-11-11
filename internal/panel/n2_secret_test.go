@@ -12,7 +12,7 @@ import (
 
 func TestAllNodesDecryptsEncryptedKey(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("DATA_DIR", dir)
+	t.Setenv("DataDir", dir)
 
 	conn, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
 	if err != nil {

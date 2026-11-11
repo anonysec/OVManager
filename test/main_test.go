@@ -29,9 +29,9 @@ func TestBinaryServesPanel(t *testing.T) {
 	port := freePort(t)
 	cmd := exec.Command(bin)
 	cmd.Env = append(os.Environ(),
-		"HOST=127.0.0.1",
-		"PORT="+port,
-		"DATA_DIR="+t.TempDir(),
+		"Host=127.0.0.1",
+		"Port="+port,
+		"DataDir="+t.TempDir(),
 		"OVM_APP_DIR="+t.TempDir(),
 	)
 	if err := cmd.Start(); err != nil {

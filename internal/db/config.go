@@ -31,16 +31,16 @@ type Config struct {
 // DB_PATH wins over DATA_DIR; DATA_DIR defaults to "data".
 func ConfigFromEnv() Config {
 	cfg := Config{PoolSize: 5}
-	if v := config.EnvOrFile("DB_POOL_SIZE", ""); v != "" {
+	if v := config.EnvOrFile("DbPoolSize", ""); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.PoolSize = n
 		}
 	}
-	if p := config.EnvOrFile("DB_PATH", ""); p != "" {
+	if p := config.EnvOrFile("DbPath", ""); p != "" {
 		cfg.Path = p
 		return cfg
 	}
-	dir := config.EnvOrFile("DATA_DIR", "data")
+	dir := config.EnvOrFile("DataDir", "data")
 	cfg.Path = filepath.Join(dir, "app.db")
 	return cfg
 }

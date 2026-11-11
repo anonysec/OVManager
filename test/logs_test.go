@@ -47,7 +47,7 @@ func logsEnvFor(t *testing.T, stub string) logsEnv {
 	t.Helper()
 	dataDir := t.TempDir()
 	stubDir := t.TempDir()
-	t.Setenv("DATA_DIR", dataDir)
+	t.Setenv("DataDir", dataDir)
 	t.Setenv("PATH", stubDir)
 	t.Setenv("HOME", stubDir)
 	t.Setenv("OVM_APP_DIR", t.TempDir())

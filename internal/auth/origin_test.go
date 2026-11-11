@@ -12,21 +12,16 @@ import (
 
 func TestOriginRejectedUsesTheFullOriginTuple(t *testing.T) {
 	tests := []struct {
-		name         string
-		trustedProxy bool
-		host         string
-		tls          bool
-		forwarded    string
-		origin       string
-		wantReject   bool
+		name       string
+		host       string
+		tls        bool
+		origin     string
+		wantReject bool
 	}{
 		{name: "same-origin HTTP", host: "panel.example", origin: "http://panel.example"},
 		{name: "same-origin HTTPS", host: "panel.example", tls: true, origin: "https://panel.example"},
 		{name: "scheme downgrade on HTTPS", host: "panel.example", tls: true, origin: "http://panel.example", wantReject: true},
 		{name: "scheme upgrade on HTTP", host: "panel.example", origin: "https://panel.example", wantReject: true},
-		{name: "trusted HTTPS proxy", host: "panel.example", trustedProxy: true, forwarded: "https", origin: "https://panel.example"},
-		{name: "trusted proxy rejects different scheme", host: "panel.example", trustedProxy: true, forwarded: "https", origin: "http://panel.example", wantReject: true},
-		{name: "untrusted forwarded scheme is ignored", host: "panel.example", forwarded: "https", origin: "https://panel.example", wantReject: true},
 		{name: "host mismatch", host: "panel.example", origin: "http://other.example", wantReject: true},
 		{name: "port mismatch", host: "panel.example:8443", tls: true, origin: "https://panel.example:9443", wantReject: true},
 		{name: "implicit HTTPS port matches explicit default", host: "panel.example:443", tls: true, origin: "https://panel.example"},
@@ -39,14 +34,11 @@ func TestOriginRejectedUsesTheFullOriginTuple(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := &Service{TrustedProxy: tt.trustedProxy}
+			svc := &Service{}
 			r := httptest.NewRequest(http.MethodPost, "http://panel.example/api/settings", nil)
 			r.Host = tt.host
 			if tt.tls {
 				r.TLS = &tls.ConnectionState{}
-			}
-			if tt.forwarded != "" {
-				r.Header.Set("X-Forwarded-Proto", tt.forwarded)
 			}
 			r.Header.Set("Origin", tt.origin)
 

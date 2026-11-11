@@ -35,14 +35,14 @@ func runResetPassword(install Install, dataDir, password string) (string, int) {
 
 	env := readEnvFile(envPath)
 	if dataDir == "" {
-		dataDir = strings.Trim(env["DATA_DIR"], `"'`)
+		dataDir = strings.Trim(env["DataDir"], `"'`)
 	}
 	if dataDir == "" {
 		return block([]string{failedLine("DATA_DIR is not set in " + envPath + " — cannot locate the database.")}), 1
 	}
-	owner := strings.Trim(env["ADMIN_USERNAME"], `"'`)
+	owner := strings.Trim(env["OwnerUsername"], `"'`)
 	if owner == "" {
-		return block([]string{failedLine("ADMIN_USERNAME is not set — cannot tell which row is the owner.")}), 1
+		return block([]string{failedLine("OwnerUsername is not set — cannot tell which row is the owner.")}), 1
 	}
 
 	hashed, err := auth.HashPassword(password)

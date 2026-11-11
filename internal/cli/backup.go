@@ -83,12 +83,12 @@ func runRestore(install Install, name string) (string, int) {
 	// DATA_DIR/app.db: keep OVM_APP_DIR/DATA_DIR aligned with this install
 	// for the whole restore so panel helpers read the same .env.
 	oldAppDir := os.Getenv("OVM_APP_DIR")
-	oldDataDir := os.Getenv("DATA_DIR")
+	oldDataDir := os.Getenv("DataDir")
 	if install.InstallDir != "" {
 		_ = os.Setenv("OVM_APP_DIR", install.InstallDir)
 	}
 	if install.DataDir != "" {
-		_ = os.Setenv("DATA_DIR", install.DataDir)
+		_ = os.Setenv("DataDir", install.DataDir)
 	}
 	defer func() {
 		if oldAppDir == "" {
@@ -97,9 +97,9 @@ func runRestore(install Install, name string) (string, int) {
 			_ = os.Setenv("OVM_APP_DIR", oldAppDir)
 		}
 		if oldDataDir == "" {
-			_ = os.Unsetenv("DATA_DIR")
+			_ = os.Unsetenv("DataDir")
 		} else {
-			_ = os.Setenv("DATA_DIR", oldDataDir)
+			_ = os.Setenv("DataDir", oldDataDir)
 		}
 	}()
 

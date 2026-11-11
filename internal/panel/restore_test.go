@@ -15,7 +15,7 @@ import (
 // serving.
 func TestRestoreRollsBackWhenTheSwappedDatabaseWillNotReopen(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("DATA_DIR", dir)
+	t.Setenv("DataDir", dir)
 	live := filepath.Join(dir, "app.db")
 	conn, err := db.Open(live)
 	if err != nil {

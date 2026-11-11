@@ -57,30 +57,19 @@ func TestSecurityHeadersSubscriptionPage(t *testing.T) {
 }
 
 func TestSecurityHeadersHSTSRules(t *testing.T) {
-	t.Setenv("TRUSTED_PROXY", "false")
 	env := newPanelEnv(t)
 
-	// Plain HTTP: no HSTS, the install may sit behind TLS where this header
-	// would be wrong for HTTP clients.
+	// Plain HTTP: no HSTS. The panel terminates TLS itself, so HSTS is only
+	// emitted on a real TLS connection.
 	h := headers(t, env, http.MethodGet, "/health", nil)
 	if hst := h.Get("Strict-Transport-Security"); hst != "" {
 		t.Errorf("/health plain http: unexpected HSTS %q", hst)
 	}
 
-	// An untrusted client cannot spoof the HTTPS scheme with a forwarded header.
+	// A forwarded scheme is not trusted: no proxy support, so a client cannot
+	// claim HTTPS with a header.
 	h = headers(t, env, http.MethodGet, "/health", map[string]string{"X-Forwarded-Proto": "https"})
 	if hst := h.Get("Strict-Transport-Security"); hst != "" {
-		t.Errorf("/health untrusted forwarded https: unexpected HSTS %q", hst)
-	}
-
-	// Forwarded by an explicitly trusted HTTPS front: HSTS present with a sane max-age.
-	t.Setenv("TRUSTED_PROXY", "true")
-	h = headers(t, env, http.MethodGet, "/health", map[string]string{"X-Forwarded-Proto": "https"})
-	hst := h.Get("Strict-Transport-Security")
-	if hst == "" {
-		t.Fatal("/health forwarded https: HSTS missing")
-	}
-	if len(hst) < 8 || hst[:8] != "max-age=" {
-		t.Errorf("/health forwarded https: HSTS %q lacks max-age", hst)
+		t.Errorf("/health forwarded https: unexpected HSTS %q", hst)
 	}
 }

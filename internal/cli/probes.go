@@ -193,7 +193,7 @@ func fetchHealthAny(urls []string, timeout time.Duration, cafile string) (bool, 
 }
 
 func probeTimeout() time.Duration {
-	if v := os.Getenv("OVM_PROBE_TIMEOUT"); v != "" {
+	if v := os.Getenv("ProbeTimeoutSeconds"); v != "" {
 		if sec, err := strconv.Atoi(v); err == nil && sec > 0 {
 			return time.Duration(sec) * time.Second
 		}

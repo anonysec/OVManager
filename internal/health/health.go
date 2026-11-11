@@ -13,26 +13,26 @@ import (
 )
 
 // Router returns the health endpoint as an http.Handler.
-func Router(trustedProxy bool) http.Handler {
+func Router() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { handle(w, r, trustedProxy) })
+	mux.HandleFunc("/health", handle)
 	return mux
 }
 
-func handle(w http.ResponseWriter, r *http.Request, trustedProxy bool) {
+func handle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		auth.WriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "Method Not Allowed"})
 		return
 	}
 	data := map[string]string{"status": "ok"}
-	if isLoopbackClient(trustedProxy, r) {
+	if isLoopbackClient(r) {
 		data["version"] = version.Version
 	}
 	auth.WriteJSON(w, http.StatusOK, data)
 }
 
-func isLoopbackClient(trustedProxy bool, r *http.Request) bool {
-	host := auth.ClientIP(trustedProxy, r)
+func isLoopbackClient(r *http.Request) bool {
+	host := auth.ClientIP(r)
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
 }

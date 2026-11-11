@@ -373,7 +373,7 @@ func plainToken(db *sql.DB, stored string) string {
 
 // resolvedDataDir mirrors panel.dataDir without importing the panel package.
 func resolvedDataDir() string {
-	if d := strings.TrimSpace(os.Getenv("DATA_DIR")); d != "" {
+	if d := strings.TrimSpace(os.Getenv("DataDir")); d != "" {
 		return d
 	}
 	if node.DataDir != "" {

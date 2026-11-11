@@ -50,9 +50,9 @@ const (
 // value, then the dev-build default <install>/data. inTree reports whether
 // that directory lives inside the install tree — only in-tree data is migrated.
 func CaptureDataDir(inst Install) (dir string, inTree bool) {
-	raw := strings.TrimSpace(inst.Env["DATA_DIR"])
+	raw := strings.TrimSpace(inst.Env["DataDir"])
 	if raw == "" {
-		raw = strings.TrimSpace(os.Getenv("DATA_DIR"))
+		raw = strings.TrimSpace(os.Getenv("DataDir"))
 	}
 	if raw == "" {
 		raw = strings.TrimSpace(inst.DataDir)

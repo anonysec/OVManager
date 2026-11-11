@@ -50,7 +50,7 @@ const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn
 // dataDir resolves DATA_DIR per call so tests and callers swapping the
 // environment stay fresh, falling back to the package default.
 func dataDir() string {
-	if d := strings.TrimSpace(os.Getenv("DATA_DIR")); d != "" {
+	if d := strings.TrimSpace(os.Getenv("DataDir")); d != "" {
 		return d
 	}
 	if DataDir != "" {

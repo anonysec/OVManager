@@ -36,10 +36,10 @@ func runTrafficSync(db *sql.DB) node.TrafficResult {
 	return fn(db)
 }
 
-// trafficPollSeconds is OVM_TRAFFIC_POLL_SECONDS (default 60). A non-positive
+// trafficPollSeconds is TrafficPollSeconds (default 60). A non-positive
 // or unparsable value falls back to the default rather than spinning the loop.
 func trafficPollSeconds() int {
-	if v := strings.TrimSpace(envOrFile("OVM_TRAFFIC_POLL_SECONDS")); v != "" {
+	if v := strings.TrimSpace(envOrFile("TrafficPollSeconds")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}

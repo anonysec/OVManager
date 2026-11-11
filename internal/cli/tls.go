@@ -1,7 +1,7 @@
 // `ovmanager tls` (cli): terminal-side HTTPS certificate management.
 // Issuance and installation happen here; the panel process only reads the
 // resulting files at startup to decide bind mode. The target pair is the
-// DECLARED pair — SSL_CERTFILE/SSL_KEYFILE from the install .env (or the
+// DECLARED pair — TlsCertFile/TlsKeyFile from the install .env (or the
 // environment) when present — falling back to DATA_DIR/tls, the same
 // resolution panel.SSLCertPath performs. Writing always to DATA_DIR/tls would
 // leave a declared install serving its old certificate.
@@ -24,16 +24,16 @@ import (
 func tlsDir(inst Install) string { return filepath.Join(inst.DataDir, "tls") }
 
 // tlsTargetPaths resolves where the panel reads the pair at startup: the
-// declared SSL_CERTFILE/SSL_KEYFILE when BOTH are set, else the DATA_DIR/tls
+// declared TlsCertFile/TlsKeyFile when BOTH are set, else the DATA_DIR/tls
 // pair. Mirrors panel.SSLCertPath/SSLKeyPath (the cli cannot call those
 // directly, they resolve against the running process's working directory).
 func tlsTargetPaths(inst Install) (cert, key string) {
 	dir := tlsDir(inst)
 	cert = filepath.Join(dir, "fullchain.pem")
 	key = filepath.Join(dir, "privkey.pem")
-	if c := strings.TrimSpace(inst.Env["SSL_CERTFILE"]); c != "" &&
-		strings.TrimSpace(inst.Env["SSL_KEYFILE"]) != "" {
-		return c, strings.TrimSpace(inst.Env["SSL_KEYFILE"])
+	if c := strings.TrimSpace(inst.Env["TlsCertFile"]); c != "" &&
+		strings.TrimSpace(inst.Env["TlsKeyFile"]) != "" {
+		return c, strings.TrimSpace(inst.Env["TlsKeyFile"])
 	}
 	return cert, key
 }

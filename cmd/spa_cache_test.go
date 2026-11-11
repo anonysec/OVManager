@@ -44,7 +44,7 @@ func TestSPACachesIndexAndFileServer(t *testing.T) {
 	}
 	t.Setenv("OVM_APP_DIR", dir)
 	dataDir := t.TempDir()
-	t.Setenv("DATA_DIR", dataDir)
+	t.Setenv("DataDir", dataDir)
 	conn, err := db.Open(filepath.Join(dataDir, "panel.db"))
 	if err != nil {
 		t.Fatal(err)

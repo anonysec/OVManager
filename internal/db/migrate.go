@@ -191,7 +191,7 @@ func seedSettings(x execer) error {
 	if n > 0 {
 		return nil
 	}
-	urlpath := strings.Trim(strings.TrimSpace(os.Getenv("URLPATH")), `"'`)
+	urlpath := strings.Trim(strings.TrimSpace(os.Getenv("BasePath")), `"'`)
 	urlpath = strings.Trim(urlpath, "/")
 	_, err := x.Exec(
 		`INSERT INTO Setting
@@ -208,7 +208,7 @@ func seedSettings(x execer) error {
 }
 
 func seedOwnerAndFirstUser(x execer) error {
-	owner := envDefault("ADMIN_USERNAME", "admin")
+	owner := envDefault("OwnerUsername", "admin")
 	if owner != "" {
 		var n int
 		if err := x.QueryRow("SELECT COUNT(*) FROM Admin WHERE username = ?", owner).Scan(&n); err != nil {

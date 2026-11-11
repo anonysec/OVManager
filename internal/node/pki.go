@@ -17,7 +17,7 @@ import (
 var DataDir = defaultDataDir()
 
 func defaultDataDir() string {
-	if d := os.Getenv("DATA_DIR"); d != "" {
+	if d := os.Getenv("DataDir"); d != "" {
 		return d
 	}
 	return filepath.Join("data")

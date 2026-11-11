@@ -26,9 +26,9 @@ func TestOpenConfigSQLiteOnly(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
-	t.Setenv("DB_PATH", "/tmp/explicit.db")
-	t.Setenv("DATA_DIR", "/tmp/fallback")
-	t.Setenv("DB_POOL_SIZE", "9")
+	t.Setenv("DbPath", "/tmp/explicit.db")
+	t.Setenv("DataDir", "/tmp/fallback")
+	t.Setenv("DbPoolSize", "9")
 	cfg := ConfigFromEnv()
 	if cfg.Path != "/tmp/explicit.db" {
 		t.Fatalf("Path = %q, want /tmp/explicit.db", cfg.Path)

@@ -138,13 +138,13 @@ func waitForServiceStopped() bool {
 }
 
 func restoreDBPath(install Install) string {
-	oldData := os.Getenv("DATA_DIR")
+	oldData := os.Getenv("DataDir")
 	oldApp := os.Getenv("OVM_APP_DIR")
 	if install.InstallDir != "" {
 		_ = os.Setenv("OVM_APP_DIR", install.InstallDir)
 	}
 	if install.DataDir != "" {
-		_ = os.Setenv("DATA_DIR", install.DataDir)
+		_ = os.Setenv("DataDir", install.DataDir)
 	}
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
@@ -152,9 +152,9 @@ func restoreDBPath(install Install) string {
 		path = filepath.Join(install.DataDir, "app.db")
 	}
 	if oldData == "" {
-		_ = os.Unsetenv("DATA_DIR")
+		_ = os.Unsetenv("DataDir")
 	} else {
-		_ = os.Setenv("DATA_DIR", oldData)
+		_ = os.Setenv("DataDir", oldData)
 	}
 	if oldApp == "" {
 		_ = os.Unsetenv("OVM_APP_DIR")

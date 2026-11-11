@@ -40,7 +40,7 @@ func main() {
 func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	dataDir := env("DATA_DIR", node.DataDir)
+	dataDir := env("DataDir", node.DataDir)
 	cfg := db.ConfigFromEnv()
 	if cfg.Path == "" {
 		cfg.Path = filepath.Join(dataDir, "app.db")
@@ -55,18 +55,14 @@ func run() int {
 		log.Printf("migrate database: %v", err)
 		return 1
 	}
-	port := env("PORT", "2095")
+	port := env("Port", "2095")
 	certFile := panel.SSLCertPath()
 	keyFile := panel.SSLKeyPath()
 	tlsEnabled := fileExists(certFile) && fileExists(keyFile)
 	svc := auth.NewService(conn, dataDir)
-	svc.TrustedProxy = svc.TrustedProxy || panel.TrustedProxyEnabled()
 	handler := panelRouter(svc)
 	addr, useTLS := serveMode(tlsEnabled, port)
-	if svc.TrustedProxy && (strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, ":")) {
-		log.Printf("SECURITY WARNING: TRUSTED_PROXY is enabled while binding to public address %s.", addr)
-	}
-	if !useTLS && !svc.TrustedProxy {
+	if !useTLS {
 		log.Printf("SECURITY WARNING: panel is serving over HTTP without TLS; session cookies are Secure and will be blocked by browsers.")
 	}
 	srv := newServer(addr, handler)
@@ -115,7 +111,7 @@ func panelRouter(svc *auth.Service) http.Handler {
 	h.MountLogs(api)
 
 	root := http.NewServeMux()
-	root.Handle("/health", health.Router(panel.TrustedProxyEnabled()))
+	root.Handle("/health", health.Router())
 	root.Handle("/api/", http.StripPrefix("/api", api))
 	root.Handle("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -309,13 +305,13 @@ func env(key, fallback string) string {
 // plaintext binds loopback unless HOST says otherwise; TLS binds all
 // interfaces.
 //
-// A native install writes HOST=127.0.0.1 (install.sh), so it stays on
+// A native install writes Host=127.0.0.1 (install.sh), so it stays on
 // loopback behind a reverse proxy.
 func serveMode(tlsEnabled bool, port string) (string, bool) {
 	host := "127.0.0.1"
 	if tlsEnabled {
 		host = "0.0.0.0"
-	} else if h := strings.TrimSpace(env("HOST", "")); h != "" {
+	} else if h := strings.TrimSpace(env("Host", "")); h != "" {
 		host = h
 	}
 	return net.JoinHostPort(host, port), tlsEnabled
