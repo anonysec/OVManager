@@ -203,7 +203,7 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 				baseEpochs[nid] = ep
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	// blob fallback only when table empty for this user
 	if len(baselines) == 0 {

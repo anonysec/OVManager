@@ -294,12 +294,12 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 		for rows.Next() {
 			var ni nodeInfo
 			if err := rows.Scan(&ni.id, &ni.name); err != nil {
-				rows.Close()
+				_ = rows.Close()
 				return res, err
 			}
 			nodes = append(nodes, ni)
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 
 	now := float64(time.Now().Unix())

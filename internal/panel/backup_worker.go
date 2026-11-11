@@ -135,7 +135,7 @@ func (h *Handler) backupTickAt(now time.Time) {
 		var chatID int64
 		_ = db.QueryRow(`SELECT COALESCE(owner_telegram_id,0) FROM Setting LIMIT 1`).Scan(&chatID)
 		if token != "" && chatID != 0 {
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) // #nosec G304 // path is the panel-generated backup snapshot
 			if err == nil {
 				name := filepath.Base(path)
 				if !telemetry.TgSendDocumentExported(token, chatID, name, data, "OVManager backup "+day) {

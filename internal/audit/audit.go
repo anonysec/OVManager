@@ -70,7 +70,7 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
 	if err != nil {
 		return
 	}
@@ -124,7 +124,7 @@ func MarkPromoted(id int64) {
 			out = append(out, line)
 		}
 	}
-	_ = os.WriteFile(Path(), []byte(strings.Join(out, "\n")+"\n"), 0o600)
+	_ = os.WriteFile(Path(), []byte(strings.Join(out, "\n")+"\n"), 0o600) // #nosec G703 // Path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
 }
 
 // loadIDSeq seeds the id counter from the existing file, so ids stay

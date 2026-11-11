@@ -63,7 +63,7 @@ func ProcessPendingRevocations(db *sql.DB, limit int) RevocationResult {
 		}
 		jobs = append(jobs, j)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	res.Attempted = len(jobs)
 	pid := PanelIDFor(db)

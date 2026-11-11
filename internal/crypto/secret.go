@@ -44,7 +44,7 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 	target := filepath.Join(dataDir, keyFile)
 
 	// Load an existing, well-formed key.
-	if data, err := os.ReadFile(target); err == nil {
+	if data, err := os.ReadFile(target); err == nil { // #nosec G304 // target is DATA_DIR/secret.key, operator-configured
 		trimmed := strings.TrimSpace(string(data))
 		if k, err := hex.DecodeString(trimmed); err == nil && len(k) == 32 {
 			return k, nil
@@ -164,7 +164,7 @@ func DecryptSecret(stored string, dataDir string) (string, error) {
 
 // EncryptFile encrypts a file with AES-256-GCM and writes to dst with 0600 permissions.
 func EncryptFile(srcPath, dstPath string, key []byte) error {
-	data, err := os.ReadFile(srcPath)
+	data, err := os.ReadFile(srcPath) // #nosec G304 // callers pass backup-directory paths; the CLI validates the restore path
 	if err != nil {
 		return err
 	}
@@ -181,12 +181,12 @@ func EncryptFile(srcPath, dstPath string, key []byte) error {
 		return err
 	}
 	sealed := gcm.Seal(nonce, nonce, data, nil)
-	return os.WriteFile(dstPath, sealed, 0o600)
+	return os.WriteFile(dstPath, sealed, 0o600) // #nosec G703 // callers pass backup-directory paths; the CLI validates the restore path
 }
 
 // DecryptFile decrypts an AES-256-GCM file and writes to dst.
 func DecryptFile(srcPath, dstPath string, key []byte) error {
-	data, err := os.ReadFile(srcPath)
+	data, err := os.ReadFile(srcPath) // #nosec G304 // callers pass backup-directory paths; the CLI validates the restore path
 	if err != nil {
 		return err
 	}
@@ -207,5 +207,5 @@ func DecryptFile(srcPath, dstPath string, key []byte) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dstPath, plain, 0o600)
+	return os.WriteFile(dstPath, plain, 0o600) // #nosec G703 // callers pass backup-directory paths; the CLI validates the restore path
 }

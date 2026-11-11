@@ -385,9 +385,9 @@ func (c *Client) requestInner(method, path string, o reqOpts) (*envelope, error)
 		}
 		return nil, err
 	}
-	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK)", c.address)
+	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK)", c.address) // #nosec G706 // address comes from the operator-entered node record
 	c.fallbackUsed = true
-	insecure := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	insecure := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec G402 // opt-in via NODE_TLS_INSECURE_FALLBACK; warns and records TLS-unverified state
 	hc2 := &http.Client{Transport: insecure, Timeout: o.timeout}
 	env2, err2 := c.send(hc2, method, path, o)
 	if err2 != nil {

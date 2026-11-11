@@ -58,7 +58,7 @@ func PruneAuditLogs(db *sql.DB, keepDays int) int {
 	keepDays = clamp(keepDays, 1, 1<<30)
 	cutoff := float64(time.Now().UTC().AddDate(0, 0, -keepDays).Unix())
 	path := audit.Path()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
 	if err != nil {
 		return 0
 	}
@@ -88,7 +88,7 @@ func PruneAuditLogs(db *sql.DB, keepDays int) int {
 	if len(kept) > 0 {
 		out += "\n"
 	}
-	_ = os.WriteFile(path, []byte(out), 0o600)
+	_ = os.WriteFile(path, []byte(out), 0o600) // #nosec G703 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
 	return removed
 }
 

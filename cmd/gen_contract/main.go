@@ -31,14 +31,14 @@ func main() {
 	}
 	data := node.ContractJSON
 	if check {
-		current, err := os.ReadFile(path)
+		current, err := os.ReadFile(path) // #nosec G304 G703 // dev tool; path is an explicit CLI argument
 		if err != nil || string(current) != string(data) {
 			fmt.Fprintln(os.Stderr, "contract.json is stale; run: make contract")
 			os.Exit(1)
 		}
 		return
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil { // #nosec G703 G306 // dev tool; contract.json is a committed public artifact
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

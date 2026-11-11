@@ -768,15 +768,14 @@ func redeemActivation(ctx context.Context, db *sql.DB, token string, chatID int6
 					_ = conn.Raw(func(driverConn any) error {
 						return driver.ErrBadConn
 					})
-					contaminated = true
 				}
 				txOpen = false
 			}
 		}
 		if contaminated {
-			conn.Close()
+			_ = conn.Close()
 		} else {
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 

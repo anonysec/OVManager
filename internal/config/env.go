@@ -25,7 +25,7 @@ func ParseEnv(raw string) map[string]string {
 
 // ReadEnvFile reads and parses a .env file from disk.
 func ReadEnvFile(path string) map[string]string {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 // callers pass an app-dir .env path
 	if err != nil {
 		return make(map[string]string)
 	}
@@ -45,7 +45,7 @@ func EnvOrFile(key, def string) string {
 	envPaths = append(envPaths, ".env")
 
 	for _, p := range envPaths {
-		if raw, err := os.ReadFile(p); err == nil {
+		if raw, err := os.ReadFile(p); err == nil { // #nosec G304 G703 // p is OVM_APP_DIR/.env or ./.env, both operator-controlled
 			parsed := ParseEnv(string(raw))
 			if v, ok := parsed[key]; ok && strings.TrimSpace(v) != "" {
 				return strings.TrimSpace(v)
