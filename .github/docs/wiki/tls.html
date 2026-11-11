@@ -60,18 +60,18 @@
     <p>
       The panel serves HTTPS from the pair in <code>.env</code>, or from
       <code>DATA_DIR/tls</code> when no override is set. The matching command is
-      the interactive <code>ovmanager tls</code> menu (status, issue, renew,
-      remove, self-signed, custom install), not <code>https</code>.
+      the interactive <code>ovmanager tls</code> menu (status, remove,
+      self-signed, custom install), not <code>https</code>.
     </p>
 
-    <h2 id="switch">Switch to Let's Encrypt</h2>
+    <h2 id="switch">Use your own certificate</h2>
     <p>
-      Once a domain points at the server, issuance uses Let's Encrypt over HTTP-01
-      in the <code>ovmanager tls</code> menu: status, issue (get a certificate),
-      renew, remove, self-signed, or install a custom key and certificate. The
-      ACME challenge needs port 80 free for about 60 seconds; the daily
-      renewal timer (<code>ovmanager-acme-renew.timer</code>) renews the
-      certificate automatically 30 days before expiry.
+      In-process ACME issuance was removed. Put a browser-trusted certificate
+      at <code>DATA_DIR/tls/fullchain.pem</code> and
+      <code>DATA_DIR/tls/privkey.pem</code> (or point
+      <code>TlsCertFile</code>/<code>TlsKeyFile</code> at them), then restart the
+      panel. Any external client — certbot, acme.sh, your CA — can produce the
+      pair. There is no renewal timer inside the panel.
     </p>
 
     <h2 id="node-cert">The node's certificate</h2>
@@ -101,38 +101,14 @@
       </table>
     </div>
 
-    <h2 id="reverse-proxy">Running behind a reverse proxy (Nginx, Caddy, Cloudflare)</h2>
+    <h2 id="direct-tls">TLS is terminated by the panel</h2>
     <p>
-      If you terminate HTTPS at a fronting server or CDN:
+      The panel serves HTTPS itself. There is no reverse-proxy mode: forwarded
+      headers are not trusted, the client IP is the peer address, and HSTS is
+      emitted only on a real TLS connection. Point DNS at the panel and use
+      <code>TlsCertFile</code>/<code>TlsKeyFile</code> (or the installer's TLS
+      step) for the certificate.
     </p>
-    <ol>
-      <li>Set <code>TRUSTED_PROXY=true</code> in <code>/opt/ovmanager/.env</code> so the panel reads client IP from <code>X-Forwarded-For</code> and issues <code>Secure</code> cookies on <code>X-Forwarded-Proto: https</code>.</li>
-      <li>Forward the headers: <code>Host</code>, <code>X-Forwarded-Proto</code> and <code>X-Forwarded-For</code> (or <code>X-Real-IP</code>, or <code>CF-Connecting-IP</code> from Cloudflare).</li>
-      <li>Disable buffering for the live stream: <code>proxy_buffering off;</code> in the panel's <code>location /</code> block, so the SSE telemetry is not starved.</li>
-    </ol>
-    <figure class="cmd">
-      <figcaption>Example Nginx configuration</figcaption>
-      <pre><code>server {
-    listen 443 ssl http2;
-    server_name panel.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:2095;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_buffering off;
-        proxy_read_timeout 300s;
-    }
-}</code></pre>
-    </figure>
 
     <h2 id="next">Next</h2>
     <p><a href="backup.html">Backups &amp; restore</a>.</p>

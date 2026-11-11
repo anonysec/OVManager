@@ -104,7 +104,7 @@ sudo ovmanager reset-password -p 'new-long-password'</code></pre>
     <h2 id="health-probe"><code>ovmanager status</code> or <code>ovmanager logs</code> report the panel unreachable</h2>
     <p>
       Rarely a certificate problem. The panel's health probe pins the certificate
-      file declared in <code>.env</code> (<code>SSL_CERTFILE</code>) and only
+      file declared in <code>.env</code> (<code>TlsCertFile</code>) and only
       falls back to unverified behaviour when it cannot read that file, so a
       healthy self-signed panel reads as healthy. The hostname is not checked on
       purpose: the installer's certificate carries the public IP and has no SANs.
@@ -170,22 +170,6 @@ curl -sk https://127.0.0.1:2083/sync/health</code></pre>
       install time, or the base URL under <strong>Settings &rarr; Subscription
       Link</strong>), then restart the panel.
     </p>
-
-    <h2 id="proxy-issues">Reverse proxy issues: rate limiting or live telemetry freezing</h2>
-    <ul>
-      <li>
-        <strong>All users rate-limited together:</strong> with Nginx, Caddy or
-        Cloudflare in front, ensure <code>TRUSTED_PROXY=true</code> is set in
-        <code>/opt/ovmanager/.env</code>. Without it, the panel sees the proxy IP
-        as the client and shares login-failure counters across all users.
-      </li>
-      <li>
-        <strong>Live stats not updating:</strong> the live dashboard uses Server
-        -Sent Events (SSE). If your reverse proxy buffers, the stream stalls.
-        Disable buffering in the panel's <code>location /</code> block:
-        <code>proxy_buffering off;</code> and <code>proxy_read_timeout 300s;</code>.
-      </li>
-    </ul>
 
     <h2 id="no-internet">VPN connects but there is no internet</h2>
     <p>This is a node-side problem: IP forwarding and NAT.</p>

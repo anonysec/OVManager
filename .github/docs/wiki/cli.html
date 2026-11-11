@@ -104,7 +104,8 @@
     <h2 id="config">Configuration</h2>
     <p>
       The panel reads <code>/opt/ovmanager/.env</code>. The installer writes a
-      minimal file (HOST, PORT, URLPATH, ADMIN_USERNAME, DATA_DIR) and sets no
+      minimal file (<code>Host</code>, <code>Port</code>, <code>BasePath</code>,
+      <code>OwnerUsername</code>, <code>DataDir</code>) and sets no
       secrets there &mdash; the owner password is a bcrypt hash in the database,
       never in <code>.env</code>. The documented variables are:
     </p>
@@ -114,17 +115,18 @@
           <tr><th scope="col">Variable</th><th scope="col">Effect</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>HOST</code></td><td>Bind address the panel listens on (default <code>127.0.0.1</code>).</td></tr>
-          <tr><td><code>PORT</code></td><td>Listen port (default <code>2095</code>).</td></tr>
-          <tr><td><code>URLPATH</code></td><td>Secret URL prefix (default <code>dashboard</code>); leave empty for the default.</td></tr>
-          <tr><td><code>ADMIN_USERNAME</code></td><td>Which database row is the owner (default <code>admin</code>).</td></tr>
-          <tr><td><code>DATA_DIR</code></td><td>Database, backups and node material (default <code>/var/lib/ovmanager</code>, mode <code>0700</code>).</td></tr>
-          <tr><td><code>OVMANAGER_LIVE_POLL_SECONDS</code></td><td>Live poll interval for the dashboard collector.</td></tr>
-          <tr><td><code>OVM_TRAFFIC_POLL_SECONDS</code></td><td>Traffic polling interval.</td></tr>
-          <tr><td><code>OVM_METRICS_INTERVAL_SECONDS</code></td><td>Metrics collection interval.</td></tr>
-          <tr><td><code>TRUSTED_PROXY</code></td><td>Read real client IPs from <code>X-Forwarded-For</code> when behind your own nginx/Caddy/Cloudflare.</td></tr>
-          <tr><td><code>OVM_REPO</code></td><td>Release source for <code>ovmanager update</code> (fork, e.g. <code>myorg/OVManager</code>).</td></tr>
-          <tr><td><code>OVM_ACME_DOMAIN</code></td><td>Domain for the built-in Let's Encrypt issuance.</td></tr>
+          <tr><td><code>Host</code></td><td>Bind address (default <code>127.0.0.1</code>).</td></tr>
+          <tr><td><code>Port</code></td><td>Listen port (default <code>2095</code>).</td></tr>
+          <tr><td><code>BasePath</code></td><td>Secret URL prefix (default <code>dashboard</code>); empty means the default.</td></tr>
+          <tr><td><code>OwnerUsername</code></td><td>Which database row is the owner (default <code>admin</code>).</td></tr>
+          <tr><td><code>DataDir</code></td><td>Database, backups and node material (default <code>/var/lib/ovmanager</code>, mode <code>0700</code>).</td></tr>
+          <tr><td><code>DbPath</code></td><td>Explicit SQLite file; defaults to <code>DataDir/app.db</code>.</td></tr>
+          <tr><td><code>TlsCertFile</code>, <code>TlsKeyFile</code></td><td>Certificate pair; empty means <code>DataDir/tls/fullchain.pem</code> and <code>privkey.pem</code>.</td></tr>
+          <tr><td><code>SecretKey</code></td><td>64 hex characters; defaults to <code>DataDir/secret.key</code>.</td></tr>
+          <tr><td><code>PublicUrl</code></td><td>Public address used in subscription links.</td></tr>
+          <tr><td><code>SubscriptionPath</code></td><td>Subscription page segment (default <code>sub</code>).</td></tr>
+          <tr><td><code>TrafficPollSeconds</code>, <code>ProbeTimeoutSeconds</code></td><td>Traffic poll cadence and per-node probe timeout.</td></tr>
+          <tr><td><code>SessionTtlSeconds</code>, <code>SessionIdleSeconds</code></td><td>Absolute session lifetime and idle timeout.</td></tr>
         </tbody>
       </table>
     </div>

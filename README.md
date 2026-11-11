@@ -2,6 +2,11 @@
 
 Self-hosted OpenVPN admin panel: users, traffic quotas, expiry dates, device limits, and live sessions, across one server or many.
 
+**2.0.0 is the first supported release.** The database (`app.db`), schema and
+state formats start here; pre-2.0.0 installs are not upgradable. The panel
+terminates TLS itself — there is no reverse-proxy mode. OpenVPN tuning is set
+per node from the drawer, not in `.env`.
+
 **Install (fresh Debian/Ubuntu, as root):**
 
 ```bash
