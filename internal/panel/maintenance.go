@@ -776,8 +776,8 @@ func (h *Handler) usageResetAll(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "Confirmation required — resend with confirm=true", nil)
 		return
 	}
-// Keep node_usage (baselines + push_hash) and set the reseed marker so the
-// next traffic pass seeds instead of re-accounting (design §4.6).
+	// Keep node_usage (baselines + push_hash) and set the reseed marker so the
+	// next traffic pass seeds instead of re-accounting (design §4.6).
 	rows, err := h.Svc.DB().QueryContext(context.Background(), `SELECT id, COALESCE(used,0), COALESCE(node_usage, '{}') FROM User`)
 	if err != nil {
 		envelope(w, false, "Usage reset failed: "+err.Error(), nil)

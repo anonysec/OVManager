@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/anonysec/OVManager/internal/accounting"
 	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/auth"
-	"github.com/anonysec/OVManager/internal/accounting"
 	"github.com/anonysec/OVManager/internal/node"
 )
 

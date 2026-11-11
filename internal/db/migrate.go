@@ -41,12 +41,12 @@ func adoptLegacyTables(x execer) error {
 	// legacy -> current table name mapping. Only rename when the current
 	// PascalCase table does not yet exist; if both exist, copy rows.
 	renames := map[string]string{
-		"users":                 "User",
-		"admins":                "Admin",
-		"nodes":                 "Node",
-		"settings":              "Setting",
-		"user_traffic_daily":    "UserTrafficDaily",
-		"delivered":             "Delivered",
+		"users":                    "User",
+		"admins":                   "Admin",
+		"nodes":                    "Node",
+		"settings":                 "Setting",
+		"user_traffic_daily":       "UserTrafficDaily",
+		"delivered":                "Delivered",
 		"pending_user_revocations": "PendingUserRevocation",
 	}
 
@@ -113,7 +113,7 @@ func copyLegacyRows(x execer, legacy, current string) error {
 	return err
 }
 
- func Migrate(conn *sql.DB) (int, error) {
+func Migrate(conn *sql.DB) (int, error) {
 	before, err := userVersion(conn)
 	if err != nil {
 		return 0, err
