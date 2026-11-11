@@ -14,7 +14,7 @@ func TestScanNodeReturnsErrorOnBadEncryptedKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if _, err := d.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name TEXT, address TEXT, tunnel_address TEXT, protocol TEXT, ovpn_port INTEGER, port INTEGER, key TEXT, status INTEGER, server_ca TEXT, country_code TEXT, latitude REAL, longitude REAL, extra_ports TEXT)`); err != nil {
+	if _, err := d.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name TEXT, address TEXT, tunnel_address TEXT, protocol TEXT, ovpn_port INTEGER, port INTEGER, key TEXT, status INTEGER, server_ca TEXT, country_code TEXT, latitude REAL, longitude REAL, extra_ports TEXT, settings TEXT DEFAULT '{}')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(`INSERT INTO Node (id, name, address, key, status) VALUES (1, 'n', '1.2.3.4', 'enc:v2:AAAA', 1)`); err != nil {

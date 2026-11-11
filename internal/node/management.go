@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -44,7 +45,7 @@ func panelDomainFor(db *sql.DB) string {
 }
 
 const nodeCols = `id, name, address, COALESCE(tunnel_address,''), protocol, ovpn_port, port,
-	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,'')`
+	COALESCE(key,''), status, server_ca, country_code, latitude, longitude, COALESCE(extra_ports,''), COALESCE(settings,'{}')`
 
 // dataDir resolves DATA_DIR per call so tests and callers swapping the
 // environment stay fresh, falling back to the package default.
@@ -61,7 +62,7 @@ func dataDir() string {
 func scanNode(row interface{ Scan(...any) error }) (*Node, error) {
 	n := &Node{}
 	err := row.Scan(&n.ID, &n.Name, &n.Address, &n.TunnelAddress, &n.Protocol, &n.OVPNPort,
-		&n.Port, &n.Key, &n.Status, &n.ServerCA, &n.CountryCode, &n.Latitude, &n.Longitude, &n.ExtraPorts)
+		&n.Port, &n.Key, &n.Status, &n.ServerCA, &n.CountryCode, &n.Latitude, &n.Longitude, &n.ExtraPorts, &n.Settings)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +293,32 @@ func listNodes(db *sql.DB) []map[string]any {
 			"latitude":       nullFloat(n.Latitude),
 			"longitude":      nullFloat(n.Longitude),
 			"extra_ports":    n.ExtraPorts,
+			"settings":       jsonObject(n.Settings),
 		})
+	}
+	return out
+}
+
+// settingsMap turns the request object into the map the node client sends.
+func settingsMap(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// jsonObject returns the stored settings as a JSON value rather than a string.
+func jsonObject(raw string) any {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]any{}
+	}
+	var out any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return map[string]any{}
 	}
 	return out
 }
@@ -403,18 +429,19 @@ func sessionDiagnosticsMap(s *SessionsResponse) map[string]any {
 // --- handlers request bodies ---
 
 type nodeCreate struct {
-	Name                string  `json:"name"`
-	Address             string  `json:"address"`
-	TunnelAddress       *string `json:"tunnel_address"`
-	Protocol            string  `json:"protocol"`
-	OVPNPort            int     `json:"ovpn_port"`
-	Port                int     `json:"port"`
-	Key                 *string `json:"key"`
-	Cert                *string `json:"cert"`
-	ExpectedFingerprint *string `json:"expected_fingerprint"`
-	ConfirmFingerprint  *bool   `json:"confirm_fingerprint"`
-	Status              *bool   `json:"status"`
-	CountryCode         *string `json:"country_code"`
+	Name                string          `json:"name"`
+	Address             string          `json:"address"`
+	TunnelAddress       *string         `json:"tunnel_address"`
+	Protocol            string          `json:"protocol"`
+	OVPNPort            int             `json:"ovpn_port"`
+	Port                int             `json:"port"`
+	Key                 *string         `json:"key"`
+	Cert                *string         `json:"cert"`
+	ExpectedFingerprint *string         `json:"expected_fingerprint"`
+	ConfirmFingerprint  *bool           `json:"confirm_fingerprint"`
+	Status              *bool           `json:"status"`
+	CountryCode         *string         `json:"country_code"`
+	Settings            json.RawMessage `json:"settings"`
 }
 
 func (r nodeCreate) key() string {
@@ -432,10 +459,54 @@ func (r nodeCreate) tunnel() string {
 }
 
 func (r nodeCreate) protocol() string {
-	if r.Protocol == "" {
+	switch strings.ToLower(strings.TrimSpace(r.Protocol)) {
+	case "tcp":
 		return "tcp"
+	case "both":
+		return "both"
+	default:
+		return "udp"
 	}
-	return r.Protocol
+}
+
+// settingsJSON is the validated settings object stored on the row. An absent
+// value becomes an empty object, never NULL.
+func (r nodeCreate) settingsJSON() string {
+	if len(r.Settings) == 0 || string(r.Settings) == "null" {
+		return "{}"
+	}
+	return string(r.Settings)
+}
+
+// validateNodeSettings keeps the row to a bounded JSON object. Values are
+// validated by the node; the panel only enforces shape and size.
+func validateNodeSettings(raw json.RawMessage) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	if len(raw) > 64<<10 {
+		return fmt.Errorf("settings exceed 64 KiB")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return fmt.Errorf("settings must be a JSON object")
+	}
+	compact, err := json.Marshal(obj)
+	if err != nil {
+		return fmt.Errorf("settings are not encodable")
+	}
+	if len(compact) > 64<<10 {
+		return fmt.Errorf("settings exceed 64 KiB")
+	}
+	return nil
+}
+
+func validProtocol(p string) bool {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "", "udp", "tcp", "both":
+		return true
+	}
+	return false
 }
 
 func (r nodeCreate) ovpnPort() int {
@@ -546,7 +617,7 @@ func UpdateNodeHandler(nodeID int64, req nodeCreate, db *sql.DB) (bool, string) 
 		}
 		return false, "Node unreachable — the panel saved the record but could not apply the settings. Configure after registration."
 	}
-	if nr.UpdateConfig(UpdateConfigParams{TunnelAddress: req.tunnel(), Protocol: req.protocol(), OVPNPort: req.ovpnPort()}) != true {
+	if nr.UpdateConfig(UpdateConfigParams{TunnelAddress: req.tunnel(), Protocol: req.protocol(), OVPNPort: req.ovpnPort(), Settings: settingsMap(req.Settings)}) != true {
 		return true, "Node updated, but the new VPN settings could not be applied on the node."
 	}
 	return true, "Node updated successfully"
@@ -604,10 +675,10 @@ func createNode(db *sql.DB, req nodeCreate, serverCA string) (int64, error) {
 		storedKey = enc
 	}
 	res, err := db.Exec(
-		`INSERT INTO Node (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO Node (name, address, tunnel_address, protocol, ovpn_port, port, key, status, server_ca, country_code, latitude, longitude, settings)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(),
-		storedKey, req.status(), nullIfEmpty(serverCA), cc, lat, lon,
+		storedKey, req.status(), nullIfEmpty(serverCA), cc, lat, lon, req.settingsJSON(),
 	)
 	if err != nil {
 		return 0, err
@@ -624,8 +695,8 @@ func updateNode(db *sql.DB, id int64, req nodeCreate, cert, apiKey string) error
 	if enc, err := crypto.EncryptSecret(storedKey, dataDir()); err == nil {
 		storedKey = enc
 	}
-	set := `name=?, address=?, tunnel_address=?, protocol=?, ovpn_port=?, port=?, status=?, key=?`
-	args := []any{req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(), req.status(), storedKey}
+	set := `name=?, address=?, tunnel_address=?, protocol=?, ovpn_port=?, port=?, status=?, key=?, settings=?`
+	args := []any{req.Name, req.Address, req.tunnel(), req.protocol(), req.ovpnPort(), req.port(), req.status(), storedKey, req.settingsJSON()}
 	if manual != "" {
 		set += `, country_code=?, latitude=NULL, longitude=NULL`
 		args = append(args, manual)

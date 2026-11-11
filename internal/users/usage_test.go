@@ -14,7 +14,7 @@ func usageTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if _, err := db.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name TEXT NOT NULL)`); err != nil {
+	if _, err := db.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name TEXT NOT NULL, settings TEXT DEFAULT '{}')`); err != nil {
 		t.Fatal(err)
 	}
 	return db

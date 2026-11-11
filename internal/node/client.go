@@ -99,6 +99,7 @@ type Node struct {
 	Latitude      sql.NullFloat64
 	Longitude     sql.NullFloat64
 	ExtraPorts    string
+	Settings      string
 }
 
 type Client struct {
@@ -682,6 +683,7 @@ type UpdateConfigParams struct {
 	EnableIPv6     *bool
 	IPv6Prefix     *string
 	ExtraPorts     *string
+	Settings       map[string]any
 	ReturnEnvelope bool
 }
 
@@ -709,6 +711,9 @@ func (c *Client) UpdateConfig(p UpdateConfigParams) any {
 	}
 	if p.ExtraPorts != nil {
 		payload["extra_ports"] = *p.ExtraPorts
+	}
+	if len(p.Settings) > 0 {
+		payload["settings"] = p.Settings
 	}
 	if p.ReturnEnvelope {
 		env, err := c.requestInner(http.MethodPost, "/sync/config", reqOpts{jsonBody: payload, timeout: LongTimeout, allowFail: true})

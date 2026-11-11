@@ -62,8 +62,7 @@ func setupNodeTestDB(t *testing.T) *sql.DB {
 			country_code TEXT,
 			latitude REAL,
 			longitude REAL,
-			extra_ports TEXT
-		);
+			extra_ports TEXT, settings TEXT DEFAULT '{}');
 		CREATE TABLE audit_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,

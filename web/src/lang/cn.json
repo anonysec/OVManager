@@ -827,5 +827,21 @@
   "systemActor": "system",
   "chartPeriod24h": "24h",
   "chartPeriod7d": "7d",
-  "notAvailable": "—"
+  "notAvailable": "—",
+  "protocolBoth": "两者（UDP + TCP）",
+  "ovpnTuning": "OpenVPN 调优",
+  "ovpnRestartHint": "更改协议、端口和 IPv6 会重启 OpenVPN 并重连客户端；其余设置热加载。",
+  "maxClients": "最大客户端数",
+  "keepalivePing": "保活 Ping（秒）",
+  "keepaliveTimeout": "保活超时（秒）",
+  "mssfix": "MSS 修正（0 = 自动）",
+  "mssfixHint": "较低值适合 PPPoE 和移动网络；0 为自动。",
+  "tlsMin": "最低 TLS 版本",
+  "tls12Compat": "TLS 1.2（旧客户端）",
+  "cipherFirst": "首选加密",
+  "ovpnVerb": "日志级别",
+  "redirectGateway": "所有客户端流量走 VPN",
+  "blockOutsideDns": "阻止隧道外 DNS（Windows）",
+  "clientToClient": "允许客户端互访",
+  "saveTuning": "保存调优"
 }

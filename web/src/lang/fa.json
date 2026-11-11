@@ -827,5 +827,21 @@
   "systemActor": "system",
   "chartPeriod24h": "24h",
   "chartPeriod7d": "7d",
-  "notAvailable": "—"
+  "notAvailable": "—",
+  "protocolBoth": "هر دو (UDP + TCP)",
+  "ovpnTuning": "تنظیمات OpenVPN",
+  "ovpnRestartHint": "تغییر پروتکل، پورت و IPv6 باعث راه‌اندازی مجدد OpenVPN و اتصال مجدد کلاینت‌ها می‌شود؛ بقیه بدون قطعی اعمال می‌شوند.",
+  "maxClients": "حداکثر کلاینت",
+  "keepalivePing": "پینگ نگهدارنده (ثانیه)",
+  "keepaliveTimeout": "مهلت نگهدارنده (ثانیه)",
+  "mssfix": "اصلاح MSS (۰ = خودکار)",
+  "mssfixHint": "مقدار کمتر برای PPPoE و شبکه موبایل بهتر است؛ ۰ یعنی انتخاب خودکار.",
+  "tlsMin": "حداقل نسخه TLS",
+  "tls12Compat": "TLS 1.2 (کلاینت‌های قدیمی)",
+  "cipherFirst": "رمز ترجیحی",
+  "ovpnVerb": "سطح لاگ",
+  "redirectGateway": "هدایت تمام ترافیک کلاینت از VPN",
+  "blockOutsideDns": "مسدود کردن DNS خارج از تونل (ویندوز)",
+  "clientToClient": "اجازه ارتباط کلاینت‌ها با یکدیگر",
+  "saveTuning": "ذخیره تنظیمات"
 }

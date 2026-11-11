@@ -60,7 +60,7 @@ func TestFreshDatabaseIsTheBaseline(t *testing.T) {
 	want := map[string][]string{
 		"Admin":                 {"id", "username", "password", "is_owner", "role", "telegram_id"},
 		"User":                  {"id", "uuid", "name", "total", "used", "last_node_usage", "node_usage", "max_logins", "expiry_date", "is_active", "last_online", "tag", "telegram_chat_id", "activation_token_hash", "activation_token_expires_at"},
-		"Node":                  {"id", "name", "address", "tunnel_address", "protocol", "ovpn_port", "port", "key", "status", "server_ca", "country_code", "latitude", "longitude", "extra_ports", "node_contract_version"},
+		"Node":                  {"id", "name", "address", "tunnel_address", "protocol", "ovpn_port", "port", "key", "status", "server_ca", "country_code", "latitude", "longitude", "extra_ports", "node_contract_version", "settings"},
 		"Delivered":             {"id", "subscription", "event_key", "ts"},
 		"NodeStat":              {"id", "node_id", "created_at", "cpu", "memory", "live_count", "reachable"},
 		"PendingUserRevocation": {"node_id", "user_id", "user_uuid", "user_name", "created_at", "last_error"},

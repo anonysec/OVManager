@@ -16,7 +16,7 @@ func TestGetOrCreateSecretKeyRefusesMissingKeyWithEncryptedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, key TEXT); INSERT INTO Node (id, key) VALUES (1, 'enc:v2:AAAA');`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, key TEXT, settings TEXT DEFAULT '{}'); INSERT INTO Node (id, key) VALUES (1, 'enc:v2:AAAA');`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := GetOrCreateSecretKey(dir); err == nil {

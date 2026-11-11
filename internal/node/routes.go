@@ -47,6 +47,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	h.register(mux, "POST /nodes", owner(h.handleAddNode))
 	h.register(mux, "POST /nodes/test", owner(h.handleTestNode))
 	h.register(mux, "PUT /nodes/{node_id}", owner(h.handleUpdateNode))
+	h.register(mux, "PUT /nodes/{node_id}/settings", owner(h.handleNodeSettings))
 	h.register(mux, "POST /nodes/{node_id}/repin", owner(h.handleRepin))
 	h.register(mux, "PUT /nodes/{node_id}/dns", owner(h.handleNodeDNS))
 	h.register(mux, "PUT /nodes/{node_id}/ipv6", owner(h.handleNodeIPv6))
@@ -102,6 +103,14 @@ func (h *Handler) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	var req nodeCreate
 	if !decodeBody(w, r, &req) {
 		auth.WriteValidation(w, "body", "Invalid request body")
+		return
+	}
+	if !validProtocol(req.Protocol) {
+		auth.WriteValidation(w, "protocol", "Protocol must be udp, tcp or both")
+		return
+	}
+	if err := validateNodeSettings(req.Settings); err != nil {
+		auth.WriteValidation(w, "settings", err.Error())
 		return
 	}
 	if req.Cert == nil || *req.Cert == "" {
@@ -203,6 +212,14 @@ func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
 		return
 	}
+	if !validProtocol(req.Protocol) {
+		auth.WriteValidation(w, "protocol", "Protocol must be udp, tcp or both")
+		return
+	}
+	if err := validateNodeSettings(req.Settings); err != nil {
+		auth.WriteValidation(w, "settings", err.Error())
+		return
+	}
 	if clash := getNodeByName(h.svc.DB(), req.Name); clash != nil && clash.ID != id {
 		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: fmt.Sprintf("Another node is already named '%s'.", req.Name)})
 		return
@@ -212,6 +229,49 @@ func (h *Handler) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		h.notifyChange("update")
 	}
 	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: ok, Msg: msg})
+}
+
+// handleNodeSettings applies the OpenVPN tuning object on the node and stores
+// it on the row so the drawer shows what was last accepted.
+func (h *Handler) handleNodeSettings(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Settings json.RawMessage `json:"settings"`
+	}
+	if !decodeBody(w, r, &req) {
+		auth.WriteValidation(w, "body", "Invalid request body")
+		return
+	}
+	if err := validateNodeSettings(req.Settings); err != nil {
+		auth.WriteValidation(w, "settings", err.Error())
+		return
+	}
+	n := h.nodeByID(r)
+	if n == nil {
+		auth.WriteDetail(w, http.StatusNotFound, "Node not found")
+		return
+	}
+	settings := settingsMap(req.Settings)
+	if settings == nil {
+		auth.WriteValidation(w, "settings", "Provide a settings object")
+		return
+	}
+	c := NodeClient(n, PanelIDFor(h.svc.DB()))
+	if c.UpdateConfig(UpdateConfigParams{Settings: settings}) != true {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "The node did not accept the settings. Check the values and that the node is reachable."})
+		return
+	}
+	compact, err := json.Marshal(settings)
+	if err != nil {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Could not store the settings."})
+		return
+	}
+	if _, err := h.svc.DB().ExecContext(r.Context(), `UPDATE Node SET settings = ? WHERE id = ?`, string(compact), n.ID); err != nil {
+		auth.WriteJSON(w, http.StatusOK, auth.Response{Success: false, Msg: "Settings applied on the node but not saved in the panel."})
+		return
+	}
+	audit.Record(h.svc.DB(), "admin", "Node.Settings", "info", "Node OpenVPN settings updated.", map[string]any{"target": n.Name})
+	h.notifyChange("settings")
+	auth.WriteJSON(w, http.StatusOK, auth.Response{Success: true, Msg: "OpenVPN settings applied.", Data: map[string]any{"settings": settings}})
 }
 
 func (h *Handler) handleNodeStatus(w http.ResponseWriter, r *http.Request) {

@@ -827,5 +827,21 @@
   "systemActor": "system",
   "chartPeriod24h": "24h",
   "chartPeriod7d": "7d",
-  "notAvailable": "—"
+  "notAvailable": "—",
+  "protocolBoth": "Оба (UDP + TCP)",
+  "ovpnTuning": "Настройки OpenVPN",
+  "ovpnRestartHint": "Смена протокола, порта и IPv6 перезапускает OpenVPN и переподключает клиентов; остальное применяется без разрыва.",
+  "maxClients": "Макс. клиентов",
+  "keepalivePing": "Keepalive ping (с)",
+  "keepaliveTimeout": "Таймаут keepalive (с)",
+  "mssfix": "MSS fix (0 = авто)",
+  "mssfixHint": "Меньшие значения помогают на PPPoE и мобильных сетях; 0 — авто.",
+  "tlsMin": "Минимальная версия TLS",
+  "tls12Compat": "TLS 1.2 (старые клиенты)",
+  "cipherFirst": "Предпочитаемый шифр",
+  "ovpnVerb": "Уровень логов",
+  "redirectGateway": "Весь трафик клиентов через VPN",
+  "blockOutsideDns": "Блокировать DNS вне туннеля (Windows)",
+  "clientToClient": "Разрешить клиентам связь друг с другом",
+  "saveTuning": "Сохранить настройки"
 }

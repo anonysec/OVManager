@@ -827,5 +827,21 @@
   "systemActor": "system",
   "chartPeriod24h": "24h",
   "chartPeriod7d": "7d",
-  "notAvailable": "—"
+  "notAvailable": "—",
+  "protocolBoth": "Both (UDP + TCP)",
+  "ovpnTuning": "OpenVPN tuning",
+  "ovpnRestartHint": "Protocol, port and IPv6 changes restart OpenVPN and reconnect clients; the rest reload without dropping them.",
+  "maxClients": "Max clients",
+  "keepalivePing": "Keepalive ping (s)",
+  "keepaliveTimeout": "Keepalive timeout (s)",
+  "mssfix": "MSS fix (0 = auto)",
+  "mssfixHint": "Lower values help on PPPoE and mobile links; 0 lets OpenVPN choose.",
+  "tlsMin": "Minimum TLS version",
+  "tls12Compat": "TLS 1.2 (older clients)",
+  "cipherFirst": "Preferred cipher",
+  "ovpnVerb": "Log verbosity",
+  "redirectGateway": "Route all client traffic through the VPN",
+  "blockOutsideDns": "Block DNS outside the tunnel (Windows)",
+  "clientToClient": "Allow clients to reach each other",
+  "saveTuning": "Save tuning"
 }

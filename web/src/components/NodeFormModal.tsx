@@ -194,6 +194,7 @@ const NodeFormModal = ({ node, isOpen, onClose, onSaved }: { node?: any; isOpen?
               <select name="protocol" value={formData.protocol} onChange={handleChange}>
                 <option value="udp">UDP</option>
                 <option value="tcp">TCP</option>
+                <option value="both">{t('protocolBoth', 'Both (UDP + TCP)')}</option>
               </select>
             </Field>
             <Field label={t('ovpnPort', 'OpenVPN port')} required error={fieldErrors.ovpn_port}>

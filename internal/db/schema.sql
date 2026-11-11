@@ -52,6 +52,7 @@ CREATE TABLE Node (
   longitude FLOAT,
   extra_ports VARCHAR DEFAULT '' NOT NULL,
   node_contract_version INTEGER DEFAULT 0 NOT NULL,
+  settings TEXT NOT NULL DEFAULT '{}',
   PRIMARY KEY (id)
 );
 

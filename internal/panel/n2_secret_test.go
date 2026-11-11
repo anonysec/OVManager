@@ -19,7 +19,7 @@ func TestAllNodesDecryptsEncryptedKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, tunnel_address VARCHAR, protocol VARCHAR, ovpn_port INTEGER, port INTEGER, key VARCHAR, status BOOLEAN, server_ca VARCHAR)`); err != nil {
+	if _, err := conn.Exec(`CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR, tunnel_address VARCHAR, protocol VARCHAR, ovpn_port INTEGER, port INTEGER, key VARCHAR, status BOOLEAN, server_ca VARCHAR, settings TEXT DEFAULT '{}')`); err != nil {
 		t.Fatal(err)
 	}
 	enc, err := crypto.EncryptSecret("node-secret-api-key", dir)

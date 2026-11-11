@@ -28,6 +28,19 @@ const apiError = (e: any, fallback: any) => {
   return fallback;
 };
 
+const OVPN_DEFAULTS = {
+  MaxClients: 250,
+  KeepalivePing: 10,
+  KeepaliveTimeout: 60,
+  RedirectGateway: true,
+  BlockOutsideDns: true,
+  ClientToClient: false,
+  Mssfix: 0,
+  TlsMin: '1.3',
+  CipherFirst: 'aes-128-gcm',
+  Verb: 3,
+};
+
 const NodeDrawer = ({
   node,
   initialTab = 'overview',
@@ -68,7 +81,10 @@ const NodeDrawer = ({
   const [ipv6On, setIpv6On] = useState(false);
   const [ipv6Prefix, setIpv6Prefix] = useState('');
   const [extraPorts, setExtraPorts] = useState(node?.extra_ports || '');
+  const [ovpn, setOvpn] = useState({ ...OVPN_DEFAULTS });
   const [repinPrompt, setRepinPrompt] = useState<any>(null);
+
+  const setOvpnField = (key: any, value: any) => setOvpn((prev) => ({ ...prev, [key]: value }));
 
   useEffect(() => {
     if (node) {
@@ -84,6 +100,7 @@ const NodeDrawer = ({
         cert: '',
       });
       setExtraPorts(node.extra_ports || '');
+      setOvpn({ ...OVPN_DEFAULTS, ...(node.settings || {}) });
       setEnabled(node.status === true || node.status === 'active');
     }
   }, [node]);
@@ -204,6 +221,25 @@ const NodeDrawer = ({
     const res = await apiClient.put(`/nodes/${node.id}/ports`, { extra_ports: extraPorts.trim() });
     const ok = Boolean(res.data?.success);
     setResult('ports', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : t('nodePortsSaveFailed', 'Failed to save extra ports')));
+    if (ok) onChanged?.();
+  });
+
+  const applyTuning = () => run('tuning', async () => {
+    const settings = {
+      MaxClients: Number(ovpn.MaxClients),
+      KeepalivePing: Number(ovpn.KeepalivePing),
+      KeepaliveTimeout: Number(ovpn.KeepaliveTimeout),
+      RedirectGateway: Boolean(ovpn.RedirectGateway),
+      BlockOutsideDns: Boolean(ovpn.BlockOutsideDns),
+      ClientToClient: Boolean(ovpn.ClientToClient),
+      Mssfix: Number(ovpn.Mssfix),
+      TlsMin: ovpn.TlsMin,
+      CipherFirst: ovpn.CipherFirst,
+      Verb: Number(ovpn.Verb),
+    };
+    const res = await apiClient.put(`/nodes/${node.id}/settings`, { settings });
+    const ok = Boolean(res.data?.success);
+    setResult('tuning', ok, res.data?.msg || (ok ? t('saved', 'Saved.') : t('nodeUpdateFailed', 'Could not update the node.')));
     if (ok) onChanged?.();
   });
 
@@ -411,6 +447,7 @@ const NodeDrawer = ({
                     <select name="protocol" value={formData.protocol} onChange={handleFormChange}>
                       <option value="udp">UDP</option>
                       <option value="tcp">TCP</option>
+                      <option value="both">{t('protocolBoth', 'Both (UDP + TCP)')}</option>
                     </select>
                   </Field>
                   <Field label={t('ovpnPort', 'OpenVPN port')}>
@@ -449,7 +486,76 @@ const NodeDrawer = ({
                 <ResultLine result={results.edit} />
               </section>
 
-              {/* 2. Extra Ports with Persistent Save */}
+              {/* 2. OpenVPN tuning */}
+              <section className="nd-section">
+                <h3 className="nd-section-title">{t('ovpnTuning', 'OpenVPN tuning')}</h3>
+                <p className="nd-section-hint">
+                  {t('ovpnRestartHint', 'Protocol, port and IPv6 changes restart OpenVPN and reconnect clients; the rest reload without dropping them.')}
+                </p>
+                <div className="nd-grid-2">
+                  <Field label={t('maxClients', 'Max clients')}>
+                    <input type="number" min="1" max="10000" value={ovpn.MaxClients}
+                      onChange={(e) => setOvpnField('MaxClients', e.target.value)} />
+                  </Field>
+                  <Field label={t('keepalivePing', 'Keepalive ping (s)')}>
+                    <input type="number" min="5" max="300" value={ovpn.KeepalivePing}
+                      onChange={(e) => setOvpnField('KeepalivePing', e.target.value)} />
+                  </Field>
+                  <Field label={t('keepaliveTimeout', 'Keepalive timeout (s)')}>
+                    <input type="number" min="30" max="900" value={ovpn.KeepaliveTimeout}
+                      onChange={(e) => setOvpnField('KeepaliveTimeout', e.target.value)} />
+                  </Field>
+                  <Field label={t('mssfix', 'MSS fix (0 = auto)')} hint={t('mssfixHint', 'Lower values help on PPPoE and mobile links; 0 lets OpenVPN choose.')}>
+                    <input type="number" min="0" max="1450" value={ovpn.Mssfix}
+                      onChange={(e) => setOvpnField('Mssfix', e.target.value)} />
+                  </Field>
+                  <Field label={t('tlsMin', 'Minimum TLS version')}>
+                    <select value={ovpn.TlsMin} onChange={(e) => setOvpnField('TlsMin', e.target.value)}>
+                      <option value="1.3">TLS 1.3</option>
+                      <option value="1.2">{t('tls12Compat', 'TLS 1.2 (older clients)')}</option>
+                    </select>
+                  </Field>
+                  <Field label={t('cipherFirst', 'Preferred cipher')}>
+                    <select value={ovpn.CipherFirst} onChange={(e) => setOvpnField('CipherFirst', e.target.value)}>
+                      <option value="aes-128-gcm">AES-128-GCM</option>
+                      <option value="aes-256-gcm">AES-256-GCM</option>
+                      <option value="chacha20-poly1305">CHACHA20-POLY1305</option>
+                    </select>
+                  </Field>
+                  <Field label={t('ovpnVerb', 'Log verbosity')}>
+                    <select value={ovpn.Verb} onChange={(e) => setOvpnField('Verb', e.target.value)}>
+                      <option value="1">1</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </Field>
+                </div>
+                <div className="nd-stack" style={{ marginTop: '10px', gap: '6px' }}>
+                  <label className="nd-check">
+                    <input type="checkbox" checked={ovpn.RedirectGateway}
+                      onChange={(e) => setOvpnField('RedirectGateway', e.target.checked)} />
+                    <span>{t('redirectGateway', 'Route all client traffic through the VPN')}</span>
+                  </label>
+                  <label className="nd-check">
+                    <input type="checkbox" checked={ovpn.BlockOutsideDns}
+                      onChange={(e) => setOvpnField('BlockOutsideDns', e.target.checked)} />
+                    <span>{t('blockOutsideDns', 'Block DNS outside the tunnel (Windows)')}</span>
+                  </label>
+                  <label className="nd-check">
+                    <input type="checkbox" checked={ovpn.ClientToClient}
+                      onChange={(e) => setOvpnField('ClientToClient', e.target.checked)} />
+                    <span>{t('clientToClient', 'Allow clients to reach each other')}</span>
+                  </label>
+                </div>
+                <div className="nd-section-foot">
+                  <Button size="sm" variant="primary" loading={busy === 'tuning'} disabled={Boolean(busy) && busy !== 'tuning'} icon={<FiSave size={12} />} onClick={applyTuning}>
+                    {busy === 'tuning' ? t('nodeApplying', 'Applying...') : t('saveTuning', 'Save tuning')}
+                  </Button>
+                </div>
+                <ResultLine result={results.tuning} />
+              </section>
+
+              {/* 3. Extra Ports with Persistent Save */}
               <section className="nd-section">
                 <h3 className="nd-section-title">{t('nodePortsTitle', 'Extra ports')}</h3>
                 <p className="nd-section-hint">{t('nodePortsHint', 'Extra ports the node opens for the VPN, like 443,8443. Leave empty to close them again.')}</p>
