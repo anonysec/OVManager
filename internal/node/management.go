@@ -712,6 +712,49 @@ func injectRemoteLines(content []byte, domain string, primaryPort int, fallbacks
 	if !utf8Valid(text) {
 		return content
 	}
+	// Connection-block mode: the template carries one or more
+	// <connection>...</connection> blocks, each with its own remote/proto.
+	// Substitute the "auto" placeholder in every remote line and leave the
+	// blocks intact (no fallback injection inside them).
+	if strings.Contains(text, "<connection>") {
+		lines := strings.Split(text, "\n")
+		inBlock := false
+		out := make([]string, len(lines))
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "<connection>") {
+				inBlock = true
+				out[i] = line
+				continue
+			}
+			if strings.HasPrefix(trimmed, "</connection>") {
+				inBlock = false
+				out[i] = line
+				continue
+			}
+			if inBlock && remoteLineRe.MatchString(line) && strings.Contains(trimmed, " auto ") {
+				out[i] = strings.Replace(line, " auto ", " "+domain+" ", 1)
+				// ensure port is present
+				fields := strings.Fields(strings.TrimSpace(out[i]))
+				if len(fields) == 3 {
+					out[i] = strings.TrimSpace(out[i]) + " " + strconv.Itoa(primaryPort)
+				}
+				continue
+			}
+			out[i] = line
+		}
+		// Also replace any top-level "remote auto" placeholders.
+		for i, line := range out {
+			if !inBlock && remoteLineRe.MatchString(line) && strings.Contains(strings.TrimSpace(line), " auto ") {
+				out[i] = fmt.Sprintf("remote %s %d", domain, primaryPort)
+			}
+		}
+		trailing := ""
+		if strings.HasSuffix(text, "\n") {
+			trailing = "\n"
+		}
+		return []byte(strings.Join(out, "\n") + trailing)
+	}
 	lines := strings.Split(text, "\n")
 	remoteIdx := []int{}
 	for i, line := range lines {
