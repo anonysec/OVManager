@@ -16,7 +16,7 @@
     "verify": "npm run build && npm run check:tokens && npm run check:i18n && npm run check:rtl && npm run lint && npm run check:types && npx vitest run"
   },
   "dependencies": {
-    "i18next": "^26.5.12",
+    "i18next": "^27.0.1",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
