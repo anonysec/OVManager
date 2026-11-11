@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultPath is the panel database location (DATA_DIR overrides at call site).
-const DefaultPath = "data/ovmanager.db"
+const DefaultPath = "data/app.db"
 
 // dsnPragmas keeps the engine's PRAGMAs. cache_size -32768 = 32MiB.
 //

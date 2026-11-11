@@ -149,7 +149,7 @@ func restoreDBPath(install Install) string {
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
 	if path == "" {
-		path = filepath.Join(install.DataDir, "ovmanager.db")
+		path = filepath.Join(install.DataDir, "app.db")
 	}
 	if oldData == "" {
 		_ = os.Unsetenv("DATA_DIR")

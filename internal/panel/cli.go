@@ -26,7 +26,7 @@ func cliHandler(dataDir string) (*Handler, func(), error) {
 	cfg := db.ConfigFromEnv()
 	path := cfg.Path
 	if path == "" {
-		path = filepath.Join(dataDir, "ovmanager.db")
+		path = filepath.Join(dataDir, "app.db")
 	}
 	conn, err := db.Open(path)
 	if err != nil {
@@ -94,7 +94,7 @@ func RestoreStored(name, actor, dataDir string) (bool, string, map[string]any) {
 // LiveURLPath is the prefix the panel is actually serving. Returns "" when the
 // database is absent (nothing has been stored yet).
 func LiveURLPath(dataDir string) (string, error) {
-	if !fileExists(filepath.Join(dataDir, "ovmanager.db")) {
+	if !fileExists(filepath.Join(dataDir, "app.db")) {
 		return "", os.ErrNotExist
 	}
 	h, closeFn, err := cliHandler(dataDir)

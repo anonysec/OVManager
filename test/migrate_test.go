@@ -15,7 +15,7 @@ import (
 
 func newMigrateDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := db.Open(filepath.Join(t.TempDir(), "ovmanager.db"))
+	conn, err := db.Open(filepath.Join(t.TempDir(), "app.db"))
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}

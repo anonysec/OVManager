@@ -27,7 +27,7 @@ func TestRestoreEncryptedBackupRoundTrip(t *testing.T) {
 	if err := os.MkdirAll(backupDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	dbPath := filepath.Join(dir, "ovmanager.db")
+	dbPath := filepath.Join(dir, "app.db")
 	conn, err := db.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)

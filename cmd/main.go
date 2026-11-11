@@ -43,7 +43,7 @@ func run() int {
 	dataDir := env("DATA_DIR", node.DataDir)
 	cfg := db.ConfigFromEnv()
 	if cfg.Path == "" {
-		cfg.Path = filepath.Join(dataDir, "ovmanager.db")
+		cfg.Path = filepath.Join(dataDir, "app.db")
 	}
 	conn, err := db.OpenConfig(cfg)
 	if err != nil {

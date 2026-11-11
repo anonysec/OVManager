@@ -11,7 +11,7 @@ import (
 
 func TestGetOrCreateSecretKeyRefusesMissingKeyWithEncryptedData(t *testing.T) {
 	dir := t.TempDir()
-	conn, err := sql.Open("sqlite", filepath.Join(dir, "ovmanager.db"))
+	conn, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestGetOrCreateSecretKeyRefusesMissingKeyWithEncryptedData(t *testing.T) {
 
 func TestGetOrCreateSecretKeyRefusesCorruptKeyWithEncryptedData(t *testing.T) {
 	dir := t.TempDir()
-	conn, err := sql.Open("sqlite", filepath.Join(dir, "ovmanager.db"))
+	conn, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

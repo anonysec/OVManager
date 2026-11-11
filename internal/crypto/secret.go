@@ -80,7 +80,7 @@ func GetOrCreateSecretKey(dataDir string) ([]byte, error) {
 // databaseHasEncryptedSecrets reports whether the SQLite database in dataDir
 // contains any enc:v2: secret values.
 func databaseHasEncryptedSecrets(dataDir string) bool {
-	dbPath := filepath.Join(dataDir, "ovmanager.db")
+	dbPath := filepath.Join(dataDir, "app.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		return false
 	}

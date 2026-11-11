@@ -132,7 +132,7 @@ func (h *Handler) checkPanel() check {
 }
 
 func (h *Handler) checkDatabase() check {
-	path := filepath.Join(dataDir(), "ovmanager.db")
+	path := filepath.Join(dataDir(), "app.db")
 	info, err := os.Stat(path)
 	if err != nil {
 		return entry("database", "error",

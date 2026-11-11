@@ -53,7 +53,7 @@ func copyOffsiteAfterBackup(dataDir, path string) (string, error) {
 // security-relevant event, and the operator needs to see that it happened (or
 // that it did not).
 func recordOffsiteCopy(dataDir, target, tool string, copyErr error) {
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	conn, err := db.Open(filepath.Join(dataDir, "app.db"))
 	if err != nil {
 		return
 	}

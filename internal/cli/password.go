@@ -76,7 +76,7 @@ func runResetPassword(install Install, dataDir, password string) (string, int) {
 // writeOwnerHash sets the owner row's bcrypt hash. Returns (revokedCount,
 // errorMessage); revokedCount is -1 when revocation could not be confirmed.
 func writeOwnerHash(dataDir, hashed, owner string) (int, string) {
-	dbPath := filepath.Join(dataDir, "ovmanager.db")
+	dbPath := filepath.Join(dataDir, "app.db")
 	if !fileExists(dbPath) {
 		return -1, "Panel database not found at " + dbPath + " — is the panel installed?"
 	}

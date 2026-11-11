@@ -41,7 +41,7 @@ func ConfigFromEnv() Config {
 		return cfg
 	}
 	dir := config.EnvOrFile("DATA_DIR", "data")
-	cfg.Path = filepath.Join(dir, "ovmanager.db")
+	cfg.Path = filepath.Join(dir, "app.db")
 	return cfg
 }
 

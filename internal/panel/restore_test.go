@@ -16,7 +16,7 @@ import (
 func TestRestoreRollsBackWhenTheSwappedDatabaseWillNotReopen(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DATA_DIR", dir)
-	live := filepath.Join(dir, "ovmanager.db")
+	live := filepath.Join(dir, "app.db")
 	conn, err := db.Open(live)
 	if err != nil {
 		t.Fatal(err)

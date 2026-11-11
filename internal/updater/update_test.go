@@ -48,7 +48,7 @@ func TestUpdateMigratesInTreeDataDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustWrite(t, filepath.Join(prev, "data", "owner-claim.key"), "claim\n")
-	mustWrite(t, filepath.Join(prev, "data", "ovmanager.db"), "db-bytes")
+	mustWrite(t, filepath.Join(prev, "data", "app.db"), "db-bytes")
 
 	decision, err := cli.MigrateDataIfInTree(prev, newDir)
 	if err != nil {
@@ -57,7 +57,7 @@ func TestUpdateMigratesInTreeDataDir(t *testing.T) {
 	if got := mustRead(t, filepath.Join(newDir, "data", "owner-claim.key")); got != "claim\n" {
 		t.Errorf("claim key not carried: %q (decision %q)", got, decision)
 	}
-	if got := mustRead(t, filepath.Join(newDir, "data", "ovmanager.db")); got != "db-bytes" {
+	if got := mustRead(t, filepath.Join(newDir, "data", "app.db")); got != "db-bytes" {
 		t.Errorf("db not carried: %q", got)
 	}
 	// prevDir/data untouched for failover.

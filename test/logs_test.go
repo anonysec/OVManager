@@ -56,7 +56,7 @@ func logsEnvFor(t *testing.T, stub string) logsEnv {
 		t.Fatalf("write journalctl stub: %v", err)
 	}
 
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	conn, err := db.Open(filepath.Join(dataDir, "app.db"))
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}

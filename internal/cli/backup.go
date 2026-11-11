@@ -80,7 +80,7 @@ func runRestore(install Install, name string) (string, int) {
 	}
 
 	// Resolve the live database from effective configuration, not an assumed
-	// DATA_DIR/ovmanager.db: keep OVM_APP_DIR/DATA_DIR aligned with this install
+	// DATA_DIR/app.db: keep OVM_APP_DIR/DATA_DIR aligned with this install
 	// for the whole restore so panel helpers read the same .env.
 	oldAppDir := os.Getenv("OVM_APP_DIR")
 	oldDataDir := os.Getenv("DATA_DIR")

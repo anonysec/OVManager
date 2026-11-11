@@ -100,7 +100,7 @@ func newPanelEnv(t *testing.T) *panelEnv {
 	t.Setenv("HOME", empty)
 	t.Setenv("OVM_APP_DIR", appDir)
 
-	conn, err := db.Open(filepath.Join(dataDir, "ovmanager.db"))
+	conn, err := db.Open(filepath.Join(dataDir, "app.db"))
 	if err != nil {
 		t.Fatalf("db.Open: %v", err)
 	}
@@ -186,7 +186,7 @@ func boolPtr(v bool) *bool { return &v }
 func TestPanelSurface(t *testing.T) {
 	env := newPanelEnv(t)
 
-	// The backup routes need a database file at DATA_DIR/ovmanager.db, which is
+	// The backup routes need a database file at DATA_DIR/app.db, which is
 	// the live test DB; create one backup so download/restore are reachable.
 	pre := []panelCase{
 		{name: "backup create", method: "POST", path: "/api/maintenance/backup", wantStatus: 200,

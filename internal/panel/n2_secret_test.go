@@ -14,7 +14,7 @@ func TestAllNodesDecryptsEncryptedKey(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("DATA_DIR", dir)
 
-	conn, err := sql.Open("sqlite", filepath.Join(dir, "ovmanager.db"))
+	conn, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

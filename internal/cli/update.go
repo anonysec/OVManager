@@ -339,8 +339,8 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 			return 1
 		}
 		dbRestored := false
-		if dbRestoreNeeded(safety, filepath.Join(install.DataDir, "ovmanager.db")) {
-			if err := restoreUpdateDatabase(safety, filepath.Join(install.DataDir, "ovmanager.db")); err != nil {
+		if dbRestoreNeeded(safety, filepath.Join(install.DataDir, "app.db")) {
+			if err := restoreUpdateDatabase(safety, filepath.Join(install.DataDir, "app.db")); err != nil {
 				writeUpdateState(install, "recovery_required", from, target, safety)
 				fmt.Fprint(out, block([]string{failedLine("Previous code was restored but the database safety backup could not be restored")}))
 				return 1
