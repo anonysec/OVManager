@@ -105,21 +105,28 @@ func TestLogsUnitWhitelist(t *testing.T) {
 		}
 	}
 
-	// A node row opens its openvpn-<name> unit.
+	// Only the panel unit is readable. A node row must not open an
+	// openvpn-<name> unit — those units no longer exist, and a remote node's
+	// journal is not on this host.
 	if _, err := env.sqlite.Exec(
 		`INSERT INTO Node (name, address, status, key) VALUES ('eu-1', '203.0.113.10', 1, 'k')`,
 	); err != nil {
 		t.Fatalf("seed node: %v", err)
 	}
 	res, raw = rawReq(t, "GET", env.srv.URL+"/api/logs?unit=openvpn-eu-1&lines=10", env.token, nil, "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("node unit status = %d, want 400", res.StatusCode)
+	}
+
+	res, raw = rawReq(t, "GET", env.srv.URL+"/api/logs?lines=10", env.token, nil, "")
 	body = string(raw)
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("node unit status = %d, want 200 (%s)", res.StatusCode, body)
+		t.Fatalf("panel unit status = %d, want 200 (%s)", res.StatusCode, body)
 	}
 	if ct := res.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
 		t.Fatalf("content type = %q", ct)
 	}
-	for _, want := range []string{"-u openvpn-eu-1", "-o cat", "--no-pager", "journal line one"} {
+	for _, want := range []string{"-u ovmanager", "-o cat", "--no-pager", "journal line one"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("journal invocation/body %q lacks %q", body, want)
 		}

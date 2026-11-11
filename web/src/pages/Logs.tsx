@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { FiActivity, FiFileText, FiPause, FiPlay, FiRefreshCw } from 'react-icons/fi';
 import apiClient from '../services/api';
-import { asList } from '../utils/apiData';
 import { errorMessageOf } from '../utils/errorMessage';
 import { Button, PageHeader, Tabs } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
@@ -30,9 +29,7 @@ const Logs = () => {
     setSearchParams(nextTab === 'system' ? {} : { tab: nextTab });
   };
 
-  const [unit, setUnit] = useState('ovmanager');
   const [lines, setLines] = useState(() => { try { const n = Number(localStorage.getItem(LINES_KEY)); return LINE_OPTIONS.includes(n) ? n : 200; } catch { return 200; } });
-  const [nodes, setNodes] = useState<{ name: string }[]>([]);
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,21 +39,10 @@ const Logs = () => {
 
   useEffect(() => { try { localStorage.setItem(LINES_KEY, String(lines)); } catch { /* blocked storage */ } }, [lines]);
 
-  // Nodes are owner-gated; admins just see the Panel until they pick one up
-  // another way — the select degrades quietly.
-  useEffect(() => {
-    let cancelled = false;
-    apiClient.get('/nodes/').then((res: any) => {
-      if (cancelled) return;
-      setNodes(asList(res?.data?.data?.nodes ?? res?.data, 'nodes').map((n: any) => ({ name: String(n.name) })));
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
   const fetchLogs = useCallback(async (opts: { background?: boolean } = {}) => {
     if (!opts.background) { setError(''); setLoading(true); }
     try {
-      const res = await apiClient.get('/logs', { params: { unit, lines } });
+      const res = await apiClient.get('/logs', { params: { lines } });
       setOutput(res.data || '');
       setError('');
     } catch (e) {
@@ -67,7 +53,7 @@ const Logs = () => {
     } finally {
       if (!opts.background) setLoading(false);
     }
-  }, [unit, lines, t]);
+  }, [lines, t]);
 
   useEffect(() => {
     if (activeTab === 'system') {
@@ -142,15 +128,6 @@ const Logs = () => {
       {activeTab === 'system' ? (
         <>
           <div className="logs-controls">
-            <label>
-              <span>{t('logsUnit', 'Unit')}</span>
-              <select value={unit} onChange={(e) => setUnit(e.target.value)}>
-                <option value="ovmanager">{t('logsUnitPanel', 'Panel')}</option>
-                {nodes.map((n) => (
-                  <option key={n.name} value={`openvpn-${n.name}`}>{n.name}</option>
-                ))}
-              </select>
-            </label>
             <label>
               <span>{t('logsLines', 'Lines')}</span>
               <select value={lines} onChange={(e) => setLines(Number(e.target.value))}>

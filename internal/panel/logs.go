@@ -1,17 +1,13 @@
-// GET /logs — journal tail for the panel and its nodes (plan Task 2).
+// GET /logs — journal tail for the panel unit.
 //
-// The unit is whitelisted: "ovmanager" for the panel itself, "openvpn-<name>"
-// for every row in the nodes table (the unit name is derived from the node
-// name only). Anything else — and anything outside [a-z0-9@._-] — is a 400
-// before journalctl is ever spawned, and the argv besides the unit/lines pair
-// is static, so no user input reaches a shell.
+// Only the panel's own unit is readable. Nodes run on other hosts; a local
+// journal cannot show their logs, and the old openvpn-<name> whitelist
+// pointed at units that no longer exist.
 package panel
 
 import (
-	"context"
 	"net/http"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -19,7 +15,7 @@ import (
 )
 
 const (
-	logsDetailUnknownUnit = "Unknown unit (allowed: ovmanager, openvpn-<name>)"
+	logsDetailUnknownUnit = "Unknown unit (allowed: ovmanager)"
 	logsDetailUnreadable  = "journalctl unreadable (add the panel user to systemd-journal)"
 	logsDetailMissing     = "journalctl is not installed on this host"
 	logsDetailFailed      = "journalctl produced an error"
@@ -32,28 +28,6 @@ const (
 // smallest possible surface change.
 func (h *Handler) MountLogs(mux *http.ServeMux) {
 	mux.HandleFunc("GET /logs", h.Svc.RequireUser(h.logs))
-}
-
-// unitCharset is the sanitize whitelist for the whole unit string: a systemd
-// unit suffix plus node names stay inside [a-z0-9@._-] in practice, and any
-// other byte is refused before the exec.
-var unitCharset = regexp.MustCompile(`^[a-z0-9@._-]+$`)
-
-// allowedUnit resolves the whitelisted journal unit or reports refusal.
-func (h *Handler) allowedUnit(unit string) (string, bool) {
-	if unit == "ovmanager" {
-		return unit, true
-	}
-	name, ok := strings.CutPrefix(unit, "openvpn-")
-	if !ok || name == "" || !unitCharset.MatchString(name) {
-		return "", false
-	}
-	var n int
-	_ = h.Svc.DB().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM Node WHERE name = ?`, name).Scan(&n)
-	if n == 0 {
-		return "", false
-	}
-	return unit, true
 }
 
 // clampLines caps the requested tail length to [1, 500].
@@ -72,17 +46,12 @@ func (h *Handler) logs(w http.ResponseWriter, r *http.Request) {
 	if unit == "" {
 		unit = "ovmanager"
 	}
-	if !unitCharset.MatchString(unit) {
-		auth.WriteDetail(w, http.StatusBadRequest, logsDetailUnknownUnit)
-		return
-	}
-	resolved, ok := h.allowedUnit(unit)
-	if !ok {
+	if unit != "ovmanager" {
 		auth.WriteDetail(w, http.StatusBadRequest, logsDetailUnknownUnit)
 		return
 	}
 
-	cmd := exec.Command("journalctl", "-u", resolved, "-n", // #nosec // unit is whitelisted against the nodes table; the rest is static
+	cmd := exec.Command("journalctl", "-u", unit, "-n", // #nosec // unit is a single constant; the rest is static
 		strconv.Itoa(clampLines(intQuery(r, "lines", logsDefaultLines))), "-o", "cat", "--no-pager")
 	out, err := cmd.Output()
 	if err != nil {
