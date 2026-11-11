@@ -195,7 +195,6 @@ func TestUsersPurgeValidatesAndRefusesEverything(t *testing.T) {
 // TestUsersPurgeSurvivesUnreachableNode: one dead node is skipped, the count is
 // reported, and the whole purge still succeeds.
 func TestUsersPurgeSurvivesUnreachableNode(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "")
 	env := newPanelEnv(t)
 	insertTestNode(t, env.conn, 1, "dead", "127.0.0.1", 1, 1194, "")
 	insertTestNode(t, env.conn, 2, "alive", "127.0.0.1", 2, 1194, "")

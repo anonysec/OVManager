@@ -122,10 +122,8 @@ func TestNodePinAcceptsMatchingCert(t *testing.T) {
 	}
 }
 
-// TestNodePinRejectsMismatchedCert: a pin for a different cert fails closed,
-// even with NODE_TLS_INSECURE_FALLBACK opted in (a pin never falls back).
+// TestNodePinRejectsMismatchedCert: a pin for a different cert fails closed.
 func TestNodePinRejectsMismatchedCert(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "true")
 	srv := httptest.NewTLSServer(syncHandler("1.6.0"))
 	defer srv.Close()
 	host, port := hostPort(t, srv.URL)
@@ -143,9 +141,8 @@ func TestNodePinRejectsMismatchedCert(t *testing.T) {
 	}
 }
 
-// TestNodeFallbackFailClosed: no pin + self-signed node + fallback off → fail.
-func TestNodeFallbackFailClosed(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "")
+// TestNodeUnpinnedSelfSignedFailsClosed: no pin and no trusted chain → fail.
+func TestNodeUnpinnedSelfSignedFailsClosed(t *testing.T) {
 	srv := httptest.NewTLSServer(syncHandler("1.6.0"))
 	defer srv.Close()
 	host, port := hostPort(t, srv.URL)
@@ -156,25 +153,6 @@ func TestNodeFallbackFailClosed(t *testing.T) {
 	}
 	if c.CheckNode() {
 		t.Fatalf("unverified TLS must fail closed while fallback is off")
-	}
-}
-
-// TestNodeFallbackOptIn: the same node is reachable once the flag is set.
-func TestNodeFallbackOptIn(t *testing.T) {
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "true")
-	srv := httptest.NewTLSServer(syncHandler("1.6.0"))
-	defer srv.Close()
-	host, port := hostPort(t, srv.URL)
-
-	c, err := node.NewClient(host, port, "api-key", "", "", 1)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-	if !c.CheckNode() {
-		t.Fatalf("fallback opt-in should connect to a self-signed node")
-	}
-	if c.TLSMode() != "unverified-self-signed" {
-		t.Errorf("tls_mode = %q, want unverified-self-signed", c.TLSMode())
 	}
 }
 
@@ -267,7 +245,6 @@ func TestNodeStatusUnreachable(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert node: %v", err)
 	}
-	t.Setenv("NODE_TLS_INSECURE_FALLBACK", "")
 
 	got := node.GetNodeStatus(conn, 2)
 	if got == nil {

@@ -518,7 +518,6 @@ write_env() {
 # OVM_ACME_DIRECTORY_URL=
 # OVM_ACME_HTTP_PORT=80
 # OVM_TRAFFIC_POLL_SECONDS=10
-# NODE_TLS_INSECURE_FALLBACK=false
 OPTS
     chmod 600 "$envfile"
     chown "root:$PANEL_USER" "$envfile"

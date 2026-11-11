@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,42 +20,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/anonysec/OVManager/internal/audit"
 )
 
-var (
-	AuditDB           func() *sql.DB
-	unverifiedNodesMu sync.Mutex
-	unverifiedNodes   = make(map[int64]bool)
-)
-
-func (c *Client) recordTLSUnverified() {
-	if c == nil || c.NodeID == 0 {
-		return
-	}
-	unverifiedNodesMu.Lock()
-	already := unverifiedNodes[c.NodeID]
-	if !already {
-		unverifiedNodes[c.NodeID] = true
-	}
-	unverifiedNodesMu.Unlock()
-	if already {
-		return
-	}
-	if AuditDB != nil {
-		if db := AuditDB(); db != nil {
-			audit.Record(db, "system", "Node.TlsUnverified", "critical",
-				fmt.Sprintf("SECURITY ALERT: Node %d TLS unverified fallback to %s. API key transmitted without peer verification!", c.NodeID, c.address),
-				map[string]any{
-					"node_id":  c.NodeID,
-					"target":   c.address,
-					"severity": "CRITICAL",
-					"risk":     "active_mitm_possible",
-				})
-		}
-	}
-}
+var AuditDB func() *sql.DB
 
 const (
 	Timeout     = 10 * time.Second
@@ -64,8 +30,8 @@ const (
 )
 
 // Response-body caps for node reads: http.Client.Timeout bounds time, not bytes.
-// A compromised node (or a MitM once NODE_TLS_INSECURE_FALLBACK is on) could
-// otherwise stream an unbounded body and exhaust the panel's RAM.
+// A compromised node could otherwise stream an unbounded body and exhaust the
+// panel's RAM.
 const (
 	// maxNodeBody is the cap for small JSON status/usage envelopes from a node.
 	maxNodeBody = 1 << 20 // 1 MiB
@@ -117,9 +83,8 @@ type Client struct {
 	tlsVerified *bool
 	conflictMsg string
 
-	transportMu  sync.Mutex
-	transport    *http.Transport
-	fallbackUsed bool
+	transportMu sync.Mutex
+	transport   *http.Transport
 }
 
 // NewClient builds a client for address:port. serverCA is the stored pin PEM
@@ -191,19 +156,6 @@ func checkHostname(host string) bool {
 }
 
 func isPEM(v string) bool { return strings.Contains(v, "BEGIN CERTIFICATE") }
-
-// insecureFallback reads NODE_TLS_INSECURE_FALLBACK (default false = fail
-// closed). pydantic treats true/1/yes/on as true, case-insensitively.
-// insecureFallback reads NODE_TLS_INSECURE_FALLBACK (default false = fail
-// closed). pydantic treats true/1/yes/on as true, case-insensitively.
-func insecureFallback() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("NODE_TLS_INSECURE_FALLBACK"))) {
-	case "1", "true", "yes", "on", "t", "y":
-		return true
-	default:
-		return false
-	}
-}
 
 func pinnedTLSConfig(pinPEM string, address string, checkName bool) (*tls.Config, error) {
 	block, _ := pem.Decode([]byte(pinPEM))
@@ -377,32 +329,15 @@ func (c *Client) requestInner(method, path string, o reqOpts) (*envelope, error)
 		}
 		return nil, err
 	}
-	if !isTLSError(err) || !insecureFallback() || c.fallbackUsed {
-		if c.TLSVerified() != nil {
-			c.setVerified(false)
-		}
-		if c.NodeID != 0 {
-			Record(c.NodeID, false)
-		}
-		return nil, err
+	// Unpinned and unverifiable: fail closed. There is no unverified
+	// fallback any more; re-pin the node's certificate to recover.
+	if c.TLSVerified() != nil {
+		c.setVerified(false)
 	}
-	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK)", c.address) // #nosec G706 // address comes from the operator-entered node record
-	c.fallbackUsed = true
-	insecure := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} // #nosec G402 // opt-in via NODE_TLS_INSECURE_FALLBACK; warns and records TLS-unverified state
-	hc2 := &http.Client{Transport: insecure, Timeout: o.timeout}
-	env2, err2 := c.send(hc2, method, path, o)
-	if err2 != nil {
-		if c.NodeID != 0 {
-			Record(c.NodeID, false)
-		}
-		return nil, err2
-	}
-	c.setVerified(false)
-	c.recordTLSUnverified()
 	if c.NodeID != 0 {
-		Record(c.NodeID, true)
+		Record(c.NodeID, false)
 	}
-	return env2, nil
+	return nil, err
 }
 
 // send performs (and retries once on 429) the request, applying the 409 /
@@ -538,31 +473,6 @@ func conflictMessage(resp *http.Response) string {
 		}
 	}
 	return "Node is paired with another panel."
-}
-
-func isTLSError(err error) bool {
-	var cv *tls.CertificateVerificationError
-	if errors.As(err, &cv) {
-		return true
-	}
-	var unk x509.UnknownAuthorityError
-	if errors.As(err, &unk) {
-		return true
-	}
-	var host x509.HostnameError
-	if errors.As(err, &host) {
-		return true
-	}
-	var inv x509.CertificateInvalidError
-	if errors.As(err, &inv) {
-		return true
-	}
-	var rec tls.RecordHeaderError
-	if errors.As(err, &rec) {
-		return true
-	}
-	s := err.Error()
-	return strings.Contains(s, "certificate") || strings.Contains(s, "tls:") || strings.Contains(s, "x509:")
 }
 
 // CheckNode is a reachability probe (GET /sync/status).
@@ -876,24 +786,10 @@ func (c *Client) rawInnerLimit(path string, headers map[string]string, timeout t
 		c.setVerified(true)
 		return validate(buf)
 	}
-	if !isTLSError(err) || !insecureFallback() || c.fallbackUsed {
-		if c.TLSVerified() != nil {
-			c.setVerified(false)
-		}
-		return nil, err
+	if c.TLSVerified() != nil {
+		c.setVerified(false)
 	}
-	log.Printf("WARNING: node %s TLS fell back to unverified (NODE_TLS_INSECURE_FALLBACK); failing closed on next fallback for this node until restart", c.address)
-	c.fallbackUsed = true
-	buf, err = do(&tls.Config{InsecureSkipVerify: true}) // #nosec // NODE_TLS_INSECURE_FALLBACK
-	if err != nil {
-		if c.TLSVerified() != nil {
-			c.setVerified(false)
-		}
-		return nil, err
-	}
-	c.setVerified(false)
-	c.recordTLSUnverified()
-	return validate(buf)
+	return nil, err
 }
 
 func validProfile(buf []byte) ([]byte, error) {

@@ -1,7 +1,6 @@
 package node
 
 import (
-	"database/sql"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -53,33 +52,5 @@ func TestTLSVerifiedResetsOnFailedPinnedRequest(t *testing.T) {
 	v := c.TLSVerified()
 	if v == nil || *v {
 		t.Fatalf("TLSVerified after failed pinned request = %v, want false", v)
-	}
-}
-
-func TestRecordTLSUnverifiedFiresOncePerNode(t *testing.T) {
-	nodeID := int64(999999)
-	unverifiedNodesMu.Lock()
-	delete(unverifiedNodes, nodeID)
-	unverifiedNodesMu.Unlock()
-
-	calls := 0
-	origAudit := AuditDB
-	t.Cleanup(func() { AuditDB = origAudit })
-
-	AuditDB = func() *sql.DB {
-		calls++
-		return nil
-	}
-
-	c := &Client{NodeID: nodeID, address: "1.2.3.4:2083"}
-	c.recordTLSUnverified()
-	if calls != 1 {
-		t.Fatalf("expected AuditDB to be called once, got %d", calls)
-	}
-
-	// Second call for the same node must be suppressed
-	c.recordTLSUnverified()
-	if calls != 1 {
-		t.Fatalf("expected AuditDB to remain 1 after second call, got %d", calls)
 	}
 }
