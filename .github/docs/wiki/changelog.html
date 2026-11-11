@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog — OVManager docs</title>
-<meta name="description" content="OVManager releases: 2.0.2, 2.0.1, 2.0.0 and the archived pre-reset line.">
+<meta name="description" content="OVManager releases: 2.0.4, 2.0.3, 2.0.2, 2.0.1, 2.0.0 and the archived pre-reset line.">
 <link rel="stylesheet" href="../assets/style.css">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 </head>
@@ -24,6 +24,22 @@
 </ul></nav>
 <h1>Changelog</h1>
 <p class="lede">The version line was reset to 2.0.0 on 2026-11-02. Everything below that is archived history.</p>
+<h2>2.0.4 — 2026-11-11</h2>
+<ul>
+<li>Storage refactor: <code>billing</code> package renamed to <code>accounting</code>; traffic simplified to a <code>User.used</code> overwrite (baselines/epochs dropped); <code>settings_kv</code> merged into <code>settings</code>; PascalCase tables; sessions moved in-memory.</li>
+<li>Admin roles base: role column with the owner role set.</li>
+<li>NodeStat time-series (cpu/memory/live_count per node).</li>
+<li>Backup expansion: panel pulls the node backup archive; Telegram upload with optional AES-256 at-rest encryption; Google Drive target via rclone.</li>
+<li>Node undo for deletes; audit events PascalCase; <code>contract.json</code> restored as a derived artifact.</li>
+<li>CI/toolchain: gosec findings cleared, Go 1.27.4 and govulncheck pinned, corrupted action pins repaired, staticcheck and deadcode wired into lint.</li>
+</ul>
+<h2>2.0.3 — 2026-11-09</h2>
+<ul>
+<li>Telegram activation tokens: private-chat redemption, per-chat rate limiting, schema migration.</li>
+<li>Full bot UX: command menu, rich welcome, <code>/help</code>, <code>/nodes</code>, <code>/balance</code>, config send, inline keyboards, callback queries, edited-message handling.</li>
+<li>Panel hardening: bot token masked and never persisted plaintext, Telegram rate limit restored, Origin-required cookie mutations, XFF left-most walk, loopback-only trusted CIDRs, request body caps, password min 12 / reject over 72 bytes, hex secret keys, subscription path validation, API 404 bodies preserved.</li>
+<li>SPA serving fixes: root serving when the URL prefix is empty, subscription links never inherit the dashboard prefix, single error boundary, backdrop keeps form drafts, login response envelope accepted.</li>
+</ul>
 <h2>2.0.2</h2>
 <ul>
 <li>Wire-contract v3 negotiation and panel compat banner.</li>
