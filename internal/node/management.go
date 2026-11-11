@@ -778,10 +778,8 @@ func injectRemoteLines(content []byte, domain string, primaryPort int, fallbacks
 			}
 		}
 	}
+	// No fallbacks: each .ovpn connects only to its own node.
 	fallbackLines := []string{}
-	for _, fb := range validFallbacks {
-		fallbackLines = append(fallbackLines, fmt.Sprintf("remote %v %v", fb[0], fb[1]))
-	}
 	if len(fallbackLines) > 0 {
 		pos := remoteIdx[len(remoteIdx)-1] + 1
 		out = append(out[:pos], append(fallbackLines, out[pos:]...)...)
