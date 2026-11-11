@@ -56,7 +56,6 @@ func run() int {
 		return 1
 	}
 	port := env("PORT", "2095")
-	migrateLegacyTLS(dataDir)
 	certFile := panel.SSLCertPath()
 	keyFile := panel.SSLKeyPath()
 	tlsEnabled := fileExists(certFile) && fileExists(keyFile)
@@ -339,44 +338,4 @@ func fileExists(p string) bool {
 	}
 	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()
-}
-
-// migrateLegacyTLS copies the pre-declaration pair in DATA_DIR/tls onto the
-// declared paths when the declared ones are empty, so an install that keeps
-// its certificate in the legacy location does not silently fall back to plain
-// HTTP after the restart that lands TLS resolution (tls migrate_legacy_tls).
-// migrate_legacy_tls). Copy, never move: the legacy files stay as a fallback.
-func migrateLegacyTLS(dataDirPath string) {
-	certPath := panel.SSLCertPath()
-	keyPath := panel.SSLKeyPath()
-	if fileExists(certPath) && fileExists(keyPath) {
-		return
-	}
-	legacyCert := filepath.Join(dataDirPath, "tls", "fullchain.pem")
-	legacyKey := filepath.Join(dataDirPath, "tls", "privkey.pem")
-	if !fileExists(legacyCert) || !fileExists(legacyKey) {
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil { // #nosec G301 // directory permissions 0755 required for service user traversal
-		log.Printf("legacy tls migration: %v", err)
-		return
-	}
-	if err := copyDiskFile(legacyCert, certPath, 0o644); err != nil {
-		log.Printf("legacy tls migration: %v", err)
-		return
-	}
-	if err := copyDiskFile(legacyKey, keyPath, 0o600); err != nil {
-		log.Printf("legacy tls migration: %v", err)
-		return
-	}
-	log.Printf("legacy tls migration: copied %s and %s onto the declared paths", legacyCert, legacyKey)
-}
-
-// copyDiskFile copies one file with exact permissions.
-func copyDiskFile(src, dst string, mode os.FileMode) error {
-	raw, err := os.ReadFile(src) // #nosec G304 // path is validated within trusted data or application directory
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, raw, mode) // #nosec // src/dst from internal staging paths
 }
