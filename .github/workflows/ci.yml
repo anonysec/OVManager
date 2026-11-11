@@ -86,9 +86,10 @@ jobs:
           install-go: false
 
       - name: Gosec Security Scanner
-        uses: securego/gosec@2385f2cc274ab1654795dbba53c74e74ea8a296d # v2.30.0
-        with:
-          args: '-exclude-dir=web -exclude-dir=test ./...'
+        run: |
+          # Pinned: bump deliberately (Dependabot does not track go install).
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
+          gosec -exclude-dir=web -exclude-dir=test ./...
 
       - name: Deadcode
         run: |
