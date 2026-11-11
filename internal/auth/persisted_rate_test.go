@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -144,6 +145,7 @@ func TestLoginDelayBackoff(t *testing.T) {
 }
 
 func TestDistributedFailuresDoNotBlockOwner(t *testing.T) {
+	t.Setenv(audit.PathEnv, filepath.Join(t.TempDir(), "audit.jsonl"))
 	d := setupAuthTestDB(t)
 	seedUser(t, d, "owner", "owner_password_456")
 	svc := NewService(d, t.TempDir())
