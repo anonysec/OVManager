@@ -37,7 +37,7 @@
 <h2>Node says red in the panel?</h2>
 <p>Check, in order: address (public IP), sync port (2083, not 1194), API key (exact, no spaces), TLS switch matching the node, name equality with <code>OVN_NAME</code>, and firewall <code>2083/tcp</code>. Full table: <a href="troubleshooting.html#node-red">Troubleshooting → Node stays red</a>.</p>
 <h2>Where is my data?</h2>
-<p>Panel: <code>/var/lib/ovmanager/ovmanager.db</code> (SQLite). Node PKI and OpenVPN config: <code>/etc/openvpn</code>. Node agent data: <code>/var/lib/ovnode</code>.</p>
+<p>Panel: <code>/var/lib/ovmanager/ovmanager.db</code> (SQLite). Node PKI and OpenVPN config: <code>/var/lib/ovnode/openvpn/server/</code>. Node agent data: <code>/var/lib/ovnode</code>.</p>
 <h2>How do I back up and restore?</h2>
 <p><code>ovmanager backup</code> writes a verified bundle; the daily timer keeps it fresh. Test one restore before you need it — <a href="backup.html">Backups &amp; restore</a>.</p>
 </div></main>

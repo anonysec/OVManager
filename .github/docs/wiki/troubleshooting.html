@@ -211,7 +211,7 @@ sudo systemctl status ovnode         # host service logs</code></pre>
       <li>
         After changing ports or TLS, run <code>sudo ovnode update</code>, or
         reinstall with the same <code>OVN_NAME</code> &mdash; the data in
-        <code>/etc/openvpn</code> and <code>/var/lib/ovnode</code> is kept.
+        <code>/var/lib/ovnode/openvpn</code> and <code>/var/lib/ovnode</code> is kept.
       </li>
     </ul>
 
@@ -252,7 +252,7 @@ sudo systemctl status ovnode         # host service logs</code></pre>
       <pre><code>sudo ovmanager service stop
 sudo rm -rf /opt/ovmanager /var/lib/ovmanager</code></pre>
     </figure>
-    <p>Data in <code>/etc/openvpn</code> and <code>/var/lib/ovnode</code> belongs to the nodes and survives independently; rename-safe only if a node keeps the same <code>OVN_NAME</code>.</p>
+    <p>Data in the OpenVPN root and <code>/var/lib/ovnode</code> belongs to the nodes and survives independently; rename-safe only if a node keeps the same <code>OVN_NAME</code>.</p>
 
     <h2 id="next">Next</h2>
     <p><a href="cli.html">CLI reference</a> &mdash; every command in one place.</p>

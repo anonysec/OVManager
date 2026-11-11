@@ -195,10 +195,10 @@ ovnode update        # staged update, verified snapshot first</code></pre>
     <p>
       A node has no database. Its state is plain files:
     </p>
-    <pre><code>/etc/openvpn/server/     server.conf, PKI (CA, certificates, CRL), logs
-/etc/openvpn/ovnode/     users/&lt;cn&gt;/{name,state,client.ovpn}, sessions/, usage/, scripts/
-/var/lib/ovnode/         agent data (flat, one instance = one directory)
-/var/backups/            backup archives (root-only)</code></pre>
+    <pre><code>/var/lib/ovnode/openvpn/server/   server.conf, PKI (CA, certificates, CRL), logs
+/var/lib/ovnode/openvpn/server/users/   users/&lt;cn&gt;/{name,state,client.ovpn}, sessions/, usage/, scripts/
+/var/lib/ovnode/   agent data (flat, one instance = one directory)
+/var/backups/      backup archives (root-only)</code></pre>
     <p>
       <code>ovnode backup</code> archives <code>/var/lib/ovnode</code> and the
       OpenVPN PKI into root-only tarballs in <code>/var/backups</code>, keeping

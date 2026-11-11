@@ -133,8 +133,8 @@
         <tbody>
           <tr><td><code>/var/lib/ovmanager</code></td><td>The panel's <code>ovmanager.db</code>: users, nodes, login sessions, settings and the audit log.</td></tr>
           <tr><td><code>/opt/ovmanager</code></td><td>The installed panel tree, with <code>.env</code>.</td></tr>
-          <tr><td><code>/etc/openvpn/server/</code></td><td>The node's OpenVPN configuration and PKI.</td></tr>
-          <tr><td><code>/etc/openvpn/ovnode/</code></td><td>Per-user folders, session markers, usage counters and the hooks.</td></tr>
+          <tr><td><code>/var/lib/ovnode/openvpn/server/</code></td><td>The node's OpenVPN configuration and PKI.</td></tr>
+          <tr><td><code>/var/lib/ovnode/openvpn/server/users/</code></td><td>Per-user folders, session markers, usage counters and the hooks.</td></tr>
           <tr><td><code>/var/lib/ovnode</code></td><td>The node agent's own data. Flat: one instance, one directory.</td></tr>
         </tbody>
       </table>
@@ -221,7 +221,7 @@
     </p>
     <p>
       On a node, <code>ovnode update</code> takes a verified snapshot of the
-      identity file, the node data directory, <code>/etc/openvpn</code> and the
+      identity file, the node data directory, the OpenVPN root and the
       API TLS files before it swaps in a release, and restores the snapshot if
       the new release does not come up healthy. <code>ovnode rollback</code>
       returns to the previous code tree.
