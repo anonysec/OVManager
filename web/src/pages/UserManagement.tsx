@@ -83,6 +83,11 @@ const UserManagement = () => {
   const [selected, setSelected] = useState(() => new Set<string>());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [lastDeleted, setLastDeleted] = useState<{ uuid: string; name: string } | null>(null);
+  // Live payloads from the node event streams: per-user session counts and
+  // the node's usage counters between billing passes. Rendering prefers these
+  // over the last fetched row, so a badge flips or the bar moves without a
+  // refetch.
+  const [liveUsers, setLiveUsers] = useState<{ online: Record<string, number>; usage: Record<string, number> }>({ online: {}, usage: {} });
   const [rowMenu, setRowMenu] = useState<{ uuid: string; user: any; left: number; top?: number; bottom?: number } | null>(null);
   const rowMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -152,8 +157,24 @@ const UserManagement = () => {
     const u2 = subscribe('users.created', () => fetchUsers({ background: true }));
     const u3 = subscribe('users.deleted', () => fetchUsers({ background: true }));
     const u4 = subscribe('tick', () => fetchUsers({ background: true }));
-    return () => { u1(); u2(); u3(); u4(); };
-  }, [subscribe, fetchUsers]);
+    const u5 = subscribe('users.live', (data: any) => {
+      setLiveUsers({
+        online: (data?.online && typeof data.online === 'object') ? data.online : {},
+        usage: (data?.usage && typeof data.usage === 'object') ? data.usage : {},
+      });
+    });
+    const u6 = subscribe('users.session', (data: any) => {
+      if (data?.op !== 'session' || !data?.name) return;
+      if (data.action === 'connect') {
+        addToast(t('liveConnectToast', '{{name}} connected', { name: data.name }), 'success');
+      } else if (data.action === 'disconnect') {
+        addToast(t('liveDisconnectToast', '{{name}} disconnected', { name: data.name }), 'info');
+      } else if (data.action === 'reject') {
+        addToast(t('liveRejectToast', '{{name}} connection rejected', { name: data.name }), 'warning');
+      }
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
+  }, [subscribe, fetchUsers, addToast, t]);
 
   // When the stream is healthy, keep this page fresh for older writers that do
   // not yet publish CRUD events. During an outage, LiveProvider's shared tick
@@ -609,7 +630,10 @@ const UserManagement = () => {
     {
       key: 'used', label: t('th_dataUsed', 'Data used'), sortable: true,
       render: (u: any) => {
-        const used = Number(u.used || 0);
+        // The node's live counter is authoritative between billing passes;
+        // never let it move the bar backwards (the panel may bill more than
+        // the node reports after a node-side usage reset).
+        const used = Math.max(Number(u.used || 0), Number(liveUsers.usage[u.name] || 0));
         const total = u.total == null || Number(u.total) === 0 ? null : Number(u.total);
         const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0;
         return (
@@ -647,9 +671,15 @@ const UserManagement = () => {
     {
       key: 'last_online', label: t('th_lastOnline', 'Last online'), sortable: true, hideOnMobile: true,
       render: (u: any) => {
-        const isOnline = u.online || Number(u.active_connections || 0) > 0;
+        // Live session count wins when the streams have reported it; the
+        // fetched row is the initial fallback until the first frame arrives.
+        const liveCount = liveUsers.online[u.name];
+        const isOnline = liveCount != null
+          ? Number(liveCount) > 0
+          : Boolean(u.online) || Number(u.active_connections || 0) > 0;
         return (
-          <span className="dt-num">
+          <span className="dt-num um-last-online">
+            <span className={`um-live-dot${isOnline ? ' is-on' : ''}`} aria-hidden="true" />
             {isOnline ? (
               <span className="um-status-online">{t('statusOnline', 'Online')}</span>
             ) : u.last_online ? (
@@ -681,7 +711,7 @@ const UserManagement = () => {
         </span>
       ),
     },
-  ], [t, rowMenu, openRowMenu, handleUserClick, handleEdit, handleDelete, keepOneUser]);
+  ], [t, rowMenu, openRowMenu, handleUserClick, handleEdit, handleDelete, keepOneUser, liveUsers]);
 
   const allPageKeys = pagedUsers.map((u) => String(u.uuid));
   const allSelected = allPageKeys.length > 0 && allPageKeys.every((k) => selected.has(k));

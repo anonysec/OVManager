@@ -843,5 +843,10 @@
   "redirectGateway": "هدایت تمام ترافیک کلاینت از VPN",
   "blockOutsideDns": "مسدود کردن DNS خارج از تونل (ویندوز)",
   "clientToClient": "اجازه ارتباط کلاینت‌ها با یکدیگر",
-  "saveTuning": "ذخیره تنظیمات"
+  "saveTuning": "ذخیره تنظیمات",
+  "liveConnectToast": "{{name}} متصل شد",
+  "liveDisconnectToast": "{{name}} قطع شد",
+  "liveRejectToast": "اتصال {{name}} رد شد",
+  "liveUsersOnline": "کاربران آنلاین (زنده)",
+  "liveUsersOnlineCount": "{{count}} کاربر آنلاین"
 }

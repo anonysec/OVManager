@@ -49,3 +49,23 @@
 .ops-main-container--mobile .ops-topbar-minimal {
   inset-inline-start: 0;
 }
+
+/* Topbar live user count, fed by the users.live stream payload. */
+.ops-live-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ops-live-dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--success-text);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}

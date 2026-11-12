@@ -359,3 +359,16 @@
     min-height: var(--control-h-lg);
   }
 }
+
+/* Live reachability dot beside the node name; absent until a stream frame
+   reports the node, so nodes without the endpoint keep the polled badge. */
+.nm-name-line { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.nm-live-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--border-strong);
+}
+.nm-live-dot.is-on { background: var(--success-text); box-shadow: 0 0 0 3px var(--success-soft); }
+.nm-live-dot.is-off { background: var(--danger-text, var(--orange)); }

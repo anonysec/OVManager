@@ -843,5 +843,10 @@
   "redirectGateway": "Весь трафик клиентов через VPN",
   "blockOutsideDns": "Блокировать DNS вне туннеля (Windows)",
   "clientToClient": "Разрешить клиентам связь друг с другом",
-  "saveTuning": "Сохранить настройки"
+  "saveTuning": "Сохранить настройки",
+  "liveConnectToast": "{{name}} подключился",
+  "liveDisconnectToast": "{{name}} отключился",
+  "liveRejectToast": "Подключение {{name}} отклонено",
+  "liveUsersOnline": "Пользователей онлайн (в реальном времени)",
+  "liveUsersOnlineCount": "{{count}} пользователей онлайн"
 }

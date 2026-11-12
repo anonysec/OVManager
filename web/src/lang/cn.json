@@ -843,5 +843,10 @@
   "redirectGateway": "所有客户端流量走 VPN",
   "blockOutsideDns": "阻止隧道外 DNS（Windows）",
   "clientToClient": "允许客户端互访",
-  "saveTuning": "保存调优"
+  "saveTuning": "保存调优",
+  "liveConnectToast": "{{name}} 已连接",
+  "liveDisconnectToast": "{{name}} 已断开",
+  "liveRejectToast": "{{name}} 连接被拒绝",
+  "liveUsersOnline": "在线用户（实时）",
+  "liveUsersOnlineCount": "{{count}} 位用户在线"
 }

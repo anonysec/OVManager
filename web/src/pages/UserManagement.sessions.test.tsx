@@ -21,7 +21,7 @@ const liveMock = vi.hoisted(() => {
       listeners.get(event)!.add(callback);
       return () => listeners.get(event)?.delete(callback);
     },
-    emit: (event: string) => listeners.get(event)?.forEach((callback) => callback()),
+    emit: (event: string, data?: any) => listeners.get(event)?.forEach((callback: any) => callback(data)),
   };
 });
 
@@ -113,6 +113,27 @@ describe('UserManagement session actions', () => {
     });
     expect(await screen.findByText('bob')).toBeTruthy();
     expect(usersRequests).toBe(2);
+  });
+
+  it('renders the live dot and usage from a live payload without a refetch', async () => {
+    render(
+      <MemoryRouter initialEntries={['/users']}>
+        <ToastProvider><UserManagement /></ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('alice')).toBeTruthy();
+    const callsAfterLoad = (apiClient.get as any).mock.calls.length;
+    expect(document.querySelector('.um-live-dot.is-on')).toBeNull();
+
+    await act(async () => {
+      liveMock.emit('users.live', { op: 'live', online: { alice: 1 }, usage: { alice: 1024 } });
+    });
+
+    expect(document.querySelector('.um-live-dot.is-on')).toBeTruthy();
+    expect(screen.getByText('Online')).toBeTruthy();
+    expect(screen.getByText(/1\.0 KB/)).toBeTruthy();
+    // The payload is the update: no list request follows it.
+    expect((apiClient.get as any).mock.calls.length).toBe(callsAfterLoad);
   });
 
   it('disconnects sessions through the implemented kick endpoint', async () => {

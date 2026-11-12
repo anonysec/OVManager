@@ -843,5 +843,10 @@
   "redirectGateway": "Route all client traffic through the VPN",
   "blockOutsideDns": "Block DNS outside the tunnel (Windows)",
   "clientToClient": "Allow clients to reach each other",
-  "saveTuning": "Save tuning"
+  "saveTuning": "Save tuning",
+  "liveConnectToast": "{{name}} connected",
+  "liveDisconnectToast": "{{name}} disconnected",
+  "liveRejectToast": "{{name}} connection rejected",
+  "liveUsersOnline": "Users online (live)",
+  "liveUsersOnlineCount": "{{count}} users online"
 }

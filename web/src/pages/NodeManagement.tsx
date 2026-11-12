@@ -80,13 +80,20 @@ const NodeManagement = () => {
   const fetchNodes = useMemo(() => createQueuedRefresh(fetchNodesWork), [fetchNodesWork]);
 
   const { subscribe } = useLive();
+  // Live reachability from the node event streams (false = the stream died,
+  // true = a snapshot is arriving). Nodes without the endpoint stay absent
+  // and keep the polled status.
+  const [liveOnline, setLiveOnline] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const refreshNodes = () => fetchNodes({ background: true });
     const unsubscribeNodes = subscribe('nodes.changed', refreshNodes);
     const unsubscribeCreated = subscribe('nodes.created', refreshNodes);
     const unsubscribeDeleted = subscribe('nodes.deleted', refreshNodes);
     const unsubscribeTick = subscribe('tick', refreshNodes);
-    return () => { unsubscribeNodes(); unsubscribeCreated(); unsubscribeDeleted(); unsubscribeTick(); };
+    const unsubscribeLive = subscribe('nodes.live', (data: any) => {
+      setLiveOnline((data?.online && typeof data.online === 'object') ? data.online : {});
+    });
+    return () => { unsubscribeNodes(); unsubscribeCreated(); unsubscribeDeleted(); unsubscribeTick(); unsubscribeLive(); };
   }, [subscribe, fetchNodes]);
 
   useEffect(() => { fetchNodes(); }, [fetchNodes]);
@@ -356,7 +363,9 @@ const NodeManagement = () => {
             const meta = nodeMeta(node);
             // Health mapping per MASTER: ok → success, unreachable-but-enabled →
             // warning, disabled/off → danger (three states stay distinct).
-            const health = !node.status ? 'offline' : info?.reachable === false ? 'warning' : 'online';
+            const liveUp = liveOnline[node.name];
+            const health = !node.status ? 'offline' : liveUp === false ? 'warning'
+              : info?.reachable === false ? 'warning' : 'online';
             const transport = (node.protocol || 'udp').toUpperCase();
             return (
               <Card as="article" key={node.id} className={`nm-node nm-node--${health}`} padded={false}>
@@ -370,14 +379,23 @@ const NodeManagement = () => {
                     }
                   />
                   <div className="nm-identity">
-                    <button
-                      type="button"
-                      className="nm-name"
-                      onClick={() => openDrawer(node)}
-                      title={t('clickToManageNode', 'Click to manage node')}
-                    >
-                      {node.name}
-                    </button>
+                    <span className="nm-name-line">
+                      {liveUp != null && (
+                        <span
+                          className={`nm-live-dot${liveUp ? ' is-on' : ' is-off'}`}
+                          title={liveUp ? t('statusOnline', 'Online') : t('statusOffline', 'Offline')}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="nm-name"
+                        onClick={() => openDrawer(node)}
+                        title={t('clickToManageNode', 'Click to manage node')}
+                      >
+                        {node.name}
+                      </button>
+                    </span>
                     <span className="nm-sub">
                       {nodeEndpoint(node)}
                       {meta.name ? ` · ${meta.name}` : ''}

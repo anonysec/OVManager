@@ -158,4 +158,35 @@ describe('LiveProvider event invalidation', () => {
     expect(screen.getByTestId('refresh-tick').textContent).toBe('1');
     view.unmount();
   });
+
+  it('delivers parsed payloads on live topics without triggering a refetch tick', async () => {
+    const stream = makeControlledStream();
+    const payloads: any[] = [];
+    let ticks = 0;
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: any) => {
+      init.signal.addEventListener('abort', stream.close, { once: true });
+      return Promise.resolve({ ok: true, status: 200, body: stream.body });
+    }));
+
+    const Probe = () => {
+      const { subscribe } = useLive();
+      useEffect(() => {
+        const offTick = subscribe('tick', () => { ticks += 1; });
+        const offLive = subscribe('users.live', (data: any) => { payloads.push(data); });
+        return () => { offTick(); offLive(); };
+      }, [subscribe]);
+      return null;
+    };
+
+    render(<LiveProvider><Probe /></LiveProvider>);
+    await waitFor(() => expect(stream.waiting).toBe(true));
+    await act(async () => {
+      stream.send('event: users.live\ndata: {"op":"live","online":{"alice":1},"usage":{"alice":1024}}\n\n');
+    });
+    await waitFor(() => expect(payloads).toHaveLength(1));
+    // The subscriber gets the parsed object, not the raw frame text.
+    expect(payloads[0]).toEqual({ op: 'live', online: { alice: 1 }, usage: { alice: 1024 } });
+    // A payload frame carries the data itself; nothing needs a full resync.
+    expect(ticks).toBe(0);
+  });
 });

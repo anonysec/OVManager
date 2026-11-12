@@ -659,40 +659,130 @@ func ApplyNodeSessions(db *sql.DB, n *node.Node, sess *node.SessionsResponse, us
 		return nil
 	}
 	if sess != nil {
-		idToName, known, err := snapshotUsers(db)
-		if err != nil {
+		if err := applyNodeSessionState(db, n, sess); err != nil {
 			return err
 		}
-		counts := map[string]int{}
-		touched := map[string]bool{}
-		for _, entry := range sess.LiveSessions {
-			username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
-			if username == "" {
-				continue
-			}
-			counts[username]++
-			touched[username] = true
-		}
-		names := make([]string, 0, len(touched))
-		for u := range touched {
-			names = append(names, u)
-		}
-		touchLastOnline(db, names, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
-		snap.mu.Lock()
-		snap.byNode[n.Name] = counts
-		snap.byNodeOnline[n.Name] = true
-		snap.mu.Unlock()
 	}
 	if usageTotals != nil {
-		// Display-only: the billing pass owns User.used and node_usage.
-		pairs := make([]KV, 0, len(usageTotals))
-		for name, n := range usageTotals {
-			pairs = append(pairs, KV{name, int64(n)})
+		usage := make(map[string]uint64, len(usageTotals))
+		for name, bytes := range usageTotals {
+			usage[name] = bytes
+		}
+		snap.mu.Lock()
+		snap.byNodeUsage[n.Name] = usage
+		snap.mu.Unlock()
+		pairs := make([]KV, 0, len(usage))
+		for name, bytes := range usage {
+			pairs = append(pairs, KV{name, int64(bytes)})
 		}
 		sort.Slice(pairs, func(i, j int) bool { return pairs[i].Key < pairs[j].Key })
 		Publish("users", KV{"op", "usage"}, KV{"usage", pairs})
 	}
 	applyNodeSnapshot()
+	return nil
+}
+
+// sessionRejectActions are the reject verdicts the node's classifier emits
+// for a refused connection (see the node's ovpn/events.go). A session event
+// with any of these actions becomes a browser toast; the node may add new
+// ones, and they simply stay silent until listed here.
+var sessionRejectActions = map[string]bool{
+	"disabled":        true,
+	"fail_closed":     true,
+	"takeover_failed": true,
+	"mgmt_degraded":   true,
+	"global_check":    true,
+	"global_policy":   true,
+	"max_logins":      true,
+	"other":           true,
+	"check_failed":    true,
+}
+
+// rejectKey dedupes announceable reject rows: one hook line is one event.
+func rejectKey(ev node.EventEntry) string {
+	return ev.CN + "|" + strconv.FormatFloat(ev.TS, 'f', -1, 64) + "|" + ev.Action
+}
+
+// applyNodeSessionState replaces one node's per-user counts and publishes the
+// session transitions the browser shows as toasts. The first snapshot after a
+// stream starts is a silent baseline: it would otherwise replay every user
+// already connected.
+func applyNodeSessionState(db *sql.DB, n *node.Node, sess *node.SessionsResponse) error {
+	idToName, known, err := snapshotUsers(db)
+	if err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	peer := map[string]string{}
+	touched := map[string]bool{}
+	for _, entry := range sess.LiveSessions {
+		username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
+		if username == "" {
+			continue
+		}
+		counts[username]++
+		touched[username] = true
+		if entry.Peer != "" {
+			peer[username] = entry.Peer
+		}
+	}
+	names := make([]string, 0, len(touched))
+	for u := range touched {
+		names = append(names, u)
+	}
+	touchLastOnline(db, names, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
+
+	snap.mu.Lock()
+	prev, hadBaseline := snap.byNode[n.Name]
+	prevRejects := snap.byNodeRejects[n.Name]
+	snap.byNode[n.Name] = counts
+	snap.byNodeOnline[n.Name] = true
+	seen := map[string]bool{}
+	for _, ev := range sess.Events {
+		if sessionRejectActions[ev.Action] {
+			seen[rejectKey(ev)] = true
+		}
+	}
+	snap.byNodeRejects[n.Name] = seen
+	snap.mu.Unlock()
+
+	if !hadBaseline {
+		return nil
+	}
+	gone := make([]string, 0, len(prev))
+	for name := range prev {
+		if counts[name] == 0 {
+			gone = append(gone, name)
+		}
+	}
+	joined := make([]string, 0, len(counts))
+	for name := range counts {
+		if prev[name] == 0 {
+			joined = append(joined, name)
+		}
+	}
+	sort.Strings(gone)
+	sort.Strings(joined)
+	for _, name := range gone {
+		Publish("users.session", KV{"op", "session"}, KV{"name", name}, KV{"action", "disconnect"})
+	}
+	for _, name := range joined {
+		data := []KV{{"op", "session"}, {"name", name}, {"action", "connect"}}
+		if ip := peer[name]; ip != "" {
+			data = append(data, KV{"ip", ip})
+		}
+		Publish("users.session", data...)
+	}
+	for _, ev := range sess.Events {
+		if !sessionRejectActions[ev.Action] || prevRejects[rejectKey(ev)] {
+			continue
+		}
+		data := []KV{{"op", "session"}, {"name", ev.CN}, {"action", "reject"}, {"reason", ev.Reason}}
+		if ev.Peer != "" {
+			data = append(data, KV{"ip", ev.Peer})
+		}
+		Publish("users.session", data...)
+	}
 	return nil
 }
 
@@ -735,6 +825,7 @@ func MarkNodeOffline(nodeName string) {
 func applyNodeSnapshot() {
 	counts := map[string]int{}
 	online := map[string]bool{}
+	usage := map[string]uint64{}
 	snap.mu.Lock()
 	for _, perUser := range snap.byNode {
 		for name, n := range perUser {
@@ -743,6 +834,11 @@ func applyNodeSnapshot() {
 	}
 	for name, up := range snap.byNodeOnline {
 		online[name] = up
+	}
+	for _, perUser := range snap.byNodeUsage {
+		for name, bytes := range perUser {
+			usage[name] += bytes
+		}
 	}
 	capacity := snap.capacity
 	snap.mu.Unlock()
@@ -754,6 +850,50 @@ func applyNodeSnapshot() {
 	if countsChanged {
 		Publish("users", KV{"op", "connections"})
 	}
+	publishLivePayloads(counts, online, usage)
+}
+
+// publishLivePayloads carries the monitoring data itself, not an
+// invalidation: the browser renders dots and usage straight from these maps,
+// so a live frame causes no refetch. Both topics contain "." so the client
+// never derives a ".changed" invalidation from them.
+func publishLivePayloads(counts map[string]int, online map[string]bool, usage map[string]uint64) {
+	userNames := make([]string, 0, len(counts))
+	for name := range counts {
+		userNames = append(userNames, name)
+	}
+	sort.Strings(userNames)
+	onlinePairs := make([]KV, 0, len(userNames))
+	for _, name := range userNames {
+		onlinePairs = append(onlinePairs, KV{name, counts[name]})
+	}
+
+	usageNames := make([]string, 0, len(usage))
+	for name := range usage {
+		usageNames = append(usageNames, name)
+	}
+	sort.Strings(usageNames)
+	usagePairs := make([]KV, 0, len(usageNames))
+	for _, name := range usageNames {
+		usagePairs = append(usagePairs, KV{name, int64(usage[name])})
+	}
+
+	nodeNames := make([]string, 0, len(online))
+	for name := range online {
+		nodeNames = append(nodeNames, name)
+	}
+	sort.Strings(nodeNames)
+	nodePairs := make([]KV, 0, len(nodeNames))
+	for _, name := range nodeNames {
+		nodePairs = append(nodePairs, KV{name, online[name]})
+	}
+
+	Publish("users.live",
+		KV{"op", "live"},
+		KV{"online", onlinePairs},
+		KV{"usage", usagePairs},
+	)
+	Publish("nodes.live", KV{"op", "live"}, KV{"online", nodePairs})
 }
 
 // applyGrace holds a node that just went down as up (live._apply_grace).

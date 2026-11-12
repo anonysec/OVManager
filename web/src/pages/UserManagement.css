@@ -798,3 +798,20 @@ input[type="checkbox"]:indeterminate::after {
 .um-cell-main-text .dt-cell-title { display: block; min-width: 0; }
 .um-cell-id { opacity: 0.7; font-size: 11px; display: block; }
 .um-status-online { color: var(--success-text); font-weight: 600; }
+
+/* Live status dot in the Last online cell: green while an event stream
+   reports the user connected, neutral otherwise. */
+.um-last-online { display: inline-flex; align-items: center; }
+.um-live-dot {
+  display: inline-block;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  margin-inline-end: 7px;
+  background: var(--border-strong);
+  flex: none;
+}
+.um-live-dot.is-on {
+  background: var(--success-text);
+  box-shadow: 0 0 0 3px var(--success-soft);
+}

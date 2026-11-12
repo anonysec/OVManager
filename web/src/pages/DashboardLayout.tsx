@@ -14,7 +14,7 @@ import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LiveProvider } from '../context/LiveContext';
+import { LiveProvider, useLive } from '../context/LiveContext';
 import { ToastProvider } from '../context/ToastContext';
 import Sidebar from '../components/Sidebar';
 import Logo from '../components/Logo';
@@ -29,6 +29,33 @@ import { settle } from '../hooks/settle';
 
 const SETUP_DISMISS_KEY = 'ovmanager-setup-dismissed';
 const SETUP_CONFIG_DONE_KEY = 'ovmanager-setup-config-done';
+
+// LiveOnlineStat is the topbar's live user count: it renders the stream's own
+// per-user online map, so it costs no request and moves within a second of a
+// connect or disconnect. Hidden until the first frame arrives.
+const LiveOnlineStat = () => {
+  const { t } = useTranslation();
+  const { subscribe } = useLive();
+  const [online, setOnline] = useState<number | null>(null);
+  useEffect(() => subscribe('users.live', (data: any) => {
+    const map = data?.online;
+    if (!map || typeof map !== 'object') return;
+    let total = 0;
+    Object.values(map).forEach((count: any) => { total += Number(count) || 0; });
+    setOnline(total);
+  }), [subscribe]);
+  if (online === null) return null;
+  return (
+    <span
+      className="ops-live-stat"
+      title={t('liveUsersOnline', 'Users online (live)')}
+      aria-label={t('liveUsersOnlineCount', '{{count}} users online', { count: online })}
+    >
+      <span className="ops-live-dot" aria-hidden="true" />
+      {online}
+    </span>
+  );
+};
 
 type LayoutNotif = {
   id: string;
@@ -376,6 +403,7 @@ const DashboardLayout = () => {
                 </ol>
               </nav>
               <div className="ops-userbar">
+                <LiveOnlineStat />
                 <button
                   type="button"
                   className="topbar-search-trigger"

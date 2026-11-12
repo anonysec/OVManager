@@ -101,20 +101,26 @@ type snapshotState struct {
 	connections map[string]int
 	nodes       map[string]bool
 	// byNode is each streaming node's own contribution (node -> user -> live
-	// count); byNodeOnline is the reachability that contribution implies.
-	// The poll collector owns connections/nodes directly and clears these.
-	byNode       map[string]map[string]int
-	byNodeOnline map[string]bool
-	lastPoll     float64 // seconds since procStart; 0 = never
-	capacity     int
+	// count); byNodeOnline is the reachability that contribution implies;
+	// byNodeUsage keeps the last usage sample per node, and byNodeRejects the
+	// reject rows already announced. The poll collector owns
+	// connections/nodes directly and clears these.
+	byNode        map[string]map[string]int
+	byNodeOnline  map[string]bool
+	byNodeUsage   map[string]map[string]uint64
+	byNodeRejects map[string]map[string]bool
+	lastPoll      float64 // seconds since procStart; 0 = never
+	capacity      int
 }
 
 var snap = &snapshotState{
-	connections:  map[string]int{},
-	nodes:        map[string]bool{},
-	byNode:       map[string]map[string]int{},
-	byNodeOnline: map[string]bool{},
-	capacity:     SnapshotMaxNodes,
+	connections:   map[string]int{},
+	nodes:         map[string]bool{},
+	byNode:        map[string]map[string]int{},
+	byNodeOnline:  map[string]bool{},
+	byNodeUsage:   map[string]map[string]uint64{},
+	byNodeRejects: map[string]map[string]bool{},
+	capacity:      SnapshotMaxNodes,
 }
 
 // streamsActive is set by the stream supervisor while at least one node
@@ -136,6 +142,8 @@ func resetPerNode() {
 	snap.mu.Lock()
 	snap.byNode = map[string]map[string]int{}
 	snap.byNodeOnline = map[string]bool{}
+	snap.byNodeUsage = map[string]map[string]uint64{}
+	snap.byNodeRejects = map[string]map[string]bool{}
 	snap.mu.Unlock()
 }
 

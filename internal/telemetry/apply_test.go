@@ -5,6 +5,7 @@ package telemetry
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/anonysec/OVManager/internal/node"
@@ -195,4 +196,132 @@ func TestStreamsActiveFlag(t *testing.T) {
 	if StreamsActive() {
 		t.Fatal("streams flag did not clear")
 	}
+}
+
+// drainEvents returns every queued bus event; Publish is synchronous, so a
+// call that returned has already queued all of its events.
+func drainEvents(ch chan Event) []Event {
+	var out []Event
+	for {
+		select {
+		case ev := <-ch:
+			out = append(out, ev)
+		default:
+			return out
+		}
+	}
+}
+
+// kvMap turns an event's ordered pairs into a map for assertions.
+func kvMap(ev Event) map[string]any {
+	out := map[string]any{}
+	for _, kv := range ev.Data {
+		out[kv.Key] = kv.Val
+	}
+	return out
+}
+
+func pairsMap(v any) map[string]any {
+	out := map[string]any{}
+	pairs, _ := v.([]KV)
+	for _, kv := range pairs {
+		out[kv.Key] = kv.Val
+	}
+	return out
+}
+
+func TestApplyNodeSessionsPublishesLivePayload(t *testing.T) {
+	conn := applyDB(t)
+	ch := DefaultBus.Subscribe()
+	defer DefaultBus.Unsubscribe(ch)
+	if _, err := conn.Exec(`INSERT INTO User (id, uuid, name, total, used, node_usage, is_active) VALUES (3, 'uuid-carl', 'carl', 0, 0, '{}', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ApplyNodeSessions(conn, &node.Node{ID: 1, Name: "a"}, sessions("amy", "bob"), map[string]uint64{"amy": 4096, "carl": 512}); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	var usersLive, nodesLive map[string]any
+	for _, ev := range drainEvents(ch) {
+		switch ev.Topic {
+		case "users.live":
+			usersLive = kvMap(ev)
+		case "nodes.live":
+			nodesLive = kvMap(ev)
+		}
+	}
+	if usersLive == nil || nodesLive == nil {
+		t.Fatalf("live payloads missing: users=%v nodes=%v", usersLive, nodesLive)
+	}
+	if usersLive["op"] != "live" {
+		t.Fatalf("users.live op = %v", usersLive["op"])
+	}
+	online := pairsMap(usersLive["online"])
+	if online["amy"] != 1 || online["bob"] != 1 {
+		t.Fatalf("users.live online = %v, want amy:1 bob:1", online)
+	}
+	usage := pairsMap(usersLive["usage"])
+	if usage["amy"] != int64(4096) || usage["carl"] != int64(512) {
+		t.Fatalf("users.live usage = %v, want amy:4096 carl:512", usage)
+	}
+	nodeOnline := pairsMap(nodesLive["online"])
+	if nodeOnline["a"] != true {
+		t.Fatalf("nodes.live online = %v, want a:true", nodeOnline)
+	}
+}
+
+func TestApplyNodeSessionsSessionToasts(t *testing.T) {
+	conn := applyDB(t)
+	ch := DefaultBus.Subscribe()
+	defer DefaultBus.Unsubscribe(ch)
+	n := &node.Node{ID: 1, Name: "a"}
+
+	// First snapshot is a silent baseline.
+	if err := ApplyNodeSessions(conn, n, sessions("amy"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionActions(drainEvents(ch)); len(got) != 0 {
+		t.Fatalf("first snapshot announced sessions: %v", got)
+	}
+
+	// amy leaves, bob arrives.
+	if err := ApplyNodeSessions(conn, n, sessions("bob"), nil); err != nil {
+		t.Fatal(err)
+	}
+	got := sessionActions(drainEvents(ch))
+	want := []string{"amy:disconnect", "bob:connect"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("session events = %v, want %v", got, want)
+	}
+
+	// A new reject row announces once; the same row in the next snapshot does
+	// not repeat.
+	withReject := sessions("bob")
+	withReject.Events = []node.EventEntry{{CN: "amy", Action: "max_logins", Reason: "max logins reached", Peer: "198.51.100.9:1", TS: 42}}
+	if err := ApplyNodeSessions(conn, n, withReject, nil); err != nil {
+		t.Fatal(err)
+	}
+	got = sessionActions(drainEvents(ch))
+	if fmt.Sprint(got) != fmt.Sprint([]string{"amy:reject"}) {
+		t.Fatalf("reject events = %v, want [amy:reject]", got)
+	}
+	if err := ApplyNodeSessions(conn, n, withReject, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionActions(drainEvents(ch)); len(got) != 0 {
+		t.Fatalf("reject row announced twice: %v", got)
+	}
+}
+
+// sessionActions renders users.session payloads as "name:action".
+func sessionActions(events []Event) []string {
+	var out []string
+	for _, ev := range events {
+		if ev.Topic != "users.session" {
+			continue
+		}
+		kv := kvMap(ev)
+		out = append(out, fmt.Sprintf("%v:%v", kv["name"], kv["action"]))
+	}
+	return out
 }
