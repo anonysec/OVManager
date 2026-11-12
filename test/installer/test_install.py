@@ -79,8 +79,8 @@ journalctl() { echo FOLLOW_LOGS; }
 offer_node_and_logs native 2095 dashboard secret-key
 ''', tty_input="y\ny\n")
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertLess(result.stdout.index("NODE_FINISHED"), result.stdout.index("Installation complete"))
-        self.assertLess(result.stdout.index("Installation complete"), result.stdout.index("FOLLOW_LOGS"))
+        self.assertLess(result.stdout.index("NODE_FINISHED"), result.stdout.index("Panel installation complete"))
+        self.assertLess(result.stdout.index("Panel installation complete"), result.stdout.index("FOLLOW_LOGS"))
         self.assertIn("secret-key", result.stdout)
         self.assertIn("http://127.0.0.1:2095/dashboard/", result.stdout)
         self.assertIn("OVNode installation failed", result.stdout)
@@ -113,3 +113,11 @@ offer_node_and_logs docker 443 /custom/ new-key
         self.assertIn("new-key", result.stderr)
 
 
+
+    def test_install_defaults_to_the_wizard_on_a_terminal(self):
+        result = self.run_bash('parse_args install; echo "INTERACTIVE=$INTERACTIVE"', tty_input="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("INTERACTIVE=1", result.stdout)
+        result = self.run_bash('parse_args -y install; echo "INTERACTIVE=$INTERACTIVE"', tty_input="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("INTERACTIVE=0", result.stdout)

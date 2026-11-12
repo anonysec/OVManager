@@ -50,6 +50,8 @@ DB_URL="${OVM_DATABASE_URL:-}"
 HEALTH_TIMEOUT="${OVM_HEALTH_TIMEOUT:-40}"
 INTERACTIVE=0
 YES=0
+NODE_INSTALL_FAILED=0
+NODE_INSTALLED=0
 FROM_SOURCE=0
 SRC=""
 DEST=""
@@ -661,7 +663,11 @@ show_install_summary() {
         fi
         public_ip="${public_ip:-<host>}"
     fi
-    colorized_echo blue "Installation complete"
+    if [[ "$NODE_INSTALL_FAILED" -eq 1 ]]; then
+        colorized_echo yellow "Panel installation complete — OVNode is not installed."
+    else
+        colorized_echo blue "Installation complete"
+    fi
     if [[ "$scheme" == "https" ]]; then
         _ok "URL     ${scheme}://${public_ip}:$port$display_path"
     else
@@ -682,6 +688,11 @@ show_install_summary() {
         _note "Open the URL in your browser (TLS is on)."
     fi
     [[ -n "$key" ]] && _note "Paste the key to claim the panel and set your password."
+    if [[ "$NODE_INSTALL_FAILED" -eq 1 ]]; then
+        _note "No VPN core is installed yet; run the install-node command above when ready."
+    elif [[ "$NODE_INSTALLED" -eq 1 ]]; then
+        _note "Add the node in the panel (Nodes → Add) with the API key the node installer printed."
+    fi
     return 0
 }
 
@@ -707,7 +718,14 @@ offer_node_and_logs() {
     echo
     read -r -p "Do you want to install OVNode on the same server? (y/n) " choice || true
     if [[ "$choice" =~ ^[Yy]$ ]]; then
-        OVN_YES=1 run_node_installer || _warn "OVNode installation failed; the panel remains installed."
+        if run_node_installer; then
+            NODE_INSTALLED=1
+        else
+            NODE_INSTALL_FAILED=1
+            _warn "OVNode installation failed; the panel remains installed."
+            _note "Retry after fixing the cause:"
+            _note "  bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/install.sh) install-node"
+        fi
     else
         _note "Skipping OVNode installation."
     fi
@@ -1069,7 +1087,7 @@ parse_args() {
             edit-env) ACTION="edit-env"; ACTION_GIVEN=1; shift ;;
             install-script) ACTION="install-script"; ACTION_GIVEN=1; shift ;;
             install-node) ACTION="install-node"; ACTION_GIVEN=1; shift ;;
-            install) shift ;;
+            install) shift; if [[ -t 0 && "$YES" -eq 0 ]]; then INTERACTIVE=1; fi ;;
             interactive) INTERACTIVE=1; shift ;;
             *) die "Unknown option: $1  (see --help)" ;;
         esac
@@ -1135,7 +1153,7 @@ main() {
         restore) shift; restore_command "$@"; return 0 ;;
         edit-env) edit_env_command; return 0 ;;
         install-script) install_script_command; return 0 ;;
-        install-node) install_node_command; return 0 ;;
+        install-node) install_node_command; return $? ;;
     esac
     if [[ "$FROM_SOURCE" -eq 1 ]]; then do_from_source; else do_install; fi
 }
