@@ -184,10 +184,26 @@ func healthURLs(inst Install) []string {
 }
 
 func fetchHealthAny(urls []string, timeout time.Duration, cafile string) (bool, string) {
+	// The public URL answers without a version (the endpoint discloses it only
+	// to loopback), so prefer any URL that reports one: on an IP-certificate
+	// panel the first URL is public and the loopback alternative is second.
+	reachable := false
+	reported := "?"
 	for _, u := range urls {
-		if reachable, reported := FetchHealth(u, timeout, cafile); reachable {
-			return true, reported
+		ok, version := FetchHealth(u, timeout, cafile)
+		if !ok {
+			continue
 		}
+		if version != "" && version != "?" {
+			return true, version
+		}
+		if !reachable {
+			reachable = true
+			reported = version
+		}
+	}
+	if reachable {
+		return true, reported
 	}
 	return false, "?"
 }
