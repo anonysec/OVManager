@@ -277,7 +277,7 @@ func TestNoEventsNodeFallsBackToPoll(t *testing.T) {
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		sup.mu.Lock()
-		fellBack := sup.fallback[1]
+		_, fellBack := sup.fallback[1]
 		sup.mu.Unlock()
 		if fellBack {
 			break
@@ -297,11 +297,33 @@ func TestNoEventsNodeFallsBackToPoll(t *testing.T) {
 		t.Fatal("StreamsActive stayed true for a node without the endpoint")
 	}
 
-	// A follow-up reconcile must not re-dial the fallback node.
+	// A follow-up reconcile inside the probe window must not re-dial.
 	sup.reconcile(ctx, conn)
 	time.Sleep(100 * time.Millisecond)
 	if got := hits.Load(); got != 1 {
-		t.Fatalf("fallback node re-dialed: %d probes", got)
+		t.Fatalf("fallback node re-dialed inside the probe window: %d probes", got)
+	}
+
+	// After the window it is probed exactly once, so a node upgraded in the
+	// meantime starts streaming without a panel restart.
+	prevProbe := streamFallbackProbe
+	streamFallbackProbe = 50 * time.Millisecond
+	t.Cleanup(func() { streamFallbackProbe = prevProbe })
+	sup.mu.Lock()
+	sup.fallback[1] = time.Now().Add(-time.Millisecond)
+	sup.mu.Unlock()
+	sup.reconcile(ctx, conn)
+	deadline = time.Now().Add(2 * time.Second)
+	for hits.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("fallback node probed %d times after the window, want 2", got)
+	}
+	sup.reconcile(ctx, conn)
+	time.Sleep(50 * time.Millisecond)
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("fallback re-probe looped: %d probes", got)
 	}
 
 	// The live ticker keeps running for polling nodes.

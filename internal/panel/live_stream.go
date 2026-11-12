@@ -33,6 +33,11 @@ var (
 	// doubles per consecutive failure up to streamBackoffMax.
 	streamBackoffBase = time.Second
 	streamBackoffMax  = 60 * time.Second
+	// streamFallbackProbe re-probes a node that answered ErrNoEvents. Keeping
+	// the fallback permanent would need a panel restart before an upgraded
+	// node could stream; one request per node per few minutes is not a hot
+	// loop and lets the node upgrade take effect on its own.
+	streamFallbackProbe = 5 * time.Minute
 )
 
 // streamOfflineAfter is the consecutive failed dials that mark a node
@@ -68,17 +73,22 @@ func currentStreamHooks() streamHooks {
 // supervised node id — its presence is also the "feed is owned by streams"
 // signal — and fallback records nodes that answered ErrNoEvents.
 type streamSupervisor struct {
-	mu       sync.Mutex
-	loops    map[int64]context.CancelFunc
-	names    map[int64]string
-	fallback map[int64]bool
+	mu    sync.Mutex
+	loops map[int64]context.CancelFunc
+	names map[int64]string
+	// fallback holds the next probe time for nodes that answered ErrNoEvents;
+	// notified remembers which fallbacks were already logged so the line
+	// appears once per node, not once per probe.
+	fallback map[int64]time.Time
+	notified map[int64]bool
 }
 
 func newStreamSupervisor() *streamSupervisor {
 	return &streamSupervisor{
 		loops:    map[int64]context.CancelFunc{},
 		names:    map[int64]string{},
-		fallback: map[int64]bool{},
+		fallback: map[int64]time.Time{},
+		notified: map[int64]bool{},
 	}
 }
 
@@ -104,13 +114,19 @@ func (s *streamSupervisor) reconcile(ctx context.Context, db *sql.DB) {
 	nodes := node.GetActiveNodes(db)
 	seen := map[int64]bool{}
 	start := make([]int64, 0, len(nodes))
+	now := time.Now()
 	s.mu.Lock()
 	for _, n := range nodes {
 		seen[n.ID] = true
 		s.names[n.ID] = n.Name
-		if _, running := s.loops[n.ID]; !running && !s.fallback[n.ID] {
-			start = append(start, n.ID)
+		if _, running := s.loops[n.ID]; running {
+			continue
 		}
+		// A fallback node is re-probed only once its window has passed.
+		if next, fellBack := s.fallback[n.ID]; fellBack && now.Before(next) {
+			continue
+		}
+		start = append(start, n.ID)
 	}
 	stale := map[int64]string{}
 	for id, cancel := range s.loops {
@@ -124,6 +140,7 @@ func (s *streamSupervisor) reconcile(ctx context.Context, db *sql.DB) {
 			stale[id] = name
 			delete(s.names, id)
 			delete(s.fallback, id)
+			delete(s.notified, id)
 		}
 	}
 	for _, id := range start {
@@ -197,10 +214,14 @@ func (s *streamSupervisor) runNode(ctx context.Context, db *sql.DB, nodeID int64
 		})
 		if errors.Is(err, node.ErrNoEvents) {
 			s.mu.Lock()
-			s.fallback[nodeID] = true
+			s.fallback[nodeID] = time.Now().Add(streamFallbackProbe)
+			fresh := !s.notified[nodeID]
+			s.notified[nodeID] = true
 			delete(s.loops, nodeID)
 			s.mu.Unlock()
-			log.Printf("live: node %s predates event streaming; polling instead", n.Name)
+			if fresh {
+				log.Printf("live: node %s predates event streaming; polling instead", n.Name)
+			}
 			s.refreshActive()
 			return
 		}
@@ -209,8 +230,12 @@ func (s *streamSupervisor) runNode(ctx context.Context, db *sql.DB, nodeID int64
 			return
 		}
 		if connected {
-			// A stream that delivered frames was healthy; the next dial
-			// starts from the base backoff.
+			// A stream that delivered frames was healthy: the node supports
+			// the endpoint, so a later fallback may log again.
+			s.mu.Lock()
+			delete(s.notified, nodeID)
+			delete(s.fallback, nodeID)
+			s.mu.Unlock()
 			failures = 0
 			backoff = streamBackoffBase
 		} else {
