@@ -23,7 +23,14 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<p class="lede">2.0.5 adds live session and usage updates over a per-node event stream; 2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.5 — 2026-11-12</h2>
+<ul>
+<li><strong>Live dashboard updates.</strong> The panel opens one event stream per node (the new <code>GET /sync/events</code> endpoint in OVNode 2.0.15). Session changes reach the browser in a fraction of a second, usage counters refresh every 10 seconds, and steady-state node polling for the live view stops while a stream is open.</li>
+<li><strong>Polling fallback.</strong> A node older than 2.0.15 answers the stream with 404 once; the panel keeps its existing polling path for that node, so the panel can be upgraded before the nodes.</li>
+<li><strong>Monitoring UI.</strong> Green live dots for users and nodes, usage bars fed by the live counter between billing passes, connect/disconnect/reject toasts, and an online-user count in the topbar.</li>
+<li><strong>Billing unchanged.</strong> Live events are display-only: traffic accounting still comes from the 60-second cumulative-delta pass, so an upgrade can never change a bill.</li>
+</ul>
 <h2>2.0.4 — 2026-11-12</h2>
 <ul>
 <li><strong>Faster first dashboard load.</strong> The panel now serves the SPA build's precompressed <code>.gz</code> siblings when the browser accepts gzip: the main JS bundle drops from about 395 KB to 122 KB, and the CSS from 43 KB to 8.8 KB. Cached assets are unchanged; this is the cold-first-visit path.</li>
