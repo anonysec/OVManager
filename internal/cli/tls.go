@@ -372,7 +372,7 @@ func runTLSAcme(inst Install, domain, email string) (string, int) {
 // portOccupant returns the process name and (best-effort) systemd unit
 // holding the challenge port, plus whether one was found.
 func portOccupant(port int) (proc string, unit string, found bool) {
-	out, err := exec.Command("ss", "-tlnp", fmt.Sprintf("sport = :%d", port)).Output()
+	out, err := exec.Command("ss", "-tlnp", fmt.Sprintf("sport = :%d", port)).Output() // #nosec G204 // port is an int validated 1-65535
 	if err != nil {
 		return "", "", false
 	}
