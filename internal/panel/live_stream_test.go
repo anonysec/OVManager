@@ -231,13 +231,14 @@ func TestSupervisorBackoffJitter(t *testing.T) {
 		t.Fatalf("retry after %s, want no faster than the 1 s base backoff", gap)
 	}
 
-	// Two consecutive failures is the offline threshold.
-	deadline = time.Now().Add(time.Second)
-	for offlineCalls.Load() == 0 && time.Now().Before(deadline) {
+	// Two consecutive failures mark the node offline, and every later retry
+	// re-applies it so the grace window can expire while the node is down.
+	deadline = time.Now().Add(6 * time.Second)
+	for offlineCalls.Load() < 2 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if offlineCalls.Load() == 0 {
-		t.Fatal("two failed dials did not mark the node offline")
+	if got := offlineCalls.Load(); got < 2 {
+		t.Fatalf("offline re-applied %d times, want at least two retries", got)
 	}
 	cancel()
 	waitStreamIdle(t, sup)

@@ -240,7 +240,10 @@ func (s *streamSupervisor) runNode(ctx context.Context, db *sql.DB, nodeID int64
 			backoff = streamBackoffBase
 		} else {
 			failures++
-			if failures == streamOfflineAfter {
+			if failures >= streamOfflineAfter {
+				// Re-applied on every retry past the threshold so the grace
+				// window can actually expire: one call would hold the badge
+				// green forever while the node stays down.
 				hooks.offline(n.Name)
 			}
 		}
