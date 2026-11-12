@@ -23,7 +23,11 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<p class="lede">2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.4 — 2026-11-12</h2>
+<ul>
+<li><strong>Faster first dashboard load.</strong> The panel now serves the SPA build's precompressed <code>.gz</code> siblings when the browser accepts gzip: the main JS bundle drops from about 395 KB to 122 KB, and the CSS from 43 KB to 8.8 KB. Cached assets are unchanged; this is the cold-first-visit path.</li>
+</ul>
 <h2>2.0.3 — 2026-11-12</h2>
 <ul>
 <li><strong>Updates on an IP-certificate panel.</strong> The health probe prefers the loopback response that reports the version, so a panel serving HTTPS for its public IP no longer fails verification with <code>?</code> and rolls back.</li>

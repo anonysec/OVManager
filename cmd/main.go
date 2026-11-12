@@ -4,12 +4,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"html"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -222,6 +224,26 @@ func spaHandler(h *panel.Handler) http.Handler {
 	return spaHandlerWithFS(h, fsys)
 }
 
+// servePrecompressed serves the build's <asset>.gz sibling when the client
+// accepts gzip. Vite writes them next to the JS/CSS, but a plain FileServer
+// would hand the browser the uncompressed 386 KB bundle on the first visit.
+func servePrecompressed(w http.ResponseWriter, r *http.Request, fsys fs.FS, rel string) bool {
+	if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		return false
+	}
+	data, err := fs.ReadFile(fsys, filepath.ToSlash(rel)+".gz")
+	if err != nil {
+		return false
+	}
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Vary", "Accept-Encoding")
+	if ct := mime.TypeByExtension(filepath.Ext(rel)); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	http.ServeContent(w, r, rel, time.Time{}, bytes.NewReader(data))
+	return true
+}
+
 func spaHandlerWithFS(h *panel.Handler, fsys fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(fsys))
 	index, _ := fs.ReadFile(fsys, "index.html")
@@ -270,6 +292,9 @@ func spaHandlerWithFS(h *panel.Handler, fsys fs.FS) http.Handler {
 					w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 				} else if strings.HasPrefix(rel, "assets/") || strings.HasPrefix(rel, "icons/") || strings.HasPrefix(rel, "fonts/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					if servePrecompressed(w, r, fsys, rel) {
+						return
+					}
 				}
 				if isRoot {
 					fileServer.ServeHTTP(w, r)
