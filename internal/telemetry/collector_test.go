@@ -47,8 +47,11 @@ func resetLiveState() {
 	snap.mu.Lock()
 	snap.connections = map[string]int{}
 	snap.nodes = map[string]bool{}
+	snap.byNode = map[string]map[string]int{}
+	snap.byNodeOnline = map[string]bool{}
 	snap.lastPoll = 0
 	snap.mu.Unlock()
+	streamsActive.Store(false)
 	nodeAlerts.mu.Lock()
 	nodeAlerts.graceUntil = map[string]float64{}
 	nodeAlerts.mu.Unlock()

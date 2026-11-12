@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 
@@ -99,11 +100,44 @@ type snapshotState struct {
 	mu          sync.Mutex
 	connections map[string]int
 	nodes       map[string]bool
-	lastPoll    float64 // seconds since procStart; 0 = never
-	capacity    int
+	// byNode is each streaming node's own contribution (node -> user -> live
+	// count); byNodeOnline is the reachability that contribution implies.
+	// The poll collector owns connections/nodes directly and clears these.
+	byNode       map[string]map[string]int
+	byNodeOnline map[string]bool
+	lastPoll     float64 // seconds since procStart; 0 = never
+	capacity     int
 }
 
-var snap = &snapshotState{connections: map[string]int{}, nodes: map[string]bool{}, capacity: SnapshotMaxNodes}
+var snap = &snapshotState{
+	connections:  map[string]int{},
+	nodes:        map[string]bool{},
+	byNode:       map[string]map[string]int{},
+	byNodeOnline: map[string]bool{},
+	capacity:     SnapshotMaxNodes,
+}
+
+// streamsActive is set by the stream supervisor while at least one node
+// event stream feeds the snapshot. The live worker checks it so the ticker
+// and the stream consumer are never both writers (Review Focus 5).
+var streamsActive atomic.Bool
+
+// StreamsActive reports whether any node event stream currently feeds
+// snapshot state.
+func StreamsActive() bool { return streamsActive.Load() }
+
+// SetStreamsActive is the supervisor's half of the single-writer gate.
+func SetStreamsActive(on bool) { streamsActive.Store(on) }
+
+// resetPerNode drops every stream-fed contribution. The poll collector calls
+// it so a later stream start never merges stale per-node maps with a fresh
+// poll result.
+func resetPerNode() {
+	snap.mu.Lock()
+	snap.byNode = map[string]map[string]int{}
+	snap.byNodeOnline = map[string]bool{}
+	snap.mu.Unlock()
+}
 
 // SnapshotCap returns the configured node cap.
 func SnapshotCap() int {

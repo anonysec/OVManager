@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -543,6 +544,9 @@ func CollectLiveSnapshot(db *sql.DB) {
 	if !pollDue(time.Since(procStart).Seconds()) {
 		return
 	}
+	// A poll owns the snapshot wholesale; anything a stream left behind is
+	// superseded the moment the ticker runs again.
+	resetPerNode()
 	cap := SnapshotMaxNodes
 	if v := kvValue(db); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -637,6 +641,113 @@ func CollectLiveSnapshot(db *sql.DB) {
 	touchLastOnline(db, names, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
 	online = applyGrace(online, NodeOnline(), time.Since(procStart).Seconds())
 	countsChanged, nodesChanged := updateSnapshot(counts, online, cap)
+	if nodesChanged {
+		Publish("nodes", KV{"op", "status"})
+	}
+	if countsChanged {
+		Publish("users", KV{"op", "connections"})
+	}
+}
+
+// ApplyNodeSessions folds ONE node's live sessions into the shared snapshot.
+// It replaces that node's previous contribution (other nodes are untouched),
+// stamps last_online for the users it saw, and publishes users/nodes exactly
+// like the poll collector. usageTotals carries a display-only usage sample:
+// it is published, never written to the database (Review Focus 4).
+func ApplyNodeSessions(db *sql.DB, n *node.Node, sess *node.SessionsResponse, usageTotals map[string]uint64) error {
+	if n == nil {
+		return nil
+	}
+	if sess != nil {
+		idToName, known, err := snapshotUsers(db)
+		if err != nil {
+			return err
+		}
+		counts := map[string]int{}
+		touched := map[string]bool{}
+		for _, entry := range sess.LiveSessions {
+			username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
+			if username == "" {
+				continue
+			}
+			counts[username]++
+			touched[username] = true
+		}
+		names := make([]string, 0, len(touched))
+		for u := range touched {
+			names = append(names, u)
+		}
+		touchLastOnline(db, names, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
+		snap.mu.Lock()
+		snap.byNode[n.Name] = counts
+		snap.byNodeOnline[n.Name] = true
+		snap.mu.Unlock()
+	}
+	if usageTotals != nil {
+		// Display-only: the billing pass owns User.used and node_usage.
+		pairs := make([]KV, 0, len(usageTotals))
+		for name, n := range usageTotals {
+			pairs = append(pairs, KV{name, int64(n)})
+		}
+		sort.Slice(pairs, func(i, j int) bool { return pairs[i].Key < pairs[j].Key })
+		Publish("users", KV{"op", "usage"}, KV{"usage", pairs})
+	}
+	applyNodeSnapshot()
+	return nil
+}
+
+// snapshotUsers loads the numeric-id and name lookup the session resolver
+// needs. Shared by the stream apply path; the poll collector keeps its own
+// inline load so its behavior stays byte-identical.
+func snapshotUsers(db *sql.DB) (map[string]string, map[string]bool, error) {
+	idToName := map[string]string{}
+	known := map[string]bool{}
+	rows, err := db.Query(`SELECT id, name FROM User`)
+	if err != nil {
+		return idToName, known, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			idToName[strconv.FormatInt(id, 10)] = name
+			known[name] = true
+		}
+	}
+	return idToName, known, rows.Err()
+}
+
+// MarkNodeOffline flips one node offline through the same grace path the
+// collector uses: its sessions stop counting at once, and the badge holds
+// for the grace window exactly as a failed poll's would.
+func MarkNodeOffline(nodeName string) {
+	snap.mu.Lock()
+	delete(snap.byNode, nodeName)
+	snap.byNodeOnline[nodeName] = false
+	snap.mu.Unlock()
+	applyNodeSnapshot()
+}
+
+// applyNodeSnapshot merges every streaming node's contribution, applies the
+// same grace window the collector uses, and publishes the same users/nodes
+// events.
+func applyNodeSnapshot() {
+	counts := map[string]int{}
+	online := map[string]bool{}
+	snap.mu.Lock()
+	for _, perUser := range snap.byNode {
+		for name, n := range perUser {
+			counts[name] += n
+		}
+	}
+	for name, up := range snap.byNodeOnline {
+		online[name] = up
+	}
+	capacity := snap.capacity
+	snap.mu.Unlock()
+	online = applyGrace(online, NodeOnline(), time.Since(procStart).Seconds())
+	countsChanged, nodesChanged := updateSnapshot(counts, online, capacity)
 	if nodesChanged {
 		Publish("nodes", KV{"op", "status"})
 	}
