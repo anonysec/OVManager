@@ -81,15 +81,14 @@
       the recommended <strong>1. Install</strong> for a default host service. For
       every setting, run <code>interactive</code> for the full wizard:
     </p>
-    <figure class="cmd">
-      <pre><code>bash &lt;(curl -sSL https://raw.githubusercontent.com/anonysec/OVNode/main/internal/assets/install.sh) interactive</code></pre>
-    </figure>
     <p>
-      With no terminal the installer cannot ask, so it needs <code>-y</code>:
+      The node installer is driven by variables and <code>-y</code>. The
+      panel's same-server offer asks for the VPN port and protocol first; the
+      standalone install takes them from the environment:
     </p>
     <figure class="cmd">
       <pre><code>curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/main/internal/assets/install.sh -o install.sh
-NodeName=eu-1 VpnPorts=443 Proto=both Ipv6=1 bash install.sh -y</code></pre>
+NodeName=eu-1 VpnPorts=1194 Proto=both Ipv6=1 bash install.sh -y</code></pre>
     </figure>
     <p>
       The flags are <code>-y/--yes</code> and <code>-h/--help</code>; everything

@@ -52,6 +52,8 @@ INTERACTIVE=0
 YES=0
 NODE_INSTALL_FAILED=0
 NODE_INSTALLED=0
+OVNODE_VPN_PORTS="1194"
+OVNODE_PROTO="udp"
 FROM_SOURCE=0
 SRC=""
 DEST=""
@@ -595,10 +597,39 @@ uninstall_completion() {
     fi
 }
 
+# ask_node_settings fills the node port/protocol for the same-server install.
+# The default is OpenVPN's 1194/udp; 443 is often a web server, so it is only
+# used when the operator types it and it is free.
+ask_node_settings() {
+    [[ -t 0 && "$YES" -eq 0 ]] || return 0
+    local p proto
+    while true; do
+        p="$(ask "OVNode VPN port" "$OVNODE_VPN_PORTS")"
+        p="${p// /}"
+        [[ -z "$p" ]] && p="$OVNODE_VPN_PORTS"
+        if ! validate_port "$p"; then
+            _warn "invalid port: $p"
+            continue
+        fi
+        if is_port_in_use "$p"; then
+            _warn "port $p is already in use"
+            continue
+        fi
+        OVNODE_VPN_PORTS="$p"
+        break
+    done
+    proto="$(ask "OVNode protocol (udp/tcp/both)" "both")"
+    case "${proto:-both}" in
+        udp|tcp|both) OVNODE_PROTO="${proto:-both}" ;;
+        *) _warn "unknown protocol '${proto}', using both"; OVNODE_PROTO="both" ;;
+    esac
+}
+
 # The node publishes its bootstrap installer as a release asset. Use the
 # latest release so this offer tracks the node line; the bootstrap verifies
 # the binary against that release's SHA256SUMS and execs the Go installer.
 run_node_installer() {
+    ask_node_settings
     local url="${OVN_INSTALLER_URL:-https://github.com/anonysec/OVNode/releases/latest/download/install.sh}"
     local script tmp rc=0
     if ! script="$(curl -fsSL "$url")" || [[ -z "$script" ]]; then

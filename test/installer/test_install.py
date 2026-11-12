@@ -121,3 +121,16 @@ offer_node_and_logs docker 443 /custom/ new-key
         result = self.run_bash('parse_args -y install; echo "INTERACTIVE=$INTERACTIVE"', tty_input="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("INTERACTIVE=0", result.stdout)
+
+    def test_node_settings_prompt_rejects_nothing_and_defaults_to_1194(self):
+        result = self.run_bash('''
+is_port_in_use() { return 1; }
+YES=0
+ask_node_settings
+echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"
+''', tty_input="45432\nboth\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PORT=45432 PROTO=both", result.stdout)
+        result = self.run_bash('YES=1; ask_node_settings; echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PORT=1194 PROTO=udp", result.stdout)
