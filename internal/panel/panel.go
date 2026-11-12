@@ -132,6 +132,11 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	// Idle cadence is enforced by the collector's own pollDue gate.
 	h.startLiveWorker()
 
+	// Per-node event streams: while a node streams, its changes reach the
+	// snapshot instantly and the collector stands down; a node without the
+	// endpoint keeps the polling path.
+	h.startEventStreams()
+
 	// Daily DB backup (replaces the ovmanager-backup timer).
 	h.startBackupWorker()
 

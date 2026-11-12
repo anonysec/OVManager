@@ -61,6 +61,12 @@ func (h *Handler) liveTick(ctx context.Context) {
 	default:
 	}
 	db := h.Svc.DB()
-	runLiveCollect(db)
+	// While an event stream owns snapshot state the poll collector stands
+	// down, so the ticker and the stream consumer are never both writers
+	// (Review Focus 5). Metrics history and alerts keep their own cadence:
+	// they read sessions but never write snapshot state or billing totals.
+	if !telemetry.StreamsActive() {
+		runLiveCollect(db)
+	}
 	telemetry.CollectMetricsIfDue(db)
 }
