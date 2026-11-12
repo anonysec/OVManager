@@ -34,7 +34,12 @@ import (
 )
 
 const (
-	appSlug        = "ovmanager"
+	appSlug = "ovmanager"
+	// serverBin is what the systemd unit executes. install.sh installs the
+	// release asset under this name and points appSlug at it, so the updater
+	// must stage the same layout; staging only appSlug leaves ExecStart
+	// dangling and the service fails with 203/EXEC.
+	serverBin      = "ovmanager-server"
 	updateStageDir = ".ovmanager.staging"
 	updatePrevDir  = ".ovmanager.previous"
 	updateKeep     = 10
@@ -427,13 +432,13 @@ func stageRelease(stage, target, src string, install Install) error {
 		// A source tree carries no binary: build it, exactly as install.sh
 		// does for a --build install. Without this the staged tree has no
 		// executable, the service fails to start, and the update rolls back.
-		build := exec.Command("go", "build", "-o", filepath.Join(stage, appSlug), "./cmd") // #nosec G204 // command arguments are static or validated against strict allowlist
+		build := exec.Command("go", "build", "-o", filepath.Join(stage, serverBin), "./cmd") // #nosec G204 // command arguments are static or validated against strict allowlist
 		build.Dir = stage
 		if out, err := build.CombinedOutput(); err != nil {
 			return fmt.Errorf("build failed: %s", strings.TrimSpace(string(out)))
 		}
 	} else {
-		bin := filepath.Join(stage, appSlug)
+		bin := filepath.Join(stage, serverBin)
 		expected, err := fetchExpectedHash(target)
 		if err != nil {
 			return fmt.Errorf("could not read SHA256SUMS for v%s: %w", target, err)
@@ -460,7 +465,25 @@ func stageRelease(stage, target, src string, install Install) error {
 			}
 		}
 	}
+	if err := linkServerEntrypoint(stage); err != nil {
+		return err
+	}
 	return nil
+}
+
+// linkServerEntrypoint points appSlug at serverBin, matching install.sh. The
+// systemd unit runs serverBin directly, so the staged tree must carry it.
+func linkServerEntrypoint(stage string) error {
+	bin := filepath.Join(stage, serverBin)
+	info, err := os.Stat(bin)
+	if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("staged release has no executable %s", serverBin)
+	}
+	link := filepath.Join(stage, appSlug)
+	if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Symlink(serverBin, link)
 }
 
 func stripEnvKey(body, key string) string {
