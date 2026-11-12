@@ -54,6 +54,7 @@ NODE_INSTALL_FAILED=0
 NODE_INSTALLED=0
 OVNODE_VPN_PORTS="1194"
 OVNODE_PROTO="udp"
+OVNODE_TLS_DOMAIN=""
 FROM_SOURCE=0
 SRC=""
 DEST=""
@@ -623,6 +624,7 @@ ask_node_settings() {
         udp|tcp|both) OVNODE_PROTO="${proto:-both}" ;;
         *) _warn "unknown protocol '${proto}', using both"; OVNODE_PROTO="both" ;;
     esac
+    OVNODE_TLS_DOMAIN="$(ask "OVNode certificate SANs (domains/IPs)" "${SSL_IP:-${SSL_DOMAIN:-${SELF_SIGNED_TARGET:-}}}")"
 }
 
 # The node publishes its bootstrap installer as a release asset. Use the
@@ -639,7 +641,7 @@ run_node_installer() {
     tmp="$(mktemp)"
     printf '%s\n' "$script" > "$tmp"
     chmod +x "$tmp"
-    local tls_domain="${SSL_IP:-${SSL_DOMAIN:-${SELF_SIGNED_TARGET:-}}}"
+    local tls_domain="${OVNODE_TLS_DOMAIN:-${SSL_IP:-${SSL_DOMAIN:-${SELF_SIGNED_TARGET:-}}}}"
     if [[ "$EUID" -eq 0 ]]; then
         VpnPorts="$OVNODE_VPN_PORTS" Proto="$OVNODE_PROTO" TlsDomain="$tls_domain" bash "$tmp" -y || rc=$?
     else

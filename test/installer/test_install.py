@@ -129,7 +129,7 @@ is_port_in_use() { return 1; }
 YES=0
 ask_node_settings
 echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"
-''', tty_input="45432\nboth\n")
+''', tty_input="45432\nboth\n\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PORT=45432 PROTO=both", result.stdout)
         result = self.run_bash('YES=1; ask_node_settings; echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"')
@@ -166,3 +166,13 @@ main update
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("UPDATED", result.stdout)
         self.assertNotIn("INSTALLED", result.stdout)
+
+    def test_node_settings_asks_for_sans(self):
+        result = self.run_bash('''
+is_port_in_use() { return 1; }
+YES=0
+ask_node_settings
+echo "SAN=$OVNODE_TLS_DOMAIN"
+''', tty_input="45432\nboth\n23.88.54.254\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SAN=23.88.54.254", result.stdout)
