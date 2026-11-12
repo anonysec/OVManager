@@ -134,3 +134,24 @@ echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"
         result = self.run_bash('YES=1; ask_node_settings; echo "PORT=$OVNODE_VPN_PORTS PROTO=$OVNODE_PROTO"')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PORT=1194 PROTO=udp", result.stdout)
+
+    def test_update_runs_the_downloaded_release_updater(self):
+        with tempfile.TemporaryDirectory() as d:
+            app = pathlib.Path(d, "app")
+            app.mkdir()
+            (app / "ovmanager-server").write_text("#!/bin/sh\nexit 0\n")
+            (app / "ovmanager-server").chmod(0o755)
+            (app / ".env").write_text(f"DataDir={d}/data\n")
+            result = self.run_bash('''
+INSTALL_DIR="$APP"; DATA_DIR="$DATA"; SERVER_BIN=ovmanager-server; FROM_SOURCE=0
+fetch_release() {
+    mkdir -p "$1"
+    printf '#!/bin/sh\necho NEW_UPDATER "$@"\n' > "$1/ovmanager-server"
+    chmod +x "$1/ovmanager-server"
+}
+do_update
+''', {"APP": str(app), "DATA": f"{d}/data"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("NEW_UPDATER", result.stdout)
+        self.assertIn("--install-dir " + str(app), result.stdout)
+        self.assertIn("update --yes", result.stdout)

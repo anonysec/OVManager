@@ -961,10 +961,27 @@ do_install() {
 }
 
 do_update() {
-        local bin="$INSTALL_DIR/$SERVER_BIN"
+    local bin="$INSTALL_DIR/$SERVER_BIN"
     [[ -x "$bin" ]] || bin="$INSTALL_DIR/$APP_SLUG"
     [[ -x "$bin" ]] || die "not installed at $INSTALL_DIR, run the installer first"
-    exec "$bin" update "$@"
+    # Local builds are the installed binary's job. A release update instead
+    # downloads the target and runs *its* updater, so a fix in the new release
+    # (for example a health-probe fix) is not gated behind the old copy.
+    if [[ "$FROM_SOURCE" -eq 1 || " $* " == *" --build "* || " $* " == *" --from-source "* ]]; then
+        exec "$bin" update "$@"
+    fi
+    local tmp data_dir="$DATA_DIR"
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        local declared
+        declared="$(awk -F= '$1=="DataDir"{print $2; exit}' "$INSTALL_DIR/.env" 2>/dev/null)"
+        [[ -n "$declared" ]] && data_dir="$declared"
+    fi
+    tmp="$(mktemp -d)"
+    fetch_release "$tmp"
+    "$tmp/$SERVER_BIN" --install-dir "$INSTALL_DIR" --data-dir "$data_dir" update --yes "$@"
+    local rc=$?
+    rm -rf "$tmp"
+    return "$rc"
 }
 do_status() {
     if [[ ! -d "$INSTALL_DIR" ]]; then render_fail "status" "Not Installed"; return 1; fi
