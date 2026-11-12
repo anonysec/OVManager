@@ -607,43 +607,31 @@ uninstall_completion() {
     fi
 }
 
-# Pin the OVNode installer to a fixed commit SHA.
-OVNODE_COMMIT="41a8a2c0e9ddeb10d6c2dfddd947eab9e22d4015"
-
-# OVNode's installer currently bootstraps its helpers into APP_DIR before it
-# checks whether APP_DIR exists. Preserve the pre-bootstrap state when this
-# exact upstream ordering is present; do not remove or overwrite existing nodes.
+# The node publishes its bootstrap installer as a release asset. Use the
+# latest release so this offer tracks the node line; the bootstrap verifies
+# the binary against that release's SHA256SUMS and execs the Go installer.
 run_node_installer() {
-    local script before='    load_helpers' check='    # install
-    if [[ -d "$APP_DIR" ]]; then'
-    local snapshot='    local ovm_node_dir_existed=0
-    [[ -d "$APP_DIR" ]] && ovm_node_dir_existed=1
-    load_helpers'
-    local fixed_check='    # install
-    if [[ "$ovm_node_dir_existed" -eq 1 ]]; then'
-
-    local url="${OVN_INSTALLER_URL:-https://raw.githubusercontent.com/anonysec/OVNode/${OVNODE_COMMIT}/install.sh}"
+    local url="${OVN_INSTALLER_URL:-https://github.com/anonysec/OVNode/releases/latest/download/install.sh}"
+    local script tmp rc=0
     if ! script="$(curl -fsSL "$url")" || [[ -z "$script" ]]; then
         _warn "Could not download the OVNode installer."
         return 1
     fi
-    local tmp
     tmp="$(mktemp)"
     printf '%s\n' "$script" > "$tmp"
-    # Pin OVNode installer by commit SHA (OVNODE_COMMIT above); the downloaded
-    # installer is executed as-is.
-    if [[ "$script" == *"$before"*"$check"* && "$script" == *'load_helpers() {'* ]]; then
-        script="${script/"$before"/"$snapshot"}"
-        script="${script/"$check"/"$fixed_check"}"
-        printf '%s\n' "$script" > "$tmp"
-    fi
     chmod +x "$tmp"
     if [[ "$EUID" -eq 0 ]]; then
-        OVN_YES=1 bash "$tmp"
+        bash "$tmp" -y || rc=$?
     else
-        sudo env OVN_YES=1 bash "$tmp"
+        sudo bash "$tmp" -y || rc=$?
     fi
     rm -f "$tmp"
+    # 3 is the node's "already installed" exit: an existing node is left as is.
+    if [[ "$rc" -eq 3 ]]; then
+        _note "OVNode is already installed; the existing node was left untouched."
+        return 0
+    fi
+    return "$rc"
 }
 
 # Print after the node installer (which clears the terminal), and before any

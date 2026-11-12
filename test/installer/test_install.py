@@ -43,34 +43,27 @@ class InstallerTests(unittest.TestCase):
         os.close(master)
         return subprocess.CompletedProcess(proc.args, proc.returncode, output.decode(), "")
 
-    def test_node_bootstrap_does_not_look_like_existing_install(self):
-        # Reproduce OVNode's load_helpers creating APP_DIR before the check.
-        upstream = '''#!/usr/bin/env bash
-set -e
-APP_DIR="$OVN_APP_DIR"
-load_helpers() { mkdir -p "$APP_DIR"; touch "$APP_DIR/helper"; }
-main() {
-    load_helpers
-    # install
-    if [[ -d "$APP_DIR" ]]; then
-        echo existing
-    else
-        echo fresh
-    fi
-}
-main
-'''
+    def test_node_installer_runs_the_release_bootstrap_with_yes(self):
+        upstream = '#!/usr/bin/env bash\necho "NODE_ARGS:$*"\nexit 0\n'
         with tempfile.TemporaryDirectory() as d:
             path = pathlib.Path(d, "upstream.sh")
             path.write_text(upstream)
-            env = {"UPSTREAM": str(path), "OVN_APP_DIR": str(pathlib.Path(d, "node"))}
-            code = 'curl() { cat "$UPSTREAM"; }; sudo() { "$@"; }; run_node_installer'
-            first = self.run_bash(code, env)
-            self.assertEqual(first.returncode, 0, first.stderr)
-            self.assertIn("fresh", first.stdout)
-            second = self.run_bash(code, env)
-            self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertIn("existing", second.stdout)
+            result = self.run_bash(
+                'curl() { cat "$UPSTREAM"; }; sudo() { "$@"; }; run_node_installer',
+                {"UPSTREAM": str(path)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("NODE_ARGS:-y", result.stdout)
+
+    def test_node_installer_accepts_an_existing_node(self):
+        upstream = '#!/usr/bin/env bash\nexit 3\n'
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d, "upstream.sh")
+            path.write_text(upstream)
+            result = self.run_bash(
+                'curl() { cat "$UPSTREAM"; }; sudo() { "$@"; }; run_node_installer',
+                {"UPSTREAM": str(path)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("already installed", result.stderr)
 
     def test_node_download_failure_is_not_success(self):
         result = self.run_bash('curl() { return 22; }; run_node_installer')
