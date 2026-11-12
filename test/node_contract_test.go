@@ -5,6 +5,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -115,6 +116,12 @@ func emittedRoutes(t *testing.T) map[route][]emit {
 						return true
 					}
 					method, path = http.MethodGet, pathName(call.Args[0])
+				case "streamReq":
+					// StreamEvents' request: GET with a literal path arg.
+					if len(call.Args) < 2 {
+						return true
+					}
+					method, path = http.MethodGet, pathName(call.Args[1])
 				}
 				if method == "" || path == "" {
 					return true
@@ -508,6 +515,11 @@ func TestNodeContractRequests(t *testing.T) {
 		{"DisconnectUser", func(c *node.Client) { c.DisconnectUser(uid, true, 0) }},
 		{"GetSessions", func(c *node.Client) { c.GetSessions("amy", 8, 0) }},
 		{"GetLogs", func(c *node.Client) { c.GetLogs("ERROR", 10) }},
+		{"StreamEvents", func(c *node.Client) {
+			// The recorder answers JSON, so the stream client rejects the
+			// content type and returns; the request itself is what counts.
+			_ = c.StreamEvents(context.Background(), func(node.NodeEvent) error { return nil })
+		}},
 		{"DownloadOVPNBytes", func(c *node.Client) { c.DownloadOVPNBytes(uid) }},
 		{"GetBackup", func(c *node.Client) { c.GetBackup(0) }},
 	}
@@ -662,10 +674,11 @@ func TestNodeContractOVPNRaw(t *testing.T) {
 	rawRoutes := map[string]bool{
 		row.Path:       true,
 		"/sync/backup": true,
+		"/sync/events": true, // SSE stream: event frames, not the envelope
 	}
 	for _, r := range node.Contract {
 		if r.ResponseRaw && !rawRoutes[r.Path] {
-			t.Fatalf("only the .ovpn download and the node backup are raw, but %s %s is marked raw too", r.Method, r.Path)
+			t.Fatalf("only the .ovpn download, the node backup and the event stream are raw, but %s %s is marked raw too", r.Method, r.Path)
 		}
 	}
 

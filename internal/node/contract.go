@@ -109,6 +109,16 @@ var Contract = []ContractRow{
 			"the SPA also accepts a legacy sessions key (NodeDrawer.tsx:129)",
 	},
 	{
+		// Live event stream, added in node 2.0.15 (events.go:StreamEvents).
+		Method:      http.MethodGet,
+		Path:        "/sync/events",
+		RequestAt:   "internal/node/events.go:StreamEvents",
+		ResponseRaw: true,
+		Note: "SSE stream, not the envelope: event frames carry kind/revision/data and a " +
+			"snapshot on (re)connect; a node before 2.0.15 answers 404 and the panel polls " +
+			"instead (live_stream.go supervisor)",
+	},
+	{
 		// The node's log ring (client.go:681).
 		Method:    http.MethodGet,
 		Path:      "/sync/logs",
