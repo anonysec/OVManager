@@ -49,29 +49,45 @@
 
     <h2 id="panel">The panel's certificate</h2>
     <p>
-      A fresh install uses a <strong>self-signed</strong> certificate. The
-      connection is genuinely encrypted; the browser just cannot tell who issued
-      the certificate, so it warns once. Click Advanced, then Proceed. The
-      installer's certificate carries the server's public IP as its common name
-      and has no subject alternative names &mdash; that is deliberate, and the
-      panel's health probe pins the file it reads rather than checking the
-      hostname.
+      The installer offers five choices: Let's Encrypt for a domain, Let's
+      Encrypt for the server's public IPv4 (short-lived), a custom pair, a
+      self-signed pair, or no TLS. The Let's Encrypt options use the panel's
+      built-in ACME client &mdash; nothing else has to be installed on the host.
     </p>
     <p>
-      The panel serves HTTPS from the pair in <code>.env</code>, or from
-      <code>DATA_DIR/tls</code> when no override is set. The matching command is
-      the interactive <code>ovmanager tls</code> menu (status, remove,
-      self-signed, custom install), not <code>https</code>.
+      Point the domain (or the IP) at this server and leave port 80 reachable:
+      the client answers the HTTP-01 challenge on a listener that exists only
+      while it runs. Issue or replace a certificate at any time with:
+    </p>
+    <figure class="cmd"><pre><code>ovmanager tls acme panel.example.com   # domain
+ovmanager tls acme 203.0.113.9         # Let's Encrypt IP certificate</code></pre></figure>
+    <p>
+      The panel stores the pair at <code>DATA_DIR/tls</code> (or the
+      <code>TlsCertFile</code>/<code>TlsKeyFile</code> you declare) and renews
+      it automatically. The check runs daily; the window is a third of the
+      certificate's lifetime, capped at 30 days, so a 90-day domain certificate
+      renews around day 60 and a short-lived IP certificate renews with about
+      two days left. The server reloads the pair on the next handshake, so a
+      renewal is served without a restart.
+    </p>
+    <p>
+      The ACME account key lives at
+      <code>DATA_DIR/tls/acme-account.pem</code>. Set
+      <code>AcmeDirectoryUrl</code> to the Let's Encrypt staging directory to
+      test without using production quota.
     </p>
 
     <h2 id="switch">Use your own certificate</h2>
     <p>
-      In-process ACME issuance was removed. Put a browser-trusted certificate
-      at <code>DATA_DIR/tls/fullchain.pem</code> and
-      <code>DATA_DIR/tls/privkey.pem</code> (or point
-      <code>TlsCertFile</code>/<code>TlsKeyFile</code> at them), then restart the
-      panel. Any external client — certbot, acme.sh, your CA — can produce the
-      pair. There is no renewal timer inside the panel.
+      A certificate from certbot, acme.sh or your CA still works:
+    </p>
+    <figure class="cmd"><pre><code>ovmanager tls install /path/fullchain.pem /path/privkey.pem
+ovmanager service restart</code></pre></figure>
+    <p>
+      Point <code>TlsCertFile</code>/<code>TlsKeyFile</code> at the pair, or
+      leave them unset to use <code>DATA_DIR/tls</code>. The panel reloads a
+      renewed pair on the next handshake; restart only when the panel has to
+      switch between HTTP and HTTPS.
     </p>
 
     <h2 id="node-cert">The node's certificate</h2>
@@ -94,7 +110,7 @@
           <tr><th scope="col">Where</th><th scope="col">What to look at</th></tr>
         </thead>
         <tbody>
-          <tr><td>Panel, via <code>ovmanager tls</code></td><td>Installed certificate, source and expiry, with issue/renew/remove actions</td></tr>
+          <tr><td>Panel, via <code>ovmanager tls</code></td><td>Installed certificate, source and expiry; built-in ACME renews it automatically</td></tr>
           <tr><td>Node, via <code>ovnode tls status</code></td><td>Node sync API certificate (self-signed or Let's Encrypt) and remaining validity</td></tr>
           <tr><td>Node, via <code>ovnode status</code></td><td>OpenVPN server certificate expiry, refreshed per probe</td></tr>
         </tbody>

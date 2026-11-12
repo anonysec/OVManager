@@ -455,18 +455,6 @@ setup_ssl_wizard() {
     esac
 }
 
-check_acme_domain() {
-    [[ -z "$SSL_DOMAIN" ]] && return 0
-    if [[ -s "$DATA_DIR/tls/fullchain.pem" && -s "$DATA_DIR/tls/privkey.pem" ]]; then
-        local check
-        if check="$(openssl x509 -in "$DATA_DIR/tls/fullchain.pem" -noout -checkend 86400 2>/dev/null)" && [[ "$check" == "Certificate will not expire"* ]]; then
-            _ok "acme    existing certificate still valid - skipping"
-            SSL_DOMAIN=""; SSL_MODE="none"; return 0
-        fi
-    fi
-    _warn "in-process ACME was removed; place your certificate at $DATA_DIR/tls/fullchain.pem and privkey.pem, then restart"
-    SSL_DOMAIN=""; SSL_MODE="none"
-}
 
 write_env() {
     local envfile="$1" data_dir="$2"
@@ -480,19 +468,17 @@ write_env() {
         printf 'BasePath=%s\n' "$URLPATH_VAL"
         printf 'OwnerUsername=%s\n' "$DEFAULT_USER"
         printf 'DataDir=%s\n' "$data_dir"
-        if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
-            printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
-            printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
+        case "$SSL_MODE" in
+        domain|ip|selfsigned)
+            printf 'TlsCertFile=%s/tls/fullchain.pem\n' "$data_dir"
+            printf 'TlsKeyFile=%s/tls/privkey.pem\n' "$data_dir"
             mkdir -p "$data_dir/tls"
-        fi
-        if [[ "$SSL_MODE" == "custom" ]]; then
+            ;;
+        custom)
             printf 'TlsCertFile=%s\n' "$SSL_CERT_SRC"
             printf 'TlsKeyFile=%s\n' "$SSL_KEY_SRC"
-        fi
-        if [[ "$SSL_MODE" == "ip" || "$SSL_MODE" == "selfsigned" ]]; then
-            printf 'SSL_CERTFILE=%s/tls/fullchain.pem\n' "$data_dir"
-            printf 'SSL_KEYFILE=%s/tls/privkey.pem\n' "$data_dir"
-        fi
+            ;;
+        esac
     } > "$envfile"
     )
     cat >> "$envfile" <<'OPTS'
@@ -872,7 +858,6 @@ do_install() {
     printf '# Executing ovmanager install script, commit: %s\n' "$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --short HEAD 2>/dev/null || echo main)"
     colorized_echo blue "Configuration"
     prompt_interactive; setup_ssl_wizard
-    [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]] && check_acme_domain
     _ok "port=$PORT_VAL  path=$URLPATH_VAL  tls=${SSL_MODE:-none}"
     if is_port_in_use "$PORT_VAL"; then
         _warn "Port $PORT_VAL is already in use."
@@ -915,23 +900,25 @@ do_install() {
             _warn "self-signed cert issuance failed"
         fi
     fi
-    [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (SSL_CERTFILE=$SSL_CERT_SRC)"
+    [[ "$SSL_MODE" == "custom" ]] && _ok "custom certificate configured (TlsCertFile=$SSL_CERT_SRC)"
     if [[ "$SSL_MODE" == "domain" && -n "$SSL_DOMAIN" ]]; then
         colorized_echo blue "TLS (Let's Encrypt domain)"
-        if "$dest/$SERVER_BIN" tls acme "$SSL_DOMAIN" >/dev/null 2>&1; then
+        if "$dest/$SERVER_BIN" tls acme "$SSL_DOMAIN"; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
-            _ok "certificate issued for $SSL_DOMAIN"
+            _ok "certificate issued for $SSL_DOMAIN (automatic renewal is on)"
         else
-            _warn "domain certificate issuance failed - run 'ovmanager tls acme $SSL_DOMAIN' later"
+            _warn "domain certificate issuance failed"
+            _note "retry after fixing the cause: ovmanager tls acme $SSL_DOMAIN"
         fi
     fi
     if [[ "$SSL_MODE" == "ip" && -n "$SSL_IP" ]]; then
         colorized_echo blue "TLS (Let's Encrypt IP)"
-        if "$dest/$SERVER_BIN" tls acme "$SSL_IP" >/dev/null 2>&1; then
+        if "$dest/$SERVER_BIN" tls acme "$SSL_IP"; then
             systemctl restart "$SYSTEMD_SERVICE" >/dev/null 2>&1 || true
-            _ok "IP certificate step done for $SSL_IP"
+            _ok "certificate issued for $SSL_IP (automatic renewal is on)"
         else
-            _warn "IP certificate issuance failed - run 'ovmanager tls acme $SSL_IP' later"
+            _warn "IP certificate issuance failed"
+            _note "retry after fixing the cause: ovmanager tls acme $SSL_IP"
         fi
     fi
     port="$(awk -F= -v k=PORT '$1==k{print $2;exit}' "$dest/.env" 2>/dev/null)"; port="${port:-$DEFAULT_PORT}"

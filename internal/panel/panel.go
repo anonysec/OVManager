@@ -110,8 +110,9 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /maintenance/usage/reset-all", owner(h.usageResetAll))
 	mux.HandleFunc("POST /maintenance/usage/purge", owner(h.usagePurge))
 
-	// TLS certificate management lives in the `ovmanager tls` CLI now. The ACME
-	// renewal worker below still runs (it uses internal/acme directly).
+	// Built-in ACME: the CLI/installer issues the first pair; this worker
+	// renews it before expiry.
+	h.startACMEWorker()
 
 	mux.HandleFunc("GET /updater/status", owner(h.updateStatus))
 	mux.HandleFunc("GET /updater/operation", owner(h.updateOperation))

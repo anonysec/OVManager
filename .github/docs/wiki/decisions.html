@@ -33,7 +33,7 @@
 </ul>
 <h2 id="tls-policy">TLS policy (LOCKED)</h2>
 <div class="table-scroll"><table><caption>Public TLS identity by component.</caption><thead><tr><th scope="col">Component</th><th scope="col">Public TLS</th><th scope="col">Why</th></tr></thead><tbody>
-<tr><td>Panel</td><td>Browser-trusted certificate supplied by the operator (certbot, acme.sh or a CA); the panel terminates TLS itself</td><td>Operators need browser-trusted HTTPS; self-signed is a warning footgun.</td></tr>
+<tr><td>Panel</td><td>Built-in ACME (Let's Encrypt domain or IP) with automatic renewal, or a custom pair via <code>ovmanager tls install</code></td><td>Operators need browser-trusted HTTPS without installing another ACME client; the panel terminates TLS itself.</td></tr>
 <tr><td>Node</td><td>Self-signed + pinned fingerprint</td><td>Control plane; one panel owns it; ACME never serves the node.</td></tr>
 <tr><td>Reverse proxy</td><td>Not supported</td><td>The panel terminates TLS and does not trust forwarded headers; a proxy would break origin checks and client-IP attribution.</td></tr>
 </tbody></table></div>

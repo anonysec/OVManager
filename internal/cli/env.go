@@ -28,7 +28,7 @@ type Install struct {
 }
 
 var envKeys = []string{
-	"Port", "BasePath", "TlsKeyFile", "TlsCertFile",
+	"Port", "BasePath", "TlsKeyFile", "TlsCertFile", "AcmeHttpPort", "AcmeDirectoryUrl",
 	"OwnerUsername", "ADMIN_PASSWORD", "ADMIN_PASSWORD_HASH",
 }
 

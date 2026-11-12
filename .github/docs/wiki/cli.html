@@ -122,6 +122,7 @@
           <tr><td><code>DataDir</code></td><td>Database, backups and node material (default <code>/var/lib/ovmanager</code>, mode <code>0700</code>).</td></tr>
           <tr><td><code>DbPath</code></td><td>Explicit SQLite file; defaults to <code>DataDir/app.db</code>.</td></tr>
           <tr><td><code>TlsCertFile</code>, <code>TlsKeyFile</code></td><td>Certificate pair; empty means <code>DataDir/tls/fullchain.pem</code> and <code>privkey.pem</code>.</td></tr>
+          <tr><td><code>AcmeHttpPort</code>, <code>AcmeDirectoryUrl</code></td><td>ACME challenge port (default <code>80</code>) and directory override (staging/tests).</td></tr>
           <tr><td><code>SecretKey</code></td><td>64 hex characters; defaults to <code>DataDir/secret.key</code>.</td></tr>
           <tr><td><code>PublicUrl</code></td><td>Public address used in subscription links.</td></tr>
           <tr><td><code>SubscriptionPath</code></td><td>Subscription page segment (default <code>sub</code>).</td></tr>

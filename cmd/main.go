@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"html"
 	"io/fs"
@@ -66,6 +67,12 @@ func run() int {
 		log.Printf("SECURITY WARNING: panel is serving over HTTP without TLS; session cookies are Secure and will be blocked by browsers.")
 	}
 	srv := newServer(addr, handler)
+	if useTLS {
+		srv.TLSConfig = &tls.Config{
+			GetCertificate: panel.ReloadingCertificate(certFile, keyFile),
+			MinVersion:     tls.VersionTLS12,
+		}
+	}
 	srvErr := make(chan error, 1)
 	go func() {
 		if useTLS {

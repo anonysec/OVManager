@@ -262,14 +262,24 @@ func (h *Handler) checkTLS() check {
 	days := daysUntil(cert)
 	detail["expires_in_days"] = days
 	detail["expires_at"] = cert.NotAfter.UTC().Format(time.RFC3339)
+	// Short-lived Let's Encrypt IP certificates are six days old by design;
+	// a 14-day warning would fire for their whole life.
+	warnDays := 14
+	if life := cert.NotAfter.Sub(cert.NotBefore); life > 0 && life <= 10*24*time.Hour {
+		warnDays = 2
+	}
+	renewHint := "Renew the certificate soon so browsers keep trusting the panel."
+	if target := acmeEnrollmentTarget(); target != "" {
+		renewHint = "Automatic renewal is enabled for " + target + " and runs daily."
+	}
 	switch {
 	case days < 0:
 		return entry("tls", "error",
 			fmt.Sprintf("The TLS certificate expired %s ago.", fmtAge(float64(-days)*86400)),
-			"Renew the certificate (for example with certbot) and restart the panel.", detail)
-	case days <= 14:
+			renewHint, detail)
+	case days <= warnDays:
 		return entry("tls", "warn", fmt.Sprintf("The TLS certificate expires in %d days.", days),
-			"Renew the certificate soon so browsers keep trusting the panel.", detail)
+			renewHint, detail)
 	}
 	return entry("tls", "ok",
 		fmt.Sprintf("TLS is using %s; the certificate expires in %d days.", certFile, days), "", detail)

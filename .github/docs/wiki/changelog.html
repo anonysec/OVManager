@@ -23,13 +23,19 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.0 is the first supported release. There is no upgrade path from pre-2.0.0 builds; everything below it is archived history.</p>
+<p class="lede">2.0.1 restores built-in Let's Encrypt issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.1 — 2026-11-12</h2>
+<ul>
+<li><strong>HTTPS certificates.</strong> The built-in ACME client is back: Let's Encrypt for a domain or the server's public IPv4 (short-lived profile), issued by the installer or <code>ovmanager tls acme</code>. The panel renews daily with a lifetime-based window and reloads the new pair without a restart.</li>
+<li><strong>Installer.</strong> The same-server OVNode step uses the node's release bootstrap instead of a stale pinned script; install defaults to the wizard on a terminal; a failed node step no longer reports a full success.</li>
+<li><strong>Panel update.</strong> The updater stages <code>ovmanager-server</code> and its symlink, so a 2.0.1 update does not leave the unit pointing at a missing binary.</li>
+</ul>
 <h2>2.0.0 — 2026-11-11</h2>
 <ul>
 <li><strong>Reset line.</strong> Database baseline is <code>app.db</code> with a single <code>schema.sql</code>; the 38-step migration history, legacy table adoption and pre-2.0.0 state formats are gone. A pre-2.0.0 database is refused, not migrated.</li>
 <li><strong>Node protocol.</strong> Nodes run UDP, TCP, or both. <code>both</code> starts one OpenVPN process per transport on the same port, and profiles carry a connection block per protocol and port.</li>
 <li><strong>Node settings.</strong> OpenVPN tuning lives in <code>state/openvpn.json</code> and is edited from the node drawer: max clients, keepalive, redirect, DNS, routes, IPv6, MTU/mssfix, ciphers, TLS floor, renegotiation, idle timeout, verbosity. The node validates, regenerates and reloads, rolling back a failed apply.</li>
-<li><strong>Configuration.</strong> Panel <code>.env</code> is 15 PascalCase keys; node <code>.env</code> is 12. No product prefixes, no reverse-proxy mode, no forwarded-header trust, no ACME or <code>DATABASE_URL</code> keys.</li>
+<li><strong>Configuration.</strong> Panel <code>.env</code> uses PascalCase keys; node <code>.env</code> is 12. No product prefixes, no reverse-proxy mode, no forwarded-header trust, no <code>DATABASE_URL</code> keys. TLS keys are <code>TlsCertFile</code>/<code>TlsKeyFile</code>.</li>
 <li><strong>Security.</strong> Node TLS pins are required (the unverified fallback is gone); backup archives are framed and capped; the node rate limiter sweeps on a timer; profiles never carry another node's address or <code>panel_domain</code>; the panel journal endpoint is limited to its own unit.</li>
 <li><strong>Installer.</strong> One Go installer (the bash fallback is deleted), typed exit codes, checksum-gated bootstrap, <code>ovnode update</code> resolves <code>latest</code>, and per-instance host files (logrotate, cron, sysctl, NAT, backups).</li>
 </ul>
