@@ -13,7 +13,7 @@ import (
 )
 
 // Version is the OVManager release version.
-var Version = "2.0.0-rc.1"
+var Version = "2.0.0"
 
 // IsLegacyPreReset reports whether tag or version string belongs to the retired
 // 2.1.0–2.4.6 pre-reset line.
