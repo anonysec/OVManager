@@ -23,7 +23,11 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.1 restores built-in Let's Encrypt issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<p class="lede">2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.2 — 2026-11-12</h2>
+<ul>
+<li><strong>IP certificates.</strong> Omit the IP address from the CSR Common Name; Let's Encrypt rejects an IP in the CN (<code>badCSR</code>) and requires it in the subjectAltName instead. Verified against Let's Encrypt production on an IP-only server.</li>
+</ul>
 <h2>2.0.1 — 2026-11-12</h2>
 <ul>
 <li><strong>HTTPS certificates.</strong> The built-in ACME client is back: Let's Encrypt for a domain or the server's public IPv4 (short-lived profile), issued by the installer or <code>ovmanager tls acme</code>. The panel renews daily with a lifetime-based window and reloads the new pair without a restart.</li>

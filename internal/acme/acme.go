@@ -169,7 +169,7 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 		}
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject:     pkix.Name{CommonName: o.Domains[0]},
+		Subject:     pkix.Name{CommonName: commonName(o.Domains)},
 		DNSNames:    dnsNames,
 		IPAddresses: ipAddrs,
 	}, certKey)
@@ -199,6 +199,18 @@ func Issue(ctx context.Context, o Options) (*Result, error) {
 		CertPEM:       certPEM,
 		Cert:          leaf,
 	}, nil
+}
+
+// commonName returns the CSR subject CN. Let's Encrypt rejects an IP address
+// in the Common Name (badCSR); the IP belongs in the SAN only.
+func commonName(domains []string) string {
+	if len(domains) == 0 {
+		return ""
+	}
+	if net.ParseIP(domains[0]) != nil {
+		return ""
+	}
+	return domains[0]
 }
 
 // newClient builds the client and serializes the account key (always — the

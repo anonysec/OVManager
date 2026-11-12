@@ -20,6 +20,6 @@ bash <(curl -sSL https://raw.githubusercontent.com/anonysec/OVManager/main/insta
 
 **Pairs with:** [OVNode](https://github.com/anonysec/OVNode) — the agent that runs OpenVPN on each VPN server.
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue)](https://anonysec.github.io/OVManager/wiki/changelog.html)
+[![Version](https://img.shields.io/badge/version-2.0.2-blue)](https://anonysec.github.io/OVManager/wiki/changelog.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/anonysec/OVManager/actions/workflows/ci.yml/badge.svg)](https://github.com/anonysec/OVManager/actions/workflows/ci.yml)
