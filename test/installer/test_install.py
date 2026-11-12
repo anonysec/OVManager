@@ -44,7 +44,7 @@ class InstallerTests(unittest.TestCase):
         return subprocess.CompletedProcess(proc.args, proc.returncode, output.decode(), "")
 
     def test_node_installer_runs_the_release_bootstrap_with_yes(self):
-        upstream = '#!/usr/bin/env bash\necho "NODE_ARGS:$*"\nexit 0\n'
+        upstream = '#!/usr/bin/env bash\necho "NODE_ARGS:$*"\necho "NODE_ENV:$VpnPorts/$Proto/$TlsDomain"\nexit 0\n'
         with tempfile.TemporaryDirectory() as d:
             path = pathlib.Path(d, "upstream.sh")
             path.write_text(upstream)
@@ -53,6 +53,7 @@ class InstallerTests(unittest.TestCase):
                 {"UPSTREAM": str(path)})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("NODE_ARGS:-y", result.stdout)
+        self.assertIn("NODE_ENV:1194/udp/", result.stdout)
 
     def test_node_installer_accepts_an_existing_node(self):
         upstream = '#!/usr/bin/env bash\nexit 3\n'

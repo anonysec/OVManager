@@ -82,9 +82,11 @@
       every setting, run <code>interactive</code> for the full wizard:
     </p>
     <p>
-      The node installer is driven by variables and <code>-y</code>. The
-      panel's same-server offer asks for the VPN port and protocol first; the
-      standalone install takes them from the environment:
+      The node installer is interactive on a terminal: node name, API port and
+      key, VPN ports, protocol, TLS method and the self-signed SAN list.
+      <code>-y</code> installs with defaults. The panel's same-server offer asks
+      for the VPN port and protocol, and passes the panel's TLS target as the
+      node certificate SAN.
     </p>
     <figure class="cmd">
       <pre><code>curl -fsSL https://raw.githubusercontent.com/anonysec/OVNode/main/internal/assets/install.sh -o install.sh

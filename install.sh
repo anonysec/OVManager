@@ -639,10 +639,11 @@ run_node_installer() {
     tmp="$(mktemp)"
     printf '%s\n' "$script" > "$tmp"
     chmod +x "$tmp"
+    local tls_domain="${SSL_IP:-${SSL_DOMAIN:-${SELF_SIGNED_TARGET:-}}}"
     if [[ "$EUID" -eq 0 ]]; then
-        bash "$tmp" -y || rc=$?
+        VpnPorts="$OVNODE_VPN_PORTS" Proto="$OVNODE_PROTO" TlsDomain="$tls_domain" bash "$tmp" -y || rc=$?
     else
-        sudo bash "$tmp" -y || rc=$?
+        sudo env VpnPorts="$OVNODE_VPN_PORTS" Proto="$OVNODE_PROTO" TlsDomain="$tls_domain" bash "$tmp" -y || rc=$?
     fi
     rm -f "$tmp"
     # 3 is the node's "already installed" exit: an existing node is left as is.
