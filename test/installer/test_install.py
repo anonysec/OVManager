@@ -155,3 +155,13 @@ do_update
         self.assertIn("NEW_UPDATER", result.stdout)
         self.assertIn("--install-dir " + str(app), result.stdout)
         self.assertIn("update --yes", result.stdout)
+
+    def test_update_does_not_fall_through_to_install(self):
+        result = self.run_bash('''
+do_update() { echo UPDATED; }
+do_install() { echo INSTALLED; }
+main update
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("UPDATED", result.stdout)
+        self.assertNotIn("INSTALLED", result.stdout)

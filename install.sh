@@ -1176,7 +1176,7 @@ main() {
     parse_args "$@"
     case "$ACTION" in
         version-script) print_version_script; return 0 ;;
-        update) do_update "${UPDATE_ARGS[@]}" ;;
+        update) do_update "${UPDATE_ARGS[@]}"; return $? ;;
         status) do_status; return 0 ;;
         uninstall) do_uninstall "${UPDATE_ARGS[@]}"; return 0 ;;
         up) up_command; return 0 ;;
