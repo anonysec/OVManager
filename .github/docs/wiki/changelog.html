@@ -23,7 +23,13 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.7 turns the node dot red while a node stays down; 2.0.6 makes a node upgrade turn live push on without a panel restart; 2.0.5 adds live session and usage updates over a per-node event stream; 2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<p class="lede">2.0.8 restores billing after a panel rebuild, creates the audit trail directory and makes surplus session rows read as pending; 2.0.6 makes a node upgrade turn live push on without a panel restart; 2.0.5 adds live session and usage updates over a per-node event stream; 2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.8 — 2026-11-13</h2>
+<ul>
+<li><strong>Billing after a panel rebuild.</strong> Traffic totals are matched to users by certificate CN name as well as by numeric id, so nodes that still carry pre-rebuild certificates bill again instead of reporting <code>billed 0 bytes</code> forever.</li>
+<li><strong>Audit trail.</strong> The panel creates and owns <code>/var/log/ovmanager</code> (unit <code>LogsDirectory</code> plus an updater ownership fix) and logs one warning when it cannot write, instead of silently dropping entries and leaving the Logs page empty.</li>
+<li><strong>Session limits.</strong> A failed or expired session the node has not reaped yet reads <code>+N pending</code> instead of an alarming over-limit count; the tooltip explains it is released automatically.</li>
+</ul>
 <h2>2.0.7 — 2026-11-12</h2>
 <ul>
 <li><strong>Offline detection on streams.</strong> A node whose stream is down now has its drop re-applied on every retry, so the 20-second grace window expires and the badge turns red instead of staying green until the node returns.</li>
