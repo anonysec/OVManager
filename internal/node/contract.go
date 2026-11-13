@@ -10,25 +10,15 @@ import "net/http"
 // typed 409 that names both numbers in plain language.
 const ContractVersion = 3
 
-// The panel↔node contract: every node endpoint the panel calls, the request
-// fields it sends and the response keys it reads.
+// The panel↔node contract: every node endpoint the panel calls, with the
+// request fields and response keys it relies on. test/node_contract_test.go
+// keeps this table and the code in step.
 //
-// The panel is the client of the node agent's /sync API, but those
-// expectations were spread thin over client.go, sync.go, management.go,
-// diagnostics.go, traffic.go and panel/security.go — thin enough that a
-// node-side change the panel cannot absorb only surfaced as an empty field
-// in the SPA. This table is the one place that says what the node has to
-// answer; test/node_contract_test.go keeps it and the code in step.
-//
-// A citation is "file.go:Func:var" (the node response arrives in var inside
-// Func), "file.go:var" (the same, anywhere in the file) or "file.tsx" (the
-// SPA file that reads the route's payload). The test checks the function,
-// never a line number: a line number moves with every edit above it. The
-// line numbers in the comments are the current ones.
+// A citation is "file.go:Func:var", "file.go:var", or "file.tsx". The test
+// checks the function, never a line number.
 //
 // The node also serves GET /sync/config, PUT /sync/users/{cn} and
-// PUT /sync/pki. The panel calls none of them, so they are not part of what
-// this panel asks of a node.
+// PUT /sync/pki; the panel calls none of them.
 type ContractRow struct {
 	// Method and Path are the HTTP method and the node route; {uid} marks
 	// the interpolated path parameter.
