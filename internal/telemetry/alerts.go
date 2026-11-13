@@ -420,7 +420,22 @@ type nodeCPU struct {
 }
 
 func latestNodeCPU(db *sql.DB) []nodeCPU {
-	return nil
+	rows, err := db.Query(`SELECT n.id, n.name, s.cpu
+		FROM Node n
+		JOIN NodeStat s ON s.node_id = n.id
+		WHERE s.created_at = (SELECT MAX(created_at) FROM NodeStat WHERE node_id = n.id)`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []nodeCPU
+	for rows.Next() {
+		var n nodeCPU
+		if rows.Scan(&n.id, &n.name, &n.cpu) == nil {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func kvValue(conn *sql.DB) string {
