@@ -193,7 +193,14 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 		s.sessMu.Unlock()
 	}
 	ident := Identity{Username: entry.username, Type: entry.role}
-	s.cachePut(th, ident)
+	// Put the cache entry while the session is still known to exist: a
+	// revoke that lands between the read and the put must not be undone by
+	// a stale cache entry.
+	s.sessMu.RLock()
+	if _, still := s.sessions[th]; still {
+		s.cachePut(th, ident)
+	}
+	s.sessMu.RUnlock()
 	return ident, true
 }
 
@@ -258,8 +265,8 @@ func (s *Service) RevokeToken(raw string) bool {
 	s.sessMu.Lock()
 	_, ok := s.sessions[th]
 	delete(s.sessions, th)
-	s.sessMu.Unlock()
 	s.cacheDelete(th)
+	s.sessMu.Unlock()
 	return ok
 }
 

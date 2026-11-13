@@ -208,7 +208,10 @@ func (s *Service) recoverOwner(w http.ResponseWriter, r *http.Request, req claim
 		writeDetail(w, http.StatusInternalServerError, "Could not reset the owner account")
 		return
 	}
-	s.RevokeUserSessions(chosen)
+	s.RevokeUserSessions(ownerName)
+	if chosen != ownerName {
+		s.RevokeUserSessions(chosen)
+	}
 	_ = os.Remove(s.claimKeyPath())
 	audit.Record(s.DB(), chosen, "Auth.Recover", "warning",
 		"Owner credentials reset with a fresh setup key.", map[string]any{"target": chosen})

@@ -49,8 +49,7 @@ func runResetPassword(install Install, dataDir, password string) (string, int) {
 	if err != nil {
 		return block([]string{failedLine("Password hashing is unavailable — " + err.Error())}), 1
 	}
-	revoked, errMsg := writeOwnerHash(dataDir, hashed, owner)
-	if errMsg != "" {
+	if errMsg := writeOwnerHash(dataDir, hashed, owner); errMsg != "" {
 		return block([]string{failedLine(errMsg)}), 1
 	}
 
@@ -58,76 +57,42 @@ func runResetPassword(install Install, dataDir, password string) (string, int) {
 		okLine("owner password updated for " + owner),
 		hint("stored in the panel database — .env is not edited"),
 	}
-	switch {
-	case revoked < 0:
-		rows = append(rows, hint("could not confirm session revocation — check the panel logs"))
-	case revoked == 0:
-		rows = append(rows, hint("no active sessions to revoke"))
-	default:
-		plural := "s"
-		if revoked == 1 {
-			plural = ""
-		}
-		rows = append(rows, hint("revoked "+itoa(revoked)+" active session"+plural+" — every device must sign in again"))
+	// Sessions live in the panel process, not in the database, so a rewrite
+	// from this process cannot end them. Restart the service and say so.
+	if ServiceRestart(install) {
+		rows = append(rows, hint("all panel sessions ended by the restart — every device must sign in again"))
+	} else {
+		rows = append(rows, hint("could not restart the panel — run: systemctl restart "+systemdService))
 	}
 	return block(rows), 0
 }
 
-// writeOwnerHash sets the owner row's bcrypt hash. Returns (revokedCount,
-// errorMessage); revokedCount is -1 when revocation could not be confirmed.
-func writeOwnerHash(dataDir, hashed, owner string) (int, string) {
+// writeOwnerHash sets the owner row's bcrypt hash and returns an error
+// message; the caller ends live sessions by restarting the panel.
+func writeOwnerHash(dataDir, hashed, owner string) string {
 	dbPath := filepath.Join(dataDir, "app.db")
 	if !fileExists(dbPath) {
-		return -1, "Panel database not found at " + dbPath + " — is the panel installed?"
+		return "Panel database not found at " + dbPath + " — is the panel installed?"
 	}
 	conn, err := db.Open(dbPath)
 	if err != nil {
-		return -1, "Could not open the panel database: " + err.Error()
+		return "Could not open the panel database: " + err.Error()
 	}
 	defer conn.Close()
 
 	var id int64
-	var actual string
-	err = conn.QueryRow(`SELECT id, username FROM Admin WHERE is_owner = 1 LIMIT 1`).Scan(&id, &actual)
+	err = conn.QueryRow(`SELECT id FROM Admin WHERE is_owner = 1 LIMIT 1`).Scan(&id)
 	if err != nil {
-		err = conn.QueryRow(`SELECT id, username FROM Admin WHERE username = ? LIMIT 1`, owner).Scan(&id, &actual)
+		err = conn.QueryRow(`SELECT id FROM Admin WHERE username = ? LIMIT 1`, owner).Scan(&id)
 	}
 	if err != nil {
 		if _, err := conn.Exec(`INSERT INTO Admin (username, password, is_owner) VALUES (?, ?, 1)`, owner, hashed); err != nil {
-			return -1, "Could not update the owner credential: " + err.Error()
+			return "Could not update the owner credential: " + err.Error()
 		}
-		actual = owner
-	} else {
-		if _, err := conn.Exec(`UPDATE Admin SET password = ?, is_owner = 1 WHERE id = ?`, hashed, id); err != nil {
-			return -1, "Could not update the owner credential: " + err.Error()
-		}
+		return ""
 	}
-	if actual == "" {
-		actual = owner
+	if _, err := conn.Exec(`UPDATE Admin SET password = ?, is_owner = 1 WHERE id = ?`, hashed, id); err != nil {
+		return "Could not update the owner credential: " + err.Error()
 	}
-
-	svc := auth.NewService(conn, dataDir)
-	return svc.RevokeUserSessions(actual), ""
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
+	return ""
 }
