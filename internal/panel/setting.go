@@ -298,24 +298,15 @@ type botConfigUpdate struct {
 	TelegramSummaryTime   *string `json:"telegram_summary_time"`
 }
 
+// encryptBotToken is a seam for the failure path.
+var encryptBotToken = crypto.EncryptSecret
+
 // columns maps each request field to its DB column.
 var botConfigColumns = []struct {
 	key    string
 	column string
 	value  func(botConfigUpdate) (any, bool)
 }{
-	{"bot_token", "bot_token", func(p botConfigUpdate) (any, bool) {
-		if p.BotToken == nil {
-			return nil, false
-		}
-		if v := strings.TrimSpace(*p.BotToken); v != "" {
-			if enc, err := crypto.EncryptSecret(v, dataDir()); err == nil {
-				return enc, true
-			}
-			return nil, true // encrypt failure: never persist plaintext
-		}
-		return nil, true // an empty token clears the column
-	}},
 	{"bot_enabled", "bot_enabled", func(p botConfigUpdate) (any, bool) { return boolOrNil(p.BotEnabled) }},
 	{"default_days", "default_days", func(p botConfigUpdate) (any, bool) { return intOrNil(p.DefaultDays) }},
 	{"default_traffic_gb", "default_traffic_gb", func(p botConfigUpdate) (any, bool) { return intOrNil(p.DefaultTrafficGB) }},
@@ -444,6 +435,20 @@ func (h *Handler) updateBotConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updates := map[string]any{}
+	// Encrypt the token before any column is written, so a failure aborts the
+	// update instead of clearing a working token and reporting success.
+	if payload.BotToken != nil {
+		if v := strings.TrimSpace(*payload.BotToken); v == "" {
+			updates["bot_token"] = nil
+		} else {
+			enc, err := encryptBotToken(v, dataDir())
+			if err != nil {
+				envelope(w, false, "Could not encrypt the bot token — nothing was saved", nil)
+				return
+			}
+			updates["bot_token"] = enc
+		}
+	}
 	for _, col := range botConfigColumns {
 		if value, ok := col.value(payload); ok {
 			updates[col.column] = value
