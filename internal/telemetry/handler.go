@@ -337,17 +337,16 @@ func CollectMetrics(db *sql.DB) {
 	now := nowSecs()
 
 	type userRow struct {
-		id        int64
-		name      string
-		isActive  int64
-		used      int64
-		maxLogins int64
+		id       int64
+		name     string
+		isActive int64
+		used     int64
 	}
 	users := []userRow{}
-	if rows, err := db.Query(`SELECT id, name, is_active, COALESCE(used,0), COALESCE(max_logins,0) FROM User`); err == nil {
+	if rows, err := db.Query(`SELECT id, name, is_active, COALESCE(used,0) FROM User`); err == nil {
 		for rows.Next() {
 			var u userRow
-			if rows.Scan(&u.id, &u.name, &u.isActive, &u.used, &u.maxLogins) == nil {
+			if rows.Scan(&u.id, &u.name, &u.isActive, &u.used) == nil {
 				users = append(users, u)
 			}
 		}
@@ -386,36 +385,32 @@ func CollectMetrics(db *sql.DB) {
 				return snapshotPair{row: row, sessions: sessions, nodeName: n.Name}
 			})
 		}
-		for _, res := range node.GatherNodes(calls, metricsFanoutDeadline) {
-			if p, ok := res.(snapshotPair); ok {
-				nodeRows = append(nodeRows, p.row)
-				sessionsByNode = append(sessionsByNode, p)
+		for i, res := range node.GatherNodes(calls, metricsFanoutDeadline) {
+			p, ok := res.(snapshotPair)
+			if !ok {
+				// A timed-out node still has to reach the alert check,
+				// otherwise a black-holed node never raises node.down.
+				nodeRows = append(nodeRows, map[string]any{
+					"node_id": nodes[i].ID, "node_name": nodes[i].Name, "reachable": int64(0),
+				})
+				continue
 			}
+			nodeRows = append(nodeRows, p.row)
+			sessionsByNode = append(sessionsByNode, p)
 		}
 	}
 
 	checkNodeAlerts(db, nodeRows, readSettings(db).notifyNodeDown)
 	checkThresholdAlerts(db)
 
-	var activeConnections, authErrors, rejects, staleMarkers, offlineNodes int64
+	var activeConnections int64
 	for _, r := range nodeRows {
 		activeConnections += toI64(r["live_count"])
-		authErrors += toI64(r["auth_errors"])
-		rejects += toI64(r["rejects"])
-		staleMarkers += toI64(r["stale_markers"])
-		if toI64(r["reachable"]) == 0 {
-			offlineNodes++
-		}
 	}
-	activeUsers := int64(0)
 	var totalUsed float64
 	for _, u := range users {
-		if u.isActive != 0 {
-			activeUsers++
-		}
 		totalUsed += float64(u.used)
 	}
-	inactiveUsers := int64(len(users)) - activeUsers
 
 	// last_online + full-user count from the per-user live connection counts.
 	activeCounts := map[string]int{}
@@ -430,35 +425,23 @@ func CollectMetrics(db *sql.DB) {
 			}
 		}
 	}
-	fullUsers := int64(0)
 	stamp := time.Now().UTC().Format("2006-01-02 15:04:05.000000")
 	touched := make([]string, 0, len(users))
 	for _, u := range users {
-		count := activeCounts[u.name]
-		if count > 0 {
+		if activeCounts[u.name] > 0 {
 			touched = append(touched, u.name)
-		}
-		if u.maxLogins > 0 && int64(count) >= u.maxLogins {
-			fullUsers++
 		}
 	}
 	touchLastOnline(db, touched, stamp)
 
+	// One row per collect, not per node. ts is the primary key, so the old
+	// in-loop insert kept only the first node's row and failed the rest.
+	_, _ = db.Exec(`INSERT INTO TrafficStat (ts, total_used, active_connections) VALUES (?, ?, ?)`,
+		now, totalUsed, activeConnections)
 	for _, row := range nodeRows {
-		_, _ = db.Exec(`INSERT INTO TrafficStat (ts, total_used, active_connections) VALUES (?, ?, ?)`,
-			now, totalUsed, activeConnections)
 		_, _ = db.Exec(`INSERT INTO NodeStat (node_id, created_at, cpu, memory, live_count, reachable) VALUES (?, ?, ?, ?, ?, ?)`,
 			row["node_id"], now, row["cpu"], row["memory"], row["live_count"], row["reachable"])
 	}
-	_ = totalUsed
-	_ = activeConnections
-	_ = activeUsers
-	_ = authErrors
-	_ = rejects
-	_ = staleMarkers
-	_ = offlineNodes
-	_ = fullUsers
-	_ = inactiveUsers
 }
 
 // nodeSnapshot probes one node for info + sessions (metrics._node_snapshot).
