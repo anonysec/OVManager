@@ -63,9 +63,16 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 // recentEvents mirrors audit.recent_events.
 func recentEvents(db *sql.DB, limit int, actor, action *string) []map[string]any {
 	_ = db
+	return recentFrom(audit.ReadLines(), limit, actor, action)
+}
+
+// recentFrom walks the append-ordered trail from the end, so the page shows
+// today's events rather than the oldest ones that fit the limit.
+func recentFrom(lines []map[string]any, limit int, actor, action *string) []map[string]any {
 	limit = clamp(limit, 1, 500)
 	out := []map[string]any{}
-	for _, obj := range audit.ReadLines() {
+	for i := len(lines) - 1; i >= 0; i-- {
+		obj := lines[i]
 		if actor != nil && fmt.Sprint(obj["actor"]) != *actor {
 			continue
 		}
@@ -85,13 +92,6 @@ func recentEvents(db *sql.DB, limit int, actor, action *string) []map[string]any
 		if len(out) >= limit {
 			break
 		}
-	}
-	// reverse to newest first
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
-	}
-	if len(out) > limit {
-		out = out[:limit]
 	}
 	return out
 }
