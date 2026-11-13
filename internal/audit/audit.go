@@ -181,6 +181,72 @@ func ReadLines() []map[string]any {
 	return out
 }
 
+// Prune drops entries older than cutoff. The rewrite holds the same lock as
+// Record, so an append during the pass is not lost; the temp file and rename
+// keep a crash from leaving a truncated trail.
+func Prune(cutoff float64) int {
+	mu.Lock()
+	defer mu.Unlock()
+	return pruneFile(Path(), cutoff)
+}
+
+func pruneFile(path string, cutoff float64) int {
+	data, err := os.ReadFile(path) // #nosec G304 -- operator-set audit path or a fixed default
+	if err != nil {
+		return 0
+	}
+	var kept []string
+	removed := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) != nil {
+			kept = append(kept, line)
+			continue
+		}
+		ts, _ := obj["ts"].(float64)
+		if ts < cutoff {
+			removed++
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if removed == 0 {
+		return 0
+	}
+	out := strings.Join(kept, "\n")
+	if len(kept) > 0 {
+		out += "\n"
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".audit-prune-*")
+	if err != nil {
+		return 0
+	}
+	name := tmp.Name()
+	defer func() { _ = os.Remove(name) }()
+	if err := tmp.Chmod(0o640); err != nil {
+		_ = tmp.Close()
+		return 0
+	}
+	if _, err := tmp.WriteString(out); err != nil {
+		_ = tmp.Close()
+		return 0
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return 0
+	}
+	if err := tmp.Close(); err != nil {
+		return 0
+	}
+	if err := os.Rename(name, path); err != nil {
+		return 0
+	}
+	return removed
+}
+
 // MarkPromoted sets promoted=true for the given id in the file.
 func MarkPromoted(id int64) {
 	mu.Lock()

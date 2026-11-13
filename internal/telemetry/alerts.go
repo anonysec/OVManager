@@ -49,7 +49,6 @@ func lastEventMeta(db *sql.DB, kind string) map[string]any {
 }
 
 // PruneAuditLogs removes audit lines older than keepDays from the JSONL file.
-// Returns number removed.
 func PruneAuditLogs(db *sql.DB, keepDays int) int {
 	_ = db
 	if keepDays <= 0 {
@@ -57,39 +56,7 @@ func PruneAuditLogs(db *sql.DB, keepDays int) int {
 	}
 	keepDays = clamp(keepDays, 1, 1<<30)
 	cutoff := float64(time.Now().UTC().AddDate(0, 0, -keepDays).Unix())
-	path := audit.Path()
-	data, err := os.ReadFile(path) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
-	if err != nil {
-		return 0
-	}
-	lines := strings.Split(string(data), "\n")
-	var kept []string
-	removed := 0
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var obj map[string]any
-		if json.Unmarshal([]byte(line), &obj) != nil {
-			kept = append(kept, line)
-			continue
-		}
-		ts, _ := obj["ts"].(float64)
-		if ts < cutoff {
-			removed++
-			continue
-		}
-		kept = append(kept, line)
-	}
-	if removed == 0 {
-		return 0
-	}
-	out := strings.Join(kept, "\n")
-	if len(kept) > 0 {
-		out += "\n"
-	}
-	_ = os.WriteFile(path, []byte(out), 0o600) // #nosec G703 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
-	return removed
+	return audit.Prune(cutoff)
 }
 
 // promoteEvents delivers enrolled audit events to Telegram, once each.
