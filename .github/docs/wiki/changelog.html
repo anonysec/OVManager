@@ -23,7 +23,11 @@
 <li><a href="decisions.html">Decisions</a></li><li><a href="changelog.html" aria-current="page">Changelog</a></li><li><a href="faq.html">FAQ</a></li>
 </ul></nav>
 <h1>Changelog</h1>
-<p class="lede">2.0.8 restores billing after a panel rebuild, creates the audit trail directory and makes surplus session rows read as pending; 2.0.6 makes a node upgrade turn live push on without a panel restart; 2.0.5 adds live session and usage updates over a per-node event stream; 2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<p class="lede">2.0.9 completes the audit fix for panels upgraded from older releases; 2.0.8 restores billing after a panel rebuild, creates the audit trail directory and makes surplus session rows read as pending; 2.0.6 makes a node upgrade turn live push on without a panel restart; 2.0.5 adds live session and usage updates over a per-node event stream; 2.0.4 serves the panel's precompressed assets; 2.0.3 fixes updates on IP-certificate panels; 2.0.2 fixes Let's Encrypt IP issuance; 2.0.1 restores built-in issuance and automatic renewal. 2.0.0 is the first supported release; there is no upgrade path from pre-2.0.0 builds, and everything below it is archived history.</p>
+<h2>2.0.9 — 2026-11-13</h2>
+<ul>
+<li><strong>Audit trail on existing installs.</strong> 2.0.8 provisioned the audit directory from the unit and the updater, but an update runs the previously installed updater, so a panel upgraded from 2.0.4/2.0.7 could still have an unwritable <code>/var/log/ovmanager</code>. When that directory is not writable the trail now uses <code>DataDir/audit.jsonl</code> (the same service owner) and every process picks the same file — the Logs page fills immediately after the upgrade.</li>
+</ul>
 <h2>2.0.8 — 2026-11-13</h2>
 <ul>
 <li><strong>Billing after a panel rebuild.</strong> Traffic totals are matched to users by certificate CN name as well as by numeric id, so nodes that still carry pre-rebuild certificates bill again instead of reporting <code>billed 0 bytes</code> forever.</li>

@@ -41,12 +41,62 @@ func warnFailure(op, path string, err error) {
 // location. The default sits under /var/log.
 const PathEnv = "OVMANAGER_AUDIT_PATH"
 
-// Path returns the audit file path.
+// Path returns the audit file path. The primary location is /var/log; when
+// that directory is not writable by the panel (a service started before the
+// unit owned it, or a root CLI that created it 0700), the trail falls back to
+// DataDir/audit.jsonl — the same user owns both, so the fallback always works
+// and the Logs page keeps reading the file the service actually writes.
 func Path() string {
 	if p := strings.TrimSpace(os.Getenv(PathEnv)); p != "" {
 		return p
 	}
-	return filepath.Join(auditDir, "audit.jsonl")
+	pathOnce.Do(resolveDefaultPath)
+	return defaultPath
+}
+
+var (
+	pathOnce    sync.Once
+	defaultPath string
+)
+
+func resolveDefaultPath() {
+	primary := filepath.Join(auditDir, "audit.jsonl")
+	fallback := filepath.Join(dataDir(), "audit.jsonl")
+	// Sticky: once the service has used the fallback, every process (root CLI
+	// included) keeps reading and writing the same file.
+	if _, err := os.Stat(fallback); err == nil {
+		defaultPath = fallback
+		return
+	}
+	if writableDir(auditDir) {
+		defaultPath = primary
+		return
+	}
+	defaultPath = fallback
+	log.Printf("audit: %s is not writable; writing the trail to %s", auditDir, fallback)
+}
+
+// writableDir reports whether this process can create files in dir.
+func writableDir(dir string) bool {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".audit-probe-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
+}
+
+// dataDir returns the panel data dir (env first, released default otherwise).
+func dataDir() string {
+	if v := strings.TrimSpace(os.Getenv("DataDir")); v != "" {
+		return v
+	}
+	return "/var/lib/ovmanager"
 }
 
 // Record writes one audit line. actor is the authenticated username; an empty

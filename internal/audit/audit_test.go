@@ -6,6 +6,7 @@ package audit
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -34,5 +35,32 @@ func TestRecordCreatesDirectoriesAndAppends(t *testing.T) {
 	}
 	if info, err := os.Stat(filepath.Dir(path)); err != nil || !info.IsDir() {
 		t.Fatalf("audit directory not created: %v", err)
+	}
+}
+
+// When /var/log is unusable (the pre-unit installs), the trail must land in
+// the data dir rather than vanish; the same rule makes every process agree.
+func TestPathFallsBackToDataDir(t *testing.T) {
+	root := t.TempDir()
+	primary := filepath.Join(root, "audit-dir-is-a-file")
+	if err := os.WriteFile(primary, []byte("not a dir"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prevDir := auditDir
+	auditDir = primary
+	pathOnce = sync.Once{}
+	defaultPath = ""
+	t.Cleanup(func() { auditDir = prevDir; pathOnce = sync.Once{}; defaultPath = "" })
+	t.Setenv(PathEnv, "")
+	t.Setenv("DataDir", filepath.Join(root, "data"))
+
+	got := Path()
+	want := filepath.Join(root, "data", "audit.jsonl")
+	if got != want {
+		t.Fatalf("Path = %q, want the data-dir fallback %q", got, want)
+	}
+	Record(nil, "admin", "Auth.Login", "info", "login", nil)
+	if lines := ReadLines(); len(lines) == 0 {
+		t.Fatal("fallback audit file was not written")
 	}
 }
