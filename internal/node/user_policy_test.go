@@ -24,7 +24,8 @@ func TestAccessBlockedBoundaries(t *testing.T) {
 		{"exactly at quota", "", i64(100), 100, "out of traffic"},
 		{"below quota", "", i64(100), 99, ""},
 		{"over quota", "", i64(100), 101, "out of traffic"},
-		{"zero quota no usage", "", i64(0), 0, "out of traffic"},
+		{"zero quota no usage", "", i64(0), 0, ""},
+		{"zero quota with usage", "", i64(0), 999, ""},
 		{"expired beats quota", "2026-11-01", i64(100), 0, "expired"},
 	}
 	for _, tc := range cases {

@@ -1,6 +1,7 @@
 package users
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -77,5 +78,41 @@ INSERT INTO User (id, uuid, name, max_logins, is_active, tag) VALUES (1, 'u1', '
 	}
 	if maxLogins != 5 {
 		t.Fatalf("valid update did not apply: max_logins = %d", maxLogins)
+	}
+}
+
+func TestUpdateAllowsNoExpiryAndZeroTraffic(t *testing.T) {
+	conn, err := db.Open(filepath.Join(t.TempDir(), "users.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.Exec(`CREATE TABLE User (
+		id INTEGER PRIMARY KEY, uuid TEXT UNIQUE, name TEXT UNIQUE, total BIGINT, used BIGINT,
+		last_node_usage BIGINT DEFAULT 0, node_usage TEXT DEFAULT '{}', max_logins INTEGER DEFAULT 1,
+		expiry_date TEXT, is_active INTEGER DEFAULT 1, last_online TEXT, tag TEXT);
+CREATE TABLE Session (username TEXT, ip TEXT, created_at REAL);
+CREATE TABLE Setting (id INTEGER PRIMARY KEY);
+INSERT INTO User (id, uuid, name, total, max_logins, expiry_date, is_active) VALUES (1, 'u1', 'alice', 1000, 3, '2030-01-01', 1);`); err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(auth.NewService(conn, t.TempDir()))
+	req := httptest.NewRequest(http.MethodPut, "/users/u1", strings.NewReader(`{"expiry_date":"","total":0}`))
+	req.SetPathValue("uuid", "u1")
+	rec := httptest.NewRecorder()
+	h.update(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var expiry sql.NullString
+	var total sql.NullInt64
+	if err := conn.QueryRow(`SELECT expiry_date, total FROM User WHERE id = 1`).Scan(&expiry, &total); err != nil {
+		t.Fatal(err)
+	}
+	if expiry.String != "" {
+		t.Fatalf("expiry_date = %q, want empty", expiry.String)
+	}
+	if total.Valid {
+		t.Fatalf("total = %v, want NULL", total.Int64)
 	}
 }

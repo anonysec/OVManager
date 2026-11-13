@@ -3,7 +3,6 @@
 package users
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -284,17 +283,12 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defaults := h.userDefaults(r.Context())
-	if expiry == "" {
-		expiry = time.Now().UTC().AddDate(0, 0, defaults.days).Format("2006-01-02")
-	}
-	maxLogins := defaults.maxUsers
+	maxLogins := 0
 	if req.MaxLogins != nil {
 		maxLogins = int(*req.MaxLogins)
 	}
-	if req.Total == nil && defaults.trafficGB > 0 {
-		v := int64(defaults.trafficGB) * 1024 * 1024 * 1024
-		req.Total = &v
+	if req.Total != nil && *req.Total == 0 {
+		req.Total = nil
 	}
 	var tag any
 	if req.Tag != nil {
@@ -350,10 +344,15 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var s string
-		_ = json.Unmarshal(raw["expiry_date"], &s)
-		if _, err := time.Parse("2006-01-02", s[:min(10, len(s))]); err != nil {
+		if err := json.Unmarshal(raw["expiry_date"], &s); err != nil {
 			auth.WriteValidation(w, "expiry_date", "Input should be a valid date")
 			return
+		}
+		if s != "" {
+			if _, err := time.Parse("2006-01-02", s[:min(10, len(s))]); err != nil {
+				auth.WriteValidation(w, "expiry_date", "Input should be a valid date")
+				return
+			}
 		}
 	}
 	if sent("total") && string(raw["total"]) != "null" {
@@ -366,11 +365,15 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 			auth.WriteValidation(w, "total", "Input should be greater than or equal to 0")
 			return
 		}
-		newGB := v / (1024 * 1024 * 1024)
-		if row.Total == nil || oldTotalGB != newGB {
-			diffs = append(diffs, fmt.Sprintf("quota %dGB -> %dGB", oldTotalGB, newGB))
+		if v == 0 {
+			row.Total = nil
+		} else {
+			newGB := v / (1024 * 1024 * 1024)
+			if row.Total == nil || oldTotalGB != newGB {
+				diffs = append(diffs, fmt.Sprintf("quota %dGB -> %dGB", oldTotalGB, newGB))
+			}
+			row.Total = &v
 		}
-		row.Total = &v
 	}
 	if sent("total") && string(raw["total"]) == "null" {
 		if row.Total != nil {
@@ -680,24 +683,10 @@ func activationBlocked(u userRow) string {
 			return "expired"
 		}
 	}
-	if u.Total != nil && *u.Total <= deref(u.Used) {
+	if u.Total != nil && *u.Total > 0 && *u.Total <= deref(u.Used) {
 		return "out of traffic"
 	}
 	return ""
-}
-
-type defaults struct{ days, trafficGB, maxUsers int }
-
-func (h *Handler) userDefaults(ctx context.Context) defaults {
-	d := defaults{days: 30, trafficGB: 100, maxUsers: 1}
-	_ = h.Svc.DB().QueryRowContext(ctx, `SELECT default_days, default_traffic_gb, default_max_users FROM Setting LIMIT 1`).
-		Scan(&d.days, &d.trafficGB, &d.maxUsers)
-	if d.days == 0 {
-		d.days = 30
-	}
-	// 0 means "unlimited" (the settings hint says so), so it must survive:
-	// coercing it to 1 would silently give every new user one device.
-	return d
 }
 
 // --- small utilities ---

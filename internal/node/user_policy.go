@@ -25,7 +25,7 @@ func AccessBlocked(expiryDate string, total *int64, used int64, now time.Time) s
 			return "expired"
 		}
 	}
-	if total != nil && *total <= used {
+	if total != nil && *total > 0 && *total <= used {
 		return "out of traffic"
 	}
 	return ""

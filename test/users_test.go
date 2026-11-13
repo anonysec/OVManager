@@ -53,18 +53,17 @@ func TestUsersCreateAndList(t *testing.T) {
 	if data["name"] != "John_Doe" {
 		t.Errorf("name = %v, want John_Doe (spaces normalised)", data["name"])
 	}
-	if data["is_active"] != true || data["max_logins"] != float64(1) {
+	if data["is_active"] != true || data["max_logins"] != float64(0) {
 		t.Errorf("defaults = %v", data)
 	}
-	if data["total"] != float64(100*1024*1024*1024) || data["used"] != nil || data["last_online"] != nil {
+	if data["total"] != nil || data["used"] != nil || data["last_online"] != nil {
 		t.Errorf("null fields = %v", data)
 	}
 	if uuid, _ := data["uuid"].(string); len(uuid) != 36 {
 		t.Errorf("uuid = %v", data["uuid"])
 	}
-	wantExpiry := time.Now().UTC().AddDate(0, 0, 30).Format("2006-01-02")
-	if data["expiry_date"] != wantExpiry {
-		t.Errorf("expiry_date = %v, want %v", data["expiry_date"], wantExpiry)
+	if data["expiry_date"] != "" {
+		t.Errorf("expiry_date = %v, want no expiry", data["expiry_date"])
 	}
 
 	res, body = doJSON(t, http.MethodGet, base+"/api/users/", token, nil)
@@ -161,7 +160,7 @@ func TestUsersNotFound404(t *testing.T) {
 // expiry/quota move.
 func TestUsersExtend(t *testing.T) {
 	conn, base, token := authedServer(t)
-	res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "bob", "expiry_date": "2030-01-01"})
+	res, _ := doJSON(t, http.MethodPost, base+"/api/users/", token, map[string]any{"name": "bob", "expiry_date": "2030-01-01", "total": 100 * 1024 * 1024 * 1024})
 	res.Body.Close()
 	var uuid string
 	if err := conn.QueryRow(`SELECT uuid FROM User WHERE name='bob'`).Scan(&uuid); err != nil {
