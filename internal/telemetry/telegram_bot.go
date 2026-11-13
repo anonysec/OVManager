@@ -666,7 +666,7 @@ func cmdExtend(m *msgCtx) {
 	expiryStr := newExpiry.Format("2006-01-02")
 	if len(fields) >= 3 {
 		addBytes := int64(gb * 1024 * 1024 * 1024)
-		_, _ = db.Exec(`UPDATE User SET expiry_date = ?, total = COALESCE(total,0) + ? WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
+		_, _ = db.Exec(`UPDATE User SET expiry_date = ?, total = CASE WHEN total IS NULL THEN NULL ELSE total + ? END WHERE uuid = ?`, expiryStr, addBytes, u.UUID)
 	} else {
 		_, _ = db.Exec(`UPDATE User SET expiry_date = ? WHERE uuid = ?`, expiryStr, u.UUID)
 	}

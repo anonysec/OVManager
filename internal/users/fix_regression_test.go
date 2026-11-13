@@ -1,6 +1,7 @@
 package users
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -42,5 +43,25 @@ func TestExtendRejectsNegative(t *testing.T) {
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Fatalf("body %s: status = %d, want 422", body, rec.Code)
 		}
+	}
+}
+
+// total IS NULL means unlimited. Extending by bytes must leave it NULL,
+// not turn the account into a 100-byte quota.
+func TestExtendKeepsUnlimited(t *testing.T) {
+	h := fixTestDB(t)
+	req := httptest.NewRequest(http.MethodPut, "/users/u1/extend", strings.NewReader(`{"bytes":100}`))
+	req.SetPathValue("uuid", "u1")
+	rec := httptest.NewRecorder()
+	h.extend(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var total sql.NullInt64
+	if err := h.Svc.DB().QueryRow(`SELECT total FROM User WHERE uuid = 'u1'`).Scan(&total); err != nil {
+		t.Fatal(err)
+	}
+	if total.Valid {
+		t.Fatalf("total = %d, want NULL (unlimited)", total.Int64)
 	}
 }

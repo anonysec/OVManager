@@ -580,12 +580,10 @@ func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
 		}
 		row.ExpiryDate = sql.NullString{String: base.AddDate(0, 0, int(req.Days)).Format("2006-01-02"), Valid: true}
 	}
-	if req.Bytes != 0 {
-		var total int64
-		if row.Total != nil {
-			total = *row.Total
-		}
-		total += req.Bytes
+	// A nil total is unlimited. Adding bytes must not turn that into a
+	// small finite quota that the next policy reconcile enforces.
+	if req.Bytes != 0 && row.Total != nil {
+		total := *row.Total + req.Bytes
 		row.Total = &total
 	}
 	if _, err := h.Svc.DB().ExecContext(r.Context(), `UPDATE User SET total = ?, expiry_date = ? WHERE uuid = ?`,

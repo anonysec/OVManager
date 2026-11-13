@@ -248,3 +248,23 @@ func TestBotActivationRateLimit(t *testing.T) {
 		t.Fatalf("other chat should not be rate-limited, got %q", st.sent[0]["text"])
 	}
 }
+
+// An unlimited user stays unlimited when traffic is added from the bot.
+func TestBotOwnerExtendKeepsUnlimited(t *testing.T) {
+	conn := newBotDB(t)
+	st := startStub(t, nil)
+	if _, err := conn.Exec(`UPDATE User SET total = NULL WHERE uuid = 'u-aaa'`); err != nil {
+		t.Fatal(err)
+	}
+	TgHandleText(conn, "tok", 999, 999, "/extend u-aaa 30 2")
+	if !strings.Contains(st.texts()[0], "Extended") {
+		t.Fatalf("reply = %q", st.texts()[0])
+	}
+	var total sql.NullInt64
+	if err := conn.QueryRow(`SELECT total FROM User WHERE uuid='u-aaa'`).Scan(&total); err != nil {
+		t.Fatal(err)
+	}
+	if total.Valid {
+		t.Fatalf("total = %d, want NULL (unlimited)", total.Int64)
+	}
+}
