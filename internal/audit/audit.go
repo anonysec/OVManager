@@ -140,7 +140,7 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 		warnFailure("create directory", path, err)
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640) // #nosec G304,G302 -- operator path or fixed default; group read is intentional
 	if err != nil {
 		warnFailure("open", path, err)
 		return

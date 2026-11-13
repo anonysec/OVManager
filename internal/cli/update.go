@@ -210,10 +210,10 @@ func ensureAuditDir() string {
 	uid, _ := strconv.Atoi(u.Uid)
 	gid, _ := strconv.Atoi(u.Gid)
 	_ = os.Chown(dir, uid, gid)
-	_ = os.Chmod(dir, 0o750)
+	_ = os.Chmod(dir, 0o750) // #nosec G302 -- service directory needs group access
 	if _, err := os.Stat(path); err == nil {
 		_ = os.Chown(path, uid, gid)
-		_ = os.Chmod(path, 0o640)
+		_ = os.Chmod(path, 0o640) // #nosec G302 -- management file needs group read
 	}
 	return dir + " ready for " + name
 }

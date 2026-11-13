@@ -673,7 +673,7 @@ func ApplyNodeSessions(db *sql.DB, n *node.Node, sess *node.SessionsResponse, us
 		snap.mu.Unlock()
 		pairs := make([]KV, 0, len(usage))
 		for name, bytes := range usage {
-			pairs = append(pairs, KV{name, int64(bytes)})
+			pairs = append(pairs, KV{name, int64(bytes)}) // #nosec G115 -- usage is a byte counter that fits int64
 		}
 		sort.Slice(pairs, func(i, j int) bool { return pairs[i].Key < pairs[j].Key })
 		Publish("users", KV{"op", "usage"}, KV{"usage", pairs})
@@ -873,7 +873,7 @@ func publishLivePayloads(counts map[string]int, online map[string]bool, usage ma
 	sort.Strings(usageNames)
 	usagePairs := make([]KV, 0, len(usageNames))
 	for _, name := range usageNames {
-		usagePairs = append(usagePairs, KV{name, int64(usage[name])})
+		usagePairs = append(usagePairs, KV{name, int64(usage[name])}) // #nosec G115 -- usage is a byte counter that fits int64
 	}
 
 	nodeNames := make([]string, 0, len(online))

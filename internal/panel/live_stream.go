@@ -283,7 +283,7 @@ func jitter(d time.Duration) time.Duration {
 	if d <= 0 {
 		return 0
 	}
-	return rand.N(d)
+	return rand.N(d) // #nosec G404 -- timer jitter, not a secret
 }
 
 // sleepCtx waits d, returning false when ctx is done first.
