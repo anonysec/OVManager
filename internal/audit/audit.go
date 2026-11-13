@@ -5,10 +5,12 @@ package audit
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -17,7 +19,23 @@ var (
 	idSeq    int64
 	seqOnce  sync.Once
 	auditDir = "/var/log/ovmanager"
+	// warnOnce keeps a broken audit path to one log line per process: the
+	// panel audits on every state change, so repeating the failure would
+	// drown the journal it is trying to preserve.
+	warnOnce sync.Once
 )
+
+// warnFailure surfaces an unwritable audit trail once. Silently dropping
+// audit lines was how an empty Logs page went unnoticed for days.
+func warnFailure(op, path string, err error) {
+	if err == nil {
+		return
+	}
+	warnOnce.Do(func() {
+		log.Printf("audit: cannot %s %s: %v — audit entries are being dropped (check ownership of %s)",
+			op, path, err, filepath.Dir(path))
+	})
+}
 
 // PathEnv names the environment variable that overrides the audit file
 // location. The default sits under /var/log.
@@ -67,14 +85,30 @@ func Record(db interface{}, actor, kind, severity, message string, meta map[stri
 		return
 	}
 	path := Path()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		warnFailure("create directory", path, err)
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640) // #nosec G304 // path is the operator-set OVMANAGER_AUDIT_PATH or a fixed default
 	if err != nil {
+		warnFailure("open", path, err)
 		return
 	}
 	defer f.Close()
+	if os.Geteuid() == 0 {
+		// Root-run CLI commands (reset-password, claim) audit too. Hand the
+		// file to the directory's owner so the service user can keep appending
+		// instead of being locked out by a root:root 0600 file.
+		if info, err := os.Stat(dir); err == nil {
+			if st, ok := info.Sys().(*syscall.Stat_t); ok {
+				if os.Geteuid() == 0 && (int(st.Uid) != 0 || int(st.Gid) != 0) {
+					_ = f.Chown(int(st.Uid), int(st.Gid))
+				}
+			}
+		}
+		_ = f.Chmod(0o640)
+	}
 	_, _ = fmt.Fprintf(f, "%s\n", line)
 }
 

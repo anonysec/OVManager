@@ -650,7 +650,22 @@ const UserManagement = () => {
     },
     {
       key: 'active_connections', label: t('th_sessions', 'Sessions'), sortable: true, className: 'dt-num', hideOnMobile: true,
-      render: (u: any) => `${Number(u.active_connections || 0)}/${u.max_logins === 0 ? '∞' : (u.max_logins ?? '—')}`,
+      render: (u: any) => {
+        const active = Number(u.active_connections || 0);
+        const max = Number(u.max_logins ?? 0);
+        // A failed/expired session stays in the node's status file until
+        // keepalive reaps it. Showing "3/2" reads like a broken limit, so
+        // display the admitted count and mark the extra rows as pending.
+        if (max > 0 && active > max) {
+          return (
+            <span className="dt-num um-limit-cell" title={t('limitPendingHint', '{{count}} extra session(s) are still registered by the node (failed or expired connections). They are released automatically; new connections are admitted up to the limit.', { count: active - max })}>
+              {max}/{max}{' '}
+              <span className="um-limit-over">{t('limitPendingCount', '+{{count}} pending', { count: active - max })}</span>
+            </span>
+          );
+        }
+        return `${active}/${u.max_logins === 0 ? '∞' : (u.max_logins ?? '—')}`;
+      },
     },
     {
       key: 'expiry_date', label: t('th_expiryDate', 'Expiry'), sortable: true,

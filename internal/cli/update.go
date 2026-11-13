@@ -25,9 +25,11 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/anonysec/OVManager/internal/audit"
 	"github.com/anonysec/OVManager/internal/db"
 	"github.com/anonysec/OVManager/internal/maintenance"
 	"github.com/anonysec/OVManager/internal/version"
@@ -186,6 +188,36 @@ func updatePlanLines(install Install, target string) []string {
 // the orchestrator's guard can be exercised on non-root CI runners.
 var UpdateRootEuid = os.Geteuid
 
+// ensureAuditDir makes the audit directory usable by the panel service. Fresh
+// installs get it from the unit (LogsDirectory=), but an existing install
+// upgraded into this release can still hold a root-owned or missing
+// /var/log/ovmanager — the state where every audit write failed silently and
+// the Logs page stayed empty. Runs as root during the update.
+func ensureAuditDir() string {
+	path := audit.Path()
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return "could not create " + dir + ": " + err.Error()
+	}
+	name := unitUser()
+	if name == "" {
+		return dir + " ready"
+	}
+	u, err := user.Lookup(name)
+	if err != nil {
+		return dir + " ready (service user " + name + " not found)"
+	}
+	uid, _ := strconv.Atoi(u.Uid)
+	gid, _ := strconv.Atoi(u.Gid)
+	_ = os.Chown(dir, uid, gid)
+	_ = os.Chmod(dir, 0o750)
+	if _, err := os.Stat(path); err == nil {
+		_ = os.Chown(path, uid, gid)
+		_ = os.Chmod(path, 0o640)
+	}
+	return dir + " ready for " + name
+}
+
 func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 	if UpdateRootEuid() != 0 {
 		fmt.Fprint(out, block([]string{failedLine("Must run as root")}))
@@ -321,6 +353,7 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 
 	// verify — the phase the v1.6.0 dev layout skipped.
 	writeUpdateState(install, "verifying", from, target, safety)
+	fmt.Fprintln(out, kv("audit", ensureAuditDir()))
 	fmt.Fprintln(out, kv("verify", "restarting "+systemdService))
 	started := serviceRestart(install)
 	verified := false

@@ -848,5 +848,7 @@
   "liveDisconnectToast": "{{name}} 已断开",
   "liveRejectToast": "{{name}} 连接被拒绝",
   "liveUsersOnline": "在线用户（实时）",
-  "liveUsersOnlineCount": "{{count}} 位用户在线"
+  "liveUsersOnlineCount": "{{count}} 位用户在线",
+  "limitPendingCount": "+{{count}} 待释放",
+  "limitPendingHint": "节点仍登记着 {{count}} 个多余会话（失败或已过期的连接）。它们会自动释放；新连接在限额内正常接纳。"
 }

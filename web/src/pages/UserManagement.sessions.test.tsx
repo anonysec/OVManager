@@ -136,6 +136,28 @@ describe('UserManagement session actions', () => {
     expect((apiClient.get as any).mock.calls.length).toBe(callsAfterLoad);
   });
 
+  it('marks surplus session rows as pending instead of over-limit', async () => {
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url === '/users/') {
+        return ok({ users: [{
+          id: 1, uuid: 'u-1', name: 'alice', tag: null, is_active: true,
+          expiry_date: '2099-01-01', total: null, used: 0, max_logins: 2,
+          active_connections: 3,
+        }] });
+      }
+      return ok({});
+    });
+    render(
+      <MemoryRouter initialEntries={['/users']}>
+        <ToastProvider><UserManagement /></ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('alice')).toBeTruthy();
+    expect(screen.getByText(/2\/2/)).toBeTruthy();
+    expect(screen.getByText(/\+1 pending/)).toBeTruthy();
+    expect(screen.queryByText('3/2')).toBeNull();
+  });
+
   it('disconnects sessions through the implemented kick endpoint', async () => {
     (apiClient.post as any).mockResolvedValue({
       data: { success: true, msg: 'User kicked', data: { kicked: 2, nodes_skipped: [] } },

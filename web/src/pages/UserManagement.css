@@ -815,3 +815,12 @@ input[type="checkbox"]:indeterminate::after {
   background: var(--success-text);
   box-shadow: 0 0 0 3px var(--success-soft);
 }
+
+/* Over-limit display: the admitted count plus a muted "pending" marker for
+   rows the node has not reaped yet (failed/expired sessions). */
+.um-limit-over {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal, 400);
+  white-space: nowrap;
+}

@@ -848,5 +848,7 @@
   "liveDisconnectToast": "{{name}} قطع شد",
   "liveRejectToast": "اتصال {{name}} رد شد",
   "liveUsersOnline": "کاربران آنلاین (زنده)",
-  "liveUsersOnlineCount": "{{count}} کاربر آنلاین"
+  "liveUsersOnlineCount": "{{count}} کاربر آنلاین",
+  "limitPendingCount": "+{{count}} در انتظار",
+  "limitPendingHint": "{{count}} نشست اضافی هنوز در گره ثبت شده است (اتصال‌های ناموفق یا منقضی). به‌طور خودکار آزاد می‌شوند؛ اتصال‌های جدید تا سقف مجاز پذیرفته می‌شوند."
 }

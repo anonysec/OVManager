@@ -1598,3 +1598,11 @@ html[dir="rtl"] .modal-window .modal-footer { display: flex; flex-direction: row
 
 
 .row-menu-item.danger:hover { background: rgba(255,83,104,.10); color: #ff7a8a; }
+
+/* Over-limit diagnostics: the extra row is a session awaiting keepalive
+   expiry, so the summary marks it as pending instead of showing 3/2. */
+.sessions-pending {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal, 400);
+  font-size: var(--font-size-xs);
+}

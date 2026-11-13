@@ -41,8 +41,12 @@ const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false,
   const fmt = (value: any) => value == null ? '—' : Number(value || 0).toLocaleString();
 
   const policy = (data?.policy || []).join(', ');
-  const active = data?.active_connections ?? data?.totals?.live_count ?? 0;
+  const active = Number(data?.active_connections ?? data?.totals?.live_count ?? 0);
+  const maxLogins = Number(data?.max_logins ?? 0);
   const max = data?.max_logins === 0 ? '∞' : (data?.max_logins ?? '—');
+  // Same rule as the users table: an extra row is a session the node has not
+  // reaped yet (failed/expired), not an admitted device over the limit.
+  const pending = maxLogins > 0 && active > maxLogins ? active - maxLogins : 0;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${t('sessionsTitle', 'Login Diagnostics')} — ${user?.name || ''}`} size="large">
@@ -50,7 +54,14 @@ const UserSessionsModal = ({ isOpen, user, data, loading, disconnecting = false,
       {loading ? <p>{t('loading', 'Loading...')}</p> : (
         <>
           <div className="diagnostic-summary">
-            <span className="status-active">{t('activeMax', 'Active / Max')}: {active}/{max}</span>
+            <span className="status-active">
+              {t('activeMax', 'Active / Max')}: {pending > 0 ? `${maxLogins}/${maxLogins}` : `${active}/${max}`}
+              {pending > 0 && (
+                <span className="sessions-pending" title={t('limitPendingHint', '{{count}} extra session(s) are still registered by the node (failed or expired connections). They are released automatically; new connections are admitted up to the limit.', { count: pending })}>
+                  {' '}{t('limitPendingCount', '+{{count}} pending', { count: pending })}
+                </span>
+              )}
+            </span>
             <span>{t('mode', 'Mode')}: {data?.mode || '-'}</span>
             <span>{t('policy', 'Policy')}: {policy || '-'}</span>
             <span>{t('registry', 'Registry')}: {registryUnavailable ? t('unavailable', 'Unavailable') : fmt(registry.length)}</span>

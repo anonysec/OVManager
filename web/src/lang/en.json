@@ -848,5 +848,7 @@
   "liveDisconnectToast": "{{name}} disconnected",
   "liveRejectToast": "{{name}} connection rejected",
   "liveUsersOnline": "Users online (live)",
-  "liveUsersOnlineCount": "{{count}} users online"
+  "liveUsersOnlineCount": "{{count}} users online",
+  "limitPendingCount": "+{{count}} pending",
+  "limitPendingHint": "{{count}} extra session(s) are still registered by the node (failed or expired connections). They are released automatically; new connections are admitted up to the limit."
 }

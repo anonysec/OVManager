@@ -543,6 +543,9 @@ Environment="OVM_APP_DIR=$dest"
 User=$PANEL_USER
 Group=$PANEL_USER
 SupplementaryGroups=systemd-journal
+# The audit trail is a JSONL file under /var/log; systemd owns the directory
+# and its ownership so the service user can always append to it.
+LogsDirectory=ovmanager
 ExecStart=$dest/$SERVER_BIN
 Restart=on-failure
 RestartSec=3
@@ -830,6 +833,9 @@ Environment="OVM_APP_DIR=$dest"
 User=$PANEL_USER
 Group=$PANEL_USER
 SupplementaryGroups=systemd-journal
+# The audit trail is a JSONL file under /var/log; systemd owns the directory
+# and its ownership so the service user can always append to it.
+LogsDirectory=ovmanager
 ExecStart=$dest/$SERVER_BIN
 Restart=on-failure
 RestartSec=3

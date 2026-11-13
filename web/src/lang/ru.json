@@ -848,5 +848,7 @@
   "liveDisconnectToast": "{{name}} отключился",
   "liveRejectToast": "Подключение {{name}} отклонено",
   "liveUsersOnline": "Пользователей онлайн (в реальном времени)",
-  "liveUsersOnlineCount": "{{count}} пользователей онлайн"
+  "liveUsersOnlineCount": "{{count}} пользователей онлайн",
+  "limitPendingCount": "+{{count}} ожидает",
+  "limitPendingHint": "{{count}} лишних сеансов всё ещё зарегистрировано узлом (неудачные или истёкшие подключения). Они освобождаются автоматически; новые подключения принимаются в пределах лимита."
 }
