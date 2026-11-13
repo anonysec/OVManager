@@ -2,6 +2,8 @@ package panel
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -100,5 +102,33 @@ func TestBackupTickSameDaySkipped(t *testing.T) {
 	h.backupTickAt(now)
 	if got := lastSuccessDay(t, h); got != "2026-11-06" {
 		t.Fatalf("same-day record changed to %q", got)
+	}
+}
+
+// Retention is per node: a name-sorted global glob grouped by id and wiped
+// the low-id nodes' history.
+func TestPruneNodeBackupsIsPerNode(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	for _, id := range []int64{1, 2} {
+		for i := 0; i < 4; i++ {
+			name := filepath.Join(dir, fmt.Sprintf("ovnode-node%d-2026010%d-000000.tar.gz", id, i))
+			if err := os.WriteFile(name, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			at := now.Add(time.Duration(i) * time.Minute)
+			if err := os.Chtimes(name, at, at); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, id := range []int64{1, 2} {
+		pruneNodeBackups(dir, id, 2)
+	}
+	for _, id := range []int64{1, 2} {
+		matches, _ := filepath.Glob(filepath.Join(dir, fmt.Sprintf("ovnode-node%d-*.tar.gz", id)))
+		if len(matches) != 2 {
+			t.Fatalf("node %d kept %d archives, want 2: %v", id, len(matches), matches)
+		}
 	}
 }

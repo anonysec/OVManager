@@ -206,15 +206,27 @@ func (h *Handler) backupNodes(panelBackupPath string, keep int) {
 			continue
 		}
 		log.Printf("backup worker: stored node %s backup (%d bytes)", n.Name, written)
+		pruneNodeBackups(dir, n.ID, keep)
 	}
-	// Prune old node archives of the same label.
-	matches, _ := filepath.Glob(filepath.Join(dir, "ovnode-node*-*.tar.gz"))
-	sort.Slice(matches, func(i, j int) bool { return matches[i] > matches[j] })
-	limit := keep
-	if limit < 1 {
-		limit = 50
+}
+
+// pruneNodeBackups keeps the newest archives of one node. A single glob over
+// every node sorted by name groups by id, not age, and deleted the low-id
+// nodes' whole history.
+func pruneNodeBackups(dir string, nodeID int64, keep int) {
+	if keep < 1 {
+		keep = 50
 	}
-	for i := limit; i < len(matches); i++ {
+	matches, _ := filepath.Glob(filepath.Join(dir, fmt.Sprintf("ovnode-node%d-*.tar.gz", nodeID)))
+	sort.Slice(matches, func(i, j int) bool {
+		a, _ := os.Stat(matches[i])
+		b, _ := os.Stat(matches[j])
+		if a == nil || b == nil {
+			return matches[i] > matches[j]
+		}
+		return a.ModTime().After(b.ModTime())
+	})
+	for i := keep; i < len(matches); i++ {
 		_ = os.Remove(matches[i])
 	}
 }
