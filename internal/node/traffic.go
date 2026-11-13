@@ -48,14 +48,7 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 	defer trafficSyncLock.Unlock()
 	res := TrafficResult{}
 	nodes := getActiveNodes(db)
-	users, byName := loadTrafficUsers(db)
-
-	idToName := map[string]string{}
-	known := make(map[string]bool, len(users))
-	for _, u := range users {
-		idToName[strconv.FormatInt(u.id, 10)] = u.name
-		known[u.name] = true
-	}
+	users, byCN := loadTrafficUsers(db)
 
 	pid := PanelIDFor(db)
 	// A hanging node must not hold a concurrency slot past the call's fair
@@ -112,13 +105,11 @@ func SyncTraffic(db *sql.DB) TrafficResult {
 		res.NodesPolled++
 		nodeKey := strconv.FormatInt(n.ID, 10)
 		for reported, rawTotal := range totals {
-			// Node keys are numeric panel ids only (OpenVPN CN guarantee).
-			// One query built idToName; no username fallback, no ambiguity.
-			uid, err := strconv.ParseInt(reported, 10, 64)
-			if err != nil {
-				continue
-			}
-			u, ok := byName[strconv.FormatInt(uid, 10)]
+			// Node totals are keyed by certificate CN. A node provisioned by
+			// this panel uses CN = panel user id, but certs that predate a
+			// panel rebuild (or came from an import) carry the username as CN.
+			// Resolve both shapes: numeric ids win, usernames are the fallback.
+			u, ok := byCN[reported]
 			if !ok {
 				continue
 			}
@@ -352,6 +343,11 @@ func applyTrafficUserTx(db *sql.DB, u trafficUser, contribs map[string]int64, ep
 	return delta > 0, didSeed, delta
 }
 
+// loadTrafficUsers loads every user and a CN-keyed lookup. A node reports
+// totals under its certificate CN; the current provisioning sets CN = user id,
+// but pre-rebuild certs use the username, so both keys resolve. Numeric ids are
+// registered unconditionally (id wins on a collision with a username), names
+// only when the key is free; usernames are UNIQUE, so the fallback is exact.
 func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 	rows, err := db.Query(`SELECT id, name, COALESCE(used,0), COALESCE(node_usage,'{}') FROM User`)
 	if err != nil {
@@ -359,19 +355,22 @@ func loadTrafficUsers(db *sql.DB) ([]trafficUser, map[string]trafficUser) {
 	}
 	defer rows.Close()
 	var out []trafficUser
-	byName := map[string]trafficUser{}
+	byCN := map[string]trafficUser{}
 	for rows.Next() {
 		var u trafficUser
 		if err := rows.Scan(&u.id, &u.name, &u.used, &u.state); err != nil {
 			break
 		}
 		out = append(out, u)
-		byName[strconv.FormatInt(u.id, 10)] = u
+		byCN[strconv.FormatInt(u.id, 10)] = u
+		if _, taken := byCN[u.name]; !taken {
+			byCN[u.name] = u
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil
 	}
-	return out, byName
+	return out, byCN
 }
 
 func totalsInt64(v any) (int64, bool) {
