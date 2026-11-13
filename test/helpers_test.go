@@ -40,6 +40,7 @@ CREATE TABLE Setting (id INTEGER PRIMARY KEY, default_days INTEGER DEFAULT 30,
 CREATE TABLE Node (id INTEGER PRIMARY KEY, name VARCHAR, address VARCHAR,
   status BOOLEAN DEFAULT 1, key VARCHAR, extra_ports VARCHAR DEFAULT '', settings TEXT DEFAULT '{}');
 CREATE TABLE UserTrafficDaily (id INTEGER PRIMARY KEY, user_id INTEGER, day TEXT, bytes BIGINT);
+CREATE TABLE UserNodeUsage (user_id INTEGER NOT NULL, node_id INTEGER NOT NULL, baseline INTEGER NOT NULL, epoch TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, node_id));
 CREATE TABLE audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, actor TEXT,
   action TEXT, target TEXT, detail TEXT, promoted BOOLEAN NOT NULL DEFAULT 0);
 CREATE TABLE deleted_users (uuid TEXT PRIMARY KEY, snap_json TEXT NOT NULL, deleted_at REAL NOT NULL, expires_at REAL NOT NULL);
