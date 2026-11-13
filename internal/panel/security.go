@@ -384,6 +384,9 @@ func ongoingUsers(events []map[string]any) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, e := range events {
+		if action, _ := e["action"].(string); action == "max_logins" {
+			continue
+		}
 		flag, _ := e["ongoing"].(bool)
 		user, _ := e["user"].(string)
 		if flag && user != "" && !seen[user] {

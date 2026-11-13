@@ -20,3 +20,15 @@ func TestLegacySecurityLogParsing(t *testing.T) {
 		t.Errorf("timestamp was not parsed: %v", event)
 	}
 }
+
+func TestOngoingUsersSkipsDeviceLimit(t *testing.T) {
+	events := []map[string]any{
+		{"user": "alice", "ongoing": true, "action": "max_logins"},
+		{"user": "bob", "ongoing": true, "action": "takeover_failed"},
+		{"user": "carol", "ongoing": false, "action": "disabled"},
+	}
+	got := ongoingUsers(events)
+	if len(got) != 1 || got[0] != "bob" {
+		t.Fatalf("ongoing users = %v, want [bob]", got)
+	}
+}

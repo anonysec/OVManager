@@ -297,7 +297,7 @@ func TestApplyNodeSessionsSessionToasts(t *testing.T) {
 	// A new reject row announces once; the same row in the next snapshot does
 	// not repeat.
 	withReject := sessions("bob")
-	withReject.Events = []node.EventEntry{{CN: "amy", Action: "max_logins", Reason: "max logins reached", Peer: "198.51.100.9:1", TS: 42}}
+	withReject.Events = []node.EventEntry{{CN: "amy", Action: "disabled", Reason: "user disabled in the panel", Peer: "198.51.100.9:1", TS: 42}}
 	if err := ApplyNodeSessions(conn, n, withReject, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -310,6 +310,32 @@ func TestApplyNodeSessionsSessionToasts(t *testing.T) {
 	}
 	if got := sessionActions(drainEvents(ch)); len(got) != 0 {
 		t.Fatalf("reject row announced twice: %v", got)
+	}
+}
+
+// Device-limit and takeover failures stay in the security log. They are not
+// browser toasts.
+func TestApplyNodeSessionsSilencesLimitRejects(t *testing.T) {
+	conn := applyDB(t)
+	ch := DefaultBus.Subscribe()
+	defer DefaultBus.Unsubscribe(ch)
+	n := &node.Node{ID: 1, Name: "a"}
+
+	if err := ApplyNodeSessions(conn, n, sessions("amy"), nil); err != nil {
+		t.Fatal(err)
+	}
+	drainEvents(ch)
+
+	quiet := sessions("amy")
+	quiet.Events = []node.EventEntry{
+		{CN: "amy", Action: "max_logins", Reason: "max logins reached", TS: 42},
+		{CN: "amy", Action: "takeover_failed", Reason: "old session not terminated", TS: 43},
+	}
+	if err := ApplyNodeSessions(conn, n, quiet, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionActions(drainEvents(ch)); len(got) != 0 {
+		t.Fatalf("limit rejects produced toasts: %v", got)
 	}
 }
 

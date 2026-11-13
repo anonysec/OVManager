@@ -687,15 +687,13 @@ func ApplyNodeSessions(db *sql.DB, n *node.Node, sess *node.SessionsResponse, us
 // with any of these actions becomes a browser toast; the node may add new
 // ones, and they simply stay silent until listed here.
 var sessionRejectActions = map[string]bool{
-	"disabled":        true,
-	"fail_closed":     true,
-	"takeover_failed": true,
-	"mgmt_degraded":   true,
-	"global_check":    true,
-	"global_policy":   true,
-	"max_logins":      true,
-	"other":           true,
-	"check_failed":    true,
+	"disabled":      true,
+	"fail_closed":   true,
+	"mgmt_degraded": true,
+	"global_check":  true,
+	"global_policy": true,
+	"other":         true,
+	"check_failed":  true,
 }
 
 // rejectKey dedupes announceable reject rows: one hook line is one event.
