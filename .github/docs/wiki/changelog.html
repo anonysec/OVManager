@@ -27,7 +27,7 @@
 <h2>2.0.10 - 2026-11-13</h2>
 <ul>
 <li><strong>Session limit policy per node.</strong> Choose strict (refuse at the limit), reserve (one temporary reconnect slot, released after the grace) or takeover (replace one existing session). One-device users keep the takeover path. The policy is stored beside the node state and applies on the next connection without an OpenVPN restart. Requires OVNode 2.0.19.</li>
-<li><strong>Quieter alerts.</strong> Device-limit rejections and takeover failures no longer create a toast or a topbar alert, and a user who is simply using their allowed devices no longer produces an alert. The Security page groups repeated events by user, node and reason with a count.</li>
+<li><strong>Quieter alerts.</strong> Device-limit rejections and takeover failures no longer create a toast or a topbar alert, and a user who is simply using their allowed devices no longer produces an alert. Takeover failures are warnings, not authentication failures. The Security page groups repeated events by user, node and reason with a count.</li>
 <li><strong>New users start unlimited.</strong> The New User Defaults section is removed. A new user has no expiry, no traffic cap and unlimited devices unless the operator fills a field. An empty expiry is accepted on update, and zero traffic means unlimited.</li>
 <li><strong>Expiry by days or date.</strong> The user form now switches between a day count and a date. Empty means never expires. The calendar button opens the native date picker, and dates use local time so the stored day does not shift.</li>
 </ul>

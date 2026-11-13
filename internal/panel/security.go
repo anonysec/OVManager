@@ -54,7 +54,7 @@ func classifyLogLine(message string) (action, severity, reason string) {
 		{"is disabled", "disabled", "policy", "user disabled in the panel"},
 		{"disabled;", "disabled", "policy", "user disabled in the panel"},
 		{"USERS_DIR missing", "fail_closed", "failure", "node user state missing"},
-		{"could not verify", "takeover_failed", "failure", "old session not terminated"},
+		{"could not verify", "takeover_failed", "warn", "old session not terminated"},
 		{"management unavailable", "mgmt_degraded", "warn", "management unavailable"},
 		{"GLOBAL_CHECK_FAILED", "global_check", "policy", "panel policy check failed"},
 		{"GLOBAL_REJECT", "global_policy", "policy", "panel rejected the connection"},

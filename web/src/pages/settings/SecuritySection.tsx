@@ -94,9 +94,9 @@ const SecuritySection = () => {
   const events: SecEvent[] = Array.isArray(sec?.events) ? (sec?.events as SecEvent[]) : [];
   const grouped = groupSecurityEvents(events);
   const danger = grouped.filter((e) => e.severity === 'failure');
-  const takeover = danger.filter((e) => e.action === 'takeover_failed');
+  const takeover = grouped.filter((e) => e.action === 'takeover_failed');
   const authDanger = danger.filter((e) => e.action !== 'takeover_failed');
-  const rest = grouped.filter((e) => e.severity !== 'failure')
+  const rest = grouped.filter((e) => e.severity !== 'failure' && e.action !== 'takeover_failed')
     .sort((a, b) => (SEVERITY_RANK[a.severity as string] ?? 3) - (SEVERITY_RANK[b.severity as string] ?? 3));
   const authFailures = sec?.auth_failures ?? sec?.auth_errors ?? 0;
 
