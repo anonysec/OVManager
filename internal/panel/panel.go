@@ -148,7 +148,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 // SubHandler routes any request under the current subscription path.
 func (h *Handler) SubHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		prefix := "/" + strings.Trim(subscriptionPath(), "/") + "/"
+		prefix := "/" + strings.Trim(h.subscriptionPath(), "/") + "/"
 		if !strings.HasPrefix(r.URL.Path, prefix) {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -262,6 +262,17 @@ func sslCertPath() string {
 // binding and TLS mode.
 func SSLCertPath() string { return sslCertPath() }
 func SSLKeyPath() string  { return sslKeyPath() }
+
+// subscriptionPath is the value the Settings page wrote; the env fallback
+// keeps a fresh install working before the row exists.
+func (h *Handler) subscriptionPath() string {
+	if s := h.settings(); s != nil {
+		if v := strings.Trim(s.strOr("subscription_path"), "/"); v != "" {
+			return v
+		}
+	}
+	return subscriptionPath()
+}
 
 func subscriptionPath() string {
 	v := strings.Trim(envOrFile("SubscriptionPath"), "/")
@@ -529,7 +540,7 @@ func (h *Handler) urlpath() string {
 // no caller can shadow a live panel route.
 func (h *Handler) setURLPath(value string) (string, error) {
 	value = strings.Trim(value, "/")
-	if reservedPrefixes()[strings.ToLower(value)] {
+	if reservedPrefixes(h.subscriptionPath())[strings.ToLower(value)] {
 		return "", errReservedPrefix{value}
 	}
 	if err := setColumns(h.Svc.DB(), map[string]any{"urlpath": value}); err != nil {
@@ -554,7 +565,7 @@ func (errURLPathPersist) Error() string { return "URLPATH could not be persisted
 
 // reservedPrefixes are the first path segments the panel itself owns. Derived
 // from the Go route table.
-func reservedPrefixes() map[string]bool {
+func reservedPrefixes(subPath string) map[string]bool {
 	// "doc" and "openapi.json" are served at the site root (spaHandler), not
 	// under the panel prefix, so they are not strictly shadowable. They stay
 	// here as belt-and-braces: a panel URL path of "doc" would otherwise
@@ -563,7 +574,7 @@ func reservedPrefixes() map[string]bool {
 		"api": true, "assets": true, "health": true, "static": true,
 		"doc": true, "openapi.json": true,
 	}
-	reserved[strings.ToLower(subscriptionPath())] = true
+	reserved[strings.ToLower(strings.Trim(subPath, "/"))] = true
 	for _, seg := range []string{
 		"login", "logout", "refresh", "owner-claim", "users", "server", "nodes",
 		"security", "maintenance", "tls", "https", "updater", "activity",

@@ -210,9 +210,9 @@ func (h *Handler) updateSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 	if payload.SubscriptionPath != nil {
 		requested := strings.Trim(*payload.SubscriptionPath, "/")
-		if requested == "" || !validURLPath(requested) || reservedPrefixes()[strings.ToLower(requested)] {
+		if requested == "" || !validURLPath(requested) || reservedPrefixes(h.subscriptionPath())[strings.ToLower(requested)] {
 			envelope(w, false, "Subscription path must be a single reserved-free segment",
-				map[string]any{"subscription_path": strings.Trim(subscriptionPath(), "/")})
+				map[string]any{"subscription_path": strings.Trim(h.subscriptionPath(), "/")})
 			return
 		}
 		updates["subscription_path"] = requested
@@ -528,7 +528,7 @@ func (h *Handler) updateURLPath(w http.ResponseWriter, r *http.Request) {
 		envelope(w, false, "URL path must contain only letters, numbers, dashes, and underscores", nil)
 		return
 	}
-	if value != "" && reservedPrefixes()[strings.ToLower(value)] {
+	if value != "" && reservedPrefixes(h.subscriptionPath())[strings.ToLower(value)] {
 		envelope(w, false, "'"+value+"' is reserved and cannot be used as the panel URL path", nil)
 		return
 	}

@@ -209,7 +209,7 @@ func (h *Handler) subPage(w http.ResponseWriter, r *http.Request) {
 		if online[n.Name] {
 			links = append(links, subLink{
 				Node: n.Name,
-				Link: baseURL(r) + subscriptionPath() + "/download/" + uuid + "/" + n.Name,
+				Link: baseURL(r) + h.subscriptionPath() + "/download/" + uuid + "/" + n.Name,
 			})
 		}
 	}
