@@ -17,7 +17,8 @@ func TestConcurrentDeletesKeepOneUser(t *testing.T) {
 	}
 	defer conn.Close()
 	if _, err := conn.Exec(`CREATE TABLE User (id INTEGER PRIMARY KEY, uuid TEXT UNIQUE);
-CREATE TABLE UserTrafficDaily (user_id INTEGER, bytes INTEGER);`); err != nil {
+CREATE TABLE UserTrafficDaily (user_id INTEGER, bytes INTEGER);
+CREATE TABLE UserNodeUsage (user_id INTEGER, node_id INTEGER, baseline INTEGER, epoch TEXT);`); err != nil {
 		t.Fatal(err)
 	}
 	h := NewHandler(auth.NewService(conn, t.TempDir()))

@@ -248,6 +248,9 @@ func DeleteAccount(db *sql.DB, userID int64, keepOne bool) (DeleteResult, error)
 	if _, err := tx.Exec(`DELETE FROM UserTrafficDaily WHERE user_id = ?`, userID); err != nil {
 		return res, err
 	}
+	if _, err := tx.Exec(`DELETE FROM UserNodeUsage WHERE user_id = ?`, userID); err != nil {
+		return res, err
+	}
 	var stmt string
 	if keepOne {
 		stmt = `DELETE FROM User WHERE id = ? AND uuid = ? AND (SELECT COUNT(*) FROM User) > 1`

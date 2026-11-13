@@ -631,8 +631,12 @@ func DeleteNodeHandler(nodeID int64, db *sql.DB) bool {
 	if n == 0 {
 		return false
 	}
-	// Retire pending revocations for a deliberately removed node.
+	// Retire pending revocations and traffic baselines for a deliberately
+	// removed node. Node ids are rowids and can be reused, so a stale
+	// baseline would suppress or inflate billing on the next node with the
+	// same id.
 	_, _ = db.Exec(`DELETE FROM PendingUserRevocation WHERE node_id = ?`, nodeID)
+	_, _ = db.Exec(`DELETE FROM UserNodeUsage WHERE node_id = ?`, nodeID)
 	Forget(nodeID)
 
 	// Clean up node's traffic baselines and push hashes from all users.
