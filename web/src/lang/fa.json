@@ -856,5 +856,6 @@
   "modal_expiryMode": "قالب انقضا",
   "modal_expiryShortcuts": "میانبرهای انقضا",
   "secTakeoverTitle": "جانشینی نشست",
-  "secRepeatCount": "{{count}} بار"
+  "secRepeatCount": "{{count}} بار",
+  "limitPolicyNeedsNode": "برای استفاده از این گزینه نود را به 2.0.19 یا جدیدتر به‌روزرسانی کنید."
 }

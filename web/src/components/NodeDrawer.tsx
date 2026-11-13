@@ -20,6 +20,19 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+const versionAtLeast = (version: string, minimum: string) => {
+  const current = String(version).replace(/^v/, '').split('-')[0].split('.').map(Number);
+  const target = minimum.split('.').map(Number);
+  if (current.some((part) => !Number.isFinite(part))) return true;
+  for (let i = 0; i < target.length; i += 1) {
+    const left = current[i] || 0;
+    const right = target[i] || 0;
+    if (left > right) return true;
+    if (left < right) return false;
+  }
+  return true;
+};
+
 const apiError = (e: any, fallback: any) => {
   const detail = e?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
@@ -347,6 +360,7 @@ const NodeDrawer = ({
   ];
 
   const info = status?.node_info;
+  const supportsLimitPolicy = !info?.version || versionAtLeast(String(info.version), '2.0.19');
   const sessions = status?.session_diagnostics;
   const reachable = status?.reachable;
   const latency = status?.latency_ms;
@@ -511,8 +525,13 @@ const NodeDrawer = ({
                     <input type="number" min="0" max="1450" value={ovpn.Mssfix}
                       onChange={(e) => setOvpnField('Mssfix', e.target.value)} />
                   </Field>
-                  <Field label={t('limitPolicy', 'At the device limit')} hint={t('limitPolicyHint', 'Reserve allows one temporary session for a reconnect. Strict refuses. Takeover disconnects one existing session and admits the new one.')}>
-                    <select value={ovpn.LimitPolicy} onChange={(e) => setOvpnField('LimitPolicy', e.target.value)}>
+                  <Field
+                    label={t('limitPolicy', 'At the device limit')}
+                    hint={!supportsLimitPolicy
+                      ? t('limitPolicyNeedsNode', 'Update the node to 2.0.19 or newer to use this.')
+                      : t('limitPolicyHint', 'Reserve allows one temporary session for a reconnect. Strict refuses. Takeover replaces one existing session and admits the new one.')}
+                  >
+                    <select value={ovpn.LimitPolicy} disabled={!supportsLimitPolicy} onChange={(e) => setOvpnField('LimitPolicy', e.target.value)}>
                       <option value="reserve">{t('limitPolicyReserve', 'Reserve one reconnect slot (recommended)')}</option>
                       <option value="strict">{t('limitPolicyStrict', 'Strict: refuse at the limit')}</option>
                       <option value="takeover">{t('limitPolicyTakeover', 'Takeover: replace one session')}</option>

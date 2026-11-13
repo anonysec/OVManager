@@ -856,5 +856,6 @@
   "modal_expiryMode": "到期格式",
   "modal_expiryShortcuts": "到期快捷选项",
   "secTakeoverTitle": "会话接管",
-  "secRepeatCount": "{{count}} 次"
+  "secRepeatCount": "{{count}} 次",
+  "limitPolicyNeedsNode": "将节点更新到 2.0.19 或更高版本后可使用此选项。"
 }

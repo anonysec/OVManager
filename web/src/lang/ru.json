@@ -856,5 +856,6 @@
   "modal_expiryMode": "Формат срока",
   "modal_expiryShortcuts": "Быстрый срок",
   "secTakeoverTitle": "Замена сеанса",
-  "secRepeatCount": "{{count}} раз"
+  "secRepeatCount": "{{count}} раз",
+  "limitPolicyNeedsNode": "Обновите узел до 2.0.19 или новее, чтобы использовать эту настройку."
 }

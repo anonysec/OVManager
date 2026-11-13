@@ -856,5 +856,6 @@
   "modal_expiryMode": "Expiry format",
   "modal_expiryShortcuts": "Expiry shortcuts",
   "secTakeoverTitle": "Session takeover",
-  "secRepeatCount": "{{count}}x"
+  "secRepeatCount": "{{count}}x",
+  "limitPolicyNeedsNode": "Update the node to 2.0.19 or newer to use this."
 }
