@@ -11,7 +11,6 @@ import { setDisplayTimezone } from '../utils/displayTimezone';
 import { FiSettings } from 'react-icons/fi';
 import { PageHeader, Tabs } from '../components/ui';
 import { SectionHeader } from './settings/shared';
-import DefaultsSection from './settings/DefaultsSection';
 import DisplaySection from './settings/DisplaySection';
 import AppearanceSection from './settings/AppearanceSection';
 import AlertsSection from './settings/AlertsSection';
@@ -25,15 +24,13 @@ import './Settings.css';
 import './SettingsPage.css';
 
 /* Four tabs, ordered by how often a VPN admin reaches for them:
-   1. Panel          — how the panel and subscriptions are reached, and what a
-                       new user gets by default. The options you set once and
-                       come back to when onboarding.
+   1. Panel          — how the panel and subscriptions are reached. The options
+                       you set once and come back to when onboarding.
    2. Notifications  — Telegram bot and which alerts fire.
    3. Backup & system — backups, updates, maintenance, connection errors.
    4. Interface      — theme, language, your own activity (per-person, not panel). */
 const SECTIONS = [
   { id: 'general',    tab: 'panel',         labelKey: 'settingsGeneral',    label: 'General',    descKey: 'settingsGeneralDesc',    desc: 'Panel URL path and subscription link prefix', Component: GeneralSection, shared: true },
-  { id: 'defaults',   tab: 'panel',         labelKey: 'settingsDefaults',   label: 'Defaults',   descKey: 'settingsDefaultsDesc',   desc: 'New user defaults used by the Telegram bot', Component: DefaultsSection, shared: true },
   { id: 'display',    tab: 'panel',         labelKey: 'settingsDisplay',    label: 'Display',    descKey: 'settingsDisplayDesc',    desc: 'Timezone used for all date and time displays', Component: DisplaySection, shared: true },
   { id: 'telegram',   tab: 'notifications', labelKey: 'settingsTelegram',   label: 'Telegram',   descKey: 'settingsTelegramDesc',   desc: 'Daily usage summary, user events and test message', Component: TelegramSection, shared: true },
   { id: 'alerts',     tab: 'notifications', labelKey: 'settingsAlerts',     label: 'Alerts',     descKey: 'settingsAlertsDesc',     desc: 'Which alerts to show and how often to refresh', Component: AlertsSection },

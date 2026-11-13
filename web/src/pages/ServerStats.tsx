@@ -59,9 +59,6 @@ const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesRea
     out.push({ id: key, level: s.level || 'warning', link, title: s.title });
   });
   (users || []).forEach((u: any) => {
-    if (Number(u.max_logins || 0) > 0 && Number(u.active_connections || 0) >= Number(u.max_logins)) {
-      out.push({ id: `full-${u.uuid}`, level: 'warning', link: `/users?user=${u.uuid}`, title: t('notifUserAtMax', 'User {{name}} at max logins', { name: u.name }) });
-    }
     const quota = Number(u.total || 0);
     if (quota > 0) {
       const pct = Number(u.used || 0) / quota;

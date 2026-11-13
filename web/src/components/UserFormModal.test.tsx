@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * The "unlimited devices" card sets the devices field to 0. The field's
- * `min` must accept 0, otherwise the browser's native constraint validation
- * blocks the submit and the form silently does nothing.
+ * The form starts with no expiry, no traffic cap and unlimited devices. The
+ * expiry field switches between a day count and a date without shifting the
+ * date across timezones.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '../i18n';
 
@@ -19,18 +19,62 @@ vi.mock('../services/api', () => ({
 import apiClient from '../services/api';
 import UserFormModal from './UserFormModal';
 
+const localDate = (date = new Date()) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const addDaysLocal = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return localDate(date);
+};
+
+const renderCreate = () => render(
+  <UserFormModal isOpen onClose={() => {}} onSaved={() => {}} defaults={{ days: 0, maxLogins: 0 }} />
+);
+
+const submit = async () => {
+  fireEvent.change(document.querySelector('#uf-username') as HTMLInputElement, { target: { value: 'alice' } });
+  fireEvent.submit(document.querySelector('.uf-form') as HTMLFormElement);
+  await waitFor(() => expect(apiClient.post).toHaveBeenCalled());
+  return (apiClient.post as any).mock.calls[0][1];
+};
+
 describe('UserFormModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.post as any).mockResolvedValue({ data: { success: true, data: {} } });
+  });
+
   it('accepts 0 devices (the unlimited option)', () => {
-    render(
-      <UserFormModal isOpen onClose={() => {}} onSaved={() => {}} defaults={{ days: 30, maxLogins: 1 }} />
-    );
+    renderCreate();
     fireEvent.click(screen.getByRole('button', { name: '∞' }));
-    // The modal renders through a portal, so query the document, not the
-    // render container.
     const input = document.querySelector('.uf-devices input[type="number"]') as HTMLInputElement;
     expect(input).toBeTruthy();
     expect(input.value).toBe('0');
     expect(input.checkValidity()).toBe(true);
+  });
+
+  it('creates a user with no expiry, no quota and unlimited devices by default', async () => {
+    renderCreate();
+    const payload = await submit();
+    expect(payload.expiry_date).toBe('');
+    expect(payload.total).toBeNull();
+    expect(payload.max_logins).toBe(0);
+  });
+
+  it('converts a day count to a local date', async () => {
+    renderCreate();
+    fireEvent.change(document.querySelector('#uf-expiry-days') as HTMLInputElement, { target: { value: '30' } });
+    const payload = await submit();
+    expect(payload.expiry_date).toBe(addDaysLocal(30));
+  });
+
+  it('submits a picked date unchanged', async () => {
+    renderCreate();
+    fireEvent.click(screen.getByRole('button', { name: 'Date' }));
+    fireEvent.change(document.querySelector('#uf-expiry-date') as HTMLInputElement, { target: { value: '2099-01-01' } });
+    const payload = await submit();
+    expect(payload.expiry_date).toBe('2099-01-01');
   });
 
   it('updates an existing user through the numeric API alias when available', async () => {

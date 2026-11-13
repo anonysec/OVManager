@@ -39,6 +39,7 @@ const OVPN_DEFAULTS = {
   TlsMin: '1.3',
   CipherFirst: 'aes-128-gcm',
   Verb: 3,
+  LimitPolicy: 'reserve',
 };
 
 const NodeDrawer = ({
@@ -236,6 +237,7 @@ const NodeDrawer = ({
       TlsMin: ovpn.TlsMin,
       CipherFirst: ovpn.CipherFirst,
       Verb: Number(ovpn.Verb),
+      LimitPolicy: ovpn.LimitPolicy,
     };
     const res = await apiClient.put(`/nodes/${node.id}/settings`, { settings });
     const ok = Boolean(res.data?.success);
@@ -508,6 +510,13 @@ const NodeDrawer = ({
                   <Field label={t('mssfix', 'MSS fix (0 = auto)')} hint={t('mssfixHint', 'Lower values help on PPPoE and mobile links; 0 lets OpenVPN choose.')}>
                     <input type="number" min="0" max="1450" value={ovpn.Mssfix}
                       onChange={(e) => setOvpnField('Mssfix', e.target.value)} />
+                  </Field>
+                  <Field label={t('limitPolicy', 'At the device limit')} hint={t('limitPolicyHint', 'Reserve allows one temporary session for a reconnect. Strict refuses. Takeover disconnects one existing session and admits the new one.')}>
+                    <select value={ovpn.LimitPolicy} onChange={(e) => setOvpnField('LimitPolicy', e.target.value)}>
+                      <option value="reserve">{t('limitPolicyReserve', 'Reserve one reconnect slot (recommended)')}</option>
+                      <option value="strict">{t('limitPolicyStrict', 'Strict: refuse at the limit')}</option>
+                      <option value="takeover">{t('limitPolicyTakeover', 'Takeover: replace one session')}</option>
+                    </select>
                   </Field>
                   <Field label={t('tlsMin', 'Minimum TLS version')}>
                     <select value={ovpn.TlsMin} onChange={(e) => setOvpnField('TlsMin', e.target.value)}>

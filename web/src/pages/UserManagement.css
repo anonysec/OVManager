@@ -213,6 +213,99 @@
   gap: var(--space-2);
 }
 
+.uf-expiry {
+  min-width: 0;
+}
+
+.uf-expiry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.uf-expiry-modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.uf-expiry-mode {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.uf-expiry-mode:hover {
+  color: var(--text-primary);
+}
+
+.uf-expiry-mode.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.uf-expiry-mode:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.uf-expiry-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.uf-expiry-row .ui-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.uf-expiry-suffix {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.uf-expiry-calendar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.uf-expiry-calendar:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.uf-expiry-calendar:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.uf-expiry-warn {
+  color: var(--warning-text);
+}
+
 .uf-devices {
   display: flex;
   flex-direction: column;

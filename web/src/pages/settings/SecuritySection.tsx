@@ -9,22 +9,10 @@ import { PanelSkeleton } from '../../components/ui';
 import ErrorState from '../../components/ui/ErrorState';
 import { FiShield } from 'react-icons/fi';
 import { Card, Stat } from './shared';
+import { groupSecurityEvents } from './groupSecurityEvents';
+import type { GroupedSecurityEvent as GroupedEvent, SecurityEvent as SecEvent } from './groupSecurityEvents';
 
 const SEVERITY_RANK: Record<string, number> = { failure: 0, warn: 1, policy: 2 };
-
-interface SecEvent {
-  action?: string;
-  reason?: string;
-  time_local?: string;
-  ts?: number;
-  user_known?: boolean;
-  user?: string;
-  cn?: string;
-  peer?: string;
-  node?: string;
-  severity?: string;
-  ongoing?: boolean;
-}
 
 interface SecNodeStat {
   node?: string;
@@ -63,7 +51,7 @@ const reasonLabel = (t: any, ev: SecEvent) => {
   return known[ev.action as string] || ev.reason || t('secReasonOther', 'Unclassified reject');
 };
 
-const EventRow = ({ ev, t }: { ev: SecEvent; t: any }) => {
+const EventRow = ({ ev, t }: { ev: GroupedEvent; t: any }) => {
   const when = ev.time_local || (ev.ts ? new Date(ev.ts * 1000).toLocaleString() : t('secTimeUnknown', 'time unknown'));
   const who = ev.user_known === false
     ? `${ev.user || ev.cn || '—'} (${t('secNoSuchUser', 'no such user')})`
@@ -75,6 +63,7 @@ const EventRow = ({ ev, t }: { ev: SecEvent; t: any }) => {
         {[ev.node, when, ev.peer && ev.peer !== who ? ev.peer : ''].filter(Boolean).join(' · ')}
       </span>
       <span className="sp-ev-tags">
+        {Number(ev.count) > 1 && <span className="sp-badge">{t('secRepeatCount', '{{count}}x', { count: ev.count })}</span>}
         {ev.ongoing && <span className="sp-badge sp-badge--ongoing">{t('secOngoing', 'ongoing')}</span>}
         <span className={`sp-badge${ev.severity === 'failure' ? ' danger' : ev.severity === 'warn' ? ' warn' : ''}`}>
           {reasonLabel(t, ev)}
@@ -103,8 +92,11 @@ const SecuritySection = () => {
   useEffect(() => { load(); }, [load, refreshTick]);
 
   const events: SecEvent[] = Array.isArray(sec?.events) ? (sec?.events as SecEvent[]) : [];
-  const danger = events.filter((e) => e.severity === 'failure');
-  const rest = events.filter((e) => e.severity !== 'failure')
+  const grouped = groupSecurityEvents(events);
+  const danger = grouped.filter((e) => e.severity === 'failure');
+  const takeover = danger.filter((e) => e.action === 'takeover_failed');
+  const authDanger = danger.filter((e) => e.action !== 'takeover_failed');
+  const rest = grouped.filter((e) => e.severity !== 'failure')
     .sort((a, b) => (SEVERITY_RANK[a.severity as string] ?? 3) - (SEVERITY_RANK[b.severity as string] ?? 3));
   const authFailures = sec?.auth_failures ?? sec?.auth_errors ?? 0;
 
@@ -165,19 +157,27 @@ const SecuritySection = () => {
             </div>
           </div>
         )}
-        {danger.length > 0 && (
+        {authDanger.length > 0 && (
           <div className="sp-mt-16">
             <p className="sp-label-xs sp-mb-6">{t('secDangerTitle', 'Authentication / TLS failures')}</p>
             <div className="sp-node-list">
-              {danger.slice(0, 20).map((e, i) => <EventRow key={`${e.ts}-${e.cn}-${i}`} ev={e} t={t} />)}
+              {authDanger.slice(0, 20).map((e) => <EventRow key={`${e.action}-${e.user}-${e.node}`} ev={e} t={t} />)}
+            </div>
+          </div>
+        )}
+        {takeover.length > 0 && (
+          <div className="sp-mt-16">
+            <p className="sp-label-xs sp-mb-6">{t('secTakeoverTitle', 'Session takeover')}</p>
+            <div className="sp-node-list">
+              {takeover.slice(0, 20).map((e) => <EventRow key={`${e.action}-${e.user}-${e.node}`} ev={e} t={t} />)}
             </div>
           </div>
         )}
         {rest.length > 0 && (
           <div className="sp-mt-16">
-            <p className="sp-label-xs sp-mb-6">{t('secBlockedTitle', 'Blocked connections (expected)')}</p>
+            <p className="sp-label-xs sp-mb-6">{t('secBlockedTitle', 'Warnings and expected blocks')}</p>
             <div className="sp-node-list">
-              {rest.slice(0, 20).map((e, i) => <EventRow key={`${e.ts}-${e.cn}-${i}`} ev={e} t={t} />)}
+              {rest.slice(0, 20).map((e) => <EventRow key={`${e.action}-${e.user}-${e.node}`} ev={e} t={t} />)}
             </div>
           </div>
         )}

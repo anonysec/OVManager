@@ -65,7 +65,6 @@ const UserManagement = () => {
   const sessionsReqRef = useRef(0);
   useEffect(() => { usersRef.current = users; }, [users]);
   const [subSettings, setSubSettings] = useState<any>(null);
-  const [myDefaults, setMyDefaults] = useState<any>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExtendModalOpen, setIsExtendModalOpen] = useState(false);
@@ -137,20 +136,6 @@ const UserManagement = () => {
     } catch { /* subscription links degrade to hidden, table still works */ }
   }, []);
 
-  const fetchMyDefaults = useCallback(async () => {
-    try {
-      const res = await apiClient.get('/settings');
-      const data = res.data?.data || res.data;
-      if (data?.default_days) {
-        setMyDefaults({
-          days: data.default_days,
-          traffic_gb: data.default_traffic_gb,
-          max_users: data.default_max_users,
-        });
-      }
-    } catch { /* fall back to the global defaults below */ }
-  }, []);
-
   const { subscribe, streamConnected } = useLive();
   useEffect(() => {
     const u1 = subscribe('users.changed', () => fetchUsers({ background: true }));
@@ -187,7 +172,7 @@ const UserManagement = () => {
     return () => clearInterval(id);
   }, [fetchUsers, streamConnected]);
 
-  useEffect(() => { fetchUsers(); fetchSubSettings(); fetchMyDefaults(); }, [fetchUsers, fetchSubSettings, fetchMyDefaults]);
+  useEffect(() => { fetchUsers(); fetchSubSettings(); }, [fetchUsers, fetchSubSettings]);
 
   useEffect(() => {
     if (!lastDeleted) return undefined;
@@ -898,11 +883,7 @@ const UserManagement = () => {
           addToast(t('userCreated', 'User created'), 'success');
           fetchUsers();
         }}
-        defaults={{
-          days: myDefaults?.days ?? subSettings?.default_days ?? 30,
-          trafficGb: myDefaults?.traffic_gb ?? subSettings?.default_traffic_gb ?? '',
-          maxLogins: myDefaults?.max_users ?? subSettings?.default_max_users ?? 1,
-        }}
+        defaults={{ days: 0, maxLogins: 0 }}
         linkForUser={getSubscriptionLink}
       />
       <UserFormModal

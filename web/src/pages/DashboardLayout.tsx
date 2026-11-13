@@ -312,9 +312,7 @@ const DashboardLayout = () => {
         }
       });
       const authFailures = Number(security.auth_failures ?? security.auth_errors ?? 0);
-      const policyRejects = Number(security.policy_rejects ?? 0);
       if (authFailures > 0) out.push({ id: 'auth', level: 'danger', title: t('notifAuthErrors', '{{count}} auth errors (8h)', { count: authFailures }), detail: t('notifAuthErrorsDetail', 'Failed authentications across nodes') });
-      if (policyRejects > 0) out.push({ id: 'rej', level: 'warning', title: t('notifRejects', '{{count}} connection rejects (8h)', { count: policyRejects }), detail: t('notifRejectsDetail', 'OVNode connection rejects') });
       const prefs = readPrefs();
       setNotifications(out.filter((n) => {
         const pref = alertPrefKey(n.id);
@@ -447,9 +445,9 @@ const DashboardLayout = () => {
                         let href = '/logs';
                         if (n.id?.startsWith('node-')) {
                           href = `/nodes?node=${n.id.replace('node-', '')}`;
-                        } else if (n.id?.startsWith('exp-') || n.id?.startsWith('full-') || n.id?.startsWith('inact-') || n.id?.startsWith('quota-')) {
-                          href = `/users?user=${n.id.replace(/^(exp|full|inact|quota)-/, '')}`;
-                        } else if (n.id === 'auth' || n.id === 'rej') {
+                        } else if (n.id?.startsWith('exp-') || n.id?.startsWith('inact-') || n.id?.startsWith('quota-')) {
+                          href = `/users?user=${n.id.replace(/^(exp|inact|quota)-/, '')}`;
+                        } else if (n.id === 'auth') {
                           href = '/logs?tab=audit';
                         }
                         return (

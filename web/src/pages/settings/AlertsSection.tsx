@@ -126,9 +126,7 @@ const AlertsSection = () => {
 
   const ALERTS = [
     { key: 'nodeDown', label: t('alertNodeDown', 'Node offline / unreachable'), icon: FiAlertTriangle },
-    { key: 'maxLogins', label: t('alertMaxLogins', 'User at max logins'), icon: FiAlertTriangle },
     { key: 'authErrors', label: t('alertAuthErrors', 'Authentication errors'), icon: FiAlertTriangle },
-    { key: 'rejects', label: t('alertRejects', 'Connection rejects'), icon: FiAlertTriangle },
     { key: 'quota', label: t('alertQuota', 'Quota warnings (80%+)'), icon: FiAlertTriangle },
   ];
 
