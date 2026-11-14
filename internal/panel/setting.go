@@ -64,10 +64,10 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		subPrefixSource = envOrFile("PublicUrl")
 	}
 	publicBase := strings.TrimRight(publicURLOr(r), "/")
+	// The subscription page is a top-level route, outside the panel's urlpath
+	// (like /api and /health). Prefixing it with the urlpath produced links
+	// such as /dashboard/sub/<uuid>, which the SPA serves instead.
 	subscriptionPrefix := publicBase + "/"
-	if urlpath != "" {
-		subscriptionPrefix = publicBase + "/" + urlpath + "/"
-	}
 	if subPrefixSource != "" {
 		subscriptionPrefix = strings.TrimRight(subPrefixSource, "/") + "/"
 	}
