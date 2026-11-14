@@ -205,7 +205,7 @@ html[data-theme="light"] .topbar-search-trigger {
 }
 
 html[data-theme="light"] .topbar-search-trigger kbd {
-  background: #f6f8fb;
+  background: var(--surface-2);
 }
 
 .topbar-brand {
@@ -235,59 +235,6 @@ html[data-theme="light"] .topbar-search-trigger kbd {
   justify-content: flex-start;
 }
 
-/* Very narrow phones: shrink the brand wordmark + userbar icons a notch so
-   the whole topbar still fits on one row at 320px. */
-@media (max-width: 340px) {
-  .ops-topbar-minimal {
-    padding-inline: 52px 8px;
-  }
-
-  .ops-topbar-minimal .topbar-brand {
-    gap: 5px;
-    font-size: var(--font-size-sm);
-  }
-
-  .ops-topbar-minimal .topbar-brand .ops-logo-svg {
-    width: 24px;
-    height: 24px;
-  }
-
-  .ops-topbar-minimal .ops-userbar {
-    gap: 2px;
-  }
-
-  .ops-topbar-minimal .ops-userbar .icon-btn {
-    width: 32px;
-    height: 32px;
-    position: relative;
-  }
-
-  .ops-topbar-minimal .ops-userbar .icon-btn::after {
-    content: '';
-    position: absolute;
-    inset: -6px;
-  }
-
-  .topbar-search-trigger {
-    min-width: 34px;
-    width: 34px !important;
-  }
-}
-
-/* Light-mode surfaces for the new chrome */
-html[data-theme="light"] .ops-topbar-minimal {
-  background: rgba(255, 255, 255, .92);
-  border-bottom-color: var(--border);
-  box-shadow: 0 8px 22px rgba(28, 42, 60, .06);
-}
-
-html[data-theme="light"] .topbar-search-trigger {
-  background: var(--surface-1) !important;
-}
-
-html[data-theme="light"] .topbar-search-trigger kbd {
-  background: #f6f8fb;
-}
 
 .topbar-brand {
   display: inline-flex;
