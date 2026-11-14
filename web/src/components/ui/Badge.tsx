@@ -6,12 +6,11 @@ import type { ReactNode } from 'react';
 import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiCircle, FiHelpCircle } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 
-const Badge = ({ tone = 'neutral', dot = false, className = '', children, ...rest }: { tone?: any; dot?: any; className?: string; children?: any; [key: string]: any }) => (
+const Badge = ({ tone = 'neutral', className = '', children, ...rest }: { tone?: any; className?: string; children?: any; [key: string]: any }) => (
   <span
     className={['ui-badge', `ui-badge--${tone}`, className].filter(Boolean).join(' ')}
     {...rest}
   >
-    {dot && <span className="ui-badge-dot" aria-hidden="true" />}
     {children}
   </span>
 );
@@ -37,7 +36,7 @@ const TONES: Record<string, string> = {
 export const StatusBadge = ({ status = 'idle', label }: { status?: string; label?: ReactNode }) => {
   const Icon: IconType = ICONS[status] || FiHelpCircle;
   return (
-    <Badge tone={TONES[status] || 'neutral'} dot className={`status-badge status-${status}`}>
+    <Badge tone={TONES[status] || 'neutral'} className={`status-badge status-${status}`}>
       <Icon size={13} className="status-badge-icon" aria-hidden="true" />
       <span>{label}</span>
     </Badge>

@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: MIT */
 
 /* Badge primitive. Soft fill + *-text foreground keeps every tone at AA in
-   both themes; the vivid --* fill is reserved for the optional dot. */
+   both themes. */
 
 .ui-badge {
   display: inline-flex;
@@ -17,14 +17,6 @@
   line-height: 1.4;
   white-space: nowrap;
   vertical-align: middle;
-}
-
-.ui-badge-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: currentColor;
 }
 
 .ui-badge--neutral {

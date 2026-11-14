@@ -436,13 +436,11 @@ const NodeManagement = () => {
                   <div className="nm-node-meta">
                     {health === 'offline' && (
                       <span className="nm-meta-chip nm-meta-chip--danger">
-                        <FiXCircle size={11} aria-hidden="true" />
                         {t('statusOffline', 'Offline')}
                       </span>
                     )}
                     {health === 'warning' && (
                       <span className="nm-meta-chip nm-meta-chip--warn">
-                        <FiXCircle size={11} aria-hidden="true" />
                         {t('nodeUnreachable', 'Unreachable')}
                       </span>
                     )}

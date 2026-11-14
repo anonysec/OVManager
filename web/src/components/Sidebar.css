@@ -363,3 +363,11 @@ html[dir="rtl"] .ops-sidebar--mobile.ops-sidebar--open {
   .mobile-nav--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .mobile-nav--7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
 }
+
+/* The rail clips overflow, so draw the focus ring inside the link instead of
+   straddling its edge where it would be cut off. */
+.sidebar-nav-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+  box-shadow: none;
+}

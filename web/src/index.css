@@ -338,7 +338,7 @@
 
 .icon-btn:hover {
   color: var(--text-primary);
-  background: rgba(252, 122, 30, 0.1);
+  background: var(--surface-hover);
 }
 
 .icon-btn.active {
@@ -411,7 +411,7 @@
   margin-top: 8px;
   box-shadow: var(--shadow);
   overflow-y: auto;
-  z-index: 100;
+  z-index: var(--z-popover-high);
 }
 
 .notification-popover p {
@@ -426,64 +426,24 @@
 }
 
 /* --- Toasts --- */
-.toast-stack {
-  position: fixed;
-  bottom: 24px;
-  inset-inline-end: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 1000;
-}
-
-.toast {
-  background: var(--background-secondary);
-  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
-  padding: 16px 20px;
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  max-width: 360px;
-  color: var(--text-primary);
-  animation: slideIn 0.3s ease, fadeOut 0.2s ease 5s forwards;
-}
-
-.toast strong {
-  color: var(--accent-color);
-  font-weight: 700;
-  display: block;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 12px;
-}
-
-.toast span,
-
-.toast.toast-error {
-  background: color-mix(in srgb, var(--danger-color) 14%, var(--background-secondary));
-  border-color: color-mix(in srgb, var(--danger-color) 50%, transparent);
-}
-.toast.toast-error strong {
-  color: var(--danger-color);
-}
-
-.toast.toast-warning {
-  background: color-mix(in srgb, var(--accent-color) 14%, var(--background-secondary));
-  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent);
-}
-.toast.toast-warning strong {
-  color: var(--accent-color);
-}
-
-.toast.toast-success {
-  background: color-mix(in srgb, var(--success-color, #2fd276) 14%, var(--background-secondary));
-  border-color: color-mix(in srgb, var(--success-color, #2fd276) 50%, transparent);
-}
-.toast.toast-success strong {
-  color: var(--success-color, #2fd276);
-}
-
 @media (max-width: 767.98px) {
+  /* Touch targets: 44px is the floor, even where the desktop table rows are
+     deliberately dense. */
+  .icon-btn,
+  .ops-userbar button:not(.lang-option):not(.profile-trigger):not(.topbar-search-trigger) {
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+  }
+  .list-table.user-list-table .icon-btn,
+  .list-table.node-list-table .icon-btn,
+  .list-table.audit-table .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px !important;
+  }
+
   .ops-userbar {
     flex-wrap: wrap;
     gap: 8px;
@@ -507,13 +467,13 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent-color);
+  background: var(--border-strong);
   border-radius: 4px;
   transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-color-hover);
+  background: var(--text-muted);
 }
 
 /* --- Focus Styles for Accessibility --- */
@@ -876,13 +836,13 @@
 }
 
 .sidebar-nav-link:hover {
-  background: var(--accent-color-transparent, rgba(255, 122, 30, 0.12));
-  color: var(--accent-color, var(--orange));
-  border-color: color-mix(in srgb, var(--accent-color) 18%, transparent);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
 }
 
 .sidebar-nav-link:hover .sidebar-nav-icon {
-  color: var(--accent-color, var(--orange));
+  color: var(--text-primary);
   transform: scale(1.05);
 }
 
@@ -1023,14 +983,14 @@
   text-align: inherit;
   cursor: pointer;
 }
-.list-table th.sortable .th-sort-btn:hover { color: var(--accent); }
+.list-table th.sortable .th-sort-btn:hover { color: var(--text-primary); }
 .list-table th.sortable .th-sort-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: 4px;
 }
 .sort-indicator.is-idle { color: var(--text-muted); opacity: .7; }
-.list-table th.sortable .th-sort-btn:hover .sort-indicator.is-idle { opacity: .9; color: var(--accent); }
+.list-table th.sortable .th-sort-btn:hover .sort-indicator.is-idle { opacity: .9; color: var(--text-primary); }
 .sort-indicator.is-asc,
 .sort-indicator.is-desc { color: var(--orange); opacity: 1; }
 .sort-indicator.is-asc { background: var(--orange-soft, rgba(255,122,30,.16)); }
@@ -1123,9 +1083,9 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
 .list-table.user-list-table .icon-btn,
 .list-table.node-list-table .icon-btn,
 .list-table.audit-table .icon-btn {
-  min-width: 28px;
-  min-height: 28px;
-  padding: 6px !important;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 7px !important;
   border-radius: 7px !important;
   background: transparent !important;
   color: var(--muted) !important;
@@ -1138,9 +1098,9 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
 .list-table.user-list-table .icon-btn:hover,
 .list-table.node-list-table .icon-btn:hover,
 .list-table.audit-table .icon-btn:hover {
-  background: rgba(255,255,255,.08) !important;
-  border-color: var(--orange) !important;
-  color: var(--orange) !important;
+  background: var(--surface-hover) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
 }
 .list-table.user-list-table .icon-btn.danger,
 .list-table.node-list-table .icon-btn.danger,
@@ -1160,7 +1120,7 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
    for the delete action. The .danger variant carries a soft danger fill at
    rest, so it is distinct from edit without relying on hover. */
 .icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 7px !important; padding: 6px !important; cursor: pointer; transition: all .12s ease; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; }
-.icon-btn:hover { background: rgba(255,255,255,.08) !important; color: var(--orange) !important; border-color: var(--orange) !important; }
+.icon-btn:hover { background: var(--surface-hover) !important; color: var(--text-primary) !important; border-color: var(--border-strong) !important; }
 .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
 .icon-btn.danger:hover { color: var(--danger-contrast) !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
 .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
@@ -1168,7 +1128,7 @@ html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 .notif-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .notif-head strong { font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--text); }
 .notif-refresh { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: var(--font-size-md); min-width: 44px; min-height: 44px; width: 44px; height: 44px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; }
-.notif-refresh:hover { color: var(--orange); background: rgba(255,255,255,.06); }
+.notif-refresh:hover { color: var(--text-primary); background: var(--surface-hover); }
 .notif-refresh:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
 .notification-empty { padding: 18px 12px; color: var(--muted); text-align: center; font-size: var(--font-size-sm); }
 .notification-item {
@@ -1201,24 +1161,40 @@ html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
 }
 .toast {
   width: min(360px, calc(100vw - 40px));
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--red);
-  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   padding: 12px;
-  box-shadow: 0 18px 40px rgba(0,0,0,.35);
+  box-shadow: var(--shadow-lg);
 }
-.toast strong { display: block; margin-bottom: 4px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
-.toast.error, .toast.Error { border-color: var(--red);
- }
-.toast.error strong, .toast.Error strong { color: var(--red); }
-.toast span { color: var(--text); font-size: var(--font-size-sm); opacity: 0.9; }
-.toast.success { border-color: var(--green);
- }
-.toast.success strong { color: var(--green); }
-.toast.warning { border-color: var(--orange);
-  }
-.toast.warning strong { color: var(--orange); }
+.toast strong {
+  flex: 0 0 auto;
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  line-height: 1.4;
+}
+.toast span { color: var(--text-primary); font-size: var(--font-size-sm); line-height: 1.45; }
+.toast.toast-error {
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  background: color-mix(in srgb, var(--danger-soft) 55%, var(--surface-1));
+}
+.toast.toast-error strong { color: var(--danger-text); }
+.toast.toast-success {
+  border-color: color-mix(in srgb, var(--success) 50%, transparent);
+  background: color-mix(in srgb, var(--success-soft) 55%, var(--surface-1));
+}
+.toast.toast-success strong { color: var(--success-text); }
+.toast.toast-warning {
+  border-color: color-mix(in srgb, var(--warning) 50%, transparent);
+  background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface-1));
+}
+.toast.toast-warning strong { color: var(--warning-text); }
+.toast.toast-info {
+  border-color: color-mix(in srgb, var(--info) 50%, transparent);
+  background: color-mix(in srgb, var(--info-soft) 55%, var(--surface-1));
+}
+.toast.toast-info strong { color: var(--info-text); }
 .settings-list.small p { font-size: 12px; color: var(--muted); line-height: 1.35; }
 .health-table-wrap .list-table { min-width: 720px; }
 .diagnostic-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 10px; }
@@ -1565,7 +1541,7 @@ html[data-theme="light"] .notification-popover { background: var(--surface-1); c
 html[data-theme="light"] .notification-item { border-color: #e3e8ef; }
 /* --accent-contrast already resolves per theme; no override needed. */
 html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
-html[data-theme="light"] .icon-btn:hover { color: var(--orange) !important; border-color: var(--orange) !important; }
+html[data-theme="light"] .icon-btn:hover { color: var(--text-primary) !important; border-color: var(--border-strong) !important; }
 /* Light theme danger icon-btn keeps the soft-danger fill + foreground so the
    destructive action stays distinct from edit. */
 html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
@@ -1576,7 +1552,7 @@ html[data-theme="light"] .ops-nav-link.active { background: rgba(255,122,30,.16)
 html[data-theme="light"] .seg-toggle button.active { color: var(--accent-contrast); }
 /* ---- Light mode: topbar + brand visibility ---- */
 html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
-html[data-theme="light"] .ops-userbar button:hover { color: var(--orange) !important; }
+html[data-theme="light"] .ops-userbar button:hover { color: var(--text-primary) !important; }
 /* ---- Light mode: borderless dashboard panels (shadow only) ---- */
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
 html[data-theme="light"] .user-list-table td, html[data-theme="light"] .node-list-table td, html[data-theme="light"] .audit-table td { border-color: var(--bg) !important; }
