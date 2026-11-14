@@ -100,6 +100,10 @@
   background: var(--accent-soft);
 }
 
+.dt-row.dt-clickable {
+  cursor: pointer;
+}
+
 .dt-wrap.dt-compact .dt-th,
 .dt-wrap.dt-compact .dt-td {
   padding: 6px 10px;

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FiEdit2, FiActivity, FiDownload, FiCopy, FiCheck, FiWifi, FiHardDrive,
-  FiClock, FiUserX, FiUserCheck, FiRefreshCw, FiTrash2, FiGlobe,
+  FiClock, FiUserX, FiUserCheck, FiRefreshCw, FiTrash2, FiGlobe, FiSmartphone,
 } from 'react-icons/fi';
 import Modal from './Modal';
 import { Badge, Button } from './ui';
@@ -22,21 +22,29 @@ const statusOf = (user: any, t: any) => {
   return { label: t('statusOffline'), tone: 'neutral' };
 };
 
-const TrafficHistory = ({ days, t }: { days?: any; t?: any }) => {
-  const max = Math.max(...days.map((d: any) => Number(d.bytes || 0)), 1);
+const TrafficHistory = ({ days, loading, t }: { days?: any; loading?: boolean; t?: any }) => {
+  const list = Array.isArray(days) ? days : [];
+  const max = Math.max(...list.map((d: any) => Number(d.bytes || 0)), 1);
+  const hasTraffic = list.some((d: any) => Number(d.bytes) > 0);
   return (
     <div className="ud-hist" aria-label={t('trafficHistory14d', 'Traffic, last 14 days')}>
       <span className="ud-label">{t('trafficHistory14d', 'Traffic, last 14 days')}</span>
-      <div className="ud-hist-bars">
-        {days.map((d: any) => (
-          <span
-            key={d.day}
-            className="ud-hist-bar"
-            title={`${d.day}: ${formatBytes(d.bytes)}`}
-            style={{ height: `${Math.max(3, Math.round((Number(d.bytes || 0) / max) * 100))}%` }}
-          />
-        ))}
-      </div>
+      {loading ? (
+        <div className="ud-hist-skeleton" aria-hidden="true" />
+      ) : hasTraffic ? (
+        <div className="ud-hist-bars">
+          {list.map((d: any) => (
+            <span
+              key={d.day}
+              className="ud-hist-bar"
+              title={`${d.day}: ${formatBytes(d.bytes)}`}
+              style={{ height: `${Math.max(3, Math.round((Number(d.bytes || 0) / max) * 100))}%` }}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="ud-hist-empty">{t('noTrafficYet', 'No traffic in the last 14 days.')}</p>
+      )}
     </div>
   );
 };
@@ -45,6 +53,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [qr, setQr] = useState('');
+  const [showQr, setShowQr] = useState(false);
   const [history, setHistory] = useState<any>(null);
 
   useEffect(() => {
@@ -80,7 +89,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   }, [subscriptionLink, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) setQr('');
+    if (!isOpen) { setQr(''); setShowQr(false); }
   }, [isOpen]);
 
   if (!user) return null;
@@ -104,7 +113,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${t('user')}: ${user.name}`} size="medium">
+    <Modal isOpen={isOpen} onClose={onClose} title={`${t('user')}: ${user.name}`} size="large">
       <div className="ud-page">
         <header className="ud-header">
           <span className="ud-avatar" aria-hidden="true">{String(user?.name || '').slice(0, 1).toUpperCase() || '?'}</span>
@@ -112,7 +121,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
             <strong className="ud-name">{user.name}</strong>
             <code className="ud-uuid" title={user.uuid}>{user?.uuid ? `${user.uuid.slice(0, 8)}…` : '—'}</code>
           </div>
-          <Badge tone={st.tone} dot>{st.label}</Badge>
+          <Badge tone={st.tone}>{st.label}</Badge>
         </header>
 
         <section className="ud-usage" aria-label={t('totalUsage', 'Total usage')}>
@@ -184,9 +193,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
           </div>
         </dl>
 
-        {history && history.length > 0 && history.some((day: any) => Number(day.bytes) > 0) && (
-          <TrafficHistory days={history} t={t} />
-        )}
+        <TrafficHistory days={history} loading={history === null} t={t} />
 
         <section className="ud-sub">
           <span className="ud-label">{t('subscriptionLink')}</span>
@@ -202,6 +209,17 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
             />
           </div>
           {qr && (
+            <button
+              type="button"
+              className="ud-qr-toggle"
+              onClick={() => setShowQr((v) => !v)}
+              aria-expanded={showQr}
+            >
+              <FiSmartphone aria-hidden="true" />
+              {showQr ? t('hideQr', 'Hide QR') : t('showQr', 'Show QR')}
+            </button>
+          )}
+          {showQr && qr && (
             <div className="ud-qr" aria-label={t('qrAlt', 'Subscription link QR code')}>
               <img src={qr} alt={t('qrAlt', 'Subscription link QR code')} />
             </div>
@@ -210,43 +228,45 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
         </section>
 
         <div className="ud-actions">
-          <Button variant="primary" size="sm" icon={<FiDownload aria-hidden="true" />} onClick={() => onDownload?.(user)}>
-            {t('downloadConfig')}
-          </Button>
-          <Button size="sm" icon={<FiEdit2 aria-hidden="true" />} onClick={() => onEdit?.(user)}>
-            {t('rowEdit')}
-          </Button>
-          <Button size="sm" icon={<FiActivity aria-hidden="true" />} onClick={() => onSessions?.(user)}>
-            {t('rowSessions')}
-          </Button>
-          {onExtend && (
-            <Button size="sm" icon={<FiClock aria-hidden="true" />} onClick={() => onExtend?.(user)}>
-              {t('extend', 'Extend')}
+          <div className="ud-actions-group">
+            <Button variant="primary" size="sm" icon={<FiDownload aria-hidden="true" />} title={t('downloadConfigHint', "Download this user's OpenVPN profile (.ovpn).")} onClick={() => onDownload?.(user)}>
+              {t('downloadConfig')}
             </Button>
-          )}
-          {onToggleStatus && (
-            <Button
-              size="sm"
-              variant={user.is_active ? 'secondary' : 'primary'}
-              icon={user.is_active ? <FiUserX aria-hidden="true" /> : <FiUserCheck aria-hidden="true" />}
-              onClick={() => onToggleStatus(user)}
-            >
-              {user.is_active ? t('disableUser') : t('enableUser')}
+            <Button size="sm" icon={<FiEdit2 aria-hidden="true" />} onClick={() => onEdit?.(user)}>
+              {t('rowEdit')}
             </Button>
-          )}
-          {onResetUsage && (
-            <Button size="sm" icon={<FiRefreshCw aria-hidden="true" />} onClick={() => onResetUsage?.(user)}>
-              {t('resetUsageButton', 'Reset usage')}
+            <Button size="sm" icon={<FiActivity aria-hidden="true" />} onClick={() => onSessions?.(user)}>
+              {t('rowSessions')}
             </Button>
-          )}
+            {onExtend && (
+              <Button size="sm" icon={<FiClock aria-hidden="true" />} onClick={() => onExtend?.(user)}>
+                {t('extend', 'Extend')}
+              </Button>
+            )}
+            {onToggleStatus && (
+              <Button
+                size="sm"
+                variant={user.is_active ? 'secondary' : 'primary'}
+                icon={user.is_active ? <FiUserX aria-hidden="true" /> : <FiUserCheck aria-hidden="true" />}
+                onClick={() => onToggleStatus(user)}
+              >
+                {user.is_active ? t('disableUser') : t('enableUser')}
+              </Button>
+            )}
+            {onResetUsage && (
+              <Button size="sm" icon={<FiRefreshCw aria-hidden="true" />} onClick={() => onResetUsage?.(user)}>
+                {t('resetUsageButton', 'Reset usage')}
+              </Button>
+            )}
+          </div>
           {onDelete && (
-            <Button variant="danger" size="sm" icon={<FiTrash2 aria-hidden="true" />} onClick={() => onDelete?.(user)}>
-              {t('rowDelete', 'Delete')}
-            </Button>
+            <div className="ud-actions-group ud-actions-group--danger">
+              <Button variant="danger" size="sm" icon={<FiTrash2 aria-hidden="true" />} onClick={() => onDelete?.(user)}>
+                {t('rowDelete', 'Delete')}
+              </Button>
+            </div>
           )}
         </div>
-
-        <p className="ud-hint">{t('downloadConfigHint', "Download this user's OpenVPN profile (.ovpn).")}</p>
       </div>
     </Modal>
   );

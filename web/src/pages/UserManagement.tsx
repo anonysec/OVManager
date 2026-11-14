@@ -844,6 +844,7 @@ const UserManagement = () => {
               return next;
             });
           }}
+          onRowClick={(row) => handleUserClick(row)}
           page={page}
           pageSize={pageSize}
           total={sortedUsers.length}

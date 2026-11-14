@@ -26,6 +26,7 @@ type DataTableProps = {
   selectedKeys?: Set<string> | null;
   onSelectAll?: ((checked: boolean) => void) | null;
   onSelectRow?: ((key: string | number, checked: boolean) => void) | null;
+  onRowClick?: ((row: any, e: any) => void) | null;
   allSelected?: boolean;
   someSelected?: boolean;
   loading?: boolean;
@@ -50,6 +51,7 @@ const DataTable = ({
   selectedKeys = null,
   onSelectAll = null,
   onSelectRow = null,
+  onRowClick = null,
   allSelected = false,
   someSelected = false,
   loading = false,
@@ -145,7 +147,17 @@ const DataTable = ({
                 const k = rowKey(row, i);
                 const checked = selectedKeys?.has?.(String(k)) ?? false;
                 return (
-                  <tr key={k} className={`dt-row${checked ? ' dt-selected' : ''}`} aria-selected={selectable ? checked : undefined}>
+                  <tr
+                    key={k}
+                    className={`dt-row${checked ? ' dt-selected' : ''}${onRowClick ? ' dt-clickable' : ''}`}
+                    aria-selected={selectable ? checked : undefined}
+                    onClick={onRowClick ? (e) => {
+                      if (window.getSelection()?.toString()) return;
+                      const el = e.target as HTMLElement | null;
+                      if (el?.closest('button, a, input, label, select, textarea, [role="menu"], [role="menuitem"]')) return;
+                      onRowClick(row, e);
+                    } : undefined}
+                  >
                     {selectable && (
                       <td className="dt-td dt-col-check">
                         <input

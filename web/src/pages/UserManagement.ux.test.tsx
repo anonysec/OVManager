@@ -123,3 +123,27 @@ describe('UserManagement bulk actions', () => {
     expect(screen.queryByText('Enable: 2 done.')).toBeNull();
   });
 });
+
+describe('UserManagement row detail', () => {
+  beforeEach(() => { vi.clearAllMocks(); stubStorage(); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('opens the detail dialog from anywhere on the row', async () => {
+    renderPage(taggedUsers(1));
+    const row = await waitFor(() => {
+      const el = document.querySelector('.dt-row');
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    fireEvent.click(row);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('User: user1')).toBeTruthy();
+  });
+
+  it('does not open the detail dialog from the row checkbox', async () => {
+    renderPage(taggedUsers(1));
+    const checkbox = await screen.findByRole('checkbox', { name: 'Select row' });
+    fireEvent.click(checkbox);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
