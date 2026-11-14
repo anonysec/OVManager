@@ -79,16 +79,21 @@ export const ToastProvider = ({ children }: { children?: any }) => {
   useEffect(() => {
     const DEDUPE_MS = 5000;
     const onErr = (e: any) => {
+      const transient = e?.detail?.transient === true;
       const msg = e?.detail?.message || 'Request failed';
+      // Network blips are one condition, not one per URL. A longer window and
+      // one shared key keep a flaky link from stacking persistent toasts.
+      const key = transient ? '__network__' : msg;
+      const windowMs = transient ? 30000 : DEDUPE_MS;
       const now = Date.now();
-      const last = recentErrors.current.get(msg) || 0;
-      if (now - last < DEDUPE_MS) return;
-      recentErrors.current.set(msg, now);
-      // prune
+      const last = recentErrors.current.get(key) || 0;
+      if (now - last < windowMs) return;
+      recentErrors.current.set(key, now);
+      const pruneAfter = Math.max(windowMs * 2, DEDUPE_MS * 2);
       for (const [k, v] of recentErrors.current) {
-        if (now - v > DEDUPE_MS * 2) recentErrors.current.delete(k);
+        if (now - v > pruneAfter) recentErrors.current.delete(k);
       }
-      addToast(msg, 'error');
+      addToast(msg, 'error', transient ? 8000 : undefined);
     };
     window.addEventListener(API_ERROR_EVENT, onErr);
     return () => window.removeEventListener(API_ERROR_EVENT, onErr);

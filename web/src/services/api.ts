@@ -91,7 +91,7 @@ function reportError(status: number, data: any, message: string, requestUrl: str
   if (isPreAuth(requestUrl)) return;
   const out = detailMessage(data?.detail) || data?.msg || message || 'Request failed';
   window.dispatchEvent(new CustomEvent(API_ERROR_EVENT, {
-    detail: { status, message: out, url: requestUrl },
+    detail: { status, message: out, url: requestUrl, transient: status === 0 },
   }));
 }
 

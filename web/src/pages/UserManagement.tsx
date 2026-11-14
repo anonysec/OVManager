@@ -149,13 +149,17 @@ const UserManagement = () => {
       });
     });
     const u6 = subscribe('users.session', (data: any) => {
-      if (data?.op !== 'session' || !data?.name) return;
+      if (data?.op !== 'session') return;
+      const name = typeof data?.name === 'string' ? data.name.trim() : '';
+      // An unresolved CN can arrive as a placeholder or a raw id; the panel
+      // backend now drops those, this keeps an older node quiet too.
+      if (!name || /^(undefined|undef|undf)$/i.test(name)) return;
       if (data.action === 'connect') {
-        addToast(t('liveConnectToast', '{{name}} connected', { name: data.name }), 'success');
+        addToast(t('liveConnectToast', '{{name}} connected', { name }), 'success');
       } else if (data.action === 'disconnect') {
-        addToast(t('liveDisconnectToast', '{{name}} disconnected', { name: data.name }), 'info');
+        addToast(t('liveDisconnectToast', '{{name}} disconnected', { name }), 'info');
       } else if (data.action === 'reject') {
-        addToast(t('liveRejectToast', '{{name}} connection rejected', { name: data.name }), 'warning');
+        addToast(t('liveRejectToast', '{{name}} connection rejected', { name }), 'warning');
       }
     });
     return () => { u1(); u2(); u3(); u4(); u5(); u6(); };

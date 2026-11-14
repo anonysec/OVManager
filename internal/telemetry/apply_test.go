@@ -351,3 +351,28 @@ func sessionActions(events []Event) []string {
 	}
 	return out
 }
+
+// A CN that maps to no panel user must not become a phantom connection or a
+// "<number> connected" toast.
+func TestApplyNodeSessionsSkipsUnresolved(t *testing.T) {
+	conn := applyDB(t)
+	n := &node.Node{ID: 1, Name: "a"}
+	ch := DefaultBus.Subscribe()
+	defer DefaultBus.Unsubscribe(ch)
+
+	if err := ApplyNodeSessions(conn, n, sessions("amy"), nil); err != nil {
+		t.Fatal(err)
+	}
+	drainEvents(ch)
+
+	if err := ApplyNodeSessions(conn, n, sessions("amy", "bob", "99"), nil); err != nil {
+		t.Fatal(err)
+	}
+	got := sessionActions(drainEvents(ch))
+	if len(got) != 1 || got[0] != "bob:connect" {
+		t.Fatalf("session events = %v, want only bob:connect", got)
+	}
+	if Connections()["99"] != 0 {
+		t.Fatalf("unresolved CN counted as a user: %v", Connections())
+	}
+}

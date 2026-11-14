@@ -187,4 +187,24 @@ describe('UserManagement session actions', () => {
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users/id/1/sessions'));
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/users/'));
   });
-});
+
+  it('does not toast placeholder session names', async () => {
+    render(
+      <MemoryRouter initialEntries={['/users']}>
+        <ToastProvider><UserManagement /></ToastProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('alice')).toBeTruthy();
+
+    await act(async () => {
+      liveMock.emit('users.session', { op: 'session', name: 'UNDEF', action: 'connect' });
+      liveMock.emit('users.session', { op: 'session', name: 'undefined', action: 'connect' });
+    });
+    expect(screen.queryByText(/connected/)).toBeNull();
+
+    await act(async () => {
+      liveMock.emit('users.session', { op: 'session', name: 'alice', action: 'connect' });
+    });
+    expect(await screen.findByText('alice connected')).toBeTruthy();
+  });
+})

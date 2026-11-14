@@ -420,7 +420,7 @@ func CollectMetrics(db *sql.DB) {
 		}
 		for _, sess := range snapshot.sessions.LiveSessions {
 			username := resolveSessionUsername(sess.CommonName, snapshot.nodeName, idToName, known)
-			if username != "" {
+			if username != "" && known[username] {
 				activeCounts[username]++
 			}
 		}
@@ -698,7 +698,7 @@ func applyNodeSessionState(db *sql.DB, n *node.Node, sess *node.SessionsResponse
 	touched := map[string]bool{}
 	for _, entry := range sess.LiveSessions {
 		username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
-		if username == "" {
+		if username == "" || !known[username] {
 			continue
 		}
 		counts[username]++
