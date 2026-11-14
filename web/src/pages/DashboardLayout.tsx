@@ -180,6 +180,7 @@ const DashboardLayout = () => {
   useEffect(() => {
     if (!notifOpen && !langOpen) return;
     const onDoc = (e: any) => {
+      if (window.getSelection()?.toString()) return;
       const target = e?.target as Element | null;
       if (!target?.closest('.notification-wrap')) setNotifOpen(false);
       if (!target?.closest('.lang-picker-wrap')) setLangOpen(false);

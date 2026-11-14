@@ -32,6 +32,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
   const titleId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const previousFocusRef = useRef<any>(null);
   const onCloseRef = useRef<any>(onClose);
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const dirtyRef = useRef(false);
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
@@ -63,6 +65,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
     if (!isOpen) return undefined;
 
     previousFocusRef.current = document.activeElement;
+    pointerDownRef.current = null;
+    dirtyRef.current = false;
     const dialog = dialogRef.current;
     if (dialog) {
       const firstInput = dialog.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled])');
@@ -104,19 +108,31 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
 
   if (!isOpen) return null;
 
-  // Clicking the backdrop of a form modal is one mis-drag away from losing
-  // the whole draft. Keep the dialog open and return focus to it; explicit
-  // close controls (X, Cancel, Escape) still work.
+  // Clicking the backdrop closes the dialog, but only on a real click. A
+  // drag (text selection, a slipped pointer) or a form the user has edited
+  // must not dismiss the draft; X, Cancel and Escape still do.
+  const handleBackdropMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+    pointerDownRef.current = e.target === e.currentTarget ? { x: e.clientX, y: e.clientY } : null;
+  };
   const handleBackdropClick = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const first = dialog.querySelector('button:not([disabled])');
-    (first as HTMLElement | null)?.focus();
+    const start = pointerDownRef.current;
+    pointerDownRef.current = null;
+    if (!start) return;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+    if (dirtyRef.current) return;
+    if (window.getSelection()?.toString()) return;
+    onCloseRef.current?.();
   };
+  const markDirty = () => { dirtyRef.current = true; };
 
   return createPortal(
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="presentation">
+    <div
+      className="modal-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+      onClick={handleBackdropClick}
+      role="presentation"
+    >
       <div
         ref={dialogRef}
         className={`modal-window modal-${size}`}
@@ -124,6 +140,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }: { isOpen?:
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
+        onInput={markDirty}
+        onChange={markDirty}
       >
         {onClose && (
           <button

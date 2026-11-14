@@ -33,7 +33,10 @@ const AuthPage = () => {
 
   useEffect(() => {
     if (!langOpen) return;
-    const onDoc = (e: MouseEvent) => { if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      if (window.getSelection()?.toString()) return;
+      if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLangOpen(false); };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);

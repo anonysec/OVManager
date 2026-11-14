@@ -563,6 +563,9 @@ const UserManagement = () => {
   useEffect(() => {
     if (!rowMenu) return undefined;
     const close = (e: Event) => {
+      // A drag that selects text can end outside the menu; that is not a
+      // dismiss gesture.
+      if (window.getSelection()?.toString()) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.closest('.um-rowmenu-panel') || el.closest('.um-rowmenu-trigger'))) return;
       setRowMenu(null);
