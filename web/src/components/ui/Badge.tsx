@@ -22,6 +22,7 @@ const ICONS: Record<string, IconType> = {
   offline: FiXCircle,
   warning: FiAlertTriangle,
   danger: FiAlertTriangle,
+  away: FiCircle,
   idle: FiCircle,
 };
 
@@ -30,6 +31,7 @@ const TONES: Record<string, string> = {
   offline: 'danger',
   warning: 'warning',
   danger: 'danger',
+  away: 'neutral',
   idle: 'neutral',
 };
 

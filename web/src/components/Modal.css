@@ -13,6 +13,7 @@
   animation: ovFade 0.18s ease both;
 }
 .modal-window {
+  position: relative;
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
@@ -45,6 +46,14 @@
 }
 .modal-close:hover { color: var(--orange); border-color: var(--orange); }
 .modal-close:focus-visible { outline: none; border-color: var(--focus-ring); box-shadow: var(--focus-ring-shadow); }
+/* Floating close sits in the top-right corner, above the scroll area. */
+.modal-close--floating {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  z-index: 3;
+}
+.modal-window:has(.modal-close--floating) .modal-header { padding-inline-end: 58px; }
 .modal-body { padding: 22px; }
 @keyframes ovFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ovPop { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }

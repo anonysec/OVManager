@@ -37,7 +37,7 @@ const statusOf = (u: any) => {
   if (d < 0 || d === -Infinity) return u.is_active === false ? 'offline' : 'danger';
   if (u.is_active === false) return 'offline';
   if (d <= 7) return 'warning';
-  return 'idle';
+  return 'away';
 };
 
 const statusLabel = (u: any, t: any) => {
@@ -46,6 +46,7 @@ const statusLabel = (u: any, t: any) => {
   const d = daysUntil(u.expiry_date);
   if (d < 0) return t('expired');
   if (u.is_active === false) return t('disabled');
+  if (d <= 7) return t('expiringSoon', 'Expiring soon');
   return t('statusOffline');
 };
 

@@ -831,7 +831,7 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
     label = t('tlsSelfSigned', 'Self-signed');
     tone = 'is-soon';
   } else if (pin?.pinned && !pin.match) {
-    label = t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate');
+    label = t('nodeTlsPinMismatch', 'Does not match the live certificate');
     tone = 'is-critical';
   }
 
@@ -855,7 +855,7 @@ const CertPinSection = ({ pin, onRepin, onConfirmRepin, repinPrompt, busy, resul
       <div className="nd-pin-head">
         <span className="nd-pin-title">{t('nodeTlsPinTitle', 'TLS certificate pin')}</span>
         <span className={`nd-pin-chip ${match ? 'is-ok' : 'is-mismatch'}`}>
-          {match ? t('nodeTlsPinMatch', 'Pin matches the live certificate') : t('nodeTlsPinMismatch', 'Pin does NOT match the live certificate')}
+          {match ? t('nodeTlsPinMatch', 'Matches the live certificate') : t('nodeTlsPinMismatch', 'Does not match the live certificate')}
         </span>
       </div>
       <dl className="nd-pin-meta">

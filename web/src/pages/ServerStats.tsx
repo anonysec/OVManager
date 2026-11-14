@@ -78,9 +78,11 @@ const deriveNotifications = ({ users, nodes, nodeStatus, serverNotifs, probesRea
 
 const userStatusOf = (u: any) => {
   if (u.online || Number(u.active_connections || 0) > 0) return 'online';
-  if (daysUntil(u.expiry_date) < 0) return 'danger';
+  const d = daysUntil(u.expiry_date);
+  if (d < 0) return 'danger';
   if (u.is_active === false) return 'offline';
-  return 'idle';
+  if (d <= 7) return 'warning';
+  return 'away';
 };
 
 const statusLabelFor = (u: any, t: any) => {
@@ -88,6 +90,7 @@ const statusLabelFor = (u: any, t: any) => {
   if (st === 'online') return t('statusOnline', 'Online');
   if (st === 'danger') return t('expired', 'Expired');
   if (st === 'offline') return t('disabled', 'Disabled');
+  if (st === 'warning') return t('expiringSoon', 'Expiring soon');
   return t('statusOffline', 'Offline');
 };
 

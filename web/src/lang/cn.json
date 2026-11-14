@@ -121,6 +121,7 @@
   "notifEmpty": "无活跃通知，所有系统正常。",
   "youHaveNotif": "您有 {{count}} 条通知",
   "noNotif": "无通知",
+  "expiringSoon": "即将到期",
   "expired": "已过期",
   "disabled": "已禁用",
   "never": "从未",
