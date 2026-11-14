@@ -151,6 +151,14 @@ const DataTable = ({
                     key={k}
                     className={`dt-row${checked ? ' dt-selected' : ''}${onRowClick ? ' dt-clickable' : ''}`}
                     aria-selected={selectable ? checked : undefined}
+                    tabIndex={onRowClick ? 0 : undefined}
+                    onKeyDown={onRowClick ? (e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onRowClick(row, e);
+                      }
+                    } : undefined}
                     onClick={onRowClick ? (e) => {
                       if (window.getSelection()?.toString()) return;
                       const el = e.target as HTMLElement | null;

@@ -146,4 +146,16 @@ describe('UserManagement row detail', () => {
     fireEvent.click(checkbox);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('opens the detail dialog with Enter on a focused row', async () => {
+    renderPage(taggedUsers(1));
+    const row = await waitFor(() => {
+      const el = document.querySelector('.dt-row') as HTMLElement;
+      expect(el).toBeTruthy();
+      return el;
+    });
+    fireEvent.keyDown(row, { key: 'Enter' });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('User: user1')).toBeTruthy();
+  });
 });

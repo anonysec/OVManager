@@ -320,18 +320,19 @@
 
 /* --- Icon Buttons (uniform size/style) --- */
 .icon-btn {
-  background: none;
-  border: none;
+  background: transparent;
+  border: 1px solid var(--border);
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 6px;
+  border-radius: 7px;
+  transition: all 0.12s ease;
+  display: inline-grid;
+  place-items: center;
   width: 2rem;
   height: 2rem;
+  min-width: 32px;
+  min-height: 32px;
   font-size: 1rem;
   position: relative;
 }
@@ -339,6 +340,19 @@
 .icon-btn:hover {
   color: var(--text-primary);
   background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.icon-btn.danger {
+  color: var(--danger-text);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger-contrast);
+  background: var(--danger-text);
+  border-color: var(--danger-text);
 }
 
 .icon-btn.active {
@@ -347,9 +361,9 @@
 }
 
 .icon-btn.has-alerts {
-  background: var(--danger-color);
-  color: #fff;
-  border: 1px solid var(--danger-color);
+  background: var(--danger);
+  color: var(--danger-contrast);
+  border: 1px solid var(--danger);
   border-radius: 9999px;
 }
 .icon-btn.has-alerts::after {
@@ -361,7 +375,7 @@
   position: static;
   margin-inline-start: 4px;
   background: transparent;
-  color: #fff;
+  color: var(--danger-contrast);
   font-size: 0.625rem;
   font-weight: 700;
   padding: 0;
@@ -384,8 +398,8 @@
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: var(--accent-color);
-  color: #000;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
@@ -998,7 +1012,7 @@
 .list-table th .sort-ic { display: inline-block; vertical-align: middle; margin-inline-start: 4px; color: var(--orange); }
 .list-table td.col-check, .list-table th.col-check { width: 38px; text-align: center; }
 .list-table tr.selected { background: rgba(255,122,30,.08); }
-.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: var(--accent-color, var(--orange)); color: #15110a; font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
+.list-table .avatar-sm { width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center; background: var(--accent-color, var(--orange)); color: var(--accent-contrast); font-weight: 800; font-size: 12px; margin-inline-end: 8px; }
 html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color, var(--orange)); color: var(--accent-contrast); }
 /* Status pills: success / info / warning / danger / muted, each as a soft
    fill plus its matching read-safe text tone.
@@ -1009,7 +1023,7 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
 .status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
 .status-pill.offline, .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
 .status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
-.expiry-soon { color: #ffb454; font-weight: 700; }
+.expiry-soon { color: var(--warning-text); font-weight: 700; }
 
 .flag-icon {
   display: inline-flex;
@@ -1116,15 +1130,8 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
   background: var(--danger-text) !important;
   border-color: var(--danger-text) !important;
 }
-/* Resting state is muted on line; hover lifts to brand colour, or to danger
-   for the delete action. The .danger variant carries a soft danger fill at
-   rest, so it is distinct from edit without relying on hover. */
-.icon-btn { background: transparent !important; color: var(--muted) !important; border: 1px solid var(--line) !important; border-radius: 7px !important; padding: 6px !important; cursor: pointer; transition: all .12s ease; min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; }
-.icon-btn:hover { background: var(--surface-hover) !important; color: var(--text-primary) !important; border-color: var(--border-strong) !important; }
-.icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
-.icon-btn.danger:hover { color: var(--danger-contrast) !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
 .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
-html[data-theme="light"] .list-table th { background: #eef2f7; color: #526071; }
+html[data-theme="light"] .list-table th { background: var(--surface-2); color: var(--text-secondary); }
 .notif-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .notif-head strong { font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--text); }
 .notif-refresh { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: var(--font-size-md); min-width: 44px; min-height: 44px; width: 44px; height: 44px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; }
@@ -1233,8 +1240,8 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--orange);
-  color: #000;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-size: var(--font-size-sm);
   font-weight: 800;
 }
@@ -1497,7 +1504,7 @@ html[data-theme="light"] body { background: var(--bg); color: var(--text-primary
 
 html[data-theme="light"] .list-table tbody tr:hover td { background: rgba(255,122,30,.07); }
 html[data-theme="light"] .modal-window, html[data-theme="light"] .notification-popover { background: var(--surface-1); }
-html[data-theme="light"] .search-field { background: #f4f6f9; border-color: #dfe3ea; }
+html[data-theme="light"] .search-field { background: var(--surface-2); border-color: var(--border); }
 
 @media (max-width: 1180px) {
   .ops-userbar { justify-content: flex-start; }
@@ -1519,39 +1526,39 @@ html[data-theme="light"] .ops-panel { background: var(--surface-1); box-shadow: 
 html[data-theme="light"] .list-table thead th,
 html[data-theme="light"] .user-list-table thead th,
 html[data-theme="light"] .node-list-table thead th,
-html[data-theme="light"] .audit-table thead th { background: #eef3f9; color: #5b6473; }
+html[data-theme="light"] .audit-table thead th { background: var(--surface-2); color: var(--text-secondary); }
 html[data-theme="light"] .user-list-table tbody tr,
 html[data-theme="light"] .node-list-table tbody tr,
 html[data-theme="light"] .audit-table tbody tr { background: var(--surface-1); }
 html[data-theme="light"] .user-list-table tbody tr:nth-child(even),
 html[data-theme="light"] .node-list-table tbody tr:nth-child(even),
-html[data-theme="light"] .audit-table tbody tr:nth-child(even) { background: #fbfcfe; }
+html[data-theme="light"] .audit-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 40%, var(--surface-1)); }
 html[data-theme="light"] .user-list-table td,
 html[data-theme="light"] .node-list-table td,
-html[data-theme="light"] .audit-table td { color: #11161f; border-color: #e3e8ef; }
+html[data-theme="light"] .audit-table td { color: var(--text-primary); border-color: var(--border); }
 html[data-theme="light"] .user-list-table tbody tr:hover td,
 html[data-theme="light"] .node-list-table tbody tr:hover td,
 html[data-theme="light"] .audit-table tbody tr:hover td { background: rgba(255,122,30,.07); }
 html[data-theme="light"] .input-group input,
 html[data-theme="light"] .input-group select,
-html[data-theme="light"] .search-input { background: var(--surface-1) !important; color: #11161f !important; border-color: var(--border) !important; }
-html[data-theme="light"] .dot { background: #aab2bf; }
+html[data-theme="light"] .search-input { background: var(--surface-1) !important; color: var(--text-primary) !important; border-color: var(--border) !important; }
+html[data-theme="light"] .dot { background: var(--text-muted); }
 html[data-theme="light"] .modal, html[data-theme="light"] .modal-content { background: var(--surface-1); }
-html[data-theme="light"] .notification-popover { background: var(--surface-1); color: #11161f; box-shadow: 0 24px 60px rgba(20,30,50,.18); }
-html[data-theme="light"] .notification-item { border-color: #e3e8ef; }
+html[data-theme="light"] .notification-popover { background: var(--surface-1); color: var(--text-primary); box-shadow: 0 24px 60px rgba(20,30,50,.18); }
+html[data-theme="light"] .notification-item { border-color: var(--border); }
 /* --accent-contrast already resolves per theme; no override needed. */
-html[data-theme="light"] .icon-btn { color: #5b6473 !important; background: #f1f4f9 !important; }
-html[data-theme="light"] .icon-btn:hover { color: var(--text-primary) !important; border-color: var(--border-strong) !important; }
+html[data-theme="light"] .icon-btn { color: var(--text-secondary); background: var(--surface-2); }
+html[data-theme="light"] .icon-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
 /* Light theme danger icon-btn keeps the soft-danger fill + foreground so the
    destructive action stays distinct from edit. */
-html[data-theme="light"] .icon-btn.danger { color: var(--danger-text) !important; border-color: var(--danger-soft) !important; background: var(--danger-soft) !important; }
-html[data-theme="light"] .icon-btn.danger:hover { color: var(--danger-contrast) !important; background: var(--danger-text) !important; border-color: var(--danger-text) !important; }
-html[data-theme="light"] .empty-state { color: #5b6473; }
+html[data-theme="light"] .icon-btn.danger { color: var(--danger-text); border-color: var(--danger-soft); background: var(--danger-soft); }
+html[data-theme="light"] .icon-btn.danger:hover { color: var(--danger-contrast); background: var(--danger-text); border-color: var(--danger-text); }
+html[data-theme="light"] .empty-state { color: var(--text-secondary); }
 html[data-theme="light"] .ops-panel header span.has-tip, html[data-theme="light"] .panel-tip { background: rgba(30,40,60,.14); }
 html[data-theme="light"] .ops-nav-link.active { background: rgba(255,122,30,.16); color: var(--orange); font-weight: 700; }
 html[data-theme="light"] .seg-toggle button.active { color: var(--accent-contrast); }
 /* ---- Light mode: topbar + brand visibility ---- */
-html[data-theme="light"] .ops-userbar button { color: #5b6473 !important; }
+html[data-theme="light"] .ops-userbar button { color: var(--text-secondary) !important; }
 html[data-theme="light"] .ops-userbar button:hover { color: var(--text-primary) !important; }
 /* ---- Light mode: borderless dashboard panels (shadow only) ---- */
 html[data-theme="light"] .user-list-table, html[data-theme="light"] .node-list-table, html[data-theme="light"] .audit-table { border: none !important; }
@@ -1573,7 +1580,7 @@ html[dir="rtl"] .modal-window .modal-footer { display: flex; flex-direction: row
 
 
 
-.row-menu-item.danger:hover { background: rgba(255,83,104,.10); color: #ff7a8a; }
+.row-menu-item.danger:hover { background: var(--danger-soft); color: var(--danger-text); }
 
 /* Over-limit diagnostics: the extra row is a session awaiting keepalive
    expiry, so the summary marks it as pending instead of showing 3/2. */
