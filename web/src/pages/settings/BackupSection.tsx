@@ -191,11 +191,11 @@ const BackupSection = () => {
       <Card title={t('backupTitle', 'Database Backup')} icon={FiDatabase}>
         <div className="sp-btn-group sp-mb-16">
           <button className="btn btn-sm" disabled={!!busy} aria-busy={busy === 'create'} onClick={create}>
-            {busy === 'create' ? <span className="button-spinner" aria-hidden="true" /> : <><FiUpload size={13} aria-hidden="true" /> {t('createBackup', 'Create backup')}</>}
+            {busy === 'create' ? <span className="button-spinner" aria-hidden="true" /> : <><FiUpload size={14} aria-hidden="true" /> {t('createBackup', 'Create backup')}</>}
           </button>
           {backups.length > 0 && (
             <button className="btn btn-sm btn-secondary" onClick={download}>
-              <FiDownload size={13} /> {t('downloadLatest', 'Download latest')}
+              <FiDownload size={14} /> {t('downloadLatest', 'Download latest')}
             </button>
           )}
         </div>
@@ -207,7 +207,7 @@ const BackupSection = () => {
           <div className="sp-backup-list">
             {backups.map(b => (
               <div key={b.name} className="sp-backup-row">
-                <FiDatabase size={13} aria-hidden="true" />
+                <FiDatabase size={14} aria-hidden="true" />
                 <span className="sp-backup-name">{b.name}</span>
                 {b.verified === true && <span className="sp-backup-size">{t('backupVerified', 'Verified')}</span>}
                 {b.verified === false && <span className="sp-backup-size">{t('backupInvalid', 'Invalid')}</span>}
@@ -336,7 +336,7 @@ const BackupSection = () => {
           <input id="sp-restore-file" type="file" accept=".db" onChange={e => setRestoreFile(e.target.files?.[0] || null)} className="sp-file-input" aria-label={t('selectBackupFile', 'Select backup file')} />
         </div>
         <button className="btn btn-sm" disabled={!restoreFile || !!busy} aria-busy={busy === 'restore'} onClick={askRestore}>
-          {busy === 'restore' ? <span className="button-spinner" aria-hidden="true" /> : <><FiRefreshCw size={13} aria-hidden="true" /> {t('restoreButton', 'Restore')}</>}
+          {busy === 'restore' ? <span className="button-spinner" aria-hidden="true" /> : <><FiRefreshCw size={14} aria-hidden="true" /> {t('restoreButton', 'Restore')}</>}
         </button>
       </Card>
       <ConfirmModal open={confirm.open} onClose={closeConfirm} onConfirm={confirm.onConfirm || (() => {})} title={confirm.title} message={confirm.message} danger confirmLabel={t('restoreButton', 'Restore')} cancelLabel={t('cancelButton', 'Cancel')} />

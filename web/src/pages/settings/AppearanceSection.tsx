@@ -136,7 +136,7 @@ const AppearanceSection = () => {
               onClick={() => setTheme(item.id)}
               aria-pressed={theme === item.id}
             >
-              <item.icon size={15} aria-hidden="true" />
+              <item.icon size={16} aria-hidden="true" />
               <span>{item.label}</span>
             </button>
           ))}
@@ -175,7 +175,7 @@ const AppearanceSection = () => {
           ) : (
             <>
               <button type="button" className="btn btn-primary btn-sm" onClick={install}>
-                <FiDownload size={13} aria-hidden="true" />
+                <FiDownload size={14} aria-hidden="true" />
                 <span>{t('pwaInstallButton', 'Install app')}</span>
               </button>
               <p className="sp-hint">{t('pwaInstallDesc', 'Install OVManager on this device for a full-screen window.')}</p>

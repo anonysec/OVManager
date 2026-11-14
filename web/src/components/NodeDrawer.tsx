@@ -837,7 +837,7 @@ const TlsChip = ({ status, t }: { status?: any; t?: any }) => {
 
   return (
     <div className={`nd-cert ${tone}`}>
-      <FiShield size={13} aria-hidden="true" />
+      <FiShield size={14} aria-hidden="true" />
       <span>{label}</span>
     </div>
   );

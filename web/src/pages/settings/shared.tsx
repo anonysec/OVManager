@@ -18,7 +18,7 @@ const Card = ({ title, icon: Icon, children, className = '' }: any) => (
   <div className={`sp-card ${className}`}>
     {title && (
       <div className="sp-card-head">
-        {Icon && <Icon size={15} aria-hidden="true" />}
+        {Icon && <Icon size={16} aria-hidden="true" />}
         <span>{title}</span>
       </div>
     )}

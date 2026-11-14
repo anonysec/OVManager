@@ -261,7 +261,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
           actions={(
             <Button
               variant="secondary" size="sm"
-              icon={<FiRefreshCw size={13} aria-hidden="true" />}
+              icon={<FiRefreshCw size={14} aria-hidden="true" />}
               onClick={() => load()}
             >
               {t('refresh', 'Refresh')}
@@ -337,7 +337,7 @@ const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
           {hideHeader && (
             <Button
               variant="secondary" size="sm"
-              icon={<FiRefreshCw size={13} aria-hidden="true" />}
+              icon={<FiRefreshCw size={14} aria-hidden="true" />}
               onClick={() => load()}
             >
               {t('refresh', 'Refresh')}

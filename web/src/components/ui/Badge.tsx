@@ -37,7 +37,7 @@ export const StatusBadge = ({ status = 'idle', label }: { status?: string; label
   const Icon: IconType = ICONS[status] || FiHelpCircle;
   return (
     <Badge tone={TONES[status] || 'neutral'} className={`status-badge status-${status}`}>
-      <Icon size={13} className="status-badge-icon" aria-hidden="true" />
+      <Icon size={14} className="status-badge-icon" aria-hidden="true" />
       <span>{label}</span>
     </Badge>
   );

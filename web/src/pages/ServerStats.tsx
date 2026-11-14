@@ -463,7 +463,7 @@ const ServerStats = () => {
             title={`${t('manage', 'Manage')} ${u.name}`}
             aria-label={`${t('manage', 'Manage')} ${u.name}`}
             onClick={() => navigate(`/users?user=${u.uuid}`)}>
-            <FiArrowRight size={15} aria-hidden="true" />
+            <FiArrowRight size={16} aria-hidden="true" />
           </button>
         </span>
       ),
@@ -495,7 +495,7 @@ const ServerStats = () => {
             title={`${t('manage', 'Manage')} ${u.name}`}
             aria-label={`${t('manage', 'Manage')} ${u.name}`}
             onClick={() => navigate(`/users?user=${u.uuid}`)}>
-            <FiArrowRight size={15} aria-hidden="true" />
+            <FiArrowRight size={16} aria-hidden="true" />
           </button>
         </span>
       ),

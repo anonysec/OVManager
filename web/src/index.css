@@ -1095,11 +1095,11 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
 .list-table.audit-table .icon-btn {
   min-width: 32px;
   min-height: 32px;
-  padding: 7px !important;
-  border-radius: 7px !important;
-  background: transparent !important;
-  color: var(--muted) !important;
-  border: 1px solid var(--line) !important;
+  padding: 7px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
   cursor: pointer;
   transition: all .12s ease;
   display: inline-grid;
@@ -1108,23 +1108,23 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
 .list-table.user-list-table .icon-btn:hover,
 .list-table.node-list-table .icon-btn:hover,
 .list-table.audit-table .icon-btn:hover {
-  background: var(--surface-hover) !important;
-  border-color: var(--border-strong) !important;
-  color: var(--text-primary) !important;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 .list-table.user-list-table .icon-btn.danger,
 .list-table.node-list-table .icon-btn.danger,
 .list-table.audit-table .icon-btn.danger {
-  color: var(--danger-text) !important;
-  border-color: var(--danger-soft) !important;
-  background: var(--danger-soft) !important;
+  color: var(--danger-text);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
 }
 .list-table.user-list-table .icon-btn.danger:hover,
 .list-table.node-list-table .icon-btn.danger:hover,
 .list-table.audit-table .icon-btn.danger:hover {
-  color: var(--danger-contrast) !important;
-  background: var(--danger-text) !important;
-  border-color: var(--danger-text) !important;
+  color: var(--danger-contrast);
+  background: var(--danger-text);
+  border-color: var(--danger-text);
 }
 .icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; box-shadow: var(--focus-ring-shadow); }
 html[data-theme="light"] .list-table th { background: var(--surface-2); color: var(--text-secondary); }

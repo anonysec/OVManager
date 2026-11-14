@@ -413,12 +413,12 @@ const NodeManagement = () => {
                   </div>
                   <div className="nm-actions" role="group" aria-label={`${node.name} ${t('actions', 'Actions')}`}>
                     <Button
-                      variant="ghost" size="sm" icon={<FiSliders size={15} />}
+                      variant="ghost" size="sm" icon={<FiSliders size={16} />}
                       title={t('manage', 'Manage')} aria-label={`${t('manage', 'Manage')} ${node.name}`}
                       onClick={() => openDrawer(node, 'settings')}
                     />
                     <Button
-                      variant="ghost" size="sm" icon={<FiPower size={15} />}
+                      variant="ghost" size="sm" icon={<FiPower size={16} />}
                       className={`nm-power-btn--${health}`}
                       loading={Boolean(busy[`toggle-${node.id}`])}
                       title={node.status ? t('disable', 'Disable') : t('enable', 'Enable')}
@@ -426,7 +426,7 @@ const NodeManagement = () => {
                       onClick={() => handleToggleStatus(node)}
                     />
                     <Button
-                      variant="danger" size="sm" icon={<FiTrash2 size={15} />}
+                      variant="danger" size="sm" icon={<FiTrash2 size={16} />}
                       title={t('deleteButton', 'Delete')} aria-label={`${t('deleteButton', 'Delete')} ${node.name}`}
                       onClick={() => handleDelete(node)}
                     />
@@ -446,7 +446,7 @@ const NodeManagement = () => {
                     )}
                     {(tls.tone === 'warning' || tls.tone === 'danger') && (
                       <span className={`nm-meta-chip nm-meta-chip--${tls.tone === 'danger' ? 'danger' : 'warn'}`}>
-                        <FiShield size={11} aria-hidden="true" />
+                        <FiShield size={12} aria-hidden="true" />
                         {tls.label}
                       </span>
                     )}

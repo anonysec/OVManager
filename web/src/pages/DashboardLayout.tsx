@@ -107,7 +107,7 @@ const SetupBanner = () => {
         </span>
       </div>
       <Link to="/setup" className="setup-banner-link">
-        {t('setupBannerAction', 'Open setup')} <FiArrowRight size={13} aria-hidden="true" />
+        {t('setupBannerAction', 'Open setup')} <FiArrowRight size={14} aria-hidden="true" />
       </Link>
       <button
         type="button"
@@ -116,7 +116,7 @@ const SetupBanner = () => {
         aria-label={t('setupDismiss', 'Dismiss')}
         title={t('setupDismiss', 'Dismiss')}
       >
-        <FiX size={15} aria-hidden="true" />
+        <FiX size={16} aria-hidden="true" />
       </button>
     </div>
   );

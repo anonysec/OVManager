@@ -702,8 +702,8 @@ const UserManagement = () => {
       key: 'actions', label: t('th_actions', 'Actions'),
       render: (u: any) => (
         <span className="dt-actions" role="group" aria-label={`${u.name} ${t('actions', 'Actions')}`}>
-          <button type="button" className="dt-icon-btn" title={t('rowEdit', 'Edit')} aria-label={`${t('rowEdit', 'Edit')} ${u.name}`} onClick={() => handleEdit(u)}><FiEdit2 size={15} /></button>
-          <button type="button" className="dt-icon-btn is-danger" title={keepOneUser ? t('keepOneUser', 'You must keep at least one user') : t('rowDelete', 'Delete')} aria-label={`${t('rowDelete', 'Delete')} ${u.name}`} disabled={keepOneUser} onClick={() => handleDelete(u)}><FiTrash2 size={15} /></button>
+          <button type="button" className="dt-icon-btn" title={t('rowEdit', 'Edit')} aria-label={`${t('rowEdit', 'Edit')} ${u.name}`} onClick={() => handleEdit(u)}><FiEdit2 size={16} /></button>
+          <button type="button" className="dt-icon-btn is-danger" title={keepOneUser ? t('keepOneUser', 'You must keep at least one user') : t('rowDelete', 'Delete')} aria-label={`${t('rowDelete', 'Delete')} ${u.name}`} disabled={keepOneUser} onClick={() => handleDelete(u)}><FiTrash2 size={16} /></button>
           <button
             type="button"
             className="dt-icon-btn um-rowmenu-trigger"
@@ -791,14 +791,14 @@ const UserManagement = () => {
       {selected.size > 0 && (
         <div className="um-bulkbar" role="toolbar" aria-label={t('bulkActions', 'Bulk actions')}>
           <strong>{t('selectedCount', '{{count}} selected', { count: selected.size })}</strong>
-          <Button size="sm" disabled={bulkBusy || anySelectedDisabled} icon={<FiClock size={13} aria-hidden="true" />} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}>{t('extend30d', 'Extend +30 days')}</Button>
-          <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={13} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
-          <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={13} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
-          <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
+          <Button size="sm" disabled={bulkBusy || anySelectedDisabled} icon={<FiClock size={14} aria-hidden="true" />} onClick={() => confirmBulk('extend30', 'extend', 'confirmBulkExtend', t('extend30d', 'Extend +30 days'))}>{t('extend30d', 'Extend +30 days')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiUserCheck size={14} aria-hidden="true" />} onClick={() => confirmBulk('enable', 'enableUsers', 'confirmBulkEnable', t('enable', 'Enable'))}>{t('enable', 'Enable')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiUserX size={14} aria-hidden="true" />} onClick={() => confirmBulk('disable', 'disableUsers', 'confirmBulkDisable', t('disable', 'Disable'))}>{t('disable', 'Disable')}</Button>
+          <Button size="sm" disabled={bulkBusy} icon={<FiRefreshCw size={14} aria-hidden="true" />} onClick={() => confirmBulk('reset', 'resetUsage', 'confirmBulkReset', t('resetUsageButton', 'Reset usage'))}>{t('resetUsageButton', 'Reset usage')}</Button>
           {selectedExpiredCount > 0 && (
-            <Button size="sm" variant="danger" disabled={bulkBusy} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('purge', 'purgeExpired', 'confirmPurgeExpired', t('purgeExpired', 'Delete expired'))}>{t('purgeExpired', 'Delete expired')} ({selectedExpiredCount})</Button>
+            <Button size="sm" variant="danger" disabled={bulkBusy} icon={<FiTrash2 size={14} aria-hidden="true" />} onClick={() => confirmBulk('purge', 'purgeExpired', 'confirmPurgeExpired', t('purgeExpired', 'Delete expired'))}>{t('purgeExpired', 'Delete expired')} ({selectedExpiredCount})</Button>
           )}
-          <Button size="sm" variant="danger" disabled={bulkBusy || bulkDeletesAll} title={bulkDeletesAll ? t('keepOneUser', 'You must keep at least one user') : undefined} icon={<FiTrash2 size={13} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
+          <Button size="sm" variant="danger" disabled={bulkBusy || bulkDeletesAll} title={bulkDeletesAll ? t('keepOneUser', 'You must keep at least one user') : undefined} icon={<FiTrash2 size={14} aria-hidden="true" />} onClick={() => confirmBulk('delete', 'deleteUsers', 'confirmBulkDelete', t('delete', 'Delete'))}>{t('delete', 'Delete')}</Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t('clear', 'Clear')}</Button>
         </div>
       )}

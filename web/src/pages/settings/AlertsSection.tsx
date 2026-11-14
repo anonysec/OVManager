@@ -153,7 +153,7 @@ const AlertsSection = () => {
         <div className="sp-alert-list">
           {ALERTS.map((item) => (
             <label key={item.key} className="sp-alert-row">
-              <span className="sp-alert-label"><item.icon size={13} aria-hidden="true" /> {item.label}</span>
+              <span className="sp-alert-label"><item.icon size={14} aria-hidden="true" /> {item.label}</span>
               <span className="sp-toggle">
                 <input type="checkbox" checked={prefs[item.key] !== false} onChange={(e) => toggle(item.key, e.target.checked)} />
                 <span className="sp-toggle-track"><span className="sp-toggle-thumb" /></span>

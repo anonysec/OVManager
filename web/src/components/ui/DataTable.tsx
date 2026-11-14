@@ -133,7 +133,7 @@ const DataTable = ({
                         >
                           <span>{c.label}</span>
                           <span className="dt-sort-ico" aria-hidden="true">
-                            {active ? (sortDir === 'asc' ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />) : <FiChevronDown size={13} className="dt-sort-idle" />}
+                            {active ? (sortDir === 'asc' ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />) : <FiChevronDown size={14} className="dt-sort-idle" />}
                           </span>
                         </button>
                       ) : c.label}

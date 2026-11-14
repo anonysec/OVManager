@@ -61,7 +61,7 @@ class SectionBoundaryInner extends Component<SectionBoundaryProps, SectionBounda
             <span>{t('sectionErrorDesc', 'The rest of the page is still usable.')}</span>
           </div>
           <button type="button" className="btn btn-sm btn-secondary" onClick={this.handleRetry}>
-            <FiRefreshCw size={13} aria-hidden="true" />
+            <FiRefreshCw size={14} aria-hidden="true" />
             <span>{t('retry', 'Retry')}</span>
           </button>
         </div>

@@ -303,7 +303,7 @@ const SystemSection = () => {
               >
                 {updateAction === 'check'
                   ? spin
-                  : <><FiRefreshCw size={13} aria-hidden="true" /> {t('updateCheck', 'Check for updates')}</>}
+                  : <><FiRefreshCw size={14} aria-hidden="true" /> {t('updateCheck', 'Check for updates')}</>}
               </button>
               {updateInfo?.update_available && (
                 <button
@@ -314,7 +314,7 @@ const SystemSection = () => {
                 >
                   {updateAction === 'run'
                     ? spin
-                    : <><FiDownload size={13} aria-hidden="true" /> {t('updateNow', 'Update now')}</>}
+                    : <><FiDownload size={14} aria-hidden="true" /> {t('updateNow', 'Update now')}</>}
                 </button>
               )}
             </div>
@@ -338,13 +338,13 @@ const SystemSection = () => {
         <p className="sp-hint sp-mb-12">{t('maintenanceDesc', 'Run background jobs on demand. These also run automatically on a schedule.')}</p>
         <div className="sp-btn-group">
           <button className="btn btn-sm" disabled={!!busy} aria-busy={busy === '/metrics/collect'} onClick={() => run('/metrics/collect', t('collectNow', 'Metrics'))}>
-            {busy === '/metrics/collect' ? spin : <><FiZap size={13} aria-hidden="true" /> {t('collectNow', 'Collect metrics')}</>}
+            {busy === '/metrics/collect' ? spin : <><FiZap size={14} aria-hidden="true" /> {t('collectNow', 'Collect metrics')}</>}
           </button>
           <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/sync-limits'} onClick={() => run('/maintenance/sync-limits', t('syncLimits', 'Limits'))}>
-            {busy === '/maintenance/sync-limits' ? spin : <><FiRefreshCw size={13} aria-hidden="true" /> {t('syncLimits', 'Sync limits')}</>}
+            {busy === '/maintenance/sync-limits' ? spin : <><FiRefreshCw size={14} aria-hidden="true" /> {t('syncLimits', 'Sync limits')}</>}
           </button>
           <button className="btn btn-sm btn-secondary" disabled={!!busy} aria-busy={busy === '/maintenance/restart'} onClick={restartPanel}>
-            {busy === '/maintenance/restart' ? spin : <><FiPower size={13} aria-hidden="true" /> {t('restartPanel', 'Restart panel')}</>}
+            {busy === '/maintenance/restart' ? spin : <><FiPower size={14} aria-hidden="true" /> {t('restartPanel', 'Restart panel')}</>}
           </button>
         </div>
         {isOwner && (
@@ -388,7 +388,7 @@ const SystemSection = () => {
                 title={cleanPreviewed !== cleanKey ? t('cleanupPreviewFirst', 'Preview the filter first.') : undefined}
                 onClick={deleteCleanup}
               >
-                {cleanBusy === 'run' ? spin : <><FiTrash2 size={13} aria-hidden="true" /> {t('delete', 'Delete')}</>}
+                {cleanBusy === 'run' ? spin : <><FiTrash2 size={14} aria-hidden="true" /> {t('delete', 'Delete')}</>}
               </button>
               <button className="btn btn-sm btn-secondary" disabled={!!cleanBusy} aria-busy={cleanBusy === 'reset'} onClick={resetAllUsage}>
                 {cleanBusy === 'reset' ? spin : t('resetUsageButton', 'Reset Usage')}

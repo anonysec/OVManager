@@ -133,11 +133,11 @@ const SetupWizard = () => {
             {t('setupSameServerHint', 'Same server as OVManager? Run the command above here too. The OVNode installer prints the API key and the TLS certificate separately on its Ready card — paste both into Nodes → Add Node.')}
           </p>
           <div className="setup-actions">
-            <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/nodes')}>
+            <Button variant="primary" size="sm" icon={<FiExternalLink size={14} aria-hidden="true" />} onClick={() => navigate('/nodes')}>
               {t('setupOpenNodes', 'Open Nodes')}
             </Button>
             {!nodeDone && (
-              <Button variant="ghost" size="sm" icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={load}>
+              <Button variant="ghost" size="sm" icon={<FiRefreshCw size={14} aria-hidden="true" />} onClick={load}>
                 {t('setupRefresh', 'Refresh checks')}
               </Button>
             )}
@@ -148,7 +148,7 @@ const SetupWizard = () => {
           <p className="setup-hint">
             {t('setupNodeOwnerOnly', 'Only the panel owner can add nodes. Ask the owner to connect one, then press Refresh.')}
           </p>
-          <Button variant="ghost" size="sm" icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={load}>
+          <Button variant="ghost" size="sm" icon={<FiRefreshCw size={14} aria-hidden="true" />} onClick={load}>
             {t('setupRefresh', 'Refresh checks')}
           </Button>
         </div>
@@ -168,11 +168,11 @@ const SetupWizard = () => {
             </p>
           )}
           <div className="setup-actions">
-            <Button variant="primary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/users')}>
+            <Button variant="primary" size="sm" icon={<FiExternalLink size={14} aria-hidden="true" />} onClick={() => navigate('/users')}>
               {t('setupOpenUsers', 'Open Users')}
             </Button>
             {!userDone && (
-              <Button variant="ghost" size="sm" icon={<FiRefreshCw size={13} aria-hidden="true" />} onClick={load}>
+              <Button variant="ghost" size="sm" icon={<FiRefreshCw size={14} aria-hidden="true" />} onClick={load}>
                 {t('setupRefresh', 'Refresh checks')}
               </Button>
             )}
@@ -188,11 +188,11 @@ const SetupWizard = () => {
       done: configDone,
       content: (
         <div className="setup-actions">
-          <Button variant="secondary" size="sm" icon={<FiExternalLink size={13} aria-hidden="true" />} onClick={() => navigate('/users')}>
+          <Button variant="secondary" size="sm" icon={<FiExternalLink size={14} aria-hidden="true" />} onClick={() => navigate('/users')}>
             {t('setupOpenUsers', 'Open Users')}
           </Button>
           {!configDone && (
-            <Button variant="ghost" size="sm" icon={<FiCheck size={13} aria-hidden="true" />} onClick={markConfigDone}>
+            <Button variant="ghost" size="sm" icon={<FiCheck size={14} aria-hidden="true" />} onClick={markConfigDone}>
               {t('setupMarkDone', 'Mark as done')}
             </Button>
           )}
@@ -266,7 +266,7 @@ const SetupWizard = () => {
       </ol>
 
       <div className="setup-footer">
-        <Button variant="ghost" size="sm" icon={<FiX size={13} aria-hidden="true" />} onClick={skip}>
+        <Button variant="ghost" size="sm" icon={<FiX size={14} aria-hidden="true" />} onClick={skip}>
           {t('setupSkip', 'Skip for now')}
         </Button>
         <p className="setup-footer-note">

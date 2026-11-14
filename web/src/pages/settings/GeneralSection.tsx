@@ -181,7 +181,7 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
         <div className="sp-url-preview">
           <span className="sp-label-xs">{t('panelUrl', 'Full URL')}</span>
           <a href={panelUrl} target="_blank" rel="noopener noreferrer" className="sp-link">
-            {panelUrl} <FiExternalLink size={11} />
+            {panelUrl} <FiExternalLink size={12} />
           </a>
         </div>
         <p className="sp-hint">{urlPath ? t('urlpathActive', 'Panel served at /{path}/. Clear to serve at root.', { path: urlPath }) : t('urlpathRoot', 'Panel served at root (/).')}</p>
@@ -227,7 +227,7 @@ const GeneralSection = ({ shared, onEditingChange }: { shared?: SharedState; onE
         </Field>
         <div className="sp-btn-group sp-mt-18">
           <LoadingButton className="btn btn-sm" isLoading={profileSaving} onClick={saveProfile}>
-            <FiCheck size={13} /> {t('save', 'Save')}
+            <FiCheck size={14} /> {t('save', 'Save')}
           </LoadingButton>
         </div>
       </Card>
