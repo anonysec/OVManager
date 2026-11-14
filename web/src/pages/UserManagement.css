@@ -486,7 +486,7 @@
 
 .ud-cell {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3) var(--space-4);
@@ -496,8 +496,13 @@
 }
 
 .ud-ico {
-  display: inline-flex;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
   color: var(--text-secondary);
 }
 

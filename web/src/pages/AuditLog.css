@@ -110,3 +110,13 @@ html[dir='rtl'] .adt-detail {
     margin-inline-start: 0;
   }
 }
+
+/* ── Event detail dialog ─────────────────────────────────────────── */
+.udetail { display: flex; flex-direction: column; gap: 18px; }
+.udetail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.udetail-cell { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+.ud-k { display: block; font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 2px; }
+.udetail-cell strong { font-size: var(--font-size-sm); }
+.udetail-sub { display: flex; flex-direction: column; gap: var(--space-2); }
+.udetail-linkrow { display: flex; gap: var(--space-2); }
+.udetail-link { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-secondary); font-size: var(--font-size-xs); }

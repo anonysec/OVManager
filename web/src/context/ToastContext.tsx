@@ -84,7 +84,7 @@ export const ToastProvider = ({ children }: { children?: any }) => {
       // Network blips are one condition, not one per URL. A longer window and
       // one shared key keep a flaky link from stacking persistent toasts.
       const key = transient ? '__network__' : msg;
-      const windowMs = transient ? 30000 : DEDUPE_MS;
+      const windowMs = transient ? 15000 : DEDUPE_MS;
       const now = Date.now();
       const last = recentErrors.current.get(key) || 0;
       if (now - last < windowMs) return;

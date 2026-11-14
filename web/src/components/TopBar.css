@@ -78,7 +78,7 @@ html[data-theme="light"] .lang-dropdown { background: var(--surface-1); box-shad
 .topbar-search-trigger > svg {
   width: 16px;
   height: 16px;
-  color: var(--accent-color);
+  color: var(--text-secondary);
 }
 
 .topbar-search-trigger span {

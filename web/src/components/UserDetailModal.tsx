@@ -1,4 +1,3 @@
-import './UserDetailModal.css';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -221,7 +220,7 @@ const UserDetailModal = ({ user, isOpen, onClose, subscriptionLink, onEdit, onSe
           )}
           {showQr && qr && (
             <div className="ud-qr" aria-label={t('qrAlt', 'Subscription link QR code')}>
-              <img src={qr} alt={t('qrAlt', 'Subscription link QR code')} />
+              <img src={qr} alt={t('qrAlt', 'Subscription link QR code')} width={180} height={180} />
             </div>
           )}
           <p className="ud-note">{t('subIsOpenvpn')}</p>
