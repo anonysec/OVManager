@@ -208,6 +208,11 @@ input[type="password"]::-webkit-textfield-decoration-button {
   outline: none;
 }
 
+.login-lang select:focus-visible {
+  box-shadow: var(--focus-ring-shadow);
+  border-radius: var(--radius-sm);
+}
+
 .login-tabs {
   display: flex;
   gap: var(--space-2);

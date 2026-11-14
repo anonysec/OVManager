@@ -1019,10 +1019,6 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
    The idle mapping used --surface-3 + --text-secondary, which scored 4.45:1
    in light mode — right at the AA floor, and indistinguishable from "muted".
    info-soft + info-text clears 4.5:1 in both themes. */
-.status-pill.online, .status-pill.ok { background: var(--success-soft); color: var(--success-text); }
-.status-pill.info, .status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
-.status-pill.offline, .status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
-.status-pill.muted { background: var(--surface-3); color: var(--text-secondary); }
 .expiry-soon { color: var(--warning-text); font-weight: 700; }
 
 .flag-icon {
@@ -1152,7 +1148,6 @@ html[data-theme="light"] .list-table th { background: var(--surface-2); color: v
 /* Deliberately free of width/padding rules: duplicating them here caused
    cascade conflicts that made the portaled menu render wider/taller than the
    JS positioning expected. */
-.status-pill.expired { background: var(--warning-soft); color: var(--warning-text); }
 .toast-stack {
   position: fixed;
   inset-inline-end: 20px;
@@ -1276,10 +1271,6 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
   border-bottom: none;
 }
 
-.status-pill.ok { background: var(--success-soft); color: var(--success-text); }
-.status-pill.idle { background: var(--info-soft); color: var(--info-text); }
-.status-pill.danger { background: var(--danger-soft); color: var(--danger-text); }
-.status-pill.warn { background: var(--warning-soft); color: var(--warning-text); }
 
 /* ===== PanelSkeleton (shared) ===== */
 

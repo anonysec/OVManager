@@ -807,11 +807,16 @@
   cursor: pointer;
 }
 
-.um-rowmenu-item:hover,
+.um-rowmenu-item:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
 .um-rowmenu-item:focus-visible {
   background: var(--surface-3);
   color: var(--text-primary);
-  outline: none;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 /* ── Pro-max pass: density, overflow, touch targets (page-scoped) ──── */
