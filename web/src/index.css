@@ -1031,7 +1031,7 @@ html[data-theme="light"] .list-table .avatar-sm { background: var(--accent-color
   height: 15px;
   display: block;
 }
-.list-table { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 0; }
+.list-table { width: 100%; min-width: 720px; border-collapse: collapse; border-spacing: 0; font-size: 14px; }
 .list-table thead th { position: sticky; top: 0; background: var(--panel); color: var(--text-secondary); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; padding: 9px 12px; z-index: 5; white-space: nowrap; border-bottom: 1px solid var(--line); font-weight: 600; }
 .list-table thead th:first-child { border-top-left-radius: 10px; }
 .list-table thead th:last-child { border-top-right-radius: 10px; }
@@ -1239,11 +1239,6 @@ body, .ops-nav-link, .input-group label, .btn { font-family: var(--font-family);
   color: var(--accent-contrast);
   font-size: var(--font-size-sm);
   font-weight: 800;
-}
-.list-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
 }
 .list-table thead {
   background: var(--bg);
@@ -1491,7 +1486,7 @@ button.danger { background: var(--red) !important; }
 .modal, .modal-content { background: var(--panel) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; }
 
 /* ---- LIGHT MODE (proper palette swap) ---- */
-html[data-theme="light"] body { background: var(--bg); color: var(--text-primary); }
+html[data-theme="light"] body { background: var(--bg); color: var(--text-primary); background-image: none; }
 
 html[data-theme="light"] .list-table tbody tr:hover td { background: rgba(255,122,30,.07); }
 html[data-theme="light"] .modal-window, html[data-theme="light"] .notification-popover { background: var(--surface-1); }
@@ -1509,9 +1504,6 @@ html[data-theme="light"] .search-field { background: var(--surface-2); border-co
 .btn-danger:hover { filter: brightness(1.08); }
 
 /* ===== Light mode enhancements ===== */
-html[data-theme="light"] body {
-  background-image: none;
-}
 html[data-theme="light"] .ops-panel { background: var(--surface-1); box-shadow: 0 18px 34px rgba(20,30,50,.10); }
 
 html[data-theme="light"] .list-table thead th,
