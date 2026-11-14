@@ -728,6 +728,8 @@
   "logsUnit": "یونیت",
   "logsUnitPanel": "پنل",
   "logsLines": "خطوط",
+  "logsFilter": "فیلتر خطوط…",
+  "logsNoMatches": "هیچ خطی با فیلتر مطابقت ندارد",
   "logsFollow": "دنبال کردن",
   "logsRefresh": "بازخوانی",
   "logsEmpty": "خروجی لاگ وجود ندارد",

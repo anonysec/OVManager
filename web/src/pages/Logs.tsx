@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // System & Audit logs — unified hub with tabs for journalctl tails and audit events.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { FiActivity, FiFileText, FiPause, FiPlay, FiRefreshCw } from 'react-icons/fi';
@@ -34,6 +34,7 @@ const Logs = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [follow, setFollow] = useState(true);
+  const [filter, setFilter] = useState('');
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +85,20 @@ const Logs = () => {
     { id: 'system', label: t('logsTitle', 'System logs'), icon: <FiFileText /> },
     { id: 'audit', label: t('audit', 'Audit'), icon: <FiActivity /> },
   ];
+
+  const visibleLines = useMemo(() => {
+    const lines = output ? output.split('\n') : [];
+    const q = filter.trim().toLowerCase();
+    return q ? lines.filter((line) => line.toLowerCase().includes(q)) : lines;
+  }, [output, filter]);
+
+  const lineTone = (line: string) => {
+    // "failed 0" is a healthy poll, so require a non-zero count or a real
+    // level token instead of colouring every line that contains "failed".
+    if (/\b(fatal|panic)\b/i.test(line) || /\berror\b/i.test(line) || /\bfailed [1-9]\d*\b/i.test(line)) return ' log-line--error';
+    if (/\bwarn(ing)?\b/i.test(line)) return ' log-line--warn';
+    return '';
+  };
 
   return (
     <div className="logs-page">
@@ -136,6 +151,16 @@ const Logs = () => {
                 ))}
               </select>
             </label>
+            <label className="logs-filter">
+              <span className="sr-only">{t('logsFilter', 'Filter lines')}</span>
+              <input
+                type="search"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder={t('logsFilter', 'Filter lines…')}
+                aria-label={t('logsFilter', 'Filter lines')}
+              />
+            </label>
           </div>
 
           <div className={`logs-view${error ? ' logs-view--error' : ''}`}>
@@ -143,8 +168,14 @@ const Logs = () => {
               <div className="logs-error" role="alert">{error}</div>
             ) : loading ? (
               <div className="log-rows-empty" aria-live="polite" aria-busy="true">{t('loading', 'Loading…')}</div>
+            ) : visibleLines.length ? (
+              <div className="log-rows" role="log">
+                {visibleLines.map((line, i) => (
+                  <div key={i} className={`log-line${lineTone(line)}`}>{line || '\u00a0'}</div>
+                ))}
+              </div>
             ) : output ? (
-              <pre className="log-rows">{output}</pre>
+              <div className="log-rows-empty" aria-live="polite">{t('logsNoMatches', 'No lines match the filter')}</div>
             ) : (
               <div className="log-rows-empty" aria-live="polite">{t('logsEmpty', 'No log output')}</div>
             )}

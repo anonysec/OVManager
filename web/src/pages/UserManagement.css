@@ -495,6 +495,10 @@
   background: var(--surface-1);
 }
 
+/* Five cells in a two-column grid: let the last one fill the row instead of
+   leaving a hole. */
+.ud-cell:last-child { grid-column: 1 / -1; }
+
 .ud-ico {
   display: grid;
   place-items: center;
@@ -689,8 +693,16 @@
 }
 
 @media (max-width: 599.98px) {
+  /* Four KPI cards in a single column pushed the table below the fold; a
+     compact 2x2 grid keeps them visible without cramping the labels. */
   .um-stats {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .um-stat .ui-stat-card {
+    padding: var(--space-3);
+  }
+  .um-stat .ui-stat-card-value {
+    font-size: var(--font-size-xl);
   }
 
   .um-search {

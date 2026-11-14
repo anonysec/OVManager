@@ -728,6 +728,8 @@
   "logsUnit": "Unit",
   "logsUnitPanel": "Panel",
   "logsLines": "Lines",
+  "logsFilter": "Filter lines…",
+  "logsNoMatches": "No lines match the filter",
   "logsFollow": "Follow",
   "logsRefresh": "Refresh",
   "logsEmpty": "No log output",

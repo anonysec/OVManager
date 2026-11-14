@@ -728,6 +728,8 @@
   "logsUnit": "单元",
   "logsUnitPanel": "面板",
   "logsLines": "行数",
+  "logsFilter": "筛选日志…",
+  "logsNoMatches": "没有匹配的日志行",
   "logsFollow": "跟随",
   "logsRefresh": "刷新",
   "logsEmpty": "暂无日志输出",

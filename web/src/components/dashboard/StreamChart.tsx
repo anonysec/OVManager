@@ -217,10 +217,12 @@ export default function StreamChart({ period: initialPeriod = '24h' }: { period?
       </div>
 
       <div className="ds-chart-inline-stats">
-        <span className="ds-chart-stat">
-          <span>{isTraffic ? t('chartTotal', 'Total') : t('trafficPeak', 'Peak')}</span>
-          <b>{fmt(isTraffic ? total : peak)}</b>
-        </span>
+        {!isTraffic && (
+          <span className="ds-chart-stat">
+            <span>{t('trafficPeak', 'Peak')}</span>
+            <b>{fmt(peak)}</b>
+          </span>
+        )}
         <span className="ds-chart-stat">
           <span>{isTraffic ? t('trafficPeak', 'Peak') : t('chartAvg', 'Average')}</span>
           <b title={peakIdx >= 0 ? fmtDateTime(new Date(buckets[peakIdx].ts).toISOString()) : undefined}>

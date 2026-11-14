@@ -728,6 +728,8 @@
   "logsUnit": "Юнит",
   "logsUnitPanel": "Панель",
   "logsLines": "Строки",
+  "logsFilter": "Фильтр строк…",
+  "logsNoMatches": "Нет строк, соответствующих фильтру",
   "logsFollow": "Следить",
   "logsRefresh": "Обновить",
   "logsEmpty": "Нет записей в журнале",
