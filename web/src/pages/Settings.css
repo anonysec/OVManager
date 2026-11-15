@@ -6,7 +6,7 @@
    dialect — see components/ui/Field.css and Button.css. */
 
 .sp-page {
-  max-width: 1160px;
+  max-width: 980px;
   margin: 0 auto;
   padding-bottom: var(--space-6);
 }

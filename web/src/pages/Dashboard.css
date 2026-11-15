@@ -207,7 +207,7 @@ button.ds-kpi:hover {
 .ds-kpi-meter-fill {
   display: block;
   height: 100%;
-  background: var(--info);
+  background: var(--border-strong);
   transition: width var(--transition-normal);
 }
 
@@ -896,6 +896,17 @@ button.ds-kpi:hover {
   background: var(--surface-3);
   color: var(--text-secondary);
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ds-feed-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
 }
 
 .ds-feed-body {

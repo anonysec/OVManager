@@ -228,7 +228,7 @@ describe('ServerStats resilience', () => {
     });
     renderStats();
     await waitFor(() => expect(screen.getByText('amy')).toBeTruthy());
-    expect(screen.getByText('User.Create')).toBeTruthy();
+    expect(screen.getByTitle('User.Create')).toBeTruthy();
   });
 
   it('hero cards navigate to filtered views', async () => {

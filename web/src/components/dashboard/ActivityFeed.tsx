@@ -16,6 +16,10 @@ const actionTone = (action: any) => {
   return '';
 };
 
+// The full action ("User.Create") is a wide pill; the group plus a tone dot
+// scans faster and the exact action stays in the tooltip.
+const actionGroup = (action: any) => String(action || '').split('.')[0] || 'Event';
+
 export default function ActivityFeed({ items, error, loading, onRetry }: { items?: any; error?: any; loading?: any; onRetry?: any }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -48,7 +52,13 @@ export default function ActivityFeed({ items, error, loading, onRetry }: { items
               return (
                 <div key={e.id || `${e.ts}-${e.action}-${e.target}`} className="ds-feed-item">
                   <span className="ds-feed-avatar" aria-hidden="true">{initial}</span>
-                  <span className={`ds-feed-action ${actionTone(e.action) ? `ds-feed-action--${actionTone(e.action)}` : ''}`}>{e.action}</span>
+                  <span
+                    className={`ds-feed-action ${actionTone(e.action) ? `ds-feed-action--${actionTone(e.action)}` : ''}`}
+                    title={e.action}
+                  >
+                    <span className="ds-feed-dot" aria-hidden="true" />
+                    {actionGroup(e.action)}
+                  </span>
                   <div className="ds-feed-body">
                     <span className="ds-feed-actor">{actor}</span>
                     {e.target && (

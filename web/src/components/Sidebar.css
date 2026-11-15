@@ -170,10 +170,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 6px;
-  border-radius: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--text-secondary);
@@ -184,7 +184,7 @@
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
-  color: var(--accent-color);
+  color: var(--text-muted);
 }
 
 .stat-chip-value {
@@ -232,7 +232,7 @@
 }
 
 .ops-sidebar--collapsed .sidebar-section-label {
-  display: none !important;
+  display: none;
 }
 
 .ops-sidebar--collapsed .sidebar-brand {
@@ -242,7 +242,7 @@
 }
 
 .ops-sidebar--collapsed .sidebar-brand-text {
-  display: none !important;
+  display: none;
 }
 
 .ops-sidebar--collapsed .sidebar-nav {
@@ -260,7 +260,7 @@
 }
 
 .ops-sidebar--collapsed .sidebar-nav-link .sidebar-nav-label {
-  display: none !important;
+  display: none;
 }
 
 .ops-sidebar--collapsed .sidebar-nav-icon {
