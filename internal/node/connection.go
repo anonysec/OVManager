@@ -58,8 +58,8 @@ var (
 // never stamped onto the shared client's header map.
 func NodeClient(n *Node, panelID string) *Client {
 	c := getConnection(n)
-	if c == nil || panelID == "" {
-		return c
+	if c == nil {
+		return nil
 	}
 	if n.ID == 0 {
 		// Uncached: this client is freshly created and solely owned here.
