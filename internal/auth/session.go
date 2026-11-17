@@ -170,13 +170,14 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 		return zero, false
 	}
 	th := tokenHash(raw)
-	if ident, ok := s.cacheGet(th); ok {
-		return ident, true
-	}
+	ident, cached := s.cacheGet(th)
 	s.sessMu.RLock()
 	entry, ok := s.sessions[th]
 	s.sessMu.RUnlock()
 	if !ok {
+		if cached {
+			s.cacheDelete(th)
+		}
 		return zero, false
 	}
 	now := nowSecs()
@@ -184,6 +185,7 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 		s.sessMu.Lock()
 		delete(s.sessions, th)
 		s.sessMu.Unlock()
+		s.cacheDelete(th)
 		return zero, false
 	}
 	if now-entry.lastSeen >= touchThrottleSeconds {
@@ -192,7 +194,10 @@ func (s *Service) VerifySession(raw string) (Identity, bool) {
 		s.sessions[th] = entry
 		s.sessMu.Unlock()
 	}
-	ident := Identity{Username: entry.username, Type: entry.role}
+	if cached {
+		return ident, true
+	}
+	ident = Identity{Username: entry.username, Type: entry.role}
 	// Put the cache entry while the session is still known to exist: a
 	// revoke that lands between the read and the put must not be undone by
 	// a stale cache entry.
