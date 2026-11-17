@@ -328,13 +328,13 @@ func subURL(db *sql.DB, uuid string) string {
 	if db == nil || uuid == "" {
 		return ""
 	}
-	var prefix, subPath, urlpath string
-	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub'), COALESCE(urlpath,'dashboard') FROM Setting LIMIT 1`)
-	if err := row.Scan(&prefix, &subPath, &urlpath); err != nil {
+	var prefix, subPath string
+	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub') FROM Setting LIMIT 1`)
+	if err := row.Scan(&prefix, &subPath); err != nil {
 		return ""
 	}
 	if prefix == "" {
-		prefix = "https://127.0.0.1:2095/" + urlpath + "/"
+		prefix = "https://127.0.0.1:2095/"
 	}
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
