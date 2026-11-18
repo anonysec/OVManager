@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -389,6 +390,10 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 			if reachable, _ := waitHealthAny(healthURLs(install), 60, install.Cafile()); reachable {
 				_ = os.Remove(updateMarkerPath(install))
 				writeUpdateState(install, "failed_over", from, target, safety)
+				audit.Record(nil, "system", "Panel.UpdateFailed", "warning",
+					fmt.Sprintf("Panel update v%s -> v%s failed over to v%s.", from, target, from),
+					map[string]any{"from": from, "to": target})
+				log.Printf("update: panel v%s -> v%s failed over to v%s", from, target, from)
 				note := " (database was untouched — no restore needed)"
 				if dbRestored {
 					note = " Data was restored from " + safety + "."
@@ -413,6 +418,10 @@ func runUpdate(install Install, opt updateOptions, out io.Writer) int {
 		return 1
 	}
 	writeUpdateState(install, "committed", from, target, safety)
+	audit.Record(nil, "system", "Panel.Update", "info",
+		fmt.Sprintf("Panel updated from v%s to v%s.", from, target),
+		map[string]any{"from": from, "to": target})
+	log.Printf("update: panel v%s -> v%s committed", from, target)
 	fmt.Fprint(out, block([]string{okLine("v" + from + " → v" + target)}))
 	return 0
 }
