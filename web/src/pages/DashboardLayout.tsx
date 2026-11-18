@@ -36,23 +36,31 @@ const SETUP_CONFIG_DONE_KEY = 'ovmanager-setup-config-done';
 const LiveOnlineStat = () => {
   const { t } = useTranslation();
   const { subscribe } = useLive();
-  const [online, setOnline] = useState<number | null>(null);
+  const [online, setOnline] = useState<{ users: number; sessions: number } | null>(null);
   useEffect(() => subscribe('users.live', (data: any) => {
     const map = data?.online;
     if (!map || typeof map !== 'object') return;
-    let total = 0;
-    Object.values(map).forEach((count: any) => { if (Number(count) > 0) total += 1; });
-    setOnline(total);
+    let users = 0;
+    let sessions = 0;
+    Object.values(map).forEach((count: any) => {
+      const n = Number(count) || 0;
+      sessions += n;
+      if (n > 0) users += 1;
+    });
+    setOnline({ users, sessions });
   }), [subscribe]);
   if (online === null) return null;
+  const label = t('liveUsersOnlineDetail', '{{users}} users, {{sessions}} connections online (live)', {
+    users: online.users,
+    sessions: online.sessions,
+  });
   return (
-    <span
-      className="ops-live-stat"
-      title={t('liveUsersOnline', 'Users online (live)')}
-      aria-label={t('liveUsersOnlineCount', '{{count}} users online', { count: online })}
-    >
+    <span className="ops-live-stat" title={label} aria-label={label}>
       <span className="ops-live-dot" aria-hidden="true" />
-      {online}
+      {online.users}
+      {online.sessions !== online.users && (
+        <span className="ops-live-sub">({online.sessions})</span>
+      )}
     </span>
   );
 };

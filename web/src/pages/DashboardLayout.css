@@ -62,6 +62,13 @@
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
+.ops-live-sub {
+  margin-inline-start: 1px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+}
+
 .ops-live-dot {
   inline-size: 7px;
   block-size: 7px;
