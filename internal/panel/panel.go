@@ -37,6 +37,7 @@ type Handler struct {
 	urlMu    sync.Mutex
 	urlValue string
 	urlAt    float64
+	urlMod   int64
 
 	// activeReq tracks in-flight requests so a database restore can wait for
 	// them to complete before swapping the live pool.
@@ -520,11 +521,31 @@ const urlPathTTL = 5.0
 // URLPath returns the current (non-empty) URL prefix the panel is served under.
 func (h *Handler) URLPath() string { return h.urlpath() }
 
+func (h *Handler) urlFileMod() int64 {
+	path := dbFilePath()
+	var mod int64
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if info, err := os.Stat(path + suffix); err == nil {
+			if m := info.ModTime().UnixNano(); m > mod {
+				mod = m
+			}
+		}
+	}
+	return mod
+}
+
+func (h *Handler) invalidateURLPath() {
+	h.urlMu.Lock()
+	h.urlAt = 0
+	h.urlMu.Unlock()
+}
+
 func (h *Handler) urlpath() string {
 	now := float64(time.Now().UnixNano()) / 1e9
+	mod := h.urlFileMod()
 	h.urlMu.Lock()
 	defer h.urlMu.Unlock()
-	if h.urlAt != 0 && now-h.urlAt < urlPathTTL {
+	if h.urlAt != 0 && now-h.urlAt < urlPathTTL && h.urlMod == mod {
 		return h.urlValue
 	}
 	value := ""
@@ -533,6 +554,7 @@ func (h *Handler) urlpath() string {
 	}
 	h.urlValue = value
 	h.urlAt = now
+	h.urlMod = mod
 	return value
 }
 
@@ -549,6 +571,7 @@ func (h *Handler) setURLPath(value string) (string, error) {
 	h.urlMu.Lock()
 	h.urlValue = value
 	h.urlAt = float64(time.Now().UnixNano()) / 1e9
+	h.urlMod = h.urlFileMod()
 	h.urlMu.Unlock()
 	return value, nil
 }

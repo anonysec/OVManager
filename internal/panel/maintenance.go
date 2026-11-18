@@ -502,6 +502,7 @@ func (h *Handler) activateDatabase(stage func(dst string) (string, error)) (dist
 	// DBSwap publishes the new pool; `old` is already closed, do not close
 	// it again.
 	_ = h.Svc.DBSwap(fresh)
+	h.invalidateURLPath()
 	return true, nil
 }
 
