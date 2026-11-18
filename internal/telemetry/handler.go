@@ -611,7 +611,7 @@ func CollectLiveSnapshot(db *sql.DB) {
 		online[n.Name] = true
 		for _, entry := range sess.LiveSessions {
 			username := resolveSessionUsername(entry.CommonName, n.Name, idToName, known)
-			if username != "" {
+			if username != "" && known[username] {
 				counts[username]++
 				touched[username] = true
 			}

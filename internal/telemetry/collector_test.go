@@ -199,6 +199,26 @@ func TestCollectLiveSnapshotNameFallback(t *testing.T) {
 	}
 }
 
+// TestCollectLiveSnapshotSkipsUnknownCN: a CN that maps to no panel user must
+// not inflate the live count (the topbar and the KPI must agree on real users).
+func TestCollectLiveSnapshotSkipsUnknownCN(t *testing.T) {
+	resetLiveState()
+	conn := newCollectorDB(t)
+	if _, err := conn.Exec(`INSERT INTO User (id, name) VALUES (7, 'bob')`); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	addNode(t, conn, 1, "nodeA", fakeNode(t, `{"live_sessions":[{"common_name":"ghost"},{"common_name":"bob"}]}`, nil))
+
+	CollectLiveSnapshot(conn)
+
+	if got := Connections()["ghost"]; got != 0 {
+		t.Errorf("ghost connections = %d, want 0", got)
+	}
+	if got := Connections()["bob"]; got != 1 {
+		t.Errorf("bob connections = %d, want 1", got)
+	}
+}
+
 // TestApplyGrace walks the up->down grace transitions.
 func TestApplyGrace(t *testing.T) {
 	resetLiveState()
