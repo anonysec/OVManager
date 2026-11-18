@@ -636,8 +636,6 @@
   "th_reason": "原因",
   "heroConnsSub": "{{count}} 个实时会话",
   "heroTrafficSub": "所有用户合计",
-  "heroUsersWarn": "等待 {{count}}",
-  "heroUsersOk": "全部空闲",
   "chartMetricTraffic": "流量",
   "chartMetricConns": "会话",
   "trafficChartMetric": "指标",

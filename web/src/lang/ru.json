@@ -636,8 +636,6 @@
   "th_reason": "Причина",
   "heroConnsSub": "Активных сессий: {{count}}",
   "heroTrafficSub": "Все пользователи",
-  "heroUsersWarn": "Ожидание: {{count}}",
-  "heroUsersOk": "Все свободны",
   "chartMetricTraffic": "Трафик",
   "chartMetricConns": "Сессии",
   "trafficChartMetric": "Метрика",

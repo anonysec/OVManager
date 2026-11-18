@@ -638,8 +638,6 @@
   "th_reason": "Needs",
   "heroConnsSub": "{{count}} sessions live",
   "heroTrafficSub": "All users combined",
-  "heroUsersWarn": "Waiting {{count}}",
-  "heroUsersOk": "All idle",
   "chartMetricTraffic": "Traffic",
   "chartMetricConns": "Sessions",
   "trafficChartMetric": "Metric",

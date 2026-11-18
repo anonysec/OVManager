@@ -636,8 +636,6 @@
   "th_reason": "نیاز",
   "heroConnsSub": "{{count}} نشست فعال",
   "heroTrafficSub": "مجموع همه کاربران",
-  "heroUsersWarn": "در انتظار {{count}}",
-  "heroUsersOk": "همه بی‌کار",
   "chartMetricTraffic": "ترافیک",
   "chartMetricConns": "نشست‌ها",
   "trafficChartMetric": "معیار",

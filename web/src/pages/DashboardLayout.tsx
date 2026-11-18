@@ -41,7 +41,7 @@ const LiveOnlineStat = () => {
     const map = data?.online;
     if (!map || typeof map !== 'object') return;
     let total = 0;
-    Object.values(map).forEach((count: any) => { total += Number(count) || 0; });
+    Object.values(map).forEach((count: any) => { if (Number(count) > 0) total += 1; });
     setOnline(total);
   }), [subscribe]);
   if (online === null) return null;

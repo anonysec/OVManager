@@ -575,9 +575,6 @@ const ServerStats = () => {
             animate={onlineTotal}
             ringPct={activeTotal ? (onlineTotal / activeTotal) * 100 : 0}
             tone={onlineTotal ? 'ok' : null}
-            chip={attentionUsers.length
-              ? t('heroUsersWarn', 'Waiting {{count}}', { count: attentionUsers.length })
-              : t('heroUsersOk', 'All idle')}
             to="/users?view=online"
           />
           <KpiCard
