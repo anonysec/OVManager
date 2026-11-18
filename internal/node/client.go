@@ -234,23 +234,22 @@ func (c *Client) setVerified(v bool) {
 	c.mu.Unlock()
 }
 
-func (c *Client) cachedTransport() *http.Transport {
+func (c *Client) cachedTransport() (*http.Transport, error) {
 	c.transportMu.Lock()
 	defer c.transportMu.Unlock()
 	if c.transport != nil {
-		return c.transport
+		return c.transport, nil
 	}
 	var cfg *tls.Config
 	if c.pinPEM != "" {
 		var err error
 		cfg, err = pinnedTLSConfig(c.pinPEM, c.address, c.checkName)
 		if err != nil {
-			c.transport = &http.Transport{}
-			return c.transport
+			return nil, err
 		}
 	}
 	c.transport = &http.Transport{TLSClientConfig: cfg}
-	return c.transport
+	return c.transport, nil
 }
 
 type nodeError struct {
@@ -309,7 +308,11 @@ func (c *Client) requestInner(method, path string, o reqOpts) (*envelope, error)
 	if o.timeout == 0 {
 		o.timeout = Timeout
 	}
-	hc := &http.Client{Transport: c.cachedTransport(), Timeout: o.timeout}
+	tr, err := c.cachedTransport()
+	if err != nil {
+		return nil, err
+	}
+	hc := &http.Client{Transport: tr, Timeout: o.timeout}
 	env, err := c.send(hc, method, path, o)
 	if err == nil {
 		// The pin config was already applied inside cachedTransport(): a
@@ -745,7 +748,7 @@ func (c *Client) rawInnerLimit(path string, headers map[string]string, timeout t
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
-		hc := &http.Client{Transport: c.cachedTransport(), Timeout: timeout}
+		hc := &http.Client{Transport: &http.Transport{TLSClientConfig: cfg}, Timeout: timeout}
 		resp, err := hc.Do(req)
 		if err != nil {
 			return nil, err

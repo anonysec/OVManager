@@ -48,7 +48,11 @@ func (c *Client) StreamEvents(ctx context.Context, on func(NodeEvent) error) err
 	// A private transport clone: ResponseHeaderTimeout bounds the header
 	// wait without touching the shared RPC transport or the request
 	// context, whose deadline would otherwise kill the stream at 15 s.
-	tr := c.cachedTransport().Clone()
+	base, err := c.cachedTransport()
+	if err != nil {
+		return err
+	}
+	tr := base.Clone()
 	tr.ResponseHeaderTimeout = eventHeaderTimeout
 	hc := &http.Client{Transport: tr}
 	resp, err := c.streamReq(ctx, "/sync/events", hc)
