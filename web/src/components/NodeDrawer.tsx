@@ -8,6 +8,7 @@ import apiClient from '../services/api';
 import { formatBytes } from '../utils/format';
 import { CODES } from '../utils/geo';
 import { errorMessageOf } from '../utils/errorMessage';
+import { fmtDate } from '../utils/time';
 import { downloadBlob } from '../utils/downloadBlob';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
@@ -281,7 +282,7 @@ const NodeDrawer = ({
     const msg = data.msg || t('nodeRequestFailed', 'The panel could not reach the node.');
     const expiry = data.data?.server_expiry;
     setResult('renewCert', Boolean(data.success), data.success && expiry
-      ? `${msg} (${t('nodeRenewCertExpiry', 'new expiry')}: ${expiry})`
+      ? `${msg} (${t('nodeRenewCertExpiry', 'new expiry')}: ${fmtDate(expiry)})`
       : msg);
     onChanged?.();
   });

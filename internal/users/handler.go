@@ -412,8 +412,12 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		var s string
 		_ = json.Unmarshal(raw["expiry_date"], &s)
 		newDate := s[:min(10, len(s))]
-		if row.ExpiryDate.String != newDate {
-			diffs = append(diffs, fmt.Sprintf("expiry %s -> %s", row.ExpiryDate.String, newDate))
+		oldDate := ""
+		if row.ExpiryDate.Valid && row.ExpiryDate.String != "" {
+			oldDate = row.ExpiryDate.String[:min(10, len(row.ExpiryDate.String))]
+		}
+		if oldDate != newDate {
+			diffs = append(diffs, fmt.Sprintf("expiry %s -> %s", oldDate, newDate))
 		}
 		row.ExpiryDate = sql.NullString{String: newDate, Valid: true}
 	}

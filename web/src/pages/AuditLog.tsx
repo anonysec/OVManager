@@ -51,18 +51,24 @@ const TIME_RANGES = [
   { id: '30d', seconds: 2592000 },
 ];
 
+// Old audit rows stored RFC3339 timestamps in their messages. Show the date
+// part so the detail reads like the rest of the panel.
+const plainDate = (s: string) =>
+  s.replace(/\b(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/g, '$1');
+
 const fmtDetail = (d: any) => {
   if (d == null || d === '') return '—';
   let v = d;
   if (typeof d === 'string') {
-    try { v = JSON.parse(d); } catch { return d; }
+    try { v = JSON.parse(d); } catch { return plainDate(d); }
   }
   // Unified event rows store {"severity", "message", "meta"} — show them as prose.
   if (v && typeof v === 'object' && !Array.isArray(v) && typeof v.message === 'string') {
-    return v.severity ? `[${v.severity}] ${v.message}` : v.message;
+    const text = plainDate(v.message);
+    return v.severity ? `[${v.severity}] ${text}` : text;
   }
-  if (typeof v === 'string') return v;
-  try { return JSON.stringify(v); } catch { return String(v); }
+  if (typeof v === 'string') return plainDate(v);
+  try { return plainDate(JSON.stringify(v)); } catch { return String(v); }
 };
 
 const AuditLog = ({ hideHeader = false }: { hideHeader?: boolean } = {}) => {
