@@ -185,12 +185,15 @@ const UserManagement = () => {
     return () => clearTimeout(id);
   }, [lastDeleted]);
 
-  const userStats = useMemo(() => ({
-    total: users.length,
-    active: users.filter((u: any) => u.is_active).length,
-    online: users.filter((u: any) => u.online || Number(u.active_connections || 0) > 0).length,
-    inactive: users.filter((u: any) => !u.is_active).length,
-  }), [users]);
+  const userStats = useMemo(() => {
+    const notExpired = (u: any) => daysUntil(u.expiry_date) >= 0;
+    return {
+      total: users.length,
+      active: users.filter((u: any) => Boolean(u.is_active) && notExpired(u)).length,
+      online: users.filter((u: any) => u.online || Number(u.active_connections || 0) > 0).length,
+      inactive: users.filter((u: any) => !u.is_active && notExpired(u)).length,
+    };
+  }, [users]);
 
   const filterCounts = useMemo(() => {
     const c = (fn: (u: any) => boolean) => users.filter(fn).length;

@@ -391,7 +391,7 @@ const ServerStats = () => {
   const activeNodeCount = (nodes || []).filter((n) => n.status).length;
   const offlineNodes = probesDone ? Math.max(0, activeNodeCount - onlineNodes) : 0;
   const onlineTotal = (users || []).filter((u) => Number(u.active_connections || 0) > 0).length;
-  const activeTotal = (users || []).filter((u) => u.is_active).length;
+  const activeTotal = (users || []).filter((u) => u.is_active && daysUntil(u.expiry_date) >= 0).length;
   const totalUsers = (users || []).length;
   const probesReady = probesDone || (nodes?.length || 0) === 0;
   const probesPending = !probesReady;

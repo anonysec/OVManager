@@ -159,3 +159,18 @@ describe('UserManagement row detail', () => {
     expect(within(dialog).getByText('User: user1')).toBeTruthy();
   });
 });
+
+describe('UserManagement stats', () => {
+  beforeEach(() => { vi.clearAllMocks(); stubStorage(); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('excludes expired users from the active count', async () => {
+    renderPage([
+      { id: 1, uuid: 'u-1', name: 'alive', is_active: true, expiry_date: '2099-01-01', total: null, used: 0 },
+      { id: 2, uuid: 'u-2', name: 'gone', is_active: true, expiry_date: '2000-01-01', total: null, used: 0 },
+    ]);
+    const label = await screen.findByText('Active Users');
+    const card = label.closest('.ui-stat-card');
+    expect(card?.querySelector('.ui-stat-card-value')?.textContent).toBe('1');
+  });
+});
