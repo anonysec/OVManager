@@ -328,16 +328,27 @@ func subURL(db *sql.DB, uuid string) string {
 	if db == nil || uuid == "" {
 		return ""
 	}
-	var prefix, subPath string
-	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub') FROM Setting LIMIT 1`)
-	if err := row.Scan(&prefix, &subPath); err != nil {
+	var prefix, subPath, domain string
+	row := db.QueryRow(`SELECT COALESCE(subscription_url_prefix,''), COALESCE(subscription_path,'sub'), COALESCE(panel_domain,'') FROM Setting LIMIT 1`)
+	if err := row.Scan(&prefix, &subPath, &domain); err != nil {
 		return ""
 	}
+	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
-		prefix = "https://127.0.0.1:2095/"
+		// No explicit prefix: use the configured subscription domain. A
+		// localhost fallback would hand every Telegram user a dead link.
+		domain = strings.TrimSpace(domain)
+		if domain == "" {
+			return ""
+		}
+		prefix = "https://" + domain + "/"
 	}
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
+	}
+	subPath = strings.Trim(subPath, "/")
+	if subPath == "" {
+		subPath = "sub"
 	}
 	return prefix + subPath + "/" + uuid + ".txt"
 }
