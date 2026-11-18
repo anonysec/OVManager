@@ -7,6 +7,7 @@ import { Badge } from './ui';
 import { FiServer, FiDownload, FiCheck } from 'react-icons/fi';
 import './SelectNodeForDownloadModal.css';
 import { userIdentifierSegment } from '../utils/userIdentifier';
+import { downloadBlob } from '../utils/downloadBlob';
 
 const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isOpen?: any; onClose?: any }) => {
   const [nodes, setNodes] = useState<any[]>([]);
@@ -102,14 +103,7 @@ const SelectNodeForDownloadModal = ({ user, isOpen, onClose }: { user?: any; isO
         throw new Error(t('ovpnInvalid', 'Panel received HTML or invalid content instead of an OpenVPN profile. Check panel URLPATH/API build and node selection.'));
       }
       const blob = new Blob([response.data], { type: 'application/x-openvpn-profile' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', downloadFileName);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      downloadBlob(blob, downloadFileName);
       onClose();
     } catch (err: any) {
       setError(err.message || t('nodeExportFailed', 'Could not download the configs.'));

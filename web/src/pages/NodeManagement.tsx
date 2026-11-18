@@ -10,6 +10,7 @@ import NodeFormModal from '../components/NodeFormModal';
 import ConfirmModal from '../components/ConfirmModal';
 import apiClient from '../services/api';
 import { asList } from '../utils/apiData';
+import { downloadBlob } from '../utils/downloadBlob';
 import { DATA_REFRESH_SEC } from '../utils/notifPrefs';
 import { nodeMeta } from '../utils/geo';
 import { errorMessageOf } from '../utils/errorMessage';
@@ -169,14 +170,7 @@ const NodeManagement = () => {
     try {
       const response = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob', timeout: 300000 });
       const blob = new Blob([response.data], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ovpn-configs-${node.name}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlob(blob, `ovpn-configs-${node.name}.zip`);
       addToast(t('nodeDownloadStarted', 'Download started.'), 'success');
     } catch (e) {
       addToast(errorMessageOf(e, t('nodeExportFailed', 'Could not download the configs.')), 'error');

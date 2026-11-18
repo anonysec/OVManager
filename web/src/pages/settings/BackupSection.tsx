@@ -13,6 +13,7 @@ import { FiArchive, FiDatabase, FiUpload, FiDownload, FiRefreshCw, FiClock } fro
 import { Card, Field } from './shared';
 import { formatBytes } from '../../utils/format';
 import { errorMessageOf } from '../../utils/errorMessage';
+import { downloadBlob } from '../../utils/downloadBlob';
 import './BackupSection.css';
 
 const MIN_KEEP = 1;
@@ -146,10 +147,8 @@ const BackupSection = () => {
   const download = async () => {
     try {
       const r = await apiClient.get('/maintenance/backup/download', { responseType: 'blob' });
-      const url = URL.createObjectURL(new Blob([r.data]));
       const safeName = String(backups[0]?.name || 'ovmanager-backup.db').replace(/[^a-zA-Z0-9._-]/g, '_');
-      const a = document.createElement('a'); a.href = url; a.download = safeName;
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      downloadBlob(new Blob([r.data]), safeName);
     } catch { addToast(t('backupDownloadFailed', 'Download failed'), 'error'); }
   };
 

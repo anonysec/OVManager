@@ -8,6 +8,7 @@ import apiClient from '../services/api';
 import { formatBytes } from '../utils/format';
 import { CODES } from '../utils/geo';
 import { errorMessageOf } from '../utils/errorMessage';
+import { downloadBlob } from '../utils/downloadBlob';
 import { Button, Field, Tabs } from './ui';
 import './NodeDrawer.css';
 
@@ -321,14 +322,7 @@ const NodeDrawer = ({
       }
       const r = await apiClient.get(`/nodes/ovpn-all/${node.id}`, { responseType: 'blob' });
       const blob = new Blob([r.data], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${node.name}-all-configs.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      downloadBlob(blob, `${node.name}-all-configs.zip`);
       setResult('download', true, t('nodeDownloadStarted', 'Download started.'));
     } catch (e) {
       setResult('download', false, errorMessageOf(e, t('nodeDownloadFailed', 'Could not download configs.')));
