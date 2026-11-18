@@ -230,7 +230,7 @@ func (h *Handler) updateSubscription(w http.ResponseWriter, r *http.Request) {
 		updates["sub_update_interval_hours"] = *payload.SubUpdateIntervalHours
 	}
 	if err := setColumns(h.Svc.DB(), updates); err != nil {
-		envelope(w, false, "Subscription link settings updated", nil)
+		envelope(w, false, "Could not update subscription link settings", nil)
 		return
 	}
 	s := h.settings()

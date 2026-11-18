@@ -43,7 +43,7 @@ describe('errorMessageOf', () => {
   });
 
   it('falls back to data.msg then err.message then a generic string', () => {
-    expect(errorMessageOf({ response: { data: { msg: 'from msg' } } }, 'fb')).toBe('fb');
+    expect(errorMessageOf({ response: { data: { msg: 'from msg' } } }, 'fb')).toBe('from msg');
     expect(errorMessageOf({ response: { data: { msg: 'from msg' } } })).toBe('from msg');
     expect(errorMessageOf({ response: { data: {} } })).toBe('Request failed');
     expect(errorMessageOf(new Error('from message'))).toBe('from message');

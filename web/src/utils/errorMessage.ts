@@ -29,5 +29,5 @@ export function errorMessageOf(err: any, fallback?: string): string {
   const data = err?.response?.data;
   const fromDetail = detailMessage(data?.detail);
   if (fromDetail) return fromDetail;
-  return str(fallback) ?? str(data?.msg) ?? str(err?.message) ?? (i18n.t('requestFailed', { defaultValue: 'Request failed' }) || 'Request failed');
+  return str(data?.msg) ?? str(err?.message) ?? str(fallback) ?? (i18n.t('requestFailed', { defaultValue: 'Request failed' }) || 'Request failed');
 }
